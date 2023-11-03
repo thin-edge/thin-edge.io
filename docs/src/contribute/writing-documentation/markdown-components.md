@@ -210,14 +210,14 @@ The following shows how to document how to publish a single MQTT message.
 **Markdown**
 
 ````markdown title="Markdown"
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/ '{"temperature": 21.3}'
 ```
 ````
 
 **Output**
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/ '{"temperature": 21.3}'
 ```
 
@@ -296,14 +296,14 @@ tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "
 ### Example: Subscribe to MQTT messages
 
 ````markdown title="Markdown"
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/#'
 ```
 ````
 
 **Output**
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/#'
 ```
 
@@ -312,14 +312,14 @@ tedge mqtt sub 'te/#'
 Any additional arguments will be automatically preserved when translating the commands. Though the `mqtt` tab will not display this information it is just meant to represent the MQTT message and does not know anything about the terminal/console.
 
 ````markdown title="Markdown"
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/#' > logged.tedge.messages.txt
 ```
 ````
 
 **Output**
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/#' > logged.tedge.messages.txt
 ```
 

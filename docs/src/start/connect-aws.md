@@ -168,13 +168,13 @@ tedge-mapper-aws service successfully started and enabled!
 
 Using the AWS mapper, you can publish measurement telemetry data to AWS by publishing on the `te/device/main///m/` topic:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/environment '{"temperature": 21.3}'
 ```
 
 Alternatively, post your own custom messages on `aws/td/#` topic:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub aws/td '{"text": "My message"}'
 ```
 

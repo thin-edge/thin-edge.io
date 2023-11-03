@@ -48,7 +48,7 @@ If multiple messages are sent to the same alarm topic, the last alarm is conside
 
 Here is a sample alarm raised for `temperature_high` alarm type with `critical` severity:
 
-```te2mqtt formats="v1"
+```te2mqtt formats=v1
 tedge mqtt pub te/device/main///a/temperature_high '
 {
   "text": "Temperature is very high",
@@ -82,7 +82,7 @@ An already raised alarm can be cleared by sending an empty message with retained
 
 For example `temperature_high` will be cleared by publishing an empty payload message as below:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///a/temperature_high "" -q 2 -r
 ```
 

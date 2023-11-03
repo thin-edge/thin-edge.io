@@ -139,7 +139,7 @@ You can inspect the collected and translated metrics, by subscribing to these to
 
 The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'collectd/#'
 ```
 
@@ -154,7 +154,7 @@ tedge mqtt sub 'collectd/#'
 The `tedge-mapper-collectd` translates these collectd measurements into the [thin-edge.io JSON](../understand/thin-edge-json.md) format,
 [grouping the measurements](../references/mqtt-topics.md#collectd-topics) emitted by each plugin:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/m/+'
 ```
 
@@ -166,7 +166,7 @@ tedge mqtt sub 'te/+/+/+/+/m/+'
 From there, if the device is actually connected to a cloud platform like Cumulocity,
 these monitoring metrics will be forwarded to the cloud.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'c8y/#'
 ```
 

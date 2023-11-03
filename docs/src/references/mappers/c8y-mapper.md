@@ -344,7 +344,7 @@ c8y/measurement/measurements/create
 The unit is a metadata associated with measurements which can be registered as a metadata message for a given measurement type.
 If the following metadata message is registered for the `environment` measurement type:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main///m/environment/meta '{
   "units": {
     "temperature": "°C"

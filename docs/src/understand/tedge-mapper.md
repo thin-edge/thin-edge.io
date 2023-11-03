@@ -180,7 +180,7 @@ tedge mqtt pub te/device/main///m/ '{"temperature": 23,"time": 220}'
 
 Then, you'll receive error messages from the mapper on the topic `te/errors`:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub te/errors
 ```
 

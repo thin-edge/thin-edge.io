@@ -45,7 +45,7 @@ and this will be retained until the service is restarted.
 
 E.g. the mapper being killed:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/status/health'
 ```
 

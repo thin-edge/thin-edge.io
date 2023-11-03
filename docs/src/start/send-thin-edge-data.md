@@ -30,7 +30,7 @@ In this tutorial, we'll be using the `tedge mqtt pub` command line utility for d
 
 The temperature measurement described above can be sent using the `tedge mqtt pub` command as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/environment '{"temperature": 25}'
 ```
 
@@ -93,7 +93,7 @@ the measurements are recorded under a child device of your thin-edge.io device.
 
 Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the following topic where the measurement type is set to `environment`:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/child1///m/environment '{"temperature": 25}'
 ```
 
@@ -109,6 +109,6 @@ So, use it only for debugging purposes during the development phase and it shoul
 
 You can subscribe to the error topic as follows:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub te/errors
 ```

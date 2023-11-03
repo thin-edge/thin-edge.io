@@ -270,7 +270,7 @@ Here are a few examples of how various entities can be registered.
 
 #### Register a device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main//' '{
   "@type": "device",
   "type": "Gateway"
@@ -279,7 +279,7 @@ tedge mqtt pub -r 'te/device/main//' '{
 
 Or the device can be registered using an explicit id:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main//' '{
   "@type": "device",
   "@id": "tedge001",
@@ -289,7 +289,7 @@ tedge mqtt pub -r 'te/device/main//' '{
 
 #### Register a service of the main device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main/service/nodered' '{
   "@type": "service",
   "name": "nodered",
@@ -302,7 +302,7 @@ The service is implicitly linked to the parent derived from the topic, `main` in
 But the parent can be explicitly provided as well with the `@parent` key,
 if the parent can not be derived from the topic directly:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
   "@type": "service",
   "@parent": "device/main//",
@@ -313,7 +313,7 @@ tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
 
 #### Register a child device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/child01//' '{
   "@type": "child-device",
   "name": "child01",
@@ -327,7 +327,7 @@ If the `@parent` info is not provided, it is assumed to be an immediate child of
 
 Nested child devices are registered in a similar fashion as an immediate child device, however the registration message requires the additional `@parent` property to be set, indicating which parent the child device should be related to.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/nested_child01//' '{
   "@type": "child-device",
   "@parent": "device/child01//",
@@ -341,7 +341,7 @@ Service registration for child devices also follow the same rules as the main de
 where the `@parent` device info is derived from the topic itself, by default.
 But, it is advised to declare it explicitly as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/child01/service/nodered' '{
   "@type": "service",
   "@parent": "device/child01//",
@@ -358,7 +358,7 @@ For example, a linux service runs on a device as it relies on physical hardware 
 
 #### Register a service of a nested child device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/nested_child01/service/nodered' '{
   "@type": "service",
   "@parent": "device/nested_child01//",
@@ -440,7 +440,7 @@ so that it can process them.
 
 #### Publish to the main device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///m/environment' '{
   "temperature": 23.4
 }'
@@ -448,7 +448,7 @@ tedge mqtt pub -r 'te/device/main///m/environment' '{
 
 If the there is no measurement type, then the type can be left empty, but it must have the trailing slash `/` (so that the number of topic segments is the same).
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///m/' '{
   "temperature": 23.4
 }'
@@ -456,7 +456,7 @@ tedge mqtt pub -r 'te/device/main///m/' '{
 
 #### Publish to a child device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/child01///m/environment' '{
   "temperature": 23.4
 }'
@@ -464,7 +464,7 @@ tedge mqtt pub -r 'te/device/child01///m/environment' '{
 
 #### Publish to a service on the main device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main/service/nodered/m/environment' '{
   "temperature": 23.4
 }'
@@ -472,25 +472,25 @@ tedge mqtt pub -r 'te/device/main/service/nodered/m/environment' '{
 
 Any MQTT client can subscribe to all measurements for all entities (devices and services) using the following MQTT topic:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/m/+'
 ```
 
 If you want to be more specific and only subscribe to the main device, then you can used fixed topic names rather than wildcards:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main/+/+/m/+'
 ```
 
 Or to subscribe to a specific type of measurement published to an services on the main device, then use:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main/service/+/m/memory'
 ```
 
 #### Publish to a service on a child device
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/child01/service/nodered/m/environment' '{
   "temperature": 23.4
 }'
@@ -503,7 +503,7 @@ which can be added/updated by publishing to `/meta` subtopics of those data type
 For example, the units associated with measurements in the `battery_reading` measurement type
 can be updated by publishing the following message:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main///m/battery_reading/meta '{
   "units": {
     "temperature": "°C",
@@ -590,7 +590,7 @@ For example, the `restart` could mean either a device restart or a service resta
 
 Command to fetch the software list from the main device:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/software_list/123' '{
   "status": "init"
 }'
@@ -601,7 +601,7 @@ such as `validating`, `downloading`, `executing` etc.
 
 The `status` field can even be skipped, which implies `init` status as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/software_list/123' '{}'
 ```
 
@@ -609,7 +609,7 @@ tedge mqtt pub -r 'te/device/main///cmd/software_list/123' '{}'
 
 Command to update the firmware of a child device:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/child01///cmd/firmware_update/123' '{
   "status": "init",
   "attempt": 1,
@@ -624,7 +624,7 @@ tedge mqtt pub -r 'te/device/child01///cmd/firmware_update/123' '{
 
 Command to update the configuration of a service:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main/service/collectd/cmd/config_update/123' '{
   "status": "init",
   "type": "collectd",
@@ -639,7 +639,7 @@ For commands as well, additional command specific metadata can be registered as 
 
 For example, the supported configuration list of the main device can be declared as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main///cmd/config_snapshot '{
   "description": "Upload a configuration from the device",
   "types": ["mosquitto", "tedge", "collectd"]
@@ -650,7 +650,7 @@ tedge mqtt pub -r te/device/main///cmd/config_snapshot '{
 
 Services can publish their health status as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
   "pid": 1234,
   "status": "up",
@@ -660,13 +660,13 @@ tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
 
 Services are responsible for updating their own health status by publishing to the above topic on any status changes. However, other clients can request the service to update its status by sending a health check command as shown below:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main/service/tedge-agent/cmd/health/check '{}'
 ```
 
 Services are also expected to react to device-wide health check commands as well (where service and `<service_id>` segments are left blank):
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main///cmd/health/check '{}'
 ```
 
@@ -674,7 +674,7 @@ On receipt of the above command, all services on that device should respond with
 
 The services are also expected to register an MQTT Last Will and Testament (LWT) message with the broker to publish a `down` status message in the event that the service stops or crashes unexpectedly. The Last Will and Testament message ensures that the down status is published even if the service is not operational. The following example details such a message:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
   "status": "down"
 }'

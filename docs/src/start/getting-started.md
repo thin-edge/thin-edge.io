@@ -173,7 +173,7 @@ Once your device is configured and connected to Cumulocity IoT, you can start se
 
 Below shows some examples on how to publish an MQTT message via the command line:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub '{{TOPIC}}' '{{PAYLOAD}}'
 ```
 
@@ -197,7 +197,7 @@ te/+/+/+/+/m/+
 
 The temperature measurement described above can be sent as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/ '{"temperature": 25}'
 ```
 
@@ -222,7 +222,7 @@ te/+/+/+/+/e/+
 
 So the door open event described above can be sent as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///e/door '{"text": "A door was closed","time": "2022-06-10T05:30:45+00:00"}'
 ```
 
@@ -267,7 +267,7 @@ sudo systemctl restart collectd
 
 What you should see by now is that data arrives on the `collectd/#` topics. You can check that via:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'collectd/#'
 ```
 
@@ -291,7 +291,7 @@ sudo systemctl start tedge-mapper-collectd
 
 You can inspect the collected and translated metrics, by subscribing to these topics:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'c8y/#'
 ```
 

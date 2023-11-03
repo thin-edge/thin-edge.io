@@ -66,7 +66,7 @@ that this device can be sent commands of this type.
 These messages are published with the retained flag set. So, a client process, such a mapper, can discover on start
 what are __all the capabilities of all the devices__:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/cmd/+'
 ```
 
@@ -105,7 +105,7 @@ It is recommended to either use a unique id generator, or add a unix timestamp a
 The messages published on these topics represent each the current status of a running command.
 So, one can list __all the in-progress commands of any type across all the devices__:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/cmd/+/+'
 ```
 
@@ -222,7 +222,7 @@ As an example, let's take software updates on a child device.
 When launched on the child device `device/child001//`,
 `tedge-agent` notifies that software packages of types: `apt` and `docker` can be updated on this device:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
     "description": "Install, update and remove software packages",
     "types": [
@@ -235,7 +235,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
 On reception of this message, the Cumulocity mapper notifies Cumulocity of this capability.
 On request from a cloud operator, the Cumulocity mapper creates a new command instance, say to update `nodered`:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' '{
     "status": "init",
     "updateList": [
@@ -255,7 +255,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' '{
 
 The agent, running on `device/child001//`, notifies that it will execute the command:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' '{
     "status": "executing",
     "updateList": [
@@ -275,7 +275,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' '{
 
 Then the agent proceeds, here installing a specific version of `nodered`, and notifies the mapper when done:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' '{
     "status": "successful",
     "updateList": [
@@ -297,6 +297,6 @@ The Cumulocity mapper, having subscribed to all software_update commands,
 monitors this command instance and notifies Cumulocity of its progress upto completion.  
 Finally, the Cumulocity mapper clear the command topic:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' ''
 ```

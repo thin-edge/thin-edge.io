@@ -84,11 +84,11 @@ One can observe the message exchange between the `service` and the `watchdog`
 by subscribing to the following topics:
 
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/status/health'
 ```
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/cmd/health/check'
 ```
 

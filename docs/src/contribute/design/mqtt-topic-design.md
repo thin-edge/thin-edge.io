@@ -16,13 +16,13 @@ Having a fixed **identifier** group in the topic structure makes it easier for o
 
 A client can subscribe to all measurements for the main device by subscribing to a single topic.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main///m/+'
 ```
 
 Alternatively, if a client wants to subscribe to all measurements regardless of the **identifier** then it can also can be done using a single subscription, as demonstrated by the following example:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/m/+'
 ```
 
@@ -119,7 +119,7 @@ graph LR
 
 The equipment, which is a conveyor belt called "belt01", is located in factory "factory01", in the "hallA" building, in the "packaging" area. The conveyor belt can be registered as a child-device by publishing the following message.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/factory01/hallA/packaging/belt001' '{
   "@type": "child-device",
   "name": "belt001",
@@ -139,7 +139,7 @@ The registration message will associate the telemetry data or commands published
 
 For example, an event can be published to the `belt01` equipment using the following message.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub 'te/factory01/hallA/packaging/belt001/e/running_status' '{
   "text": "Belt started"
 }'
@@ -147,7 +147,7 @@ tedge mqtt pub 'te/factory01/hallA/packaging/belt001/e/running_status' '{
 
 Since the topic schema encodes additional location information about the equipment, other MQTT clients can subscribe to telemetry data coming from all equipment located in the same area using a single MQTT subscription.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub 'te/factory01/hallA/packaging/+/e/+'
 ```
 
@@ -156,7 +156,7 @@ When applying your own semantics to the **identifier**, you can leave any segmen
 
 For example, if it does not make sense to have the factory and building in the **identifier**, then they can be removed and the equipment can be registered using:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/packaging/belt001' '{
   "@type": "child-device"
 }'
@@ -164,7 +164,7 @@ tedge mqtt pub -r 'te/packaging/belt001' '{
 
 Publishing an event requires just leaving the last two segments of the **identifier** blank (whilst keeping the slashes `/` in place).
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub 'te/packaging/belt001///e/running_status' '{
   "text": "Belt started"
 }'

@@ -188,7 +188,7 @@ Follow these steps to bootstrap the child device:
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt pub "tedge/child1/commands/res/config_snapshot" '{"path": "", "type":"c8y-configuration-plugin"}'
     ```
 
@@ -202,7 +202,7 @@ Following these steps, a configuration file from the child-device will be reques
 
 1. Subscribe to config snapshot requests via MQTT
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt sub "tedge/{child-id}/commands/req/config_snapshot"
     ```
 
@@ -249,7 +249,7 @@ Following these steps, a configuration file from the child-device will be reques
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt pub "tedge/child1/commands/res/config_snapshot" '{"status": "executing", "path": "/home/pi/config/config1", "type": "config1"}'
     ```
 
@@ -289,7 +289,7 @@ Following these steps, a configuration file from the child-device will be reques
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt pub "tedge/child1/commands/res/config_snapshot" '{"status": "successful", "path": "/home/pi/config/config1", "type": "config1"}'
     ```
 
@@ -301,7 +301,7 @@ Performing config update is an 8-step process:
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt sub "tedge/child1/commands/req/config_update"
     ```
 
@@ -352,7 +352,7 @@ Performing config update is an 8-step process:
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt pub "tedge/child1/commands/res/config_update" '{"status": "executing", "path": "/home/pi/config/config1", "type": "config1"}'
     ```
 
@@ -398,7 +398,7 @@ Performing config update is an 8-step process:
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt pub "tedge/child1/commands/res/config_update" '{"status": "successful", "path": "/home/pi/config/config1", "type": "config1"}'
     ```
 
@@ -415,7 +415,7 @@ Performing config update is an 8-step process:
 
     **Example**
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=legacy
     tedge mqtt pub "tedge/child1/commands/res/config_update" '{"status": "failed", "reason": "Download failed", "path": "/home/pi/config/config1", "type": "config1"}'
     ```
 
