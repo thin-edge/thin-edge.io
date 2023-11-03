@@ -132,7 +132,8 @@ async fn run_with(
         &mut mqtt_actor,
         &mut fs_watch_actor,
         &mut uploader_actor,
-    )?;
+    )
+    .await?;
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());
