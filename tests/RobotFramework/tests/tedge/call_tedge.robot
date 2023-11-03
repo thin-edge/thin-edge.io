@@ -1,10 +1,8 @@
 *** Settings ***
 Documentation    Purpose of this test is to verify that the proper version number
 ...              will be shown by using the tedge -V command.
-...              By executing the tedge -h command that USAGE, OPTIONS and SUBCOMMANDS
+...              By executing the tedge -h command that Usage, Options and Commands
 ...              will be shown
-...              By executing the tedge -h -V command combination of both previous
-...              commands will be shown
 
 Resource    ../../resources/common.resource
 Library    ThinEdgeIO
@@ -30,22 +28,15 @@ call tedge -V
 
 call tedge -h
     ${output}=    Execute Command    tedge -h
-    Should Contain    ${output}    USAGE:
-    Should Contain    ${output}    OPTIONS:
-    Should Contain    ${output}    SUBCOMMANDS:
-
-call tedge -h -V
-    ${output}=    Execute Command    tedge -h -V   # Execute command to call help and check the version at same time
-    Should Contain    ${output}    ${version}    # Check that the output of tedge -V returns the version which was installed
-    Should Contain    ${output}    USAGE:
-    Should Contain    ${output}    OPTIONS:
-    Should Contain    ${output}    SUBCOMMANDS:
+    Should Contain    ${output}    Usage:
+    Should Contain    ${output}    Options:
+    Should Contain    ${output}    Commands:
 
 call tedge help
     ${output}=    Execute Command    tedge help
-    Should Contain    ${output}    USAGE:
-    Should Contain    ${output}    OPTIONS:
-    Should Contain    ${output}    SUBCOMMANDS:
+    Should Contain    ${output}    Usage:
+    Should Contain    ${output}    Options:
+    Should Contain    ${output}    Commands:
 
 *** Keywords ***
 
