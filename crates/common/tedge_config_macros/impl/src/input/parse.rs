@@ -6,9 +6,12 @@ use darling::util::SpannedValue;
 use darling::FromAttributes;
 use darling::FromField;
 use darling::FromMeta;
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 use syn::parse::Parse;
 use syn::punctuated::Punctuated;
 use syn::Attribute;
+use syn::Expr;
 use syn::Token;
 
 #[derive(Debug)]
@@ -136,8 +139,30 @@ pub enum FieldDefault {
     Function(syn::Expr),
     FromKey(Punctuated<syn::Ident, syn::Token![.]>),
     FromOptionalKey(Punctuated<syn::Ident, syn::Token![.]>),
-    Value(syn::Lit),
+    Value(DefaultValueLit),
     None,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct DefaultValueLit(syn::Lit);
+
+impl ToTokens for DefaultValueLit {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0.to_tokens(tokens)
+    }
+}
+
+impl FromMeta for DefaultValueLit {
+    fn from_expr(expr: &Expr) -> darling::Result<Self> {
+        match expr {
+            Expr::Lit(value) => Ok(Self(value.lit.clone())),
+            _ => Err(darling::Error::custom(format!(
+                "Unexpected expression, `default(value = ...)` expects a literal.\n\
+                 Perhaps you want to use `#[tedge_config(default(variable = \"{}\"))]`?",
+                quote::quote!(#expr).to_string().replace(" :: ", "::")
+            ))),
+        }
+    }
 }
 
 impl Parse for ConfigurableField {
