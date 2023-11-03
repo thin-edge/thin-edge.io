@@ -226,7 +226,7 @@ If you are looking to use packages that you locally built, then just use `invoke
 
 **What is happening?**
 
-When building the docker image it will automatically add all the files/folders under the `tests/images/deb` path to the built image. These files are then used by the test bootstrapping script (`bootstrap.sh`) which is also part of the docker image. The bootstrapping process is smart enough to detect if there are debian packages there, and if will install the tedge related packages. If no packages are found then it will revert to installing the latest official tedge version via the `get-thin-edge_io.sh` script.
+When building the docker image it will automatically add all the files/folders under the `tests/images/deb` path to the built image. These files are then used by the test bootstrapping script (`bootstrap.sh`) which is also part of the docker image. The bootstrapping process is smart enough to detect if there are debian packages there, and if will install the tedge related packages. If no packages are found then it will revert to installing the latest official tedge version via the `https://thin-edge.io/install.sh` script.
 
 ## Viewing the test reports and logs
 

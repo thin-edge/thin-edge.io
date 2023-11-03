@@ -8,8 +8,7 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 Install latest via script (from current branch)
-    Transfer To Device    ${CURDIR}/../../../../get-thin-edge_io.sh    /setup/
-    Execute Command    chmod a+x /setup/get-thin-edge_io.sh && sudo /setup/get-thin-edge_io.sh
+    Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
     # Uninstall
@@ -19,6 +18,7 @@ Install latest via script (from current branch)
 Install specific version via script (from current branch)
     [Documentation]    Remove the tedge.toml file as the apt filter is not supported in older tedge versions
     ...                and unknown configuration causes problems
+    # TODO: Remove reliance on the legacy get-thin-edge_io.sh script, however thin-edge.io/install.sh does not currently support installing a specific version
     Transfer To Device    ${CURDIR}/../../../../get-thin-edge_io.sh    /setup/
     Execute Command    [ -f /etc/tedge/tedge.toml ] && sed -i '/\\[apt\\]/,/\\n/d' /etc/tedge/tedge.toml
     Execute Command    chmod a+x /setup/get-thin-edge_io.sh && sudo /setup/get-thin-edge_io.sh 0.8.1
@@ -28,8 +28,8 @@ Install specific version via script (from current branch)
     Uninstall tedge using local Script
     Tedge Should Not Be Installed    tedge-log-plugin
 
-Install latest tedge via script (from main branch)
-    Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+Install latest tedge via script
+    Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
 Install then uninstall latest tedge via script (from main branch)

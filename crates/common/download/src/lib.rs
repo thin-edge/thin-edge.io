@@ -26,7 +26,7 @@
 //! async fn main() -> Result<()> {
 //!     // Create Download metadata.
 //!     let url_data = DownloadInfo::new(
-//!         "https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh",
+//!         "https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/README.md",
 //!     );
 //!
 //!     // Create downloader instance with desired file path and target directory.
