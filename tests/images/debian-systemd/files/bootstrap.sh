@@ -43,7 +43,7 @@ FLAGS
 INSTALL METHODS
     local - Install the thin-edge.io .deb packages found locally on the disk under '--install-sourcedir <path>'
     apt - Install using public APT repository
-    script - Install using the get-thin-edge_io.sh script from GitHub
+    script - Install using the https://thin-edge.io/install.sh script
 
 EXAMPLES
     sudo -E $0
@@ -516,7 +516,7 @@ install_via_script() {
         curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s "$VERSION"
     else
         echo "Installing latest official version"
-        curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+        curl -fsSL https://thin-edge.io/install.sh | sh -s
     fi
 }
 
@@ -538,7 +538,7 @@ install_via_local_files() {
 
     ARCH=$(get_debian_arch)
 
-    # Install tedge packages in same order as the get-thin-edge_io.sh script
+    # Install tedge packages
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge_[0-9]*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]mapper_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]agent_*_$ARCH.deb"
@@ -652,7 +652,7 @@ install_tedge() {
             ;;
 
         *)
-            echo "Installing thin-edge.io using the 'get-thin-edge_io.sh' script"
+            echo "Installing thin-edge.io using the install script"
             # Remove system.toml as the latest official release does not support custom reboot command
             rm -f /etc/tedge/system.toml
             install_via_script

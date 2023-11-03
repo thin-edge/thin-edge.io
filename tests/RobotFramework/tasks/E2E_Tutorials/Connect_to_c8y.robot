@@ -95,4 +95,4 @@ Clear previous downloaded files if any
     Execute Command    rm -f *.deb; rm -f uninstall-thin-edge_io.sh
 
 Install thin-edge.io
-    Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+    Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s

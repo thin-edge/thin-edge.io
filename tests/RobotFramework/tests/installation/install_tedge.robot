@@ -8,8 +8,7 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 Install latest via script (from current branch)
-    Transfer To Device    ${CURDIR}/../../../../get-thin-edge_io.sh    /setup/
-    Execute Command    chmod a+x /setup/get-thin-edge_io.sh && sudo /setup/get-thin-edge_io.sh
+    Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
     # Uninstall
@@ -28,8 +27,8 @@ Install specific version via script (from current branch)
     Uninstall tedge using local Script
     Tedge Should Not Be Installed    tedge-log-plugin
 
-Install latest tedge via script (from main branch)
-    Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+Install latest tedge via script
+    Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
 Install then uninstall latest tedge via script (from main branch)
