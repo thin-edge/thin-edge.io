@@ -154,6 +154,12 @@ class ThinEdgeIO(DeviceLibrary):
         except Exception as ex:  # pylint: disable=broad-except
             log.warning("Failed to get device managed object. %s", ex)
 
+        # Log mqtt messages separately so it is easier to read/debug
+        try:
+            self.log_mqtt_messages("#", date_from)
+        except Exception as ex:
+            log.warning("Failed to retrieve mqtt logs. %s", ex, exc_info=True)
+
         try:
             # Get agent log files (if they exist)
             log.info("tedge agent logs: /var/log/tedge/agent/*")
@@ -511,6 +517,18 @@ class ThinEdgeIO(DeviceLibrary):
             ), f"Matching messages is greater than maximum.\nwanted: {maximum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
 
         return messages
+
+    def log_mqtt_messages(self, topic: str = "#", date_from: Union[datetime, float] = None, **kwargs):
+        items = self.mqtt_match_messages(
+            topic=topic,
+            date_from=date_from,
+            **kwargs,
+        )
+        entries = [
+            f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {bytes.fromhex(item["payload_hex"]).decode("utf8")}'
+            for item in items
+        ]
+        log.info("---- mqtt messages ----\n%s", "\n".join(entries))
 
     @keyword("Should Have MQTT Messages")
     def mqtt_should_have_topic(
