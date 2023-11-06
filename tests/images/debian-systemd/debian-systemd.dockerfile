@@ -1,4 +1,4 @@
-FROM debian:11-slim
+FROM debian:12-slim
 
 # Install
 RUN apt-get -y update \
@@ -17,7 +17,7 @@ RUN apt-get -y update \
     mosquitto-clients \
     vim.tiny \
     nginx \
-    netcat \
+    netcat-openbsd \
     iputils-ping \
     net-tools
 

@@ -12,7 +12,7 @@ You can use any OS to build from source (below has been tested on Ubuntu, but we
 
 Our recommended setup and required tools are:
 
-* Ubuntu 20.04 or Debian 10.9 (Buster)
+* Ubuntu 20.04 or Debian 12 (Bookworm)
 * git
 * Rust toolchain
 

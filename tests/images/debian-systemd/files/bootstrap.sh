@@ -464,14 +464,14 @@ configure_repos() {
             # Use a fixed distribution string to avoid guess work, and it does not really matter anyway
             curl -1sLf \
             "https://dl.cloudsmith.io/public/thinedge/${REPO}/setup.deb.sh" \
-            | distro=raspbian version=11 codename=bullseye sudo -E bash
+            | distro=raspbian version=11 codename=bookworm sudo -E bash
         else
             echo "Repo (channel=${REPO_CHANNEL}) is already configured"
         fi
     else
         # TODO: Support non-bash environments (but the cloudsmith script only supports bash)
         fail "Bash is missing. Currently this script requires bash to setup the apt repos"
-        # deb [signed-by=/usr/share/keyrings/thinedge-tedge-release-archive-keyring.gpg] https://dl.cloudsmith.io/public/thinedge/tedge-release/deb/raspbian bullseye main
+        # deb [signed-by=/usr/share/keyrings/thinedge-tedge-release-archive-keyring.gpg] https://dl.cloudsmith.io/public/thinedge/tedge-release/deb/raspbian bookworm main
     fi
 }
 
