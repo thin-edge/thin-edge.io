@@ -425,13 +425,11 @@ impl CumulocityConverter {
                         self.ops_dir.join(target.external_id.as_ref())
                     }
                     _ => {
-                        warn!("config_snapshot and config_update features for nested child devices are currently unsupported");
                         return Ok(vec![]);
                     }
                 }
             }
             EntityType::Service => {
-                warn!("config_snapshot and config_update features for services are currently unsupported");
                 return Ok(vec![]);
             }
         };

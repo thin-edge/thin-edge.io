@@ -8,6 +8,7 @@ use crate::actor::IdDownloadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
+use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
@@ -926,9 +927,27 @@ impl CumulocityConverter {
                 vec![]
             }
 
-            Channel::CommandMetadata {
-                operation: OperationType::Restart,
-            } => self.register_restart_operation(&source).await?,
+            Channel::CommandMetadata { operation } => {
+                self.validate_operation_supported(operation, &source)?;
+                match operation {
+                    OperationType::Restart => self.register_restart_operation(&source).await?,
+                    OperationType::SoftwareList => {
+                        self.register_software_list_operation(&source).await?
+                    }
+                    OperationType::SoftwareUpdate => {
+                        self.register_software_update_operation(&source).await?
+                    }
+                    OperationType::LogUpload => self.convert_log_metadata(&source, message)?,
+                    OperationType::ConfigSnapshot => {
+                        self.convert_config_snapshot_metadata(&source, message)?
+                    }
+                    OperationType::ConfigUpdate => {
+                        self.convert_config_update_metadata(&source, message)?
+                    }
+                    _ => vec![],
+                }
+            }
+
             Channel::Command {
                 operation: OperationType::Restart,
                 cmd_id,
@@ -937,9 +956,6 @@ impl CumulocityConverter {
                     .await?
             }
 
-            Channel::CommandMetadata {
-                operation: OperationType::SoftwareList,
-            } => self.register_software_list_operation(&source).await?,
             Channel::Command {
                 operation: OperationType::SoftwareList,
                 cmd_id,
@@ -947,9 +963,6 @@ impl CumulocityConverter {
                 self.publish_software_list(&source, cmd_id, message).await?
             }
 
-            Channel::CommandMetadata {
-                operation: OperationType::SoftwareUpdate,
-            } => self.register_software_update_operation(&source).await?,
             Channel::Command {
                 operation: OperationType::SoftwareUpdate,
                 cmd_id,
@@ -957,10 +970,6 @@ impl CumulocityConverter {
                 self.publish_software_update_status(&source, cmd_id, message)
                     .await?
             }
-
-            Channel::CommandMetadata {
-                operation: OperationType::LogUpload,
-            } => self.convert_log_metadata(&source, message)?,
 
             Channel::Command {
                 operation: OperationType::LogUpload,
@@ -970,9 +979,6 @@ impl CumulocityConverter {
                     .await?
             }
 
-            Channel::CommandMetadata {
-                operation: OperationType::ConfigSnapshot,
-            } => self.convert_config_snapshot_metadata(&source, message)?,
             Channel::Command {
                 operation: OperationType::ConfigSnapshot,
                 cmd_id,
@@ -981,9 +987,6 @@ impl CumulocityConverter {
                     .await?
             }
 
-            Channel::CommandMetadata {
-                operation: OperationType::ConfigUpdate,
-            } => self.convert_config_update_metadata(&source, message)?,
             Channel::Command {
                 operation: OperationType::ConfigUpdate,
                 cmd_id,
@@ -998,6 +1001,29 @@ impl CumulocityConverter {
 
         registration_messages.append(&mut messages);
         Ok(registration_messages)
+    }
+
+    fn validate_operation_supported(
+        &self,
+        op_type: &OperationType,
+        topic_id: &EntityTopicId,
+    ) -> Result<(), ConversionError> {
+        let target = self.entity_store.try_get(topic_id)?;
+
+        match target.r#type {
+            EntityType::MainDevice => Ok(()),
+            EntityType::ChildDevice => match &target.parent {
+                Some(parent) if !parent.is_default_main_device() => {
+                    Err(ConversionError::UnexpectedError(anyhow!(
+                        "{op_type} operation for nested child devices are currently unsupported"
+                    )))
+                }
+                _ => Ok(()),
+            },
+            EntityType::Service => Err(ConversionError::UnexpectedError(anyhow!(
+                "{op_type} operation for services are currently unsupported"
+            ))),
+        }
     }
 
     pub fn register_and_convert_entity(
@@ -2764,6 +2790,128 @@ pub(crate) mod tests {
         assert_eq!(smartrest_fields.next().unwrap(), "service");
         assert_eq!(smartrest_fields.next().unwrap(), "service1");
         assert_eq!(smartrest_fields.next().unwrap(), "up");
+    }
+
+    #[test_case("restart")]
+    #[test_case("software_list")]
+    #[test_case("software_update")]
+    #[test_case("log_upload")]
+    #[test_case("config_snapshot")]
+    #[test_case("config_update")]
+    #[test_case("custom_op")]
+    #[tokio::test]
+    async fn operations_not_supported_for_nested_child_devices(op_type: &str) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        // Register immediate child device and nested child device
+        let reg_message = Message::new(
+            &Topic::new_unchecked("te/device/immediate_child//"),
+            json!({
+                "@type":"child-device",
+                "@parent":"device/main//",
+                "@id":"immediate_child"
+            })
+            .to_string(),
+        );
+        let _ = converter.convert(&reg_message).await;
+        let reg_message = Message::new(
+            &Topic::new_unchecked("te/device/nested_child//"),
+            json!({
+                "@type":"child-device",
+                "@parent":"device/immediate_child//",
+                "@id":"nested_child"
+            })
+            .to_string(),
+        );
+        let _ = converter.convert(&reg_message).await;
+
+        let capability_msg = Message::new(
+            &Topic::new_unchecked(&format!("te/device/nested_child///cmd/{op_type}")),
+            "[]",
+        );
+        let messages = converter.convert(&capability_msg).await;
+
+        assert_messages_matching(
+            &messages,
+            [(
+                "te/errors",
+                "operation for nested child devices are currently unsupported".into(),
+            )],
+        );
+    }
+
+    #[test_case("restart")]
+    #[test_case("software_list")]
+    #[test_case("software_update")]
+    #[test_case("log_upload")]
+    #[test_case("config_snapshot")]
+    #[test_case("config_update")]
+    #[test_case("custom_op")]
+    #[tokio::test]
+    async fn operations_not_supported_for_services(op_type: &str) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        // Register main device service
+        let _ = converter
+            .convert(&Message::new(
+                &Topic::new_unchecked("te/device/main/service/dummy"),
+                json!({
+                    "@type":"service",
+                })
+                .to_string(),
+            ))
+            .await;
+        // Register immediate child device service
+        let _ = converter
+            .convert(&Message::new(
+                &Topic::new_unchecked("te/device/immediate_child/service/dummy"),
+                json!({
+                    "@type":"service",
+                })
+                .to_string(),
+            ))
+            .await;
+        // Register nested child device
+        let _ = converter
+            .convert(&Message::new(
+                &Topic::new_unchecked("te/device/nested_child//"),
+                json!({
+                    "@type":"child-device",
+                    "@parent":"device/immediate_child//",
+                })
+                .to_string(),
+            ))
+            .await;
+        // Register nested child device service
+        let _ = converter
+            .convert(&Message::new(
+                &Topic::new_unchecked("te/device/nested_child/service/dummy"),
+                json!({
+                    "@type":"service",
+                })
+                .to_string(),
+            ))
+            .await;
+
+        for device_id in ["main", "immediate_child", "nested_child"] {
+            let messages = converter
+                .convert(&Message::new(
+                    &Topic::new_unchecked(&format!(
+                        "te/device/{device_id}/service/dummy/cmd/{op_type}"
+                    )),
+                    "[]",
+                ))
+                .await;
+            assert_messages_matching(
+                &messages,
+                [(
+                    "te/errors",
+                    "operation for services are currently unsupported".into(),
+                )],
+            );
+        }
     }
 
     pub(crate) async fn create_c8y_converter(
