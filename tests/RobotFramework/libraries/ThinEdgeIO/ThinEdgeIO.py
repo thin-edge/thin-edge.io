@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 
 __version__ = "0.0.1"
 __author__ = "Reuben Miller"
+C8Y_TOKEN_TOPIC = "c8y/s/dat"
 
 
 class MQTTMessage:
@@ -170,7 +171,22 @@ class ThinEdgeIO(DeviceLibrary):
         except Exception as ex:
             log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
 
-        super().get_logs(device.get_id(), date_from=date_from, show=show)
+        log_output = super().get_logs(device.get_id(), date_from=date_from, show=False)
+        if show:
+            hide_sensitive = self._hide_sensitive_factory()
+            for line in log_output:
+                print(hide_sensitive(line))
+
+    def _hide_sensitive_factory(self):
+        # This is fragile and should be improved upon once a more suitable/robust method of logging and querying
+        # the mqtt messages is found.
+        token_replace_pattern = re.compile(r"\{.+$")
+        def _hide(line: str) -> str:
+            if C8Y_TOKEN_TOPIC in line and "71," in line:
+                line_sensitive = token_replace_pattern.sub(f"(redacted log entry): Received token: topic={C8Y_TOKEN_TOPIC}, message=71,<redacted>", line)
+                return line_sensitive
+            return line
+        return _hide
 
     def log_operations(self, mo_id: str, status: str = None):
         """Log operations to help with debugging
@@ -523,10 +539,16 @@ class ThinEdgeIO(DeviceLibrary):
             date_from=date_from,
             **kwargs,
         )
-        entries = [
-            f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {bytes.fromhex(item["payload_hex"]).decode("utf8", errors="replace")}'
-            for item in items
-        ]
+
+        # hide sensitive information
+        # This is fragile and should be improved upon once a more suitable/robust method of logging and querying
+        # the mqtt messages is found.
+        entries = []
+        for item in items:
+            payload = bytes.fromhex(item["payload_hex"]).decode("utf8", errors="replace")
+            if item["message"]["topic"] == C8Y_TOKEN_TOPIC and payload.startswith("71,"):
+                payload = "71,<redacted>"
+            entries.append(f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {payload}')
         log.info("---- mqtt messages ----\n%s", "\n".join(entries))
 
     @keyword("Should Have MQTT Messages")
