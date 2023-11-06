@@ -501,8 +501,7 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
         messages = [
-            bytes.fromhex(item["payload_hex"]).decode("utf8")
-            # item["message"]["payload"]
+            bytes.fromhex(item["payload_hex"]).decode("utf8", errors="replace")
             for item in items
         ]
 
@@ -525,7 +524,7 @@ class ThinEdgeIO(DeviceLibrary):
             **kwargs,
         )
         entries = [
-            f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {bytes.fromhex(item["payload_hex"]).decode("utf8")}'
+            f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {bytes.fromhex(item["payload_hex"]).decode("utf8", errors="replace")}'
             for item in items
         ]
         log.info("---- mqtt messages ----\n%s", "\n".join(entries))
