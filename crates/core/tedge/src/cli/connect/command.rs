@@ -259,7 +259,12 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
-                client.publish(C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM, AtLeastOnce, false, "")?;
+                client.publish(
+                    C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM,
+                    rumqttc::QoS::AtMostOnce,
+                    false,
+                    "",
+                )?;
             }
             Ok(Event::Incoming(Packet::PubAck(_))) => {
                 // The request has been sent

@@ -59,8 +59,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             r#"alarm/alarms/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
             // c8y JWT token retrieval
-            r#"s/uat out 2 c8y/ """#.into(),
-            r#"s/dat in 2 c8y/ """#.into(),
+            r#"s/uat out 0 c8y/ """#.into(),
+            r#"s/dat in 0 c8y/ """#.into(),
         ];
 
         let templates_set = smartrest_templates
@@ -199,8 +199,8 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             r#"alarm/alarms/create out 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
             // c8y JWT token retrieval
-            r#"s/uat out 2 c8y/ """#.into(),
-            r#"s/dat in 2 c8y/ """#.into(),
+            r#"s/uat out 0 c8y/ """#.into(),
+            r#"s/dat in 0 c8y/ """#.into(),
             // Smartrest templates should be deserialized as:
             // s/uc/template-1 (in from localhost), s/uc/template-1
             // s/dc/template-1 (out to localhost), s/dc/template-1

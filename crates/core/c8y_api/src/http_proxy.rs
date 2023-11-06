@@ -132,10 +132,10 @@ impl C8yMqttJwtTokenRetriever {
         for _ in 0..3 {
             mqtt_con
                 .published
-                .publish(mqtt_channel::Message::new(
-                    &Topic::new_unchecked("c8y/s/uat"),
-                    "".to_string(),
-                ))
+                .publish(
+                    mqtt_channel::Message::new(&Topic::new_unchecked("c8y/s/uat"), "".to_string())
+                        .with_qos(mqtt_channel::QoS::AtMostOnce),
+                )
                 .await?;
             info!("JWT token requested");
 
