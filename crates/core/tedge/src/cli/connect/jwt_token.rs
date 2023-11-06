@@ -33,7 +33,12 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
-                client.publish(C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM, AtLeastOnce, false, "")?;
+                client.publish(
+                    C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM,
+                    rumqttc::QoS::AtMostOnce,
+                    false,
+                    "",
+                )?;
             }
             Ok(Event::Incoming(Packet::PubAck(_))) => {
                 // The request has been sent
