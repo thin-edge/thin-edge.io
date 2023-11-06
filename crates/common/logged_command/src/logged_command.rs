@@ -3,12 +3,12 @@ use nix::unistd::Pid;
 use std::ffi::OsStr;
 use std::process::Output;
 use std::process::Stdio;
-use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tokio::process::Child;
 use tokio::process::Command;
+use tokio::time::Duration;
 
 #[derive(Debug)]
 pub enum CmdStatus {

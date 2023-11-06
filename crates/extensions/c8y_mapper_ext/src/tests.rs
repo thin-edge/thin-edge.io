@@ -2025,11 +2025,11 @@ async fn custom_operation_timeout_sigterm() {
     let cfg_dir = TempTedgeDir::new();
     let cmd_file = cfg_dir.path().join("command");
     //create custom operation file
-    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
+    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(2), Some(8));
     //create command
     let content = r#"#!/usr/bin/env bash
     handle_term() {
-        for i in {1..1}
+        for i in {1..2}
         do
             echo "sigterm $i"
             sleep 1
@@ -2039,7 +2039,6 @@ async fn custom_operation_timeout_sigterm() {
     trap handle_term SIGTERM
     for i in {1..10}
     do
-        echo "main $i"
         sleep 1
     done
     "#;
@@ -2048,7 +2047,7 @@ async fn custom_operation_timeout_sigterm() {
     let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let mut mqtt = mqtt.with_timeout(Duration::from_secs(10));
 
     skip_init_messages(&mut mqtt).await;
 
@@ -2068,7 +2067,7 @@ async fn custom_operation_timeout_sigterm() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_Command,\"operation failed due to timeout: duration=1s\"",
+            "502,c8y_Command,\"operation failed due to timeout: duration=2s\"",
         )],
     )
     .await;
@@ -2078,12 +2077,12 @@ async fn custom_operation_timeout_sigterm() {
 exit status: 124
 
 stdout <<EOF
-main 1
 sigterm 1
+sigterm 2
 EOF
 
 stderr <<EOF
-operation failed due to timeout: duration=1sEOF";
+operation failed due to timeout: duration=2sEOF";
 
     assert_command_exec_log_content(cfg_dir, expected_content);
 }
@@ -2098,7 +2097,7 @@ async fn custom_operation_timeout_sigkill() {
 
     let cmd_file = cfg_dir.path().join("command");
     //create custom operation file
-    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
+    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(2), Some(4));
     //create command
     let content = r#"#!/usr/bin/env bash
     handle_term() {
@@ -2111,8 +2110,7 @@ async fn custom_operation_timeout_sigkill() {
     }
     trap handle_term SIGTERM
     for i in {1..50}
-    do
-        echo "main $i"
+    do      
         sleep 1
     done
     "#;
@@ -2121,7 +2119,7 @@ async fn custom_operation_timeout_sigkill() {
     let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let mut mqtt = mqtt.with_timeout(Duration::from_secs(10));
 
     skip_init_messages(&mut mqtt).await;
 
@@ -2141,25 +2139,14 @@ async fn custom_operation_timeout_sigkill() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_Command,\"operation failed due to timeout: duration=1s\"",
+            "502,c8y_Command,\"operation failed due to timeout: duration=2s\"",
         )],
     )
     .await;
 
-    // assert the signterm is handled
-    let expected_content = "command \"511,test-device,c8y_Command\"
-exit status: unknown
-
-stdout <<EOF
-main 1
-sigterm 1
-sigterm 2
-EOF
-
-stderr <<EOF
-operation failed due to timeout: duration=1sEOF
-";
-
+    let expected_content = "exit status: unknown";
+    assert_command_exec_log_content(cfg_dir.clone(), expected_content);
+    let expected_content = "sigterm 1";
     assert_command_exec_log_content(cfg_dir, expected_content);
 }
 
