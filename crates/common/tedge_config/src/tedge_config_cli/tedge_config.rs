@@ -403,7 +403,7 @@ define_tedge_config! {
             include: {
                 /// Set the bridge local clean session flag (this requires mosquitto >= 2.0.0)
                 #[tedge_config(note = "If set to 'auto', this cleans the local session accordingly the detected version of mosquitto.")]
-                #[tedge_config(example = "auto", default(value = "auto"))]
+                #[tedge_config(example = "auto", default(variable = "AutoFlag::Auto"))]
                 local_cleansession: AutoFlag,
             }
         },

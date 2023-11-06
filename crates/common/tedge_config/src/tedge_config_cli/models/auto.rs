@@ -17,22 +17,6 @@ pub struct InvalidAutoFlag {
     input: String,
 }
 
-impl From<bool> for AutoFlag {
-    fn from(value: bool) -> Self {
-        if value {
-            AutoFlag::True
-        } else {
-            AutoFlag::False
-        }
-    }
-}
-
-impl From<&str> for AutoFlag {
-    fn from(value: &str) -> Self {
-        FromStr::from_str(value).unwrap_or(AutoFlag::False)
-    }
-}
-
 impl FromStr for AutoFlag {
     type Err = InvalidAutoFlag;
 
