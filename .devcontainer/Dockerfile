@@ -66,7 +66,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/bin/
 
 # Update python deps
-RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade pip --break-system-packages
 
 # Delete the dummy systemctl command added by the base image
 RUN rm -f /usr/local/bin/systemctl
