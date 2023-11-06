@@ -28,8 +28,8 @@ Check PID number in lock file
 Check PID number in lock file after restarting the services
     [Documentation]    Include the new pid generated after service restart 
     ...  inside the existing lock files under /run/lock/
-    Restart Service    tedge-agent
-    Restart Service    tedge-mapper-c8y
+    Stop/Start Service    tedge-agent
+    Stop/Start Service    tedge-mapper-c8y
     ${pid_agent2}=    Execute Command    pgrep -f '^/usr/bin/tedge-agent'    strip=True
     ${pid_mapper2}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
     ${pid_agent_lock2}=    Execute Command    cat /run/lock/tedge-agent.lock
@@ -61,3 +61,13 @@ Switch off lock file creation
     #Check that no lock file is created
     File Should Not Exist    /run/lock/tedge-agent.lock
     File Should Not Exist    /run/lock/tedge-mapper-c8y.lock
+
+*** Keywords ***
+
+Stop/Start Service
+    [Arguments]    ${name}
+    # Note: Use stop/start service rather than restart as 'systemctl restart <service>'
+    # does not wait for all file descriptors to be flushed before returning, https://man7.org/linux/man-pages/man1/systemctl.1.html
+    # See https://github.com/thin-edge/thin-edge.io/issues/2087 for more details
+    Stop Service    ${name}
+    Start Service    ${name}
