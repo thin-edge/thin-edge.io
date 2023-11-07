@@ -21,7 +21,7 @@ impl ProxyUrlGenerator {
 
     pub fn proxy_url(&self, mut cumulocity_url: url::Url) -> url::Url {
         cumulocity_url.set_host(Some(&self.host)).unwrap();
-        cumulocity_url.set_scheme("http").unwrap();
+        cumulocity_url.set_scheme("https").unwrap();
         cumulocity_url.set_port(Some(self.port)).unwrap();
         cumulocity_url.set_path(&format!("/c8y{}", cumulocity_url.path()));
         cumulocity_url
@@ -46,7 +46,7 @@ mod tests {
 
         assert_eq!(
             url_gen.proxy_url(url).to_string(),
-            "http://127.0.0.1:8001/c8y/inventory/managedObjects"
+            "https://127.0.0.1:8001/c8y/inventory/managedObjects"
         )
     }
 }

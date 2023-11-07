@@ -37,6 +37,7 @@ async-tungstenite = { version = "0.23", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
+axum-server = { version = "0.5.1", features = ["tls-rustls"] }
 aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
 axum = "0.6"
 az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
@@ -151,6 +152,8 @@ tedge_test_utils = { path = "crates/tests/tedge_test_utils" }
 tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
 tedge_utils = { path = "crates/common/tedge_utils" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
+tokio-rustls = "0.24.1"
+tower = "0.4.13"
 tempfile = "3.5"
 test-case = "2.2"
 thiserror = "1.0"

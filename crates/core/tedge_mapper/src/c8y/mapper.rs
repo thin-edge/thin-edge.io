@@ -63,7 +63,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
-        let old_to_new_agent_adaptator = OldAgentAdapter::builder(&mut mqtt_actor);
+        let old_to_new_agent_adapter = OldAgentAdapter::builder(&mut mqtt_actor);
 
         // MQTT client dedicated to set service down status on shutdown, using a last-will message
         // A separate MQTT actor/client is required as the last will message of the main MQTT actor
@@ -82,7 +82,7 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(service_monitor_actor).await?;
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
-        runtime.spawn(old_to_new_agent_adaptator).await?;
+        runtime.spawn(old_to_new_agent_adapter).await?;
         runtime.run_to_completion().await?;
 
         Ok(())

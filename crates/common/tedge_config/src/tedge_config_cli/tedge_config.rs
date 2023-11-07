@@ -409,7 +409,13 @@ define_tedge_config! {
                 /// Cumulocity mapper.
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
-            }
+            },
+
+            #[doku(as = "PathBuf")]
+            cert_path: Utf8PathBuf,
+
+            #[doku(as = "PathBuf")]
+            key_path: Utf8PathBuf,
         },
 
         bridge: {
