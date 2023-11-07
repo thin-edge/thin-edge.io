@@ -78,6 +78,9 @@ pub enum CertError {
 
     #[error(transparent)]
     TedgeConfigSettingError(#[from] ConfigSettingError),
+
+    #[error("Root certificate path {0} does not exist")]
+    RootCertificatePathDoesNotExist(String),
 }
 
 impl CertError {
