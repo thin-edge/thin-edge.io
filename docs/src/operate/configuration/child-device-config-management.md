@@ -155,11 +155,10 @@ Follow these steps to bootstrap the child device:
     The child-device connector needs to upload this file to thin-edge.io with an HTTP PUT request to the URL:
 
     ```text
-    http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin
+    http://{fts-address}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin
     ```
 
-    * `{tedge-ip}` is the IP of the thin-edge.io device which is configured as `mqtt.external.bind.address` or `mqtt.bind.address` or
-     `127.0.0.1` if neither is configured.
+    * `{fts-address}` is the address of the thin-edge.io device on which the [File Transfer Service](../../references/tedge-file-transfer-service.md) is running
     * `{child-id}` is the child-device-id.
 
     **Example**

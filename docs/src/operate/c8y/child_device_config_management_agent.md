@@ -66,12 +66,13 @@ files = [
 * `path` is the full path to the configuration file on the child device file system.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI
 
-The child device agent needs to upload this file to thin-edge with an HTTP PUT request
-to the URL: `http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
+The child device agent needs to upload this file to thin-edge [File Transfer Service][fts] with an HTTP PUT request
+to the URL: `http://{fts-address}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
 
-* `{tedge-ip}` is the IP of the thin-edge device which is configured as 
-`mqtt.external.bind.address` or `mqtt.bind.address` or `127.0.0.1` if neither is configured.
+* {fts-address}` is the address of the thin-edge.io device on which the [File Transfer Service][fts] is running
 * `{child-id}` is the child-device-id
+
+[fts]: ../../references/tedge-file-transfer-service.md
 
 Once the upload is complete, the agent should notify thin-edge about the upload by sending the following MQTT message:
 
@@ -98,7 +99,7 @@ These requests arrive in the following JSON format:
 {
   "type": "{config-type}",
   "path": "/child/local/fs/path",
-  "url": "http://{tedge-ip}:8000/tedge/file-transfer/{child-d}/config_snapshot/{config-type}"
+  "url": "http://{fts-address}:8000/tedge/file-transfer/{child-d}/config_snapshot/{config-type}"
 }
 ```
 
@@ -165,7 +166,7 @@ These requests arrive in the following JSON format:
 {
   "type": "{config-type}",
   "path": "/child/local/fs/path",
-  "url": "http://{tedge-ip}:8000/tedge/file-transfer/{child-d}/config_update/{config-type}"
+  "url": "http://{fts-address}:8000/tedge/file-transfer/{child-d}/config_update/{config-type}"
 }
 ```
 
@@ -226,4 +227,5 @@ a "failed" status update must be sent instead, to the same topic as follows:
 
 * Configuration Management [documentation](config_management_plugin.md)
 * Reference implementation of a [child device agent](https://github.com/thin-edge/thin-edge.io_examples/tree/main/child-device-agent) written in Python to demonstrate the contract described in this document.
+
 
