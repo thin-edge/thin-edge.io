@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args: 
-        VARIANT: bullseye
+        VARIANT: bookworm
     environment:
       - DOCKER_HOST=unix:///opt/run/docker.sock
 
