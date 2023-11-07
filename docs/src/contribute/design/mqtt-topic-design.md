@@ -148,7 +148,7 @@ tedge mqtt pub 'te/factory01/hallA/packaging/belt001/e/running_status' '{
 Since the topic schema encodes additional location information about the equipment, other MQTT clients can subscribe to telemetry data coming from all equipment located in the same area using a single MQTT subscription.
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub 'te/factory01/hallA/packaging/+/e/+'
+tedge mqtt sub 'te/factory01/hallA/packaging/+/e/+'
 ```
 
 :::tip
