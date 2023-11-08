@@ -388,8 +388,11 @@ impl C8yMapperBuilder {
         let download_sender =
             downloader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
-        let auth_proxy =
-            ProxyUrlGenerator::new(config.auth_proxy_addr.clone(), config.auth_proxy_port);
+        let auth_proxy = ProxyUrlGenerator::new(
+            config.auth_proxy_addr.clone(),
+            config.auth_proxy_port,
+            config.auth_proxy_protocol,
+        );
 
         Ok(Self {
             config,

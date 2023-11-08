@@ -20,8 +20,6 @@ use tedge_actors::Sequential;
 use tedge_actors::ServerActorBuilder;
 use tedge_config::ReadableKey::C8yProxyCertPath;
 use tedge_config::ReadableKey::C8yProxyKeyPath;
-use tedge_config::ReadableKey::DeviceCertPath;
-use tedge_config::ReadableKey::DeviceKeyPath;
 use tedge_config::TEdgeConfig;
 use tracing::info;
 
@@ -30,6 +28,7 @@ use crate::server::Server;
 use crate::tokens::TokenManager;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+type CertKeyPair = (Vec<Vec<u8>>, Vec<u8>);
 
 pub struct C8yAuthProxyBuilder {
     app_state: AppState,
@@ -37,8 +36,7 @@ pub struct C8yAuthProxyBuilder {
     bind_port: u16,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
-    server_certificate: Vec<Vec<u8>>,
-    server_private_key: Vec<u8>,
+    cert_and_private_key: Option<CertKeyPair>,
 }
 
 impl C8yAuthProxyBuilder {
@@ -52,7 +50,7 @@ impl C8yAuthProxyBuilder {
         };
         let bind = &config.c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let (server_certificate, server_private_key) = load_certificate_and_key(config)?;
+        let cert_and_private_key = load_certificate_and_key(config)?;
 
         Ok(Self {
             app_state,
@@ -60,33 +58,28 @@ impl C8yAuthProxyBuilder {
             bind_port: bind.port,
             signal_sender,
             signal_receiver,
-            server_certificate,
-            server_private_key,
+            cert_and_private_key,
         })
     }
 }
 
-fn load_certificate_and_key(config: &TEdgeConfig) -> anyhow::Result<(Vec<Vec<u8>>, Vec<u8>)> {
+fn load_certificate_and_key(config: &TEdgeConfig) -> anyhow::Result<Option<CertKeyPair>> {
     let paths = tedge_config_macros::all_or_nothing((
         config.c8y.proxy.cert_path.as_ref(),
         config.c8y.proxy.key_path.as_ref(),
     ))
     .map_err(|e| anyhow!("{e}"))?;
 
-    match paths {
-        Some((external_cert_file, external_key_file)) => Ok((
+    if let Some((external_cert_file, external_key_file)) = paths {
+        Ok(Some((
             load_cert(external_cert_file)
                 .with_context(|| format!("reading certificate configured in {C8yProxyCertPath}"))?,
             load_pkey(external_key_file).with_context(|| {
                 format!("reading private key configured in `{C8yProxyKeyPath}`")
             })?,
-        )),
-        None => Ok((
-            load_cert(&config.device.cert_path)
-                .with_context(|| format!("reading certificate configured in `{DeviceCertPath}`"))?,
-            load_pkey(&config.device.key_path)
-                .with_context(|| format!("reading private key configured in `{DeviceKeyPath}`"))?,
-        )),
+        )))
+    } else {
+        Ok(None)
     }
 }
 
@@ -99,8 +92,7 @@ impl Builder<C8yAuthProxy> for C8yAuthProxyBuilder {
             bind_address: self.bind_address,
             bind_port: self.bind_port,
             signal_receiver: self.signal_receiver,
-            server_certificate: self.server_certificate,
-            server_private_key: self.server_private_key,
+            cert_and_private_key: self.cert_and_private_key,
         })
     }
 }
@@ -116,8 +108,7 @@ pub struct C8yAuthProxy {
     bind_address: IpAddr,
     bind_port: u16,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
-    server_certificate: Vec<Vec<u8>>,
-    server_private_key: Vec<u8>,
+    cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
 }
 
 #[async_trait]
@@ -131,8 +122,7 @@ impl Actor for C8yAuthProxy {
             self.app_state,
             self.bind_address,
             self.bind_port,
-            self.server_certificate,
-            self.server_private_key,
+            self.cert_and_private_key,
         )
         .map_err(BoxError::from)?
         .wait();

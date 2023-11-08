@@ -35,14 +35,19 @@ impl Server {
         state: AppState,
         address: IpAddr,
         port: u16,
-        cert: Vec<Vec<u8>>,
-        key: Vec<u8>,
+        cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
     ) -> anyhow::Result<Self> {
         let app = create_app(state);
-        let server_config = crate::tls::get_ssl_config(cert, key, None)?;
-        Ok(Server {
-            fut: try_bind_with_tls(app, address, port, server_config)?.boxed(),
-        })
+        let server_config = cert_and_private_key
+            .map(|(cert, key)| crate::tls::get_ssl_config(cert, key, None))
+            .transpose()?;
+        let fut = if let Some(server_config) = server_config {
+            try_bind_with_tls(app, address, port, server_config)?.boxed()
+        } else {
+            try_bind_insecure(app, address, port)?.boxed()
+        };
+
+        Ok(Server { fut })
     }
 
     pub fn wait(self) -> BoxFuture<'static, std::io::Result<()>> {
@@ -83,13 +88,24 @@ fn create_app(state: AppState) -> Router<(), hyper::Body> {
         .with_state(state)
 }
 
+fn try_bind_insecure(
+    app: Router<(), hyper::Body>,
+    address: IpAddr,
+    port: u16,
+) -> anyhow::Result<impl Future<Output = io::Result<()>>> {
+    info!("Launching on port {port} with HTTP");
+    let listener =
+        TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
+    Ok(axum_server::from_tcp(listener).serve(app.into_make_service()))
+}
+
 fn try_bind_with_tls(
     app: Router<(), hyper::Body>,
     address: IpAddr,
     port: u16,
     server_config: rustls::ServerConfig,
 ) -> anyhow::Result<impl Future<Output = io::Result<()>>> {
-    info!("Launching on port {port}");
+    info!("Launching on port {port} with HTTPS");
     let listener =
         TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
     Ok(axum_server::from_tcp(listener)
