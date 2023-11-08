@@ -4,6 +4,10 @@
 
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -161,7 +165,9 @@ impl MqttSchema {
             ChannelFilter::EventMetadata => "/e/+/meta".to_string(),
             ChannelFilter::Alarm => "/a/+".to_string(),
             ChannelFilter::AlarmMetadata => "/a/+/meta".to_string(),
+            ChannelFilter::AnyCommand => "/cmd/+/+".to_string(),
             ChannelFilter::Command(operation) => format!("/cmd/{operation}/+"),
+            ChannelFilter::AnyCommandMetadata => "/cmd/+".to_string(),
             ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
         };
 
@@ -577,7 +583,7 @@ impl Channel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OperationType {
     Restart,
     SoftwareList,
@@ -589,19 +595,51 @@ pub enum OperationType {
     Custom(String),
 }
 
+// Using a custom Serialize/Deserialize implementations to read "foo" as Custom("foo")
+impl<'de> Deserialize<'de> for OperationType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let str = String::deserialize(deserializer)?;
+        Ok(str.as_str().into())
+    }
+}
+
+impl Serialize for OperationType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
 impl FromStr for OperationType {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.into())
+    }
+}
+
+impl<'a> From<&'a str> for OperationType {
+    fn from(s: &'a str) -> OperationType {
         match s {
-            "restart" => Ok(OperationType::Restart),
-            "software_list" => Ok(OperationType::SoftwareList),
-            "software_update" => Ok(OperationType::SoftwareUpdate),
-            "log_upload" => Ok(OperationType::LogUpload),
-            "config_snapshot" => Ok(OperationType::ConfigSnapshot),
-            "config_update" => Ok(OperationType::ConfigUpdate),
-            operation => Ok(OperationType::Custom(operation.to_string())),
+            "restart" => OperationType::Restart,
+            "software_list" => OperationType::SoftwareList,
+            "software_update" => OperationType::SoftwareUpdate,
+            "log_upload" => OperationType::LogUpload,
+            "config_snapshot" => OperationType::ConfigSnapshot,
+            "config_update" => OperationType::ConfigUpdate,
+            operation => OperationType::Custom(operation.to_string()),
         }
+    }
+}
+
+impl From<&OperationType> for String {
+    fn from(value: &OperationType) -> Self {
+        format!("{value}")
     }
 }
 
@@ -639,10 +677,12 @@ pub enum ChannelFilter {
     Measurement,
     Event,
     Alarm,
+    AnyCommand,
     Command(OperationType),
     MeasurementMetadata,
     EventMetadata,
     AlarmMetadata,
+    AnyCommandMetadata,
     CommandMetadata(OperationType),
 }
 
