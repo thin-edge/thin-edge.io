@@ -16,6 +16,7 @@ use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_config_macros::all_or_nothing;
 use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
@@ -560,15 +561,26 @@ define_tedge_config! {
 
     http: {
         bind: {
-            /// Http server port used by the File Transfer Service
+            /// The port number of the File Transfer Service HTTP server binds to for internal use
             #[tedge_config(example = "8000", default(value = 8000u16), deprecated_key = "http.port")]
             port: u16,
 
-            /// Http server address used by the File Transfer Service
-            #[tedge_config(default(function = "default_http_address"), deprecated_key = "http.address")]
-            #[tedge_config(example = "127.0.0.1", example = "192.168.1.2")]
+            /// The address of the File Transfer Service HTTP server binds to for internal use
+            #[tedge_config(default(function = "default_http_bind_address"), deprecated_key = "http.address")]
+            #[tedge_config(example = "127.0.0.1", example = "192.168.1.2", example = "0.0.0.0")]
             address: IpAddr,
         },
+
+        client: {
+            /// The port number on the remote host on which the File Transfer Service HTTP server is running
+            #[tedge_config(example = "8000", default(value = 8000u16))]
+            port: u16,
+
+            /// The address of the host on which the File Transfer Service HTTP server is running
+            #[tedge_config(default(value = "127.0.0.1"))]
+            #[tedge_config(example = "127.0.0.1", example = "192.168.1.2", example = "tedge-hostname")]
+            host: Arc<str>,
+        }
     },
 
     software: {
@@ -641,7 +653,7 @@ define_tedge_config! {
     }
 }
 
-fn default_http_address(dto: &TEdgeConfigDto) -> IpAddr {
+fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
     let external_address = dto.mqtt.external.bind.address;
     external_address
         .or(dto.mqtt.bind.address)

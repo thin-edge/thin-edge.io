@@ -4,8 +4,8 @@ use crate::error::FirmwareManagementError;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
-use std::net::IpAddr;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_api::path::DataDir;
 use tedge_config::TEdgeConfig;
@@ -17,7 +17,7 @@ const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_upd
 #[derive(Debug)]
 pub struct FirmwareManagerConfig {
     pub tedge_device_id: String,
-    pub local_http_host: String,
+    pub local_http_host: Arc<str>,
     pub tmp_dir: Utf8PathBuf,
     pub data_dir: DataDir,
     pub c8y_request_topics: TopicFilter,
@@ -29,14 +29,14 @@ pub struct FirmwareManagerConfig {
 impl FirmwareManagerConfig {
     pub fn new(
         tedge_device_id: String,
-        local_http_address: IpAddr,
+        local_http_host: Arc<str>,
         local_http_port: u16,
         tmp_dir: Utf8PathBuf,
         data_dir: DataDir,
         timeout_sec: Duration,
         c8y_url: String,
     ) -> Self {
-        let local_http_host = format!("{}:{}", local_http_address, local_http_port);
+        let local_http_host = format!("{}:{}", local_http_host, local_http_port).into();
 
         let c8y_request_topics = C8yTopic::SmartRestRequest.into();
         let firmware_update_response_topics =
@@ -60,8 +60,8 @@ impl FirmwareManagerConfig {
         tedge_config: &TEdgeConfig,
     ) -> Result<Self, FirmwareManagementConfigBuildError> {
         let tedge_device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
-        let local_http_address = tedge_config.http.bind.address;
-        let local_http_port = tedge_config.http.bind.port;
+        let local_http_address = tedge_config.http.client.host.clone();
+        let local_http_port = tedge_config.http.client.port;
         let tmp_dir = tedge_config.tmp.path.clone();
         let data_dir = tedge_config.data.path.clone().into();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();

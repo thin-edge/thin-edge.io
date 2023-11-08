@@ -80,6 +80,7 @@ Check for child related content
 Set external MQTT bind address
     Set Device Context    ${PARENT_SN}
     Execute Command    sudo tedge config set mqtt.external.bind.address ${PARENT_IP}
+    Execute Command    sudo tedge config set http.client.host ${PARENT_IP}
 
 Set external MQTT port
     Set Device Context    ${PARENT_SN}

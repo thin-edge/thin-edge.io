@@ -1,9 +1,9 @@
 use super::child_device::ConfigOperationResponseTopic;
 
 use c8y_api::smartrest::topic::C8yTopic;
-use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_api::path::DataDir;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
@@ -22,7 +22,7 @@ pub struct ConfigManagerConfig {
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
-    pub tedge_http_host: String,
+    pub tedge_http_host: Arc<str>,
     pub ops_dir: PathBuf,
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
@@ -40,10 +40,10 @@ impl ConfigManagerConfig {
         device_id: String,
         mqtt_host: String,
         mqtt_port: u16,
-        tedge_http_address: IpAddr,
+        tedge_http_host: Arc<str>,
         tedge_http_port: u16,
     ) -> Self {
-        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
+        let tedge_http_host = format!("{}:{}", tedge_http_host, tedge_http_port).into();
 
         let ops_dir = config_dir.join("operations/c8y");
         let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
@@ -84,8 +84,8 @@ impl ConfigManagerConfig {
         let data_dir = tedge_config.data.path.clone().into();
         let mqtt_host = tedge_config.mqtt.client.host.clone();
         let mqtt_port = tedge_config.mqtt.client.port.get();
-        let tedge_http_address = tedge_config.http.bind.address;
-        let tedge_http_port = tedge_config.http.bind.port;
+        let tedge_http_host = tedge_config.http.client.host.clone();
+        let tedge_http_port = tedge_config.http.client.port;
 
         let config = ConfigManagerConfig::new(
             config_dir,
@@ -94,7 +94,7 @@ impl ConfigManagerConfig {
             device_id,
             mqtt_host,
             mqtt_port,
-            tedge_http_address,
+            tedge_http_host,
             tedge_http_port,
         );
         Ok(config)
