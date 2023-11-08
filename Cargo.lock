@@ -651,6 +651,7 @@ dependencies = [
  "futures",
  "hyper",
  "mockito",
+ "pin-project",
  "rcgen",
  "reqwest",
  "rustls",

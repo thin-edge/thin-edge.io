@@ -1,3 +1,4 @@
+use crate::tls::redirect_http_to_https;
 use crate::tokens::*;
 use anyhow::Context;
 use axum::body::Body;
@@ -8,6 +9,7 @@ use axum::extract::FromRef;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::HeaderValue;
+use axum::middleware::map_request;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
@@ -110,7 +112,10 @@ fn try_bind_with_tls(
         TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
     Ok(axum_server::from_tcp(listener)
         .acceptor(crate::tls::Acceptor::new(server_config))
-        .serve(app.into_make_service()))
+        .serve(
+            app.layer(map_request(redirect_http_to_https))
+                .into_make_service(),
+        ))
 }
 
 #[derive(Clone)]

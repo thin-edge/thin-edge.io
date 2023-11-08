@@ -18,6 +18,7 @@ camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
 rcgen = { workspace = true }
+pin-project = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
