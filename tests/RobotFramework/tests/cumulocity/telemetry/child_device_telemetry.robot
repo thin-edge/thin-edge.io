@@ -48,6 +48,13 @@ Child devices support sending custom events overriding the type
     Log    ${events}
 
 
+Child devices support sending large events
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///e/largeEvent "$(printf '{"text":"Large event","large_text_field":"%s"}' "$(yes "x" | head -n 100000 | tr -d '\n')")"
+    ${events}=    Device Should Have Event/s    expected_text=Large event    with_attachment=False    minimum=1    maximum=1    type=largeEvent    fragment=large_text_field
+    Length Should Be    ${events[0]["large_text_field"]}    100000
+    Log    ${events}
+
+
 Child devices support sending custom alarms #1699
     [Tags]    \#1699
     Execute Command    tedge mqtt pub te/device/${CHILD_SN}///a/myCustomAlarmType '{ "severity": "critical", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'

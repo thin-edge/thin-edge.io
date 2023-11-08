@@ -1,12 +1,13 @@
 use c8y_api::json_c8y::*;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
 use tedge_utils::file::PermissionEntry;
 
-fan_in_message_type!(C8YRestRequest[GetJwtToken, GetFreshJwtToken, C8yCreateEvent, SoftwareListResponse, UploadLogBinary, UploadFile, DownloadFile]: Debug, PartialEq, Eq);
+fan_in_message_type!(C8YRestRequest[GetJwtToken, GetFreshJwtToken, CreateEvent, SoftwareListResponse, UploadLogBinary, UploadFile, DownloadFile]: Debug, PartialEq, Eq);
 //HIPPO Rename EventId to String as there could be many other String responses as well and this macro doesn't allow another String variant
 fan_in_message_type!(C8YRestResponse[EventId, Url, Unit]: Debug);
 
@@ -48,6 +49,16 @@ pub struct GetJwtToken;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GetFreshJwtToken;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct CreateEvent {
+    pub event_type: String,
+    pub time: time::OffsetDateTime,
+    pub text: String,
+    pub extras: HashMap<String, serde_json::Value>,
+    /// C8y's external ID of the device
+    pub device_id: String,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SoftwareListResponse {

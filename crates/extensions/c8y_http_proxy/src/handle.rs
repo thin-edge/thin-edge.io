@@ -2,12 +2,12 @@ use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResponse;
 use crate::messages::C8YRestResult;
+use crate::messages::CreateEvent;
 use crate::messages::GetFreshJwtToken;
 use crate::messages::GetJwtToken;
 use crate::messages::SoftwareListResponse;
 use crate::messages::UploadFile;
 use crate::messages::UploadLogBinary;
-use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use std::path::Path;
 use std::path::PathBuf;
@@ -50,7 +50,7 @@ impl C8YHttpProxy {
         }
     }
 
-    pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, C8YRestError> {
+    pub async fn send_event(&mut self, c8y_event: CreateEvent) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = c8y_event.into();
         match self.c8y.await_response(request).await? {
             Ok(C8YRestResponse::EventId(id)) => Ok(id),

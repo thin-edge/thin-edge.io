@@ -42,6 +42,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
+use c8y_http_proxy::messages::CreateEvent;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
@@ -466,7 +467,14 @@ impl CumulocityConverter {
                 messages.push(message);
             } else {
                 // The message must be sent over HTTP
-                let _ = self.http_proxy.send_event(c8y_event).await?;
+                let create_event = CreateEvent {
+                    event_type: c8y_event.event_type,
+                    time: c8y_event.time,
+                    text: c8y_event.text,
+                    extras: c8y_event.extras,
+                    device_id: entity.external_id.clone().into(),
+                };
+                self.http_proxy.send_event(create_event).await?;
                 return Ok(vec![]);
             }
         };
@@ -2297,7 +2305,7 @@ pub(crate) mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, mut http_proxy) = create_c8y_converter(&tmp_dir).await;
         tokio::spawn(async move {
-            if let Some(C8YRestRequest::C8yCreateEvent(_)) = http_proxy.recv().await {
+            if let Some(C8YRestRequest::CreateEvent(_)) = http_proxy.recv().await {
                 let _ = http_proxy
                     .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
                         "event-id".into(),
@@ -2312,6 +2320,34 @@ pub(crate) mod tests {
         let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
 
         assert!(converter.convert(&big_event_message).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_convert_big_event_for_child_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, mut http_proxy) = create_c8y_converter(&tmp_dir).await;
+        tokio::spawn(async move {
+            if let Some(C8YRestRequest::CreateEvent(_)) = http_proxy.recv().await {
+                http_proxy
+                    .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
+                        "event-id".into(),
+                    )))
+                    .await
+                    .unwrap()
+            }
+        });
+
+        let event_topic = "te/device/child1///e/click_event";
+        let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
+        let big_event_payload = json!({ "text": big_event_text }).to_string();
+        let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
+
+        let child_registration_messages = converter.convert(&big_event_message).await;
+
+        for message in child_registration_messages {
+            // Event creation message should be handled via HTTP
+            assert_ne!(message.topic.name, "c8y/event/events/create")
+        }
     }
 
     #[tokio::test]

@@ -2,12 +2,11 @@ use crate::credentials::ConstJwtRetriever;
 use crate::credentials::JwtRequest;
 use crate::credentials::JwtResult;
 use crate::handle::C8YHttpProxy;
+use crate::messages::CreateEvent;
 use crate::C8YHttpConfig;
 use crate::C8YHttpProxyBuilder;
 use async_trait::async_trait;
-use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yEventResponse;
-use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
 use mockito::Matcher;
@@ -192,17 +191,15 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
 async fn retry_create_event_on_expired_jwt_with_mock() {
     let external_id = "device-001";
     let tmp_dir = "/tmp";
-    let internal_id = "external-device-001";
-    let event_id = "TestClickEvent";
+    let internal_id = "12345678";
+    let event_id = "87654321";
 
-    let event = C8yCreateEvent {
-        source: Some(C8yManagedObject {
-            id: external_id.to_string(),
-        }),
+    let event = CreateEvent {
         event_type: "click_event".into(),
         time: datetime!(2021-04-23 19:00:00 +05:00),
         text: "Someone clicked".into(),
         extras: HashMap::new(),
+        device_id: external_id.to_string(),
     };
 
     let response = C8yEventResponse {

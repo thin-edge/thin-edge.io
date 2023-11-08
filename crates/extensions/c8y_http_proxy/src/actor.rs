@@ -5,6 +5,7 @@ use crate::messages::C8YConnectionError;
 use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
+use crate::messages::CreateEvent;
 use crate::messages::DownloadFile;
 use crate::messages::EventId;
 use crate::messages::SoftwareListResponse;
@@ -95,7 +96,7 @@ impl Actor for C8YHttpProxyActor {
                         .map(|response| response.into())
                 }
 
-                C8YRestRequest::C8yCreateEvent(request) => self
+                C8YRestRequest::CreateEvent(request) => self
                     .create_event(request)
                     .await
                     .map(|response| response.into()),
@@ -295,7 +296,7 @@ impl C8YHttpProxyActor {
 
     pub(crate) async fn create_event(
         &mut self,
-        c8y_event: C8yCreateEvent,
+        c8y_event: CreateEvent,
     ) -> Result<EventId, C8YRestError> {
         let create_event = |internal_id: String| -> C8yCreateEvent {
             C8yCreateEvent {
@@ -307,13 +308,8 @@ impl C8YHttpProxyActor {
             }
         };
 
-        // If the incoming event does not have any source mentioned explicitly,
-        // it is associated to the main device by default.
-        let device_id = c8y_event
-            .source
-            .map_or_else(|| self.end_point.device_id.clone(), |v| v.id);
-
-        self.send_event_internal(device_id, create_event).await
+        self.send_event_internal(c8y_event.device_id, create_event)
+            .await
     }
 
     async fn send_software_list_http(
