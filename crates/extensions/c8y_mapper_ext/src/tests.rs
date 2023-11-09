@@ -4,12 +4,13 @@ use super::actor::SyncStart;
 use super::config::C8yMapperConfig;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
+use crate::actor::IdUploadRequest;
+use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
-use c8y_http_proxy::messages::Url;
 use serde_json::json;
 use std::fs;
 use std::fs::File;
@@ -26,10 +27,8 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_actors::WrappedInput;
-use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::mqtt_topics::OperationType;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_file_system_ext::FsWatchEvent;
@@ -47,7 +46,7 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 async fn mapper_publishes_init_messages_on_startup() {
     // Start SM Mapper
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
@@ -92,7 +91,7 @@ async fn mapper_publishes_init_messages_on_startup() {
 #[tokio::test]
 async fn child_device_registration_mapping() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -150,7 +149,7 @@ async fn child_device_registration_mapping() {
 #[tokio::test]
 async fn custom_topic_scheme_registration_mapping() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -207,7 +206,7 @@ async fn custom_topic_scheme_registration_mapping() {
 #[tokio::test]
 async fn service_registration_mapping() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -283,7 +282,7 @@ async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `te/device/main///cmd/software_update/+`.
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -329,7 +328,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -378,7 +377,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     // Start SM Mapper
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -429,7 +428,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -460,7 +459,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 #[tokio::test]
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -483,7 +482,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 #[tokio::test]
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -529,7 +528,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
 #[tokio::test]
 async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -578,7 +577,7 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
 #[tokio::test]
 async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -651,7 +650,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
 #[tokio::test]
 async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -692,7 +691,7 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
 #[tokio::test]
 async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -739,7 +738,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
 #[tokio::test]
 async fn c8y_mapper_child_alarm_with_custom_message() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -785,7 +784,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
 #[tokio::test]
 async fn c8y_mapper_alarm_with_custom_message() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -825,7 +824,7 @@ async fn c8y_mapper_alarm_with_custom_message() {
 #[tokio::test]
 async fn c8y_mapper_child_alarm_empty_payload() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -854,7 +853,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 #[tokio::test]
 async fn c8y_mapper_alarm_empty_payload() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -874,7 +873,7 @@ async fn c8y_mapper_alarm_empty_payload() {
 #[tokio::test]
 async fn c8y_mapper_alarm_empty_json_payload() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -900,7 +899,7 @@ async fn c8y_mapper_alarm_empty_json_payload() {
 #[tokio::test]
 async fn c8y_mapper_child_event() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -960,7 +959,7 @@ async fn c8y_mapper_child_event() {
 #[tokio::test]
 async fn c8y_mapper_child_service_event() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1043,7 +1042,7 @@ async fn c8y_mapper_child_service_event() {
 #[tokio::test]
 async fn c8y_mapper_main_service_event() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1108,7 +1107,7 @@ async fn c8y_mapper_main_service_event() {
 #[tokio::test]
 async fn c8y_mapper_child_service_alarm() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1184,7 +1183,7 @@ async fn c8y_mapper_child_service_alarm() {
 #[tokio::test]
 async fn c8y_mapper_main_service_alarm() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1242,7 +1241,7 @@ async fn c8y_mapper_main_service_alarm() {
 #[tokio::test]
 async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -1273,7 +1272,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
 async fn mapper_handles_multiline_sm_requests() {
     // The test assures if Mapper can handle multiline smartrest messages arrived on `c8y/s/ds`
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     spawn_dummy_c8y_http_proxy(http);
 
@@ -1338,7 +1337,7 @@ async fn mapper_publishes_supported_operations() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     mqtt.skip(2).await;
@@ -1355,7 +1354,7 @@ async fn mapper_publishes_child_device_create_message() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_child_devices(&cfg_dir, vec!["child1"]);
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1389,7 +1388,7 @@ async fn mapper_publishes_child_device_create_message_default_naming_scheme() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_child_devices(&cfg_dir, vec!["test-device:device:child1"]);
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1433,7 +1432,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
         vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"],
     );
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1471,7 +1470,7 @@ async fn mapping_child_device_dirs_with_forbidden_characters() {
     create_thin_edge_child_operations(&cfg_dir, "my#complex+child", vec!["c8y_ChildTestOp1"]);
     create_thin_edge_child_operations(&cfg_dir, "simple_child", vec!["c8y_ChildTestOp2"]);
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1517,7 +1516,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
 
-    let (mqtt, _http, mut fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, mut fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1600,7 +1599,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
         vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"],
     );
 
-    let (mqtt, _http, mut fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, mut fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1668,7 +1667,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
 #[tokio::test]
 async fn mapping_dynamically_added_child_device_dir() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, mut fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, mut fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
     let ops_dir = cfg_dir.dir("operations").dir("c8y");
@@ -1701,7 +1700,7 @@ async fn mapping_dynamically_added_child_device_dir() {
 #[tokio::test]
 async fn mapping_dynamically_added_child_device_dir_with_default_external_id_naming_scheme() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, mut fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, mut fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
     let ops_dir = cfg_dir.dir("operations").dir("c8y");
@@ -1738,7 +1737,7 @@ async fn mapping_dynamically_added_child_device_dir_with_default_external_id_nam
 async fn mapping_dynamically_added_child_device_dir_with_forbidden_characters() {
     let cfg_dir = TempTedgeDir::new();
     let ops_dir = cfg_dir.dir("operations").dir("c8y");
-    let (mqtt, _http, mut fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let (mqtt, _http, mut fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1804,7 +1803,7 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
     });
     create_inventroy_json_file_with_content(&cfg_dir, &custom_fragment_content.to_string());
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     assert_received_includes_json(
@@ -1857,7 +1856,7 @@ async fn forbidden_keys_in_inventory_fragments_file_ignored() {
     });
     create_inventroy_json_file_with_content(&cfg_dir, &custom_fragment_content.to_string());
 
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     assert_received_includes_json(
@@ -1914,7 +1913,7 @@ async fn custom_operation_without_timeout_successful() {
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
 
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -1976,7 +1975,7 @@ async fn custom_operation_with_timeout_successful() {
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
 
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2045,7 +2044,7 @@ async fn custom_operation_timeout_sigterm() {
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
 
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2118,7 +2117,7 @@ async fn custom_operation_timeout_sigkill() {
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
 
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2172,7 +2171,7 @@ operation failed due to timeout: duration=1sEOF
 #[tokio::test]
 async fn inventory_registers_unknown_entity_once() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
@@ -2217,441 +2216,9 @@ async fn inventory_registers_unknown_entity_once() {
 }
 
 #[tokio::test]
-async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device() {
-    let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate c8y_LogfileRequest SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
-        "522,test-device,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
-    ))
-        .await
-        .expect("Send failed");
-
-    let (topic, received_json) = mqtt
-        .recv()
-        .await
-        .map(|msg| {
-            (
-                msg.topic,
-                serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
-                    .expect("JSON"),
-            )
-        })
-        .unwrap();
-
-    let mqtt_schema = MqttSchema::default();
-    let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
-    assert_eq!(entity, "device/main//");
-
-    if let Channel::Command {
-        operation: OperationType::LogUpload,
-        cmd_id,
-    } = channel
-    {
-        // Validate the topic name
-        assert_eq!(
-            topic.name,
-            format!("te/device/main///cmd/log_upload/{cmd_id}")
-        );
-
-        // Validate the payload JSON
-        let expected_json = json!({
-            "status": "init",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-{cmd_id}"),
-            "type": "logfileA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000
-        });
-
-        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
-    } else {
-        panic!("Unexpected response on channel: {:?}", topic)
-    }
-}
-
-#[tokio::test]
-async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_device() {
-    let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate log_upload cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/DeviceSerial///cmd/log_upload"),
-        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
-
-    mqtt.skip(3).await; //Skip entity registration, mapping and supported log types messages
-
-    // Simulate c8y_LogfileRequest SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
-        "522,test-device:device:DeviceSerial,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
-    ))
-    .await
-    .expect("Send failed");
-
-    let (topic, received_json) = mqtt
-        .recv()
-        .await
-        .map(|msg| {
-            (
-                msg.topic,
-                serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
-                    .expect("JSON"),
-            )
-        })
-        .unwrap();
-
-    let mqtt_schema = MqttSchema::default();
-    let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
-    assert_eq!(entity, "device/DeviceSerial//");
-
-    if let Channel::Command {
-        operation: OperationType::LogUpload,
-        cmd_id,
-    } = channel
-    {
-        // Validate the topic name
-        assert_eq!(
-            topic.name,
-            format!("te/device/DeviceSerial///cmd/log_upload/{cmd_id}")
-        );
-
-        // Validate the payload JSON
-        let expected_json = json!({
-            "status": "init",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device:device:DeviceSerial/log_upload/logfileA-{cmd_id}"),
-            "type": "logfileA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000
-        });
-
-        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
-    } else {
-        panic!("Unexpected response on channel: {:?}", topic)
-    }
-}
-
-#[tokio::test]
-async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_main_device() {
-    let ttd = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate log_upload cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload"),
-        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
-
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "118,typeA,typeB,typeC")]).await;
-
-    // Validate if the supported operation file is created
-    assert!(ttd
-        .path()
-        .join("operations/c8y/c8y_LogfileRequest")
-        .exists());
-}
-
-#[tokio::test]
-async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_device() {
-    let ttd = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate log_upload cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload"),
-        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/child1//",
-            json!({"@type":"child-device","@id":"test-device:device:child1"}),
-        )],
-    )
-    .await;
-
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:child1,child1,thin-edge.io-child",
-        )],
-    )
-    .await;
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:child1",
-            "118,typeA,typeB,typeC",
-        )],
-    )
-    .await;
-
-    // Validate if the supported operation file is created
-    assert!(ttd
-        .path()
-        .join("operations/c8y/test-device:device:child1/c8y_LogfileRequest")
-        .exists());
-}
-
-#[tokio::test]
-async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
-    let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate log_upload command with "executing" state
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
-        json!({
-            "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
-            "type": "typeA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000
-        })
-            .to_string(),
-    ))
-        .await
-        .expect("Send failed");
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_LogfileRequest")]).await;
-
-    // Simulate log_upload command with "failed" state
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
-        json!({
-            "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
-            "type": "typeA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000,
-            "reason": "Something went wrong"
-        })
-            .to_string(),
-    ))
-        .await
-        .expect("Send failed");
-
-    // Expect `502` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "502,c8y_LogfileRequest,\"Something went wrong\"",
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
-    let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate log_upload command with "executing" state
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
-        json!({
-            "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
-            "type": "typeA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000
-        })
-            .to_string(),
-    ))
-        .await
-        .expect("Send failed");
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/child1//",
-            json!({"@type":"child-device","@id":"test-device:device:child1"}),
-        )],
-    )
-    .await;
-
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:child1,child1,thin-edge.io-child",
-        )],
-    )
-    .await;
-
-    // Expect `501` smartrest message on `c8y/s/us/child1`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:child1",
-            "501,c8y_LogfileRequest",
-        )],
-    )
-    .await;
-
-    // Simulate log_upload command with "failed" state
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
-        json!({
-            "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
-            "type": "typeA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000,
-            "reason": "Something went wrong"
-        })
-            .to_string(),
-    ))
-        .await
-        .expect("Send failed");
-
-    // Expect `502` smartrest message on `c8y/s/us/child1`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:child1",
-            "502,c8y_LogfileRequest,\"Something went wrong\"",
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn handle_log_upload_successful_cmd_for_main_device() {
-    let ttd = TempTedgeDir::new();
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate a log file is uploaded to the file transfer repository
-    ttd.dir("tedge")
-        .dir("file-transfer")
-        .dir("main")
-        .dir("log_upload")
-        .file("typeA-1234");
-
-    // Simulate log_upload command with "executing" state
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
-        json!({
-            "status": "successful",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
-            "type": "typeA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000
-        })
-            .to_string(),
-    ))
-        .await
-        .expect("Send failed");
-
-    // Expect `503` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "503,c8y_LogfileRequest,http://c8y-binary.url")],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn handle_log_upload_successful_cmd_for_child_device() {
-    let ttd = TempTedgeDir::new();
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate a log file is uploaded to the file transfer repository
-    ttd.dir("tedge")
-        .dir("file-transfer")
-        .dir("child1")
-        .dir("log_upload")
-        .file("typeA-1234");
-
-    // Simulate log_upload command with "executing" state
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
-        json!({
-            "status": "successful",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
-            "type": "typeA",
-            "dateFrom": "2013-06-22T17:03:14.123+02:00",
-            "dateTo": "2013-06-23T18:03:14.123+02:00",
-            "searchText": "ERROR",
-            "lines": 1000
-        })
-            .to_string(),
-    ))
-        .await
-        .expect("Send failed");
-
-    mqtt.skip(2).await; // Skip child device registration messages
-
-    // Expect `503` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:child1",
-            "503,c8y_LogfileRequest,http://c8y-binary.url",
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2710,7 +2277,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
 #[tokio::test]
 async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2778,7 +2345,7 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
 #[tokio::test]
 async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2841,7 +2408,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
 #[tokio::test]
 async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -2985,6 +2552,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     SimpleMessageBox<C8YRestRequest, C8YRestResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     SimpleMessageBox<SyncStart, SyncComplete>,
+    SimpleMessageBox<IdUploadRequest, IdUploadResult>,
     SimpleMessageBox<IdDownloadRequest, IdDownloadResult>,
 ) {
     if init {
@@ -3033,6 +2601,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         SimpleMessageBoxBuilder::new("C8Y", 1);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
+    let mut uploader_builder: SimpleMessageBoxBuilder<IdUploadRequest, IdUploadResult> =
+        SimpleMessageBoxBuilder::new("Uploader", 5);
     let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         SimpleMessageBoxBuilder::new("Downloader", 5);
     let mut timer_builder: SimpleMessageBoxBuilder<SyncStart, SyncComplete> =
@@ -3043,6 +2613,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         &mut mqtt_builder,
         &mut c8y_proxy_builder,
         &mut timer_builder,
+        &mut uploader_builder,
         &mut downloader_builder,
         &mut fs_watcher_builder,
     )
@@ -3056,6 +2627,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         c8y_proxy_builder.build(),
         fs_watcher_builder.build(),
         timer_builder.build(),
+        uploader_builder.build(),
         downloader_builder.build(),
     )
 }
@@ -3105,11 +2677,11 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Unit(())))
                         .await;
                 }
-                Some(C8YRestRequest::UploadFile(_)) => {
+                Some(C8YRestRequest::CreateEvent(_)) => {
                     let _ = http
-                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Url(Url(
-                            "http://c8y-binary.url".into(),
-                        ))))
+                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
+                            "dummy-event-id-1234".to_string(),
+                        )))
                         .await;
                 }
                 _ => {}

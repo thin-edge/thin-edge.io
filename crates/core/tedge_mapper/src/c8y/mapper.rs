@@ -19,6 +19,7 @@ use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
+use tedge_uploader_ext::UploaderActor;
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 
@@ -46,6 +47,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
 
+        let mut uploader_actor = UploaderActor::new().builder();
         let mut downloader_actor = DownloaderActor::new().builder();
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
@@ -54,6 +56,7 @@ impl TEdgeComponent for CumulocityMapper {
             &mut mqtt_actor,
             &mut c8y_http_proxy_actor,
             &mut timer_actor,
+            &mut uploader_actor,
             &mut downloader_actor,
             &mut fs_watch_actor,
         )?;
@@ -77,6 +80,7 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(timer_actor).await?;
         runtime.spawn(c8y_mapper_actor).await?;
         runtime.spawn(service_monitor_actor).await?;
+        runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
         runtime.spawn(old_to_new_agent_adaptator).await?;
         runtime.run_to_completion().await?;

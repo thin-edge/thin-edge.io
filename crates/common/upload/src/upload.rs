@@ -1,3 +1,5 @@
+use crate::error::ErrContext;
+use crate::error::UploadError;
 use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use camino::Utf8Path;
@@ -6,13 +8,12 @@ use log::warn;
 use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Body;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;
-
-use crate::error::ErrContext;
-use crate::error::UploadError;
 
 fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 5 minutes total.
@@ -26,9 +27,25 @@ fn default_backoff() -> ExponentialBackoff {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ContentType {
+    TextPlain,
+    ApplicationOctetStream,
+}
+
+impl Display for ContentType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentType::TextPlain => write!(f, "text/plain"),
+            ContentType::ApplicationOctetStream => write!(f, "application/octet-stream"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UploadInfo {
     pub url: String,
     pub auth: Option<Auth>,
+    pub content_type: ContentType,
 }
 
 impl From<&str> for UploadInfo {
@@ -42,12 +59,20 @@ impl UploadInfo {
         Self {
             url: url.into(),
             auth: None,
+            content_type: ContentType::ApplicationOctetStream,
         }
     }
 
     pub fn with_auth(self, auth: Auth) -> Self {
         Self {
             auth: Some(auth),
+            ..self
+        }
+    }
+
+    pub fn with_content_type(self, content_type: ContentType) -> Self {
+        Self {
+            content_type,
             ..self
         }
     }
@@ -105,9 +130,10 @@ impl Uploader {
 
             let file_body = Body::wrap_stream(FramedRead::new(file, BytesCodec::new()));
 
+            // Todo: Ideally it detects the appropriate content-type automatically, e.g. UTF-8 => text/plain
             let mut client = reqwest::Client::new()
                 .put(url.url())
-                .header(CONTENT_TYPE, "application/octet-stream")
+                .header(CONTENT_TYPE, url.content_type.to_string())
                 .header(CONTENT_LENGTH, file_length);
 
             if let Some(Auth::Bearer(token)) = &url.auth {

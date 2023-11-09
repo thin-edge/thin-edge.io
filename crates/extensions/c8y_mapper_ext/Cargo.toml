@@ -31,6 +31,7 @@ tedge_file_system_ext = { workspace = true }
 tedge_http_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_timer_ext = { workspace = true }
+tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

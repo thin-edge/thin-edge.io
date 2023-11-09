@@ -4,3 +4,4 @@ mod actor;
 mod tests;
 
 pub use actor::*;
+pub use upload::ContentType;

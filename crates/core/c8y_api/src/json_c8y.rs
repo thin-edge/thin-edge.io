@@ -125,24 +125,6 @@ impl From<&SoftwareListCommand> for C8yUpdateSoftwareListResponse {
     }
 }
 
-impl C8yCreateEvent {
-    pub fn new(
-        source: Option<C8yManagedObject>,
-        event_type: String,
-        time: OffsetDateTime,
-        text: String,
-        extras: HashMap<String, Value>,
-    ) -> Self {
-        Self {
-            source,
-            event_type,
-            time,
-            text,
-            extras,
-        }
-    }
-}
-
 impl From<ThinEdgeEvent> for C8yCreateEvent {
     fn from(event: ThinEdgeEvent) -> Self {
         let mut extras = HashMap::new();

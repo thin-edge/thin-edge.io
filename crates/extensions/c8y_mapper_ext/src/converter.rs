@@ -5,6 +5,7 @@ use super::error::CumulocityMapperError;
 use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
+use crate::actor::IdUploadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
@@ -159,6 +160,13 @@ impl CumulocityConverter {
     }
 }
 
+pub struct UploadOperationData {
+    pub smartrest_topic: Topic,
+    pub clear_cmd_topic: Topic,
+    pub c8y_binary_url: String,
+    pub operation: CumulocitySupportedOperations,
+}
+
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: C8yMapperConfig,
@@ -179,8 +187,10 @@ pub struct CumulocityConverter {
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
+    pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
-    pub pending_operations: HashMap<CmdId, SmartRestOperationVariant>,
+    pub pending_upload_operations: HashMap<CmdId, UploadOperationData>,
+    pub pending_download_operations: HashMap<CmdId, SmartRestOperationVariant>,
     pub command_id: IdGenerator,
 }
 
@@ -190,6 +200,7 @@ impl CumulocityConverter {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
+        uploader_sender: LoggingSender<IdUploadRequest>,
         downloader_sender: LoggingSender<IdDownloadRequest>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
@@ -256,8 +267,10 @@ impl CumulocityConverter {
             mqtt_schema,
             entity_store,
             auth_proxy,
+            uploader_sender,
             downloader_sender,
-            pending_operations: HashMap::new(),
+            pending_upload_operations: HashMap::new(),
+            pending_download_operations: HashMap::new(),
             command_id,
         })
     }
@@ -1490,6 +1503,8 @@ pub(crate) mod tests {
     use super::CumulocityConverter;
     use crate::actor::IdDownloadRequest;
     use crate::actor::IdDownloadResult;
+    use crate::actor::IdUploadRequest;
+    use crate::actor::IdUploadResult;
     use crate::config::C8yMapperConfig;
     use crate::error::ConversionError;
     use crate::Capabilities;
@@ -3013,8 +3028,13 @@ pub(crate) mod tests {
         let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
 
+        let uploader_builder: SimpleMessageBoxBuilder<IdUploadResult, IdUploadRequest> =
+            SimpleMessageBoxBuilder::new("UL", 5);
+        let uploader_sender =
+            LoggingSender::new("UL".into(), uploader_builder.build().sender_clone());
+
         let downloader_builder: SimpleMessageBoxBuilder<IdDownloadResult, IdDownloadRequest> =
-            SimpleMessageBoxBuilder::new("MQTT", 5);
+            SimpleMessageBoxBuilder::new("DL", 5);
         let downloader_sender =
             LoggingSender::new("DL".into(), downloader_builder.build().sender_clone());
 
@@ -3023,6 +3043,7 @@ pub(crate) mod tests {
             mqtt_publisher,
             http_proxy,
             auth_proxy,
+            uploader_sender,
             downloader_sender,
         )
         .unwrap();

@@ -89,6 +89,11 @@ impl C8yEndPoint {
         url_event_binary
     }
 
+    pub fn get_url_for_event_binary_upload_unchecked(&self, event_id: &str) -> Url {
+        let url = self.get_url_for_event_binary_upload(event_id);
+        Url::parse(&url).unwrap()
+    }
+
     pub fn maybe_tenant_url(&self, url: &str) -> Option<Url> {
         // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
         // * <tenant_name>.<domain> eg: sample.c8y.io

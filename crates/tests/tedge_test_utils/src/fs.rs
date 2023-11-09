@@ -107,8 +107,16 @@ impl TempTedgeFile {
         Path::new(&self.file_path)
     }
 
+    pub fn utf8_path(&self) -> &Utf8Path {
+        Utf8Path::from_path(self.path()).unwrap()
+    }
+
     pub fn to_path_buf(&self) -> PathBuf {
         PathBuf::from(self.path())
+    }
+
+    pub fn utf8_path_buf(&self) -> Utf8PathBuf {
+        Utf8PathBuf::from_path_buf(self.to_path_buf()).unwrap()
     }
 }
 

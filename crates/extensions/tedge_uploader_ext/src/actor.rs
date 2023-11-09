@@ -7,6 +7,7 @@ use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use upload::Auth;
+use upload::ContentType;
 use upload::UploadError;
 use upload::UploadInfo;
 use upload::Uploader;
@@ -16,6 +17,7 @@ pub struct UploadRequest {
     pub url: String,
     pub file_path: Utf8PathBuf,
     pub auth: Option<Auth>,
+    pub content_type: ContentType,
 }
 
 impl UploadRequest {
@@ -24,12 +26,20 @@ impl UploadRequest {
             url: url.into(),
             file_path: file_path.to_owned(),
             auth: None,
+            content_type: ContentType::ApplicationOctetStream,
         }
     }
 
     pub fn with_auth(self, auth: Auth) -> Self {
         Self {
             auth: Some(auth),
+            ..self
+        }
+    }
+
+    pub fn with_content_type(self, content_type: ContentType) -> Self {
+        Self {
+            content_type,
             ..self
         }
     }
@@ -85,11 +95,10 @@ impl Server for UploaderActor {
     async fn handle(&mut self, id_request: Self::Request) -> Self::Response {
         let (id, request) = id_request;
 
-        let upload_info = if let Some(auth) = request.auth {
-            UploadInfo::new(&request.url).with_auth(auth)
-        } else {
-            UploadInfo::new(&request.url)
-        };
+        let mut upload_info = UploadInfo::new(&request.url).with_content_type(request.content_type);
+        if let Some(auth) = request.auth {
+            upload_info = upload_info.with_auth(auth);
+        }
 
         let uploader = Uploader::new(request.file_path.clone());
 

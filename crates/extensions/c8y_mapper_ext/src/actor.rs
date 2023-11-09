@@ -2,7 +2,13 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
+use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRest;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -33,13 +39,18 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
 use tracing::error;
+use tracing::warn;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -47,10 +58,12 @@ pub type SyncStart = SetTimeout<()>;
 pub type SyncComplete = Timeout<()>;
 
 pub(crate) type CmdId = String;
+pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
+pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdDownloadResult] : Debug);
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -87,6 +100,9 @@ impl Actor for C8yMapperActor {
                 }
                 C8yMapperInput::SyncComplete(_) => {
                     self.process_sync_timeout().await?;
+                }
+                C8yMapperInput::IdUploadResult((cmd_id, result)) => {
+                    self.process_upload_result(cmd_id, result).await?;
                 }
                 C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
                     self.process_download_result(cmd_id, result).await?;
@@ -217,12 +233,72 @@ impl C8yMapperActor {
         Ok(())
     }
 
+    async fn process_upload_result(
+        &mut self,
+        cmd_id: CmdId,
+        upload_result: UploadResult,
+    ) -> Result<(), RuntimeError> {
+        match self.converter.pending_upload_operations.remove(&cmd_id) {
+            None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
+            Some(queued_data) => {
+                let serialize_result = match queued_data.operation {
+                    CumulocitySupportedOperations::C8yLogFileRequest
+                    | CumulocitySupportedOperations::C8yUploadConfigFile => self
+                        .get_smartrest_response_for_upload_result(
+                            upload_result,
+                            queued_data.c8y_binary_url,
+                            queued_data.operation,
+                        ),
+                    other_type => {
+                        warn!("Received unsupported operation {other_type:?} for uploading a file");
+                        return Ok(());
+                    }
+                };
+
+                match serialize_result {
+                    Ok(sr_payload) => {
+                        let c8y_notification =
+                            Message::new(&queued_data.smartrest_topic, sr_payload);
+                        let clear_local_cmd = Message::new(&queued_data.clear_cmd_topic, "")
+                            .with_retain()
+                            .with_qos(QoS::AtLeastOnce);
+                        for converted_message in [c8y_notification, clear_local_cmd] {
+                            self.mqtt_publisher.send(converted_message).await?
+                        }
+                    }
+                    Err(err) => {
+                        error!("Error occurred while processing an upload result. {err}")
+                    }
+                }
+            }
+        };
+
+        Ok(())
+    }
+
+    fn get_smartrest_response_for_upload_result(
+        &self,
+        upload_result: UploadResult,
+        binary_url: String,
+        operation: CumulocitySupportedOperations,
+    ) -> Result<SmartRest, SmartRestSerializerError> {
+        match upload_result {
+            Ok(_) => SmartRestSetOperationToSuccessful::new(operation)
+                .with_response_parameter(&binary_url)
+                .to_smartrest(),
+            Err(err) => {
+                SmartRestSetOperationToFailed::new(operation, format!("Upload failed with {}", err))
+                    .to_smartrest()
+            }
+        }
+    }
+
     async fn process_download_result(
         &mut self,
         cmd_id: CmdId,
         result: DownloadResult,
     ) -> Result<(), RuntimeError> {
-        match self.converter.pending_operations.remove(&cmd_id) {
+        match self.converter.pending_download_operations.remove(&cmd_id) {
             None => error!("Received a download result for the unknown command ID: {cmd_id}"),
             Some(operation) => {
                 let result = match operation {
@@ -261,6 +337,7 @@ pub struct C8yMapperBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
+    upload_sender: DynSender<IdUploadRequest>,
     download_sender: DynSender<IdDownloadRequest>,
     auth_proxy: ProxyUrlGenerator,
 }
@@ -271,6 +348,7 @@ impl C8yMapperBuilder {
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
+        uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
         downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Result<Self, FileError> {
@@ -282,6 +360,7 @@ impl C8yMapperBuilder {
             mqtt.connect_consumer(config.topics.clone(), adapt(&box_builder.get_sender()));
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+        let upload_sender = uploader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         let download_sender =
             downloader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
@@ -293,6 +372,7 @@ impl C8yMapperBuilder {
             mqtt_publisher,
             http_proxy,
             timer_sender,
+            upload_sender,
             download_sender,
             auth_proxy,
         })
@@ -319,6 +399,8 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
+        let uploader_sender =
+            LoggingSender::new("C8yMapper => Uploader".into(), self.upload_sender);
         let downloader_sender =
             LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
 
@@ -327,6 +409,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             mqtt_publisher.clone(),
             self.http_proxy,
             self.auth_proxy,
+            uploader_sender.clone(),
             downloader_sender.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
