@@ -247,10 +247,7 @@ impl GenericCommandState {
         let json: Value = serde_json::from_slice(payload)?;
         let status = GenericCommandState::extract_text_property(&json, "status")
             .ok_or(WorkflowExecutionError::MissingStatus)?;
-        Ok(Some(GenericCommandState {
-            status,
-            json,
-        }))
+        Ok(Some(GenericCommandState { status, json }))
     }
 
     /// Serialize the command state as a json payload

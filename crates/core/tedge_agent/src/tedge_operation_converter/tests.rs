@@ -1,5 +1,6 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
+use std::process::Output;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -18,11 +19,13 @@ use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_script_ext::Execute;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -250,13 +253,19 @@ async fn spawn_mqtt_operation_converter(
         SimpleMessageBoxBuilder::new("Restart", 5);
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
+    let mut script_builder: SimpleMessageBoxBuilder<Execute, std::io::Result<Output>> =
+        SimpleMessageBoxBuilder::new("Script", 5);
+
+    let workflows = WorkflowSupervisor::default();
 
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
         "te",
         device_topic_id.parse().expect("Invalid topic id"),
+        workflows,
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,
+        &mut script_builder,
     );
 
     let software_box = software_builder.build().with_timeout(TEST_TIMEOUT_MS);
