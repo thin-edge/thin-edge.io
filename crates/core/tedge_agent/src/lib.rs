@@ -61,7 +61,7 @@ pub struct AgentOpt {
     pub mqtt_topic_root: Option<Arc<str>>,
 }
 
-pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
+pub async fn run(agent_opt: AgentOpt, v1: bool) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
 
@@ -86,7 +86,7 @@ pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
         warn!("This --init option has been deprecated and will be removed in a future release");
         return Ok(());
     } else {
-        agent.start().await?;
+        agent.start(v1).await?;
     }
     Ok(())
 }

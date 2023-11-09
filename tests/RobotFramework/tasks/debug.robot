@@ -18,8 +18,6 @@ ${DPKG_INSTALL_SCRIPT}   cd /setup \
 ...                      && dpkg -i tedge*mapper*.deb \
 ...                      && dpkg -i tedge*agent*.deb \
 ...                      && dpkg -i tedge*watchdog*.deb \
-...                      && dpkg -i c8y*configuration*plugin*.deb \
-...                      && dpkg -i c8y*log*plugin*.deb \
 ...                      && dpkg -i tedge*apt*plugin*.deb
 
 
@@ -50,7 +48,7 @@ Debug device with locally built debian packages (no upgrade)
 
 Install Locally Built Packages
     [Arguments]    ${connect}=no
-    Transfer To Device                       target/packages/*.deb    /setup/
+    Transfer To Device                       target/x86_64-unknown-linux-musl/packages/*.deb    /setup/
     Execute Command                          apt-get update && apt-get install -y --no-install-recommends mosquitto
     Execute Command                          ${DPKG_INSTALL_SCRIPT}
     IF    "${connect}" == "yes"
