@@ -10,6 +10,9 @@ use tokio::io::ReadBuf;
 use tokio_rustls::server::TlsStream;
 
 #[pin_project(project = MaybeTlsStreamProj)]
+/// An optional [TlsStream], i.e. a stream of either TLS or non-TLS data
+///
+/// This is useful for redirecting HTTP requests to HTTPS.
 pub enum MaybeTlsStream<I> {
     Tls(#[pin] Box<TlsStream<BufReader<I>>>),
     Insecure(#[pin] BufReader<I>),

@@ -306,51 +306,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_unknown_client_certificates() {
-        let _ = env_logger::try_init();
-
-        let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-        let server_cert_der = certificate.serialize_der().unwrap();
-
-        let mut server = mockito::Server::new();
-        let _mock = server
-            .mock("GET", "/hello")
-            .match_header("Authorization", "Bearer test-token")
-            .with_status(204)
-            .create();
-
-        std::fs::create_dir_all("/tmp/test").unwrap();
-        let port = start_proxy_to_url(
-            &server.url(),
-            vec!["test-token"],
-            certificate,
-            Some("/tmp/test".into()),
-        );
-
-        let client = reqwest::Client::builder()
-            .add_root_certificate(reqwest::tls::Certificate::from_der(&server_cert_der).unwrap())
-            .identity(identity_with_name("not-authorized"))
-            .build()
-            .unwrap();
-        let err = client
-            .get(format!("https://localhost:{port}/c8y/hello"))
-            .send()
-            .await
-            .unwrap_err();
-        assert_matches::assert_matches!(
-            rustls_error_from_reqwest(&err),
-            rustls::Error::AlertReceived(rustls::AlertDescription::UnknownCA)
-        );
-    }
-
-    fn identity_with_name(name: &str) -> Identity {
-        let client_cert = rcgen::generate_simple_self_signed([name.into()]).unwrap();
-        let mut pem = client_cert.serialize_private_key_pem().into_bytes();
-        pem.append(&mut client_cert.serialize_pem().unwrap().into_bytes());
-        Identity::from_pem(&pem).unwrap()
-    }
-
-    #[tokio::test]
     async fn forwards_unsuccessful_responses() {
         let _ = env_logger::try_init();
         let mut server = mockito::Server::new();
@@ -588,10 +543,13 @@ mod tests {
                 token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
                     .shared(),
             };
+            let trust_store = ca_dir
+                .as_ref()
+                .map(|dir| axum_tls::read_trust_store(dir).unwrap());
             let config = axum_tls::ssl_config(
                 vec![certificate.serialize_der().unwrap()],
                 certificate.serialize_private_key_der(),
-                ca_dir.clone(),
+                trust_store,
             )
             .unwrap();
             let app = create_app(state);
@@ -607,21 +565,6 @@ mod tests {
         }
 
         panic!("Failed to bind to any port: {}", last_error.unwrap());
-    }
-
-    fn rustls_error_from_reqwest(err: &reqwest::Error) -> &rustls::Error {
-        err.source()
-            .unwrap()
-            .downcast_ref::<hyper::Error>()
-            .unwrap()
-            .source()
-            .unwrap()
-            .downcast_ref::<std::io::Error>()
-            .unwrap()
-            .get_ref()
-            .unwrap()
-            .downcast_ref::<rustls::Error>()
-            .unwrap()
     }
 
     /// A JwtRetriever that returns a sequence of JWT tokens

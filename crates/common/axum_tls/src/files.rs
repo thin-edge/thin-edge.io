@@ -1,10 +1,7 @@
-use crate::verifier::AllowAnyClient;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use rustls::server::AllowAnyAuthenticatedClient;
-use rustls::server::ClientCertVerifier;
 use rustls::Certificate;
 use rustls::PrivateKey;
 use rustls::RootCertStore;
@@ -13,51 +10,57 @@ use rustls_pemfile::Item;
 use std::fs::File;
 use std::sync::Arc;
 
+pub fn read_trust_store(ca_dir: &Utf8Path) -> anyhow::Result<RootCertStore> {
+    let mut roots = RootCertStore::empty();
+
+    let mut ders = Vec::new();
+    for file in ca_dir
+        .read_dir_utf8()
+        .with_context(|| format!("reading {ca_dir}"))?
+    {
+        let file = file.with_context(|| format!("reading metadata for file in {ca_dir}"))?;
+        let mut path = ca_dir.to_path_buf();
+        path.push(file.file_name());
+
+        if path.is_dir() {
+            continue;
+        }
+
+        let Ok(mut pem_file) = File::open(&path).map(std::io::BufReader::new) else {
+            continue;
+        };
+        if let Some(value) = rustls_pemfile::certs(&mut pem_file)
+            .with_context(|| format!("reading {path}"))?
+            .into_iter()
+            .next()
+        {
+            ders.push(value);
+        };
+    }
+    roots.add_parsable_certificates(&ders);
+
+    Ok(roots)
+}
+
 /// Load the SSL configuration for rustls
 pub fn ssl_config(
     certificate_chain: Vec<Vec<u8>>,
     key_der: Vec<u8>,
-    ca_dir: Option<Utf8PathBuf>,
+    root_certs: Option<RootCertStore>,
 ) -> anyhow::Result<ServerConfig> {
     // Trusted CA for client certificates
-    let mut roots = RootCertStore::empty();
-    let verifier = if let Some(ca_dir) = &ca_dir {
-        let mut ders = Vec::new();
-        for file in ca_dir
-            .read_dir_utf8()
-            .with_context(|| format!("reading {ca_dir}"))?
-        {
-            let file = file.with_context(|| format!("reading metadata for file in {ca_dir}"))?;
-            let mut path = ca_dir.clone().to_path_buf();
-            path.push(file.file_name());
+    let config = ServerConfig::builder().with_safe_defaults();
 
-            if path.is_dir() {
-                continue;
-            }
-
-            let Ok(mut pem_file) = File::open(&path).map(std::io::BufReader::new) else {
-                continue;
-            };
-            if let Some(value) = rustls_pemfile::certs(&mut pem_file)
-                .with_context(|| format!("reading {path}"))?
-                .into_iter()
-                .next()
-            {
-                ders.push(value);
-            };
-        }
-        roots.add_parsable_certificates(&ders);
-        Arc::new(AllowAnyAuthenticatedClient::new(roots)) as Arc<dyn ClientCertVerifier>
+    let config = if let Some(root_certs) = root_certs {
+        config.with_client_cert_verifier(Arc::new(AllowAnyAuthenticatedClient::new(root_certs)))
     } else {
-        Arc::new(AllowAnyClient)
+        config.with_no_client_auth()
     };
 
     let server_cert = certificate_chain.into_iter().map(Certificate).collect();
     let server_key = PrivateKey(key_der);
 
-    ServerConfig::builder()
-        .with_safe_defaults()
-        .with_client_cert_verifier(verifier)
+    config
         .with_single_cert(server_cert, server_key)
         .context("invalid key or certificate")
 }

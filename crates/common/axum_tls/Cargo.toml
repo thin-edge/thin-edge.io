@@ -23,3 +23,10 @@ tokio-rustls = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }
 x509-parser = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+hyper = { workspace = true }
+rcgen = { workspace = true }
+reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
+tokio = { workspace = true, features = ["macros"] }
