@@ -1,11 +1,11 @@
 use std::convert::Infallible;
 use std::net::IpAddr;
 
-use crate::tls::load_cert;
-use crate::tls::load_pkey;
 use anyhow::anyhow;
 use anyhow::Context;
 use axum::async_trait;
+use axum_tls::load_cert;
+use axum_tls::load_pkey;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::credentials::JwtRetriever;
 use futures::channel::mpsc;

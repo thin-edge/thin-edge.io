@@ -369,6 +369,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum_tls"
+version = "0.13.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-server",
+ "camino",
+ "futures",
+ "pin-project",
+ "rustls",
+ "rustls-pemfile",
+ "tokio",
+ "tokio-rustls",
+ "tower",
+ "tracing",
+ "x509-parser 0.14.0",
+]
+
+[[package]]
 name = "az_mapper_ext"
 version = "0.13.1"
 dependencies = [
@@ -645,6 +664,7 @@ dependencies = [
  "assert_matches",
  "axum",
  "axum-server",
+ "axum_tls",
  "c8y_http_proxy",
  "camino",
  "env_logger",

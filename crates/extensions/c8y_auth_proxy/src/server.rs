@@ -1,4 +1,3 @@
-use crate::tls::redirect_http_to_https;
 use crate::tokens::*;
 use anyhow::Context;
 use axum::body::Body;
@@ -14,6 +13,7 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
+use axum_tls::redirect_http_to_https;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::HeaderMap;
@@ -41,7 +41,7 @@ impl Server {
     ) -> anyhow::Result<Self> {
         let app = create_app(state);
         let server_config = cert_and_private_key
-            .map(|(cert, key)| crate::tls::get_ssl_config(cert, key, None))
+            .map(|(cert, key)| axum_tls::ssl_config(cert, key, None))
             .transpose()?;
         let fut = if let Some(server_config) = server_config {
             try_bind_with_tls(app, address, port, server_config)?.boxed()
@@ -111,7 +111,7 @@ fn try_bind_with_tls(
     let listener =
         TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
     Ok(axum_server::from_tcp(listener)
-        .acceptor(crate::tls::Acceptor::new(server_config))
+        .acceptor(axum_tls::Acceptor::new(server_config))
         .serve(
             app.layer(map_request(redirect_http_to_https))
                 .into_make_service(),
@@ -588,7 +588,7 @@ mod tests {
                 token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
                     .shared(),
             };
-            let config = crate::tls::get_ssl_config(
+            let config = axum_tls::ssl_config(
                 vec![certificate.serialize_der().unwrap()],
                 certificate.serialize_private_key_der(),
                 ca_dir.clone(),

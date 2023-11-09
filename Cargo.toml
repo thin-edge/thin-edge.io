@@ -37,6 +37,7 @@ async-tungstenite = { version = "0.23", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
+axum_tls = { path = "crates/common/axum_tls" }
 axum-server = { version = "0.5.1", features = ["tls-rustls"] }
 aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
 axum = "0.6"
