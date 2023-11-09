@@ -170,16 +170,11 @@ impl RestartManagerActor {
             }
             Err(err) => {
                 match err {
-                    StateError::FromIo(e) => match e.kind() {
-                        std::io::ErrorKind::NotFound => {
-                            info!("tedge-agent state file is not present")
-                        }
-                        std::io::ErrorKind::PermissionDenied => {
-                            error!("Failed to read tedge-agent state file due to: PermissionDenied")
-                        }
-                        e => error!("Failed to read tedge-agent state file due to: {e}"),
-                    },
-                    e => error!("Failed to read tedge-agent state file due to: {e}"),
+                    // file missing means we don't have to perform the operation, so just do nothing
+                    StateError::LoadingFromFileFailed { source, .. }
+                        if source.kind() == std::io::ErrorKind::NotFound => {}
+                    // if read failed for some other reason, we should probably log it
+                    _ => error!("{err}"),
                 }
                 None
             }
