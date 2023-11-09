@@ -769,6 +769,7 @@ dependencies = [
  "clock",
  "json-writer",
  "logged_command",
+ "mockito",
  "plugin_sm",
  "proptest",
  "rand",

@@ -2,6 +2,7 @@ use crate::converter::CumulocityConverter;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use anyhow::Context;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
@@ -33,6 +34,7 @@ use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::Downloader;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -151,17 +153,37 @@ impl CumulocityConverter {
                 let event_response_id = self.http_proxy.send_event(create_event).await?;
 
                 // Send a request to the Uploader to upload the file asynchronously.
-                let uploaded_file_path = self
-                    .config
-                    .data_dir
-                    .file_transfer_dir()
-                    .join(target.external_id.as_ref())
-                    .join("config_snapshot")
-                    .join(format!(
-                        "{}-{}",
-                        response.config_type.replace('/', ":"),
-                        cmd_id
-                    ));
+                let config_filename =
+                    format!("{}-{}", response.config_type.replace('/', ":"), cmd_id);
+
+                let uploaded_file_url = format!(
+                    "http://{}/tedge/file-transfer/{external_id}/config_snapshot/{config_filename}",
+                    &self.config.tedge_http_host,
+                    external_id = target.external_id.as_ref()
+                );
+
+                let download_info = tedge_api::DownloadInfo::new(uploaded_file_url.as_str());
+                let uploaded_file_path = self.config.data_dir.cache_dir().join(config_filename);
+
+                let downloader = Downloader::new(uploaded_file_path.as_std_path().to_path_buf());
+                if let Err(err) = downloader
+                    .download(&download_info)
+                    .await
+                    .context("Failed to download config file from File Transfer Service")
+                {
+                    let smartrest_error = SmartRestSetOperationToFailed::new(
+                        CumulocitySupportedOperations::C8yLogFileRequest,
+                        format!("Upload failed with {:?}", err),
+                    )
+                    .to_smartrest()?;
+
+                    let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
+                    let clean_operation = Message::new(&message.topic, "")
+                        .with_retain()
+                        .with_qos(QoS::AtLeastOnce);
+
+                    return Ok(vec![c8y_notification, clean_operation]);
+                }
 
                 let binary_upload_event_url = self
                     .c8y_endpoint
@@ -891,17 +913,11 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let (mqtt, http, _fs, _timer, ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         spawn_dummy_c8y_http_proxy(http);
+        crate::tests::dummy_file_transfer_service(8888);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
-
-        // Simulate a config file is uploaded to the file transfer repository
-        let uploaded_file = ttd
-            .dir("file-transfer")
-            .dir("test-device")
-            .dir("config_snapshot")
-            .file("path:type:A-c8y-mapper-1234");
 
         // Simulate config_snapshot command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -923,7 +939,6 @@ mod tests {
             request.1.url,
             "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
         );
-        assert_eq!(request.1.file_path, uploaded_file.utf8_path());
 
         // Simulate Uploader returns a result
         ul.send((
@@ -964,13 +979,6 @@ mod tests {
 
         mqtt.skip(2).await; // Skip child device registration messages
 
-        // Simulate a config file is uploaded to the file transfer repository
-        let uploaded_file = ttd
-            .dir("file-transfer")
-            .dir("child1")
-            .dir("config_snapshot")
-            .file("typeA-c8y-mapper-1234");
-
         // Simulate config_snapshot command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
@@ -991,7 +999,6 @@ mod tests {
             request.1.url,
             "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
         );
-        assert_eq!(request.1.file_path, uploaded_file.utf8_path());
 
         // Simulate Uploader returns a result
         ul.send((

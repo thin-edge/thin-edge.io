@@ -2,6 +2,7 @@ use crate::converter::CumulocityConverter;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use anyhow::Context;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -22,6 +23,7 @@ use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::Downloader;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
@@ -32,6 +34,7 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use time::OffsetDateTime;
+use tracing::debug;
 use tracing::log::warn;
 
 pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
@@ -101,6 +104,8 @@ impl CumulocityConverter {
         cmd_id: &str,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
+        debug!("Handling log_upload command");
+
         if !self.config.capabilities.log_upload {
             warn!("Received a log_upload command, however, log_upload feature is disabled");
             return Ok(vec![]);
@@ -131,13 +136,36 @@ impl CumulocityConverter {
                 let event_response_id = self.http_proxy.send_event(create_event).await?;
 
                 // Send a request to the Uploader to upload the file asynchronously.
-                let uploaded_file_path = self
-                    .config
-                    .data_dir
-                    .file_transfer_dir()
-                    .join(target.external_id.as_ref())
-                    .join("log_upload")
-                    .join(format!("{}-{}", response.log_type, cmd_id));
+                let log_filename = format!("{}-{}", response.log_type, cmd_id);
+
+                let uploaded_file_url = format!(
+                    "http://{}/tedge/file-transfer/{external_id}/log_upload/{log_filename}",
+                    &self.config.tedge_http_host,
+                    external_id = target.external_id.as_ref()
+                );
+
+                let download_info = tedge_api::DownloadInfo::new(uploaded_file_url.as_str());
+                let uploaded_file_path = self.config.data_dir.cache_dir().join(log_filename);
+
+                // TODO: send `SmartrestSetOperationToFailed` when returning Err() as well
+                let downloader = Downloader::new(uploaded_file_path.as_std_path().to_path_buf());
+                if let Err(err) = downloader
+                    .download(&download_info)
+                    .await
+                    .context("Failed to download logfile from the File Transfer Service")
+                {
+                    let smartrest_error = SmartRestSetOperationToFailed::new(
+                        CumulocitySupportedOperations::C8yLogFileRequest,
+                        format!("Upload failed with {:?}", err),
+                    )
+                    .to_smartrest()?;
+
+                    let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
+                    let clean_operation = Message::new(&message.topic, "")
+                        .with_retain()
+                        .with_qos(QoS::AtLeastOnce);
+                    return Ok(vec![c8y_notification, clean_operation]);
+                }
 
                 let binary_upload_event_url = self
                     .c8y_endpoint
@@ -604,13 +632,6 @@ mod tests {
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate a log file is uploaded to the file transfer repository
-        let uploaded_file = ttd
-            .dir("file-transfer")
-            .dir("test-device")
-            .dir("log_upload")
-            .file("typeA-c8y-mapper-1234");
-
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
@@ -635,7 +656,6 @@ mod tests {
             request.1.url,
             "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
         );
-        assert_eq!(request.1.file_path, uploaded_file.utf8_path());
 
         // Simulate Uploader returns a result
         ul.send((
@@ -669,13 +689,6 @@ mod tests {
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate a log file is uploaded to the file transfer repository
-        let uploaded_file = ttd
-            .dir("file-transfer")
-            .dir("test-device:device:child1")
-            .dir("log_upload")
-            .file("typeA-c8y-mapper-1234");
-
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
@@ -702,7 +715,6 @@ mod tests {
             request.1.url,
             "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
         );
-        assert_eq!(request.1.file_path, uploaded_file.utf8_path());
 
         // Simulate Uploader returns a result
         ul.send((

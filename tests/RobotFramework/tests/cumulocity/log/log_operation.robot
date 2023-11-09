@@ -59,6 +59,7 @@ Log operation uses correct tedgeUrl when file transfer service on different host
     Execute Command    tedge config set http.client.host ${child_ip}
     Execute Command    tedge reconnect c8y
     Stop Service       tedge-agent
+    Start Service      tedge-log-plugin
 
 
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -66,7 +67,8 @@ Log operation uses correct tedgeUrl when file transfer service on different host
     ${operation}=     Cumulocity.Create Operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
-    Should Have MQTT Messages    te/device/main///cmd/log_upload/+    message_contains=tedgeUrl":"http://${child_ip}
+    # Should Have MQTT Messages    te/device/main///cmd/log_upload/+    message_contains=tedgeUrl":"http://${child_ip}
+    Operation Should Be SUCCESSFUL    ${operation}
 
 
 
