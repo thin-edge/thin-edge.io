@@ -2,6 +2,7 @@ use crate::restart_manager::config::RestartManagerConfig;
 use crate::restart_manager::error::RestartManagerError;
 use crate::restart_manager::restart_operation_handler::restart_operation::create_tmp_restart_file;
 use crate::restart_manager::restart_operation_handler::restart_operation::has_rebooted;
+use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
 use crate::state_repository::state::RestartOperationStatus;
 use crate::state_repository::state::State;
@@ -168,7 +169,18 @@ impl RestartManagerActor {
                 }
             }
             Err(err) => {
-                error!("Fail to read tedge-agent state: {err}");
+                match err {
+                    StateError::FromIo(e) => match e.kind() {
+                        std::io::ErrorKind::NotFound => {
+                            info!("tedge-agent state file is not present")
+                        }
+                        std::io::ErrorKind::PermissionDenied => {
+                            error!("Failed to read tedge-agent state file due to: PermissionDenied")
+                        }
+                        e => error!("Failed to read tedge-agent state file due to: {e}"),
+                    },
+                    e => error!("Failed to read tedge-agent state file due to: {e}"),
+                }
                 None
             }
             Ok(_) => None,
