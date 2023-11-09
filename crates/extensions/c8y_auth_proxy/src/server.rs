@@ -8,12 +8,11 @@ use axum::extract::FromRef;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::HeaderValue;
-use axum::middleware::map_request;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
-use axum_tls::redirect_http_to_https;
+use axum_tls::start_tls_server;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::HeaderMap;
@@ -110,12 +109,7 @@ fn try_bind_with_tls(
     info!("Launching on port {port} with HTTPS");
     let listener =
         TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
-    Ok(axum_server::from_tcp(listener)
-        .acceptor(axum_tls::Acceptor::new(server_config))
-        .serve(
-            app.layer(map_request(redirect_http_to_https))
-                .into_make_service(),
-        ))
+    Ok(start_tls_server(listener, server_config, app))
 }
 
 #[derive(Clone)]
@@ -242,9 +236,7 @@ mod tests {
     use camino::Utf8PathBuf;
     use futures::future::ready;
     use futures::stream::once;
-    use reqwest::Identity;
     use std::borrow::Cow;
-    use std::error::Error;
     use std::net::Ipv4Addr;
     use tedge_actors::Sequential;
     use tedge_actors::Server;

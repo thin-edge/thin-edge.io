@@ -679,7 +679,6 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rustls",
- "rustls-pemfile",
  "tedge_actors",
  "tedge_config",
  "tedge_config_macros",

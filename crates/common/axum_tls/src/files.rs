@@ -10,6 +10,8 @@ use rustls_pemfile::Item;
 use std::fs::File;
 use std::sync::Arc;
 
+/// Read a directory into a RootCertStore
+// TODO unit test me
 pub fn read_trust_store(ca_dir: &Utf8Path) -> anyhow::Result<RootCertStore> {
     let mut roots = RootCertStore::empty();
 
