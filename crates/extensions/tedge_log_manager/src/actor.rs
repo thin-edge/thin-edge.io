@@ -137,32 +137,21 @@ impl LogManagerActor {
         topic: &Topic,
         mut request: LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
-        match self
-            .execute_logfile_request_operation(topic, &request)
-            .await
-        {
-            Ok(()) => {
-                request.successful();
-                self.publish_command_status(topic, &request).await?;
-                info!("Log request processed for log type: {}", request.log_type);
-                Ok(())
-            }
-            Err(error) => {
-                let error_message = format!("Handling of operation failed with {}", error);
-                request.failed(&error_message);
-                self.publish_command_status(topic, &request).await?;
-                error!("{}", error_message);
-                Ok(())
-            }
+        if let Err(error) = self.generate_and_upload_logfile(topic, &request).await {
+            let error_message = format!("Handling of operation failed with {}", error);
+            request.failed(&error_message);
+            self.publish_command_status(topic, &request).await?;
+            error!("{}", error_message);
+            return Ok(());
         }
+
+        self.pending_operations.insert(topic.name.clone(), request);
+
+        Ok(())
     }
 
-    /// executes the log file request
-    ///
-    /// - sends request executing (mqtt)
-    /// - uploads log content (http)
-    /// - sends request successful (mqtt)
-    async fn execute_logfile_request_operation(
+    /// Generates the required logfile and starts its upload via the uploader actor.
+    async fn generate_and_upload_logfile(
         &mut self,
         topic: &Topic,
         request: &LogUploadCmdPayload,
@@ -197,34 +186,38 @@ impl LogManagerActor {
         topic: &str,
         result: UploadResult,
     ) -> Result<(), LogManagementError> {
-        if let Some(mut request) = self.pending_operations.remove(topic) {
-            let topic = Topic::new_unchecked(topic);
-            match result {
-                Ok(response) => {
-                    request.successful();
+        let Some(mut request) = self.pending_operations.remove(topic) else {
+            warn!("Ignoring unexpected log_upload result: {topic}");
+            return Ok(());
+        };
 
-                    info!("Log request processed for log type: {}.", request.log_type);
+        let topic = Topic::new_unchecked(topic);
+        match result {
+            Ok(response) => {
+                request.successful();
 
-                    if let Err(err) = std::fs::remove_file(&response.file_path) {
-                        warn!(
-                            "Failed to remove temporary file {}: {}",
-                            response.file_path, err
-                        )
-                    }
+                info!("Log request processed for log type: {}.", request.log_type);
 
-                    self.publish_command_status(&topic, &request).await?;
+                if let Err(err) = std::fs::remove_file(&response.file_path) {
+                    warn!(
+                        "Failed to remove temporary file {}: {}",
+                        response.file_path, err
+                    )
                 }
-                Err(err) => {
-                    let error_message = format!("Handling of operation failed with {}", err);
-                    request.failed(&error_message);
-                    error!("{}", error_message);
-                    self.publish_command_status(&topic, &request).await?;
-                }
+
+                self.publish_command_status(&topic, &request).await?;
+            }
+            Err(err) => {
+                let error_message = format!("Handling of operation failed with {}", err);
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(&topic, &request).await?;
             }
         }
 
         Ok(())
     }
+
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {
         let path = match event {
             FsWatchEvent::Modified(path) => path,
