@@ -16,6 +16,13 @@ use std::time::Duration;
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
 
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub enum ResultFormat {
+    #[default]
+    Text,
+    Csv,
+}
+
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
@@ -27,11 +34,26 @@ pub struct OnMessageExec {
     on_message: Option<String>,
     topic: Option<String>,
     user: Option<String>,
+    #[serde(default, deserialize_with = "to_result_format")]
+    result_format: ResultFormat,
     #[serde(rename = "timeout")]
     #[serde(default = "default_graceful_timeout", deserialize_with = "to_duration")]
     pub graceful_timeout: Duration,
     #[serde(default = "default_forceful_timeout", deserialize_with = "to_duration")]
     pub forceful_timeout: Duration,
+}
+
+fn to_result_format<'de, D>(deserializer: D) -> Result<ResultFormat, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let val: String = serde::Deserialize::deserialize(deserializer)?;
+
+    match val.as_str() {
+        "text" => Ok(ResultFormat::Text),
+        "csv" => Ok(ResultFormat::Csv),
+        _ => Err(serde::de::Error::unknown_variant(&val, &["text", "csv"])),
+    }
 }
 
 fn default_graceful_timeout() -> Duration {
@@ -75,6 +97,12 @@ impl Operation {
 
     pub fn topic(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.topic.clone())
+    }
+
+    pub fn result_format(&self) -> ResultFormat {
+        self.exec()
+            .map(|exec| exec.result_format.clone())
+            .unwrap_or_default()
     }
 
     pub fn template(&self) -> Option<String> {
@@ -331,5 +359,20 @@ mod tests {
     #[test_case("?!£$%^&*(c8y_CommandF?!£$%^&*(", false)]
     fn operation_name_should_contain_only_alphabetic_chars(operation: &str, expected_result: bool) {
         assert_eq!(is_valid_operation_name(operation), expected_result)
+    }
+
+    #[test]
+    fn deserialize_result_format() {
+        let toml: OnMessageExec = toml::from_str(r#"result_format = "csv""#).unwrap();
+        assert_eq!(toml.result_format, ResultFormat::Csv);
+
+        let toml: OnMessageExec = toml::from_str(r#"result_format = "text""#).unwrap();
+        assert_eq!(toml.result_format, ResultFormat::Text);
+
+        let toml: OnMessageExec = toml::from_str("").unwrap();
+        assert_eq!(toml.result_format, ResultFormat::Text);
+
+        let result = toml::from_str::<OnMessageExec>(r#"result_format = "foo""#);
+        assert!(result.is_err());
     }
 }

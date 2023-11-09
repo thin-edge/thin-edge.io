@@ -232,3 +232,4 @@ The command will be executed with tedge-mapper permission level so most of the s
 * `topic` - The topic on which the operation will be executed.
 * `on_message` - The SmartRest template on which the operation will be executed.
 * `command` - The command to execute.
+* `result_format` - The expected command output format: `"text"` or `"csv"`, `"text"` being the default.
