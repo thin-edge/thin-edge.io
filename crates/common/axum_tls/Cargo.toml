@@ -29,5 +29,5 @@ x509-parser = { workspace = true }
 assert_matches = { workspace = true }
 rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
-tokio = { workspace = true, features = ["macros"] }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
