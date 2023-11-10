@@ -192,7 +192,7 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn start(self, v1: bool) -> Result<(), anyhow::Error> {
+    pub async fn start(self) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
         self.init()?;
 
@@ -247,55 +247,50 @@ impl Agent {
         // Tedge to Te topic converter
         let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
 
-        if v1 {
-            let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
-            let mut downloader_actor_builder =
-                DownloaderActor::new(self.config.identity.clone()).builder();
-            let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
+        let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
+        let mut downloader_actor_builder = DownloaderActor::new(self.config.identity.clone()).builder();
+        let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
 
-            // Instantiate config manager actor
-            let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
-                config_dir: self.config.config_dir.clone().into(),
-                mqtt_topic_root: mqtt_schema.clone(),
-                mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
-                tmp_path: self.config.tmp_dir.clone(),
-                is_sudo_enabled: self.config.is_sudo_enabled,
-            })?;
-            let config_actor_builder = ConfigManagerBuilder::try_new(
-                manager_config,
-                &mut mqtt_actor_builder,
-                &mut fs_watch_actor_builder,
-                &mut downloader_actor_builder,
-                &mut uploader_actor_builder,
-            )
-            .await?;
+        // Instantiate config manager actor
+        let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
+            config_dir: self.config.config_dir.clone().into(),
+            mqtt_topic_root: mqtt_schema.clone(),
+            mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+            tmp_path: self.config.tmp_dir.clone(),
+            is_sudo_enabled: self.config.is_sudo_enabled,
+        })?;
+        let config_actor_builder = ConfigManagerBuilder::try_new(
+            manager_config,
+            &mut mqtt_actor_builder,
+            &mut fs_watch_actor_builder,
+            &mut downloader_actor_builder,
+            &mut uploader_actor_builder,
+        )
+        .await?;
 
-            // Instantiate log manager actor
-            let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
-                config_dir: self.config.config_dir.clone().into(),
-                tmp_dir: self.config.config_dir.into(),
-                mqtt_schema,
-                mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
-            })?;
-            let log_actor_builder = LogManagerBuilder::try_new(
-                log_manager_config,
-                &mut mqtt_actor_builder,
-                &mut fs_watch_actor_builder,
-                &mut uploader_actor_builder,
-            )
-            .await?;
-
-            runtime.spawn(fs_watch_actor_builder).await?;
-            runtime.spawn(downloader_actor_builder).await?;
-            runtime.spawn(uploader_actor_builder).await?;
-
-            runtime.spawn(config_actor_builder).await?;
-            runtime.spawn(log_actor_builder).await?;
-        }
+        // Instantiate log manager actor
+        let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
+            config_dir: self.config.config_dir.clone().into(),
+            tmp_dir: self.config.config_dir.into(),
+            mqtt_schema,
+            mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+        })?;
+        let log_actor_builder = LogManagerBuilder::try_new(
+            log_manager_config,
+            &mut mqtt_actor_builder,
+            &mut fs_watch_actor_builder,
+            &mut uploader_actor_builder,
+        )
+        .await?;
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
+        runtime.spawn(fs_watch_actor_builder).await?;
+        runtime.spawn(downloader_actor_builder).await?;
+        runtime.spawn(uploader_actor_builder).await?;
+        runtime.spawn(config_actor_builder).await?;
+        runtime.spawn(log_actor_builder).await?;
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(script_runner).await?;

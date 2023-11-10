@@ -224,8 +224,7 @@ Custom Setup
     Execute Command    sudo tedge config set c8y.enable.config_snapshot false
     Execute Command    sudo tedge config set c8y.enable.config_update false
 
-    # Use deprecated c8y-configuration-plugin over tedge-configuration-plugin
-    Execute Command    cmd=sudo apt-get remove -y tedge-configuration-plugin
+    # Use deprecated c8y-configuration-plugin over tedge-agent (configuration)
     Execute Command    find . -type f -name "c8y-configuration-plugin_*.deb" -exec dpkg -i {} \\;
 
     ${parent_ip}=    Get IP Address

@@ -24,7 +24,7 @@ Successful log operation
 *** Keywords ***
 Setup Child Device
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
-    Execute Command    sudo dpkg -i packages/tedge_*.deb
+    Execute Command    sudo dpkg -i packages/tedge_*.deb packages/tedge-agent*.deb
 
     Execute Command    sudo tedge config set mqtt.client.host ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.client.port 1883
@@ -32,15 +32,13 @@ Setup Child Device
     Execute Command    sudo tedge config set mqtt.topic_root te
     Execute Command    sudo tedge config set mqtt.device_topic_id "device/${CHILD_SN}//"
 
-    # Install plugin after the default settings have been updated to prevent it from starting up as the main plugin
-    Execute Command    sudo dpkg -i packages/tedge-log-plugin*.deb
-
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-log-plugin.toml    /etc/tedge/plugins/tedge-log-plugin.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
     Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
 
-    # WORKAROUND: Uncomment next line once https://github.com/thin-edge/thin-edge.io/issues/2253 has been resolved
-    # ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin    device=${CHILD_SN}
+    Enable Service    tedge-agent
+    Start Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
 
 Custom Setup
     # Parent
