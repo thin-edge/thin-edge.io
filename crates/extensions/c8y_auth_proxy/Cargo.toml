@@ -15,25 +15,20 @@ axum = { workspace = true, features = ["macros"] }
 axum-server = { workspace = true }
 axum_tls = { workspace = true }
 c8y_http_proxy = { workspace = true }
-camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
-pin-project = { workspace = true }
-rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rustls = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 tedge_config_macros = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "io-util"] }
-tokio-rustls = { workspace = true }
-tower = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-x509-parser = { workspace = true }
 
 [dev-dependencies]
-assert_matches = { workspace = true }
+camino = { workspace = true }
 env_logger = { workspace = true }
 mockito = { workspace = true }
+rcgen = { workspace = true }
 tedge_http_ext = { workspace = true, features = ["test_helpers" ] }

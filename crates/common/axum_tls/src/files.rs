@@ -111,6 +111,93 @@ mod tests {
     use axum::Router;
     use std::io::Cursor;
 
+    mod read_trust_store {
+        use super::*;
+        use std::os::unix::fs::symlink;
+        use std::path::Path;
+        use tempfile::tempdir;
+
+        macro_rules! tempdir_path {
+            ($dir:ident $(/ $file:literal)*) => ({
+                let mut path = $dir.path().to_path_buf();
+                $(path.push($file);)*
+                ::camino::Utf8PathBuf::try_from(path).unwrap()
+            })
+        }
+
+        #[test]
+        fn reads_certificates_in_provided_directory() {
+            let dir = tempdir().unwrap();
+
+            copy_test_file_to("ec.crt", tempdir_path!(dir / "cert.crt")).unwrap();
+
+            let store = read_trust_store(dir.path().try_into().unwrap()).unwrap();
+            assert_eq!(store.len(), 1);
+        }
+
+        #[test]
+        fn reads_multiple_certificates_from_directory() {
+            let dir = tempdir().unwrap();
+
+            copy_test_file_to("ec.crt", tempdir_path!(dir / "ec.crt")).unwrap();
+            copy_test_file_to("rsa.crt", tempdir_path!(dir / "rsa.crt")).unwrap();
+
+            let store = read_trust_store(dir.path().try_into().unwrap()).unwrap();
+            assert_eq!(store.len(), 2);
+        }
+
+        #[test]
+        fn ignores_private_keys_in_provided_directory() {
+            let dir = tempdir().unwrap();
+            copy_test_file_to("ec.key", tempdir_path!(dir / "example.key")).unwrap();
+
+            let store = read_trust_store(dir.path().try_into().unwrap()).unwrap();
+            assert_eq!(store.len(), 0);
+        }
+
+        #[test]
+        fn reads_certificates_via_relative_symlink() {
+            let dir = tempdir().unwrap();
+            let cert_path = tempdir_path!(dir / "certs" / "cert.crt");
+            let real_cert_path = tempdir_path!(dir / "actual_certs" / "cert.crt");
+
+            let trust_store = create_parent_dir(&cert_path).unwrap();
+            create_parent_dir(&real_cert_path).unwrap();
+            copy_test_file_to("ec.crt", real_cert_path).unwrap();
+            symlink("../actual_certs/cert.crt", &cert_path).unwrap();
+
+            let store = read_trust_store(trust_store).unwrap();
+            assert!(std::fs::symlink_metadata(&cert_path).unwrap().is_symlink());
+            assert_eq!(store.len(), 1);
+        }
+
+        #[test]
+        fn reads_certificates_via_absolute_symlink() {
+            let dir = tempdir().unwrap();
+            let cert_path = tempdir_path!(dir / "certs" / "cert.crt");
+            let real_cert_path = tempdir_path!(dir / "actual_certs" / "cert.crt");
+
+            let trust_store = create_parent_dir(&cert_path).unwrap();
+            create_parent_dir(&real_cert_path).unwrap();
+            copy_test_file_to("ec.crt", &real_cert_path).unwrap();
+            symlink(&real_cert_path, &cert_path).unwrap();
+
+            let store = read_trust_store(trust_store).unwrap();
+            assert!(std::fs::symlink_metadata(&cert_path).unwrap().is_symlink());
+            assert_eq!(store.len(), 1);
+        }
+
+        fn create_parent_dir(path: &Utf8Path) -> io::Result<&Utf8Path> {
+            let path = path.parent().expect("path should have parent");
+            std::fs::create_dir(path)?;
+            Ok(path)
+        }
+
+        fn copy_test_file_to(test_file: &str, path: impl AsRef<Path>) -> io::Result<u64> {
+            std::fs::copy(format!("./src/test_data/{test_file}"), path)
+        }
+    }
+
     #[test]
     fn load_pkey_fails_when_given_x509_certificate() {
         assert_eq!(

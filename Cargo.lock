@@ -384,6 +384,7 @@ dependencies = [
  "reqwest",
  "rustls",
  "rustls-pemfile",
+ "tempfile",
  "tokio",
  "tokio-rustls",
  "tower",
@@ -665,7 +666,6 @@ name = "c8y_auth_proxy"
 version = "0.13.1"
 dependencies = [
  "anyhow",
- "assert_matches",
  "axum",
  "axum-server",
  "axum_tls",
@@ -675,7 +675,6 @@ dependencies = [
  "futures",
  "hyper",
  "mockito",
- "pin-project",
  "rcgen",
  "reqwest",
  "rustls",
@@ -684,11 +683,8 @@ dependencies = [
  "tedge_config_macros",
  "tedge_http_ext",
  "tokio",
- "tokio-rustls",
- "tower",
  "tracing",
  "url",
- "x509-parser 0.14.0",
 ]
 
 [[package]]
