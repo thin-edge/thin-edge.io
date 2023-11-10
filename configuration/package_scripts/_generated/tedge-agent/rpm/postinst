@@ -14,9 +14,3 @@ if [ $1 -eq 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
     /usr/lib/systemd/systemd-update-helper install-system-units tedge-agent.service || :
 fi
 # End automatically added section
-# Automatically added by thin-edge.io
-if [ -d /run/systemd/system ]; then
-	systemctl --system daemon-reload >/dev/null || true
-	systemctl start tedge-agent.service >/dev/null || true
-fi
-# End automatically added section

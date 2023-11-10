@@ -20,7 +20,7 @@ However, despite their diversity, all these APIs are designed along the same lin
 - associate MQTT topics with devices and commands
 - tell which types of command is supported by a device
 - create new command requests of a specific type for some target device
-- monitor the progression of a specific command request upto completion.
+- monitor the progression of a specific command request up to completion.
 
 ## Concepts
 
