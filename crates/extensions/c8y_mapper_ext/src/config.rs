@@ -2,6 +2,7 @@ use crate::Capabilities;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::net::IpAddr;
 use std::path::Path;
@@ -33,6 +34,7 @@ pub struct C8yMapperConfig {
     pub device_type: String,
     pub service_type: String,
     pub ops_dir: PathBuf,
+    pub tmp_dir: Arc<Utf8Path>,
     pub c8y_host: String,
     pub tedge_http_host: Arc<str>,
     pub topics: TopicFilter,
@@ -48,6 +50,7 @@ impl C8yMapperConfig {
         config_dir: PathBuf,
         logs_path: Utf8PathBuf,
         data_dir: DataDir,
+        tmp_dir: Arc<Utf8Path>,
         device_id: String,
         device_topic_id: EntityTopicId,
         device_type: String,
@@ -71,6 +74,7 @@ impl C8yMapperConfig {
             device_type,
             service_type,
             ops_dir,
+            tmp_dir,
             c8y_host,
             tedge_http_host,
             topics,
@@ -89,6 +93,8 @@ impl C8yMapperConfig {
 
         let logs_path = tedge_config.logs.path.clone();
         let data_dir: DataDir = tedge_config.data.path.clone().into();
+        let tmp_dir = tedge_config.tmp.path.clone().into();
+
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
         let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
@@ -145,6 +151,7 @@ impl C8yMapperConfig {
             config_dir,
             logs_path,
             data_dir,
+            tmp_dir,
             device_id,
             device_topic_id,
             device_type,

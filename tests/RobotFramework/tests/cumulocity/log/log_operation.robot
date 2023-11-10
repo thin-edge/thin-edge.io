@@ -41,7 +41,7 @@ Manual log_upload operation request
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_DownloadConfigFile
 
-Log operation uses correct tedgeUrl when file transfer service on different host
+Log operation successful when file transfer service on different host
     ${parent_ip}=    Get IP Address
 
     ${CHILD_SN}=    Setup    skip_bootstrap=True
@@ -67,9 +67,7 @@ Log operation uses correct tedgeUrl when file transfer service on different host
     ${operation}=     Cumulocity.Create Operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
-    # Should Have MQTT Messages    te/device/main///cmd/log_upload/+    message_contains=tedgeUrl":"http://${child_ip}
     Operation Should Be SUCCESSFUL    ${operation}
-
 
 
 *** Keywords ***

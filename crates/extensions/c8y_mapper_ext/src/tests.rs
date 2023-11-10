@@ -16,7 +16,6 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::sync::OnceLock;
 use std::time::Duration;
 use std::time::SystemTime;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -2583,6 +2582,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         config_dir.to_path_buf(),
         config_dir.utf8_path_buf(),
         config_dir.utf8_path_buf().into(),
+        config_dir.utf8_path_buf().into(),
         device_name,
         device_topic_id,
         device_type,
@@ -2689,39 +2689,4 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(
             }
         }
     });
-}
-
-static FTS_MOCK_SERVER: OnceLock<mockito::Server> = OnceLock::new();
-
-/// Spawns the mock of File Transfer Service HTTP server.
-///
-/// Created FTS server just imitates a real FTS by just returning the same file no matter the actual
-/// URL used. Because tedge-mapper-c8y assumes FTS is running in order to be able to download files
-/// from it when processing `log_upload` and `config_snapshot` requests, the HTTP server needs to be
-/// running when these operations are tested. At the same time, the tests don't check if the files
-/// are the same as what was initially given, so it can just return garbage.
-///
-/// The server is spawned when this function is called for the first time. Successive calls don't do
-/// anything.
-
-// this is a bit of a hack for #2390 - previously mapper just read from the filesystem, but since
-// tedge-agent can run on another device, the mapper needs to use FTS always, so we need to spawn
-// HTTP server for the tests to pass. At the same time, the tests don't check if the files are the
-// same, and moving the FTS out of tedge-agent in order to use it here to make it a proper
-// integration test would be too much work, so that's why this shortcut was used.
-
-// TODO: rewrite the affected tests to be proper integration tests by using a real FTS or remove the
-// dependency on FTS somehow
-pub(crate) fn dummy_file_transfer_service(port: u16) -> &'static mockito::Server {
-    FTS_MOCK_SERVER.get_or_init(|| {
-        let mut server = mockito::Server::new_with_port(port);
-
-        let _mock = server
-            .mock("GET", mockito::Matcher::Any)
-            .with_status(200)
-            .with_body("world")
-            .create();
-
-        server
-    })
 }
