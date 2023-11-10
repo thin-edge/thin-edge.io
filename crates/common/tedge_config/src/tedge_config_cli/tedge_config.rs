@@ -411,9 +411,13 @@ define_tedge_config! {
                 port: u16,
             },
 
+            /// The file that will be used as a the server certificate for the Cumulocity proxy
+            #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_certificate.pem")]
             #[doku(as = "PathBuf")]
             cert_path: Utf8PathBuf,
 
+            /// The file that will be used as a the server private key for the Cumulocity proxy
+            #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_key.pem")]
             #[doku(as = "PathBuf")]
             key_path: Utf8PathBuf,
         },
