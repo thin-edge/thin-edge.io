@@ -54,8 +54,6 @@ pub enum Component {
 
     TedgeAgent(AgentOpt),
 
-    TedgeAgentV1(AgentOpt),
-
     TedgeLogPlugin(LogfilePluginOpt),
 
     TedgeConfigurationPlugin(ConfigPluginOpt),
