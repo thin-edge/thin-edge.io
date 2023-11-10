@@ -21,7 +21,7 @@ Migrate Legacy Configuration Files
     Execute Command
     ...    chown root:root /etc/tedge/c8y/c8y-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
 
-    # Bootstrap the tedge-log-plugin so that it picks up the old c8y-log-plugin.toml
+    # Bootstrap so that it picks up the old c8y-log-plugin.toml
     Execute Command    ./bootstrap.sh
     Cumulocity.Device Should Exist    ${DEVICE_SN}
 

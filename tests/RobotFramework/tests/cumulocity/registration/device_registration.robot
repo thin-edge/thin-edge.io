@@ -138,39 +138,6 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
     Should Have MQTT Messages    te/device/offlinechild1///cmd/restart/+
 
 
-Register tedge-configuration-plugin when tedge-mapper-c8y is not running #2389
-    [Teardown]    Start Service    tedge-mapper-c8y
-    Device Should Exist    ${DEVICE_SN}
-
-    Stop Service    tedge-mapper-c8y
-    Execute Command    cmd=timeout 5 tedge-configuration-plugin --mqtt-device-topic-id device/offlinechild2//    ignore_exit_code=${True}
-    Start Service    tedge-mapper-c8y
-
-    Should Be A Child Device Of Device    ${DEVICE_SN}:device:offlinechild2
-    Should Have MQTT Messages    te/device/offlinechild2//    minimum=1
-
-    Device Should Exist    ${DEVICE_SN}:device:offlinechild2
-    Cumulocity.Get Configuration    dummy1
-    Should Have MQTT Messages    te/device/offlinechild2///cmd/config_snapshot/+
-
-
-Register tedge-log-plugin when tedge-mapper-c8y is not running #2389
-    [Teardown]    Start Service    tedge-mapper-c8y
-    Device Should Exist    ${DEVICE_SN}
-
-    Stop Service    tedge-mapper-c8y
-    Execute Command    cmd=timeout 5 tedge-log-plugin --mqtt-device-topic-id device/offlinechild3//    ignore_exit_code=${True}
-    Start Service    tedge-mapper-c8y
-
-    Should Be A Child Device Of Device    ${DEVICE_SN}:device:offlinechild3
-    Should Have MQTT Messages    te/device/offlinechild3//    minimum=1
-
-    Device Should Exist    ${DEVICE_SN}:device:offlinechild3
-    Cumulocity.Create Operation
-    ...    description=Log file request
-    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"2023-01-01T01:00:00+0000","dateTo":"2023-01-02T01:00:00+0000","logFile":"example1","searchText":"first","maximumLines":10}}
-    Should Have MQTT Messages    te/device/offlinechild3///cmd/log_upload/+
-    
 *** Keywords ***
 
 Check Child Device

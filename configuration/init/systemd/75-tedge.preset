@@ -4,8 +4,6 @@
 # systemd preset file with a lower number, e.g. 50-tedge-custom.preset
 #
 # Device management
-enable tedge-log-plugin.service
-enable tedge-configuration-plugin.service
 enable c8y-firmware-plugin.service
 
 # Agent

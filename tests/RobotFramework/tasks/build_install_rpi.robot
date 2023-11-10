@@ -96,12 +96,6 @@ Install Tedge agent
 Install tedge apt plugin
    ${rc}=    Execute Command    sudo dpkg -i ./tedge-apt-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
-Install Tedge logfile request plugin
-   ${rc}=    Execute Command    sudo dpkg -i ./tedge-log-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
-    Should Be Equal    ${rc}    ${0}
-Install Tedge configuration plugin
-    ${rc}=    Execute Command    sudo dpkg -i ./tedge-configuration-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
-    Should Be Equal    ${rc}    ${0}
 Install Watchdog
     ${rc}=    Execute Command    sudo dpkg -i ./tedge-watchdog_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}

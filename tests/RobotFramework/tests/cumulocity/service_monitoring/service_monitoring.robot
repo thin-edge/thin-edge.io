@@ -25,16 +25,12 @@ Test if all c8y services are up
     [Template]     Check if a service is up
     tedge-mapper-c8y
     tedge-agent
-    tedge-configuration-plugin
-    tedge-log-plugin
     c8y-firmware-plugin
 
 Test if all c8y services are down
     [Template]     Check if a service is down
     tedge-mapper-c8y
     tedge-agent
-    tedge-configuration-plugin
-    tedge-log-plugin
     c8y-firmware-plugin
 
 
@@ -42,16 +38,12 @@ Test if all c8y services are using configured service type
     [Template]     Check if a service using configured service type
     tedge-mapper-c8y
     tedge-agent
-    tedge-configuration-plugin
-    tedge-log-plugin
     c8y-firmware-plugin
 
 Test if all c8y services using default service type when service type configured as empty
     [Template]     Check if a service using configured service type as empty
     tedge-mapper-c8y
     tedge-agent
-    tedge-configuration-plugin
-    tedge-log-plugin
     c8y-firmware-plugin
 
 Check health status of tedge-mapper-c8y service on broker stop start

@@ -24,7 +24,6 @@ ${toml}    SEPARATOR=\n
 Configuration types should be detected on file change (without restarting service)
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
     Execute Command    /setup/bootstrap.sh 2>&1
-    Execute Command    sudo systemctl restart tedge-configuration-plugin.service
     Device Should Exist    ${DEVICE_SN}
 
     ${supported_configs}=    Should Support Configurations    tedge-configuration-plugin    includes=True

@@ -14,7 +14,7 @@ Each of these device management operation requires a different set of interactio
 with specific steps, message payloads and expectations.
 
 Hence, each operation type comes with its own API, and, possibly, with different implementations:
-the `tedge-agent` service and operation plugins such as the `tedge-log-plugin` or user-specific plugins.
+the `tedge-agent` service or user-specific plugins.
 
 However, despite their diversity, all these APIs are designed along the same lines with normalized ways to
 - associate MQTT topics with devices and commands

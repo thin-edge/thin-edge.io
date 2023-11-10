@@ -26,7 +26,7 @@ Install specific version via script (from current branch)
 
     # Uninstall
     Uninstall tedge using local Script
-    Tedge Should Not Be Installed    tedge-log-plugin
+    Tedge Should Not Be Installed    tedge-agent
 
 Install latest tedge via script
     Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
@@ -39,14 +39,11 @@ Install then uninstall latest tedge via script (from main branch)
     Execute Command    dpkg -s tedge-watchdog
     Execute Command    dpkg -s tedge-mapper
     Execute Command    dpkg -s tedge-agent
-    Execute Command    dpkg -s tedge-log-plugin
-    Execute Command    dpkg -s tedge-configuration-plugin
     Execute Command    dpkg -s c8y-firmware-plugin
     Execute Command    dpkg -s c8y-remote-access-plugin
 
     # Uninstall
     Execute Command    curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
-    # TODO: Add tedge-log-plugin after merging to main
     Tedge Should Not Be Installed
 
 *** Keywords ***
@@ -74,8 +71,6 @@ Tedge Should Not Be Installed
     Execute Command    dpkg -s tedge-watchdog    exp_exit_code=!0
     Execute Command    dpkg -s tedge-mapper    exp_exit_code=!0
     Execute Command    dpkg -s tedge-agent    exp_exit_code=!0
-    Execute Command    dpkg -s c8y-log-plugin    exp_exit_code=!0
-    Execute Command    dpkg -s tedge-configuration-plugin    exp_exit_code=!0
     Execute Command    dpkg -s c8y-firmware-plugin    exp_exit_code=!0
     Execute Command    dpkg -s c8y-remote-access-plugin    exp_exit_code=!0
 
