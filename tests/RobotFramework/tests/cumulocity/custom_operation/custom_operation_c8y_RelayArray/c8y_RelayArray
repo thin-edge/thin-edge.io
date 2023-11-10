@@ -1,0 +1,6 @@
+[exec]
+topic = "c8y/s/ds"
+on_message = "519"
+result_format = "csv"
+command = "/etc/tedge/operations/set_relay.sh"
+timeout = 10

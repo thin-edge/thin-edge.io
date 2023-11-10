@@ -27,6 +27,7 @@ use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
+use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
@@ -660,6 +661,7 @@ impl CumulocityConverter {
                     payload,
                     command.as_str(),
                     &operation.name,
+                    operation.result_format(),
                     operation.graceful_timeout(),
                     operation.forceful_timeout(),
                 )
@@ -675,6 +677,7 @@ impl CumulocityConverter {
         payload: &str,
         command: &str,
         operation_name: &str,
+        result_format: ResultFormat,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
     ) -> Result<(), CumulocityMapperError> {
@@ -730,8 +733,14 @@ impl CumulocityConverter {
                                     output.stdout,
                                     MAX_PAYLOAD_LIMIT_IN_BYTES,
                                 );
-                                let successful_str =
-                                    format!("503,{op_name},\"{sanitized_stdout}\"");
+                                let successful_str = match result_format {
+                                    ResultFormat::Text => {
+                                        format!("503,{op_name},\"{sanitized_stdout}\"")
+                                    }
+                                    ResultFormat::Csv => {
+                                        format!("503,{op_name},{sanitized_stdout}")
+                                    }
+                                };
                                 mqtt_publisher.send(Message::new(&topic, successful_str.as_str())).await
                                     .unwrap_or_else(|err| {
                                         error!("Failed to publish a message: {successful_str}. Error: {err}")
@@ -1512,6 +1521,7 @@ pub(crate) mod tests {
     use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
+    use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
     use c8y_auth_proxy::url::ProxyUrlGenerator;
     use c8y_http_proxy::handle::C8YHttpProxy;
@@ -2560,6 +2570,7 @@ pub(crate) mod tests {
                 "5",
                 "sleep",
                 "sleep_ten",
+                ResultFormat::Text,
                 tokio::time::Duration::from_secs(10),
                 tokio::time::Duration::from_secs(1),
             )
@@ -2570,6 +2581,7 @@ pub(crate) mod tests {
                 "5",
                 "sleep",
                 "sleep_twenty",
+                ResultFormat::Text,
                 tokio::time::Duration::from_secs(20),
                 tokio::time::Duration::from_secs(1),
             )
