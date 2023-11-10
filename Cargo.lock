@@ -766,6 +766,7 @@ dependencies = [
  "c8y_auth_proxy",
  "c8y_http_proxy",
  "camino",
+ "capture-logger",
  "clock",
  "json-writer",
  "logged_command",
@@ -800,6 +801,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c59e92b5a388f549b863a7bea62612c09f24c8393560709a54558a9abdfb3b9c"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "capture-logger"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "605a59c5054ce9e87cd329251bcc4c04579d5edbd206b1e4c45fbfe24b13ff82"
+dependencies = [
+ "log",
 ]
 
 [[package]]

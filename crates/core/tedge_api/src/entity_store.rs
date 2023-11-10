@@ -586,7 +586,7 @@ pub enum Error {
     #[error("The specified entity {0} does not exist in the store")]
     UnknownEntity(String),
 
-    #[error("The specified topic id {0} does not match the default topic scheme: 'device/<device-id>/service/<service-id>'")]
+    #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
     NonDefaultTopicScheme(EntityTopicId),
 
     #[error(transparent)]
