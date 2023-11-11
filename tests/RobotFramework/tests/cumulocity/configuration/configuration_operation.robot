@@ -298,6 +298,8 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config2.json         /etc/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/binary-config1.tar.gz         /etc/
 
+    # Remove line below after https://github.com/thin-edge/thin-edge.io/issues/2456 is resolved
+    Execute Command    chgrp tedge /etc/ && chmod g+w /etc/
     # Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
 
