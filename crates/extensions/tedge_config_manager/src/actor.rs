@@ -119,7 +119,9 @@ impl ConfigManagerActor {
                     self.handle_config_snapshot_request(&message.topic, request)
                         .await?;
                 }
-                CommandStatus::Successful | CommandStatus::Failed { .. } => {}
+                CommandStatus::Scheduled
+                | CommandStatus::Successful
+                | CommandStatus::Failed { .. } => {}
             },
             Ok(Some(ConfigOperation::Update(request))) => match request.status {
                 CommandStatus::Init => {
@@ -135,7 +137,9 @@ impl ConfigManagerActor {
                     self.handle_config_update_request(&message.topic, request)
                         .await?;
                 }
-                CommandStatus::Successful | CommandStatus::Failed { .. } => {}
+                CommandStatus::Scheduled
+                | CommandStatus::Successful
+                | CommandStatus::Failed { .. } => {}
             },
             Ok(None) => {}
             Err(ConfigManagementError::InvalidTopicError) => {

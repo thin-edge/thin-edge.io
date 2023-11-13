@@ -1,6 +1,7 @@
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
+use log::info;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use serde::Deserialize;
@@ -16,6 +17,10 @@ pub type OperationName = String;
 pub struct OperationWorkflow {
     /// The operation to which this workflow applies
     pub operation: OperationType,
+
+    /// Mark this workflow as built_in
+    #[serde(default, skip)]
+    pub built_in: bool,
 
     /// The states of the state machine
     #[serde(flatten)]
@@ -112,14 +117,23 @@ impl WorkflowSupervisor {
         &mut self,
         workflow: OperationWorkflow,
     ) -> Result<(), WorkflowRegistrationError> {
-        if self.workflows.contains_key(&workflow.operation) {
-            Err(WorkflowRegistrationError::DuplicatedWorkflow {
-                operation: workflow.operation.to_string(),
-            })
-        } else {
-            self.workflows.insert(workflow.operation.clone(), workflow);
-            Ok(())
+        if let Some(previous) = self.workflows.get(&workflow.operation) {
+            if previous.built_in == workflow.built_in {
+                return Err(WorkflowRegistrationError::DuplicatedWorkflow {
+                    operation: workflow.operation.to_string(),
+                });
+            }
+
+            info!(
+                "The built-in {} operation has been customized",
+                workflow.operation
+            );
+            if workflow.built_in {
+                return Ok(());
+            }
         }
+        self.workflows.insert(workflow.operation.clone(), workflow);
+        Ok(())
     }
 
     /// List the capabilities provided by the registered workflows
@@ -157,17 +171,22 @@ impl OperationWorkflow {
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
         let states = [
-            ("init", vec!["executing"]),
-            ("executing", vec!["successful", "failed"]),
-            ("successful", vec![]),
-            ("failed", vec![]),
+            ("init", false, vec!["scheduled"]),
+            ("scheduled", true, vec!["executing"]),
+            ("executing", true, vec!["successful", "failed"]),
+            ("successful", false, vec![]),
+            ("failed", false, vec![]),
         ]
         .into_iter()
-        .map(|(step, next)| {
+        .map(|(step, delegate, next)| {
             (
                 step.to_string(),
                 OperationState {
-                    owner: None,
+                    owner: if delegate {
+                        Some("tedge".to_string())
+                    } else {
+                        None
+                    },
                     script: None,
                     next: next.into_iter().map(|s| s.to_string()).collect(),
                 },
@@ -175,7 +194,11 @@ impl OperationWorkflow {
         })
         .collect();
 
-        OperationWorkflow { operation, states }
+        OperationWorkflow {
+            built_in: true,
+            operation,
+            states,
+        }
     }
 
     /// Return the MQTT message to register support for the operation described by this workflow

@@ -486,6 +486,7 @@ impl CommandPayload for RestartCommandPayload {
 pub enum CommandStatus {
     #[default]
     Init,
+    Scheduled,
     Executing,
     Successful,
     Failed {
