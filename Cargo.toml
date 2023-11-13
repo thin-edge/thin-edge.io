@@ -169,7 +169,7 @@ uzers = "0.11"
 walkdir = "2"
 which = "4.2"
 whoami = "1.2.1"
-ws_stream_tungstenite = { git = "https://github.com/swanandx/ws_stream_tungstenite", rev = "1dc6b3f52672922c1fc9a3473ceb980e3cab89af" }
+ws_stream_tungstenite = "0.11"
 x509-parser = "0.14"
 yansi = "0.5"
 zeroize = "1.5"

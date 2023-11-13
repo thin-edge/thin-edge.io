@@ -4840,8 +4840,9 @@ dependencies = [
 
 [[package]]
 name = "ws_stream_tungstenite"
-version = "0.10.0"
-source = "git+https://github.com/swanandx/ws_stream_tungstenite?rev=1dc6b3f52672922c1fc9a3473ceb980e3cab89af#1dc6b3f52672922c1fc9a3473ceb980e3cab89af"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e283cc794a890f5bdc01e358ad7c34535025f79ba83c1b5c7e01e5d6c60b336d"
 dependencies = [
  "async-tungstenite",
  "async_io_stream",
@@ -4850,9 +4851,9 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
- "log",
  "pharos",
  "rustc_version",
+ "tracing",
  "tungstenite",
 ]
 
