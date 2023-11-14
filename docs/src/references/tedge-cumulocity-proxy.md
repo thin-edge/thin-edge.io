@@ -11,9 +11,11 @@ thin-edge device.
 It automatically handles authenticating with a JWT, avoiding the need for clients to support MQTT to retrieve this
 information.
 
-The API can be accessed at `http://{ip}:8001/c8y/{c8y-endpoint}`. `ip` is configured using the `c8y.proxy.bind.address`
-configuration
-(the default value is `127.0.0.1`) and the port can be changed by setting `c8y.proxy.bind.port`.
+The Cumulocity HTTP API can be accessed at `http://{host}:{port}/c8y/{c8y-endpoint}`. Configuration settings
+`c8y.proxy.client.host` and `c8y.proxy.client.port` are used to configure `{host}` and `{port}` parts of the base URL
+which will be used by thin-edge components to make requests to the C8y Proxy. `c8y.proxy.bind.address` and
+`c8y.proxy.bind.port` are read by `tedge-mapper-c8y` and used as bind address and port for the Cumulocity HTTP proxy. In
+both `client` and `bind`, `127.0.0.1` and `8001` are used as defaults for the address and port, respectively.
 
 For example, you can access the current tenant information
 at [http://127.0.0.1:8001/c8y/tenant/currentTenant](http://127.0.0.1:8001/c8y/tenant/currentTenant)

@@ -4,7 +4,6 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -39,7 +38,7 @@ pub struct C8yMapperConfig {
     pub tedge_http_host: Arc<str>,
     pub topics: TopicFilter,
     pub capabilities: Capabilities,
-    pub auth_proxy_addr: IpAddr,
+    pub auth_proxy_addr: Arc<str>,
     pub auth_proxy_port: u16,
     pub mqtt_schema: MqttSchema,
 }
@@ -59,7 +58,7 @@ impl C8yMapperConfig {
         tedge_http_host: Arc<str>,
         topics: TopicFilter,
         capabilities: Capabilities,
-        auth_proxy_addr: IpAddr,
+        auth_proxy_addr: Arc<str>,
         auth_proxy_port: u16,
         mqtt_schema: MqttSchema,
     ) -> Self {
@@ -103,8 +102,8 @@ impl C8yMapperConfig {
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let auth_proxy_addr = tedge_config.c8y.proxy.bind.address;
-        let auth_proxy_port = tedge_config.c8y.proxy.bind.port;
+        let auth_proxy_addr = tedge_config.c8y.proxy.client.host.clone();
+        let auth_proxy_port = tedge_config.c8y.proxy.client.port;
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 

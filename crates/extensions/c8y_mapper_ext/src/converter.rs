@@ -3040,7 +3040,7 @@ pub(crate) mod tests {
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
         let mqtt_schema = MqttSchema::default();
-        let auth_proxy_addr = [127, 0, 0, 1].into();
+        let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
@@ -3079,7 +3079,7 @@ pub(crate) mod tests {
             SimpleMessageBoxBuilder::new("C8Y", 1);
         let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
 
-        let auth_proxy_addr = config.auth_proxy_addr;
+        let auth_proxy_addr = config.auth_proxy_addr.clone();
         let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
 

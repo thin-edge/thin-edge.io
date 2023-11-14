@@ -390,11 +390,23 @@ define_tedge_config! {
 
         proxy: {
             bind: {
-                /// The address used for the local Cumulocity HTTP proxy
+                /// The IP address local Cumulocity HTTP proxy binds to
                 #[tedge_config(example = "127.0.0.1", default(variable = "Ipv4Addr::LOCALHOST"))]
                 address: IpAddr,
 
-                /// The port used for the local Cumulocity HTTP proxy
+                /// The port local Cumulocity HTTP proxy binds to
+                #[tedge_config(example = "8001", default(value = 8001u16))]
+                port: u16,
+            },
+            client: {
+                /// The address of the host on which the local Cumulocity HTTP Proxy is running, used by the Cumulocity
+                /// mapper.
+                #[tedge_config(default(value = "127.0.0.1"))]
+                #[tedge_config(example = "127.0.0.1", example = "192.168.1.2", example = "tedge-hostname")]
+                host: Arc<str>,
+
+                /// The port number on the remote host on which the local Cumulocity HTTP Proxy is running, used by the
+                /// Cumulocity mapper.
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
             }
