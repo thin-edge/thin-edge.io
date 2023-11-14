@@ -194,27 +194,27 @@ mod tests {
         }
 
         fn copy_test_file_to(test_file: &str, path: impl AsRef<Path>) -> io::Result<u64> {
-            std::fs::copy(format!("./src/test_data/{test_file}"), path)
+            std::fs::copy(format!("./test_data/{test_file}"), path)
         }
     }
 
     #[test]
     fn load_pkey_fails_when_given_x509_certificate() {
         assert_eq!(
-            load_pkey(Utf8Path::new("./src/test_data/ec.crt"))
+            load_pkey(Utf8Path::new("./test_data/ec.crt"))
                 .unwrap_err()
                 .to_string(),
-            "expected private key in \"./src/test_data/ec.crt\", found an X509 certificate"
+            "expected private key in \"./test_data/ec.crt\", found an X509 certificate"
         );
     }
 
     #[test]
     fn load_pkey_fails_when_given_certificate_revocation_list() {
         assert_eq!(
-            load_pkey(Utf8Path::new("./src/test_data/demo.crl"))
+            load_pkey(Utf8Path::new("./test_data/demo.crl"))
                 .unwrap_err()
                 .to_string(),
-            "expected private key in \"./src/test_data/demo.crl\", found a CRL"
+            "expected private key in \"./test_data/demo.crl\", found a CRL"
         );
     }
 
@@ -223,56 +223,56 @@ mod tests {
 
         #[tokio::test]
         async fn alg_ed25519_pkcs8() {
-            let key = include_str!("test_data/ed25519.key");
-            let cert = include_str!("./test_data/ed25519.crt");
+            let key = test_data("ed25519.key");
+            let cert = test_data("ed25519.crt");
 
-            let (config, cert) = config_from_pem(key, cert).unwrap();
+            let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(key), Item::PKCS8Key(_));
+            assert_matches!(parse_key_to_item(&key), Item::PKCS8Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_ec() {
-            let key = include_str!("test_data/ec.key");
-            let cert = include_str!("./test_data/ec.crt");
+            let key = test_data("ec.key");
+            let cert = test_data("ec.crt");
 
-            let (config, cert) = config_from_pem(key, cert).unwrap();
+            let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(key), Item::ECKey(_));
+            assert_matches!(parse_key_to_item(&key), Item::ECKey(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_ec_pkcs8() {
-            let key = include_str!("test_data/ec.pkcs8.key");
-            let cert = include_str!("./test_data/ec.crt");
+            let key = test_data("ec.pkcs8.key");
+            let cert = test_data("ec.crt");
 
-            let (config, cert) = config_from_pem(key, cert).unwrap();
+            let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(key), Item::PKCS8Key(_));
+            assert_matches!(parse_key_to_item(&key), Item::PKCS8Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_rsa_pkcs8() {
-            let key = include_str!("./test_data/rsa.pkcs8.key");
-            let cert = include_str!("./test_data/rsa.crt");
+            let key = test_data("rsa.pkcs8.key");
+            let cert = test_data("rsa.crt");
 
-            let (config, cert) = config_from_pem(key, cert).unwrap();
+            let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(key), Item::PKCS8Key(_));
+            assert_matches!(parse_key_to_item(&key), Item::PKCS8Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_rsa_pkcs1() {
-            let key = include_str!("./test_data/rsa.pkcs1.key");
-            let cert = include_str!("./test_data/rsa.crt");
+            let key = test_data("rsa.pkcs1.key");
+            let cert = test_data("rsa.crt");
 
-            let (config, cert) = config_from_pem(key, cert).unwrap();
+            let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(key), Item::RSAKey(_));
+            assert_matches!(parse_key_to_item(&key), Item::RSAKey(_));
             assert_server_works_with(config, cert).await;
         }
 
@@ -280,6 +280,10 @@ mod tests {
             rustls_pemfile::read_one(&mut Cursor::new(pem))
                 .unwrap()
                 .unwrap()
+        }
+
+        fn test_data(file_name: &str) -> String {
+            std::fs::read_to_string(format!("./test_data/{file_name}")).with_context(|| format!("opening file {file_name} from test_data")).unwrap()
         }
 
         fn config_from_pem(
