@@ -117,7 +117,8 @@ impl TedgeOperationConverterActor {
             Ok(Some((state, OperationAction::Script(script)))) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
-                if let Ok(command) = Execute::try_new(&script) {
+                if let Ok(mut command) = Execute::try_new(&script) {
+                    command.args = state.inject_parameters(&command.args);
                     let output = self.script_runner.await_response(command).await?;
                     let new_state = state.update_with_script_output(script, output);
                     self.publish_command_state(operation, cmd_id, new_state)

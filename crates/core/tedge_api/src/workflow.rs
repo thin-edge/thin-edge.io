@@ -6,6 +6,7 @@ use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -256,8 +257,9 @@ impl From<&OperationState> for OperationAction {
 /// Generic command state that can be used to manipulate any type of command payload.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GenericCommandState {
+    pub topic: String,
     pub status: String,
-    pub json: Value,
+    pub payload: Value,
 }
 
 impl GenericCommandState {
@@ -267,26 +269,31 @@ impl GenericCommandState {
         if payload.is_empty() {
             return Ok(None);
         }
+        let topic = message.topic.name.clone();
         let json: Value = serde_json::from_slice(payload)?;
         let status = GenericCommandState::extract_text_property(&json, "status")
             .ok_or(WorkflowExecutionError::MissingStatus)?;
-        Ok(Some(GenericCommandState { status, json }))
+        Ok(Some(GenericCommandState {
+            topic,
+            status,
+            payload: json,
+        }))
     }
 
     /// Serialize the command state as a json payload
     pub fn to_json_string(mut self) -> String {
-        GenericCommandState::inject_text_property(&mut self.json, "status", &self.status);
-        self.json.to_string()
+        GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
+        self.payload.to_string()
     }
 
     /// Inject a json payload into this one
     pub fn update_from_json(mut self, json: Value) -> Self {
-        if let (Some(values), Some(new_values)) = (self.json.as_object_mut(), json.as_object()) {
+        if let (Some(values), Some(new_values)) = (self.payload.as_object_mut(), json.as_object()) {
             for (k, v) in new_values {
                 values.insert(k.to_string(), v.clone());
             }
         }
-        match GenericCommandState::extract_text_property(&self.json, "status") {
+        match GenericCommandState::extract_text_property(&self.payload, "status") {
             None => self.fail_with("Unknown status".to_string()),
             Some(status) => GenericCommandState { status, ..self },
         }
@@ -338,7 +345,7 @@ impl GenericCommandState {
 
     /// Update the command state with a new status describing the next state
     pub fn move_to(mut self, status: String) -> Self {
-        GenericCommandState::inject_text_property(&mut self.json, "status", &status);
+        GenericCommandState::inject_text_property(&mut self.payload, "status", &status);
 
         GenericCommandState { status, ..self }
     }
@@ -346,8 +353,8 @@ impl GenericCommandState {
     /// Update the command state to failed status with the given reason
     pub fn fail_with(mut self, reason: String) -> Self {
         let status = "failed";
-        GenericCommandState::inject_text_property(&mut self.json, "status", status);
-        GenericCommandState::inject_text_property(&mut self.json, "reason", &reason);
+        GenericCommandState::inject_text_property(&mut self.payload, "status", status);
+        GenericCommandState::inject_text_property(&mut self.payload, "reason", &reason);
 
         GenericCommandState {
             status: status.to_owned(),
@@ -369,6 +376,88 @@ impl GenericCommandState {
             o.insert(property.to_string(), value.into());
         }
     }
+
+    /// Inject values extracted from the message payload into a script command line.
+    ///
+    /// - The script command is first tokenized using shell escaping rules.
+    ///   `/some/script.sh arg1 "arg 2" "arg 3"` -> ["/some/script.sh", "arg1", "arg 2", "arg 3"]
+    /// - Then each token matching `${x.y.z}` is substituted with the value of
+    pub fn inject_parameters(&self, args: &[String]) -> Vec<String> {
+        args.iter().map(|arg| self.inject_parameter(arg)).collect()
+    }
+
+    /// Inject values extracted from the message payload into a script argument
+    ///
+    /// `${.payload}` -> the whole message payload
+    /// `${.payload.x}` -> the value of x if there is any in the payload
+    /// `${.payload.unknown}` -> `${.payload.unknown}` unchanged
+    /// `Not a variable pattern` -> `Not a variable pattern` unchanged
+    pub fn inject_parameter(&self, script_parameter: &str) -> String {
+        script_parameter
+            .strip_prefix("${")
+            .and_then(|s| s.strip_suffix('}'))
+            .and_then(|path| self.extract(path))
+            .unwrap_or_else(|| script_parameter.to_string())
+    }
+
+    fn extract(&self, path: &str) -> Option<String> {
+        match path {
+            "." => Some(
+                json!({
+                    "topic": self.topic,
+                    "payload": self.payload
+                })
+                .to_string(),
+            ),
+            ".topic" => Some(self.topic.clone()),
+            ".topic.target" => self.target(),
+            ".topic.operation" => self.operation(),
+            ".topic.cmd_id" => self.cmd_id(),
+            ".payload" => Some(self.payload.to_string()),
+            path => path
+                .strip_prefix(".payload.")
+                .and_then(|path| json_excerpt(&self.payload, path)),
+        }
+    }
+
+    fn target(&self) -> Option<String> {
+        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+            [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
+            _ => None,
+        }
+    }
+
+    fn operation(&self) -> Option<String> {
+        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+            [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
+            _ => None,
+        }
+    }
+
+    fn cmd_id(&self) -> Option<String> {
+        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+            [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
+            _ => None,
+        }
+    }
+}
+
+fn json_excerpt(value: &Value, path: &str) -> Option<String> {
+    match path.split_once('.') {
+        None if path.is_empty() => Some(json_as_string(value)),
+        None => value.get(path).map(json_as_string),
+        Some((key, path)) => value.get(key).and_then(|value| json_excerpt(value, path)),
+    }
+}
+
+fn json_as_string(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => s.clone(),
+        _ => value.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -388,8 +477,9 @@ mod tests {
         assert_eq!(
             cmd,
             GenericCommandState {
+                topic: "te/device/main///cmd/make_it/123".to_string(),
                 status: "init".to_string(),
-                json: json!({
+                payload: json!({
                     "status": "init",
                     "foo": 42,
                     "bar": {
@@ -403,8 +493,9 @@ mod tests {
         assert_eq!(
             update_cmd,
             GenericCommandState {
+                topic: "te/device/main///cmd/make_it/123".to_string(),
                 status: "executing".to_string(),
-                json: json!({
+                payload: json!({
                     "status": "executing",
                     "foo": 42,
                     "bar": {
@@ -418,8 +509,9 @@ mod tests {
         assert_eq!(
             final_cmd,
             GenericCommandState {
+                topic: "te/device/main///cmd/make_it/123".to_string(),
                 status: "failed".to_string(),
-                json: json!({
+                payload: json!({
                     "status": "failed",
                     "reason": "panic",
                     "foo": 42,
@@ -429,5 +521,73 @@ mod tests {
                 })
             }
         );
+    }
+
+    #[test]
+    fn inject_json_into_parameters() {
+        let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
+        let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
+        let command = mqtt_channel::Message::new(&topic, payload);
+        let cmd = GenericCommandState::from_command_message(&command)
+            .expect("parsing error")
+            .expect("no message");
+
+        // Valid paths
+        assert_eq!(
+            cmd.inject_parameter("${.}").to_json(),
+            json!({
+                "topic": "te/device/main///cmd/make_it/123",
+                "payload": {
+                    "status":"init",
+                    "foo":42,
+                    "bar": { "extra": [1,2,3] }
+                }
+            })
+        );
+        assert_eq!(cmd.inject_parameter("${.topic}"), cmd.topic);
+        assert_eq!(cmd.inject_parameter("${.topic.target}"), "device/main//");
+        assert_eq!(cmd.inject_parameter("${.topic.operation}"), "make_it");
+        assert_eq!(cmd.inject_parameter("${.topic.cmd_id}"), "123");
+        assert_eq!(cmd.inject_parameter("${.payload}").to_json(), cmd.payload);
+        assert_eq!(cmd.inject_parameter("${.payload.status}"), "init");
+        assert_eq!(cmd.inject_parameter("${.payload.foo}"), "42");
+        assert_eq!(
+            cmd.inject_parameter("${.payload.bar}").to_json(),
+            json!({
+                "extra": [1,2,3]
+            })
+        );
+        assert_eq!(
+            cmd.inject_parameter("${.payload.bar.extra}").to_json(),
+            json!([1, 2, 3])
+        );
+
+        // Not supported yet
+        assert_eq!(
+            cmd.inject_parameter("${.payload.bar.extra[1]}"),
+            "${.payload.bar.extra[1]}"
+        );
+
+        // Ill formed
+        assert_eq!(cmd.inject_parameter("not a pattern"), "not a pattern");
+        assert_eq!(cmd.inject_parameter("${ill-formed}"), "${ill-formed}");
+        assert_eq!(cmd.inject_parameter("${.unknown}"), "${.unknown}");
+        assert_eq!(
+            cmd.inject_parameter("${.payload.bar.unknown}"),
+            "${.payload.bar.unknown}"
+        );
+    }
+
+    trait JsonContent {
+        fn to_json(self) -> Value;
+    }
+
+    impl JsonContent for String {
+        fn to_json(self) -> Value {
+            match serde_json::from_str(&self) {
+                Ok(json) => json,
+                Err(_) => Value::Null,
+            }
+        }
     }
 }
