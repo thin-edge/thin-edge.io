@@ -13,7 +13,7 @@ repository = { workspace = true }
 # No features on by default
 default = []
 logging = []
-fs-notify = ["strum_macros", "notify"]
+fs-notify = ["strum_macros", "notify", "notify-debouncer-full"]
 
 [dependencies]
 anyhow = "1.0.71"
@@ -21,6 +21,7 @@ futures = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 notify = { workspace = true, optional = true }
+notify-debouncer-full = { workspace = true, optional = true }
 strum_macros = { workspace = true, optional = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
