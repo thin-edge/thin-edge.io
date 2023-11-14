@@ -1,6 +1,7 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
+use crate::converter::FtsDownloadOperationType;
 use async_trait::async_trait;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
@@ -298,34 +299,57 @@ impl C8yMapperActor {
         cmd_id: CmdId,
         result: DownloadResult,
     ) -> Result<(), RuntimeError> {
-        match self.converter.pending_download_operations.remove(&cmd_id) {
-            None => error!("Received a download result for the unknown command ID: {cmd_id}"),
-            Some(operation) => {
-                let result = match operation {
-                    SmartRestOperationVariant::DownloadConfigFile(smartrest) => {
-                        self.converter
-                            .process_download_result_for_config_update(
-                                cmd_id.into(),
-                                &smartrest,
-                                result,
-                            )
-                            .await
-                    }
-                    _other_types => return Ok(()), // unsupported
-                };
-
-                match result {
-                    Ok(converted_messages) => {
-                        for converted_message in converted_messages.into_iter() {
-                            self.mqtt_publisher.send(converted_message).await?
+        let operation_result = match self.converter.pending_download_operations.remove(&cmd_id) {
+            None => {
+                // download not from c8y_proxy, check if it was from FTS
+                if let Some(fts_download) = self
+                    .converter
+                    .pending_fts_download_operations
+                    .remove(&cmd_id)
+                {
+                    let cmd_id = cmd_id.clone();
+                    match fts_download.download_type {
+                        FtsDownloadOperationType::ConfigDownload => {
+                            self.converter
+                                .handle_fts_config_download_result(cmd_id, result, fts_download)
+                                .await
+                        }
+                        FtsDownloadOperationType::LogDownload => {
+                            self.converter
+                                .handle_fts_log_download_result(cmd_id, result, fts_download)
+                                .await
                         }
                     }
-                    Err(err) => {
-                        error!("Error occurred while processing a download result. {err}")
-                    }
+                } else {
+                    error!("Received a download result for the unknown command ID: {cmd_id}");
+                    return Ok(());
                 }
             }
+
+            Some(operation) => match operation {
+                SmartRestOperationVariant::DownloadConfigFile(smartrest) => {
+                    self.converter
+                        .process_download_result_for_config_update(
+                            cmd_id.into(),
+                            &smartrest,
+                            result,
+                        )
+                        .await
+                }
+                _other_types => return Ok(()), // unsupported
+            },
         };
+
+        match operation_result {
+            Ok(converted_messages) => {
+                for converted_message in converted_messages.into_iter() {
+                    self.mqtt_publisher.send(converted_message).await?
+                }
+            }
+            Err(err) => {
+                error!("Error occurred while processing a download result. {err}")
+            }
+        }
 
         Ok(())
     }

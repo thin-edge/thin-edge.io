@@ -45,6 +45,7 @@ use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
+use camino::Utf8Path;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
@@ -59,6 +60,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity_store;
@@ -166,6 +168,35 @@ pub struct UploadOperationData {
     pub clear_cmd_topic: Topic,
     pub c8y_binary_url: String,
     pub operation: CumulocitySupportedOperations,
+
+    // used to automatically remove the temporary file after operation is finished
+    pub file_dir: tempfile::TempDir,
+}
+
+/// Represents a pending download performed by the downloader from the FTS.
+///
+/// Functions which download files from the tedge File Transfer Service as part of handling
+/// operations (e.g. when performing `log_upload` or `config_snapshot`, the relevant file is
+/// uploaded into FTS) will use this type for communicating with the Downloader actor.
+pub struct FtsDownloadOperationData {
+    pub download_type: FtsDownloadOperationType,
+    pub url: String,
+
+    // used to automatically remove the temporary file after operation is finished
+    pub file_dir: tempfile::TempDir,
+
+    // the message that triggeered the operation
+    pub message: MqttMessage,
+
+    pub entity_topic_id: EntityTopicId,
+}
+
+/// Used to denote as type of what operation was the file downloaded from the FTS.
+///
+/// Used to dispatch download result to the correct operation handler.
+pub enum FtsDownloadOperationType {
+    LogDownload,
+    ConfigDownload,
 }
 
 pub struct CumulocityConverter {
@@ -182,6 +213,7 @@ pub struct CumulocityConverter {
     pub http_proxy: C8YHttpProxy,
     pub cfg_dir: PathBuf,
     pub ops_dir: PathBuf,
+    pub tmp_dir: Arc<Utf8Path>,
     pub children: HashMap<String, Operations>,
     pub service_type: String,
     pub c8y_endpoint: C8yEndPoint,
@@ -192,6 +224,11 @@ pub struct CumulocityConverter {
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
     pub pending_upload_operations: HashMap<CmdId, UploadOperationData>,
     pub pending_download_operations: HashMap<CmdId, SmartRestOperationVariant>,
+
+    /// Used to store pending downloads from the FTS.
+    // Using a separate field to not mix downloads from FTS and HTTP proxy
+    pub pending_fts_download_operations: HashMap<CmdId, FtsDownloadOperationData>,
+
     pub command_id: IdGenerator,
 }
 
@@ -220,6 +257,9 @@ impl CumulocityConverter {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
         let ops_dir = config.ops_dir.clone();
+
+        let tmp_dir = config.tmp_dir.clone();
+
         let operations = Operations::try_new(ops_dir.clone())?;
         let children = get_child_ops(ops_dir.clone())?;
 
@@ -261,6 +301,7 @@ impl CumulocityConverter {
             http_proxy,
             cfg_dir,
             ops_dir,
+            tmp_dir,
             children,
             mqtt_publisher,
             service_type,
@@ -272,6 +313,7 @@ impl CumulocityConverter {
             downloader_sender,
             pending_upload_operations: HashMap::new(),
             pending_download_operations: HashMap::new(),
+            pending_fts_download_operations: HashMap::new(),
             command_id,
         })
     }
@@ -3008,6 +3050,7 @@ pub(crate) mod tests {
         C8yMapperConfig::new(
             tmp_dir.to_path_buf(),
             tmp_dir.utf8_path_buf(),
+            tmp_dir.utf8_path_buf().into(),
             tmp_dir.utf8_path_buf().into(),
             device_id,
             device_topic_id,

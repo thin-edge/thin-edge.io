@@ -2582,6 +2582,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         config_dir.to_path_buf(),
         config_dir.utf8_path_buf(),
         config_dir.utf8_path_buf().into(),
+        config_dir.utf8_path_buf().into(),
         device_name,
         device_topic_id,
         device_type,
