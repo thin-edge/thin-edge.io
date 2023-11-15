@@ -591,6 +591,7 @@ pub enum OperationType {
     LogUpload,
     ConfigSnapshot,
     ConfigUpdate,
+    FirmwareUpdate,
     Health,
     Custom(String),
 }
@@ -632,6 +633,7 @@ impl<'a> From<&'a str> for OperationType {
             "log_upload" => OperationType::LogUpload,
             "config_snapshot" => OperationType::ConfigSnapshot,
             "config_update" => OperationType::ConfigUpdate,
+            "firmware_update" => OperationType::FirmwareUpdate,
             operation => OperationType::Custom(operation.to_string()),
         }
     }
@@ -652,6 +654,7 @@ impl Display for OperationType {
             OperationType::LogUpload => write!(f, "log_upload"),
             OperationType::ConfigSnapshot => write!(f, "config_snapshot"),
             OperationType::ConfigUpdate => write!(f, "config_update"),
+            OperationType::FirmwareUpdate => write!(f, "firmware_update"),
             OperationType::Health => write!(f, "health"),
             OperationType::Custom(operation) => write!(f, "{operation}"),
         }

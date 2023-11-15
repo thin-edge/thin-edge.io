@@ -6,6 +6,7 @@ mod config_operations;
 pub mod converter;
 pub mod dynamic_discovery;
 pub mod error;
+mod firmware_update;
 mod fragments;
 mod inventory;
 pub mod json;
@@ -20,6 +21,7 @@ pub struct Capabilities {
     log_upload: bool,
     config_snapshot: bool,
     config_update: bool,
+    firmware_update: bool,
 }
 
 impl Default for Capabilities {
@@ -28,6 +30,7 @@ impl Default for Capabilities {
             log_upload: true,
             config_snapshot: true,
             config_update: true,
+            firmware_update: false,
         }
     }
 }
