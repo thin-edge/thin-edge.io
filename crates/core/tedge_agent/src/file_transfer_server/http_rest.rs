@@ -9,7 +9,6 @@ use camino::Utf8PathBuf;
 use hyper::server::conn::AddrIncoming;
 use hyper::Body;
 use hyper::Request;
-use hyper::Response;
 use hyper::Server;
 use hyper::StatusCode;
 use std::io::ErrorKind;
@@ -28,16 +27,14 @@ const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 #[derive(Debug, Clone)]
 pub struct HttpConfig {
     pub bind_address: SocketAddr,
-    pub file_transfer_uri: String,
-    pub data_dir: DataDir,
+    pub file_transfer_dir: Utf8PathBuf,
 }
 
 impl Default for HttpConfig {
     fn default() -> Self {
         HttpConfig {
             bind_address: ([127, 0, 0, 1], HTTP_FILE_TRANSFER_PORT).into(),
-            file_transfer_uri: "/tedge/".into(),
-            data_dir: DataDir::default(),
+            file_transfer_dir: DataDir::default().file_transfer_dir(),
         }
     }
 }
@@ -51,7 +48,7 @@ impl HttpConfig {
     }
 
     pub fn with_data_dir(self, data_dir: DataDir) -> HttpConfig {
-        Self { data_dir, ..self }
+        Self { file_transfer_dir: data_dir.file_transfer_dir(), ..self }
     }
 
     pub fn with_port(self, port: u16) -> HttpConfig {
@@ -63,10 +60,6 @@ impl HttpConfig {
         }
     }
 
-    pub fn file_transfer_end_point(&self) -> String {
-        format!("{}file-transfer/*path", self.file_transfer_uri)
-    }
-
     /// Return the path of the file associated to the given `uri`
     ///
     /// Check that:
@@ -76,44 +69,14 @@ impl HttpConfig {
         &self,
         path: &Utf8Path,
     ) -> Result<Utf8PathBuf, FileTransferRequestError> {
-        // TODO just move this to self
-        let file_transfer_dir = self.data_dir.join("file-transfer");
-        let full_path = file_transfer_dir.join(path);
+        let full_path = self.file_transfer_dir.join(path);
 
         // TODO rocket does this in a nicer way (I think), that I'd like to copy
         // One must check that once normalized (i.e. any `..` removed)
         // the path is still under the file transfer dir
         let clean_path = clean_utf8_path(&full_path);
         // TODO did we actually mean to allow (very limited) path traversal attacks into the data dir?
-        if clean_path.starts_with(&file_transfer_dir) {
-            Ok(clean_path)
-        } else {
-            Err(FileTransferRequestError::InvalidURI {
-                value: clean_path.to_string(),
-            })
-        }
-    }
-
-    /// Return the path of the file associated to the given `uri`
-    ///
-    /// Check that:
-    /// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
-    /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
-    pub fn local_path_for_uri(&self, uri: String) -> Result<Utf8PathBuf, FileTransferRequestError> {
-        let ref_uri = uri.clone();
-
-        // The file transfer prefix has to be removed from the uri to get the target path
-        let path = uri
-            .strip_prefix(&self.file_transfer_uri)
-            .ok_or(FileTransferRequestError::InvalidURI { value: ref_uri })?;
-
-        // This path is relative to the file transfer dir
-        let full_path = self.data_dir.join(path);
-
-        // One must check that once normalized (i.e. any `..` removed)
-        // the path is still under the file transfer dir
-        let clean_path = clean_utf8_path(&full_path);
-        if clean_path.starts_with(&self.data_dir) {
+        if clean_path.starts_with(&self.file_transfer_dir) {
             Ok(clean_path)
         } else {
             Err(FileTransferRequestError::InvalidURI {
@@ -127,43 +90,42 @@ fn clean_utf8_path(path: &Utf8Path) -> Utf8PathBuf {
     Utf8PathBuf::from(path_clean::clean(path.as_str()))
 }
 
-fn separate_path_and_file_name(input: &Utf8Path) -> Option<(Utf8PathBuf, String)> {
+// TODO I think this methodology is flawed - it has unit tests, but the cases we test can't be reached due to clean_utf8_path interfering 
+fn separate_path_and_file_name(input: &Utf8Path) -> Option<(&Utf8Path, &str)> {
     let (relative_path, file_name) = input.as_str().rsplit_once('/')?;
 
-    let relative_path = Utf8PathBuf::from(relative_path);
-    Some((relative_path, file_name.into()))
+    let relative_path = Utf8Path::new(relative_path);
+    Some((relative_path, file_name))
 }
 
-async fn put(
+async fn upload_file(
+    Path(path): Path<Utf8PathBuf>,
+    file_transfer: State<Arc<HttpConfig>>,
     mut request: Request<Body>,
-    file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferRequestError> {
-    let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
-
-    let mut response = Response::new(Body::empty());
+) -> Result<StatusCode, FileTransferRequestError> {
+    let full_path = file_transfer.local_path_for_file(&path)?;
 
     if let Some((relative_path, file_name)) = separate_path_and_file_name(&full_path) {
-        let root_path = file_transfer.data_dir.clone();
+        let root_path = file_transfer.file_transfer_dir.clone();
         let directories_path = root_path.join(relative_path);
 
         if let Err(_err) = create_directories(&directories_path) {
-            *response.status_mut() = hyper::StatusCode::FORBIDDEN;
+            return Ok(StatusCode::FORBIDDEN);
         }
 
         let full_path = directories_path.join(file_name);
 
         match stream_request_body_to_path(&full_path, request.body_mut()).await {
-            Ok(()) => {
-                *response.status_mut() = hyper::StatusCode::CREATED;
-            }
+            Ok(()) => Ok(StatusCode::CREATED),
             Err(_err) => {
-                *response.status_mut() = hyper::StatusCode::FORBIDDEN;
+                // TODO add error variant
+                Ok(StatusCode::FORBIDDEN)
             }
         }
     } else {
-        *response.status_mut() = hyper::StatusCode::FORBIDDEN;
+        // TODO add error variant
+        Ok(StatusCode::FORBIDDEN)
     }
-    Ok(response)
 }
 
 async fn download_file(
@@ -232,28 +194,21 @@ pub fn http_file_transfer_server(
 }
 
 fn http_file_transfer_router(config: HttpConfig) -> Router {
-    let file_transfer_end_point = config.file_transfer_end_point();
-    let put_config = config.clone();
-
     Router::new()
         .route(
-            &file_transfer_end_point,
-            get(download_file)
-                .put(move |req| {
-                    let config = put_config.clone();
-                    async move { put(req, &config).await }
-                })
-                .delete(delete_file),
+            "/tedge/file-transfer/*path",
+            get(download_file).put(upload_file).delete(delete_file),
         )
         .with_state(Arc::new(config))
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use bytes::Bytes;
     use http_body::combinators::UnsyncBoxBody;
     use hyper::Method;
+    use axum::response::Response;
     use hyper::StatusCode;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
@@ -261,13 +216,12 @@ mod test {
     use tower::ServiceExt;
 
     #[test_case(
-        "/tedge/some/dir/file",
-        Some(Utf8PathBuf::from("/var/tedge/some/dir/file"))
+        "some/dir/file",
+        Some(Utf8PathBuf::from("/var/tedge/file-transfer/some/dir/file"))
     )]
-    #[test_case("/wrong/some/dir/file", None)]
     fn test_remove_prefix_from_uri(input: &str, output: Option<Utf8PathBuf>) {
         let file_transfer = HttpConfig::default();
-        let actual_output = file_transfer.local_path_for_uri(input.to_string()).ok();
+        let actual_output = file_transfer.local_path_for_file(Utf8Path::new(input)).ok();
         assert_eq!(actual_output, output);
     }
 
@@ -426,14 +380,14 @@ mod test {
             .expect("request builder")
     }
 
-    #[test_case(String::from("/tedge/file-transfer/../../../bin/sh"), false)]
+    #[test_case(String::from("../../../bin/sh"), false)]
     #[test_case(
-        String::from("/tedge/file-transfer/../file-transfer/new/dir/file"),
+        String::from("../file-transfer/new/dir/file"),
         true
     )]
     fn test_verify_uri(uri: String, is_ok: bool) {
         let file_transfer = HttpConfig::default();
-        let res = file_transfer.local_path_for_uri(uri);
+        let res = file_transfer.local_path_for_file(Utf8Path::new(&uri));
         match is_ok {
             true => {
                 assert!(res.is_ok());
