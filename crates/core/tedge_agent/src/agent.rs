@@ -24,11 +24,20 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
+use tedge_config_manager::ConfigManagerBuilder;
+use tedge_config_manager::ConfigManagerConfig;
+use tedge_config_manager::ConfigManagerOptions;
+use tedge_downloader_ext::DownloaderActor;
+use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
+use tedge_log_manager::LogManagerBuilder;
+use tedge_log_manager::LogManagerConfig;
+use tedge_log_manager::LogManagerOptions;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_signal_ext::SignalActor;
+use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
@@ -153,7 +162,7 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn start(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn start(&mut self, v1: bool) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
         self.init()?;
 
@@ -206,6 +215,48 @@ impl Agent {
 
         // Tedge to Te topic converter
         let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
+
+        if v1 {
+            let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
+            let mut downloader_actor_builder = DownloaderActor::new().builder();
+            let mut uploader_actor_builder = UploaderActor::new().builder();
+
+            // Instantiate config manager actor
+            let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
+                config_dir: self.config.config_dir.clone().into(),
+                mqtt_topic_root: mqtt_schema.clone(),
+                mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+            })?;
+            let config_actor_builder = ConfigManagerBuilder::try_new(
+                manager_config,
+                &mut mqtt_actor_builder,
+                &mut fs_watch_actor_builder,
+                &mut downloader_actor_builder,
+                &mut uploader_actor_builder,
+            )
+            .await?;
+
+            // Instantiate log manager actor
+            let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
+                config_dir: self.config.config_dir.clone().into(),
+                mqtt_schema,
+                mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+            })?;
+            let log_actor_builder = LogManagerBuilder::try_new(
+                log_manager_config,
+                &mut mqtt_actor_builder,
+                &mut fs_watch_actor_builder,
+                &mut uploader_actor_builder,
+            )
+            .await?;
+
+            runtime.spawn(fs_watch_actor_builder).await?;
+            runtime.spawn(downloader_actor_builder).await?;
+            runtime.spawn(uploader_actor_builder).await?;
+
+            runtime.spawn(config_actor_builder).await?;
+            runtime.spawn(log_actor_builder).await?;
+        }
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;

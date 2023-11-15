@@ -514,31 +514,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "c8y-device-management"
-version = "0.13.1"
-dependencies = [
- "anyhow",
- "c8y_config_manager",
- "c8y_firmware_manager",
- "c8y_http_proxy",
- "c8y_log_manager",
- "clap",
- "env_logger",
- "log",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_downloader_ext",
- "tedge_file_system_ext",
- "tedge_health_ext",
- "tedge_http_ext",
- "tedge_mqtt_ext",
- "tedge_signal_ext",
- "tedge_timer_ext",
- "tokio",
-]
-
-[[package]]
 name = "c8y-firmware-plugin"
 version = "0.13.1"
 dependencies = [
@@ -3570,10 +3545,15 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_config_manager",
+ "tedge_downloader_ext",
+ "tedge_file_system_ext",
  "tedge_health_ext",
+ "tedge_log_manager",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
  "tedge_test_utils",
+ "tedge_uploader_ext",
  "tedge_utils",
  "test-case",
  "thiserror",
