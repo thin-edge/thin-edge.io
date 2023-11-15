@@ -25,8 +25,16 @@ The server supports all public REST APIs of Cumulocity, and all possible request
 There is no need to provide an `Authorization` header (or any other authentication method) when accessing the API.
 If an `Authorization` header is provided, this will be used to authenticate the request instead of the device JWT.
 
-At the time of writing, this service is unauthenticated and does not support incoming HTTPS connections
+## HTTPS and authenticated access
+By default, the service is unauthenticated  and does not support incoming HTTPS connections
 (when the request is forwarded to Cumulocity, however, this will use HTTPS).
+HTTPS can be enabled by setting `c8y.proxy.cert_path` and `c8y.proxy.key_path`.
+If the certificates are configured, the mapper will automatically host the proxy via HTTPS, and redirect any
+HTTP requests to the equivalent HTTPS URL.
+If HTTPS is enabled, the configured certificate should be installed in the OS trust store for any connected agents
+in order for them to trust the connection to the mapper.
+
+## Possible errors returned by the proxy
 Due to the underlying JWT handling in Cumulocity, requests to the proxy API are occasionally spuriously rejected with
 a `401 Not Authorized` status code.
 The proxy server currently forwards this response directly to the client, as well as all other errors responses from
