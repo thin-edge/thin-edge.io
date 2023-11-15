@@ -43,6 +43,7 @@ az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 batcher = { path = "crates/common/batcher" }
+bytes = "1.4"
 c8y_api = { path = "crates/core/c8y_api" }
 c8y_config_manager = { path = "crates/extensions/c8y_config_manager" }
 c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
@@ -159,6 +160,7 @@ tokio = { version = "1.23", default-features = false }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.7"
 tower = "0.4"
+http-body = "0.4"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 try-traits = "0.1"

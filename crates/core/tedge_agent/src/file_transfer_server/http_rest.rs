@@ -1,4 +1,5 @@
 use crate::file_transfer_server::error::FileTransferError;
+use axum::extract::Path;
 use axum::routing::IntoMakeService;
 use axum::Router;
 use camino::Utf8Path;
@@ -8,12 +9,15 @@ use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use hyper::Server;
+use std::io::ErrorKind;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use tedge_actors::futures::StreamExt;
 use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
 use tokio::io::AsyncWriteExt;
+
+use super::error::FileTransferRequestError;
 
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 
@@ -64,13 +68,40 @@ impl HttpConfig {
     /// Check that:
     /// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
     /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
-    pub fn local_path_for_uri(&self, uri: String) -> Result<Utf8PathBuf, FileTransferError> {
+    pub fn local_path_for_file(
+        &self,
+        path: &Utf8Path,
+    ) -> Result<Utf8PathBuf, FileTransferRequestError> {
+        // TODO just move this to self
+        let file_transfer_dir = self.data_dir.join("file-transfer");
+        let full_path = file_transfer_dir.join(path);
+
+        // TODO rocket does this in a nicer way (I think), that I'd like to copy
+        // One must check that once normalized (i.e. any `..` removed)
+        // the path is still under the file transfer dir
+        let clean_path = clean_utf8_path(&full_path);
+        // TODO did we actually mean to allow (very limited) path traversal attacks into the data dir?
+        if clean_path.starts_with(&file_transfer_dir) {
+            Ok(clean_path)
+        } else {
+            Err(FileTransferRequestError::InvalidURI {
+                value: clean_path.to_string(),
+            })
+        }
+    }
+
+    /// Return the path of the file associated to the given `uri`
+    ///
+    /// Check that:
+    /// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
+    /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
+    pub fn local_path_for_uri(&self, uri: String) -> Result<Utf8PathBuf, FileTransferRequestError> {
         let ref_uri = uri.clone();
 
         // The file transfer prefix has to be removed from the uri to get the target path
         let path = uri
             .strip_prefix(&self.file_transfer_uri)
-            .ok_or(FileTransferError::InvalidURI { value: ref_uri })?;
+            .ok_or(FileTransferRequestError::InvalidURI { value: ref_uri })?;
 
         // This path is relative to the file transfer dir
         let full_path = self.data_dir.join(path);
@@ -81,7 +112,7 @@ impl HttpConfig {
         if clean_path.starts_with(&self.data_dir) {
             Ok(clean_path)
         } else {
-            Err(FileTransferError::InvalidURI {
+            Err(FileTransferRequestError::InvalidURI {
                 value: clean_path.to_string(),
             })
         }
@@ -102,7 +133,7 @@ fn separate_path_and_file_name(input: &Utf8Path) -> Option<(Utf8PathBuf, String)
 async fn put(
     mut request: Request<Body>,
     file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferError> {
+) -> Result<Response<Body>, FileTransferRequestError> {
     let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     let mut response = Response::new(Body::empty());
@@ -132,26 +163,32 @@ async fn put(
 }
 
 async fn get(
-    request: Request<Body>,
+    Path(path): Path<Utf8PathBuf>,
     file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferError> {
-    let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
+) -> Result<Vec<u8>, FileTransferRequestError> {
+    let full_path = file_transfer.local_path_for_file(&path)?;
 
-    if !full_path.exists() || full_path.is_dir() {
-        let mut response = Response::new(Body::empty());
-        *response.status_mut() = hyper::StatusCode::NOT_FOUND;
-        return Ok(response);
+    // TODO do we really want to read this entirely into memory?
+    match tokio::fs::read(full_path).await {
+        Ok(contents) => Ok(contents),
+        Err(e) if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) => {
+            Err(FileTransferRequestError::FileNotFound(path))
+        }
+        Err(e) => Err(FileTransferRequestError::FromIo(e)),
     }
+}
 
-    let contents = tokio::fs::read(full_path).await?;
-
-    Ok(Response::new(Body::from(contents)))
+fn err_is_is_a_directory(e: &std::io::Error) -> bool {
+    // At the time of writing, `ErrorKind::IsADirectory` is feature-gated (https://github.com/rust-lang/rust/issues/86442)
+    // Hence the string conversion rather than a direct comparison
+    // If the error for reading a directory as a file changes, the unit tests should catch this
+    e.kind().to_string() == "is a directory"
 }
 
 async fn delete(
     request: Request<Body>,
     file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferError> {
+) -> Result<Response<Body>, FileTransferRequestError> {
     let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     let mut response = Response::new(Body::empty());
@@ -206,9 +243,9 @@ fn http_file_transfer_router(config: &HttpConfig) -> Router {
 
     Router::new().route(
         &file_transfer_end_point,
-        axum::routing::get(move |req| {
+        axum::routing::get(move |path| {
             let config = get_config.clone();
-            async move { get(req, &config).await }
+            async move { get(path, &config).await }
         })
         .put(move |req| {
             let config = put_config.clone();
@@ -224,6 +261,8 @@ fn http_file_transfer_router(config: &HttpConfig) -> Router {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bytes::Bytes;
+    use http_body::combinators::UnsyncBoxBody;
     use hyper::Method;
     use hyper::StatusCode;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -240,6 +279,31 @@ mod test {
         let file_transfer = HttpConfig::default();
         let actual_output = file_transfer.local_path_for_uri(input.to_string()).ok();
         assert_eq!(actual_output, output);
+    }
+
+    #[test]
+    fn reading_a_directory_returns_directory_error() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("test-dir");
+
+        let mut dir_path = ttd.path().to_owned();
+        dir_path.push("test-dir");
+
+        assert!(err_is_is_a_directory(
+            &std::fs::read_to_string(&dir_path).unwrap_err()
+        ))
+    }
+
+    #[test]
+    fn not_found_returns_a_non_directory_error() {
+        let ttd = TempTedgeDir::new();
+
+        let mut unknown_path = ttd.path().to_owned();
+        unknown_path.push("not-a-real-file");
+
+        assert!(!err_is_is_a_directory(
+            &std::fs::read_to_string(&unknown_path).unwrap_err()
+        ))
     }
 
     #[test_case("/tedge/some/dir/file", "/tedge/some/dir", "file")]
@@ -297,6 +361,59 @@ mod test {
         let response = app.oneshot(req).await.unwrap();
 
         assert_eq!(response.status(), status_code);
+    }
+
+    #[tokio::test]
+    async fn get_responds_with_not_found_for_nonexistent_file() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(VALID_TEST_URI)
+            .body(Body::empty())
+            .expect("request builder");
+
+        let (_ttd, app) = app();
+
+        let response = app.oneshot(req).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn get_responds_with_not_found_for_directory() {
+        let (_ttd, mut app) = app();
+
+        upload_file(&mut app, "dir/a-file.txt", "some content").await;
+
+        let response = download_file(&mut app, "dir").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    async fn upload_file(
+        app: &mut Router,
+        path: &str,
+        contents: &str,
+    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri(format!("/tedge/file-transfer/{path}"))
+            .body(Body::from(contents.to_owned()))
+            .expect("request builder");
+
+        app.call(req).await.unwrap()
+    }
+
+    async fn download_file(
+        app: &mut Router,
+        path: &str,
+    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("/tedge/file-transfer/{path}"))
+            .body(Body::empty())
+            .expect("request builder");
+
+        app.call(req).await.unwrap()
     }
 
     fn app() -> (TempTedgeDir, Router) {
