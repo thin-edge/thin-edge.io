@@ -1,5 +1,6 @@
 pub use shell_words::ParseError;
 use std::process::Output;
+use std::process::Stdio;
 use tedge_actors::Concurrent;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
@@ -38,6 +39,7 @@ impl Server for ScriptActor {
     async fn handle(&mut self, message: Self::Request) -> Self::Response {
         tokio::process::Command::new(message.command)
             .args(message.args)
+            .stdin(Stdio::null())
             .output()
             .await
     }
@@ -51,6 +53,7 @@ impl ScriptActor {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
     use tedge_actors::ClientMessageBox;
 
     use super::*;
@@ -68,11 +71,7 @@ mod tests {
 
     #[tokio::test]
     async fn script() {
-        let mut actor = ScriptActor::builder();
-        let mut handle = ClientMessageBox::new("Tester", &mut actor);
-
-        tokio::spawn(actor.run());
-
+        let mut handle = spawn_script_actor();
         let output = handle
             .await_response(Execute {
                 command: "echo".to_owned(),
@@ -85,5 +84,28 @@ mod tests {
         assert!(output.status.success());
         assert_eq!(String::from_utf8(output.stdout).unwrap(), "A message\n");
         assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn script_stdin_is_closed() {
+        let actor = spawn_script_actor();
+        let mut actor = actor;
+        let command = Execute::try_new("cat").unwrap();
+        let output = tokio::time::timeout(Duration::from_secs(1), actor.await_response(command))
+            .await
+            .expect("execution timeout")
+            .expect("result send error")
+            .expect("execution error");
+
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+    }
+
+    fn spawn_script_actor() -> ClientMessageBox<Execute, std::io::Result<Output>> {
+        let mut actor = ScriptActor::builder();
+        let handle = ClientMessageBox::new("Tester", &mut actor);
+        tokio::spawn(actor.run());
+        handle
     }
 }
