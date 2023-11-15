@@ -1,1 +1,4 @@
-files = [{ type = "example", path = "/var/log/example/example.log" }]
+files = [
+    { type = "example", path = "/var/log/example/example.log" },
+    { type = "multiple_logfiles", path = "/var/log/example/logfile.*.log" },
+]

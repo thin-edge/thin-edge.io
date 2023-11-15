@@ -3,7 +3,8 @@ Resource            ../../../resources/common.resource
 Library             Cumulocity
 Library             DateTime
 Library             ThinEdgeIO
-Library    ../../../.venv/lib/python3.9/site-packages/robot/libraries/Collections.py
+Library             String
+Library             OperatingSystem
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
@@ -19,6 +20,7 @@ Successful log operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Log File Contents Should Be Equal    ${operation}    filename: example.log\n1 first line\n
 
 Request with non-existing log type
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -70,10 +72,48 @@ Log operation successful when file transfer service on different host
     Operation Should Be SUCCESSFUL    ${operation}
 
 
+Log file request limits maximum number of lines with text filter
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Cumulocity.Create Operation
+    ...    description=Log file request
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"repeated line","maximumLines":2}}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Log File Contents Should Be Equal    ${operation}    filename: example.log\n14 repeated line\n15 repeated line\n
+
+Log file request limits maximum number of lines without text filter
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Cumulocity.Create Operation
+    ...    description=Log file request
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"","maximumLines":300}}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    ${expected_contents}=    OperatingSystem.Get File    ${CURDIR}/example.log
+    Log File Contents Should Be Equal    ${operation}    filename: example.log\n${expected_contents}
+
+Log file request supports date/time filters and can search across multiple log files
+    Execute Command    touch -d "48 hours ago" /var/log/example/logfile.1.log
+    Execute Command    touch -d "20 hours ago" /var/log/example/logfile.2.log
+    Execute Command    touch -d "6 hours ago" /var/log/example/logfile.3.log
+
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Cumulocity.Create Operation
+    ...    description=Log file request (multiple_logfiles)
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"multiple_logfiles","searchText":"","maximumLines":300}}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    # Log files are search from newest to oldest
+    ${logfile3_contents}=    OperatingSystem.Get File    ${CURDIR}/logfile.3.log
+    ${logfile2_contents}=    OperatingSystem.Get File    ${CURDIR}/logfile.2.log
+    ${expected_contents}=    OperatingSystem.Get File    ${CURDIR}/example.log
+    Log File Contents Should Be Equal    ${operation}    filename: logfile.3.log\n${logfile3_contents}\nfilename: logfile.2.log\n${logfile2_contents}\n
+
 *** Keywords ***
 Setup LogFiles
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-log-plugin.toml    /etc/tedge/plugins/tedge-log-plugin.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/logfile.*.log    /var/log/example/
     # touch file again to change last modified timestamp, otherwise the logfile retrieval could be outside of the requested range
     Execute Command
     ...    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
@@ -101,3 +141,10 @@ Publish and Verify Local Command
         # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
         Should Have MQTT Messages    c8y/s/ds    message_pattern=^(501|502|503),${c8y_fragment}.*    minimum=0    maximum=0
     END
+
+Log File Contents Should Be Equal
+    [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8
+    ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
+    ${event_id}=    Set Variable    ${event_url_parts}[-2]
+    ${contents}=    Cumulocity.Event Should Have An Attachment    ${event_id}    expected_contents=${expected_contents}    encoding=${encoding}
+    RETURN    ${contents}

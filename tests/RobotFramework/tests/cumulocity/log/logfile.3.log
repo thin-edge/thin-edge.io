@@ -1,0 +1,10 @@
+3-1 Error: No such file or directory: /home/some/file
+3-2 Error: in line 1000.
+3-3 Error: Connection timed out. OS error 111.
+3-4 Error: Is MQTT running?
+3-5 Error: missing dependency mosquitto-clients.
+3-6 thunderbird-gnome-support       1:78.14.0+build1-0ubuntu0.20.04.2
+3-7 thunderbird-locale-en-us        1:78.14.0+build1-0ubuntu0.20.04.2
+3-8 fonts-kacst-one 5.0+svn11846-10
+3-9 fonts-khmeros-core      5.0-7ubuntu1
+3-10 fonts-lao       0.0.20060226-9ubuntu1
