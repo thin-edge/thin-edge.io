@@ -27,7 +27,7 @@ impl Actor for FileTransferServerActor {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         let http_config = self.config.clone();
-        let server = http_file_transfer_server(&http_config)?;
+        let server = http_file_transfer_server(http_config)?;
 
         tokio::select! {
             result = server => {

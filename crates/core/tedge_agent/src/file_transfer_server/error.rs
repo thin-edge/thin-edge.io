@@ -26,6 +26,13 @@ pub enum FileTransferRequestError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
+    #[error("Request to delete {path:?} failed: {err}")]
+    DeleteIoError {
+        #[source]
+        err: std::io::Error,
+        path: Utf8PathBuf,
+    },
+
     #[error("Invalid URI: {value:?}")]
     InvalidURI { value: String },
 
@@ -60,12 +67,19 @@ impl IntoResponse for FileTransferError {
 impl IntoResponse for FileTransferRequestError {
     fn into_response(self) -> axum::response::Response {
         use FileTransferRequestError::*;
-        match self {
+        match &self {
             FromIo(_) => {
                 tracing::error!("{self}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal error".to_owned(),
+                )
+            }
+            DeleteIoError { path, .. } => {
+                tracing::error!("{self}");
+                (
+                    StatusCode::FORBIDDEN,
+                    format!("Cannot delete path {path:?}"),
                 )
             }
             InvalidURI { .. } | FileNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),

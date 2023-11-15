@@ -1,5 +1,7 @@
 use crate::file_transfer_server::error::FileTransferError;
 use axum::extract::Path;
+use axum::extract::State;
+use axum::routing::get;
 use axum::routing::IntoMakeService;
 use axum::Router;
 use camino::Utf8Path;
@@ -9,9 +11,11 @@ use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use hyper::Server;
+use hyper::StatusCode;
 use std::io::ErrorKind;
 use std::net::IpAddr;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tedge_actors::futures::StreamExt;
 use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
@@ -162,19 +166,22 @@ async fn put(
     Ok(response)
 }
 
-async fn get(
+async fn download_file(
     Path(path): Path<Utf8PathBuf>,
-    file_transfer: &HttpConfig,
+    file_transfer: State<Arc<HttpConfig>>,
 ) -> Result<Vec<u8>, FileTransferRequestError> {
     let full_path = file_transfer.local_path_for_file(&path)?;
 
     // TODO do we really want to read this entirely into memory?
     match tokio::fs::read(full_path).await {
         Ok(contents) => Ok(contents),
-        Err(e) if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) => {
-            Err(FileTransferRequestError::FileNotFound(path))
+        Err(e) => {
+            if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) {
+                Err(FileTransferRequestError::FileNotFound(path))
+            } else {
+                Err(FileTransferRequestError::FromIo(e))
+            }
         }
-        Err(e) => Err(FileTransferRequestError::FromIo(e)),
     }
 }
 
@@ -185,28 +192,16 @@ fn err_is_is_a_directory(e: &std::io::Error) -> bool {
     e.kind().to_string() == "is a directory"
 }
 
-async fn delete(
-    request: Request<Body>,
-    file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferRequestError> {
-    let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
+async fn delete_file(
+    Path(path): Path<Utf8PathBuf>,
+    file_transfer: State<Arc<HttpConfig>>,
+) -> Result<StatusCode, FileTransferRequestError> {
+    let full_path = file_transfer.local_path_for_file(&path)?;
 
-    let mut response = Response::new(Body::empty());
-
-    if !full_path.exists() {
-        *response.status_mut() = hyper::StatusCode::ACCEPTED;
-        Ok(response)
-    } else {
-        match tokio::fs::remove_file(&full_path).await {
-            Ok(()) => {
-                *response.status_mut() = hyper::StatusCode::ACCEPTED;
-                Ok(response)
-            }
-            Err(_err) => {
-                *response.status_mut() = hyper::StatusCode::FORBIDDEN;
-                Ok(response)
-            }
-        }
+    match tokio::fs::remove_file(&full_path).await {
+        Ok(()) => Ok(StatusCode::ACCEPTED),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
+        Err(err) => Err(FileTransferRequestError::DeleteIoError { err, path }),
     }
 }
 
@@ -223,39 +218,34 @@ async fn stream_request_body_to_path(
 }
 
 pub fn http_file_transfer_server(
-    config: &HttpConfig,
+    config: HttpConfig,
 ) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError> {
+    let bind_address = config.bind_address;
     let router = http_file_transfer_router(config);
-    let server_builder = Server::try_bind(&config.bind_address);
+    let server_builder = Server::try_bind(&bind_address);
     match server_builder {
         Ok(server) => Ok(server.serve(router.into_make_service())),
         Err(_err) => Err(FileTransferError::BindingAddressInUse {
-            address: config.bind_address,
+            address: bind_address,
         }),
     }
 }
 
-fn http_file_transfer_router(config: &HttpConfig) -> Router {
+fn http_file_transfer_router(config: HttpConfig) -> Router {
     let file_transfer_end_point = config.file_transfer_end_point();
-    let get_config = config.clone();
     let put_config = config.clone();
-    let del_config = config.clone();
 
-    Router::new().route(
-        &file_transfer_end_point,
-        axum::routing::get(move |path| {
-            let config = get_config.clone();
-            async move { get(path, &config).await }
-        })
-        .put(move |req| {
-            let config = put_config.clone();
-            async move { put(req, &config).await }
-        })
-        .delete(move |req| {
-            let config = del_config.clone();
-            async move { delete(req, &config).await }
-        }),
-    )
+    Router::new()
+        .route(
+            &file_transfer_end_point,
+            get(download_file)
+                .put(move |req| {
+                    let config = put_config.clone();
+                    async move { put(req, &config).await }
+                })
+                .delete(delete_file),
+        )
+        .with_state(Arc::new(config))
 }
 
 #[cfg(test)]
@@ -422,7 +412,7 @@ mod test {
         let http_config = HttpConfig::default()
             .with_data_dir(tempdir_path.into())
             .with_port(3333);
-        let router = http_file_transfer_router(&http_config);
+        let router = http_file_transfer_router(http_config);
         (ttd, router)
     }
 
