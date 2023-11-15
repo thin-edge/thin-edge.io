@@ -686,6 +686,7 @@ dependencies = [
 name = "c8y_http_proxy"
 version = "0.13.1"
 dependencies = [
+ "anyhow",
  "async-trait",
  "c8y_api",
  "download",

@@ -27,10 +27,19 @@ impl StateRepository for AgentStateRepository {
     type Error = StateError;
 
     async fn load(&self) -> Result<State, StateError> {
-        match fs::read(&self.state_repo_path).await {
-            Ok(bytes) => Ok(toml::from_str::<State>(&String::from_utf8(bytes)?)?),
-            Err(err) => Err(StateError::FromIo(err)),
-        }
+        let text = fs::read_to_string(&self.state_repo_path)
+            .await
+            .map_err(|e| StateError::LoadingFromFileFailed {
+                path: self.state_repo_path.as_path().into(),
+                source: e,
+            })?;
+
+        let state = toml::from_str::<State>(&text).map_err(|e| StateError::FromTOMLParse {
+            path: self.state_repo_path.as_path().into(),
+            source: e,
+        })?;
+
+        Ok(state)
     }
 
     async fn store(&self, state: &State) -> Result<(), StateError> {

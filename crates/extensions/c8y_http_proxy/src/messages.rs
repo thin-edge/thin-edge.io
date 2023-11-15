@@ -40,6 +40,12 @@ pub enum C8YRestError {
 
     #[error(transparent)]
     FromIOError(#[from] std::io::Error),
+
+    // `Display` impl of `C8yRestError` is used as part of an error message sent to the cloud in a smartrest message.
+    // Using `{anyhow::Error:?}` also prints the lower-level cause, so using it here will result in a more detailed
+    // error message being sent to the cloud
+    #[error("Unexpected error: {0:?}")]
+    Other(#[from] anyhow::Error),
 }
 
 pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;

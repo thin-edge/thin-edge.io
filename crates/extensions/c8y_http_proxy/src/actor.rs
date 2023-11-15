@@ -14,13 +14,13 @@ use crate::messages::UploadFile;
 use crate::messages::UploadLogBinary;
 use crate::messages::Url;
 use crate::C8YHttpConfig;
+use anyhow::Context;
 use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
-use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
 use download::Auth;
 use download::DownloadInfo;
@@ -409,9 +409,13 @@ impl C8YHttpProxyActor {
 
             async {
                 // TODO: Upload the file as a multi-part stream
-                let file_content = tokio::fs::read(&request.file_path)
-                    .await
-                    .map_err(SMCumulocityMapperError::from)?;
+                let file_content =
+                    tokio::fs::read(&request.file_path).await.with_context(|| {
+                        format!(
+                            "Reading file {} for upload failed",
+                            request.file_path.display()
+                        )
+                    })?;
 
                 let (content_type, body) = match String::from_utf8(file_content) {
                     Ok(text) => ("text/plain", hyper::Body::from(text)),
