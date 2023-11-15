@@ -1,13 +1,13 @@
 use crate::file_transfer_server::error::FileTransferError;
+use axum::Router;
+use axum::routing::IntoMakeService;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use hyper::Server;
 use hyper::server::conn::AddrIncoming;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
-use hyper::Server;
-use routerify::Router;
-use routerify::RouterService;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use tedge_actors::futures::StreamExt;
@@ -56,7 +56,7 @@ impl HttpConfig {
     }
 
     pub fn file_transfer_end_point(&self) -> String {
-        format!("{}file-transfer/*", self.file_transfer_uri)
+        format!("{}file-transfer/*path", self.file_transfer_uri)
     }
 
     /// Return the path of the file associated to the given `uri`
@@ -187,32 +187,32 @@ async fn stream_request_body_to_path(
 
 pub fn http_file_transfer_server(
     config: &HttpConfig,
-) -> Result<Server<AddrIncoming, RouterService<hyper::Body, FileTransferError>>, FileTransferError>
+) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError>
 {
     let file_transfer_end_point = config.file_transfer_end_point();
     let get_config = config.clone();
     let put_config = config.clone();
     let del_config = config.clone();
 
-    let router = Router::builder()
-        .get(&file_transfer_end_point, move |req| {
+    let router = Router::new()
+        .route(&file_transfer_end_point, axum::routing::get(move |req| {
             let config = get_config.clone();
             async move { get(req, &config).await }
-        })
-        .put(&file_transfer_end_point, move |req| {
+        }).put(
+ move |req| {
             let config = put_config.clone();
             async move { put(req, &config).await }
-        })
-        .delete(&file_transfer_end_point, move |req| {
+        }
+        ).delete(
+ move |req| {
             let config = del_config.clone();
             async move { delete(req, &config).await }
-        })
-        .build()?;
-    let router_service = RouterService::new(router)?;
+        }
+        ));
 
     let server_builder = Server::try_bind(&config.bind_address);
     match server_builder {
-        Ok(server) => Ok(server.serve(router_service)),
+        Ok(server) => Ok(server.serve(router.into_make_service())),
         Err(_err) => Err(FileTransferError::BindingAddressInUse {
             address: config.bind_address,
         }),
@@ -221,18 +221,8 @@ pub fn http_file_transfer_server(
 
 #[cfg(test)]
 mod test {
-    use super::http_file_transfer_server;
-    use super::separate_path_and_file_name;
-    use crate::file_transfer_server::error::FileTransferError;
-    use crate::file_transfer_server::http_rest::HttpConfig;
-    use camino::Utf8Path;
-    use camino::Utf8PathBuf;
-    use hyper::server::conn::AddrIncoming;
-    use hyper::Body;
+    use super::*;
     use hyper::Method;
-    use hyper::Request;
-    use hyper::Server;
-    use routerify::RouterService;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
 
@@ -332,7 +322,7 @@ mod test {
 
     fn server() -> (
         TempTedgeDir,
-        Server<AddrIncoming, RouterService<Body, FileTransferError>>,
+        Server<AddrIncoming, IntoMakeService<Router>>,
     ) {
         let ttd = TempTedgeDir::new();
         let tempdir_path = ttd.utf8_path_buf();

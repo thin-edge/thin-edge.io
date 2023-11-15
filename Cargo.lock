@@ -2828,19 +2828,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "routerify"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "496c1d3718081c45ba9c31fbfc07417900aa96f4070ff90dc29961836b7a9945"
-dependencies = [
- "http",
- "hyper",
- "lazy_static",
- "percent-encoding",
- "regex",
-]
-
-[[package]]
 name = "rpassword"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3531,6 +3518,7 @@ version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "camino",
  "clap",
  "flockfile",
@@ -3539,7 +3527,6 @@ dependencies = [
  "log",
  "path-clean",
  "plugin_sm",
- "routerify",
  "serde",
  "serde_json",
  "serial_test",

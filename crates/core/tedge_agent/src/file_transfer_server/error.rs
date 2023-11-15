@@ -1,3 +1,5 @@
+use axum::response::IntoResponse;
+use hyper::StatusCode;
 use tedge_actors::RuntimeError;
 
 #[derive(Debug, thiserror::Error)]
@@ -12,9 +14,6 @@ pub enum FileTransferError {
     InvalidURI { value: String },
 
     #[error(transparent)]
-    FromRouterServer(#[from] routerify::RouteError),
-
-    #[error(transparent)]
     FromAddressParseError(#[from] std::net::AddrParseError),
 
     #[error(transparent)]
@@ -27,5 +26,24 @@ pub enum FileTransferError {
 impl From<FileTransferError> for RuntimeError {
     fn from(error: FileTransferError) -> Self {
         RuntimeError::ActorError(Box::new(error))
+    }
+}
+
+impl IntoResponse for FileTransferError {
+    fn into_response(self) -> axum::response::Response {
+        use FileTransferError::*;
+        let status_code = match self {
+            // TODO split out errors into startup and runtime errors
+            FromIo(_)
+            | FromHyperError(_)
+            | FromAddressParseError(_)
+            | FromUtf8Error(_)
+            | BindingAddressInUse { .. } => {
+                tracing::error!("{self}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            InvalidURI { .. } => StatusCode::NOT_FOUND,
+        };
+        status_code.into_response()
     }
 }

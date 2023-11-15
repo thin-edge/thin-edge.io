@@ -10,6 +10,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+axum = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
@@ -20,7 +21,6 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 path-clean = { workspace = true }
 plugin_sm = { workspace = true }
-routerify = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
