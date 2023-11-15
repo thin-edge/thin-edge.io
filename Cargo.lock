@@ -3911,6 +3911,7 @@ name = "tedge_script_ext"
 version = "0.13.1"
 dependencies = [
  "async-trait",
+ "nix",
  "shell-words",
  "tedge_actors",
  "tokio",
