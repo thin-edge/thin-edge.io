@@ -1,3 +1,4 @@
+use axum::extract::rejection::PathRejection;
 use axum::response::IntoResponse;
 use camino::Utf8PathBuf;
 use hyper::StatusCode;
@@ -33,11 +34,21 @@ pub enum FileTransferRequestError {
         path: Utf8PathBuf,
     },
 
-    #[error("Invalid URI: {value:?}")]
-    InvalidURI { value: String },
+    #[error("Request to upload to {path:?} failed: {err:?}")]
+    Upload {
+        #[source]
+        err: anyhow::Error,
+        path: Utf8PathBuf,
+    },
+
+    #[error("Invalid file path: {path:?}")]
+    InvalidPath { path: Utf8PathBuf },
 
     #[error("File not found: {0:?}")]
     FileNotFound(Utf8PathBuf),
+
+    #[error("Path rejection: {0:?}")]
+    PathRejection(#[from] PathRejection),
 }
 
 impl From<FileTransferError> for RuntimeError {
@@ -68,7 +79,7 @@ impl IntoResponse for FileTransferRequestError {
     fn into_response(self) -> axum::response::Response {
         use FileTransferRequestError::*;
         match &self {
-            FromIo(_) => {
+            FromIo(_) | PathRejection(_) => {
                 tracing::error!("{self}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -78,11 +89,20 @@ impl IntoResponse for FileTransferRequestError {
             DeleteIoError { path, .. } => {
                 tracing::error!("{self}");
                 (
+                    // TODO do we really want to respond with forbidden for these errors?
                     StatusCode::FORBIDDEN,
                     format!("Cannot delete path {path:?}"),
                 )
             }
-            InvalidURI { .. } | FileNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
+            Upload { path, .. } => {
+                tracing::error!("{self}");
+                (
+                    // TODO do we really want to respond with forbidden for these errors?
+                    StatusCode::FORBIDDEN,
+                    format!("Cannot upload to path {path:?}"),
+                )
+            }
+            InvalidPath { .. } | FileNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
         }
         .into_response()
     }

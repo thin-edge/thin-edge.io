@@ -1,6 +1,9 @@
 use crate::file_transfer_server::error::FileTransferError;
+use anyhow::Context;
+use axum::body::StreamBody;
+use axum::extract::FromRequestParts;
 use axum::extract::Path;
-use axum::extract::State;
+use axum::http::request::Parts;
 use axum::routing::get;
 use axum::routing::IntoMakeService;
 use axum::Router;
@@ -18,10 +21,16 @@ use std::sync::Arc;
 use tedge_actors::futures::StreamExt;
 use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
+use tokio::fs::File;
+use tokio::io;
+use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
+use tokio_util::io::ReaderStream;
 
-use super::error::FileTransferRequestError;
+use super::error::FileTransferRequestError as Error;
 
+// TODO is this not just a repeat of code in tedge_config?
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 
 #[derive(Debug, Clone)]
@@ -48,7 +57,10 @@ impl HttpConfig {
     }
 
     pub fn with_data_dir(self, data_dir: DataDir) -> HttpConfig {
-        Self { file_transfer_dir: data_dir.file_transfer_dir(), ..self }
+        Self {
+            file_transfer_dir: data_dir.file_transfer_dir(),
+            ..self
+        }
     }
 
     pub fn with_port(self, port: u16) -> HttpConfig {
@@ -67,9 +79,9 @@ impl HttpConfig {
     /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
     pub fn local_path_for_file(
         &self,
-        path: &Utf8Path,
-    ) -> Result<Utf8PathBuf, FileTransferRequestError> {
-        let full_path = self.file_transfer_dir.join(path);
+        request_path: Utf8PathBuf,
+    ) -> Result<FileTransferPaths, Error> {
+        let full_path = self.file_transfer_dir.join(&request_path);
 
         // TODO rocket does this in a nicer way (I think), that I'd like to copy
         // One must check that once normalized (i.e. any `..` removed)
@@ -77,12 +89,31 @@ impl HttpConfig {
         let clean_path = clean_utf8_path(&full_path);
         // TODO did we actually mean to allow (very limited) path traversal attacks into the data dir?
         if clean_path.starts_with(&self.file_transfer_dir) {
-            Ok(clean_path)
-        } else {
-            Err(FileTransferRequestError::InvalidURI {
-                value: clean_path.to_string(),
+            Ok(FileTransferPaths {
+                full: clean_path,
+                request: request_path,
             })
+        } else {
+            Err(Error::InvalidPath { path: request_path })
         }
+    }
+}
+
+pub struct FileTransferPaths {
+    full: Utf8PathBuf,
+    request: Utf8PathBuf,
+}
+
+#[async_trait::async_trait]
+impl FromRequestParts<Arc<HttpConfig>> for FileTransferPaths {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<HttpConfig>,
+    ) -> Result<Self, Self::Rejection> {
+        let Path(request_path) = Path::<Utf8PathBuf>::from_request_parts(parts, state).await?;
+        state.local_path_for_file(request_path)
     }
 }
 
@@ -90,63 +121,61 @@ fn clean_utf8_path(path: &Utf8Path) -> Utf8PathBuf {
     Utf8PathBuf::from(path_clean::clean(path.as_str()))
 }
 
-// TODO I think this methodology is flawed - it has unit tests, but the cases we test can't be reached due to clean_utf8_path interfering 
 fn separate_path_and_file_name(input: &Utf8Path) -> Option<(&Utf8Path, &str)> {
-    let (relative_path, file_name) = input.as_str().rsplit_once('/')?;
-
-    let relative_path = Utf8Path::new(relative_path);
-    Some((relative_path, file_name))
+    Some((input.parent()?, input.file_name()?))
 }
 
 async fn upload_file(
-    Path(path): Path<Utf8PathBuf>,
-    file_transfer: State<Arc<HttpConfig>>,
+    paths: FileTransferPaths,
     mut request: Request<Body>,
-) -> Result<StatusCode, FileTransferRequestError> {
-    let full_path = file_transfer.local_path_for_file(&path)?;
-
-    if let Some((relative_path, file_name)) = separate_path_and_file_name(&full_path) {
-        let root_path = file_transfer.file_transfer_dir.clone();
-        let directories_path = root_path.join(relative_path);
-
-        if let Err(_err) = create_directories(&directories_path) {
-            return Ok(StatusCode::FORBIDDEN);
+) -> Result<StatusCode, Error> {
+    if let Some((directory, file_name)) = separate_path_and_file_name(&paths.full) {
+        if let Err(err) = create_directories(directory) {
+            return Err(Error::Upload {
+                err: err.into(),
+                path: paths.request,
+            });
         }
 
-        let full_path = directories_path.join(file_name);
+        let full_path = directory.join(file_name);
 
         match stream_request_body_to_path(&full_path, request.body_mut()).await {
             Ok(()) => Ok(StatusCode::CREATED),
-            Err(_err) => {
-                // TODO add error variant
-                Ok(StatusCode::FORBIDDEN)
-            }
+            Err(err) => Err(Error::Upload {
+                err,
+                path: paths.request,
+            }),
         }
     } else {
-        // TODO add error variant
-        Ok(StatusCode::FORBIDDEN)
+        Err(Error::InvalidPath {
+            path: paths.request,
+        })
     }
 }
 
 async fn download_file(
-    Path(path): Path<Utf8PathBuf>,
-    file_transfer: State<Arc<HttpConfig>>,
-) -> Result<Vec<u8>, FileTransferRequestError> {
-    let full_path = file_transfer.local_path_for_file(&path)?;
+    paths: FileTransferPaths,
+) -> Result<StreamBody<ReaderStream<BufReader<File>>>, Error> {
+    let reader: Result<_, io::Error> = async {
+        let mut buf_reader = BufReader::new(File::open(paths.full).await?);
+        buf_reader.fill_buf().await?;
+        Ok(buf_reader)
+    }
+    .await;
 
-    // TODO do we really want to read this entirely into memory?
-    match tokio::fs::read(full_path).await {
-        Ok(contents) => Ok(contents),
+    match reader {
+        Ok(reader) => Ok(StreamBody::new(ReaderStream::new(reader))),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) {
-                Err(FileTransferRequestError::FileNotFound(path))
+                Err(Error::FileNotFound(paths.request))
             } else {
-                Err(FileTransferRequestError::FromIo(e))
+                Err(Error::FromIo(e))
             }
         }
     }
 }
 
+// Not a typo, snake_case for: 'err is "is a directory"'
 fn err_is_is_a_directory(e: &std::io::Error) -> bool {
     // At the time of writing, `ErrorKind::IsADirectory` is feature-gated (https://github.com/rust-lang/rust/issues/86442)
     // Hence the string conversion rather than a direct comparison
@@ -154,27 +183,31 @@ fn err_is_is_a_directory(e: &std::io::Error) -> bool {
     e.kind().to_string() == "is a directory"
 }
 
-async fn delete_file(
-    Path(path): Path<Utf8PathBuf>,
-    file_transfer: State<Arc<HttpConfig>>,
-) -> Result<StatusCode, FileTransferRequestError> {
-    let full_path = file_transfer.local_path_for_file(&path)?;
-
-    match tokio::fs::remove_file(&full_path).await {
+async fn delete_file(req: FileTransferPaths) -> Result<StatusCode, Error> {
+    match tokio::fs::remove_file(&req.full).await {
         Ok(()) => Ok(StatusCode::ACCEPTED),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
-        Err(err) => Err(FileTransferRequestError::DeleteIoError { err, path }),
+        Err(err) => Err(Error::DeleteIoError {
+            err,
+            path: req.request,
+        }),
     }
 }
 
 async fn stream_request_body_to_path(
     path: &Utf8Path,
     body_stream: &mut hyper::Body,
-) -> Result<(), FileTransferError> {
-    let mut buffer = tokio::fs::File::create(path).await?;
+) -> anyhow::Result<()> {
+    let mut buffer = tokio::fs::File::create(path)
+        .await
+        .with_context(|| format!("creating {path:?}"))?;
     while let Some(data) = body_stream.next().await {
-        let data = data?;
-        let _bytes_written = buffer.write(&data).await?;
+        let data =
+            data.with_context(|| format!("reading body of uploaded file (destined for {path:?})"))?;
+        let _bytes_written = buffer
+            .write(&data)
+            .await
+            .with_context(|| format!("writing to {path:?}"))?;
     }
     Ok(())
 }
@@ -205,28 +238,37 @@ fn http_file_transfer_router(config: HttpConfig) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::response::Response;
     use bytes::Bytes;
     use http_body::combinators::UnsyncBoxBody;
     use hyper::Method;
-    use axum::response::Response;
     use hyper::StatusCode;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
+    use test_case::test_matrix;
     use tower::Service;
     use tower::ServiceExt;
 
-    #[test_case(
-        "some/dir/file",
-        Some(Utf8PathBuf::from("/var/tedge/file-transfer/some/dir/file"))
-    )]
-    fn test_remove_prefix_from_uri(input: &str, output: Option<Utf8PathBuf>) {
-        let file_transfer = HttpConfig::default();
-        let actual_output = file_transfer.local_path_for_file(Utf8Path::new(input)).ok();
-        assert_eq!(actual_output, output);
+    #[tokio::test]
+    async fn file_is_uploaded_to_provided_data_dir() {
+        let path = "some/dir/file";
+        let (ttd, mut app) = app();
+        let expected_output_file = ttd.utf8_path().join("file-transfer").join(path);
+
+        upload_file(&mut app, path, "some content").await;
+
+        assert_eq!(
+            tokio::fs::read_to_string(expected_output_file)
+                .await
+                .unwrap(),
+            "some content"
+        );
     }
 
     #[test]
     fn reading_a_directory_returns_directory_error() {
+        // See comment in `err_is_is_a_directory` implementation
+        // for why the function is tested in isolation
         let ttd = TempTedgeDir::new();
         ttd.dir("test-dir");
 
@@ -240,6 +282,8 @@ mod tests {
 
     #[test]
     fn not_found_returns_a_non_directory_error() {
+        // See comment in `err_is_is_a_directory` implementation
+        // for why the function is tested in isolation
         let ttd = TempTedgeDir::new();
 
         let mut unknown_path = ttd.path().to_owned();
@@ -250,17 +294,33 @@ mod tests {
         ))
     }
 
-    #[test_case("/tedge/some/dir/file", "/tedge/some/dir", "file")]
-    #[test_case("/tedge/some/dir/", "/tedge/some/dir", "")]
-    fn test_separate_path_and_file_name(
-        input: &str,
-        expected_path: &str,
-        expected_file_name: &str,
-    ) {
-        let (actual_path, actual_file_name) =
-            separate_path_and_file_name(Utf8Path::new(input)).unwrap();
-        assert_eq!(actual_path, expected_path);
-        assert_eq!(actual_file_name, expected_file_name);
+    #[test_case("some/dir/file")]
+    #[test_case("some/dir/")]
+    #[tokio::test]
+    async fn upload_with_and_without_trailing_slash_has_same_effect(path: &str) {
+        let (_ttd, mut app) = app();
+
+        let response = upload_file(&mut app, path, "some content").await;
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[test_matrix(
+        ["/some/file", "../some/dir", "../../../some/other/dir"],
+        [Method::GET, Method::PUT, Method::DELETE]
+    )]
+    #[tokio::test]
+    async fn access_is_denied_if_request_attempts_path_traversal(path: &str, method: Method) {
+        let (_ttd, mut app) = app();
+
+        let req = Request::builder()
+            .method(method)
+            .uri(format!("/tedge/file-transfer/{path}"))
+            .body(Body::empty())
+            .expect("request builder");
+        let response = app.call(req).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     const VALID_TEST_URI: &str = "/tedge/file-transfer/another/dir/test-file";
@@ -378,23 +438,5 @@ mod tests {
             .uri(VALID_TEST_URI)
             .body(Body::from("file transfer server"))
             .expect("request builder")
-    }
-
-    #[test_case(String::from("../../../bin/sh"), false)]
-    #[test_case(
-        String::from("../file-transfer/new/dir/file"),
-        true
-    )]
-    fn test_verify_uri(uri: String, is_ok: bool) {
-        let file_transfer = HttpConfig::default();
-        let res = file_transfer.local_path_for_file(Utf8Path::new(&uri));
-        match is_ok {
-            true => {
-                assert!(res.is_ok());
-            }
-            false => {
-                assert!(res.is_err());
-            }
-        }
     }
 }
