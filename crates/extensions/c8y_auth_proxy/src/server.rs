@@ -13,6 +13,7 @@ use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
 use axum_tls::start_tls_server;
+use camino::Utf8Path;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::HeaderMap;
@@ -37,10 +38,12 @@ impl Server {
         address: IpAddr,
         port: u16,
         cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
+        ca_path: Option<&Utf8Path>,
     ) -> anyhow::Result<Self> {
         let app = create_app(state);
+        let root_certs = ca_path.map(axum_tls::read_trust_store).transpose()?;
         let server_config = cert_and_private_key
-            .map(|(cert, key)| axum_tls::ssl_config(cert, key, None))
+            .map(|(cert, key)| axum_tls::ssl_config(cert, key, root_certs))
             .transpose()?;
         let fut = if let Some(server_config) = server_config {
             try_bind_with_tls(app, address, port, server_config)?.boxed()

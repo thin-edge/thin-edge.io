@@ -8,6 +8,7 @@ use axum_tls::load_cert;
 use axum_tls::load_pkey;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::credentials::JwtRetriever;
+use camino::Utf8PathBuf;
 use futures::channel::mpsc;
 use futures::StreamExt;
 use tedge_actors::Actor;
@@ -37,6 +38,7 @@ pub struct C8yAuthProxyBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     cert_and_private_key: Option<CertKeyPair>,
+    ca_path: Option<Utf8PathBuf>,
 }
 
 impl C8yAuthProxyBuilder {
@@ -51,6 +53,7 @@ impl C8yAuthProxyBuilder {
         let bind = &config.c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let cert_and_private_key = load_certificate_and_key(config)?;
+        let ca_path = config.c8y.proxy.ca_path.or_none().cloned();
 
         Ok(Self {
             app_state,
@@ -59,6 +62,7 @@ impl C8yAuthProxyBuilder {
             signal_sender,
             signal_receiver,
             cert_and_private_key,
+            ca_path,
         })
     }
 }
@@ -93,6 +97,7 @@ impl Builder<C8yAuthProxy> for C8yAuthProxyBuilder {
             bind_port: self.bind_port,
             signal_receiver: self.signal_receiver,
             cert_and_private_key: self.cert_and_private_key,
+            ca_path: self.ca_path,
         })
     }
 }
@@ -109,6 +114,7 @@ pub struct C8yAuthProxy {
     bind_port: u16,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
+    ca_path: Option<Utf8PathBuf>,
 }
 
 #[async_trait]
@@ -123,6 +129,7 @@ impl Actor for C8yAuthProxy {
             self.bind_address,
             self.bind_port,
             self.cert_and_private_key,
+            self.ca_path.as_deref(),
         )
         .map_err(BoxError::from)?
         .wait();

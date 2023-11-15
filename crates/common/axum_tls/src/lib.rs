@@ -4,6 +4,7 @@ mod maybe_tls;
 mod redirect_http;
 
 use crate::acceptor::Acceptor;
+pub use crate::acceptor::TlsData;
 pub use crate::files::*;
 use crate::redirect_http::redirect_http_to_https;
 use axum::middleware::map_request;

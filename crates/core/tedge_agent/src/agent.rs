@@ -12,6 +12,7 @@ use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
+use reqwest::Identity;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tedge_actors::ConvertingActor;
@@ -58,6 +59,7 @@ pub struct AgentConfig {
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
+    pub identity: Option<Identity>,
 }
 
 impl AgentConfig {
@@ -112,6 +114,8 @@ impl AgentConfig {
         // For agent specific
         let log_dir = tedge_config.logs.path.join("tedge").join("agent");
 
+        let identity = tedge_config.http.client.auth.identity()?;
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -125,6 +129,7 @@ impl AgentConfig {
             mqtt_topic_root,
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
+            identity,
         })
     }
 }
@@ -218,7 +223,8 @@ impl Agent {
 
         if v1 {
             let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
-            let mut downloader_actor_builder = DownloaderActor::new().builder();
+            let mut downloader_actor_builder =
+                DownloaderActor::new(self.config.identity.clone()).builder();
             let mut uploader_actor_builder = UploaderActor::new().builder();
 
             // Instantiate config manager actor

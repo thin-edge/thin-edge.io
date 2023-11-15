@@ -283,7 +283,9 @@ mod tests {
         }
 
         fn test_data(file_name: &str) -> String {
-            std::fs::read_to_string(format!("./test_data/{file_name}")).with_context(|| format!("opening file {file_name} from test_data")).unwrap()
+            std::fs::read_to_string(format!("./test_data/{file_name}"))
+                .with_context(|| format!("opening file {file_name} from test_data"))
+                .unwrap()
         }
 
         fn config_from_pem(

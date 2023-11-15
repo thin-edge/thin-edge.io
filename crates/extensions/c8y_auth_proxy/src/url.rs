@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn server_generates_https_urls_for_the_provided_port() {
         let url_gen = ProxyUrlGenerator {
-            address: [127, 0, 0, 1].into(),
+            host: "127.0.0.1".into(),
             port: 1234,
             protocol: Protocol::Https,
         };

@@ -29,6 +29,7 @@ use http::status::StatusCode;
 use log::debug;
 use log::error;
 use log::info;
+use reqwest::Identity;
 use std::collections::HashMap;
 use std::future::ready;
 use std::future::Future;
@@ -51,6 +52,7 @@ const RETRY_TIMEOUT_SECS: u64 = 20;
 pub struct C8YHttpProxyActor {
     pub(crate) end_point: C8yEndPoint,
     peers: C8YHttpProxyMessageBox,
+    identity: Option<Identity>,
 }
 
 pub struct C8YHttpProxyMessageBox {
@@ -132,6 +134,7 @@ impl C8YHttpProxyActor {
         C8YHttpProxyActor {
             end_point,
             peers: message_box,
+            identity: config.identity,
         }
     }
 
@@ -466,8 +469,11 @@ impl C8YHttpProxyActor {
         }
 
         info!(target: self.name(), "Downloading from: {:?}", download_info.url());
-        let downloader: Downloader =
-            Downloader::with_permission(request.file_path, request.file_permissions);
+        let downloader: Downloader = Downloader::with_permission(
+            request.file_path,
+            request.file_permissions,
+            self.identity.clone(),
+        );
         downloader.download(&download_info).await?;
 
         Ok(())

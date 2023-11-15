@@ -48,7 +48,8 @@ impl TEdgeComponent for CumulocityMapper {
         let mut timer_actor = TimerActor::builder();
 
         let mut uploader_actor = UploaderActor::new().builder();
-        let mut downloader_actor = DownloaderActor::new().builder();
+        let identity = tedge_config.http.client.auth.identity()?;
+        let mut downloader_actor = DownloaderActor::new(identity).builder();
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
         let c8y_mapper_actor = C8yMapperBuilder::try_new(
