@@ -1,7 +1,7 @@
+use super::FtsDownloadOperationData;
+use super::FtsDownloadOperationType;
 use crate::actor::CmdId;
 use crate::converter::CumulocityConverter;
-use crate::converter::FtsDownloadOperationData;
-use crate::converter::FtsDownloadOperationType;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
@@ -250,7 +250,7 @@ impl CumulocityConverter {
     /// - supported operation "c8y_LogfileRequest"
     /// - supported log types
     pub fn convert_log_metadata(
-        &mut self,
+        &self,
         topic_id: &EntityTopicId,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {

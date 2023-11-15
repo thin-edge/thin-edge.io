@@ -1,7 +1,7 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
-use crate::converter::FtsDownloadOperationType;
+use crate::operations::FtsDownloadOperationType;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;

@@ -2,15 +2,13 @@ pub mod actor;
 pub mod alarm_converter;
 pub mod compatibility_adapter;
 pub mod config;
-mod config_operations;
 pub mod converter;
 pub mod dynamic_discovery;
 pub mod error;
-mod firmware_update;
 mod fragments;
 mod inventory;
 pub mod json;
-mod log_upload;
+mod operations;
 mod serializer;
 pub mod service_monitor;
 #[cfg(test)]
