@@ -3529,7 +3529,6 @@ dependencies = [
  "plugin_sm",
  "serde",
  "serde_json",
- "serial_test",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -3548,6 +3547,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.7.6",
+ "tower",
  "tracing",
  "which",
 ]

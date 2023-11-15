@@ -141,7 +141,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn check_server_does_not_panic_when_port_is_in_use() -> Result<(), anyhow::Error> {
         let ttd = TempTedgeDir::new();
 
@@ -151,7 +150,7 @@ mod tests {
         let config_clone = http_config.clone();
 
         // Spawn HTTP file transfer server
-        // handle_one uses port 3000.
+        // handle_one uses port 3746.
         let builder_one = FileTransferServerBuilder::new(http_config);
         let handle_one = tokio::spawn(async move { builder_one.build().run().await });
 

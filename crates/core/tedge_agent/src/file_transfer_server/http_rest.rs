@@ -1,13 +1,13 @@
 use crate::file_transfer_server::error::FileTransferError;
-use axum::Router;
 use axum::routing::IntoMakeService;
+use axum::Router;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use hyper::Server;
 use hyper::server::conn::AddrIncoming;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
+use hyper::Server;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use tedge_actors::futures::StreamExt;
@@ -187,29 +187,8 @@ async fn stream_request_body_to_path(
 
 pub fn http_file_transfer_server(
     config: &HttpConfig,
-) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError>
-{
-    let file_transfer_end_point = config.file_transfer_end_point();
-    let get_config = config.clone();
-    let put_config = config.clone();
-    let del_config = config.clone();
-
-    let router = Router::new()
-        .route(&file_transfer_end_point, axum::routing::get(move |req| {
-            let config = get_config.clone();
-            async move { get(req, &config).await }
-        }).put(
- move |req| {
-            let config = put_config.clone();
-            async move { put(req, &config).await }
-        }
-        ).delete(
- move |req| {
-            let config = del_config.clone();
-            async move { delete(req, &config).await }
-        }
-        ));
-
+) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError> {
+    let router = http_file_transfer_router(config);
     let server_builder = Server::try_bind(&config.bind_address);
     match server_builder {
         Ok(server) => Ok(server.serve(router.into_make_service())),
@@ -219,12 +198,38 @@ pub fn http_file_transfer_server(
     }
 }
 
+fn http_file_transfer_router(config: &HttpConfig) -> Router {
+    let file_transfer_end_point = config.file_transfer_end_point();
+    let get_config = config.clone();
+    let put_config = config.clone();
+    let del_config = config.clone();
+
+    Router::new().route(
+        &file_transfer_end_point,
+        axum::routing::get(move |req| {
+            let config = get_config.clone();
+            async move { get(req, &config).await }
+        })
+        .put(move |req| {
+            let config = put_config.clone();
+            async move { put(req, &config).await }
+        })
+        .delete(move |req| {
+            let config = del_config.clone();
+            async move { delete(req, &config).await }
+        }),
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use hyper::Method;
+    use hyper::StatusCode;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
+    use tower::Service;
+    use tower::ServiceExt;
 
     #[test_case(
         "/tedge/some/dir/file",
@@ -250,104 +255,68 @@ mod test {
         assert_eq!(actual_file_name, expected_file_name);
     }
 
-    const VALID_TEST_URI: &str = "http://127.0.0.1:3333/tedge/file-transfer/another/dir/test-file";
-    const INVALID_TEST_URI: &str = "http://127.0.0.1:3333/wrong/place/test-file";
+    const VALID_TEST_URI: &str = "/tedge/file-transfer/another/dir/test-file";
+    const INVALID_TEST_URI: &str = "/wrong/place/test-file";
 
-    #[ignore = "flaky: returns 404 for GET/OK case (https://github.com/thin-edge/thin-edge.io/actions/runs/6273349762/job/17036638819?pr=2276#step:10:1153)"]
-    #[test_case(hyper::Method::GET, VALID_TEST_URI, hyper::StatusCode::OK)]
-    #[test_case(hyper::Method::GET, INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
-    #[test_case(hyper::Method::DELETE, VALID_TEST_URI, hyper::StatusCode::ACCEPTED)]
-    #[test_case(hyper::Method::DELETE, INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
-    #[serial_test::serial]
+    #[test_case(Method::GET, VALID_TEST_URI, StatusCode::OK)]
+    #[test_case(Method::GET, INVALID_TEST_URI, StatusCode::NOT_FOUND)]
+    #[test_case(Method::DELETE, VALID_TEST_URI, StatusCode::ACCEPTED)]
+    #[test_case(Method::DELETE, INVALID_TEST_URI, StatusCode::NOT_FOUND)]
     #[tokio::test]
     async fn test_file_transfer_http_methods(
         method: hyper::Method,
         uri: &'static str,
         status_code: hyper::StatusCode,
     ) {
-        let (_ttd, server) = server();
-        let client_put_request = client_put_request().await;
+        let (_ttd, mut app) = app();
+        let req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .body(Body::empty())
+            .expect("request builder");
 
-        let client_handler = tokio::spawn(async move {
-            let client = hyper::Client::new();
+        app.call(client_put_request()).await.unwrap();
+        let response = app.call(req).await.unwrap();
 
-            let req = Request::builder()
-                .method(method)
-                .uri(uri)
-                .body(Body::empty())
-                .expect("request builder");
-            client.request(req).await.unwrap()
-        });
-
-        tokio::select! {
-            Err(_) = server => {}
-            Ok(_put_response) = client_put_request => {
-                let response = client_handler.await.unwrap();
-                assert_eq!(response.status(), status_code);
-            }
-        }
+        assert_eq!(response.status(), status_code);
     }
 
     #[test_case(VALID_TEST_URI, hyper::StatusCode::CREATED)]
     #[test_case(INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
-    #[serial_test::serial]
     #[tokio::test]
     async fn test_file_transfer_put(uri: &'static str, status_code: hyper::StatusCode) {
-        let client_put_request = tokio::spawn(async move {
-            let client = hyper::Client::new();
+        let body = "just an example body";
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri(uri)
+            .body(Body::from(body))
+            .expect("request builder");
 
-            let mut string = String::new();
-            for val in 0..100 {
-                string.push_str(&format!("{}\n", val));
-            }
-            let req = Request::builder()
-                .method(Method::PUT)
-                .uri(uri)
-                .body(Body::from(string.clone()))
-                .expect("request builder");
+        let (_ttd, app) = app();
 
-            client.request(req).await.unwrap()
-        });
+        let response = app.oneshot(req).await.unwrap();
 
-        let (_ttd, server) = server();
-
-        tokio::select! {
-            Err(_) = server => {
-            }
-            Ok(_put_response) = client_put_request => {
-                assert_eq!(_put_response.status(), status_code);
-            }
-        }
+        assert_eq!(response.status(), status_code);
     }
 
-    fn server() -> (
-        TempTedgeDir,
-        Server<AddrIncoming, IntoMakeService<Router>>,
-    ) {
+    fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
         let tempdir_path = ttd.utf8_path_buf();
         let http_config = HttpConfig::default()
             .with_data_dir(tempdir_path.into())
             .with_port(3333);
-        let server = http_file_transfer_server(&http_config).unwrap();
-        (ttd, server)
+        let router = http_file_transfer_router(&http_config);
+        (ttd, router)
     }
 
     // canonicalised client PUT request to create a file in `VALID_TEST_URI`
     // this is to be used to test the GET and DELETE methods.
-    async fn client_put_request() -> tokio::task::JoinHandle<hyper::Response<Body>> {
-        tokio::spawn(async move {
-            let client = hyper::Client::new();
-
-            let string = String::from("file transfer server");
-
-            let req = Request::builder()
-                .method(Method::PUT)
-                .uri(VALID_TEST_URI)
-                .body(Body::from(string.clone()))
-                .expect("request builder");
-            client.request(req).await.unwrap()
-        })
+    fn client_put_request() -> Request<Body> {
+        Request::builder()
+            .method(Method::PUT)
+            .uri(VALID_TEST_URI)
+            .body(Body::from("file transfer server"))
+            .expect("request builder")
     }
 
     #[test_case(String::from("/tedge/file-transfer/../../../bin/sh"), false)]
