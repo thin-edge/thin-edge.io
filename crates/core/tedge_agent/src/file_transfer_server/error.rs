@@ -1,8 +1,9 @@
 use axum::extract::rejection::PathRejection;
 use axum::response::IntoResponse;
-use camino::Utf8PathBuf;
 use hyper::StatusCode;
 use tedge_actors::RuntimeError;
+
+use super::request_files::RequestPath;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FileTransferError {
@@ -31,21 +32,21 @@ pub enum FileTransferRequestError {
     DeleteIoError {
         #[source]
         err: std::io::Error,
-        path: Utf8PathBuf,
+        path: RequestPath,
     },
 
     #[error("Request to upload to {path:?} failed: {err:?}")]
     Upload {
         #[source]
         err: anyhow::Error,
-        path: Utf8PathBuf,
+        path: RequestPath,
     },
 
     #[error("Invalid file path: {path:?}")]
-    InvalidPath { path: Utf8PathBuf },
+    InvalidPath { path: RequestPath },
 
     #[error("File not found: {0:?}")]
-    FileNotFound(Utf8PathBuf),
+    FileNotFound(RequestPath),
 
     #[error("Path rejection: {0:?}")]
     PathRejection(#[from] PathRejection),
