@@ -210,7 +210,7 @@ impl<S: Server, K> RuntimeRequestSink for ServerActorBuilder<S, K> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ServerConfig {
     pub capacity: usize,
     pub max_concurrency: usize,

@@ -9,10 +9,12 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 csv = { workspace = true }
 download = { workspace = true }
 logged_command = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_api = { workspace = true }

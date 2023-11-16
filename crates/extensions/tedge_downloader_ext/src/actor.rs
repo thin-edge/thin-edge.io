@@ -4,6 +4,8 @@ use download::DownloadError;
 use download::DownloadInfo;
 use download::Downloader;
 use log::info;
+use reqwest::Identity;
+use std::marker::PhantomData;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::Message;
@@ -63,25 +65,41 @@ impl DownloadResponse {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DownloaderActor<T> {
     config: ServerConfig,
     key: std::marker::PhantomData<T>,
+    identity: Option<Identity>,
+}
+
+impl<T> Clone for DownloaderActor<T> {
+    fn clone(&self) -> Self {
+        DownloaderActor {
+            config: self.config,
+            key: self.key,
+            identity: self.identity.clone(),
+        }
+    }
 }
 
 impl<T: Message + Default> DownloaderActor<T> {
-    pub fn new() -> Self {
-        DownloaderActor::default()
+    pub fn new(identity: Option<Identity>) -> Self {
+        DownloaderActor {
+            config: <_>::default(),
+            key: PhantomData,
+            identity,
+        }
     }
 
     pub fn builder(&self) -> ServerActorBuilder<DownloaderActor<T>, Sequential> {
-        ServerActorBuilder::new(DownloaderActor::default(), &ServerConfig::new(), Sequential)
+        ServerActorBuilder::new(self.clone(), &ServerConfig::new(), Sequential)
     }
 
-    pub fn with_capacity(self, capacity: usize) -> Self {
+    pub fn with_capacity(self, capacity: usize, identity: Option<Identity>) -> Self {
         Self {
             config: self.config.with_capacity(capacity),
             key: self.key,
+            identity,
         }
     }
 }
@@ -105,9 +123,13 @@ impl<T: Message> Server for DownloaderActor<T> {
         };
 
         let downloader = if let Some(permission) = request.permission {
-            Downloader::with_permission(request.file_path.clone(), permission)
+            Downloader::with_permission(
+                request.file_path.clone(),
+                permission,
+                self.identity.clone(),
+            )
         } else {
-            Downloader::new(request.file_path.clone())
+            Downloader::new(request.file_path.clone(), self.identity.clone())
         };
 
         info!(

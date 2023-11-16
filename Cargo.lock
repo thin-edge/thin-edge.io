@@ -106,6 +106,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
+
+[[package]]
 name = "asn1-rs"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -340,6 +346,50 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 2.0.29",
+]
+
+[[package]]
+name = "axum-server"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "447f28c85900215cc1bea282f32d4a2f22d55c5a300afdfbc661c8d6a632e063"
+dependencies = [
+ "arc-swap",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "hyper",
+ "pin-project-lite",
+ "rustls",
+ "rustls-pemfile",
+ "tokio",
+ "tokio-rustls",
+ "tower-service",
+]
+
+[[package]]
+name = "axum_tls"
+version = "0.13.1"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "axum",
+ "axum-server",
+ "camino",
+ "futures",
+ "hyper",
+ "pin-project",
+ "rcgen",
+ "reqwest",
+ "rustls",
+ "rustls-pemfile",
+ "tempfile",
+ "tokio",
+ "tokio-rustls",
+ "tower",
+ "tracing",
+ "x509-parser 0.14.0",
 ]
 
 [[package]]
@@ -615,16 +665,22 @@ dependencies = [
 name = "c8y_auth_proxy"
 version = "0.13.1"
 dependencies = [
+ "anyhow",
  "axum",
+ "axum-server",
+ "axum_tls",
  "c8y_http_proxy",
+ "camino",
  "env_logger",
  "futures",
  "hyper",
- "miette",
  "mockito",
+ "rcgen",
  "reqwest",
+ "rustls",
  "tedge_actors",
  "tedge_config",
+ "tedge_config_macros",
  "tedge_http_ext",
  "tokio",
  "tracing",
@@ -695,6 +751,7 @@ dependencies = [
  "log",
  "mockito",
  "mqtt_channel",
+ "reqwest",
  "serde",
  "serde_json",
  "tedge_actors",
@@ -1167,11 +1224,13 @@ version = "0.13.1"
 dependencies = [
  "anyhow",
  "backoff",
+ "hyper",
  "log",
  "mockito",
  "nix",
  "regex",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tedge_utils",
@@ -2464,6 +2523,7 @@ dependencies = [
  "csv",
  "download",
  "logged_command",
+ "reqwest",
  "serde",
  "serde_json",
  "serial_test",
@@ -3540,6 +3600,7 @@ dependencies = [
  "log",
  "path-clean",
  "plugin_sm",
+ "reqwest",
  "routerify",
  "serde",
  "serde_json",
@@ -3647,6 +3708,7 @@ dependencies = [
  "collectd_ext",
  "flockfile",
  "mqtt_channel",
+ "reqwest",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -3731,6 +3793,7 @@ dependencies = [
  "figment",
  "mqtt_channel",
  "once_cell",
+ "reqwest",
  "serde",
  "serde_ignored",
  "strum_macros",
@@ -3814,6 +3877,7 @@ dependencies = [
  "download",
  "log",
  "mockito",
+ "reqwest",
  "tedge_actors",
  "tedge_test_utils",
  "tedge_utils",

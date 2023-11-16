@@ -9,6 +9,7 @@ use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
+use c8y_auth_proxy::url::Protocol;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 use serde_json::json;
@@ -2593,6 +2594,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         Capabilities::default(),
         auth_proxy_addr,
         auth_proxy_port,
+        Protocol::Http,
         MqttSchema::default(),
     );
 

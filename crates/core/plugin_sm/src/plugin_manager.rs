@@ -108,8 +108,7 @@ impl ExternalPlugins {
         };
         if let Err(e) = plugins.load() {
             warn!(
-                "Reading the plugins directory: failed with: {:?}: {:?}",
-                e.kind(),
+                "Reading the plugins directory ({:?}): failed with: {e:?}",
                 &plugins.plugin_dir
             );
             return Ok(plugins);
@@ -136,7 +135,7 @@ impl ExternalPlugins {
         Ok(plugins)
     }
 
-    pub fn load(&mut self) -> io::Result<()> {
+    pub fn load(&mut self) -> anyhow::Result<()> {
         self.plugin_map.clear();
 
         let config = tedge_config::TEdgeConfigRepository::new(self.config_location.clone())
@@ -201,11 +200,13 @@ impl ExternalPlugins {
 
                 if let Some(file_name) = path.file_name() {
                     if let Some(plugin_name) = file_name.to_str() {
+                        let identity = config.http.client.auth.identity()?;
                         let plugin = ExternalPluginCommand::new(
                             plugin_name,
                             &path,
                             self.sudo.clone(),
                             config.software.plugin.max_packages,
+                            identity,
                         );
                         self.plugin_map.insert(plugin_name.into(), plugin);
                     }
