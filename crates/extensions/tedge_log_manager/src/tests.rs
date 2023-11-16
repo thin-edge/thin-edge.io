@@ -89,6 +89,7 @@ async fn new_log_manager_builder(
 ) {
     let config = LogManagerConfig {
         config_dir: temp_dir.to_path_buf(),
+        tmp_dir: temp_dir.to_path_buf(),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
@@ -198,7 +199,18 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
         upload_request.url,
         "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234"
     );
-    assert_eq!(upload_request.file_path, tempdir.path().join("file_c.tmp"));
+    assert!(
+        upload_request.file_path.starts_with(tempdir.path()),
+        "Expected the log file to be created in tempdir"
+    );
+    assert!(
+        upload_request
+            .file_path
+            .file_name()
+            .unwrap()
+            .starts_with("type_two"),
+        "Expected a log file name with the log type as prefix"
+    );
 
     assert_eq!(upload_request.auth, None);
 

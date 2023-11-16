@@ -1839,6 +1839,7 @@ dependencies = [
  "filetime",
  "glob",
  "log",
+ "rand",
  "serde",
  "tedge_test_utils",
  "tedge_utils",

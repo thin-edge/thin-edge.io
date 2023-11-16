@@ -162,6 +162,7 @@ impl LogManagerActor {
             request.date_from,
             request.lines.to_owned(),
             &request.search_text,
+            &self.config.tmp_dir,
         )?;
 
         let upload_request = UploadRequest::new(
