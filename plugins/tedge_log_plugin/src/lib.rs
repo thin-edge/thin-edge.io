@@ -82,6 +82,7 @@ async fn run_with(
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
+    let tmp_dir = tedge_config.tmp.path.clone().into();
     let mqtt_topic_root = cliopts
         .mqtt_topic_root
         .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
@@ -124,6 +125,7 @@ async fn run_with(
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
         config_dir: cliopts.config_dir,
+        tmp_dir,
         mqtt_schema: MqttSchema::with_root(mqtt_topic_root.to_string()),
         mqtt_device_topic_id: mqtt_device_topic_id.to_string().parse()?,
     })?;

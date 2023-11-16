@@ -51,6 +51,7 @@ pub struct AgentConfig {
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,
+    pub tmp_dir: Utf8PathBuf,
     pub run_dir: Utf8PathBuf,
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
@@ -70,6 +71,7 @@ impl AgentConfig {
         let tedge_config = config_repository.load()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
+        let tmp_dir = tedge_config.tmp.path.clone();
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -118,6 +120,7 @@ impl AgentConfig {
             restart_config,
             sw_update_config,
             config_dir,
+            tmp_dir,
             run_dir,
             use_lock,
             data_dir,
@@ -239,6 +242,7 @@ impl Agent {
             // Instantiate log manager actor
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
+                tmp_dir: self.config.config_dir.clone().into(),
                 mqtt_schema,
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;
