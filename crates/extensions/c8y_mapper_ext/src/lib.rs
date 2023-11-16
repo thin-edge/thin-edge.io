@@ -24,13 +24,14 @@ pub struct Capabilities {
     firmware_update: bool,
 }
 
+#[cfg(test)]
 impl Default for Capabilities {
     fn default() -> Self {
         Capabilities {
             log_upload: true,
             config_snapshot: true,
             config_update: true,
-            firmware_update: false,
+            firmware_update: true,
         }
     }
 }

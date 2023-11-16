@@ -622,6 +622,47 @@ impl ConfigUpdateCmdPayload {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FirmwareMetadata {
+    pub name: Option<String>,
+    pub version: Option<String>,
+    #[serde(rename = "url")]
+    pub remote_url: Option<String>,
+}
+
+impl<'a> Jsonify<'a> for FirmwareMetadata {}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FirmwareUpdateCmdPayload {
+    #[serde(flatten)]
+    pub status: CommandStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tedge_url: Option<String>,
+    pub remote_url: String,
+    pub name: String,
+    pub version: String,
+}
+
+impl<'a> Jsonify<'a> for FirmwareUpdateCmdPayload {}
+
+impl FirmwareUpdateCmdPayload {
+    pub fn executing(&mut self) {
+        self.status = CommandStatus::Executing;
+    }
+
+    pub fn successful(&mut self) {
+        self.status = CommandStatus::Successful;
+    }
+
+    pub fn failed(&mut self, reason: impl Into<String>) {
+        self.status = CommandStatus::Failed {
+            reason: reason.into(),
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
