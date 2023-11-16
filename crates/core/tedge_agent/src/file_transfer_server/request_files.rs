@@ -69,7 +69,7 @@ fn local_path_for_file(
     let full_path = config.file_transfer_dir.join(&request_path);
 
     let clean_path = clean_utf8_path(&full_path);
-    // TODO did we actually mean to allow (very limited) path traversal attacks into the data dir?
+    
     if clean_path.starts_with(&config.file_transfer_dir) {
         Ok(FileTransferPaths {
             full: clean_path,

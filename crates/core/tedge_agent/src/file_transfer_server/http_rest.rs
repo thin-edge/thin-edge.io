@@ -28,7 +28,6 @@ use tokio_util::io::ReaderStream;
 use super::error::FileTransferRequestError as Error;
 use super::request_files::FileTransferPaths;
 
-// TODO is this not just a repeat of code in tedge_config?
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 
 #[derive(Debug, Clone)]

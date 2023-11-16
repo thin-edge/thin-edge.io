@@ -62,7 +62,6 @@ impl IntoResponse for FileTransferError {
     fn into_response(self) -> axum::response::Response {
         use FileTransferError::*;
         let status_code = match self {
-            // TODO split out errors into startup and runtime errors
             FromIo(_)
             | FromHyperError(_)
             | FromAddressParseError(_)
@@ -90,7 +89,6 @@ impl IntoResponse for FileTransferRequestError {
             DeleteIoError { path, .. } => {
                 tracing::error!("{self}");
                 (
-                    // TODO do we really want to respond with forbidden for these errors?
                     StatusCode::FORBIDDEN,
                     format!("Cannot delete path {path:?}"),
                 )
@@ -98,7 +96,6 @@ impl IntoResponse for FileTransferRequestError {
             Upload { path, .. } => {
                 tracing::error!("{self}");
                 (
-                    // TODO do we really want to respond with forbidden for these errors?
                     StatusCode::FORBIDDEN,
                     format!("Cannot upload to path {path:?}"),
                 )
