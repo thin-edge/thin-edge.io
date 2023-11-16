@@ -53,23 +53,22 @@ impl FromRequestParts<Arc<HttpConfig>> for FileTransferPaths {
         config: &Arc<HttpConfig>,
     ) -> Result<Self, Self::Rejection> {
         let Path(request_path) = Path::<Utf8PathBuf>::from_request_parts(parts, config).await?;
-        local_path_for_file(config, RequestPath(request_path))
+        local_path_for_file(RequestPath(request_path), config)
     }
 }
 
 /// Return the path of the file associated to the given `uri`
 ///
-/// Check that:
-/// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
-/// * the `path`, once normalized, is actually under `self.file_transfer_dir`
+/// This cleans up the path using [path_clean::clean] and then verifies that this
+/// path is actually under `config.file_transfer_dir`
 fn local_path_for_file(
-    config: &HttpConfig,
     request_path: RequestPath,
+    config: &HttpConfig,
 ) -> Result<FileTransferPaths, FileTransferRequestError> {
     let full_path = config.file_transfer_dir.join(&request_path);
 
     let clean_path = clean_utf8_path(&full_path);
-    
+
     if clean_path.starts_with(&config.file_transfer_dir) {
         Ok(FileTransferPaths {
             full: clean_path,
