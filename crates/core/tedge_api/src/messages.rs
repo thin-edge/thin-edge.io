@@ -489,8 +489,13 @@ pub enum CommandStatus {
     Executing,
     Successful,
     Failed {
+        #[serde(default = "default_failure_reason")]
         reason: String,
     },
+}
+
+fn default_failure_reason() -> String {
+    "Unknown reason".to_string()
 }
 
 /// TODO: Deprecate OperationStatus
