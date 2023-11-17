@@ -1,4 +1,5 @@
 use crate::file_transfer_server::error::FileTransferError;
+use anyhow::anyhow;
 use anyhow::Context;
 use axum::body::StreamBody;
 use axum::routing::get;
@@ -27,6 +28,7 @@ use tokio_util::io::ReaderStream;
 
 use super::error::FileTransferRequestError as Error;
 use super::request_files::FileTransferPath;
+use super::request_files::RequestPath;
 
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 
@@ -70,36 +72,42 @@ impl HttpConfig {
     }
 }
 
-fn separate_path_and_file_name(input: &Utf8Path) -> Option<(&Utf8Path, &str)> {
-    Some((input.parent()?, input.file_name()?))
-}
-
 async fn upload_file(
     paths: FileTransferPath,
     mut request: Request<Body>,
 ) -> Result<StatusCode, Error> {
-    if let Some((directory, file_name)) = separate_path_and_file_name(&paths.full) {
+    fn internal_error(source: impl Into<anyhow::Error>, path: RequestPath) -> Error {
+        Error::OtherUpload {
+            source: source.into(),
+            path,
+        }
+    }
+
+    if let Some(directory) = paths.full.parent() {
         if let Err(err) = create_directories(directory) {
-            return Err(Error::Upload {
-                source: err.into(),
-                path: paths.request,
-            });
+            return Err(internal_error(err, paths.request));
         }
 
-        let full_path = directory.join(file_name);
-
-        match stream_request_body_to_path(&full_path, request.body_mut()).await {
+        match stream_request_body_to_path(&paths.full, request.body_mut()).await {
             Ok(()) => Ok(StatusCode::CREATED),
-            Err(err) => Err(Error::Upload {
-                source: err,
+            Err(err) if source_err_is_is_a_directory(&err) => Err(Error::CannotUploadDirectory {
                 path: paths.request,
             }),
+            Err(err) => Err(internal_error(err, paths.request)),
         }
     } else {
-        Err(Error::InvalidPath {
-            path: paths.request,
-        })
+        Err(internal_error(
+            anyhow!("cannot retrieve directory name for for {}", paths.full),
+            paths.request,
+        ))
     }
+}
+
+fn source_err_is_is_a_directory(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref()
+        .map(err_is_is_a_directory)
+        .unwrap_or(false)
 }
 
 async fn download_file(
@@ -139,8 +147,10 @@ async fn delete_file(req: FileTransferPath) -> Result<StatusCode, Error> {
     match tokio::fs::remove_file(&req.full).await {
         Ok(()) => Ok(StatusCode::ACCEPTED),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
-        Err(e) if err_is_is_a_directory(&e) => Ok(StatusCode::NOT_FOUND),
-        Err(err) => Err(Error::DeleteIoError {
+        Err(e) if err_is_is_a_directory(&e) => {
+            Err(Error::CannotDeleteDirectory { path: req.request })
+        }
+        Err(err) => Err(Error::OtherDelete {
             source: err,
             path: req.request,
         }),
@@ -365,15 +375,36 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    #[test_case(Method::GET, StatusCode::NOT_FOUND)]
+    #[test_case(Method::PUT, StatusCode::CONFLICT)]
+    #[test_case(Method::DELETE, StatusCode::NOT_FOUND)]
     #[tokio::test]
-    async fn get_responds_with_not_found_for_directory() {
+    async fn all_methods_respond_with_sensible_status_for_a_directory(
+        method: Method,
+        status_code: StatusCode,
+    ) {
         let (_ttd, mut app) = app();
 
         upload_file(&mut app, "dir/a-file.txt", "some content").await;
 
-        let response = download_file(&mut app, "dir").await;
+        let response = request_with(method, &mut app, "dir", "").await;
 
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), status_code);
+    }
+
+    async fn request_with(
+        method: Method,
+        app: &mut Router,
+        path: &str,
+        body: impl Into<Body>,
+    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+        let req = Request::builder()
+            .method(method)
+            .uri(format!("/tedge/file-transfer/{path}"))
+            .body(body.into())
+            .expect("request builder");
+
+        app.call(req).await.unwrap()
     }
 
     async fn upload_file(
@@ -381,39 +412,21 @@ mod tests {
         path: &str,
         contents: &str,
     ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
-        let req = Request::builder()
-            .method(Method::PUT)
-            .uri(format!("/tedge/file-transfer/{path}"))
-            .body(Body::from(contents.to_owned()))
-            .expect("request builder");
-
-        app.call(req).await.unwrap()
+        request_with(Method::PUT, app, path, contents.to_owned()).await
     }
 
     async fn delete_file(
         app: &mut Router,
         path: &str,
     ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
-        let req = Request::builder()
-            .method(Method::DELETE)
-            .uri(format!("/tedge/file-transfer/{path}"))
-            .body(Body::empty())
-            .expect("request builder");
-
-        app.call(req).await.unwrap()
+        request_with(Method::DELETE, app, path, Body::empty()).await
     }
 
     async fn download_file(
         app: &mut Router,
         path: &str,
     ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
-        let req = Request::builder()
-            .method(Method::GET)
-            .uri(format!("/tedge/file-transfer/{path}"))
-            .body(Body::empty())
-            .expect("request builder");
-
-        app.call(req).await.unwrap()
+        request_with(Method::GET, app, path, Body::empty()).await
     }
 
     fn app() -> (TempTedgeDir, Router) {

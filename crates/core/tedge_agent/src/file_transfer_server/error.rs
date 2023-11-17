@@ -28,14 +28,20 @@ pub enum FileTransferRequestError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
+    #[error("Cannot delete: {path:?} is a directory, not a file")]
+    CannotDeleteDirectory { path: RequestPath },
+
+    #[error("Cannot upload: {path:?} is a directory, not a file")]
+    CannotUploadDirectory { path: RequestPath },
+
     #[error("Request to delete {path:?} failed: {source}")]
-    DeleteIoError {
+    OtherDelete {
         source: std::io::Error,
         path: RequestPath,
     },
 
     #[error("Request to upload to {path:?} failed: {source:?}")]
-    Upload {
+    OtherUpload {
         source: anyhow::Error,
         path: RequestPath,
     },
@@ -46,7 +52,7 @@ pub enum FileTransferRequestError {
     #[error("File not found: {0:?}")]
     FileNotFound(RequestPath),
 
-    #[error("Path rejection: {0:?}")]
+    #[error("Path rejection: {0}")]
     PathRejection(#[from] PathRejection),
 }
 
@@ -65,7 +71,7 @@ impl IntoResponse for FileTransferRequestError {
                 tracing::error!("{error_message}");
                 err.into_response()
             }
-            FromIo(_) => {
+            FromIo(_) | OtherDelete { .. } | OtherUpload { .. } => {
                 tracing::error!("{error_message}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -73,25 +79,11 @@ impl IntoResponse for FileTransferRequestError {
                 )
                     .into_response()
             }
-            DeleteIoError { path, .. } => {
-                tracing::error!("{error_message}");
-                (
-                    StatusCode::FORBIDDEN,
-                    format!("Cannot delete path {path:?}"),
-                )
-                    .into_response()
+            // All of these from an invalid URL, so `Not Found` is most appropriate response
+            InvalidPath { .. } | FileNotFound(_) | CannotDeleteDirectory { .. } => {
+                (StatusCode::NOT_FOUND, error_message).into_response()
             }
-            Upload { path, .. } => {
-                tracing::error!("{error_message}");
-                (
-                    StatusCode::FORBIDDEN,
-                    format!("Cannot upload to path {path:?}"),
-                )
-                    .into_response()
-            }
-            InvalidPath { .. } | FileNotFound(_) => {
-                (StatusCode::NOT_FOUND, self.to_string()).into_response()
-            }
+            CannotUploadDirectory { .. } => (StatusCode::CONFLICT, error_message).into_response(),
         }
     }
 }
