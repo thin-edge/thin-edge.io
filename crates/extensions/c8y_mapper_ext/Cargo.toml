@@ -49,9 +49,11 @@ tracing = { workspace = true }
 [dev-dependencies]
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
+capture-logger = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 test-case = { workspace = true }
+

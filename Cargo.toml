@@ -60,6 +60,7 @@ certificate = { path = "crates/common/certificate" }
 clap = { version = "4.4", features = ["cargo", "derive"] }
 clock = { path = "crates/common/clock" }
 collectd_ext = { path = "crates/extensions/collectd_ext" }
+capture-logger = "0.1"
 csv = "1.1"
 darling = "0.20"
 doku = "0.21"

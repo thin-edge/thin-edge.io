@@ -967,7 +967,20 @@ impl CumulocityConverter {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(&source).is_none() {
                     let auto_registration_messages =
-                        self.entity_store.auto_register_entity(&source)?;
+                        match self.entity_store.auto_register_entity(&source) {
+                            Ok(auto_registration_messages) => auto_registration_messages,
+                            Err(e) => match e {
+                                Error::NonDefaultTopicScheme(eid) => {
+                                    debug!("{}", Error::NonDefaultTopicScheme(eid.clone()));
+                                    return Ok(vec![self.new_error_message(
+                                        ConversionError::FromEntityStoreError(
+                                            entity_store::Error::NonDefaultTopicScheme(eid),
+                                        ),
+                                    )]);
+                                }
+                                e => return Err(e.into()),
+                            },
+                        };
                     for auto_registration_message in &auto_registration_messages {
                         registration_messages.append(
                             &mut self.register_and_convert_entity(auto_registration_message)?,
@@ -3018,6 +3031,28 @@ pub(crate) mod tests {
                 )],
             );
         }
+    }
+
+    #[tokio::test]
+    async fn try_auto_registration_on_custom_topic() -> Result<(), anyhow::Error> {
+        use capture_logger::begin_capture;
+        use capture_logger::pop_captured;
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let alarm_topic = "te/custom/child2///m/";
+        let alarm_payload = json!({ "text": "" }).to_string();
+        let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
+        begin_capture();
+        let res = converter.try_convert(&alarm_message).await.unwrap();
+        let expected_err_msg = Message::new(&Topic::new_unchecked("te/errors"), "Auto registration of the entity with topic id custom/child2// failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.");
+        assert_eq!(res[0], expected_err_msg);
+        let expected_log = "Auto registration of the entity with topic id custom/child2// failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.";
+        // skip other log messages
+        pop_captured().unwrap().message();
+        pop_captured().unwrap().message();
+        assert_eq!(pop_captured().unwrap().message(), expected_log);
+        Ok(())
     }
 
     pub(crate) async fn create_c8y_converter(
