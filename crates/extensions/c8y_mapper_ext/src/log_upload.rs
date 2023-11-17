@@ -563,8 +563,7 @@ mod tests {
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
             "searchText": "ERROR",
-            "lines": 1000,
-            "reason": "Something went wrong"
+            "lines": 1000
         })
                 .to_string(),
         ))
@@ -574,10 +573,7 @@ mod tests {
         // Expect `502` smartrest message on `c8y/s/us`.
         assert_received_contains_str(
             &mut mqtt,
-            [(
-                "c8y/s/us",
-                "502,c8y_LogfileRequest,\"Something went wrong\"",
-            )],
+            [("c8y/s/us", "502,c8y_LogfileRequest,\"Unknown reason\"")],
         )
         .await;
     }
