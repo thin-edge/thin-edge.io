@@ -1,10 +1,10 @@
 ---
-title: Operation Workflows
+title: User-defined Operation Workflows
 tags: [Reference, MQTT, Operations]
-sidebar_position: 6
+sidebar_position: 7
 ---
 
-# Operation Workflows
+# User-defined Operation Workflows
 
 Thin-edge provides the tools to define, extend and combine *operation workflows*
 that rule the sequence of steps applied when a maintenance *operation* is triggered by an operator or some software component,
