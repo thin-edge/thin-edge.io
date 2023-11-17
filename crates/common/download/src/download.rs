@@ -10,8 +10,10 @@ use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
 use reqwest::header;
+use reqwest::Identity;
 use serde::Deserialize;
 use serde::Serialize;
+use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io::Seek;
@@ -100,36 +102,33 @@ pub struct Downloader {
     target_filename: PathBuf,
     target_permission: PermissionEntry,
     backoff: ExponentialBackoff,
-}
-
-impl From<PathBuf> for Downloader {
-    fn from(path: PathBuf) -> Self {
-        Self {
-            target_filename: path,
-            target_permission: PermissionEntry::default(),
-            backoff: default_backoff(),
-        }
-    }
+    identity: Option<Identity>,
 }
 
 impl Downloader {
     /// Creates a new downloader which downloads to a target directory and uses
     /// default permissions.
-    pub fn new(target_path: PathBuf) -> Self {
+    pub fn new(target_path: PathBuf, identity: Option<Identity>) -> Self {
         Self {
             target_filename: target_path,
             target_permission: PermissionEntry::default(),
             backoff: default_backoff(),
+            identity,
         }
     }
 
     /// Creates a new downloader which downloads to a target directory and sets
     /// specified permissions the downloaded file.
-    pub fn with_permission(target_path: PathBuf, target_permission: PermissionEntry) -> Self {
+    pub fn with_permission(
+        target_path: PathBuf,
+        target_permission: PermissionEntry,
+        identity: Option<Identity>,
+    ) -> Self {
         Self {
             target_filename: target_path,
             target_permission,
             backoff: default_backoff(),
+            identity,
         }
     }
 
@@ -386,20 +385,26 @@ impl Downloader {
         let backoff = self.backoff.clone();
 
         let operation = || async {
-            let mut client = reqwest::Client::new().get(url.url());
+            let mut client = reqwest::Client::builder();
+            if let Some(identity) = &self.identity {
+                client = client.identity(identity.clone());
+            }
+            let mut request = client.build()?.get(url.url());
             if let Some(Auth::Bearer(token)) = &url.auth {
-                client = client.bearer_auth(token)
+                request = request.bearer_auth(token)
             }
 
             if range_start != 0 {
-                client = client.header("Range", format!("bytes={range_start}-"));
+                request = request.header("Range", format!("bytes={range_start}-"));
             }
 
-            client
+            request
                 .send()
                 .await
                 .map_err(|err| {
-                    if err.is_builder() || err.is_connect() {
+                    // rustls errors are caused by e.g. CertificateRequired
+                    // If this is the case, retrying won't help us
+                    if err.is_builder() || err.is_connect() || is_rustls(&err) {
                         backoff::Error::Permanent(err)
                     } else {
                         backoff::Error::transient(err)
@@ -476,6 +481,18 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
     Ok(())
 }
 
+fn is_rustls(err: &reqwest::Error) -> bool {
+    (|| {
+        err.source()?
+            .downcast_ref::<hyper::Error>()?
+            .source()?
+            .downcast_ref::<std::io::Error>()?
+            .get_ref()?
+            .downcast_ref::<rustls::Error>()
+    })()
+    .is_some()
+}
+
 #[cfg(test)]
 #[allow(deprecated)]
 mod tests {
@@ -508,7 +525,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let mut downloader = Downloader::new(target_path);
+        let mut downloader = Downloader::new(target_path, None);
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -538,7 +555,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path.clone());
+        let downloader = Downloader::new(target_path.clone(), None);
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_path).unwrap();
@@ -567,7 +584,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path);
+        let downloader = Downloader::new(target_path, None);
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(err, DownloadError::InsufficientSpace));
     }
@@ -590,7 +607,7 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         // empty filename
-        let downloader = Downloader::new("".into());
+        let downloader = Downloader::new("".into(), None);
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -599,7 +616,7 @@ mod tests {
 
         // invalid unicode filename
         let path = unsafe { String::from_utf8_unchecked(b"\xff".to_vec()) };
-        let downloader = Downloader::new(path.into());
+        let downloader = Downloader::new(path.into(), None);
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -607,7 +624,7 @@ mod tests {
         ));
 
         // relative path filename
-        let downloader = Downloader::new("myfile.txt".into());
+        let downloader = Downloader::new("myfile.txt".into(), None);
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -634,7 +651,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_file_path.clone());
+        let downloader = Downloader::new(target_file_path.clone(), None);
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_file_path).unwrap();
@@ -661,7 +678,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path);
+        let downloader = Downloader::new(target_path, None);
 
         downloader.download(&url).await.unwrap();
 
@@ -688,7 +705,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path);
+        let downloader = Downloader::new(target_path, None);
         downloader.download(&url).await.unwrap();
 
         let log_content = std::fs::read(downloader.filename()).unwrap();
@@ -709,7 +726,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path);
+        let downloader = Downloader::new(target_path, None);
         downloader.download(&url).await.unwrap();
 
         assert_eq!("".as_bytes(), std::fs::read(downloader.filename()).unwrap());
@@ -799,7 +816,7 @@ mod tests {
         let tmpdir = TempDir::new().unwrap();
         let target_path = tmpdir.path().join("partial_download");
 
-        let downloader = Downloader::new(target_path);
+        let downloader = Downloader::new(target_path, None);
         let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
 
         downloader.download(&url).await.unwrap();
@@ -907,7 +924,7 @@ mod tests {
         };
 
         let target_path = target_dir_path.path().join("test_download");
-        let mut downloader = Downloader::new(target_path);
+        let mut downloader = Downloader::new(target_path, None);
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()

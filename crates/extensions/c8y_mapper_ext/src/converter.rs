@@ -1565,6 +1565,7 @@ pub(crate) mod tests {
     use assert_matches::assert_matches;
     use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+    use c8y_auth_proxy::url::Protocol;
     use c8y_auth_proxy::url::ProxyUrlGenerator;
     use c8y_http_proxy::handle::C8YHttpProxy;
     use c8y_http_proxy::messages::C8YRestRequest;
@@ -3042,6 +3043,7 @@ pub(crate) mod tests {
         let mqtt_schema = MqttSchema::default();
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
+        let auth_proxy_protocol = Protocol::Http;
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
         topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
@@ -3062,6 +3064,7 @@ pub(crate) mod tests {
             Capabilities::default(),
             auth_proxy_addr,
             auth_proxy_port,
+            auth_proxy_protocol,
             MqttSchema::default(),
         )
     }
@@ -3081,7 +3084,7 @@ pub(crate) mod tests {
 
         let auth_proxy_addr = config.auth_proxy_addr.clone();
         let auth_proxy_port = config.auth_proxy_port;
-        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
+        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
 
         let uploader_builder: SimpleMessageBoxBuilder<IdUploadResult, IdUploadRequest> =
             SimpleMessageBoxBuilder::new("UL", 5);

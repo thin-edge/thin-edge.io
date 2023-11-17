@@ -175,6 +175,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         c8y_host: target_url.clone(),
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
+        identity: None,
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
     let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, jwt.build());
@@ -237,6 +238,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         c8y_host: target_url.clone(),
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
+        identity: None,
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
     let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
@@ -461,6 +463,7 @@ async fn spawn_c8y_http_proxy(
         c8y_host,
         device_id,
         tmp_dir,
+        identity: None,
     };
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
     let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);

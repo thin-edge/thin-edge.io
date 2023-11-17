@@ -12,6 +12,7 @@ use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
+use reqwest::Identity;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tedge_actors::ConvertingActor;
@@ -51,6 +52,7 @@ pub struct AgentConfig {
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,
+    pub tmp_dir: Utf8PathBuf,
     pub run_dir: Utf8PathBuf,
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
@@ -58,6 +60,7 @@ pub struct AgentConfig {
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
+    pub identity: Option<Identity>,
 }
 
 impl AgentConfig {
@@ -70,6 +73,7 @@ impl AgentConfig {
         let tedge_config = config_repository.load()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
+        let tmp_dir = tedge_config.tmp.path.clone();
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -112,12 +116,15 @@ impl AgentConfig {
         // For agent specific
         let log_dir = tedge_config.logs.path.join("tedge").join("agent");
 
+        let identity = tedge_config.http.client.auth.identity()?;
+
         Ok(Self {
             mqtt_config,
             http_config,
             restart_config,
             sw_update_config,
             config_dir,
+            tmp_dir,
             run_dir,
             use_lock,
             data_dir,
@@ -125,6 +132,7 @@ impl AgentConfig {
             mqtt_topic_root,
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
+            identity,
         })
     }
 }
@@ -218,7 +226,8 @@ impl Agent {
 
         if v1 {
             let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
-            let mut downloader_actor_builder = DownloaderActor::new().builder();
+            let mut downloader_actor_builder =
+                DownloaderActor::new(self.config.identity.clone()).builder();
             let mut uploader_actor_builder = UploaderActor::new().builder();
 
             // Instantiate config manager actor
@@ -239,6 +248,7 @@ impl Agent {
             // Instantiate log manager actor
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
+                tmp_dir: self.config.config_dir.clone().into(),
                 mqtt_schema,
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;

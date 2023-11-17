@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
 use logged_command::LoggedCommand;
+use reqwest::Identity;
 use serde::Deserialize;
 use std::error::Error;
 use std::path::Path;
@@ -58,8 +59,14 @@ pub trait Plugin {
                 let module_url = module.url.clone();
                 match module_url {
                     Some(url) => {
-                        self.install_from_url(&mut module, &url, logger, download_path)
-                            .await?
+                        self.install_from_url(
+                            &mut module,
+                            &url,
+                            logger,
+                            download_path,
+                            self.identity(),
+                        )
+                        .await?
                     }
                     None => self.install(&module, logger).await?,
                 }
@@ -69,6 +76,8 @@ pub trait Plugin {
             SoftwareModuleUpdate::Remove { module } => self.remove(&module, logger).await,
         }
     }
+
+    fn identity(&self) -> Option<&Identity>;
 
     async fn apply_all(
         &self,
@@ -93,7 +102,9 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(module, &url, logger, download_path).await {
+                match Self::download_from_url(module, &url, logger, download_path, self.identity())
+                    .await
+                {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
                         break;
@@ -139,8 +150,10 @@ pub trait Plugin {
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
         download_path: &Path,
+        identity: Option<&Identity>,
     ) -> Result<(), SoftwareError> {
-        let downloader = Self::download_from_url(module, url, logger, download_path).await?;
+        let downloader =
+            Self::download_from_url(module, url, logger, download_path, identity).await?;
         let result = self.install(module, logger).await;
         Self::cleanup_downloaded_artefacts(downloader, logger).await?;
 
@@ -152,9 +165,10 @@ pub trait Plugin {
         url: &DownloadInfo,
         logger: &mut BufWriter<File>,
         download_path: &Path,
+        identity: Option<&Identity>,
     ) -> Result<Downloader, SoftwareError> {
         let sm_path = sm_path(&module.name, &module.version, download_path);
-        let downloader = Downloader::new(sm_path);
+        let downloader = Downloader::new(sm_path, identity.map(|id| id.to_owned()));
 
         logger
             .write_all(
@@ -223,6 +237,7 @@ pub struct ExternalPluginCommand {
     pub path: PathBuf,
     pub sudo: Option<PathBuf>,
     pub max_packages: u32,
+    identity: Option<Identity>,
 }
 
 impl ExternalPluginCommand {
@@ -231,12 +246,14 @@ impl ExternalPluginCommand {
         path: impl Into<PathBuf>,
         sudo: Option<PathBuf>,
         max_packages: u32,
+        identity: Option<Identity>,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
             path: path.into(),
             sudo,
             max_packages,
+            identity,
         }
     }
 
@@ -497,6 +514,10 @@ impl Plugin for ExternalPluginCommand {
                 reason: self.content(output.stderr)?,
             })
         }
+    }
+
+    fn identity(&self) -> Option<&Identity> {
+        self.identity.as_ref()
     }
 }
 

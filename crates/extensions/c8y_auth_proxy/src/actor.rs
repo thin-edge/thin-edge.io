@@ -1,9 +1,14 @@
 use std::convert::Infallible;
 use std::net::IpAddr;
 
+use anyhow::anyhow;
+use anyhow::Context;
 use axum::async_trait;
+use axum_tls::load_cert;
+use axum_tls::load_pkey;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::credentials::JwtRetriever;
+use camino::Utf8PathBuf;
 use futures::channel::mpsc;
 use futures::StreamExt;
 use tedge_actors::Actor;
@@ -14,7 +19,8 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sequential;
 use tedge_actors::ServerActorBuilder;
-use tedge_config::ConfigNotSet;
+use tedge_config::ReadableKey::C8yProxyCertPath;
+use tedge_config::ReadableKey::C8yProxyKeyPath;
 use tedge_config::TEdgeConfig;
 use tracing::info;
 
@@ -23,6 +29,7 @@ use crate::server::Server;
 use crate::tokens::TokenManager;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+type CertKeyPair = (Vec<Vec<u8>>, Vec<u8>);
 
 pub struct C8yAuthProxyBuilder {
     app_state: AppState,
@@ -30,19 +37,23 @@ pub struct C8yAuthProxyBuilder {
     bind_port: u16,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    cert_and_private_key: Option<CertKeyPair>,
+    ca_path: Option<Utf8PathBuf>,
 }
 
 impl C8yAuthProxyBuilder {
     pub fn try_from_config(
         config: &TEdgeConfig,
         jwt: &mut ServerActorBuilder<C8YJwtRetriever, Sequential>,
-    ) -> Result<Self, ConfigNotSet> {
+    ) -> anyhow::Result<Self> {
         let app_state = AppState {
             target_host: format!("https://{}", config.c8y.http.or_config_not_set()?).into(),
             token_manager: TokenManager::new(JwtRetriever::new("C8Y-PROXY => JWT", jwt)).shared(),
         };
         let bind = &config.c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let cert_and_private_key = load_certificate_and_key(config)?;
+        let ca_path = config.c8y.proxy.ca_path.or_none().cloned();
 
         Ok(Self {
             app_state,
@@ -50,7 +61,29 @@ impl C8yAuthProxyBuilder {
             bind_port: bind.port,
             signal_sender,
             signal_receiver,
+            cert_and_private_key,
+            ca_path,
         })
+    }
+}
+
+fn load_certificate_and_key(config: &TEdgeConfig) -> anyhow::Result<Option<CertKeyPair>> {
+    let paths = tedge_config_macros::all_or_nothing((
+        config.c8y.proxy.cert_path.as_ref(),
+        config.c8y.proxy.key_path.as_ref(),
+    ))
+    .map_err(|e| anyhow!("{e}"))?;
+
+    if let Some((external_cert_file, external_key_file)) = paths {
+        Ok(Some((
+            load_cert(external_cert_file)
+                .with_context(|| format!("reading certificate configured in {C8yProxyCertPath}"))?,
+            load_pkey(external_key_file).with_context(|| {
+                format!("reading private key configured in `{C8yProxyKeyPath}`")
+            })?,
+        )))
+    } else {
+        Ok(None)
     }
 }
 
@@ -63,6 +96,8 @@ impl Builder<C8yAuthProxy> for C8yAuthProxyBuilder {
             bind_address: self.bind_address,
             bind_port: self.bind_port,
             signal_receiver: self.signal_receiver,
+            cert_and_private_key: self.cert_and_private_key,
+            ca_path: self.ca_path,
         })
     }
 }
@@ -78,6 +113,8 @@ pub struct C8yAuthProxy {
     bind_address: IpAddr,
     bind_port: u16,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
+    ca_path: Option<Utf8PathBuf>,
 }
 
 #[async_trait]
@@ -87,9 +124,15 @@ impl Actor for C8yAuthProxy {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let server = Server::try_init(self.app_state.clone(), self.bind_address, self.bind_port)
-            .map_err(BoxError::from)?
-            .wait();
+        let server = Server::try_init(
+            self.app_state,
+            self.bind_address,
+            self.bind_port,
+            self.cert_and_private_key,
+            self.ca_path.as_deref(),
+        )
+        .map_err(BoxError::from)?
+        .wait();
         tokio::select! {
             result = server => {
                 info!("Done");

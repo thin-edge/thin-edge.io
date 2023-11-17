@@ -1,4 +1,5 @@
 use crate::tokens::*;
+use anyhow::Context;
 use axum::body::Body;
 use axum::body::BoxBody;
 use axum::body::Full;
@@ -10,44 +11,58 @@ use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
-use axum::routing::IntoMakeService;
 use axum::Router;
+use axum_tls::start_tls_server;
+use camino::Utf8Path;
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use hyper::server::conn::AddrIncoming;
 use hyper::HeaderMap;
-use miette::Context;
-use miette::IntoDiagnostic;
 use reqwest::Method;
 use reqwest::StatusCode;
 use std::fmt;
+use std::future::Future;
+use std::io;
 use std::net::IpAddr;
+use std::net::TcpListener;
 use std::sync::Arc;
 use tracing::error;
 use tracing::info;
 
-type AxumServer = hyper::Server<AddrIncoming, IntoMakeService<Router>>;
-
 pub struct Server {
-    fut: BoxFuture<'static, hyper::Result<()>>,
+    fut: BoxFuture<'static, std::io::Result<()>>,
 }
 
 impl Server {
-    pub(crate) fn try_init(state: AppState, address: IpAddr, port: u16) -> miette::Result<Self> {
-        Ok(Server {
-            fut: try_run_server(address, port, state)?.boxed(),
-        })
+    pub(crate) fn try_init(
+        state: AppState,
+        address: IpAddr,
+        port: u16,
+        cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
+        ca_path: Option<&Utf8Path>,
+    ) -> anyhow::Result<Self> {
+        let app = create_app(state);
+        let root_certs = ca_path.map(axum_tls::read_trust_store).transpose()?;
+        let server_config = cert_and_private_key
+            .map(|(cert, key)| axum_tls::ssl_config(cert, key, root_certs))
+            .transpose()?;
+        let fut = if let Some(server_config) = server_config {
+            try_bind_with_tls(app, address, port, server_config)?.boxed()
+        } else {
+            try_bind_insecure(app, address, port)?.boxed()
+        };
+
+        Ok(Server { fut })
     }
 
-    pub fn wait(self) -> BoxFuture<'static, hyper::Result<()>> {
+    pub fn wait(self) -> BoxFuture<'static, std::io::Result<()>> {
         self.fut
     }
 }
 
-struct ProxyError(miette::Report);
+struct ProxyError(anyhow::Error);
 
-impl From<miette::Report> for ProxyError {
-    fn from(value: miette::Report) -> Self {
+impl From<anyhow::Error> for ProxyError {
+    fn from(value: anyhow::Error) -> Self {
         Self(value)
     }
 }
@@ -63,23 +78,41 @@ impl IntoResponse for ProxyError {
     }
 }
 
-fn try_run_server(address: IpAddr, port: u16, state: AppState) -> miette::Result<AxumServer> {
-    info!("Launching on port {port}");
+fn create_app(state: AppState) -> Router<(), hyper::Body> {
     let handle = get(respond_to)
         .post(respond_to)
         .put(respond_to)
         .patch(respond_to)
         .delete(respond_to)
         .options(respond_to);
-    let app = Router::new()
+    Router::new()
         .route("/c8y", handle.clone())
         .route("/c8y/", handle.clone())
         .route("/c8y/*path", handle)
-        .with_state(state);
-    Ok(axum::Server::try_bind(&(address, port).into())
-        .into_diagnostic()
-        .wrap_err_with(|| format!("binding to port {port}"))?
-        .serve(app.into_make_service()))
+        .with_state(state)
+}
+
+fn try_bind_insecure(
+    app: Router<(), hyper::Body>,
+    address: IpAddr,
+    port: u16,
+) -> anyhow::Result<impl Future<Output = io::Result<()>>> {
+    info!("Launching on port {port} with HTTP");
+    let listener =
+        TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
+    Ok(axum_server::from_tcp(listener).serve(app.into_make_service()))
+}
+
+fn try_bind_with_tls(
+    app: Router<(), hyper::Body>,
+    address: IpAddr,
+    port: u16,
+    server_config: rustls::ServerConfig,
+) -> anyhow::Result<impl Future<Output = io::Result<()>>> {
+    info!("Launching on port {port} with HTTPS");
+    let listener =
+        TcpListener::bind((address, port)).with_context(|| format!("binding to port {port}"))?;
+    Ok(start_tls_server(listener, server_config, app))
 }
 
 #[derive(Clone)]
@@ -151,8 +184,7 @@ async fn respond_to(
             .bearer_auth(&token)
             .send()
             .await
-            .into_diagnostic()
-            .wrap_err_with(|| format!("making HEAD request to {destination}"))?;
+            .with_context(|| format!("making HEAD request to {destination}"))?;
         if response.status() == StatusCode::UNAUTHORIZED {
             token = retrieve_token.not_matching(Some(&token)).await;
         }
@@ -170,16 +202,14 @@ async fn respond_to(
     };
     let mut res = send_request(body, &token)
         .await
-        .into_diagnostic()
-        .wrap_err_with(|| format!("making proxied request to {destination}"))?;
+        .with_context(|| format!("making proxied request to {destination}"))?;
 
     if res.status() == StatusCode::UNAUTHORIZED {
         token = retrieve_token.not_matching(Some(&token)).await;
         if let Some(body) = body_clone {
             res = send_request(Body::from(body), &token)
                 .await
-                .into_diagnostic()
-                .wrap_err_with(|| format!("making proxied request to {destination}"))?;
+                .with_context(|| format!("making proxied request to {destination}"))?;
         }
     }
     let te_header = res.headers_mut().remove("transfer-encoding");
@@ -192,10 +222,7 @@ async fn respond_to(
         axum::body::boxed(StreamBody::new(res.bytes_stream()))
     } else {
         axum::body::boxed(Full::new(
-            res.bytes()
-                .await
-                .into_diagnostic()
-                .wrap_err("reading proxy response bytes")?,
+            res.bytes().await.context("reading proxy response bytes")?,
         ))
     };
 
@@ -209,6 +236,9 @@ mod tests {
     use c8y_http_proxy::credentials::JwtRequest;
     use c8y_http_proxy::credentials::JwtResult;
     use c8y_http_proxy::credentials::JwtRetriever;
+    use camino::Utf8PathBuf;
+    use futures::future::ready;
+    use futures::stream::once;
     use std::borrow::Cow;
     use std::net::Ipv4Addr;
     use tedge_actors::Sequential;
@@ -230,7 +260,41 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/hello"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 204);
+    }
+
+    #[tokio::test]
+    async fn uses_configured_server_certificate() {
+        let _ = env_logger::try_init();
+
+        let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
+        let cert_der = certificate.serialize_der().unwrap();
+
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/hello")
+            .match_header("Authorization", "Bearer test-token")
+            .with_status(204)
+            .create();
+
+        let port = start_server_with_certificate(&server, vec!["test-token"], certificate, None);
+
+        let client = reqwest::Client::builder()
+            .add_root_certificate(reqwest::tls::Certificate::from_der(&cert_der).unwrap())
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 204);
@@ -247,7 +311,13 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/not-a-known-url"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/not-a-known-url"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 404);
@@ -257,9 +327,20 @@ mod tests {
     async fn responds_with_bad_gateway_on_connection_error() {
         let _ = env_logger::try_init();
 
-        let port = start_server_at_url(Arc::from("127.0.0.1:0"), vec!["test-token"]);
+        let port = start_proxy_to_url(
+            "127.0.0.1:0",
+            vec!["test-token"],
+            rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap(),
+            None,
+        );
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/not-a-known-url"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/not-a-known-url"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 502);
@@ -277,11 +358,17 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!(
-            "http://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
-        ))
-        .await
-        .unwrap();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!(
+                "https://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
+            ))
+            .send()
+            .await
+            .unwrap();
         assert_eq!(res.status(), 200);
     }
 
@@ -297,10 +384,13 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
         let res = client
             .get(format!(
-                "http://localhost:{port}/c8y/inventory/managedObjects"
+                "https://localhost:{port}/c8y/inventory/managedObjects"
             ))
             .basic_auth("test", Some("test"))
             .send()
@@ -328,10 +418,13 @@ mod tests {
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
         let body = "A body";
         let res = client
-            .put(format!("http://localhost:{port}/c8y/hello"))
+            .put(format!("https://localhost:{port}/c8y/hello"))
             .header("Content-Length", body.bytes().len())
             .body(body)
             .send()
@@ -361,13 +454,17 @@ mod tests {
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
         let body = "A body";
         let res = client
-            .put(format!("http://localhost:{port}/c8y/hello"))
-            .body(reqwest::Body::wrap_stream(futures::stream::once(
-                futures::future::ready(Ok::<_, std::convert::Infallible>(body)),
-            )))
+            .put(format!("https://localhost:{port}/c8y/hello"))
+            .body(reqwest::Body::wrap_stream(once(ready(Ok::<
+                _,
+                std::convert::Infallible,
+            >(body)))))
             .send()
             .await
             .unwrap();
@@ -396,7 +493,13 @@ mod tests {
 
         let port = start_server(&server, vec!["stale-token", "test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/hello"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 200);
@@ -404,28 +507,59 @@ mod tests {
     }
 
     fn start_server(server: &mockito::Server, tokens: Vec<impl Into<Cow<'static, str>>>) -> u16 {
-        start_server_at_url(server.url().into(), tokens)
+        start_server_with_certificate(
+            server,
+            tokens,
+            rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap(),
+            None,
+        )
     }
 
-    fn start_server_at_url(
-        target_host: Arc<str>,
+    fn start_server_with_certificate(
+        target_host: &mockito::Server,
         tokens: Vec<impl Into<Cow<'static, str>>>,
+        certificate: rcgen::Certificate,
+        ca_dir: Option<Utf8PathBuf>,
+    ) -> u16 {
+        start_proxy_to_url(&target_host.url(), tokens, certificate, ca_dir)
+    }
+
+    fn start_proxy_to_url(
+        target_host: &str,
+        tokens: Vec<impl Into<Cow<'static, str>>>,
+        certificate: rcgen::Certificate,
+        ca_dir: Option<Utf8PathBuf>,
     ) -> u16 {
         let mut retriever = IterJwtRetriever::builder(tokens);
+        let mut last_error = None;
         for port in 3000..3100 {
             let state = AppState {
-                target_host: target_host.clone(),
+                target_host: target_host.into(),
                 token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
                     .shared(),
             };
-            if let Ok(server) = try_run_server(Ipv4Addr::LOCALHOST.into(), port, state) {
-                tokio::spawn(server);
-                tokio::spawn(retriever.run());
-                return port;
+            let trust_store = ca_dir
+                .as_ref()
+                .map(|dir| axum_tls::read_trust_store(dir).unwrap());
+            let config = axum_tls::ssl_config(
+                vec![certificate.serialize_der().unwrap()],
+                certificate.serialize_private_key_der(),
+                trust_store,
+            )
+            .unwrap();
+            let app = create_app(state);
+            let res = try_bind_with_tls(app, Ipv4Addr::LOCALHOST.into(), port, config);
+            match res {
+                Ok(server) => {
+                    tokio::spawn(server);
+                    tokio::spawn(retriever.run());
+                    return port;
+                }
+                Err(e) => last_error = Some(e),
             }
         }
 
-        panic!("Failed to bind to any port");
+        panic!("Failed to bind to any port: {}", last_error.unwrap());
     }
 
     /// A JwtRetriever that returns a sequence of JWT tokens

@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
 
     // Create downloader instance with desired file path and target directory.
     #[allow(deprecated)]
-    let downloader = Downloader::new("/tmp/test_download".into());
+    let downloader = Downloader::new("/tmp/test_download".into(), None);
 
     // Call `download` method to get data from url.
     downloader.download(&url_data).await?;

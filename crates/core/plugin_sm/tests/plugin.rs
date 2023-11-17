@@ -239,6 +239,7 @@ mod tests {
             &dummy_plugin_path,
             None,
             config.software.plugin.max_packages,
+            config.http.client.auth.identity()?,
         );
         assert_eq!(plugin.name, "test");
         assert_eq!(plugin.path, dummy_plugin_path);
@@ -251,7 +252,7 @@ mod tests {
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100, None);
 
         let module = SoftwareModule {
             module_type: Some("test".into()),
@@ -275,7 +276,7 @@ mod tests {
         let dummy_plugin_path = get_dummy_plugin_path();
 
         // Create new plugin in the registry with name `test`.
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100, None);
 
         // Create test module with name `test2`.
         let module = SoftwareModule {
@@ -305,7 +306,7 @@ mod tests {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100, None);
 
         // Create software module without an explicit type.
         let module = SoftwareModule {
@@ -423,12 +424,7 @@ mod tests {
 
     fn get_dummy_plugin(name: &str) -> (ExternalPluginCommand, PathBuf) {
         let dummy_plugin_path = get_dummy_plugin_path();
-        let plugin = ExternalPluginCommand {
-            name: name.into(),
-            path: dummy_plugin_path.clone(),
-            sudo: None,
-            max_packages: 100,
-        };
+        let plugin = ExternalPluginCommand::new(name, &dummy_plugin_path, None, 100, None);
         (plugin, dummy_plugin_path)
     }
 
