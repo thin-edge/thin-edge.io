@@ -44,13 +44,6 @@ impl CumulocityConverter {
         &self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        if !self.config.capabilities.firmware_update {
-            warn!(
-                "Received a c8y_Firmware operation, however, firmware_update feature is disabled"
-            );
-            return Ok(vec![]);
-        }
-
         let firmware_request = SmartRestFirmwareRequest::from_smartrest(smartrest)?;
 
         let target = self
