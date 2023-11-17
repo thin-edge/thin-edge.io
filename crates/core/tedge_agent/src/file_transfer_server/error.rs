@@ -28,17 +28,15 @@ pub enum FileTransferRequestError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
-    #[error("Request to delete {path:?} failed: {err}")]
+    #[error("Request to delete {path:?} failed: {source}")]
     DeleteIoError {
-        #[source]
-        err: std::io::Error,
+        source: std::io::Error,
         path: RequestPath,
     },
 
-    #[error("Request to upload to {path:?} failed: {err:?}")]
+    #[error("Request to upload to {path:?} failed: {source:?}")]
     Upload {
-        #[source]
-        err: anyhow::Error,
+        source: anyhow::Error,
         path: RequestPath,
     },
 
@@ -58,50 +56,42 @@ impl From<FileTransferError> for RuntimeError {
     }
 }
 
-impl IntoResponse for FileTransferError {
-    fn into_response(self) -> axum::response::Response {
-        use FileTransferError::*;
-        let status_code = match self {
-            FromIo(_)
-            | FromHyperError(_)
-            | FromAddressParseError(_)
-            | FromUtf8Error(_)
-            | BindingAddressInUse { .. } => {
-                tracing::error!("{self}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-        };
-        status_code.into_response()
-    }
-}
-
 impl IntoResponse for FileTransferRequestError {
     fn into_response(self) -> axum::response::Response {
         use FileTransferRequestError::*;
-        match &self {
-            FromIo(_) | PathRejection(_) => {
-                tracing::error!("{self}");
+        let error_message = self.to_string();
+        match self {
+            PathRejection(err) => {
+                tracing::error!("{error_message}");
+                err.into_response()
+            }
+            FromIo(_) => {
+                tracing::error!("{error_message}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal error".to_owned(),
                 )
+                    .into_response()
             }
             DeleteIoError { path, .. } => {
-                tracing::error!("{self}");
+                tracing::error!("{error_message}");
                 (
                     StatusCode::FORBIDDEN,
                     format!("Cannot delete path {path:?}"),
                 )
+                    .into_response()
             }
             Upload { path, .. } => {
-                tracing::error!("{self}");
+                tracing::error!("{error_message}");
                 (
                     StatusCode::FORBIDDEN,
                     format!("Cannot upload to path {path:?}"),
                 )
+                    .into_response()
             }
-            InvalidPath { .. } | FileNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
+            InvalidPath { .. } | FileNotFound(_) => {
+                (StatusCode::NOT_FOUND, self.to_string()).into_response()
+            }
         }
-        .into_response()
     }
 }

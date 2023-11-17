@@ -26,7 +26,7 @@ use tokio::io::BufReader;
 use tokio_util::io::ReaderStream;
 
 use super::error::FileTransferRequestError as Error;
-use super::request_files::FileTransferPaths;
+use super::request_files::FileTransferPath;
 
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 
@@ -75,13 +75,13 @@ fn separate_path_and_file_name(input: &Utf8Path) -> Option<(&Utf8Path, &str)> {
 }
 
 async fn upload_file(
-    paths: FileTransferPaths,
+    paths: FileTransferPath,
     mut request: Request<Body>,
 ) -> Result<StatusCode, Error> {
     if let Some((directory, file_name)) = separate_path_and_file_name(&paths.full) {
         if let Err(err) = create_directories(directory) {
             return Err(Error::Upload {
-                err: err.into(),
+                source: err.into(),
                 path: paths.request,
             });
         }
@@ -91,7 +91,7 @@ async fn upload_file(
         match stream_request_body_to_path(&full_path, request.body_mut()).await {
             Ok(()) => Ok(StatusCode::CREATED),
             Err(err) => Err(Error::Upload {
-                err,
+                source: err,
                 path: paths.request,
             }),
         }
@@ -103,7 +103,7 @@ async fn upload_file(
 }
 
 async fn download_file(
-    paths: FileTransferPaths,
+    paths: FileTransferPath,
 ) -> Result<StreamBody<ReaderStream<BufReader<File>>>, Error> {
     let reader: Result<_, io::Error> = async {
         let mut buf_reader = BufReader::new(File::open(paths.full).await?);
@@ -135,12 +135,13 @@ fn err_is_is_a_directory(e: &std::io::Error) -> bool {
     e.kind().to_string() == "is a directory"
 }
 
-async fn delete_file(req: FileTransferPaths) -> Result<StatusCode, Error> {
+async fn delete_file(req: FileTransferPath) -> Result<StatusCode, Error> {
     match tokio::fs::remove_file(&req.full).await {
         Ok(()) => Ok(StatusCode::ACCEPTED),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
+        Err(e) if err_is_is_a_directory(&e) => Ok(StatusCode::NOT_FOUND),
         Err(err) => Err(Error::DeleteIoError {
-            err,
+            source: err,
             path: req.request,
         }),
     }

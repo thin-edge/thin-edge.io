@@ -12,7 +12,7 @@ use super::error::FileTransferRequestError;
 use super::http_rest::HttpConfig;
 
 /// The paths inferred from a request to the File Transfer Service
-pub struct FileTransferPaths {
+pub struct FileTransferPath {
     /// The full path, i.e. the absolute path on disk the request corresponds to
     pub full: Utf8PathBuf,
     /// The requested path, used to generate error messages, keeping the absolute path encapsulated
@@ -45,7 +45,7 @@ impl fmt::Debug for RequestPath {
 }
 
 #[async_trait::async_trait]
-impl FromRequestParts<Arc<HttpConfig>> for FileTransferPaths {
+impl FromRequestParts<Arc<HttpConfig>> for FileTransferPath {
     type Rejection = FileTransferRequestError;
 
     async fn from_request_parts(
@@ -64,13 +64,13 @@ impl FromRequestParts<Arc<HttpConfig>> for FileTransferPaths {
 fn local_path_for_file(
     request_path: RequestPath,
     config: &HttpConfig,
-) -> Result<FileTransferPaths, FileTransferRequestError> {
+) -> Result<FileTransferPath, FileTransferRequestError> {
     let full_path = config.file_transfer_dir.join(&request_path);
 
     let clean_path = clean_utf8_path(&full_path);
 
     if clean_path.starts_with(&config.file_transfer_dir) {
-        Ok(FileTransferPaths {
+        Ok(FileTransferPath {
             full: clean_path,
             request: request_path,
         })

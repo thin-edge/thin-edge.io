@@ -147,21 +147,17 @@ mod tests {
     async fn check_server_does_not_panic_when_port_is_in_use() -> anyhow::Result<()> {
         let ttd = TempTedgeDir::new();
 
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port_in_use = listener.local_addr().unwrap().port();
+
         let http_config = HttpConfig::default()
             .with_data_dir(ttd.utf8_path_buf().into())
-            .with_port(3746);
-        let config_clone = http_config.clone();
+            .with_port(port_in_use);
 
-        // Both servers will attempt to bind to port 3746.
-        let server_one = FileTransferServerBuilder::new(http_config).build().run();
-        // This server will not be able to bind to the same port.
-        let server_two = FileTransferServerBuilder::new(config_clone).build().run();
+        let server = FileTransferServerBuilder::new(http_config).build().run();
 
         tokio::select! {
-            // Ensure we bind server_one first by polling that future first
-            biased;
-            res = server_one => bail!("expected second server to finish first, but first finished with: {res:?}"),
-            res = server_two => ensure!(res.is_err(), "expected server two to fail with port binding error, but no error was found"),
+            res = server => ensure!(res.is_err(), "expected server to fail with port binding error, but no error was found"),
             _ = tokio::time::sleep(Duration::from_secs(5)) => bail!("timed out waiting for actor to stop running"),
         }
 
