@@ -1,3 +1,5 @@
+use super::config::FileEntry;
+use super::error::LogRetrievalError;
 use easy_reader::EasyReader;
 use glob::glob;
 use std::collections::VecDeque;
@@ -5,12 +7,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_utils::file::FileError;
-use tedge_utils::paths::PathsError;
 use time::OffsetDateTime;
-
-use super::config::FileEntry;
-use super::error::LogRetrievalError;
 
 /// read any log file coming from `obj.log.log_type`
 pub fn new_read_logs(
@@ -19,12 +16,13 @@ pub fn new_read_logs(
     date_from: OffsetDateTime,
     lines: usize,
     search_text: &Option<String>,
+    tmp_dir: &Path,
 ) -> Result<PathBuf, LogRetrievalError> {
     // first filter logs on type
     let mut logfiles_to_read = filter_logs_on_type(files, log_type)?;
     logfiles_to_read = filter_logs_path_on_metadata(log_type, date_from, logfiles_to_read)?;
 
-    let temp_path = temp_file_at(logfiles_to_read.first().unwrap())?; //safe because filters return error on empty vector
+    let temp_path = tmp_dir.join(format!("{log_type}-{}", rand::random::<u128>()));
     let mut temp_file = File::create(&temp_path)?;
 
     let mut line_counter = 0usize;
@@ -157,26 +155,6 @@ pub fn filter_logs_path_on_metadata(
     } else {
         Ok(out)
     }
-}
-
-fn temp_file_at(path: &Path) -> Result<PathBuf, LogRetrievalError> {
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| FileError::InvalidName {
-            path: path.to_path_buf(),
-        })?
-        .to_str()
-        .ok_or_else(|| FileError::InvalidUnicode {
-            path: path.to_path_buf(),
-        })?;
-
-    let parent_path = path.parent().ok_or_else(|| PathsError::ParentDirNotFound {
-        path: path.as_os_str().into(),
-    })?;
-
-    let temp_file_path = parent_path.join(format!("{file_name}.tmp"));
-
-    Ok(temp_file_path)
 }
 
 #[cfg(test)]
@@ -383,11 +361,13 @@ mod tests {
             datetime!(1970-01-01 00:00:03 +00:00),
             7,
             &None,
+            tempdir.path(),
         )
         .unwrap();
 
-        let result = std::fs::read_to_string(temp_path).unwrap();
+        assert_eq!(temp_path.parent().unwrap(), tempdir.path());
 
+        let result = std::fs::read_to_string(temp_path).unwrap();
         assert_eq!(result, String::from("filename: file_d\nthis is the first line of file_d.\nthis is the second line of file_d.\nthis is the third line of file_d.\nthis is the forth line of file_d.\nthis is the fifth line of file_d.\nfilename: file_b\nthis is the forth line of file_b.\nthis is the fifth line of file_b.\n"))
     }
 }

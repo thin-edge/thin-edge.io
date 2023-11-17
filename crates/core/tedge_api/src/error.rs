@@ -15,7 +15,7 @@ pub enum TopicError {
 
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub enum SoftwareError {
-    #[error("DownloadError error: {reason:?} for {url:?}")]
+    #[error("DownloadError error: {reason:?} for {url:?}\n\nCaused by: {source_err}")]
     DownloadError {
         reason: String,
         url: String,

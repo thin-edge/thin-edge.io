@@ -11,6 +11,7 @@ pub use self::tedge_config_cli::tedge_config_repository::*;
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;
+pub use tedge_config_macros::all_or_nothing;
 
 /// loads the new tedge config from system default
 pub fn get_new_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {

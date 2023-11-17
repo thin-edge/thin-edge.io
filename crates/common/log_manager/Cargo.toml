@@ -12,6 +12,7 @@ repository = { workspace = true }
 easy_reader = { workspace = true }
 glob = { workspace = true }
 log = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }

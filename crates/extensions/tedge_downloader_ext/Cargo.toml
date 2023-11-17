@@ -13,6 +13,7 @@ repository = { workspace = true }
 async-trait = { workspace = true }
 download = { workspace = true }
 log = { workspace = true }
+reqwest = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_utils = { workspace = true }
 

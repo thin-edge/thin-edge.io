@@ -9,12 +9,14 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 camino = { workspace = true, features = ["serde", "serde1"] }
 certificate = { workspace = true }
 doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
 mqtt_channel = { workspace = true }
 once_cell = { workspace = true }
+reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 serde = { workspace = true, features = ["rc"] }
 serde_ignored = { workspace = true }
 strum_macros = { workspace = true }
@@ -27,7 +29,6 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 assert_matches = { workspace = true }
 figment = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }

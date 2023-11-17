@@ -122,6 +122,7 @@ impl LogManagerActor {
             smartrest_request.date_from,
             smartrest_request.lines,
             &smartrest_request.search_text,
+            &self.config.tmp_dir,
         )?;
 
         let log_content = std::fs::read_to_string(&log_path)?;

@@ -6,12 +6,15 @@ use crate::TEdgeConfigLocation;
 use crate::TemplatesSet;
 use crate::HTTPS_PORT;
 use crate::MQTT_TLS_PORT;
+use anyhow::anyhow;
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
 use doku::Document;
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
+use std::io::Read;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
@@ -409,7 +412,23 @@ define_tedge_config! {
                 /// Cumulocity mapper.
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
-            }
+            },
+
+            /// The file that will be used as a the server certificate for the Cumulocity proxy
+            #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_certificate.pem")]
+            #[doku(as = "PathBuf")]
+            cert_path: Utf8PathBuf,
+
+            /// The file that will be used as a the server private key for the Cumulocity proxy
+            #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_key.pem")]
+            #[doku(as = "PathBuf")]
+            key_path: Utf8PathBuf,
+
+            /// Path to a file containing the PEM encoded CA certificates that are
+            /// trusted when checking incoming client certificates for the Cumulocity Proxy
+            #[tedge_config(example = "/etc/ssl/certs")]
+            #[doku(as = "PathBuf")]
+            ca_path: Utf8PathBuf,
         },
 
         bridge: {
@@ -592,6 +611,18 @@ define_tedge_config! {
             #[tedge_config(default(value = "127.0.0.1"))]
             #[tedge_config(example = "127.0.0.1", example = "192.168.1.2", example = "tedge-hostname")]
             host: Arc<str>,
+
+            auth: {
+                /// Path to the certificate which is used by the agent when connecting to external services
+                #[doku(as = "PathBuf")]
+                #[tedge_config(reader(private))]
+                cert_file: Utf8PathBuf,
+
+                /// Path to the private key which is used by the agent when connecting to external services
+                #[doku(as = "PathBuf")]
+                #[tedge_config(reader(private))]
+                key_file: Utf8PathBuf,
+            }
         }
     },
 
@@ -795,6 +826,33 @@ pub struct MqttAuthConfig {
 pub struct MqttAuthClientConfig {
     pub cert_file: Utf8PathBuf,
     pub key_file: Utf8PathBuf,
+}
+
+impl TEdgeConfigReaderHttpClientAuth {
+    pub fn identity(&self) -> anyhow::Result<Option<reqwest::Identity>> {
+        use ReadableKey::*;
+
+        let client_cert_key =
+            crate::all_or_nothing((self.cert_file.as_ref(), self.key_file.as_ref()))
+                .map_err(|e| anyhow!("{e}"))?;
+
+        Ok(match client_cert_key {
+            Some((cert, key)) => {
+                let mut pem = std::fs::read(key).with_context(|| {
+                    format!("reading private key (from {HttpClientAuthKeyFile}): {key}")
+                })?;
+                let mut cert_file = std::fs::File::open(cert).with_context(|| {
+                    format!("opening certificate (from {HttpClientAuthCertFile}): {cert}")
+                })?;
+                cert_file.read_to_end(&mut pem).with_context(|| {
+                    format!("reading certificate (from {HttpClientAuthCertFile}): {cert}")
+                })?;
+
+                Some(reqwest::Identity::from_pem(&pem)?)
+            }
+            None => None,
+        })
+    }
 }
 
 #[cfg(test)]

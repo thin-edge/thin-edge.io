@@ -4,6 +4,7 @@ use crate::credentials::JwtResult;
 use crate::credentials::JwtRetriever;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
+use reqwest::Identity;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use tedge_actors::Builder;
@@ -34,6 +35,7 @@ pub struct C8YHttpConfig {
     pub c8y_host: String,
     pub device_id: String,
     pub tmp_dir: PathBuf,
+    identity: Option<Identity>,
 }
 
 impl TryFrom<&NewTEdgeConfig> for C8YHttpConfig {
@@ -43,11 +45,13 @@ impl TryFrom<&NewTEdgeConfig> for C8YHttpConfig {
         let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
+        let identity = tedge_config.http.client.auth.identity()?;
 
         Ok(Self {
             c8y_host,
             device_id,
             tmp_dir,
+            identity,
         })
     }
 }
@@ -60,6 +64,9 @@ pub enum C8yHttpConfigBuildError {
 
     #[error(transparent)]
     FromConfigNotSet(#[from] ConfigNotSet),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 /// A proxy to C8Y REST API

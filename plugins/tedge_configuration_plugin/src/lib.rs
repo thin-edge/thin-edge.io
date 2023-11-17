@@ -123,8 +123,9 @@ async fn run_with(
         &mqtt_schema,
         tedge_config.service.ty.clone(),
     );
+    let identity = tedge_config.http.client.auth.identity()?;
 
-    let mut downloader_actor = DownloaderActor::new().builder();
+    let mut downloader_actor = DownloaderActor::new(identity).builder();
 
     let mut uploader_actor = UploaderActor::new().builder();
 
