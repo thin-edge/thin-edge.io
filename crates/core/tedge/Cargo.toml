@@ -47,6 +47,7 @@ tedge-mapper = { workspace = true }
 tedge-watchdog = { workspace = true }
 tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
+tedge-write = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }

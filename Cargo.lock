@@ -3617,6 +3617,7 @@ dependencies = [
  "tedge-log-plugin",
  "tedge-mapper",
  "tedge-watchdog",
+ "tedge-write",
  "tedge_config",
  "tedge_utils",
  "tempfile",
@@ -3797,6 +3798,17 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "tedge-write"
+version = "0.13.1"
+dependencies = [
+ "anyhow",
+ "camino",
+ "clap",
+ "nix",
+ "uzers",
 ]
 
 [[package]]
