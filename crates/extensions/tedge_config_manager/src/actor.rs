@@ -322,7 +322,12 @@ impl ConfigManagerActor {
         let path = match event {
             FsWatchEvent::Modified(path) => path,
             FsWatchEvent::FileDeleted(path) => path,
-            FsWatchEvent::FileCreated(path) => path,
+            // Creating new files and file moves and copies also emits `FsWatchEvent::Modified`
+            // _most_ of the time, so we don't have to listen to `FileCreated`, if we did we'd have
+            // duplicates.
+            //
+            // https://github.com/thin-edge/thin-edge.io/pull/2454#discussion_r1394358034
+            FsWatchEvent::FileCreated(_) => return Ok(()),
             FsWatchEvent::DirectoryDeleted(_) => return Ok(()),
             FsWatchEvent::DirectoryCreated(_) => return Ok(()),
         };
