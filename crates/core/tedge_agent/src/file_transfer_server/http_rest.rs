@@ -13,11 +13,9 @@ use hyper::Request;
 use hyper::Server;
 use hyper::StatusCode;
 use std::io::ErrorKind;
-use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tedge_actors::futures::StreamExt;
-use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
 use tokio::fs::File;
 use tokio::io;
@@ -30,46 +28,11 @@ use super::error::FileTransferRequestError as Error;
 use super::request_files::FileTransferPath;
 use super::request_files::RequestPath;
 
-const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
-
 #[derive(Debug, Clone)]
-pub struct HttpConfig {
+pub(crate) struct HttpConfig {
     pub bind_address: SocketAddr,
     pub file_transfer_dir: Utf8PathBuf,
-}
-
-impl Default for HttpConfig {
-    fn default() -> Self {
-        HttpConfig {
-            bind_address: ([127, 0, 0, 1], HTTP_FILE_TRANSFER_PORT).into(),
-            file_transfer_dir: DataDir::default().file_transfer_dir(),
-        }
-    }
-}
-
-impl HttpConfig {
-    pub fn with_ip_address(self, ip_address: IpAddr) -> HttpConfig {
-        Self {
-            bind_address: SocketAddr::new(ip_address, self.bind_address.port()),
-            ..self
-        }
-    }
-
-    pub fn with_data_dir(self, data_dir: DataDir) -> HttpConfig {
-        Self {
-            file_transfer_dir: data_dir.file_transfer_dir(),
-            ..self
-        }
-    }
-
-    pub fn with_port(self, port: u16) -> HttpConfig {
-        let mut bind_address = self.bind_address;
-        bind_address.set_port(port);
-        Self {
-            bind_address,
-            ..self
-        }
-    }
+    pub certificates: Option<(Vec<Vec<u8>>, Vec<u8>)>,
 }
 
 async fn upload_file(
@@ -175,7 +138,7 @@ async fn stream_request_body_to_path(
     Ok(())
 }
 
-pub fn http_file_transfer_server(
+pub(crate) fn http_file_transfer_server(
     config: HttpConfig,
 ) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError> {
     let bind_address = config.bind_address;
@@ -206,6 +169,7 @@ mod tests {
     use http_body::combinators::UnsyncBoxBody;
     use hyper::Method;
     use hyper::StatusCode;
+    use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
     use test_case::test_matrix;
@@ -431,10 +395,11 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let tempdir_path = ttd.utf8_path_buf();
-        let http_config = HttpConfig::default()
-            .with_data_dir(tempdir_path.into())
-            .with_port(3333);
+        let http_config = HttpConfig {
+            file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
+            bind_address: SocketAddr::from(([127, 0, 0, 1], 3333)),
+            certificates: None,
+        };
         let router = http_file_transfer_router(http_config);
         (ttd, router)
     }

@@ -49,7 +49,7 @@ pub struct FileTransferServerBuilder {
 }
 
 impl FileTransferServerBuilder {
-    pub fn new(config: HttpConfig) -> Self {
+    pub(crate) fn new(config: HttpConfig) -> Self {
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         Self {
             config,
@@ -88,7 +88,9 @@ mod tests {
     use hyper::Body;
     use hyper::Method;
     use hyper::Request;
+    use std::net::SocketAddr;
     use std::time::Duration;
+    use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
 
@@ -97,9 +99,8 @@ mod tests {
         let test_url = "http://127.0.0.1:4000/tedge/file-transfer/test-file";
         let ttd = TempTedgeDir::new();
 
-        let http_config = HttpConfig::default()
-            .with_data_dir(ttd.utf8_path_buf().into())
-            .with_port(4000);
+        // TODO make this port dynamic
+        let http_config = http_config(&ttd, 4000);
 
         // Spawn HTTP file transfer server
         let builder = FileTransferServerBuilder::new(http_config);
@@ -150,9 +151,7 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port_in_use = listener.local_addr().unwrap().port();
 
-        let http_config = HttpConfig::default()
-            .with_data_dir(ttd.utf8_path_buf().into())
-            .with_port(port_in_use);
+        let http_config = http_config(&ttd, port_in_use);
 
         let server = FileTransferServerBuilder::new(http_config).build().run();
 
@@ -162,5 +161,13 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    fn http_config(ttd: &TempTedgeDir, port: u16) -> HttpConfig {
+        HttpConfig {
+            file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
+            bind_address: SocketAddr::from(([127, 0, 0, 1], port)),
+            certificates: None,
+        }
     }
 }
