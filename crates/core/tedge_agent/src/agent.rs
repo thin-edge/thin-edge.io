@@ -206,7 +206,7 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn start(&mut self, v1: bool) -> Result<(), anyhow::Error> {
+    pub async fn start(self, v1: bool) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
         self.init()?;
 
@@ -217,20 +217,18 @@ impl Agent {
         // File transfer server actor
         let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
             self.config.http_socket_addr,
-            self.config.http_config.clone(),
+            self.config.http_config,
         )
         .await?;
 
         // Restart actor
-        let mut restart_actor_builder =
-            RestartManagerBuilder::new(self.config.restart_config.clone());
+        let mut restart_actor_builder = RestartManagerBuilder::new(self.config.restart_config);
 
         // Mqtt actor
         let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
 
         // Software update actor
-        let mut software_update_builder =
-            SoftwareManagerBuilder::new(self.config.sw_update_config.clone());
+        let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
         // Converter actor
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
@@ -287,7 +285,7 @@ impl Agent {
             // Instantiate log manager actor
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
-                tmp_dir: self.config.config_dir.clone().into(),
+                tmp_dir: self.config.config_dir.into(),
                 mqtt_schema,
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;
