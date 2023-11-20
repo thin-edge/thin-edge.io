@@ -13,7 +13,6 @@ use hyper::Request;
 use hyper::Server;
 use hyper::StatusCode;
 use std::io::ErrorKind;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tedge_actors::futures::StreamExt;
 use tedge_utils::paths::create_directories;
@@ -22,6 +21,7 @@ use tokio::io;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::net::TcpListener;
 use tokio_util::io::ReaderStream;
 
 use super::error::FileTransferRequestError as Error;
@@ -30,7 +30,6 @@ use super::request_files::RequestPath;
 
 #[derive(Debug, Clone)]
 pub(crate) struct HttpConfig {
-    pub bind_address: SocketAddr,
     pub file_transfer_dir: Utf8PathBuf,
     pub certificates: Option<(Vec<Vec<u8>>, Vec<u8>)>,
 }
@@ -139,17 +138,14 @@ async fn stream_request_body_to_path(
 }
 
 pub(crate) fn http_file_transfer_server(
+    listener: TcpListener,
     config: HttpConfig,
 ) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError> {
-    let bind_address = config.bind_address;
     let router = http_file_transfer_router(config);
-    let server_builder = Server::try_bind(&bind_address);
-    match server_builder {
-        Ok(server) => Ok(server.serve(router.into_make_service())),
-        Err(_err) => Err(FileTransferError::BindingAddressInUse {
-            address: bind_address,
-        }),
-    }
+    Ok(AddrIncoming::from_listener(listener)
+        .map(Server::builder)
+        .context("creating server from tcp listener")?
+        .serve(router.into_make_service()))
 }
 
 fn http_file_transfer_router(config: HttpConfig) -> Router {
@@ -397,7 +393,6 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let http_config = HttpConfig {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
-            bind_address: SocketAddr::from(([127, 0, 0, 1], 3333)),
             certificates: None,
         };
         let router = http_file_transfer_router(http_config);

@@ -21,6 +21,9 @@ pub enum FileTransferError {
 
     #[error("Could not bind to address: {address}. Address already in use.")]
     BindingAddressInUse { address: std::net::SocketAddr },
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 #[derive(Debug, thiserror::Error)]

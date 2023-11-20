@@ -1,8 +1,10 @@
 use crate::file_transfer_server::error::FileTransferError;
 use crate::file_transfer_server::http_rest::http_file_transfer_server;
 use crate::file_transfer_server::http_rest::HttpConfig;
+use anyhow::Context;
 use async_trait::async_trait;
 use std::convert::Infallible;
+use std::net::SocketAddr;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
@@ -11,11 +13,13 @@ use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tokio::net::TcpListener;
 use tracing::log::info;
 
 pub struct FileTransferServerActor {
     config: HttpConfig,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    listener: TcpListener,
 }
 
 /// HTTP file transfer server is stand-alone.
@@ -26,8 +30,7 @@ impl Actor for FileTransferServerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let http_config = self.config.clone();
-        let server = http_file_transfer_server(http_config)?;
+        let server = http_file_transfer_server(self.listener, self.config)?;
 
         tokio::select! {
             result = server => {
@@ -46,16 +49,29 @@ pub struct FileTransferServerBuilder {
     config: HttpConfig,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    listener: TcpListener,
 }
 
 impl FileTransferServerBuilder {
-    pub(crate) fn new(config: HttpConfig) -> Self {
+    pub(crate) async fn try_bind(
+        config: HttpConfig,
+        socket_addr: impl Into<SocketAddr>,
+    ) -> Result<Self, anyhow::Error> {
+        let addr = socket_addr.into();
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .with_context(|| format!("Binding file-transfer server to {addr}"))?;
+        Self::new(config, listener)
+    }
+
+    pub(crate) fn new(config: HttpConfig, listener: TcpListener) -> Result<Self, anyhow::Error> {
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        Self {
+        Ok(Self {
             config,
             signal_sender,
             signal_receiver,
-        }
+            listener,
+        })
     }
 }
 
@@ -76,6 +92,7 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
         FileTransferServerActor {
             config: self.config,
             signal_receiver: self.signal_receiver,
+            listener: self.listener,
         }
     }
 }
@@ -83,44 +100,26 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::bail;
     use anyhow::ensure;
-    use hyper::Body;
-    use hyper::Method;
-    use hyper::Request;
-    use std::net::SocketAddr;
-    use std::time::Duration;
     use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
 
     #[tokio::test]
     async fn http_server_put_and_get() {
-        let test_url = "http://127.0.0.1:4000/tedge/file-transfer/test-file";
         let ttd = TempTedgeDir::new();
-
-        // TODO make this port dynamic
-        let http_config = http_config(&ttd, 4000);
+        let (listener, port) = create_listener().await;
+        let test_url = format!("http://127.0.0.1:{port}/tedge/file-transfer/test-file");
 
         // Spawn HTTP file transfer server
-        let builder = FileTransferServerBuilder::new(http_config);
+        let builder = FileTransferServerBuilder::new(http_config(&ttd), listener).unwrap();
         let actor = builder.build();
         tokio::spawn(async move { actor.run().await });
 
-        // Create PUT request to file transfer service
-        let put_handler = tokio::spawn(async move {
-            let client = hyper::Client::new();
+        let client = reqwest::Client::new();
 
-            let req = Request::builder()
-                .method(Method::PUT)
-                .uri(test_url)
-                .body(Body::from(String::from("file")))
-                .expect("request builder");
-            client.request(req).await.unwrap()
-        });
-
-        let put_response = put_handler.await.unwrap();
-        assert_eq!(put_response.status(), hyper::StatusCode::CREATED);
+        let upload_response = client.put(&test_url).body("file").send().await.unwrap();
+        assert_eq!(upload_response.status(), hyper::StatusCode::CREATED);
 
         // Check if a file is created.
         let file_path = ttd.path().join("file-transfer").join("test-file");
@@ -128,19 +127,7 @@ mod tests {
         let file_content = fs::read_to_string(file_path).await.unwrap();
         assert_eq!(file_content, "file".to_string());
 
-        // Create GET request to file transfer service
-        let get_handler = tokio::spawn(async move {
-            let client = hyper::Client::new();
-
-            let req = Request::builder()
-                .method(Method::GET)
-                .uri(test_url)
-                .body(Body::empty())
-                .expect("request builder");
-            client.request(req).await.unwrap()
-        });
-
-        let get_response = get_handler.await.unwrap();
+        let get_response = client.get(&test_url).send().await.unwrap();
         assert_eq!(get_response.status(), hyper::StatusCode::OK);
     }
 
@@ -148,25 +135,30 @@ mod tests {
     async fn check_server_does_not_panic_when_port_is_in_use() -> anyhow::Result<()> {
         let ttd = TempTedgeDir::new();
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port_in_use = listener.local_addr().unwrap().port();
+        let (_listener, port_in_use) = create_listener().await;
 
-        let http_config = http_config(&ttd, port_in_use);
+        let http_config = http_config(&ttd);
 
-        let server = FileTransferServerBuilder::new(http_config).build().run();
+        let binding_res =
+            FileTransferServerBuilder::try_bind(http_config, ([127, 0, 0, 1], port_in_use)).await;
 
-        tokio::select! {
-            res = server => ensure!(res.is_err(), "expected server startup to fail with port binding error, but actor exited successfully"),
-            _ = tokio::time::sleep(Duration::from_secs(5)) => bail!("timed out waiting for actor to stop running"),
-        }
+        ensure!(
+            binding_res.is_err(),
+            "expected port binding to fail, but `try_bind` finished successfully"
+        );
 
         Ok(())
     }
 
-    fn http_config(ttd: &TempTedgeDir, port: u16) -> HttpConfig {
+    async fn create_listener() -> (TcpListener, u16) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        (listener, port)
+    }
+
+    fn http_config(ttd: &TempTedgeDir) -> HttpConfig {
         HttpConfig {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
-            bind_address: SocketAddr::from(([127, 0, 0, 1], port)),
             certificates: None,
         }
     }
