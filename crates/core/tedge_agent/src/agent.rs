@@ -161,10 +161,10 @@ impl Agent {
     pub fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
         create_directory_with_defaults(self.config.config_dir.join(".agent"))?;
-        create_directory_with_defaults(self.config.log_dir.clone())?;
-        create_directory_with_defaults(self.config.data_dir.clone())?;
-        create_directory_with_defaults(self.config.http_config.data_dir.file_transfer_dir())?;
-        create_directory_with_defaults(self.config.http_config.data_dir.cache_dir())?;
+        create_directory_with_defaults(&self.config.log_dir)?;
+        create_directory_with_defaults(&self.config.data_dir)?;
+        create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
+        create_directory_with_defaults(self.config.data_dir.cache_dir())?;
 
         Ok(())
     }

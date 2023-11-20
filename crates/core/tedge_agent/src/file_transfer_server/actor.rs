@@ -27,7 +27,7 @@ impl Actor for FileTransferServerActor {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         let http_config = self.config.clone();
-        let server = http_file_transfer_server(&http_config)?;
+        let server = http_file_transfer_server(http_config)?;
 
         tokio::select! {
             result = server => {
@@ -83,9 +83,12 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::bail;
+    use anyhow::ensure;
     use hyper::Body;
     use hyper::Method;
     use hyper::Request;
+    use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
 
@@ -141,31 +144,22 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
-    async fn check_server_does_not_panic_when_port_is_in_use() -> Result<(), anyhow::Error> {
+    async fn check_server_does_not_panic_when_port_is_in_use() -> anyhow::Result<()> {
         let ttd = TempTedgeDir::new();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port_in_use = listener.local_addr().unwrap().port();
 
         let http_config = HttpConfig::default()
             .with_data_dir(ttd.utf8_path_buf().into())
-            .with_port(3746);
-        let config_clone = http_config.clone();
+            .with_port(port_in_use);
 
-        // Spawn HTTP file transfer server
-        // handle_one uses port 3000.
-        let builder_one = FileTransferServerBuilder::new(http_config);
-        let handle_one = tokio::spawn(async move { builder_one.build().run().await });
+        let server = FileTransferServerBuilder::new(http_config).build().run();
 
-        // handle_two will not be able to bind to the same port.
-        let builder_two = FileTransferServerBuilder::new(config_clone);
-        let handle_two = tokio::spawn(async move { builder_two.build().run().await });
-
-        // although the code inside handle_two throws an error it does not panic.
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-        // to check for the error, we assert that handle_one is still running
-        // while handle_two is finished.
-        assert!(!handle_one.is_finished());
-        assert!(handle_two.is_finished());
+        tokio::select! {
+            res = server => ensure!(res.is_err(), "expected server startup to fail with port binding error, but actor exited successfully"),
+            _ = tokio::time::sleep(Duration::from_secs(5)) => bail!("timed out waiting for actor to stop running"),
+        }
 
         Ok(())
     }

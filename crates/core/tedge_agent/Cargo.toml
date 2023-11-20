@@ -12,6 +12,7 @@ repository = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+axum = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true }
 flockfile = { workspace = true }
@@ -21,7 +22,6 @@ log = { workspace = true }
 path-clean = { workspace = true }
 plugin_sm = { workspace = true }
 reqwest = { workspace = true }
-routerify = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
@@ -39,13 +39,16 @@ tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio-util = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
-serial_test = { workspace = true }
+bytes = { workspace = true }
+http-body = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 test-case = { workspace = true }
+tower = { workspace = true }

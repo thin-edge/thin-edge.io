@@ -45,6 +45,7 @@ az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 batcher = { path = "crates/common/batcher" }
+bytes = "1.4"
 c8y_api = { path = "crates/core/c8y_api" }
 c8y_config_manager = { path = "crates/extensions/c8y_config_manager" }
 c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
@@ -115,7 +116,6 @@ rand = "0.8"
 rcgen = { version = "0.9", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.11", default-features = false }
-routerify = "3.0"
 rpassword = "5.0"
 rstest = "0.16.0"
 rumqttc = "0.22"
@@ -157,14 +157,15 @@ tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
 tedge_utils = { path = "crates/common/tedge_utils" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tokio-rustls = "0.24.1"
-tower = "0.4.13"
 tempfile = "3.5"
-test-case = "2.2"
+test-case = "3.2"
 thiserror = "1.0"
 time = "0.3"
 tokio = { version = "1.23", default-features = false }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.7"
+tower = "0.4"
+http-body = "0.4"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 try-traits = "0.1"
