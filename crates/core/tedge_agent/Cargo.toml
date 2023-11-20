@@ -13,15 +13,19 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
+axum-server = { workspace = true }
+axum_tls = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true }
 flockfile = { workspace = true }
+futures = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 lazy_static = { workspace = true }
 log = { workspace = true }
 path-clean = { workspace = true }
 plugin_sm = { workspace = true }
 reqwest = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
@@ -45,8 +49,11 @@ tracing = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
+axum_tls = { workspace = true, features = ["test-helpers"] }
 bytes = { workspace = true }
 http-body = { workspace = true }
+rcgen = { workspace = true }
+rustls-pemfile = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }

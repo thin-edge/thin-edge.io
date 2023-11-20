@@ -1,4 +1,6 @@
 mod acceptor;
+#[cfg(any(test, feature = "error-matching"))]
+mod error_matching;
 mod files;
 mod maybe_tls;
 mod redirect_http;
@@ -9,6 +11,8 @@ pub use crate::files::*;
 use crate::redirect_http::redirect_http_to_https;
 use axum::middleware::map_request;
 use axum::Router;
+#[cfg(feature = "error-matching")]
+pub use error_matching::*;
 use std::future::Future;
 use std::net::TcpListener;
 

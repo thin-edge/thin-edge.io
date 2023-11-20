@@ -622,8 +622,24 @@ define_tedge_config! {
                 #[doku(as = "PathBuf")]
                 #[tedge_config(reader(private))]
                 key_file: Utf8PathBuf,
-            }
-        }
+            },
+        },
+
+        /// The file that will be used as a the server certificate for the File Transfer Service
+        #[tedge_config(example = "/etc/tedge/device-certs/file_transfer_certificate.pem")]
+        #[doku(as = "PathBuf")]
+        cert_path: Utf8PathBuf,
+
+        /// The file that will be used as a the server private key for the File Transfer Service
+        #[tedge_config(example = "/etc/tedge/device-certs/file_transfer_key.pem")]
+        #[doku(as = "PathBuf")]
+        key_path: Utf8PathBuf,
+
+        /// Path to a file containing the PEM encoded CA certificates that are
+        /// trusted when checking incoming client certificates for the File Transfer Service
+        #[tedge_config(example = "/etc/ssl/certs")]
+        #[doku(as = "PathBuf")]
+        ca_path: Utf8PathBuf,
     },
 
     software: {

@@ -6,7 +6,7 @@ use tedge_actors::RuntimeError;
 use super::request_files::RequestPath;
 
 #[derive(Debug, thiserror::Error)]
-pub enum FileTransferError {
+pub(crate) enum FileTransferError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
@@ -18,9 +18,6 @@ pub enum FileTransferError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
-
-    #[error("Could not bind to address: {address}. Address already in use.")]
-    BindingAddressInUse { address: std::net::SocketAddr },
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -38,13 +35,13 @@ pub enum FileTransferRequestError {
     CannotUploadDirectory { path: RequestPath },
 
     #[error("Request to delete {path:?} failed: {source}")]
-    OtherDelete {
+    Delete {
         source: std::io::Error,
         path: RequestPath,
     },
 
     #[error("Request to upload to {path:?} failed: {source:?}")]
-    OtherUpload {
+    Upload {
         source: anyhow::Error,
         path: RequestPath,
     },
@@ -74,7 +71,7 @@ impl IntoResponse for FileTransferRequestError {
                 tracing::error!("{error_message}");
                 err.into_response()
             }
-            FromIo(_) | OtherDelete { .. } | OtherUpload { .. } => {
+            FromIo(_) | Delete { .. } | Upload { .. } => {
                 tracing::error!("{error_message}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,

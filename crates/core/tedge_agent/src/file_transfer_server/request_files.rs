@@ -9,7 +9,15 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 
 use super::error::FileTransferRequestError;
-use super::http_rest::HttpConfig;
+
+#[derive(Clone)]
+pub(super) struct FileTransferDir(Arc<Utf8Path>);
+
+impl FileTransferDir {
+    pub(super) fn new(file_transfer_dir: Utf8PathBuf) -> Self {
+        Self(Arc::from(file_transfer_dir))
+    }
+}
 
 /// The paths inferred from a request to the File Transfer Service
 pub struct FileTransferPath {
@@ -45,15 +53,16 @@ impl fmt::Debug for RequestPath {
 }
 
 #[async_trait::async_trait]
-impl FromRequestParts<Arc<HttpConfig>> for FileTransferPath {
+impl FromRequestParts<FileTransferDir> for FileTransferPath {
     type Rejection = FileTransferRequestError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        config: &Arc<HttpConfig>,
+        file_transfer_dir: &FileTransferDir,
     ) -> Result<Self, Self::Rejection> {
-        let Path(request_path) = Path::<Utf8PathBuf>::from_request_parts(parts, config).await?;
-        local_path_for_file(RequestPath(request_path), config)
+        let Path(request_path) =
+            Path::<Utf8PathBuf>::from_request_parts(parts, &file_transfer_dir).await?;
+        local_path_for_file(RequestPath(request_path), &file_transfer_dir.0)
     }
 }
 
@@ -63,13 +72,13 @@ impl FromRequestParts<Arc<HttpConfig>> for FileTransferPath {
 /// path is actually under `config.file_transfer_dir`
 fn local_path_for_file(
     request_path: RequestPath,
-    config: &HttpConfig,
+    file_transfer_dir: &Utf8Path,
 ) -> Result<FileTransferPath, FileTransferRequestError> {
-    let full_path = config.file_transfer_dir.join(&request_path);
+    let full_path = file_transfer_dir.join(&request_path);
 
     let clean_path = clean_utf8_path(&full_path);
 
-    if clean_path.starts_with(&config.file_transfer_dir) {
+    if clean_path.starts_with(file_transfer_dir) {
         Ok(FileTransferPath {
             full: clean_path,
             request: request_path,

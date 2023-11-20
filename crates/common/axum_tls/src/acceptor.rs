@@ -114,7 +114,6 @@ mod tests {
     use reqwest::Client;
     use reqwest::Identity;
     use rustls::RootCertStore;
-    use std::error::Error;
     use std::net::SocketAddr;
     use std::net::TcpListener;
 
@@ -177,10 +176,7 @@ mod tests {
             .get_with_scheme(Scheme::HTTPS, &client)
             .await
             .unwrap_err();
-        assert_matches::assert_matches!(
-            rustls_error_from_reqwest(&err),
-            rustls::Error::AlertReceived(rustls::AlertDescription::UnknownCA)
-        );
+        crate::error_matching::assert_error_matches(&err, rustls::AlertDescription::UnknownCA);
     }
 
     #[tokio::test]
@@ -204,18 +200,6 @@ mod tests {
                 .unwrap(),
             "server is working"
         );
-    }
-
-    fn rustls_error_from_reqwest(err: &reqwest::Error) -> &rustls::Error {
-        (|| {
-            err.source()?
-                .downcast_ref::<hyper::Error>()?
-                .source()?
-                .downcast_ref::<std::io::Error>()?
-                .get_ref()?
-                .downcast_ref::<rustls::Error>()
-        })()
-        .unwrap()
     }
 
     struct Server {

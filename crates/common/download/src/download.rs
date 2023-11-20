@@ -13,7 +13,6 @@ use reqwest::header;
 use reqwest::Identity;
 use serde::Deserialize;
 use serde::Serialize;
-use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io::Seek;
@@ -404,7 +403,10 @@ impl Downloader {
                 .map_err(|err| {
                     // rustls errors are caused by e.g. CertificateRequired
                     // If this is the case, retrying won't help us
-                    if err.is_builder() || err.is_connect() || is_rustls(&err) {
+                    if err.is_builder()
+                        || err.is_connect()
+                        || axum_tls::rustls_error_from_reqwest(&err).is_some()
+                    {
                         backoff::Error::Permanent(err)
                     } else {
                         backoff::Error::transient(err)
@@ -479,18 +481,6 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
     );
 
     Ok(())
-}
-
-fn is_rustls(err: &reqwest::Error) -> bool {
-    (|| {
-        err.source()?
-            .downcast_ref::<hyper::Error>()?
-            .source()?
-            .downcast_ref::<std::io::Error>()?
-            .get_ref()?
-            .downcast_ref::<rustls::Error>()
-    })()
-    .is_some()
 }
 
 #[cfg(test)]

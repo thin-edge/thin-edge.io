@@ -3,17 +3,15 @@ use anyhow::anyhow;
 use anyhow::Context;
 use axum::body::StreamBody;
 use axum::routing::get;
-use axum::routing::IntoMakeService;
 use axum::Router;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use hyper::server::conn::AddrIncoming;
+use futures::future::FutureExt;
 use hyper::Body;
 use hyper::Request;
-use hyper::Server;
 use hyper::StatusCode;
+use std::future::Future;
 use std::io::ErrorKind;
-use std::sync::Arc;
 use tedge_actors::futures::StreamExt;
 use tedge_utils::paths::create_directories;
 use tokio::fs::File;
@@ -25,13 +23,14 @@ use tokio::net::TcpListener;
 use tokio_util::io::ReaderStream;
 
 use super::error::FileTransferRequestError as Error;
+use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
 use super::request_files::RequestPath;
 
 #[derive(Debug, Clone)]
 pub(crate) struct HttpConfig {
     pub file_transfer_dir: Utf8PathBuf,
-    pub certificates: Option<(Vec<Vec<u8>>, Vec<u8>)>,
+    pub rustls_config: Option<rustls::ServerConfig>,
 }
 
 async fn upload_file(
@@ -39,7 +38,7 @@ async fn upload_file(
     mut request: Request<Body>,
 ) -> Result<StatusCode, Error> {
     fn internal_error(source: impl Into<anyhow::Error>, path: RequestPath) -> Error {
-        Error::OtherUpload {
+        Error::Upload {
             source: source.into(),
             path,
         }
@@ -112,7 +111,7 @@ async fn delete_file(path: FileTransferPath) -> Result<StatusCode, Error> {
         Err(e) if err_is_is_a_directory(&e) => {
             Err(Error::CannotDeleteDirectory { path: path.request })
         }
-        Err(err) => Err(Error::OtherDelete {
+        Err(err) => Err(Error::Delete {
             source: err,
             path: path.request,
         }),
@@ -121,9 +120,9 @@ async fn delete_file(path: FileTransferPath) -> Result<StatusCode, Error> {
 
 async fn stream_request_body_to_path(
     path: &Utf8Path,
-    body_stream: &mut hyper::Body,
+    body_stream: &mut Body,
 ) -> anyhow::Result<()> {
-    let mut buffer = tokio::fs::File::create(path)
+    let mut buffer = File::create(path)
         .await
         .with_context(|| format!("creating {path:?}"))?;
     while let Some(data) = body_stream.next().await {
@@ -140,21 +139,28 @@ async fn stream_request_body_to_path(
 pub(crate) fn http_file_transfer_server(
     listener: TcpListener,
     config: HttpConfig,
-) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError> {
-    let router = http_file_transfer_router(config);
-    Ok(AddrIncoming::from_listener(listener)
-        .map(Server::builder)
-        .context("creating server from tcp listener")?
-        .serve(router.into_make_service()))
+) -> Result<impl Future<Output = io::Result<()>>, FileTransferError> {
+    let router = http_file_transfer_router(config.file_transfer_dir);
+    let listener = listener.into_std()?;
+
+    let server = if let Some(rustls_config) = config.rustls_config {
+        axum_tls::start_tls_server(listener, rustls_config, router).boxed()
+    } else {
+        axum_server::from_tcp(listener)
+            .serve(router.into_make_service())
+            .boxed()
+    };
+
+    Ok(server)
 }
 
-fn http_file_transfer_router(config: HttpConfig) -> Router {
+fn http_file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
     Router::new()
         .route(
             "/tedge/file-transfer/*path",
             get(download_file).put(upload_file).delete(delete_file),
         )
-        .with_state(Arc::new(config))
+        .with_state(FileTransferDir::new(file_transfer_dir))
 }
 
 #[cfg(test)]
@@ -391,11 +397,8 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let http_config = HttpConfig {
-            file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
-            certificates: None,
-        };
-        let router = http_file_transfer_router(http_config);
+        let ftd = DataDir::from(ttd.utf8_path_buf()).file_transfer_dir();
+        let router = http_file_transfer_router(ftd);
         (ttd, router)
     }
 
