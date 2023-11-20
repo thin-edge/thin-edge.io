@@ -97,7 +97,7 @@ async fn upload_file(
         }
     } else {
         Err(internal_error(
-            anyhow!("cannot retrieve directory name for for {}", paths.full),
+            anyhow!("cannot retrieve directory name for {}", paths.full),
             paths.request,
         ))
     }

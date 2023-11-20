@@ -157,7 +157,7 @@ mod tests {
         let server = FileTransferServerBuilder::new(http_config).build().run();
 
         tokio::select! {
-            res = server => ensure!(res.is_err(), "expected server startup to fail with port binding error, but actor exited succesfully"),
+            res = server => ensure!(res.is_err(), "expected server startup to fail with port binding error, but actor exited successfully"),
             _ = tokio::time::sleep(Duration::from_secs(5)) => bail!("timed out waiting for actor to stop running"),
         }
 
