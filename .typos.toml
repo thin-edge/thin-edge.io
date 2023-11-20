@@ -9,6 +9,7 @@ Robocorp = "Robocorp"
 extend-exclude = [
     "**certificate.txt",
     "**test_root_cert*.txt",
+    "**.crl",
     "**.min.js"
 ]
 

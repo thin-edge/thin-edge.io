@@ -34,7 +34,7 @@ pub enum FsEvent {
     /// Returned when the content of the file changes for any reason.
     ///
     ///
-    /// Emitted when the file is modified, deleted, created, or renamed. Consumers intrested in responding to changes
+    /// Emitted when the file is modified, deleted, created, or renamed. Consumers interested in responding to changes
     /// only once, without precise knowledge what caused the change of the content of the file, should use this event.
     Modified,
     FileDeleted,

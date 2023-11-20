@@ -37,7 +37,7 @@ in order for them to trust the connection to the mapper.
 Once HTTPS is enabled for the mapper, certificate-based authentication can also be enabled.
 The directory containing the certificates that the mapper will trust can be configured using `c8y.proxy.ca_path`,
 and the agent can be configured to use a trusted certificate using the `http.client.auth.cert_file` and `http.client.auth.key_file`
-setings.
+settings.
 
 ## Possible errors returned by the proxy
 Due to the underlying JWT handling in Cumulocity, requests to the proxy API are occasionally spuriously rejected with
