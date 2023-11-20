@@ -35,7 +35,7 @@ pub(crate) struct HttpConfig {
 }
 
 async fn upload_file(
-    paths: FileTransferPath,
+    path: FileTransferPath,
     mut request: Request<Body>,
 ) -> Result<StatusCode, Error> {
     fn internal_error(source: impl Into<anyhow::Error>, path: RequestPath) -> Error {
@@ -45,22 +45,22 @@ async fn upload_file(
         }
     }
 
-    if let Some(directory) = paths.full.parent() {
+    if let Some(directory) = path.full.parent() {
         if let Err(err) = create_directories(directory) {
-            return Err(internal_error(err, paths.request));
+            return Err(internal_error(err, path.request));
         }
 
-        match stream_request_body_to_path(&paths.full, request.body_mut()).await {
+        match stream_request_body_to_path(&path.full, request.body_mut()).await {
             Ok(()) => Ok(StatusCode::CREATED),
-            Err(err) if source_err_is_is_a_directory(&err) => Err(Error::CannotUploadDirectory {
-                path: paths.request,
-            }),
-            Err(err) => Err(internal_error(err, paths.request)),
+            Err(err) if source_err_is_is_a_directory(&err) => {
+                Err(Error::CannotUploadDirectory { path: path.request })
+            }
+            Err(err) => Err(internal_error(err, path.request)),
         }
     } else {
         Err(internal_error(
-            anyhow!("cannot retrieve directory name for {}", paths.full),
-            paths.request,
+            anyhow!("cannot retrieve directory name for {}", path.full),
+            path.request,
         ))
     }
 }
@@ -73,10 +73,10 @@ fn source_err_is_is_a_directory(error: &anyhow::Error) -> bool {
 }
 
 async fn download_file(
-    paths: FileTransferPath,
+    path: FileTransferPath,
 ) -> Result<StreamBody<ReaderStream<BufReader<File>>>, Error> {
     let reader: Result<_, io::Error> = async {
-        let mut buf_reader = BufReader::new(File::open(paths.full).await?);
+        let mut buf_reader = BufReader::new(File::open(path.full).await?);
         // Filling the buffer will ensure the file can actually be read from,
         // which isn't true if it's a directory, but `File::open` alone won't
         // catch that
@@ -89,7 +89,7 @@ async fn download_file(
         Ok(reader) => Ok(StreamBody::new(ReaderStream::new(reader))),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) {
-                Err(Error::FileNotFound(paths.request))
+                Err(Error::FileNotFound(path.request))
             } else {
                 Err(Error::FromIo(e))
             }
@@ -105,16 +105,16 @@ fn err_is_is_a_directory(e: &std::io::Error) -> bool {
     e.kind().to_string() == "is a directory"
 }
 
-async fn delete_file(req: FileTransferPath) -> Result<StatusCode, Error> {
-    match tokio::fs::remove_file(&req.full).await {
+async fn delete_file(path: FileTransferPath) -> Result<StatusCode, Error> {
+    match tokio::fs::remove_file(&path.full).await {
         Ok(()) => Ok(StatusCode::ACCEPTED),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
         Err(e) if err_is_is_a_directory(&e) => {
-            Err(Error::CannotDeleteDirectory { path: req.request })
+            Err(Error::CannotDeleteDirectory { path: path.request })
         }
         Err(err) => Err(Error::OtherDelete {
             source: err,
-            path: req.request,
+            path: path.request,
         }),
     }
 }
