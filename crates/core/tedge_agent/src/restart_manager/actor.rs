@@ -6,7 +6,6 @@ use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
 use crate::state_repository::state::RestartOperationStatus;
 use crate::state_repository::state::State;
-use crate::state_repository::state::StateRepository;
 use crate::state_repository::state::StateStatus;
 use async_trait::async_trait;
 use std::time::Duration;

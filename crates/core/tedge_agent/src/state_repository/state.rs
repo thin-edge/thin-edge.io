@@ -1,5 +1,4 @@
 use crate::state_repository::error::StateError;
-use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
@@ -11,20 +10,18 @@ pub struct AgentStateRepository {
     pub state_repo_path: Utf8PathBuf,
 }
 
-#[async_trait]
-pub trait StateRepository {
-    type Error;
-    async fn load(&self) -> Result<State, Self::Error>;
-    async fn store(&self, state: &State) -> Result<(), Self::Error>;
-    async fn clear(&self) -> Result<State, Self::Error>;
-    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error>;
-}
+impl AgentStateRepository {
+    pub fn state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
+        tedge_root.join(".agent")
+    }
 
-#[async_trait]
-impl StateRepository for AgentStateRepository {
-    type Error = StateError;
+    pub fn new(tedge_root: Utf8PathBuf, file_name: &str) -> Self {
+        let state_repo_path = Self::state_dir(tedge_root).join(file_name);
 
-    async fn load(&self) -> Result<State, StateError> {
+        Self { state_repo_path }
+    }
+
+    pub async fn load(&self) -> Result<State, StateError> {
         let text = fs::read_to_string(&self.state_repo_path)
             .await
             .map_err(|e| StateError::LoadingFromFileFailed {
@@ -40,42 +37,20 @@ impl StateRepository for AgentStateRepository {
         Ok(state)
     }
 
-    async fn store(&self, state: &State) -> Result<(), StateError> {
+    pub async fn store(&self, state: &State) -> Result<(), StateError> {
         let toml = toml::to_string_pretty(&state)?;
-        let () = atomically_write_file_async(&self.state_repo_path, toml.as_bytes()).await?;
+        atomically_write_file_async(&self.state_repo_path, toml.as_bytes()).await?;
 
         Ok(())
     }
 
-    async fn clear(&self) -> Result<State, Self::Error> {
+    pub async fn clear(&self) -> Result<(), StateError> {
         let state = State {
             operation_id: None,
             operation: None,
         };
         self.store(&state).await?;
-
-        Ok(state)
-    }
-
-    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error> {
-        let mut state = self.load().await?;
-        state.operation = Some(status.to_owned());
-
-        self.store(&state).await?;
-
         Ok(())
-    }
-}
-
-impl AgentStateRepository {
-    pub fn state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
-        tedge_root.join(".agent")
-    }
-
-    pub fn new(tedge_root: Utf8PathBuf, file_name: &str) -> Self {
-        let state_repo_path = Self::state_dir(tedge_root).join(file_name);
-
-        Self { state_repo_path }
     }
 }
 
@@ -113,7 +88,6 @@ mod tests {
     use crate::state_repository::state::RestartOperationStatus;
     use crate::state_repository::state::SoftwareOperationVariants;
     use crate::state_repository::state::State;
-    use crate::state_repository::state::StateRepository;
     use crate::state_repository::state::StateStatus;
 
     use tedge_test_utils::fs::TempTedgeDir;

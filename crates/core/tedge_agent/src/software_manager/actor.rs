@@ -4,7 +4,6 @@ use crate::software_manager::error::SoftwareManagerError::NoPlugins;
 use crate::state_repository::state::AgentStateRepository;
 use crate::state_repository::state::SoftwareOperationVariants;
 use crate::state_repository::state::State;
-use crate::state_repository::state::StateRepository;
 use crate::state_repository::state::StateStatus;
 use async_trait::async_trait;
 use plugin_sm::operation_logs::LogKind;
@@ -194,7 +193,7 @@ impl SoftwareManagerActor {
                 }
             };
         }
-        let _state: State = self.state_repository.clear().await?;
+        self.state_repository.clear().await?;
         Ok(())
     }
 
@@ -236,8 +235,7 @@ impl SoftwareManagerActor {
         };
         self.output_sender.send(response.into()).await?;
 
-        let _state: State = self.state_repository.clear().await?;
-
+        self.state_repository.clear().await?;
         Ok(())
     }
 
@@ -272,8 +270,7 @@ impl SoftwareManagerActor {
         };
         self.output_sender.send(response.into()).await?;
 
-        let _state: State = self.state_repository.clear().await?;
-
+        self.state_repository.clear().await?;
         Ok(())
     }
 }
