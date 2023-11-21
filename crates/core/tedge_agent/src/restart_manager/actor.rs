@@ -112,10 +112,8 @@ impl RestartManagerActor {
         config: RestartManagerConfig,
         message_box: SimpleMessageBox<RestartCommand, RestartCommand>,
     ) -> Self {
-        let state_repository = AgentStateRepository::new_with_file_name(
-            config.config_dir.clone(),
-            "restart-current-operation",
-        );
+        let state_repository =
+            AgentStateRepository::new(config.config_dir.clone(), "restart-current-operation");
         Self {
             config,
             state_repository,

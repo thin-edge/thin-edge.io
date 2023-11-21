@@ -135,7 +135,6 @@ pub fn with_exec_permission(file_path: &Path, content: &str) {
 pub fn create_full_tedge_dir_structure() {
     let ttd = TempTedgeDir::new();
     ttd.file("tedge.toml");
-    ttd.dir(".agent").file("current-operation");
     ttd.dir("c8y")
         .file("c8y-log-plugin.toml")
         .with_toml_content(toml::toml! {

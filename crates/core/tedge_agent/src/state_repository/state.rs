@@ -3,14 +3,12 @@ use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
-use std::str::FromStr;
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
 
 #[derive(Debug)]
 pub struct AgentStateRepository {
     pub state_repo_path: Utf8PathBuf,
-    state_repo_root: Utf8PathBuf,
 }
 
 #[async_trait]
@@ -44,12 +42,6 @@ impl StateRepository for AgentStateRepository {
 
     async fn store(&self, state: &State) -> Result<(), StateError> {
         let toml = toml::to_string_pretty(&state)?;
-
-        // Create in path given through `config-dir` or `/etc/tedge` directory in case it does not exist yet
-        if !self.state_repo_root.exists() {
-            fs::create_dir(&self.state_repo_root).await?;
-        }
-
         let () = atomically_write_file_async(&self.state_repo_path, toml.as_bytes()).await?;
 
         Ok(())
@@ -76,22 +68,14 @@ impl StateRepository for AgentStateRepository {
 }
 
 impl AgentStateRepository {
-    #[cfg(test)]
-    pub fn new(tedge_root: Utf8PathBuf) -> Self {
-        Self::new_with_file_name(tedge_root, "current-operation")
+    pub fn state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
+        tedge_root.join(".agent")
     }
 
-    pub fn new_with_file_name(tedge_root: Utf8PathBuf, file_name: &str) -> Self {
-        let mut state_repo_root = tedge_root;
-        state_repo_root.push(Utf8PathBuf::from_str(".agent").expect("infallible"));
+    pub fn new(tedge_root: Utf8PathBuf, file_name: &str) -> Self {
+        let state_repo_path = Self::state_dir(tedge_root).join(file_name);
 
-        let mut state_repo_path = state_repo_root.clone();
-        state_repo_path.push(Utf8PathBuf::from_str(file_name).expect("infallible"));
-
-        Self {
-            state_repo_path,
-            state_repo_root,
-        }
+        Self { state_repo_path }
     }
 }
 
@@ -137,7 +121,7 @@ mod tests {
     #[tokio::test]
     async fn agent_state_repository_not_exists_fail() {
         let temp_dir = TempTedgeDir::new();
-        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf(), "current-operation");
 
         repo.load().await.unwrap_err();
     }
@@ -151,7 +135,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(content);
 
-        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf(), "current-operation");
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -172,7 +156,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(content);
 
-        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf(), "current-operation");
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -193,7 +177,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(content);
 
-        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf(), "current-operation");
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -210,7 +194,7 @@ mod tests {
         let temp_dir = TempTedgeDir::new();
         temp_dir.dir(".agent").file("current-operation");
 
-        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf(), "current-operation");
 
         repo.store(&State {
             operation_id: Some("1234".into()),
