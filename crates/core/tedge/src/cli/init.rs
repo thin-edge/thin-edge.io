@@ -128,12 +128,24 @@ impl TEdgeInitCmd {
             ),
         )?;
         create_directory(
+            config_dir.join("operations").join("c8y"),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o755),
+            ),
+        )?;
+        create_directory(
             config_dir.join("plugins"),
             PermissionEntry::new(
                 Some(self.user.clone()),
                 Some(self.group.clone()),
                 Some(0o775),
             ),
+        )?;
+        create_directory(
+            config_dir.join("sm-plugins"),
+            PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o755)),
         )?;
         create_directory(
             config_dir.join("device-certs"),
