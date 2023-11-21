@@ -10,7 +10,8 @@ import ProposalBanner from '@site/src/components/ProposalBanner'
 
 ## Overview
 
-An agent developer can define application specific [operation workflows](./device-management-api.md#mqtt-driven-workflows).
+An agent developer can define application specific [operation workflows](./device-management-api.md#mqtt-driven-workflows)
+to control how an operation is performed on a device.
 Thin-edge **tedge-agent** provides the tools to:
 
 - override existing workflows
@@ -61,21 +62,21 @@ Observe on the example that:
 - At any state, *one and only one* participant is responsible to move the operation forward.
 - Publishing a state to the MQTT command topic, can be seen as passing the baton from one participant to another.
   The mapper creates the **init** state and then lets the other components work.
-  The plugin tell the download has been successful by publishing the **downloaded** state,
+  The agent tells the download has been successful by publishing the **downloaded** state,
   but do nothing till the domain-specific component has checked the file and move the command state to **install**.
 - Each software component has to know only *some* states of the whole workflow:
   - the states they are responsible for
   - the states they create to pass the control.
-- The compatibility of two participants, one publishing the state owned by the other, is only defined by the message payload:
+- The compatibility of two participants, one advancing to the new state owned by the other, is only defined by the message payload:
   - all the property fields, required to make progress at some state, must be provided by the previous participant.
 
 ### Benefits
 
 The benefits are that:
 - A participant can be substituted by another implementation as long as the substitute implementation
-  is ready to process at least all the state processed by the former implementation.
+  is ready to process at least all the states processed by the former implementation.
   - This is the key principle used by thin-edge to provide extensible operation support.
-  - The **tedge-agent** defines the **init**, **downloaded**, **installed** states
+  - The **tedge-agent** defines the **downloaded** and *installed** states
     with no specific behavior beyond proceeding to the next step;
     so, a domain specific component can be substituted to add extra checks and actions before moving forward.
 - Extra states and participants can be added as long as each state is owned by one participant.
@@ -83,14 +84,15 @@ The benefits are that:
     associated by another software component responsible for these rollbacks.
 
 Furthermore, specific versions of the same workflow can be defined on different targets.
+The main and child devices can each run their own version of a workflow for an operation.
 Indeed, all the status updates for a command on a given thin-edge entity or component
-are published on an MQTT topic which prefix is the entity identifier.
+are published on an MQTT topic with the entity identifier as the prefix.
 - The same executable can be used to handle operations on different targets.
   For instance, the **tedge-agent** can run on the main device `te/device/main//`
   as well as on a child-device identified by `te/device/child-xyz//`.
 - A specific executable can be substituted on a specific target.
   If for some reasons, **tedge-agent** cannot be installed on a child-device,
-  then a specific implementation of the `firmware_update` MQTT API can be used to serve configuration updates
+  then a specific implementation of the `firmware_update` MQTT API can be used to serve firmware updates
   on, say, `te/micro-controller/xyz//`.
 - A workflow can be extended differently for each target.
   As an example, an agent developer can define an extra rollback state on the main device but not on the child devices.
@@ -203,13 +205,57 @@ operation = "firmware_update"
 ```
 
 Thin-edge combines all these workflows to determine what has to be done
-when a state message is published for a command on one topic matching the global topic filter for commands,
-i.e. `te/+/+/+/+/cmd/+/+`. Given an actual command state message, thin-edge
-- keeps only the workflows which target topic filter matches the topic of the message
-- then keeps only the workflows that define a behavior for the state of the message payload
-- and then uses priority rules to select a single workflow: the workflow ruling this command at that stage
+when a state message is published for a command on a topic matching the global topic filter for commands,
+i.e. `te/+/+/+/+/cmd/+/+`.
+- Each running instance of the __tedge_agent__ reacts only on commands targeting its own device.
+- If a user-defined workflow has been defined for this operation, then this workflow is used to determine the required action.
+- If no workflow has been defined by the user for this operation, then the built-in workflow is used.
+- If there is no workflow or no defined action for the current state, then the __tedge_agent__ fails the command.
 
-The priority rules give a higher priority to the workflow that are user-defined than to those pre-defined by thin-edge.
-If several user-defined workflows are matching a command state,
-then the alphabetic order of the workflow definition file names is used:
-`001-firmware_update_workflow.toml` being of higher priority than `002-firmware_update_workflow.toml`.
+### Built-in Actions
+
+For operations supported by the __tedge-agent__, the built-in behavior is the default.
+In other words, if no alternative actions is specified by a user-provided workflow,
+the commands are processed following the built-in behavior.
+
+If alternative actions are only given on some states, then the built-in behavior is applied to all others.
+This gives the ability to override parts of the built-in operation workflow.
+
+The __successful__ and __failed__ states are also handled in a specific way.
+Only the command issuer is supposed to react on those,
+pushing a retained empty message on the command request topic when done.
+This ends the command workflow.
+
+### Script Execution
+
+A script can be attached to a command state. 
+
+```
+[state]
+script = "/full/path/command [args]" 
+```
+
+This script is given as a plain command line possibly with arguments.
+
+Data extracted from the command status topic and message payload can be passed as argument to the script.
+
+- `"/bin/new-command.sh ${.topic} ${.payload}"` passes two arguments to the `/bin/new-command.sh` program.
+  - The first one is the full command request topic (*e.g.* `te/device/main/cmd///restart/c8y-mapper-123`).
+  - The second one is the full json payload (*e.g.* `{"status': "init"}`).
+- Specific path expressions can be used to pass specific excerpts.
+  - `${.}` is a json for the whole message including the `topic` and the `payload`.
+  - `${.topic}` is the command request topic (*e.g.* `te/device/main/cmd///restart/c8y-mapper-123`)
+  - `${.topic.target}` is the command target identity  (*e.g.* `device/main/cmd//`)
+  - `${.topic.operation}` is the command operation  (*e.g.* `restart`)
+  - `${.topic.cmd_id}` is the command request unique identifier  (*e.g.* `c8y-mapper-123`)
+  - `${.payload}` is the whole command json payload (*e.g.* `{"status': "init"}`)
+  - `${.payload.status}` is the command current status (*e.g.* `"init"`)
+  - `${.payload.x.y.z}` is the json value extracted from the payload following the given `x.y.z` path if any.
+  - If given `${.some.unknown.path}`, the argument is passed unchanged to the script.
+
+The script exit status and output is used to determine the next step for the command.
+- If the script cannot be launched or return a non-zero status, the command request is marked as __failed__.
+- If the script returns a json payload, this payload is injected into the previous message payload
+  (adding new fields, overriding overlapping ones, keeping previous unchanged ones).
+- If the script returns a json payload with a `status` field this status is used as the new status for the command.
+- If the script output is empty, then the exit status of the process is used to determine the next step. 
