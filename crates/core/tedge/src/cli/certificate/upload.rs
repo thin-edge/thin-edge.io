@@ -53,10 +53,23 @@ impl UploadCertCmd {
         let config = get_new_tedge_config()?;
         let root_cert = &config.c8y.root_cert_path;
         let client_builder = reqwest::blocking::Client::builder();
-        let client = match std::fs::metadata(root_cert)?.is_file() {
+        let res = match std::fs::metadata(root_cert) {
+            Ok(res) => res,
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    return Err(CertError::RootCertificatePathDoesNotExist(
+                        root_cert.to_string(),
+                    ))
+                }
+                e => return Err(CertError::IoError(e.into())),
+            },
+        };
+
+        let client = match res.is_file() {
             true => {
-                let cert = std::fs::read(root_cert)?;
-                let cert_pem = reqwest::Certificate::from_pem(&cert)?;
+                let cert = std::fs::read(root_cert);
+
+                let cert_pem = reqwest::Certificate::from_pem(&cert?)?;
                 client_builder.add_root_certificate(cert_pem).build()?
             }
             false => client_builder.build()?,
