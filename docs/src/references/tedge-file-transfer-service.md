@@ -32,3 +32,16 @@ Unique paths must be used in the URL path to avoid such overwrites.
 All uploaded files are preserved until they are explicitly deleted with the DELETE API.
 To avoid exhaustion of storage space on the thin-edge device,
 users must be diligent to delete any stored files as soon as their purpose is served.
+
+## HTTPS and authenticated access
+By default, the service is unauthenticated and does not support HTTPS connections.
+HTTPS can be enabled by setting `http.cert_path` and `http.key_path`.
+If the certificates are configured, the agent will automatically host the service via HTTPS, and redirect any
+HTTP requests to the equivalent HTTPS URL.
+If HTTPS is enabled, the configured certificate should be installed in the OS trust store for any connected agents
+in order for them to trust the connection to the mapper.
+
+Once HTTPS is enabled for the file-transfer service, certificate-based authentication can also be enabled.
+The directory containing the certificates that the mapper will trust can be configured using `http.ca_path`,
+and the agent can be configured to use a trusted certificate using the `http.client.auth.cert_file` and `http.client.auth.key_file`
+settings.
