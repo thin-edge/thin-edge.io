@@ -14,10 +14,7 @@ csv = { workspace = true }
 download = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
-reqwest = { workspace = true, features = [
-    "json",
-    "rustls-tls-native-roots",
-] }
+reqwest = { workspace = true, features = ["json", "rustls-tls-native-roots"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_api = { workspace = true }

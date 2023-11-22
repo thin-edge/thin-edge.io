@@ -20,10 +20,7 @@ tedge_api = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true, features = [
-    "sync",
-    "time",
-] }
+tokio = { workspace = true, features = ["sync", "time"] }
 
 [dev-dependencies]
 anyhow = { workspace = true }

@@ -23,7 +23,12 @@ rustls = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 tedge_config_macros = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "io-util"] }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "process",
+    "io-util",
+] }
 tracing = { workspace = true }
 url = { workspace = true }
 
@@ -31,4 +36,4 @@ url = { workspace = true }
 env_logger = { workspace = true }
 mockito = { workspace = true }
 rcgen = { workspace = true }
-tedge_http_ext = { workspace = true, features = ["test_helpers" ] }
+tedge_http_ext = { workspace = true, features = ["test_helpers"] }

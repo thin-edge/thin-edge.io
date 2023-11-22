@@ -12,7 +12,7 @@ repository = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
 doku = { workspace = true }
 once_cell = { workspace = true }
-serde  = { workspace = true }
+serde = { workspace = true }
 tedge_config_macros-macro = { path = "macro" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
