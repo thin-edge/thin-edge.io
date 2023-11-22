@@ -72,7 +72,7 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
         target: EntityTopicId::default_main_device(),
         cmd_id: "random".to_string(),
         payload: SoftwareUpdateCommandPayload {
-            status: Default::default(),
+            status: CommandStatus::Scheduled,
             update_list: vec![debian_list],
             failures: vec![],
         },
@@ -122,7 +122,8 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
     let command =
-        SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string());
+        SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string())
+            .with_status(CommandStatus::Scheduled);
     converter_box.send(command.clone().into()).await?;
 
     let executing_response = command.clone().with_status(CommandStatus::Executing);

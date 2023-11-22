@@ -1,0 +1,22 @@
+operation = "download"
+
+[init]
+script = "/etc/tedge/operations/schedule-download.sh ${.topic.cmd_id} ${.topic.target}"
+next = ["scheduled"]
+
+[scheduled]
+script = "/etc/tedge/operations/launch-download.sh ${.topic.cmd_id} ${.payload.url} ${.payload.file}"
+next = ["downloading"]
+
+[downloading]
+next = ["downloaded"]
+
+[downloaded]
+script = "/etc/tedge/operations/check-download.sh ${.topic.cmd_id} ${.}"
+next = ["successful", "failed"]
+
+[successful]
+next = []
+
+[failed]
+next = []

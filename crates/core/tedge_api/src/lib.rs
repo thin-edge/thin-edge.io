@@ -15,6 +15,7 @@ pub mod serialize;
 mod software;
 pub mod topic;
 pub mod utils;
+pub mod workflow;
 
 pub use download::*;
 pub use entity_store::EntityStore;

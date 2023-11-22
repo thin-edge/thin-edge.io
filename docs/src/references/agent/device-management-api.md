@@ -22,6 +22,52 @@ However, despite their diversity, all these APIs are designed along the same lin
 - create new command requests of a specific type for some target device
 - monitor the progression of a specific command request upto completion.
 
+## Concepts
+
+### Operations, Capabilities, and Commands
+
+From a user perspective an *operation* is a predefined sequence of actions
+that an operator can trigger on a device to reach some desirable state.
+It can be to restart the device or to install some new software.
+From an implementation perspective, an operation is an API identified by a well-known name such as `restart` or `software_update`.
+This API rules the coordination among the software components that need to interact to advance the operation.
+
+Not all entities and components of a thin-edge device support all the operations,
+and, even if they do, the implementations might be specific.
+Installing a software package on top of service makes no sense.
+Restarting the device is not the same as restarting one of its services.
+Each entity or component has to declare its *capabilities* i.e. the operations made available on this target.
+
+Strictly speaking, capabilities are not implemented nor declared by the devices and the services themselves.
+They are implemented by thin-edge services and plugins.
+These are the components which actually implement the operations interacting with the operating system and other software.
+For instance, device restart and software updates are implemented by the `tedge-agent`.
+
+Once an operation has been registered as a capability of some target entity or component,
+an operator can trigger operation requests a.k.a *commands*,
+for this kind of operation on this target,
+say to request a software update, then a restart of the device.
+
+### MQTT-Driven Workflows
+
+The core idea is to expose over MQTT the different states a specific operation request might go through;
+so independent sub-systems can observe the progress of the request
+and participate as per their role, when it is their turn.
+
+- A specific topic is attached to each command under-execution.
+  - This topic is specific to the target of the command, the requested operation and the request instance.
+  - e.g. `te/device/child-xyz///cmd/configuration-update/req-123`
+- The messages published over this topic represent the current state of the command.
+  - Each message indicates at which step of its progression the command is and gives all the required information to proceed.
+  - e.g. `{ "status": "init", "target": "mosquitto", "url": "https://..." }`
+- The state messages are published as retained.
+  - They capture the latest state of the operation request.
+  - Till some change occurs, this latest state is dispatched to any participant on reconnect.
+- Several participants act in concert to move the command execution forward.
+  - The participants observe the progress of all the operations they are interested in.
+  - They watch for the specific states they are responsible in moving forward.
+  - When a step is performed, successfully or not, the new state is published accordingly by the performer.
+
 ## Topics
 
 Following [thin-edge MQTT topic conventions](../mqtt-api.md#commands),
@@ -31,8 +77,10 @@ and specific sub-topics for the requests.
 
 ### Command metadata topics
 
-The __command metadata topics__ are used to declare which commands are available for a device,
-and, if so, to which extent.
+The command metadata topics are used to declare the *capabilities* of a device.
+
+The ability for an entity *a*/*b*/*c*/*d* to handle a given *operation*, is published as a retained message
+on the topic __te__/*a*/*b*/*c*/*d*/__cmd__/*operation*.
 
 ```mermaid
 graph LR
@@ -60,8 +108,13 @@ Where the groups are described as follows:
 | `cmd`        | The [command channel](../mqtt-api.md/#channel-identifier) grouping all of the commands for this target.                                                                               |
 | command_type | The type name of the operation.                                                                                                                                                       |
 
-A service that implements an operation for a device publishes on start a message notifying on the MQTT Bus
+A service that implements an operation for a device publishes on start, a capability message notifying
 that this device can be sent commands of this type.
+As an example, the `tedge-agent` which implements the `restart` operation emits on start a capability message for that operation:
+
+```sh te2mqtt
+tedge mqtt pub -r 'te/device/main///cmd/restart' '{}' 
+```
 
 These messages are published with the retained flag set. So, a client process, such a mapper, can discover on start
 what are __all the capabilities of all the devices__:
@@ -72,9 +125,11 @@ tedge mqtt sub 'te/+/+/+/+/cmd/+'
 
 ### Command status topics
 
-The actual command requests are published on the __command status topics__.
-For each request, a specific command topic is created to monitor the progress of the command from its initial state to its completion.
-These topics are named using a unique command identifier forged by the requester.
+The actual command requests are published on the command status topics.
+
+Each request is given a unique *command identifier*
+and the topic __te__/*a*/*b*/*c*/*d*/__cmd__/*operation*/*command-identifier*
+is used to trigger and monitor this request for a given *operation* on a target entity *a*/*b*/*c*/*d*.
 
 ```mermaid
 graph LR
@@ -99,7 +154,9 @@ graph LR
 
 :::note
 The `command_id` is an arbitrary string however it should be unique.
-It is recommended to either use a unique id generator, or add a unix timestamp as a suffix, e.g. date +%s
+It is recommended to either use a unique id generator, or add a unix timestamp as a suffix, e.g. date +%s.
+This unique id assigned by the requester, who is also responsible for creating the topic
+with an initial state and for finally removing it.
 :::
 
 The messages published on these topics represent each the current status of a running command.
@@ -107,6 +164,36 @@ So, one can list __all the in-progress commands of any type across all the devic
 
 ```sh te2mqtt formats=v1
 tedge mqtt sub 'te/+/+/+/+/cmd/+/+'
+```
+
+As an example, software update is an operation that requires coordination between a mapper and `tedge-agent`.
+On reception of a software update request from the cloud operator,
+the `tedge-mapper` creates a fresh new topic for this command,
+say `te/device/main///cmd/software_update/c8y-mapper-123` with a unique command id: `c8y-mapper-123`.
+On this topic, a first retained messages is published to describe the operator expectations for the software updates.
+
+```sh te2mqtt
+tedge mqtt pub -r 'te/device/main///cmd/software_update/c8y-mapper-123' '{
+    "status": "init",
+    "modules": [
+        {
+            "type": "apt",
+            "name": "collectd",
+            "version": "5.7",
+            "action": "install"
+        }
+    ]
+}' 
+```
+
+Then, the `tedge-agent` and possibly other software components take charge of the command,
+making it advance to some final state,
+publishing all the successive states as retained messages on the command topic.
+
+Eventually, the `tedge-mapper` will have to clean the command topic with an empty retained message:
+
+```sh te2mqtt
+tedge mqtt pub -r 'te/device/main///cmd/software_update/c8y-mapper-123' ''
 ```
 
 ## Message payloads
@@ -141,6 +228,19 @@ triggering a health message response published on the `status/health` channel of
 :::
 
 ## Operation workflow
+
+An operation workflow defines the possible sequences of actions for an operation request
+from its initialization up to its success or failure. It specifies the actions to perform
+as well as any prerequisite checks, outcome validations and possible rollbacks.
+However, a workflow doesn't define how to perform these actions.
+These are delegated to thin-edge services, scripts, application-specific services or other devices.
+More precisely, an operation workflow defines:
+- the *observable states* of an ongoing operation instance
+  from initialization up to a final success or failure
+- the *participants* and their interactions, passing the baton to the software component
+  whose responsibility is to advance the operation in a given state
+  and to notify the other participants what is the new resulting state
+- the *possible state sequences* so that the system can detect any stale or misbehaving operation request.
 
 A specific workflow rules each operation type, with specific:
 - states

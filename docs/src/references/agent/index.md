@@ -23,6 +23,8 @@ __Any service securely connected to the local MQTT bus can trigger commands as w
   It can run on the main device as well as child devices.
   It can be replaced with any other user-developed components that implement these device management APIs 
   addressing specific requirements or hardware.
+- Thin-edge also provides the tools to define, extend and combine *user-defined operation workflows*
+  that rule the sequence of steps applied when an *operation* is triggered by an operator or a software component.
 
 ```mermaid
 ---

@@ -206,8 +206,8 @@ impl SoftwareManagerActor {
         plugins: &mut ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
-        if request.status() != CommandStatus::Init {
-            // Handle only the init state
+        if request.status() != CommandStatus::Scheduled {
+            // Only handle commands in the scheduled state
             return Ok(());
         }
 
@@ -249,8 +249,8 @@ impl SoftwareManagerActor {
         plugins: &ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
-        if request.status() != CommandStatus::Init {
-            // Handle only the init state
+        if request.status() != CommandStatus::Scheduled {
+            // Only handle commands in the scheduled state
             return Ok(());
         }
 
