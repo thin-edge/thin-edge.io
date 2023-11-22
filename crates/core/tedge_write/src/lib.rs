@@ -13,9 +13,6 @@ use clap::Parser;
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
 #[command(about, version, long_about = None)]
 pub struct Args {
-    /// A source file which content will be copied to the destination file.
-    source_file: Box<Utf8Path>,
-
     /// A destination file which will be written to. Current content of the file will be lost.
     destination_file: Box<Utf8Path>,
 
@@ -33,16 +30,12 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> anyhow::Result<()> {
-    let mut source = fs::File::open(args.source_file.as_std_path()).with_context(|| {
-        format!(
-            "Could not open source file `{}` for reading",
-            args.source_file
-        )
-    })?;
+    let mut stdin = std::io::stdin().lock();
 
     let mut destination = fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(args.destination_file.as_std_path())
         .with_context(|| {
             format!(
@@ -51,7 +44,7 @@ pub fn run(args: Args) -> anyhow::Result<()> {
             )
         })?;
 
-    io::copy(&mut source, &mut destination).context("Could not copy source file to destination")?;
+    io::copy(&mut stdin, &mut destination).context("Could not copy source file to destination")?;
 
     if args.user.is_some() || args.group.is_some() {
         let new_uid = match args.user {
