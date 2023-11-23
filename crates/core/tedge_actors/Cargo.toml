@@ -15,6 +15,7 @@ default = []
 test-helpers = []
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }

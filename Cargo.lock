@@ -384,6 +384,7 @@ dependencies = [
  "reqwest",
  "rustls",
  "rustls-pemfile",
+ "tedge_config",
  "tempfile",
  "tokio",
  "tokio-rustls",
@@ -3800,6 +3801,7 @@ dependencies = [
 name = "tedge_actors"
 version = "0.13.1"
 dependencies = [
+ "anyhow",
  "async-trait",
  "env_logger",
  "futures",

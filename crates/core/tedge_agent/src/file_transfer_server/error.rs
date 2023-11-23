@@ -64,14 +64,14 @@ impl From<FileTransferError> for RuntimeError {
 
 impl IntoResponse for FileTransferRequestError {
     fn into_response(self) -> axum::response::Response {
-        use FileTransferRequestError::*;
+        use FileTransferRequestError as E;
         let error_message = self.to_string();
         match self {
-            PathRejection(err) => {
+            E::PathRejection(err) => {
                 tracing::error!("{error_message}");
                 err.into_response()
             }
-            FromIo(_) | Delete { .. } | Upload { .. } => {
+            E::FromIo(_) | E::Delete { .. } | E::Upload { .. } => {
                 tracing::error!("{error_message}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -80,10 +80,12 @@ impl IntoResponse for FileTransferRequestError {
                     .into_response()
             }
             // All of these from an invalid URL, so `Not Found` is most appropriate response
-            InvalidPath { .. } | FileNotFound(_) | CannotDeleteDirectory { .. } => {
+            E::InvalidPath { .. } | E::FileNotFound(_) | E::CannotDeleteDirectory { .. } => {
                 (StatusCode::NOT_FOUND, error_message).into_response()
             }
-            CannotUploadDirectory { .. } => (StatusCode::CONFLICT, error_message).into_response(),
+            E::CannotUploadDirectory { .. } => {
+                (StatusCode::CONFLICT, error_message).into_response()
+            }
         }
     }
 }

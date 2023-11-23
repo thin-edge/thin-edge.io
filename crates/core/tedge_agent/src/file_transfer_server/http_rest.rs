@@ -10,6 +10,7 @@ use futures::future::FutureExt;
 use hyper::Body;
 use hyper::Request;
 use hyper::StatusCode;
+use rustls::ServerConfig;
 use std::future::Future;
 use std::io::ErrorKind;
 use tedge_actors::futures::StreamExt;
@@ -26,12 +27,6 @@ use super::error::FileTransferRequestError as Error;
 use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
 use super::request_files::RequestPath;
-
-#[derive(Debug, Clone)]
-pub(crate) struct HttpConfig {
-    pub file_transfer_dir: Utf8PathBuf,
-    pub rustls_config: Option<rustls::ServerConfig>,
-}
 
 async fn upload_file(
     path: FileTransferPath,
@@ -97,7 +92,7 @@ async fn download_file(
 }
 
 // Not a typo, snake_case for: 'err is "is a directory"'
-fn err_is_is_a_directory(e: &std::io::Error) -> bool {
+fn err_is_is_a_directory(e: &io::Error) -> bool {
     // At the time of writing, `ErrorKind::IsADirectory` is feature-gated (https://github.com/rust-lang/rust/issues/86442)
     // Hence the string conversion rather than a direct comparison
     // If the error for reading a directory as a file changes, the unit tests should catch this
@@ -138,12 +133,13 @@ async fn stream_request_body_to_path(
 
 pub(crate) fn http_file_transfer_server(
     listener: TcpListener,
-    config: HttpConfig,
+    file_transfer_dir: Utf8PathBuf,
+    rustls_config: Option<ServerConfig>,
 ) -> Result<impl Future<Output = io::Result<()>>, FileTransferError> {
-    let router = http_file_transfer_router(config.file_transfer_dir);
+    let router = http_file_transfer_router(file_transfer_dir);
     let listener = listener.into_std()?;
 
-    let server = if let Some(rustls_config) = config.rustls_config {
+    let server = if let Some(rustls_config) = rustls_config {
         axum_tls::start_tls_server(listener, rustls_config, router).boxed()
     } else {
         axum_server::from_tcp(listener)

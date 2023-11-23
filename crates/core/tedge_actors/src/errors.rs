@@ -39,6 +39,9 @@ pub enum RuntimeError {
 
     #[error(transparent)]
     LinkError(#[from] LinkError),
+
+    #[error("Unknown error: {0:?}")]
+    Other(#[from] anyhow::Error),
 }
 
 impl<T> From<Box<T>> for RuntimeError

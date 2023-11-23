@@ -1,8 +1,12 @@
 use crate::file_transfer_server::error::FileTransferError;
 use crate::file_transfer_server::http_rest::http_file_transfer_server;
-use crate::file_transfer_server::http_rest::HttpConfig;
 use anyhow::Context;
 use async_trait::async_trait;
+use axum_tls::config::load_ssl_config;
+use axum_tls::config::PemReader;
+use axum_tls::config::TrustStoreLoader;
+use camino::Utf8PathBuf;
+use rustls::ServerConfig;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use tedge_actors::futures::channel::mpsc;
@@ -13,13 +17,23 @@ use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_config::OptionalConfig;
 use tokio::net::TcpListener;
 use tracing::log::info;
 
 pub struct FileTransferServerActor {
-    config: HttpConfig,
+    file_transfer_dir: Utf8PathBuf,
+    rustls_config: Option<ServerConfig>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct FileTransferServerConfig<ConfigPath, CaPath> {
+    pub file_transfer_dir: Utf8PathBuf,
+    pub cert_path: OptionalConfig<ConfigPath>,
+    pub key_path: OptionalConfig<ConfigPath>,
+    pub ca_path: CaPath,
 }
 
 /// HTTP file transfer server is stand-alone.
@@ -30,7 +44,8 @@ impl Actor for FileTransferServerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let server = http_file_transfer_server(self.listener, self.config)?;
+        let server =
+            http_file_transfer_server(self.listener, self.file_transfer_dir, self.rustls_config)?;
 
         tokio::select! {
             result = server => {
@@ -46,7 +61,8 @@ impl Actor for FileTransferServerActor {
 }
 
 pub struct FileTransferServerBuilder {
-    config: HttpConfig,
+    file_transfer_dir: Utf8PathBuf,
+    rustls_config: Option<ServerConfig>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
@@ -54,24 +70,27 @@ pub struct FileTransferServerBuilder {
 
 impl FileTransferServerBuilder {
     pub(crate) async fn try_bind(
-        socket_addr: impl Into<SocketAddr>,
-        config: HttpConfig,
+        socket_addr: SocketAddr,
+        config: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
     ) -> Result<Self, anyhow::Error> {
-        let addr = socket_addr.into();
-        let listener = TcpListener::bind(addr)
+        let listener = TcpListener::bind(socket_addr)
             .await
-            .with_context(|| format!("Binding file-transfer server to {addr}"))?;
-        Ok(Self::new(listener, config))
+            .with_context(|| format!("Binding file-transfer server to {socket_addr}"))?;
+        Self::try_new(listener, config)
     }
 
-    pub(crate) fn new(listener: TcpListener, config: HttpConfig) -> Self {
+    pub(crate) fn try_new(
+        listener: TcpListener,
+        cfg: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
+    ) -> anyhow::Result<Self> {
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        Self {
-            config,
+        Ok(Self {
+            rustls_config: load_ssl_config(cfg.cert_path, cfg.key_path, cfg.ca_path)?,
+            file_transfer_dir: cfg.file_transfer_dir,
             signal_sender,
             signal_receiver,
             listener,
-        }
+        })
     }
 }
 
@@ -85,15 +104,12 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
     type Error = Infallible;
 
     fn try_build(self) -> Result<FileTransferServerActor, Self::Error> {
-        Ok(self.build())
-    }
-
-    fn build(self) -> FileTransferServerActor {
-        FileTransferServerActor {
-            config: self.config,
+        Ok(FileTransferServerActor {
+            file_transfer_dir: self.file_transfer_dir,
+            rustls_config: self.rustls_config,
             signal_receiver: self.signal_receiver,
             listener: self.listener,
-        }
+        })
     }
 }
 
@@ -101,8 +117,10 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
 mod tests {
     use super::*;
     use anyhow::ensure;
-    use axum_tls::ssl_config;
+    use axum_tls::config::InjectedValue;
     use camino::Utf8PathBuf;
+    use mpsc::Receiver;
+    use mpsc::Sender;
     use reqwest::Certificate;
     use reqwest::Identity;
     use rustls::RootCertStore;
@@ -140,9 +158,11 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let (_listener, port_in_use) = create_listener().await?;
 
-        let binding_res =
-            FileTransferServerBuilder::try_bind(([127, 0, 0, 1], port_in_use), http_config(&ttd))
-                .await;
+        let binding_res = FileTransferServerBuilder::try_bind(
+            ([127, 0, 0, 1], port_in_use).into(),
+            http_config(&ttd),
+        )
+        .await;
 
         ensure!(
             binding_res.is_err(),
@@ -194,7 +214,7 @@ mod tests {
         let test_url = server.url_for("test/file");
 
         let upload_err = client.put(&test_url).body("file").send().await.unwrap_err();
-        axum_tls::assert_error_matches(&upload_err, rustls::AlertDescription::CertificateRequired);
+        axum_tls::assert_error_matches(upload_err, rustls::AlertDescription::CertificateRequired);
 
         Ok(())
     }
@@ -203,6 +223,7 @@ mod tests {
         port: u16,
         temp_dir: TempTedgeDir,
         server_cert: Cert,
+        server_err: Receiver<RuntimeError>,
     }
 
     impl Server<()> {
@@ -210,12 +231,14 @@ mod tests {
             let (listener, port) = create_listener().await?;
             let temp_dir = TempTedgeDir::new();
             let config = http_config(&temp_dir);
-            Self::spawn(listener, config);
+            let (tx, rx) = mpsc::channel(1);
+            Self::spawn(listener, config, tx)?;
 
             Ok(Server {
                 port,
                 temp_dir,
                 server_cert: (),
+                server_err: rx,
             })
         }
 
@@ -228,6 +251,18 @@ mod tests {
         }
     }
 
+    impl<C> Drop for Server<C> {
+        fn drop(&mut self) {
+            if let Ok(Some(value)) = self.server_err.try_next() {
+                if std::thread::panicking() {
+                    println!("Error running server: {value}")
+                } else {
+                    Err(value).context("Error running server").unwrap()
+                }
+            }
+        }
+    }
+
     impl Server<rcgen::Certificate> {
         async fn new_https(
             server_cert: rcgen::Certificate,
@@ -236,12 +271,14 @@ mod tests {
             let (listener, port) = create_listener().await?;
             let temp_dir = TempTedgeDir::new();
             let config = https_config(&temp_dir, &server_cert, trusted_root)?;
-            Self::spawn(listener, config);
+            let (tx, rx) = mpsc::channel(1);
+            Self::spawn(listener, config, tx)?;
 
             Ok(Server {
                 port,
                 temp_dir,
                 server_cert,
+                server_err: rx,
             })
         }
 
@@ -283,17 +320,26 @@ mod tests {
         }
     }
 
+    type TestConfig =
+        FileTransferServerConfig<InjectedValue<String>, InjectedValue<Option<RootCertStore>>>;
+
     impl<Cert> Server<Cert> {
         fn temp_path_for(&self, file: &str) -> Utf8PathBuf {
             self.temp_dir.utf8_path().join("file-transfer").join(file)
         }
+
         fn spawn(
             listener: TcpListener,
-            config: HttpConfig,
-        ) -> JoinHandle<Result<(), RuntimeError>> {
-            let builder = FileTransferServerBuilder::new(listener, config);
+            config: TestConfig,
+            mut error_tx: Sender<RuntimeError>,
+        ) -> anyhow::Result<JoinHandle<()>> {
+            let builder = FileTransferServerBuilder::try_new(listener, config)?;
             let actor = builder.build();
-            tokio::spawn(actor.run())
+            Ok(tokio::spawn(async move {
+                if let Err(e) = actor.run().await {
+                    let _ = error_tx.try_send(e);
+                }
+            }))
         }
     }
 
@@ -308,10 +354,12 @@ mod tests {
         Ok((listener, port))
     }
 
-    fn http_config(ttd: &TempTedgeDir) -> HttpConfig {
-        HttpConfig {
+    fn http_config(ttd: &TempTedgeDir) -> TestConfig {
+        TestConfig {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
-            rustls_config: None,
+            cert_path: OptionalConfig::empty("http.cert_path"),
+            key_path: OptionalConfig::empty("http.key_path"),
+            ca_path: InjectedValue(None),
         }
     }
 
@@ -319,11 +367,11 @@ mod tests {
         ttd: &TempTedgeDir,
         server_cert: &rcgen::Certificate,
         trusted_root_cert: Option<&rcgen::Certificate>,
-    ) -> anyhow::Result<HttpConfig> {
+    ) -> anyhow::Result<TestConfig> {
         let cert = server_cert
-            .serialize_der()
-            .context("serializing server certificate as der")?;
-        let key = server_cert.serialize_private_key_der();
+            .serialize_pem()
+            .context("serializing server certificate as pem")?;
+        let key = server_cert.serialize_private_key_pem();
 
         let root_certs = if let Some(trusted_root) = trusted_root_cert {
             let mut store = RootCertStore::empty();
@@ -333,9 +381,11 @@ mod tests {
             None
         };
 
-        Ok(HttpConfig {
+        Ok(TestConfig {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
-            rustls_config: Some(ssl_config(vec![cert], key, root_certs)?),
+            cert_path: OptionalConfig::present(InjectedValue(cert), "http.cert_path"),
+            key_path: OptionalConfig::present(InjectedValue(key), "http.key_path"),
+            ca_path: InjectedValue(root_certs),
         })
     }
 }

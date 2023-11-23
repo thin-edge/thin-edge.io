@@ -23,6 +23,7 @@ use x509_parser::prelude::FromDer;
 use x509_parser::prelude::X509Certificate;
 
 #[derive(Debug, Clone)]
+/// An [Acceptor](Accept) that accepts TLS connections via [rustls], or non TLS connections
 pub struct Acceptor {
     inner: RustlsAcceptor,
 }
@@ -34,12 +35,14 @@ impl From<ServerConfig> for Acceptor {
 }
 
 #[derive(Debug, Clone)]
+/// [Extension] data added to a request by [Acceptor]
 pub struct TlsData {
+    /// The common name of the certificate used, if a client certificate was used
     pub common_name: Option<Arc<str>>,
+    /// Whether the incoming request was made over HTTPS (`true`) or HTTP (`false`)
     pub is_secure: bool,
 }
 
-/// An [axum_server::Acceptor] that accepts TLS connections via [rustls]
 impl Acceptor {
     pub fn new(config: ServerConfig) -> Self {
         Self {
@@ -99,7 +102,7 @@ where
     }
 }
 
-pub fn common_name<'a>(cert: Option<&'a (&[u8], X509Certificate)>) -> Option<&'a str> {
+fn common_name<'a>(cert: Option<&'a (&[u8], X509Certificate)>) -> Option<&'a str> {
     cert?.1.subject.iter_common_name().next()?.as_str().ok()
 }
 
@@ -176,7 +179,7 @@ mod tests {
             .get_with_scheme(Scheme::HTTPS, &client)
             .await
             .unwrap_err();
-        crate::error_matching::assert_error_matches(&err, rustls::AlertDescription::UnknownCA);
+        crate::error_matching::assert_error_matches(err, rustls::AlertDescription::UnknownCA);
     }
 
     #[tokio::test]

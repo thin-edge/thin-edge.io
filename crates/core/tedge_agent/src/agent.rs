@@ -1,5 +1,5 @@
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
-use crate::file_transfer_server::http_rest::HttpConfig;
+use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
@@ -7,10 +7,7 @@ use crate::software_manager::config::SoftwareManagerConfig;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
-use anyhow::anyhow;
 use anyhow::Context;
-use axum_tls::load_cert;
-use axum_tls::load_pkey;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
@@ -29,9 +26,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
-use tedge_config::ReadableKey::HttpCertPath;
-use tedge_config::ReadableKey::HttpKeyPath;
-use tedge_config::TEdgeConfig;
+use tedge_config::OptionalConfig;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;
@@ -55,7 +50,7 @@ const TEDGE_AGENT: &str = "tedge-agent";
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
     pub mqtt_config: MqttConfig,
-    pub http_config: HttpConfig,
+    pub http_config: FileTransferServerConfig<Utf8PathBuf, OptionalConfig<Utf8PathBuf>>,
     pub http_socket_addr: SocketAddr,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
@@ -103,17 +98,11 @@ impl AgentConfig {
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
-        let rustls_config = if let Some((cert, key)) = load_certificate_and_key(&tedge_config)? {
-            let ca_path = tedge_config.http.ca_path.or_none();
-            let root_cert_store = ca_path.map(|s| axum_tls::read_trust_store(s)).transpose()?;
-            Some(axum_tls::ssl_config(cert, key, root_cert_store)?)
-        } else {
-            None
-        };
-
-        let http_config = HttpConfig {
+        let http_config = FileTransferServerConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),
-            rustls_config,
+            cert_path: tedge_config.http.cert_path.clone(),
+            key_path: tedge_config.http.key_path.clone(),
+            ca_path: tedge_config.http.ca_path.clone(),
         };
         let http_socket_addr = SocketAddr::from((http_bind_address, http_port));
 
@@ -149,27 +138,6 @@ impl AgentConfig {
             service_type: tedge_config.service.ty.clone(),
             identity,
         })
-    }
-}
-
-type CertKeyPair = (Vec<Vec<u8>>, Vec<u8>);
-
-fn load_certificate_and_key(config: &TEdgeConfig) -> anyhow::Result<Option<CertKeyPair>> {
-    let paths = tedge_config::all_or_nothing((
-        config.http.cert_path.as_ref(),
-        config.http.key_path.as_ref(),
-    ))
-    .map_err(|e| anyhow!("{e}"))?;
-
-    if let Some((external_cert_file, external_key_file)) = paths {
-        Ok(Some((
-            load_cert(external_cert_file)
-                .with_context(|| format!("reading certificate configured in {HttpCertPath}"))?,
-            load_pkey(external_key_file)
-                .with_context(|| format!("reading private key configured in `{HttpKeyPath}`"))?,
-        )))
-    } else {
-        Ok(None)
     }
 }
 
