@@ -25,9 +25,7 @@ fn main() -> anyhow::Result<()> {
         TEdgeOptMulticall::Component(Component::TedgeMapper(mapper_opt)) => {
             block_on(tedge_mapper::run(mapper_opt))
         }
-        TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => {
-            block_on(tedge_agent::run(opt, true))
-        }
+        TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => block_on(tedge_agent::run(opt)),
         TEdgeOptMulticall::Component(Component::TedgeLogPlugin(opt)) => {
             block_on(tedge_log_plugin::run(opt))
         }
