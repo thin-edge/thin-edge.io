@@ -13,7 +13,7 @@ use serde::Serialize;
 use time::OffsetDateTime;
 
 /// A command instance with its target and its current state of execution
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Command<Payload> {
     pub target: EntityTopicId,
     pub cmd_id: String,
