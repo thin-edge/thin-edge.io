@@ -2192,6 +2192,7 @@ dependencies = [
  "log",
  "mqtt_tests",
  "rumqttc",
+ "serde",
  "serial_test",
  "thiserror",
  "tokio",
