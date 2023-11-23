@@ -9,8 +9,6 @@ use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
-use tedge_configuration_plugin::ConfigPluginOpt;
-use tedge_log_plugin::LogfilePluginOpt;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
@@ -53,10 +51,6 @@ pub enum Component {
     TedgeMapper(MapperOpt),
 
     TedgeAgent(AgentOpt),
-
-    TedgeLogPlugin(LogfilePluginOpt),
-
-    TedgeConfigurationPlugin(ConfigPluginOpt),
 
     C8yFirmwarePlugin(FirmwarePluginOpt),
 

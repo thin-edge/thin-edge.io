@@ -26,12 +26,6 @@ fn main() -> anyhow::Result<()> {
             block_on(tedge_mapper::run(mapper_opt))
         }
         TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => block_on(tedge_agent::run(opt)),
-        TEdgeOptMulticall::Component(Component::TedgeLogPlugin(opt)) => {
-            block_on(tedge_log_plugin::run(opt))
-        }
-        TEdgeOptMulticall::Component(Component::TedgeConfigurationPlugin(cp_opt)) => {
-            block_on(tedge_configuration_plugin::run(cp_opt))
-        }
         TEdgeOptMulticall::Component(Component::C8yFirmwarePlugin(fp_opt)) => {
             block_on(c8y_firmware_plugin::run(fp_opt))
         }
