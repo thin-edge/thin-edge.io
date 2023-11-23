@@ -10,6 +10,9 @@ use tokio::io::AsyncWriteExt;
 /// Write file to filesystem atomically using std::fs synchronously.
 pub fn atomically_write_file_sync(dest: impl AsRef<Path>, content: &[u8]) -> std::io::Result<()> {
     let dest_dir = parent_dir(dest.as_ref());
+    // FIXME: `.with_extension` replaces file extension, so if we used this
+    // function to write files `file.txt`, `file.bin`, `file.jpg`, etc.
+    // concurrently, then this will result in an error
     let tempfile = PathBuf::from(dest.as_ref()).with_extension("tmp");
 
     // Write the content on a temp file

@@ -15,5 +15,5 @@ repository.workspace = true
 anyhow.workspace = true
 camino.workspace = true
 clap.workspace = true
-uzers.workspace = true
 nix.workspace = true
+uzers.workspace = true
