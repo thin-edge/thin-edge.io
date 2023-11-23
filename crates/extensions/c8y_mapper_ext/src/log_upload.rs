@@ -57,13 +57,6 @@ impl CumulocityConverter {
         &self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        if !self.config.capabilities.log_upload {
-            warn!(
-                "Received a c8y_LogfileRequest operation, however, log_upload feature is disabled"
-            );
-            return Ok(vec![]);
-        }
-
         let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
         let device_external_id = log_request.device.into();
         let target = self

@@ -614,9 +614,19 @@ impl CumulocityConverter {
         match get_smartrest_device_id(payload) {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    "522" => self.convert_log_upload_request(payload),
-                    "524" => self.convert_config_update_request(payload).await,
-                    "526" => self.convert_config_snapshot_request(payload),
+                    // Need a check of capabilities so that user can still use custom template if disabled
+                    "522" if self.config.capabilities.log_upload => {
+                        self.convert_log_upload_request(payload)
+                    }
+                    "524" if self.config.capabilities.config_update => {
+                        self.convert_config_update_request(payload).await
+                    }
+                    "526" if self.config.capabilities.config_snapshot => {
+                        self.convert_config_snapshot_request(payload)
+                    }
+                    "515" if self.config.capabilities.firmware_update => {
+                        self.convert_firmware_update_request(payload)
+                    }
                     "528" => self.forward_software_request(payload).await,
                     "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
@@ -1029,6 +1039,9 @@ impl CumulocityConverter {
                     OperationType::ConfigUpdate => {
                         self.convert_config_update_metadata(&source, message)?
                     }
+                    OperationType::FirmwareUpdate => {
+                        self.convert_firmware_metadata(&source, message)?
+                    }
                     _ => vec![],
                 }
             }
@@ -1079,6 +1092,15 @@ impl CumulocityConverter {
                 self.handle_config_update_state_change(&source, cmd_id, message)
                     .await?
             }
+
+            Channel::Command {
+                operation: OperationType::FirmwareUpdate,
+                cmd_id,
+            } if self.command_id.is_generator_of(cmd_id) => {
+                self.handle_firmware_update_state_change(&source, message)
+                    .await?
+            }
+
             Channel::Health => self.process_health_status_message(&source, message).await?,
 
             _ => vec![],
