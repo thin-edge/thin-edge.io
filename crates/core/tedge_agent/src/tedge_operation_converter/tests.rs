@@ -115,9 +115,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
         .assert_received([RestartCommand {
             target: target_device.parse()?,
             cmd_id: "random".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Scheduled,
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Scheduled),
         }])
         .await;
 
@@ -221,9 +219,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     let executing_response = RestartCommand {
         target: EntityTopicId::default_main_device(),
         cmd_id: "abc".to_string(),
-        payload: RestartCommandPayload {
-            status: CommandStatus::Executing,
-        },
+        payload: RestartCommandPayload::new(CommandStatus::Executing),
     };
     restart_box.send(executing_response).await?;
 

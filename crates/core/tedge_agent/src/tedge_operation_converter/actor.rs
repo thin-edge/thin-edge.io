@@ -114,6 +114,27 @@ impl TedgeOperationConverterActor {
                 // TODO fail the operation on timeout
                 Ok(())
             }
+            Ok(Some((
+                state,
+                OperationAction::Restart {
+                    on_exec,
+                    on_success,
+                    on_error,
+                },
+            ))) => {
+                let step = &state.status;
+                info!("Restarting in the context of {operation} operation {step} step");
+                let cmd = RestartCommand::with_context(
+                    target,
+                    cmd_id.clone(),
+                    state.clone(),
+                    on_exec,
+                    on_success,
+                    on_error,
+                );
+                self.restart_sender.send(cmd).await?;
+                Ok(())
+            }
             Ok(Some((state, OperationAction::Script(script)))) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
@@ -132,6 +153,10 @@ impl TedgeOperationConverterActor {
             }
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {
                 info!("Ignoring {operation} operation which is not registered");
+                Ok(())
+            }
+            Err(WorkflowExecutionError::UnknownStep { operation, step }) => {
+                info!("No action defined for {operation} operation {step} step");
                 Ok(())
             }
             Err(err) => {
@@ -213,7 +238,10 @@ impl TedgeOperationConverterActor {
         &mut self,
         response: RestartCommand,
     ) -> Result<(), RuntimeError> {
-        let message = response.command_message(&self.mqtt_schema);
+        let message = match response.resume_context() {
+            None => response.command_message(&self.mqtt_schema),
+            Some(context) => context.into_message(),
+        };
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }

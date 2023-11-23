@@ -4,6 +4,8 @@ use crate::mqtt_topics::OperationType;
 use log::info;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
+use mqtt_channel::QoS::AtLeastOnce;
+use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -53,6 +55,13 @@ pub enum OperationAction {
 
     /// The command is delegated to a participant identified by its name
     Delegate(String),
+
+    /// Restart the device
+    Restart {
+        on_exec: StateName,
+        on_success: StateName,
+        on_error: StateName,
+    },
 
     /// A script has to be executed
     Script(String),
@@ -240,6 +249,23 @@ impl From<&OperationState> for OperationAction {
     // TODO this must be called when an operation is registered, not when invoked.
     fn from(state: &OperationState) -> Self {
         match &state.script {
+            Some(script) if script == "restart" => {
+                let (on_exec, on_success, on_error) = match &state.next[..] {
+                    [] => ("executing", "successful", "failed"),
+                    [restarting] => (restarting.as_ref(), "successful", "failed"),
+                    [restarting, successful] => {
+                        (restarting.as_ref(), successful.as_ref(), "failed")
+                    }
+                    [restarting, successful, failed, ..] => {
+                        (restarting.as_ref(), successful.as_ref(), failed.as_str())
+                    }
+                };
+                OperationAction::Restart {
+                    on_exec: on_exec.to_string(),
+                    on_success: on_success.to_string(),
+                    on_error: on_error.to_string(),
+                }
+            }
             Some(script) => OperationAction::Script(script.to_owned()),
             None => match &state.owner {
                 Some(owner) if owner == "tedge" => OperationAction::BuiltIn,
@@ -255,9 +281,9 @@ impl From<&OperationState> for OperationAction {
 }
 
 /// Generic command state that can be used to manipulate any type of command payload.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct GenericCommandState {
-    pub topic: String,
+    pub topic: Topic,
     pub status: String,
     pub payload: Value,
 }
@@ -269,7 +295,7 @@ impl GenericCommandState {
         if payload.is_empty() {
             return Ok(None);
         }
-        let topic = message.topic.name.clone();
+        let topic = message.topic.clone();
         let json: Value = serde_json::from_slice(payload)?;
         let status = GenericCommandState::extract_text_property(&json, "status")
             .ok_or(WorkflowExecutionError::MissingStatus)?;
@@ -278,6 +304,14 @@ impl GenericCommandState {
             status,
             payload: json,
         }))
+    }
+
+    pub fn into_message(self) -> Message {
+        let topic = &self.topic;
+        let payload = self.payload.to_string();
+        Message::new(topic, payload)
+            .with_retain()
+            .with_qos(AtLeastOnce)
     }
 
     /// Serialize the command state as a json payload
@@ -404,12 +438,12 @@ impl GenericCommandState {
         match path {
             "." => Some(
                 json!({
-                    "topic": self.topic,
+                    "topic": self.topic.name,
                     "payload": self.payload
                 })
                 .to_string(),
             ),
-            ".topic" => Some(self.topic.clone()),
+            ".topic" => Some(self.topic.name.clone()),
             ".topic.target" => self.target(),
             ".topic.operation" => self.operation(),
             ".topic.cmd_id" => self.cmd_id(),
@@ -421,21 +455,21 @@ impl GenericCommandState {
     }
 
     fn target(&self) -> Option<String> {
-        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
             _ => None,
         }
     }
 
     fn operation(&self) -> Option<String> {
-        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
             _ => None,
         }
     }
 
     fn cmd_id(&self) -> Option<String> {
-        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
             _ => None,
         }
@@ -477,7 +511,7 @@ mod tests {
         assert_eq!(
             cmd,
             GenericCommandState {
-                topic: "te/device/main///cmd/make_it/123".to_string(),
+                topic: topic.clone(),
                 status: "init".to_string(),
                 payload: json!({
                     "status": "init",
@@ -493,7 +527,7 @@ mod tests {
         assert_eq!(
             update_cmd,
             GenericCommandState {
-                topic: "te/device/main///cmd/make_it/123".to_string(),
+                topic: topic.clone(),
                 status: "executing".to_string(),
                 payload: json!({
                     "status": "executing",
@@ -509,7 +543,7 @@ mod tests {
         assert_eq!(
             final_cmd,
             GenericCommandState {
-                topic: "te/device/main///cmd/make_it/123".to_string(),
+                topic: topic.clone(),
                 status: "failed".to_string(),
                 payload: json!({
                     "status": "failed",
@@ -544,7 +578,10 @@ mod tests {
                 }
             })
         );
-        assert_eq!(cmd.inject_parameter("${.topic}"), cmd.topic);
+        assert_eq!(
+            cmd.inject_parameter("${.topic}"),
+            "te/device/main///cmd/make_it/123"
+        );
         assert_eq!(cmd.inject_parameter("${.topic.target}"), "device/main//");
         assert_eq!(cmd.inject_parameter("${.topic.operation}"), "make_it");
         assert_eq!(cmd.inject_parameter("${.topic.cmd_id}"), "123");

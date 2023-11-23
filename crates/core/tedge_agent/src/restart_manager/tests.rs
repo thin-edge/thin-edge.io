@@ -41,9 +41,7 @@ async fn test_pending_restart_operation() -> Result<(), DynError> {
         .assert_received([RestartCommand {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Successful,
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Successful),
         }])
         .await;
 
@@ -71,11 +69,9 @@ async fn test_pending_restart_operation_failed() -> Result<(), DynError> {
         .assert_received([RestartCommand {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Failed {
-                    reason: "The agent has been restarted but not the device".to_string(),
-                },
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Failed {
+                reason: "The agent has been restarted but not the device".to_string(),
+            }),
         }])
         .await;
 
@@ -95,9 +91,7 @@ async fn test_new_restart_operation() -> Result<(), DynError> {
         .send(RestartCommand {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Scheduled,
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Scheduled),
         })
         .await?;
 

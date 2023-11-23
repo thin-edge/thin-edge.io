@@ -259,3 +259,27 @@ The script exit status and output is used to determine the next step for the com
   (adding new fields, overriding overlapping ones, keeping previous unchanged ones).
 - If the script returns a json payload with a `status` field this status is used as the new status for the command.
 - If the script output is empty, then the exit status of the process is used to determine the next step. 
+
+### Restart action
+
+A workflow can trigger a device restart, using the builtin __restart__ action.
+
+This action is controlled by three states:
+- the *on_executing* state to which the workflow moves before the reboot is triggered
+- the *on_success* state to which the workflow resumes after a successful device reboot
+- the *on_error* state to which the workflow resumes in case the reboot fails
+
+For instance, the following triggers a reboot from the `reboot_required` state
+and moves to `restarting` waiting for the device to restart
+and finally to either `successful_restart` or `failed_restart`,
+depending on the actual status of the reboot. 
+
+```
+[reboot_required]
+script = "restart"
+next = ["restarting", "successful_restart", "failed_restart"]
+```
+
+:::note
+This file format is not finalized and will likely be revised.
+:::
