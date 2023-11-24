@@ -1,7 +1,7 @@
 ---
 title: Configuration Management
 tags: [Reference, Configuration]
-sidebar_position: 8
+sidebar_position: 6
 ---
 
 # Configuration Management Plugin

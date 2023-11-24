@@ -389,6 +389,10 @@ define_tedge_config! {
             /// Enable config_update feature
             #[tedge_config(example = "true", default(value = true))]
             config_update: bool,
+
+            /// Enable firmware_update feature
+            #[tedge_config(example = "true", default(value = false))]
+            firmware_update: bool,
         },
 
         proxy: {

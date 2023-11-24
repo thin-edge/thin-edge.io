@@ -37,6 +37,7 @@ tedge_file_system_ext = { workspace = true }
 tedge_health_ext = { workspace = true }
 tedge_log_manager = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
+tedge_script_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }

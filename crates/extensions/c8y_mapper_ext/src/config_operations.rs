@@ -77,11 +77,6 @@ impl CumulocityConverter {
         &self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        if !self.config.capabilities.config_snapshot {
-            warn!("Received a c8y_UploadConfigFile operation, however, config_snapshot feature is disabled");
-            return Ok(vec![]);
-        }
-
         let snapshot_request = SmartRestConfigUploadRequest::from_smartrest(smartrest)?;
         let target = self
             .entity_store
@@ -298,13 +293,6 @@ impl CumulocityConverter {
         &mut self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        if !self.config.capabilities.config_update {
-            warn!(
-                "Received a c8y_DownloadConfigFile operation, however, config_update feature is disabled"
-            );
-            return Ok(vec![]);
-        }
-
         let smartrest = SmartRestConfigDownloadRequest::from_smartrest(smartrest)?;
         let target = self
             .entity_store

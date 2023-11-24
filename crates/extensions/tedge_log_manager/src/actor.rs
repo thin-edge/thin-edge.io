@@ -106,7 +106,9 @@ impl LogManagerActor {
                         self.handle_logfile_request_operation(&message.topic, request)
                             .await?;
                     }
-                    CommandStatus::Successful | CommandStatus::Failed { .. } => {}
+                    CommandStatus::Scheduled
+                    | CommandStatus::Successful
+                    | CommandStatus::Failed { .. } => {}
                 },
                 Ok(None) => {}
                 Err(err) => {

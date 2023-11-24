@@ -12,20 +12,27 @@ use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
+use log::error;
 use reqwest::Identity;
+use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
+use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::Runtime;
+use tedge_actors::ServerActorBuilder;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
+use tedge_api::workflow::OperationWorkflow;
+use tedge_api::workflow::WorkflowSupervisor;
 use tedge_config::OptionalConfig;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
@@ -39,6 +46,7 @@ use tedge_log_manager::LogManagerOptions;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::create_directory_with_defaults;
@@ -58,6 +66,7 @@ pub(crate) struct AgentConfig {
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
     pub data_dir: DataDir,
+    pub operations_dir: Utf8PathBuf,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
@@ -118,6 +127,7 @@ impl AgentConfig {
 
         // For agent specific
         let log_dir = tedge_config.logs.path.join("tedge").join("agent");
+        let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
 
@@ -131,6 +141,7 @@ impl AgentConfig {
             use_lock,
             data_dir,
             log_dir,
+            operations_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
@@ -167,6 +178,7 @@ impl Agent {
         create_directory_with_defaults(&self.config.data_dir)?;
         create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
         create_directory_with_defaults(self.config.data_dir.cache_dir())?;
+        create_directory_with_defaults(self.config.operations_dir.clone())?;
 
         Ok(())
     }
@@ -180,6 +192,10 @@ impl Agent {
         let runtime_events_logger = None;
         let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
+        // Operation workflows
+        let workflows = self.load_operation_workflows().await?;
+        let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
+
         // File transfer server actor
         let file_transfer_server_builder =
             FileTransferServerBuilder::try_bind(self.config.http_config).await?;
@@ -188,7 +204,7 @@ impl Agent {
         let mut restart_actor_builder = RestartManagerBuilder::new(self.config.restart_config);
 
         // Mqtt actor
-        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
+        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config);
 
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
@@ -197,9 +213,11 @@ impl Agent {
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
             self.config.mqtt_topic_root.as_ref(),
             self.config.mqtt_device_topic_id.clone(),
+            workflows,
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,
+            &mut script_runner,
         );
 
         // Shutdown on SIGINT
@@ -273,6 +291,7 @@ impl Agent {
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
+        runtime.spawn(script_runner).await?;
         runtime.spawn(converter_actor_builder).await?;
         runtime.spawn(health_actor).await?;
 
@@ -293,6 +312,43 @@ impl Agent {
 
         Ok(())
     }
+
+    async fn load_operation_workflows(&self) -> Result<WorkflowSupervisor, anyhow::Error> {
+        let dir_path = &self.config.operations_dir;
+        let mut workflows = WorkflowSupervisor::default();
+        for entry in std::fs::read_dir(dir_path)?.flatten() {
+            let file = entry.path();
+            if file.extension() == Some(OsStr::new("toml")) {
+                match read_operation_workflow(&file)
+                    .await
+                    .and_then(|workflow| load_operation_workflow(&mut workflows, workflow))
+                {
+                    Ok(cmd) => {
+                        info!("Using operation workflow definition from {file:?} for '{cmd}' operation");
+                    }
+                    Err(err) => {
+                        error!("Ignoring operation workflow definition from {file:?}: {err}")
+                    }
+                };
+            }
+        }
+        Ok(workflows)
+    }
+}
+
+async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyhow::Error> {
+    Ok(toml::from_str(std::str::from_utf8(
+        &tokio::fs::read(path).await?,
+    )?)?)
+}
+
+fn load_operation_workflow(
+    workflows: &mut WorkflowSupervisor,
+    workflow: OperationWorkflow,
+) -> Result<String, anyhow::Error> {
+    let name = workflow.operation.to_string();
+    workflows.register_custom_workflow(workflow)?;
+    Ok(name)
 }
 
 pub fn create_tedge_to_te_converter(

@@ -3664,6 +3664,7 @@ dependencies = [
  "tedge_health_ext",
  "tedge_log_manager",
  "tedge_mqtt_ext",
+ "tedge_script_ext",
  "tedge_signal_ext",
  "tedge_test_utils",
  "tedge_uploader_ext",

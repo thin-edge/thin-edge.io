@@ -53,7 +53,8 @@ impl Actor for RestartManagerActor {
         }
 
         while let Some(request) = self.message_box.recv().await {
-            if request.status() != CommandStatus::Init {
+            if request.status() != CommandStatus::Scheduled {
+                // Only handle commands in the scheduled state
                 continue;
             }
             let executing_response = self.update_state_repository(request.clone()).await;

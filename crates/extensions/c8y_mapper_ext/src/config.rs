@@ -121,6 +121,7 @@ impl C8yMapperConfig {
             log_upload: tedge_config.c8y.enable.log_upload,
             config_snapshot: tedge_config.c8y.enable.config_snapshot,
             config_update: tedge_config.c8y.enable.config_update,
+            firmware_update: tedge_config.c8y.enable.firmware_update,
         };
 
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
@@ -145,6 +146,11 @@ impl C8yMapperConfig {
         }
         if capabilities.config_update {
             topics.add_all(crate::config_operations::config_update_topic_filter(
+                &mqtt_schema,
+            ));
+        }
+        if capabilities.firmware_update {
+            topics.add_all(crate::firmware_update::firmware_update_topic_filter(
                 &mqtt_schema,
             ));
         }

@@ -1,5 +1,6 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
+use std::process::Output;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -18,11 +19,13 @@ use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_script_ext::Execute;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -35,7 +38,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/main///cmd/software_list/some-cmd-id"),
-        r#"{ "status": "init" }"#,
+        r#"{ "status": "scheduled" }"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -44,7 +47,8 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
         .assert_received([SoftwareListCommand::new(
             &EntityTopicId::default_main_device(),
             "some-cmd-id".to_string(),
-        )])
+        )
+        .with_status(CommandStatus::Scheduled)])
         .await;
     Ok(())
 }
@@ -58,7 +62,7 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     // Simulate SoftwareUpdate MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child001///cmd/software_update/1234"),
-        r#"{"status":"init","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
+        r#"{"status":"scheduled","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -81,7 +85,7 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
             target: EntityTopicId::default_child_device("child001").unwrap(),
             cmd_id: "1234".to_string(),
             payload: SoftwareUpdateCommandPayload {
-                status: CommandStatus::Init,
+                status: CommandStatus::Scheduled,
                 update_list: vec![debian_list],
                 failures: vec![],
             },
@@ -102,7 +106,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
     // Simulate Restart MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked(&format!("te/{target_device}/cmd/restart/random")),
-        r#"{"status": "init"}"#,
+        r#"{"status": "scheduled"}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -112,7 +116,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
             target: target_device.parse()?,
             cmd_id: "random".to_string(),
             payload: RestartCommandPayload {
-                status: CommandStatus::Init,
+                status: CommandStatus::Scheduled,
             },
         }])
         .await;
@@ -250,13 +254,19 @@ async fn spawn_mqtt_operation_converter(
         SimpleMessageBoxBuilder::new("Restart", 5);
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
+    let mut script_builder: SimpleMessageBoxBuilder<Execute, std::io::Result<Output>> =
+        SimpleMessageBoxBuilder::new("Script", 5);
+
+    let workflows = WorkflowSupervisor::default();
 
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
         "te",
         device_topic_id.parse().expect("Invalid topic id"),
+        workflows,
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,
+        &mut script_builder,
     );
 
     let software_box = software_builder.build().with_timeout(TEST_TIMEOUT_MS);

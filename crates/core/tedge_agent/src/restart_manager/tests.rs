@@ -107,7 +107,7 @@ async fn test_new_restart_operation() -> Result<(), DynError> {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
             payload: RestartCommandPayload {
-                status: CommandStatus::Init,
+                status: CommandStatus::Scheduled,
             },
         })
         .await?;
