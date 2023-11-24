@@ -9,10 +9,10 @@ Suite Setup            Custom Setup
 Suite Teardown         Custom Teardown
 
 *** Test Cases ***
-Validate updated data path used by tedge-agent
+Validate updated log path used by tedge-agent
     Execute Command    sudo tedge config set logs.path /var/test
     Restart Service    tedge-agent
-    Directory Should Exist    /var/test/tedge/agent
+    Directory Should Exist    /var/test/agent
 
 *** Keywords ***
 Custom Setup

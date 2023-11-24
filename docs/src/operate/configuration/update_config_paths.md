@@ -14,7 +14,7 @@ The following table captures the paths that can be changed, with their default l
 | Config Key | Description | Default Value |
 |------------|-------------|---------------|
 | tmp.path | Directory where temporary files are created/stored. E.g: while downloading files | `/tmp` |
-| logs.path | Directory where log files are created | `/var/log` |
+| logs.path | Directory where log files are created | `/var/log/tedge` |
 | run.path | Directory where runtime information are stored | `/run` |
 | data.path | Directory where data files are stored. E.g: Cached binary files, operation metadata etc | `/var/tedge` |
 

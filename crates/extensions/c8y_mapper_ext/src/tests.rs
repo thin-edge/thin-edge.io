@@ -2475,7 +2475,7 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
 }
 
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
-    let paths = fs::read_dir(cfg_dir.to_path_buf().join("tedge/agent")).unwrap();
+    let paths = fs::read_dir(cfg_dir.to_path_buf().join("agent")).unwrap();
     for path in paths {
         let mut file =
             File::open(path.unwrap().path()).expect("Unable to open the command exec log file");
