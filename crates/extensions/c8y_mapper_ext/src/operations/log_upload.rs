@@ -6,8 +6,7 @@ use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use anyhow::Context;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -51,18 +50,17 @@ pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
 }
 
 impl CumulocityConverter {
-    /// Convert a SmartREST logfile request to a Thin Edge log_upload command
+    /// Convert c8y_LogfileRequest operation to a ThinEdge log_upload command
     pub fn convert_log_upload_request(
         &self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
+        log_request: C8yLogfileRequest,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
-        let device_external_id = log_request.device.into();
         let target = self
             .entity_store
-            .try_get_by_external_id(&device_external_id)?;
+            .try_get_by_external_id(&device_xid.into())?;
 
-        let cmd_id = self.command_id.new_id();
         let channel = Channel::Command {
             operation: OperationType::LogUpload,
             cmd_id: cmd_id.clone(),
@@ -73,18 +71,18 @@ impl CumulocityConverter {
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
             &self.config.tedge_http_host,
             target.external_id.as_ref(),
-            log_request.log_type,
+            log_request.log_file,
             cmd_id
         );
 
         let request = LogUploadCmdPayload {
             status: CommandStatus::Init,
             tedge_url,
-            log_type: log_request.log_type,
+            log_type: log_request.log_file,
             date_from: log_request.date_from,
             date_to: log_request.date_to,
-            search_text: log_request.search_text,
-            lines: log_request.lines,
+            search_text: Some(log_request.search_text).filter(|s| !s.is_empty()),
+            lines: log_request.maximum_lines,
         };
 
         // Command messages must be retained
@@ -294,7 +292,7 @@ impl CumulocityConverter {
 mod tests {
     use super::*;
     use crate::tests::*;
-    use c8y_api::smartrest::topic::C8yTopic;
+    use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
@@ -316,56 +314,43 @@ mod tests {
 
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate c8y_LogfileRequest SmartREST request
+        // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
-            &C8yTopic::downstream_topic(),
-            "522,test-device,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
-        ))
-            .await
-            .expect("Send failed");
-
-        let (topic, received_json) = mqtt
-            .recv()
-            .await
-            .map(|msg| {
-                (
-                    msg.topic,
-                    serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
-                        .expect("JSON"),
-                )
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_LogfileRequest": {
+                    "searchText": "ERROR",
+                    "logFile": "logfileA",
+                    "dateTo": "2023-11-29T16:33:50+0100",
+                    "dateFrom": "2023-11-28T16:33:50+0100",
+                    "maximumLines": 1000
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                 }
             })
-            .unwrap();
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
 
-        let mqtt_schema = MqttSchema::default();
-        let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
-        assert_eq!(entity, "device/main//");
-
-        if let Channel::Command {
-            operation: OperationType::LogUpload,
-            cmd_id,
-        } = channel
-        {
-            // Validate the topic name
-            assert_eq!(
-                topic.name,
-                format!("te/device/main///cmd/log_upload/{cmd_id}")
-            );
-
-            // Validate the payload JSON
-            let expected_json = json!({
-                "status": "init",
-                "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-{cmd_id}"),
-                "type": "logfileA",
-                "dateFrom": "2013-06-22T17:03:14.123+02:00",
-                "dateTo": "2013-06-23T18:03:14.123+02:00",
-                "searchText": "ERROR",
-                "lines": 1000
-            });
-
-            assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
-        } else {
-            panic!("Unexpected response on channel: {:?}", topic)
-        }
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/log_upload/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-c8y-mapper-123456",
+                    "type": "logfileA",
+                    "dateFrom": "2023-11-28T16:33:50+01:00",
+                    "dateTo": "2023-11-29T16:33:50+01:00",
+                    "searchText": "ERROR",
+                    "lines": 1000
+                }),
+            )],
+        ).await;
     }
 
     #[tokio::test]
@@ -386,56 +371,43 @@ mod tests {
 
         mqtt.skip(3).await; //Skip entity registration, mapping and supported log types messages
 
-        // Simulate c8y_LogfileRequest SmartREST request
+        // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
-            &C8yTopic::downstream_topic(),
-            "522,test-device:device:DeviceSerial,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
-        ))
-            .await
-            .expect("Send failed");
-
-        let (topic, received_json) = mqtt
-            .recv()
-            .await
-            .map(|msg| {
-                (
-                    msg.topic,
-                    serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
-                        .expect("JSON"),
-                )
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_LogfileRequest": {
+                    "searchText": "ERROR",
+                    "logFile": "logfileA",
+                    "dateTo": "2023-11-29T16:33:50+0100",
+                    "dateFrom": "2023-11-28T16:33:50+0100",
+                    "maximumLines": 1000
+                },
+                "externalSource": {
+                    "externalId": "test-device:device:DeviceSerial",
+                    "type": "c8y_Serial"
+                 }
             })
-            .unwrap();
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
 
-        let mqtt_schema = MqttSchema::default();
-        let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
-        assert_eq!(entity, "device/DeviceSerial//");
-
-        if let Channel::Command {
-            operation: OperationType::LogUpload,
-            cmd_id,
-        } = channel
-        {
-            // Validate the topic name
-            assert_eq!(
-                topic.name,
-                format!("te/device/DeviceSerial///cmd/log_upload/{cmd_id}")
-            );
-
-            // Validate the payload JSON
-            let expected_json = json!({
-                "status": "init",
-                "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device:device:DeviceSerial/log_upload/logfileA-{cmd_id}"),
-                "type": "logfileA",
-                "dateFrom": "2013-06-22T17:03:14.123+02:00",
-                "dateTo": "2013-06-23T18:03:14.123+02:00",
-                "searchText": "ERROR",
-                "lines": 1000
-            });
-
-            assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
-        } else {
-            panic!("Unexpected response on channel: {:?}", topic)
-        }
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/DeviceSerial///cmd/log_upload/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device:device:DeviceSerial/log_upload/logfileA-c8y-mapper-123456",
+                    "type": "logfileA",
+                    "dateFrom": "2023-11-28T16:33:50+01:00",
+                    "dateTo": "2023-11-29T16:33:50+01:00",
+                    "searchText": "ERROR",
+                    "lines": 1000
+                }),
+            )],
+        ).await;
     }
 
     #[tokio::test]
