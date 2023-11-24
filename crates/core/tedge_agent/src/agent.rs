@@ -51,7 +51,6 @@ const TEDGE_AGENT: &str = "tedge-agent";
 pub(crate) struct AgentConfig {
     pub mqtt_config: MqttConfig,
     pub http_config: FileTransferServerConfig<Utf8PathBuf, OptionalConfig<Utf8PathBuf>>,
-    pub http_socket_addr: SocketAddr,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,
@@ -103,8 +102,8 @@ impl AgentConfig {
             cert_path: tedge_config.http.cert_path.clone(),
             key_path: tedge_config.http.key_path.clone(),
             ca_path: tedge_config.http.ca_path.clone(),
+            bind_addr: SocketAddr::from((http_bind_address, http_port)),
         };
-        let http_socket_addr = SocketAddr::from((http_bind_address, http_port));
 
         // Restart config
         let restart_config =
@@ -125,7 +124,6 @@ impl AgentConfig {
         Ok(Self {
             mqtt_config,
             http_config,
-            http_socket_addr,
             restart_config,
             sw_update_config,
             config_dir,
@@ -183,11 +181,8 @@ impl Agent {
         let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
         // File transfer server actor
-        let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
-            self.config.http_socket_addr,
-            self.config.http_config,
-        )
-        .await?;
+        let file_transfer_server_builder =
+            FileTransferServerBuilder::try_bind(self.config.http_config).await?;
 
         // Restart actor
         let mut restart_actor_builder = RestartManagerBuilder::new(self.config.restart_config);

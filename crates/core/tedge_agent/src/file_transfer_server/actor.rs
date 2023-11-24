@@ -34,6 +34,7 @@ pub(crate) struct FileTransferServerConfig<ConfigPath, CaPath> {
     pub cert_path: OptionalConfig<ConfigPath>,
     pub key_path: OptionalConfig<ConfigPath>,
     pub ca_path: CaPath,
+    pub bind_addr: SocketAddr,
 }
 
 /// HTTP file transfer server is stand-alone.
@@ -70,23 +71,16 @@ pub struct FileTransferServerBuilder {
 
 impl FileTransferServerBuilder {
     pub(crate) async fn try_bind(
-        socket_addr: SocketAddr,
         config: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
     ) -> Result<Self, anyhow::Error> {
-        let listener = TcpListener::bind(socket_addr)
+        let listener = TcpListener::bind(config.bind_addr)
             .await
-            .with_context(|| format!("Binding file-transfer server to {socket_addr}"))?;
-        Self::try_new(listener, config)
-    }
-
-    pub(crate) fn try_new(
-        listener: TcpListener,
-        cfg: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
-    ) -> anyhow::Result<Self> {
+            .with_context(|| format!("Binding file-transfer server to {}", config.bind_addr))?;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+
         Ok(Self {
-            rustls_config: load_ssl_config(cfg.cert_path, cfg.key_path, cfg.ca_path)?,
-            file_transfer_dir: cfg.file_transfer_dir,
+            rustls_config: load_ssl_config(config.cert_path, config.key_path, config.ca_path)?,
+            file_transfer_dir: config.file_transfer_dir,
             signal_sender,
             signal_receiver,
             listener,
@@ -127,7 +121,6 @@ mod tests {
     use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
-    use tokio::task::JoinHandle;
 
     #[tokio::test]
     async fn http_server_put_and_get() -> anyhow::Result<()> {
@@ -158,11 +151,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let (_listener, port_in_use) = create_listener().await?;
 
-        let binding_res = FileTransferServerBuilder::try_bind(
-            ([127, 0, 0, 1], port_in_use).into(),
-            http_config(&ttd),
-        )
-        .await;
+        let binding_res = FileTransferServerBuilder::try_bind(http_config(&ttd, port_in_use)).await;
 
         ensure!(
             binding_res.is_err(),
@@ -228,11 +217,10 @@ mod tests {
 
     impl Server<()> {
         async fn new_http() -> anyhow::Result<Self> {
-            let (listener, port) = create_listener().await?;
             let temp_dir = TempTedgeDir::new();
-            let config = http_config(&temp_dir);
+            let config = http_config(&temp_dir, 0);
             let (tx, rx) = mpsc::channel(1);
-            Self::spawn(listener, config, tx)?;
+            let port = Self::spawn(config, tx).await?;
 
             Ok(Server {
                 port,
@@ -268,11 +256,10 @@ mod tests {
             server_cert: rcgen::Certificate,
             trusted_root: Option<&rcgen::Certificate>,
         ) -> anyhow::Result<Self> {
-            let (listener, port) = create_listener().await?;
             let temp_dir = TempTedgeDir::new();
             let config = https_config(&temp_dir, &server_cert, trusted_root)?;
             let (tx, rx) = mpsc::channel(1);
-            Self::spawn(listener, config, tx)?;
+            let port = Self::spawn(config, tx).await?;
 
             Ok(Server {
                 port,
@@ -328,18 +315,20 @@ mod tests {
             self.temp_dir.utf8_path().join("file-transfer").join(file)
         }
 
-        fn spawn(
-            listener: TcpListener,
+        async fn spawn(
             config: TestConfig,
             mut error_tx: Sender<RuntimeError>,
-        ) -> anyhow::Result<JoinHandle<()>> {
-            let builder = FileTransferServerBuilder::try_new(listener, config)?;
+        ) -> anyhow::Result<u16> {
+            let builder = FileTransferServerBuilder::try_bind(config).await?;
+            let port = builder.listener.local_addr()?.port();
             let actor = builder.build();
-            Ok(tokio::spawn(async move {
+
+            tokio::spawn(async move {
                 if let Err(e) = actor.run().await {
                     let _ = error_tx.try_send(e);
                 }
-            }))
+            });
+            Ok(port)
         }
     }
 
@@ -354,12 +343,13 @@ mod tests {
         Ok((listener, port))
     }
 
-    fn http_config(ttd: &TempTedgeDir) -> TestConfig {
+    fn http_config(ttd: &TempTedgeDir, bind_port: u16) -> TestConfig {
         TestConfig {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
             cert_path: OptionalConfig::empty("http.cert_path"),
             key_path: OptionalConfig::empty("http.key_path"),
             ca_path: InjectedValue(None),
+            bind_addr: ([127, 0, 0, 1], bind_port).into(),
         }
     }
 
@@ -386,6 +376,7 @@ mod tests {
             cert_path: OptionalConfig::present(InjectedValue(cert), "http.cert_path"),
             key_path: OptionalConfig::present(InjectedValue(key), "http.key_path"),
             ca_path: InjectedValue(root_certs),
+            bind_addr: ([127, 0, 0, 1], 0).into(),
         })
     }
 }
