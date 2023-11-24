@@ -1,7 +1,6 @@
 use crate::Capabilities;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
-use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::Protocol;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -197,7 +196,7 @@ impl C8yMapperConfig {
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
-            C8yTopic::SmartRestRequest.to_string().as_str(),
+            "c8y/devicecontrol/notifications", // JSON over MQTT
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
