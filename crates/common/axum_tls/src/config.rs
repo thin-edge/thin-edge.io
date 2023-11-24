@@ -42,6 +42,7 @@ use yansi::Paint;
 ///
 /// ```
 /// # fn main() -> anyhow::Result<()> {
+/// use rustls::RootCertStore;
 /// use axum_tls::config::{InjectedValue, load_ssl_config};
 /// use tedge_config::{OptionalConfig, TEdgeConfig};
 ///
@@ -52,7 +53,7 @@ use yansi::Paint;
 /// let config = load_ssl_config(
 ///     OptionalConfig::present(InjectedValue(cert_pem), "http.cert_path"),
 ///     OptionalConfig::present(InjectedValue(key_pem), "http.key_path"),
-///     OptionalConfig::empty("http.ca_path"), // ...or `OptionalConfig::present(InjectedValue(RootCertStore), key)`
+///     OptionalConfig::<InjectedValue<RootCertStore>>::empty("http.ca_path"),
 ///     "File transfer service",
 /// )?;
 /// # Ok(())
