@@ -15,6 +15,8 @@ use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
+use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
@@ -94,7 +96,8 @@ use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::debug;
-use tracing::log::error;
+use tracing::error;
+use tracing::info;
 use tracing::trace;
 
 const C8Y_CLOUD: &str = "c8y";
@@ -204,6 +207,8 @@ pub struct CumulocityConverter {
     pub pending_fts_download_operations: HashMap<CmdId, FtsDownloadOperationData>,
 
     pub command_id: IdGenerator,
+    // Keep active command IDs to avoid creation of multiple commands for an operation
+    pub active_commands: HashSet<CmdId>,
 }
 
 impl CumulocityConverter {
@@ -290,6 +295,7 @@ impl CumulocityConverter {
             pending_upload_operations: HashMap::new(),
             pending_fts_download_operations: HashMap::new(),
             command_id,
+            active_commands: HashSet::new(),
         })
     }
 
@@ -547,7 +553,41 @@ impl CumulocityConverter {
         ))
     }
 
-    async fn parse_c8y_topics(
+    async fn parse_c8y_devicecontrol_topic(
+        &mut self,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let operation: C8yOperation =
+            serde_json::from_str(message.payload.as_str().unwrap()).unwrap();
+        dbg!(&operation);
+
+        let device_xid = operation.external_source.external_id;
+        let cmd_id = self.command_id.new_id_with_str(&operation.id);
+
+        if self.active_commands.contains(&cmd_id) {
+            // The received operation is already addressed
+            info!("{cmd_id} is already addressed");
+            return Ok(vec![]);
+        }
+
+        if let Some(_value) = operation.extras.get("c8y_SoftwareUpdate") {
+        } else if let Some(_value) = operation.extras.get("c8y_Restart") {
+        } else if let Some(value) = operation.extras.get("c8y_LogfileRequest") {
+            let request: C8yLogfileRequest = serde_json::from_value(value.clone()).unwrap();
+            dbg!(&request);
+            let msgs = self.convert_log_upload_request(device_xid, cmd_id, request)?;
+            return Ok(msgs);
+        } else if let Some(_value) = operation.extras.get("c8y_UploadConfigFile") {
+        } else if let Some(_value) = operation.extras.get("c8y_DownloadConfigFile") {
+        } else if let Some(_value) = operation.extras.get("c8y_Firmware") {
+        } else {
+            dbg!("error");
+        }
+
+        Ok(vec![])
+    }
+
+    async fn parse_c8y_smartrest_topics(
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
@@ -587,9 +627,6 @@ impl CumulocityConverter {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
                     // Need a check of capabilities so that user can still use custom template if disabled
-                    "522" if self.config.capabilities.log_upload => {
-                        self.convert_log_upload_request(payload)
-                    }
                     "524" if self.config.capabilities.config_update => {
                         self.convert_config_update_request(payload).await
                     }
@@ -1033,8 +1070,12 @@ impl CumulocityConverter {
                 self.process_alarm_messages(&source, message, alarm_type)
             }
 
-            Channel::Command { .. } if message.payload_bytes().is_empty() => {
+            Channel::Command {
+                operation: _,
+                cmd_id,
+            } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
+                self.active_commands.remove(cmd_id);
                 Ok(vec![])
             }
 
@@ -1089,6 +1130,7 @@ impl CumulocityConverter {
                 operation: OperationType::LogUpload,
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
+                self.active_commands.insert(cmd_id.clone());
                 self.handle_log_upload_state_change(&source, cmd_id, message)
                     .await
             }
@@ -1227,7 +1269,10 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic if C8yTopic::accept(topic) => self.parse_c8y_topics(message).await,
+            topic if C8yTopic::accept_devicecontrol(topic) => {
+                self.parse_c8y_devicecontrol_topic(message).await
+            }
+            topic if C8yTopic::accept(topic) => self.parse_c8y_smartrest_topics(message).await,
             _ => {
                 error!("Unsupported topic: {}", message.topic.name);
                 Ok(vec![])
