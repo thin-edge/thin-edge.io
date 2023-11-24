@@ -176,7 +176,7 @@ fn fix_timezone_offset(time: &str) -> String {
     }
 }
 
-fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
+pub fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
 where
     D: Deserializer<'de>,
 {
