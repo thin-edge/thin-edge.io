@@ -42,10 +42,10 @@ impl Server {
         port: u16,
         cert_path: OptionalConfig<impl PemReader>,
         key_path: OptionalConfig<impl PemReader>,
-        ca_path: impl TrustStoreLoader,
+        ca_path: OptionalConfig<impl TrustStoreLoader>,
     ) -> anyhow::Result<Self> {
         let app = create_app(state);
-        let server_config = load_ssl_config(cert_path, key_path, ca_path)?;
+        let server_config = load_ssl_config(cert_path, key_path, ca_path, "Cumulocity proxy")?;
         let fut = if let Some(server_config) = server_config {
             try_bind_with_tls(app, address, port, server_config)?.boxed()
         } else {

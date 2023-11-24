@@ -9,9 +9,13 @@ use rustls::RootCertStore;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io;
+use std::io::stderr;
 use std::io::Cursor;
+use std::io::IsTerminal;
 use std::path::Path;
 use tedge_config::OptionalConfig;
+use tracing::info;
+use yansi::Paint;
 
 /// Loads the relevant [rustls::ServerConfig] from configured values for `cert_path`, `key_path` and `ca_path`
 ///
@@ -27,7 +31,8 @@ use tedge_config::OptionalConfig;
 /// let config = load_ssl_config(
 ///     config.http.cert_path.as_ref(),
 ///     config.http.key_path.as_ref(),
-///     config.http.ca_path.as_ref()
+///     config.http.ca_path.as_ref(),
+///     "File transfer service",
 /// )?;
 /// # Ok(())
 /// # }
@@ -47,7 +52,8 @@ use tedge_config::OptionalConfig;
 /// let config = load_ssl_config(
 ///     OptionalConfig::present(InjectedValue(cert_pem), "http.cert_path"),
 ///     OptionalConfig::present(InjectedValue(key_pem), "http.key_path"),
-///     InjectedValue(None), // ...or `Some(RootCertStore)`
+///     OptionalConfig::empty("http.ca_path"), // ...or `OptionalConfig::present(InjectedValue(RootCertStore), key)`
+///     "File transfer service",
 /// )?;
 /// # Ok(())
 /// # }
@@ -56,11 +62,39 @@ use tedge_config::OptionalConfig;
 pub fn load_ssl_config(
     cert_path: OptionalConfig<impl PemReader>,
     key_path: OptionalConfig<impl PemReader>,
-    ca_path: impl TrustStoreLoader,
+    ca_path: OptionalConfig<impl TrustStoreLoader>,
+    service_name: &'static str,
 ) -> anyhow::Result<Option<rustls::ServerConfig>> {
+    // TODO this could be moved somewhere more generic (e.g. where we initialize tracing subscriber)
+    if !stderr().is_terminal() {
+        yansi::Paint::disable();
+    }
+
+    let enabled = Paint::green("enabled").bold();
+    let disabled = Paint::red("disabled").bold();
+    let service_name = Paint::default(service_name).bold();
+    let cert_key = cert_path.key();
+    let key_key = key_path.key();
+    let ca_key = ca_path.key();
     if let Some((cert, key)) = load_certificate_and_key(cert_path, key_path)? {
-        Ok(Some(ssl_config(cert, key, ca_path.load_trust_store()?)?))
+        let trust_store = match ca_path.or_none() {
+            Some(path) => path
+                .load_trust_store()
+                .map(Some)
+                .with_context(|| format!("reading root certificates configured in `{ca_key}`",))?,
+            None => None,
+        };
+        let ca_state = if let Some(store) = &trust_store {
+            let count = store.len();
+            format!("{enabled} ({count} certificates found)")
+        } else {
+            format!("{disabled}")
+        };
+
+        info!(target: "HTTP Server", "{service_name} has HTTPS {enabled} (configured in `{cert_key}`/`{key_key}`) and certificate authentication {ca_state} (configured in `{ca_key}`)", );
+        Ok(Some(ssl_config(cert, key, trust_store)?))
     } else {
+        info!(target: "HTTP Server", "{service_name} has HTTPS {disabled} (configured in `{cert_key}`/`{key_key}`) and certificate authentication {disabled} (configured in `{ca_key}`)");
         Ok(None)
     }
 }
@@ -97,7 +131,7 @@ pub trait PemReader: Debug {
 }
 
 pub trait TrustStoreLoader {
-    fn load_trust_store(&self) -> anyhow::Result<Option<RootCertStore>>;
+    fn load_trust_store(&self) -> anyhow::Result<RootCertStore>;
 }
 
 #[derive(Debug)]
@@ -132,19 +166,14 @@ impl<P: AsRef<Path> + Debug + ?Sized> PemReader for P {
     }
 }
 
-impl<P: AsRef<Utf8Path> + 'static> TrustStoreLoader for OptionalConfig<P> {
-    fn load_trust_store(&self) -> anyhow::Result<Option<RootCertStore>> {
-        match self.or_none() {
-            Some(s) => read_trust_store(s.as_ref()).map(Some).with_context(|| {
-                format!("reading root certificates configured in `{}`", self.key())
-            }),
-            None => Ok(None),
-        }
+impl<P: AsRef<Utf8Path> + 'static> TrustStoreLoader for P {
+    fn load_trust_store(&self) -> anyhow::Result<RootCertStore> {
+        read_trust_store(self.as_ref())
     }
 }
 
-impl TrustStoreLoader for InjectedValue<Option<RootCertStore>> {
-    fn load_trust_store(&self) -> anyhow::Result<Option<RootCertStore>> {
+impl TrustStoreLoader for InjectedValue<RootCertStore> {
+    fn load_trust_store(&self) -> anyhow::Result<RootCertStore> {
         Ok(self.0.clone())
     }
 }

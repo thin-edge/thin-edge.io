@@ -29,11 +29,13 @@ pub struct FileTransferServerActor {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct FileTransferServerConfig<ConfigPath, CaPath> {
+// In the tests, CertKeyPath is replaced with a String, and CaPath is replaced with a RootCertStore
+// hence they need to be separate types
+pub(crate) struct FileTransferServerConfig<CertKeyPath = Utf8PathBuf, CaPath = Utf8PathBuf> {
     pub file_transfer_dir: Utf8PathBuf,
-    pub cert_path: OptionalConfig<ConfigPath>,
-    pub key_path: OptionalConfig<ConfigPath>,
-    pub ca_path: CaPath,
+    pub cert_path: OptionalConfig<CertKeyPath>,
+    pub key_path: OptionalConfig<CertKeyPath>,
+    pub ca_path: OptionalConfig<CaPath>,
     pub bind_addr: SocketAddr,
 }
 
@@ -79,7 +81,12 @@ impl FileTransferServerBuilder {
         let (signal_sender, signal_receiver) = mpsc::channel(10);
 
         Ok(Self {
-            rustls_config: load_ssl_config(config.cert_path, config.key_path, config.ca_path)?,
+            rustls_config: load_ssl_config(
+                config.cert_path,
+                config.key_path,
+                config.ca_path,
+                "File transfer service",
+            )?,
             file_transfer_dir: config.file_transfer_dir,
             signal_sender,
             signal_receiver,
@@ -124,7 +131,7 @@ mod tests {
 
     #[tokio::test]
     async fn http_server_put_and_get() -> anyhow::Result<()> {
-        let server = Server::new_http().await?;
+        let server = TestFileTransferService::new_http().await?;
         let file_name = "test-file";
         let test_url = server.url_for(file_name);
 
@@ -165,7 +172,7 @@ mod tests {
     async fn server_uses_https_if_certificate_is_configured() -> anyhow::Result<()> {
         let server_cert = rcgen::generate_simple_self_signed(["localhost".into()])
             .context("generating server certificate")?;
-        let server = Server::new_https(server_cert, None).await?;
+        let server = TestFileTransferService::new_https(server_cert, None).await?;
         let test_url = server.url_for("test-file");
 
         let client = server.anonymous_client()?;
@@ -181,7 +188,7 @@ mod tests {
             .context("generating server certificate")?;
         let client_cert = rcgen::generate_simple_self_signed(["a-client".into()])
             .context("generating client certificate")?;
-        let server = Server::new_https(server_cert, Some(&client_cert)).await?;
+        let server = TestFileTransferService::new_https(server_cert, Some(&client_cert)).await?;
         let test_url = server.url_for("test-file");
 
         let client = server.client_with_certificate(&client_cert)?;
@@ -197,7 +204,7 @@ mod tests {
             .context("generating server certificate")?;
         let client_cert = rcgen::generate_simple_self_signed(["a-client".into()])
             .context("generating client certificate")?;
-        let server = Server::new_https(server_cert, Some(&client_cert)).await?;
+        let server = TestFileTransferService::new_https(server_cert, Some(&client_cert)).await?;
 
         let client = server.anonymous_client()?;
         let test_url = server.url_for("test/file");
@@ -208,21 +215,22 @@ mod tests {
         Ok(())
     }
 
-    struct Server<Cert> {
+    /// A wrapper around a running [FileTransferServiceActor] to simplify/clarify test code
+    struct TestFileTransferService<Cert> {
         port: u16,
         temp_dir: TempTedgeDir,
         server_cert: Cert,
         server_err: Receiver<RuntimeError>,
     }
 
-    impl Server<()> {
+    impl TestFileTransferService<()> {
         async fn new_http() -> anyhow::Result<Self> {
             let temp_dir = TempTedgeDir::new();
             let config = http_config(&temp_dir, 0);
             let (tx, rx) = mpsc::channel(1);
             let port = Self::spawn(config, tx).await?;
 
-            Ok(Server {
+            Ok(TestFileTransferService {
                 port,
                 temp_dir,
                 server_cert: (),
@@ -239,7 +247,7 @@ mod tests {
         }
     }
 
-    impl<C> Drop for Server<C> {
+    impl<C> Drop for TestFileTransferService<C> {
         fn drop(&mut self) {
             if let Ok(Some(value)) = self.server_err.try_next() {
                 if std::thread::panicking() {
@@ -251,7 +259,7 @@ mod tests {
         }
     }
 
-    impl Server<rcgen::Certificate> {
+    impl TestFileTransferService<rcgen::Certificate> {
         async fn new_https(
             server_cert: rcgen::Certificate,
             trusted_root: Option<&rcgen::Certificate>,
@@ -261,7 +269,7 @@ mod tests {
             let (tx, rx) = mpsc::channel(1);
             let port = Self::spawn(config, tx).await?;
 
-            Ok(Server {
+            Ok(TestFileTransferService {
                 port,
                 temp_dir,
                 server_cert,
@@ -273,6 +281,7 @@ mod tests {
             format!("https://localhost:{}/tedge/file-transfer/{path}", self.port)
         }
 
+        /// An client with a client certificate that trusts the associated server certificate
         fn client_with_certificate(
             &self,
             cert: &rcgen::Certificate,
@@ -288,6 +297,7 @@ mod tests {
                 .context("building client with identity")
         }
 
+        /// An anonymous client that trusts the associated server certificate
         fn anonymous_client(&self) -> anyhow::Result<reqwest::Client> {
             self.client_builder()?
                 .build()
@@ -307,10 +317,9 @@ mod tests {
         }
     }
 
-    type TestConfig =
-        FileTransferServerConfig<InjectedValue<String>, InjectedValue<Option<RootCertStore>>>;
+    type TestConfig = FileTransferServerConfig<InjectedValue<String>, InjectedValue<RootCertStore>>;
 
-    impl<Cert> Server<Cert> {
+    impl<Cert> TestFileTransferService<Cert> {
         fn temp_path_for(&self, file: &str) -> Utf8PathBuf {
             self.temp_dir.utf8_path().join("file-transfer").join(file)
         }
@@ -348,7 +357,7 @@ mod tests {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
             cert_path: OptionalConfig::empty("http.cert_path"),
             key_path: OptionalConfig::empty("http.key_path"),
-            ca_path: InjectedValue(None),
+            ca_path: OptionalConfig::empty("http.ca_path"),
             bind_addr: ([127, 0, 0, 1], bind_port).into(),
         }
     }
@@ -375,7 +384,9 @@ mod tests {
             file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
             cert_path: OptionalConfig::present(InjectedValue(cert), "http.cert_path"),
             key_path: OptionalConfig::present(InjectedValue(key), "http.key_path"),
-            ca_path: InjectedValue(root_certs),
+            ca_path: root_certs
+                .map(|c| OptionalConfig::present(InjectedValue(c), "http.ca_path"))
+                .unwrap_or_else(|| OptionalConfig::Empty("http.ca_path")),
             bind_addr: ([127, 0, 0, 1], 0).into(),
         })
     }

@@ -33,7 +33,6 @@ use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
 use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::WorkflowSupervisor;
-use tedge_config::OptionalConfig;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;
@@ -58,7 +57,7 @@ const TEDGE_AGENT: &str = "tedge-agent";
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
     pub mqtt_config: MqttConfig,
-    pub http_config: FileTransferServerConfig<Utf8PathBuf, OptionalConfig<Utf8PathBuf>>,
+    pub http_config: FileTransferServerConfig,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,

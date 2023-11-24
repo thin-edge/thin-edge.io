@@ -391,6 +391,7 @@ dependencies = [
  "tower",
  "tracing",
  "x509-parser 0.14.0",
+ "yansi 0.5.1",
 ]
 
 [[package]]
