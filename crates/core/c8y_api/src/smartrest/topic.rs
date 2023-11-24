@@ -44,10 +44,6 @@ impl C8yTopic {
     pub fn accept(topic: &Topic) -> bool {
         topic.name.starts_with("c8y")
     }
-
-    pub fn accept_devicecontrol(topic: &Topic) -> bool {
-        topic.name.starts_with("c8y/devicecontrol/notifications")
-    }
 }
 
 impl ToString for C8yTopic {
