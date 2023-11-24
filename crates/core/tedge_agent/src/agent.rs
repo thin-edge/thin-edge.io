@@ -195,10 +195,6 @@ impl Agent {
         let workflows = self.load_operation_workflows().await?;
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
 
-        // File transfer server actor
-        let file_transfer_server_builder =
-            FileTransferServerBuilder::try_bind(self.config.http_config).await?;
-
         // Restart actor
         let mut restart_actor_builder = RestartManagerBuilder::new(self.config.restart_config);
 
@@ -301,6 +297,9 @@ impl Agent {
             info!(
                 "Running as a main device, starting tedge_to_te_converter and file transfer actors"
             );
+
+            let file_transfer_server_builder =
+                FileTransferServerBuilder::try_bind(self.config.http_config).await?;
             runtime.spawn(tedge_to_te_converter).await?;
             runtime.spawn(file_transfer_server_builder).await?;
         } else {
