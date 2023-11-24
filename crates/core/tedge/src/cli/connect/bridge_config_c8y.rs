@@ -57,6 +57,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"event/events/create out 2 c8y/ """#.into(),
             r#"alarm/alarms/create out 2 c8y/ """#.into(),
+            r#"devicecontrol/notifications in 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
             // c8y JWT token retrieval
             r#"s/uat out 0 c8y/ """#.into(),
@@ -197,6 +198,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
             r#"measurement/measurements/create out 2 c8y/ """#.into(),
             r#"event/events/create out 2 c8y/ """#.into(),
             r#"alarm/alarms/create out 2 c8y/ """#.into(),
+            r#"devicecontrol/notifications in 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
             // c8y JWT token retrieval
             r#"s/uat out 0 c8y/ """#.into(),
