@@ -42,6 +42,6 @@ If HTTPS is enabled, the configured certificate should be installed in the OS tr
 in order for them to trust the connection to the mapper.
 
 Once HTTPS is enabled for the file-transfer service, certificate-based authentication can also be enabled.
-The directory containing the certificates that the mapper will trust can be configured using `http.ca_path`,
-and the agent can be configured to use a trusted certificate using the `http.client.auth.cert_file` and `http.client.auth.key_file`
-settings.
+The directory containing the certificates that the agent will trust can be configured using `http.ca_path`,
+and the mapper as well as the child device agents can be configured to use a trusted certificate using the
+`http.client.auth.cert_file` and `http.client.auth.key_file` settings.
