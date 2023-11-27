@@ -13,7 +13,7 @@ use tedge_configuration_plugin::ConfigPluginOpt;
 use tedge_log_plugin::LogfilePluginOpt;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
-use tedge_write::Args as TedgeWriteOpt;
+use tedge_write::bin::Args as TedgeWriteOpt;
 
 use self::init::TEdgeInitCmd;
 mod certificate;

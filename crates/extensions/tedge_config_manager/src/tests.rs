@@ -1,4 +1,6 @@
+use camino::Utf8Path;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -78,6 +80,8 @@ async fn new_config_manager_builder(
         ]
         .try_into()
         .expect("Infallible"),
+        tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
+        is_sudo_enabled: true,
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
     };
@@ -269,11 +273,15 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
         download_request.url,
         "http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234"
     );
-    assert_eq!(download_request.file_path, tempdir.path().join("file_b"));
+    assert_eq!(
+        download_request.file_path,
+        std::env::temp_dir().join("type_two")
+    );
 
     assert_eq!(download_request.auth, None);
 
     // Simulate downloading a file is completed.
+    std::fs::File::create(&download_request.file_path).unwrap();
     let download_response =
         DownloadResponse::new(&download_request.url, &download_request.file_path);
     downloader.send((topic, Ok(download_response))).await?;

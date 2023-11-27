@@ -5,7 +5,6 @@ use log::error;
 use log::info;
 use serde_json::json;
 use std::collections::HashMap;
-use std::path::Path;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -67,7 +66,7 @@ impl Actor for ConfigManagerActor {
                 ConfigInput::MqttMessage(message) => self.process_mqtt_message(message).await,
                 ConfigInput::FsWatchEvent(event) => self.process_file_watch_events(event).await,
                 ConfigInput::ConfigDownloadResult((topic, result)) => {
-                    self.process_downloaded_config(&topic, result).await
+                    Ok(self.process_downloaded_config(&topic, result).await?)
                 }
                 ConfigInput::ConfigUploadResult((topic, result)) => {
                     self.process_uploaded_config(&topic, result).await
@@ -285,9 +284,12 @@ impl ConfigManagerActor {
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
 
-        let download_request =
-            DownloadRequest::new(&request.tedge_url, Path::new(&file_entry.path))
-                .with_permission(file_entry.file_permissions);
+        // because we might not have permissions to write to destination, save in tmpdir and then
+        // move to destination later
+        let temp_path = &self.config.tmp_path.join(&file_entry.config_type);
+
+        let download_request = DownloadRequest::new(&request.tedge_url, temp_path.as_std_path())
+            .with_permission(file_entry.file_permissions.to_owned());
 
         info!(
             "Awaiting download for config type: {} from url: {}",
@@ -305,29 +307,90 @@ impl ConfigManagerActor {
         &mut self,
         topic: &str,
         result: DownloadResult,
-    ) -> Result<(), ChannelError> {
-        if let Some(ConfigOperation::Update(mut request)) = self.pending_operations.remove(topic) {
-            let topic = Topic::new_unchecked(topic);
-            match result {
-                Ok(response) => {
-                    request.successful(response.file_path.as_path().to_str().unwrap());
-                    info!(
-                        "Config Update request processed for config type: {}.",
-                        request.config_type
-                    );
-                    self.publish_command_status(&topic, &ConfigOperation::Update(request))
-                        .await?;
-                }
-                Err(err) => {
-                    let error_message =
-                        format!("tedge-configuration-plugin failed downloading a file: {err}",);
-                    request.failed(&error_message);
-                    error!("{}", error_message);
-                    self.publish_command_status(&topic, &ConfigOperation::Update(request))
-                        .await?;
-                }
+    ) -> Result<(), ConfigManagementError> {
+        let Some(ConfigOperation::Update(mut request)) = self.pending_operations.remove(topic)
+        else {
+            return Ok(());
+        };
+
+        let topic = Topic::new_unchecked(topic);
+
+        let response = match result {
+            Ok(response) => response,
+            Err(err) => {
+                let error_message =
+                    format!("tedge-configuration-plugin failed downloading a file: {err}",);
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                    .await?;
+                return Ok(());
+            }
+        };
+
+        // new config was downloaded into tmpdir, we need to write it into destination using tedge-write
+        let file_entry = self
+            .plugin_config
+            .get_file_entry_from_type(&request.config_type)?;
+
+        // when testing, `tedge-agent` binary is not available. need to do the switch here, because
+        // conditional compilation in tedge-write crate here doesn't work
+        #[cfg(test)]
+        {
+            std::fs::copy(&response.file_path, &file_entry.path)?;
+        }
+        #[cfg(not(test))]
+        {
+            let mode = file_entry.file_permissions.mode;
+            let user = file_entry.file_permissions.user.as_deref();
+            let group = file_entry.file_permissions.group.as_deref();
+
+            let tedge_write_process = tedge_write::CopyOptions::new()
+                .mode(mode)
+                .user(user)
+                .group(group)
+                .copy(
+                    Utf8Path::from_path(response.file_path.as_path()).unwrap(),
+                    Utf8Path::new(&file_entry.path),
+                );
+
+            if let Err(err) = tedge_write_process {
+                let error_message = format!(
+                    "Handling of operation failed with: Could not start tedge-write process: {err}",
+                );
+
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                    .await?;
+                return Ok(());
+            }
+
+            let tedge_write_output = tedge_write_process?;
+
+            if !tedge_write_output.status.success() {
+                let error_message = format!(
+                    "Handling of operation failed with: {}",
+                    String::from_utf8(tedge_write_output.stderr)
+                        .expect("tedge-write output should be utf-8")
+                );
+
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                    .await?;
+                return Ok(());
             }
         }
+
+        request.successful(&file_entry.path);
+        info!(
+            "Config Update request processed for config type: {}.",
+            request.config_type
+        );
+        self.publish_command_status(&topic, &ConfigOperation::Update(request))
+            .await?;
+
         Ok(())
     }
 

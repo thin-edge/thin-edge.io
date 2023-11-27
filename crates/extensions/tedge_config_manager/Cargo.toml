@@ -16,6 +16,7 @@ http = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tedge-write = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }

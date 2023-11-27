@@ -16,4 +16,5 @@ anyhow.workspace = true
 camino.workspace = true
 clap.workspace = true
 nix.workspace = true
+path-clean.workspace = true
 uzers.workspace = true

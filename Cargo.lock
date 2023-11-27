@@ -3808,6 +3808,7 @@ dependencies = [
  "camino",
  "clap",
  "nix",
+ "path-clean",
  "uzers",
 ]
 
@@ -3921,6 +3922,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "tedge-write",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
