@@ -100,8 +100,8 @@ jobs:
           cargo install --git https://github.com/est31/cargo-udeps --locked
           cargo udeps --all-features --all-targets
 
-  cargo-sort:
-    name: Run cargo sort
+  dependency-sort:
+    name: Sort dependencies
     runs-on: ubuntu-20.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
@@ -113,11 +113,11 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo sort
-        run: cargo install cargo-sort
+      - name: Install taplo
+        run: cargo install taplo-cli
 
-      - name: Cargo sort
-        run: cargo sort -w . --check
+      - name: Check Cargo.toml formatting
+        run: taplo fmt --check
 
   cargo-fmt:
     name: Run cargo fmt
