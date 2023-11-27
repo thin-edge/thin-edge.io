@@ -25,7 +25,7 @@ default:
 # Install necessary tools
 install-tools:
     rustup component add rustfmt --toolchain nightly
-    cargo install cargo-sort cargo-nextest
+    cargo install taplo-cli cargo-nextest
 
 # Check if necessary tools are installed
 [private]
@@ -36,20 +36,20 @@ check-tools:
         exit 1
     fi
 
-    if ! cargo sort --help &> /dev/null; then
-        echo "cargo sort is not installed, use just install-tools or install it manually"
+    if ! taplo fmt --help &> /dev/null; then
+        echo "taplo is not installed, use just install-tools or install it manually"
         exit 1
     fi
 
 # Format code
 format: check-tools
     cargo +nightly fmt
-    cargo sort -w .
+    taplo fmt
 
 # Check code formatting
 format-check: check-tools
     cargo +nightly fmt -- --check
-    cargo sort -w . --check
+    taplo fmt --check
 
 # Check code
 check TARGET=DEFAULT_TARGET:

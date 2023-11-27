@@ -15,7 +15,7 @@ csv = { workspace = true }
 log = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-tedge_config   = { workspace = true }
+tedge_config = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

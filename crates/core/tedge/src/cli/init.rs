@@ -155,7 +155,7 @@ impl TEdgeInitCmd {
         let config = self.context.config_repository.load()?;
 
         create_directory(
-            config.logs.path.join("tedge"),
+            config.logs.path.clone(),
             PermissionEntry::new(
                 Some(self.user.clone()),
                 Some(self.group.clone()),

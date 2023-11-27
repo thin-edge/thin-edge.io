@@ -44,7 +44,7 @@ impl SoftwareManagerConfig {
 
         let tmp_dir = &tedge_config.tmp.path;
         let sm_plugins_dir = config_dir.join("sm-plugins");
-        let log_dir = tedge_config.logs.path.join("tedge").join("agent");
+        let log_dir = tedge_config.logs.path.join("agent");
         let default_plugin_type = tedge_config
             .software
             .plugin

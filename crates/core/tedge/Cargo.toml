@@ -18,7 +18,12 @@ c8y-firmware-plugin = { workspace = true }
 c8y-remote-access-plugin = { workspace = true }
 camino = { workspace = true }
 certificate = { workspace = true }
-clap = { workspace = true, features = ["cargo", "derive", "string", "unstable-styles"] }
+clap = { workspace = true, features = [
+    "cargo",
+    "derive",
+    "string",
+    "unstable-styles",
+] }
 doku = { workspace = true }
 hyper = { workspace = true, default-features = false }
 nix = { workspace = true }

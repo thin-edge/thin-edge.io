@@ -125,7 +125,7 @@ impl AgentConfig {
         let use_lock = tedge_config.run.lock_files;
 
         // For agent specific
-        let log_dir = tedge_config.logs.path.join("tedge").join("agent");
+        let log_dir = tedge_config.logs.path.join("agent");
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
