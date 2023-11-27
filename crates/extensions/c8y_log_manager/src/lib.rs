@@ -75,7 +75,7 @@ impl LogManagerBuilder {
         create_directory_with_defaults(&config.plugin_config_dir)?;
 
         // creating c8y-log-plugin.toml
-        let logs_path = format!("{}/tedge/agent/software-*", config.log_dir.display());
+        let logs_path = format!("{}/agent/software-*", config.log_dir.display());
         let data = format!(
             r#"files = [
     {{ type = "software-management", path = "{logs_path}" }},

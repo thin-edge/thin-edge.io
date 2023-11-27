@@ -351,7 +351,7 @@ set/unset logs.path
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset logs.path
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    logs.path=/var/log
+    Should Contain    ${unset}    logs.path=/var/log/tedge
 
 set/unset run.path
     Execute Command    sudo tedge config set run.path /run1    # Changing run.path

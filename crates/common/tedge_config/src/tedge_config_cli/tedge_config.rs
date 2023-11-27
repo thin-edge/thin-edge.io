@@ -655,7 +655,7 @@ define_tedge_config! {
 
     logs: {
         /// The directory used to store logs
-        #[tedge_config(example = "/var/log", default(value = "/var/log"))]
+        #[tedge_config(example = "/var/log/tedge", default(value = "/var/log/tedge"))]
         #[doku(as = "PathBuf")]
         path: Utf8PathBuf,
     },

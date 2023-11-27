@@ -22,9 +22,9 @@ user="tedge"
 name=$(basename $0)
 pid_file="/var/run/$name.pid"
 
-# Default location for logging assumed to be /var/log.
-stdout_log="/var/log/$name.log"
-stderr_log="/var/log/$name.err"
+# Default location for logging assumed to be /var/log/tedge.
+stdout_log="/var/log/tedge/$name.log"
+stderr_log="/var/log/tedge/$name.err"
 
 get_pid() {
     cat "$pid_file"
