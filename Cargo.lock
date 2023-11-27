@@ -3649,6 +3649,7 @@ dependencies = [
  "hyper",
  "lazy_static",
  "log",
+ "logged_command",
  "path-clean",
  "plugin_sm",
  "rcgen",

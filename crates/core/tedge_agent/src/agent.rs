@@ -210,6 +210,7 @@ impl Agent {
             self.config.mqtt_topic_root.as_ref(),
             self.config.mqtt_device_topic_id.clone(),
             workflows,
+            self.config.log_dir.clone(),
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,

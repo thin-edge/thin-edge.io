@@ -396,6 +396,11 @@ impl GenericCommandState {
         }
     }
 
+    /// Return the error reason if any
+    pub fn failure_reason(&self) -> Option<String> {
+        GenericCommandState::extract_text_property(&self.payload, "reason")
+    }
+
     /// Extract a text property from a Json object
     fn extract_text_property(json: &Value, property: &str) -> Option<String> {
         json.as_object()

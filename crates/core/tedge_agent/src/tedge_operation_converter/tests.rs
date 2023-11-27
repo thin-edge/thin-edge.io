@@ -259,6 +259,7 @@ async fn spawn_mqtt_operation_converter(
         "te",
         device_topic_id.parse().expect("Invalid topic id"),
         workflows,
+        "/tmp".into(),
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,
