@@ -8,6 +8,7 @@ use log::warn;
 use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Body;
+use reqwest::Identity;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
@@ -91,13 +92,15 @@ pub enum Auth {
 pub struct Uploader {
     source_filename: Utf8PathBuf,
     backoff: ExponentialBackoff,
+    identity: Option<Identity>,
 }
 
 impl Uploader {
-    pub fn new(target_path: Utf8PathBuf) -> Self {
+    pub fn new(target_path: Utf8PathBuf, identity: Option<Identity>) -> Self {
         Self {
             source_filename: target_path,
             backoff: default_backoff(),
+            identity,
         }
     }
 
@@ -130,8 +133,15 @@ impl Uploader {
 
             let file_body = Body::wrap_stream(FramedRead::new(file, BytesCodec::new()));
 
+            let mut client = reqwest::Client::builder();
+            if let Some(identity) = self.identity.clone() {
+                client = client.identity(identity);
+            }
             // Todo: Ideally it detects the appropriate content-type automatically, e.g. UTF-8 => text/plain
-            let mut client = reqwest::Client::new()
+            let mut client = client
+                .build()
+                .map_err(UploadError::from)
+                .map_err(backoff::Error::Permanent)?
                 .put(url.url())
                 .header(CONTENT_TYPE, url.content_type.to_string())
                 .header(CONTENT_LENGTH, file_length);
@@ -202,7 +212,7 @@ mod tests {
         ttd.file("file_upload.txt")
             .with_raw_content("Hello, world!");
 
-        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"));
+        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"), None);
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -232,7 +242,7 @@ mod tests {
         ttd.file("file_upload.txt")
             .with_raw_content("Hello, world!");
 
-        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"));
+        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"), None);
 
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
@@ -258,7 +268,7 @@ mod tests {
         // Not existing filename
         let source_path = Utf8Path::new("not_exist.txt").to_path_buf();
 
-        let uploader = Uploader::new(source_path);
+        let uploader = Uploader::new(source_path, None);
         assert!(uploader.upload(&url).await.is_err());
     }
 
@@ -348,7 +358,7 @@ mod tests {
 
         write_to_file_with_size(&mut source_file, 1024 * 1024).await;
 
-        let uploader = Uploader::new(source_path.to_owned());
+        let uploader = Uploader::new(source_path.to_owned(), None);
         let url = UploadInfo::new(&format!("http://localhost:{port}/target.txt"));
 
         assert!(uploader.upload(&url).await.is_ok());

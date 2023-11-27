@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use log::info;
+use reqwest::Identity;
 use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
@@ -62,23 +63,28 @@ impl UploadResponse {
 
 pub type UploadResult = Result<UploadResponse, UploadError>;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct UploaderActor {
     config: ServerConfig,
+    identity: Option<Identity>,
 }
 
 impl UploaderActor {
-    pub fn new() -> Self {
-        UploaderActor::default()
+    pub fn new(identity: Option<Identity>) -> Self {
+        Self {
+            config: ServerConfig::default(),
+            identity,
+        }
     }
-
-    pub fn builder(&self) -> ServerActorBuilder<UploaderActor, Sequential> {
-        ServerActorBuilder::new(UploaderActor::default(), &ServerConfig::new(), Sequential)
+    pub fn builder(self) -> ServerActorBuilder<UploaderActor, Sequential> {
+        let config = self.config;
+        ServerActorBuilder::new(self, &config, Sequential)
     }
 
     pub fn with_capacity(self, capacity: usize) -> Self {
         Self {
             config: self.config.with_capacity(capacity),
+            identity: self.identity,
         }
     }
 }
@@ -100,7 +106,7 @@ impl Server for UploaderActor {
             upload_info = upload_info.with_auth(auth);
         }
 
-        let uploader = Uploader::new(request.file_path.clone());
+        let uploader = Uploader::new(request.file_path.clone(), self.identity.clone());
 
         info!(
             "Uploading from {} to url: {}",

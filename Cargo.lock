@@ -4074,6 +4074,7 @@ dependencies = [
  "camino",
  "log",
  "mockito",
+ "reqwest",
  "tedge_actors",
  "tedge_test_utils",
  "tokio",

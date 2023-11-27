@@ -241,7 +241,7 @@ impl Agent {
             let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
             let mut downloader_actor_builder =
                 DownloaderActor::new(self.config.identity.clone()).builder();
-            let mut uploader_actor_builder = UploaderActor::new().builder();
+            let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
 
             // Instantiate config manager actor
             let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {

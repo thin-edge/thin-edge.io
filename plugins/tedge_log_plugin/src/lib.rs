@@ -120,7 +120,8 @@ async fn run_with(
         tedge_config.service.ty.clone(),
     );
 
-    let mut uploader_actor = UploaderActor::new().builder();
+    let identity = tedge_config.http.client.auth.identity()?;
+    let mut uploader_actor = UploaderActor::new(identity).builder();
 
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
