@@ -1,6 +1,7 @@
 use log::error;
 use nix::unistd::Pid;
 use std::ffi::OsStr;
+use std::os::unix::process::ExitStatusExt;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
@@ -198,7 +199,7 @@ impl LoggedCommand {
         })
     }
 
-    async fn log_outcome(
+    pub async fn log_outcome(
         command_line: &str,
         result: &Result<Output, std::io::Error>,
         logger: &mut BufWriter<File>,
@@ -209,14 +210,16 @@ impl LoggedCommand {
 
         match result.as_ref() {
             Ok(output) => {
-                match &output.status.code() {
-                    None => logger.write_all(b"exit status: unknown\n\n").await?,
-                    Some(code) => {
-                        logger
-                            .write_all(format!("exit status: {}\n\n", code).as_bytes())
-                            .await?
-                    }
+                if let Some(code) = &output.status.code() {
+                    logger
+                        .write_all(format!("exit status: {}\n\n", code).as_bytes())
+                        .await?
                 };
+                if let Some(signal) = &output.status.signal() {
+                    logger
+                        .write_all(format!("killed by signal: {}\n\n", signal).as_bytes())
+                        .await?
+                }
                 logger.write_all(b"stdout <<EOF\n").await?;
                 logger.write_all(&output.stdout).await?;
                 logger.write_all(b"EOF\n\n").await?;
