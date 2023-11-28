@@ -214,8 +214,9 @@ impl CumulocityConverter {
         let download = match download_result {
             Err(err) => {
                 let smartrest_error = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                    format!("Upload failed with {:?}", err),
+                    // TODO test I'm the right message type
+                    CumulocitySupportedOperations::C8yUploadConfigFile,
+                    format!("Mapper failed to download configuration snapshot from file-transfer service: {err}"),
                 )
                 .to_smartrest()?;
 

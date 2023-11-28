@@ -4,6 +4,7 @@ use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use log::info;
 use log::warn;
 use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
@@ -137,12 +138,36 @@ impl Uploader {
             if let Some(identity) = self.identity.clone() {
                 client = client.identity(identity);
             }
-            // Todo: Ideally it detects the appropriate content-type automatically, e.g. UTF-8 => text/plain
-            let mut client = client
+            let client = client
                 .build()
                 .map_err(UploadError::from)
-                .map_err(backoff::Error::Permanent)?
-                .put(url.url())
+                .map_err(backoff::Error::Permanent)?;
+
+            // If HTTPS is enabled for the file transfer service, the response to an HTTP request
+            // will be a temporary redirect. We can't retry the PUT request, so we first perform a
+            // HEAD request to establish the correct URL
+            let head_res = client.head(url.url()).send().await;
+            let head_res_url = match &head_res {
+                Ok(res) => Some(res.url()),
+                Err(err) => {
+                    // e.g. if we need a client certificate but haven't provided one
+                    // We handle this error here because if there is a certificate error now
+                    // there is guaranteed to be one later
+                    if axum_tls::rustls_error_from_reqwest(err).is_some() {
+                        return Err(backoff::Error::Permanent(head_res.unwrap_err().into()));
+                    }
+                    err.url()
+                }
+            };
+            let target_url = head_res_url.map_or(url.url(), |u| u.as_str());
+
+            if target_url != url.url() {
+                info!("Redirecting request from {} to {target_url}", url.url())
+            }
+
+            // Todo: Ideally it detects the appropriate content-type automatically, e.g. UTF-8 => text/plain
+            let mut client = client
+                .put(target_url)
                 .header(CONTENT_TYPE, url.content_type.to_string())
                 .header(CONTENT_LENGTH, file_length);
 

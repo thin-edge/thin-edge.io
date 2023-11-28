@@ -30,7 +30,7 @@ Request with non-existing log type
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example1","searchText":"first","maximumLines":10}}
     Operation Should Be FAILED
     ...    ${operation}
-    ...    failure_reason=.*No such file or directory for log type: example1
+    ...    failure_reason=.*No logs found with type "example1"
     ...    timeout=120
 
 Manual log_upload operation request

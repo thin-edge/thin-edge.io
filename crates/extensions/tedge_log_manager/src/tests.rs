@@ -270,7 +270,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
         mqtt.recv().await,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"failed","reason":"Handling of operation failed with No such file or directory for log type: type_four","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found with type \"type_four\"","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
 
@@ -376,7 +376,7 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
         mqtt.recv().await,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"failed","reason":"Handling of operation failed with No such file or directory for log type: type_three","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found with type \"type_three\"","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
 

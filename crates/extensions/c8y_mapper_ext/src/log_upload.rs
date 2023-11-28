@@ -187,6 +187,7 @@ impl CumulocityConverter {
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
     ) -> Result<Vec<Message>, ConversionError> {
+        dbg!(&download_result);
         let topic_id = fts_download.entity_topic_id;
         let target = self.entity_store.try_get(&topic_id)?;
         let smartrest_topic = self.smartrest_publish_topic_for_entity(&topic_id)?;
@@ -197,7 +198,7 @@ impl CumulocityConverter {
             Err(err) => {
                 let smartrest_error = SmartRestSetOperationToFailed::new(
                     CumulocitySupportedOperations::C8yLogFileRequest,
-                    format!("Upload failed with {:?}", err),
+                    format!("Mapper failed to download log from file transfer service: {err}",),
                 )
                 .to_smartrest()?;
 

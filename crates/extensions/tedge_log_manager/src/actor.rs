@@ -140,7 +140,7 @@ impl LogManagerActor {
         mut request: LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
         if let Err(error) = self.generate_and_upload_logfile(topic, &request).await {
-            let error_message = format!("Handling of operation failed with {}", error);
+            let error_message = format!("Failed to initiate log file upload: {error}");
             request.failed(&error_message);
             self.publish_command_status(topic, &request).await?;
             error!("{}", error_message);
@@ -211,7 +211,7 @@ impl LogManagerActor {
                 self.publish_command_status(&topic, &request).await?;
             }
             Err(err) => {
-                let error_message = format!("Handling of operation failed with {}", err);
+                let error_message = format!("Failed to upload log to file-transfer service: {err}");
                 request.failed(&error_message);
                 error!("{}", error_message);
                 self.publish_command_status(&topic, &request).await?;
