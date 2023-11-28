@@ -1,4 +1,3 @@
-use crate::error::ErrContext;
 use crate::error::UploadError;
 use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
@@ -116,6 +115,8 @@ impl Uploader {
     }
 
     async fn upload_request(&self, url: &UploadInfo) -> Result<reqwest::Response, UploadError> {
+        use crate::error::ErrContext;
+
         let operation = || async {
             let file = File::open(&self.source_filename)
                 .await
@@ -209,16 +210,24 @@ impl Uploader {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+    use axum::extract::BodyStream;
+    use axum::http::StatusCode;
+    use axum::routing::put;
+    use axum::Router;
+    use backoff::ExponentialBackoffBuilder;
+    use futures::future::pending;
+    use futures::stream::StreamExt;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use tedge_test_utils::fs::TempTedgeDir;
     use tempfile::tempdir;
-    use tokio::io::AsyncBufReadExt;
-    use tokio::io::AsyncReadExt;
+    use tokio::fs::read_to_string;
     use tokio::io::AsyncWriteExt;
-    use tokio::io::BufReader;
+    use tokio::io::BufWriter;
     use tokio::net::TcpListener;
+    use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn upload_content_no_auth() {
@@ -297,8 +306,21 @@ mod tests {
         assert!(uploader.upload(&url).await.is_err());
     }
 
+    #[test]
+    fn default_uploader_uses_customised_backoff_parameters() {
+        let uploader = Uploader::new(Utf8PathBuf::default(), None);
+
+        assert_eq!(uploader.backoff.initial_interval, Duration::from_secs(15));
+        assert_eq!(
+            uploader.backoff.max_elapsed_time,
+            Some(Duration::from_secs(300))
+        );
+        assert_eq!(uploader.backoff.randomization_factor, 0.1);
+    }
+
     #[tokio::test]
     async fn retry_upload_when_disconnected() {
+        use anyhow::Context;
         let temp_dir = Arc::new(tempdir().unwrap());
 
         let listener = TcpListener::bind("localhost:0").await.unwrap();
@@ -311,69 +333,51 @@ mod tests {
                 .join("target.txt"),
         );
         let target_path_clone = target_path.clone();
+        let is_first_attempt = Arc::new(AtomicBool::new(true));
+        let (io_err_tx, mut io_err_rx) = mpsc::channel::<anyhow::Error>(1);
 
-        File::create(&target_path.as_path()).await.unwrap();
-
-        let server_task = tokio::spawn(async move {
-            let mut send_internal_error = true;
-            while let Ok((mut stream, _addr)) = listener.accept().await {
-                let target_path_clone_task = target_path_clone.clone();
-                let response_task = async move {
-                    let (reader, mut writer) = stream.split();
-
-                    let mut bufreader = BufReader::new(reader);
-
-                    let mut header: String = String::new();
-                    let mut size = 0;
-
-                    // Read header
-                    loop {
-                        let r = bufreader.read_line(&mut header).await.unwrap();
-                        if r < 3 {
-                            //detect empty line
-                            break;
-                        }
-                    }
-
-                    // Send internal error to trigger retry
-                    if send_internal_error {
-                        let header = "\
-                        HTTP/1.1 500 Internal Server Error\r\n";
-                        writer.write_all(header.as_bytes()).await.unwrap();
+        let app = Router::new().route(
+            "/target.txt",
+            put(|mut body: BodyStream| async move {
+                let res = async {
+                    if is_first_attempt.fetch_and(false, Ordering::SeqCst) {
+                        Ok(StatusCode::INTERNAL_SERVER_ERROR)
                     } else {
-                        // Get size of body
-                        let linesplit = header.split('\n');
-                        for l in linesplit {
-                            if l.to_lowercase().starts_with("content-length") {
-                                let (_, l) = l.split_once(':').unwrap();
-                                let l = l.trim().parse().unwrap_or(0);
-                                size = l;
-                            }
+                        let mut file = BufWriter::new(
+                            File::create(target_path_clone.as_path())
+                                .await
+                                .context("creating file")?,
+                        );
+                        while let Some(chunk) = body.next().await {
+                            file.write_all(&chunk.context("receiving chunk")?)
+                                .await
+                                .context("writing chunk")?;
                         }
-
-                        //Get the Body Content.
-                        let mut buffer = vec![0; size];
-                        bufreader.read_exact(&mut buffer).await.unwrap();
-
-                        //Write content to file
-                        std::fs::write(target_path_clone_task.as_path(), buffer).unwrap();
-
-                        // Answer with 201 response
-                        let header = "\
-                        HTTP/1.1 201 Created\r\n\
-                        content-location: /target_path.txt\r\n";
-
-                        let msg = format!("{header}\r\n0\r\n");
-                        writer.write_all(msg.as_bytes()).await.unwrap();
+                        Ok(StatusCode::CREATED)
                     }
-                };
-                tokio::spawn(response_task);
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                send_internal_error = false;
-            }
-        });
+                }
+                .await;
 
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                match res {
+                    Ok(status_code) => status_code,
+                    Err(err) => {
+                        io_err_tx.send(err).await.unwrap();
+                        // If we've encountered a server error, don't respond
+                        // The uploader will keep running, so the main task will see the error
+                        // message on the channel and panic accordingly
+                        pending().await
+                    }
+                }
+            }),
+        );
+
+        let server_task = tokio::spawn(
+            axum::Server::from_tcp(listener.into_std().unwrap())
+                .unwrap()
+                .serve(app.into_make_service()),
+        );
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
 
         let source_path = Utf8Path::from_path(temp_dir.path())
             .unwrap()
@@ -383,16 +387,27 @@ mod tests {
 
         write_to_file_with_size(&mut source_file, 1024 * 1024).await;
 
-        let uploader = Uploader::new(source_path.to_owned(), None);
+        let mut uploader = Uploader::new(source_path.to_owned(), None);
+        // Adjust the backoff to be super fast for testing purposes
+        uploader.set_backoff(
+            ExponentialBackoffBuilder::new()
+                .with_initial_interval(Duration::from_millis(10))
+                .with_max_elapsed_time(Some(Duration::from_secs(10)))
+                .build(),
+        );
         let url = UploadInfo::new(&format!("http://localhost:{port}/target.txt"));
 
-        assert!(uploader.upload(&url).await.is_ok());
+        tokio::select! {
+            upload_res = uploader.upload(&url) => upload_res.unwrap(),
+            server_err = io_err_rx.recv() => panic!("{:?}", server_err),
+        };
 
         server_task.abort();
 
-        let target_content = std::fs::read_to_string(target_path.as_path()).unwrap();
-        let source_content = std::fs::read_to_string(source_path).unwrap();
+        let target_content = read_to_string(target_path.as_path()).await.unwrap();
+        let source_content = read_to_string(source_path).await.unwrap();
 
+        assert_eq!(source_content.len(), target_content.len());
         assert_eq!(source_content, target_content);
     }
 

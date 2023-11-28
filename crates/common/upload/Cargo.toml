@@ -20,6 +20,9 @@ tokio = { workspace = true, features = ["fs"] }
 tokio-util = { workspace = true, features = ["codec"] }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+futures = { workspace = true }
 mockito = { workspace = true }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
