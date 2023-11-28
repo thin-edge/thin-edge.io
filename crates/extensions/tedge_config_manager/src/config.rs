@@ -44,6 +44,7 @@ pub struct ConfigManagerOptions {
     pub mqtt_topic_root: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
     pub tmp_path: Arc<Utf8Path>,
+    pub is_sudo_enabled: bool,
 }
 
 impl ConfigManagerConfig {

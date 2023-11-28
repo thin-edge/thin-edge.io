@@ -72,6 +72,7 @@ pub(crate) struct AgentConfig {
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
     pub identity: Option<Identity>,
+    pub is_sudo_enabled: bool,
 }
 
 impl AgentConfig {
@@ -133,6 +134,8 @@ impl AgentConfig {
 
         let identity = tedge_config.http.client.auth.identity()?;
 
+        let is_sudo_enabled = tedge_config.enable.sudo;
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -149,6 +152,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
             identity,
+            is_sudo_enabled,
         })
     }
 }
@@ -253,6 +257,7 @@ impl Agent {
                 mqtt_topic_root: mqtt_schema.clone(),
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
                 tmp_path: self.config.tmp_dir.clone(),
+                is_sudo_enabled: self.config.is_sudo_enabled,
             })?;
             let config_actor_builder = ConfigManagerBuilder::try_new(
                 manager_config,

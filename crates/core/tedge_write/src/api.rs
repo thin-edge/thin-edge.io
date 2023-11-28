@@ -1,17 +1,14 @@
 use camino::Utf8Path;
 use std::io;
 use std::process;
-
-/// Copies the file by spawning new tedge-write process.
-///
-/// Stdin and Stdout are UTF-8.
-pub fn copy(from: &Utf8Path, to: &Utf8Path) -> io::Result<process::Output> {
-    CopyOptions::new().copy(from, to)
-}
+use std::process::Command;
 
 /// Additional flags passed to `tedge-write` process
 #[derive(Debug, PartialEq, Default)]
 pub struct CopyOptions<'a> {
+    /// If tedge-write will be used with sudo
+    sudo: bool,
+
     /// Permission mode for the file, in octal form.
     mode: Option<u32>,
 
@@ -23,11 +20,14 @@ pub struct CopyOptions<'a> {
 }
 
 impl<'a> CopyOptions<'a> {
-    /// Create a blank new set of options ready for configuration.
+    /// Create a blank new set of tedge-write options using sudo or not.
     ///
     /// All the options are initially set to `None`.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn with_sudo(sudo: bool) -> Self {
+        Self {
+            sudo,
+            ..Default::default()
+        }
     }
 
     /// Sets new permissions for the file.
@@ -52,7 +52,14 @@ impl<'a> CopyOptions<'a> {
     ///
     /// Stdin and Stdout are UTF-8.
     pub fn copy(&mut self, from: &Utf8Path, to: &Utf8Path) -> io::Result<process::Output> {
-        let mut command = std::process::Command::new(crate::TEDGE_WRITE_PATH);
+        let mut command = match self.sudo {
+            true => {
+                let mut command = Command::new("sudo");
+                command.arg(crate::TEDGE_WRITE_PATH);
+                command
+            }
+            false => Command::new(crate::TEDGE_WRITE_PATH),
+        };
         let from_reader = std::fs::File::open(from)?;
         command.stdin(from_reader).arg(to);
 

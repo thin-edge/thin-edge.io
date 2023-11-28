@@ -1,4 +1,5 @@
-use std::fs::{self, Permissions};
+use std::fs;
+use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
@@ -26,7 +27,7 @@ fn creates_dest_file_if_doesnt_exist() {
 }
 
 #[test]
-fn changes_file_permissions_if_file_doesnt_exist() {
+fn sets_file_permissions_if_file_doesnt_exist() {
     // Arrange
     let (temp_dir, source_path) = setup_source_file();
     fs::set_permissions(&source_path, Permissions::from_mode(0o644)).unwrap();

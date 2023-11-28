@@ -25,5 +25,4 @@ pub mod bin;
 
 mod api;
 
-pub use api::copy;
 pub use api::CopyOptions;

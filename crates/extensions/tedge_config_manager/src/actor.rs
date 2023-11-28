@@ -345,14 +345,15 @@ impl ConfigManagerActor {
             let user = file_entry.file_permissions.user.as_deref();
             let group = file_entry.file_permissions.group.as_deref();
 
-            let tedge_write_process = tedge_write::CopyOptions::new()
-                .mode(mode)
-                .user(user)
-                .group(group)
-                .copy(
-                    Utf8Path::from_path(response.file_path.as_path()).unwrap(),
-                    Utf8Path::new(&file_entry.path),
-                );
+            let tedge_write_process =
+                tedge_write::CopyOptions::with_sudo(self.config.is_sudo_enabled)
+                    .mode(mode)
+                    .user(user)
+                    .group(group)
+                    .copy(
+                        Utf8Path::from_path(response.file_path.as_path()).unwrap(),
+                        Utf8Path::new(&file_entry.path),
+                    );
 
             if let Err(err) = tedge_write_process {
                 let error_message = format!(
