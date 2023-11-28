@@ -30,7 +30,6 @@ use time::format_description;
 use time::OffsetDateTime;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufWriter;
 
 fan_in_message_type!(AgentInput[MqttMessage, SoftwareCommand, RestartCommand] : Debug);
 
@@ -107,8 +106,16 @@ impl TedgeOperationConverterActor {
                     .await;
             }
             Ok(Some((state, action))) => {
-                self.process_workflow_action(&mut log_file, message, target, operation, cmd_id, state, action)
-                    .await?;
+                self.process_workflow_action(
+                    &mut log_file,
+                    message,
+                    target,
+                    operation,
+                    cmd_id,
+                    state,
+                    action,
+                )
+                .await?;
             }
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {
                 info!("Ignoring {operation} operation which is not registered");
@@ -187,19 +194,20 @@ impl TedgeOperationConverterActor {
             }
             OperationAction::Script(script) => {
                 let step = &state.status;
-                info!("Processing {operation} operation {step} step with script: {script}");
 
                 if let Ok(mut command) = Execute::try_new(&script) {
                     command.args = state.inject_parameters(&command.args);
-                    let command_line = format!("{command:?}");
+                    info!("Processing {operation} operation {step} step with script: {command}");
+                    log_file.log(&format!("{command}")).await;
 
                     let output = self.script_runner.await_response(command).await?;
-                    log_file.log_script_output(&command_line, &output).await;
+                    log_file.log_script_output(&output).await;
 
                     let new_state = state.update_with_script_output(script, output);
                     self.publish_command_state(operation, cmd_id, new_state)
                         .await
                 } else {
+                    info!("Processing {operation} operation {step} step with script: {script}");
                     let error = format!("Fail to parse the command line: {script}");
                     error!("{}", &error);
                     log_file.log_step(step, &error).await;
@@ -313,7 +321,7 @@ impl TedgeOperationConverterActor {
 
 struct CommandLog {
     path: Utf8PathBuf,
-    file: Option<BufWriter<File>>,
+    file: Option<File>,
 }
 
 impl CommandLog {
@@ -329,7 +337,7 @@ impl CommandLog {
         {
             Ok(file) => CommandLog {
                 path,
-                file: Some(BufWriter::new(file)),
+                file: Some(file),
             },
             Err(err) => {
                 error!("Fail to open log file {path}: {err}");
@@ -366,24 +374,34 @@ Action: {action:?}
         }
     }
 
-    async fn log_script_output(
-        &mut self,
-        command_line: &str,
-        result: &Result<Output, std::io::Error>,
-    ) {
-        if let Some(file) = self.file.as_mut() {
-            if let Err(err) =
-                logged_command::LoggedCommand::log_outcome(command_line, result, file).await
-            {
-                error!("Fail to log to {}: {err}", self.path)
-            }
+    async fn log(&mut self, line: &str) {
+        if let Err(err) = self.write(&format!("{line}\n\n")).await {
+            error!("Fail to log to {}: {err}", self.path)
         }
+    }
+
+    async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
+        if let Err(err) = self.write_script_output(result).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    async fn write_script_output(
+        &mut self,
+        result: &Result<Output, std::io::Error>,
+    ) -> Result<(), std::io::Error> {
+        if let Some(file) = self.file.as_mut() {
+            logged_command::LoggedCommand::log_outcome("", result, file).await?;
+            file.sync_all().await?;
+        }
+        Ok(())
     }
 
     async fn write(&mut self, message: &str) -> Result<(), std::io::Error> {
         if let Some(file) = self.file.as_mut() {
             file.write_all(message.as_bytes()).await?;
             file.flush().await?;
+            file.sync_all().await?;
         }
         Ok(())
     }

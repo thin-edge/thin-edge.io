@@ -6,6 +6,7 @@ use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::fs::File;
+use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tokio::process::Child;
@@ -202,11 +203,13 @@ impl LoggedCommand {
     pub async fn log_outcome(
         command_line: &str,
         result: &Result<Output, std::io::Error>,
-        logger: &mut BufWriter<File>,
+        logger: &mut (impl AsyncWrite + Unpin),
     ) -> Result<(), std::io::Error> {
-        logger
-            .write_all(format!("----- $ {}\n", command_line).as_bytes())
-            .await?;
+        if !command_line.is_empty() {
+            logger
+                .write_all(format!("----- $ {}\n", command_line).as_bytes())
+                .await?;
+        }
 
         match result.as_ref() {
             Ok(output) => {

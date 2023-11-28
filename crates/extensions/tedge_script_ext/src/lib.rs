@@ -1,4 +1,6 @@
 pub use shell_words::ParseError;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
@@ -56,6 +58,18 @@ impl Execute {
             timeouts: Some(timeouts),
             ..self
         }
+    }
+}
+
+impl Display for Execute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.command)?;
+        for arg in self.args.iter() {
+            f.write_str(" '")?;
+            f.write_str(arg)?;
+            f.write_str("'")?;
+        }
+        Ok(())
     }
 }
 
