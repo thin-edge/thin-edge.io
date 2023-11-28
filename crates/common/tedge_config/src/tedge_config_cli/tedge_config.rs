@@ -562,6 +562,13 @@ define_tedge_config! {
             }
         },
 
+        enable: {
+            /// Determines if thin-edge should use `sudo` when attempting to write to files possibly
+            /// not owned by `tedge`.
+            #[tedge_config(default(value = true), example = "true", example = "false")]
+            sudo: bool,
+        },
+
         external: {
             bind: {
                 /// The port mosquitto binds to for external use
