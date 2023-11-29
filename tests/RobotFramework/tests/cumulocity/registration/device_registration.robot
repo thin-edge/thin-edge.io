@@ -31,6 +31,17 @@ Child device registration
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Be A Child Device Of Device    ${CHILD_SN}
 
+Auto register disabled
+    ${timestamp}=        Get Unix Timestamp
+    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
+    Restart Service    tedge-mapper-c8y    
+    Service Health Status Should Be Up    tedge-mapper-c8y    
+    Execute Command    sudo tedge mqtt pub 'te/device/auto_reg_device///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-01T05:30:45+00:00" }' -q 2 -r
+    Should Have MQTT Messages    te/errors    message_contains=The provided entity: device/auto_reg_device// was not found and could not be auto-registered either, because it is disabled    date_from=${timestamp}   minimum=1    maximum=1
+    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
+    Restart Service    tedge-mapper-c8y
+
+
 Register child device with defaults via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_XID}    child_type=thin-edge.io-child
@@ -159,8 +170,7 @@ Register tedge-log-plugin when tedge-mapper-c8y is not running #2389
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"2023-01-01T01:00:00+0000","dateTo":"2023-01-02T01:00:00+0000","logFile":"example1","searchText":"first","maximumLines":10}}
     Should Have MQTT Messages    te/device/offlinechild3///cmd/log_upload/+
-
-
+    
 *** Keywords ***
 
 Check Child Device

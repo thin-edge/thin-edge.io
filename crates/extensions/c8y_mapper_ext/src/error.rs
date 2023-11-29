@@ -128,6 +128,9 @@ pub enum ConversionError {
 
     #[error("Unexpected error: {0:?}")]
     UnexpectedError(#[from] anyhow::Error),
+
+    #[error("The provided entity: {0} was not found and could not be auto-registered either, because it is disabled")]
+    AutoRegistrationDisabled(String),
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -43,6 +43,7 @@ pub struct C8yMapperConfig {
     pub auth_proxy_port: u16,
     pub auth_proxy_protocol: Protocol,
     pub mqtt_schema: MqttSchema,
+    pub enable_auto_register: bool,
 }
 
 impl C8yMapperConfig {
@@ -64,6 +65,7 @@ impl C8yMapperConfig {
         auth_proxy_port: u16,
         auth_proxy_protocol: Protocol,
         mqtt_schema: MqttSchema,
+        enable_auto_register: bool,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
 
@@ -85,6 +87,7 @@ impl C8yMapperConfig {
             auth_proxy_port,
             auth_proxy_protocol,
             mqtt_schema,
+            enable_auto_register,
         }
     }
 
@@ -125,6 +128,7 @@ impl C8yMapperConfig {
         };
 
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
+        let enable_auto_register = tedge_config.c8y.entity_store.auto_register;
 
         // Add feature topic filters
         for cmd in [
@@ -179,6 +183,7 @@ impl C8yMapperConfig {
             auth_proxy_port,
             auth_proxy_protocol,
             mqtt_schema,
+            enable_auto_register,
         ))
     }
 
