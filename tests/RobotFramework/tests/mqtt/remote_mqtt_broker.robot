@@ -4,7 +4,7 @@ Library             ThinEdgeIO
 Library             Cumulocity
 
 Suite Setup         Custom Setup
-Suite Teardown      Get Logs    name=${CONTAINER_1}
+Suite Teardown      Custom Teardown
 
 Force Tags          theme:mqtt    theme:c8y    adapter:docker
 
@@ -87,10 +87,13 @@ Custom Setup
     Stop Service    tedge-mapper-c8y
 
     Execute Command    echo -n "${tedge_toml_encoded}" | base64 --decode | sudo tee /etc/tedge/tedge.toml
-    Execute Command    sudo tedge config set mqtt.client.host ${CONTAINER_1_IP}
-    Execute Command    sudo tedge config set mqtt.client.port 1883
+    Execute Command    sudo tedge config unset mqtt.bind.address
     Execute Command    echo "${pem}" | sudo tee "$(tedge config get device.cert_path)"
     Restart Service    c8y-firmware-plugin
     Restart Service    tedge-log-plugin
     Restart Service    tedge-configuration-plugin
     Restart Service    tedge-agent
+
+Custom Teardown
+    Get Logs    name=${CONTAINER_1}
+    Get Logs    name=${CONTAINER_2}

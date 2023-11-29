@@ -20,6 +20,6 @@ pub enum LogRetrievalError {
     #[error("Log file has maximum number of lines.")]
     MaxLines,
 
-    #[error("No logs found with type {log_type:?}")]
+    #[error("No logs found for log type {log_type:?}")]
     NoLogsAvailableForType { log_type: String },
 }
