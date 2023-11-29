@@ -80,28 +80,15 @@ impl OperationLogs {
 
     pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
         let mut log_tracker: HashMap<String, BinaryHeap<Reverse<String>>> = HashMap::new();
+        let re = regex::Regex::new("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}")
+            .expect("Regex matching a date");
 
-        // FIXME: this is a hotfix to map "software-list" and "software-update" to "software-management"
-        // this should be fixed in https://github.com/thin-edge/thin-edge.io/issues/1077
         for file in (self.log_dir.read_dir()?).flatten() {
             if let Some(path) = file.path().file_name().and_then(|name| name.to_str()) {
-                if path.starts_with("software-list") {
+                if let Some(date_match) = re.find(path) {
+                    let (prefix, _) = path.split_at(date_match.start());
                     log_tracker
-                        .entry("software-list".to_string())
-                        .or_default()
-                        .push(Reverse(path.to_string()));
-                } else if path.starts_with("software-update") {
-                    log_tracker
-                        .entry("software-update".to_string())
-                        .or_default()
-                        .push(Reverse(path.to_string()));
-                } else {
-                    let file_name = path
-                        .split('-')
-                        .next()
-                        .ok_or(OperationLogsError::FileFormatError)?;
-                    log_tracker
-                        .entry(file_name.to_string())
+                        .entry(prefix.to_string())
                         .or_default()
                         .push(Reverse(path.to_string()));
                 }

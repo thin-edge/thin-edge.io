@@ -2581,6 +2581,7 @@ dependencies = [
  "csv",
  "download",
  "logged_command",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
