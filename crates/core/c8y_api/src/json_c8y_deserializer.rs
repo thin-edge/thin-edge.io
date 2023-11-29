@@ -4,6 +4,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 pub struct C8yDeviceControlTopic;
+
 impl C8yDeviceControlTopic {
     pub fn topic() -> Topic {
         Topic::new_unchecked(Self::name())
@@ -18,17 +19,57 @@ impl C8yDeviceControlTopic {
     }
 }
 
+/// Representation of operation object received via JSON over MQTT
+///
+/// A lot information come from c8y, however, we only need these items:
+/// - `id`, namely c8y's operation ID,
+/// - `externalSource.externalId` as device external ID,
+/// - operation fragment and its contents, here "c8y_UploadConfigFile".
+///
+/// ```rust
+/// // Example input from c8y
+/// use c8y_api::json_c8y_deserializer::{C8yOperation, C8yUploadConfigFile};
+///
+/// let data = r#"
+/// {
+///     "delivery": {
+///         "log": [],
+///         "time": "2023-02-08T06:51:19.350Z",
+///         "status": "PENDING"
+///     },
+///     "agentId": "22519994",
+///     "creationTime": "2023-02-08T06:51:19.318Z",
+///     "deviceId": "22519994",
+///     "id": "522559",
+///     "status": "PENDING",
+///     "description": "test operation",
+///     "c8y_UploadConfigFile": {
+///         "type": "/etc/tedge/tedge.toml"
+///     },
+///     "externalSource": {
+///         "externalId": "raspberrypi_001",
+///         "type": "c8y_Serial"
+///     }
+/// }"#;
+///
+/// // Parse the data
+/// let op: C8yOperation = serde_json::from_str(data).unwrap();
+///
+/// // Get data for processing command
+/// let device_xid = op.external_source.external_id;
+/// let operation_id = op.id;
+/// if let Some(v) = op.extras.get("c8y_UploadConfigFile") {
+///     let c8y_upload_config_file: C8yUploadConfigFile = serde_json::from_value(v.clone()).unwrap();
+/// }
+/// ```
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yOperation {
-    // externalSource field
+    // externalSource
     pub external_source: ExternalSource,
 
     // Operation ID
     pub id: String,
-
-    // Operation status
-    pub status: C8yOperationStatus,
 
     #[serde(flatten)]
     pub extras: std::collections::HashMap<String, serde_json::Value>,
@@ -42,20 +83,28 @@ pub struct ExternalSource {
     pub source_type: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum C8yOperationStatus {
-    Pending,
-    Executing,
-    Successful,
-    Failed,
-}
-
-/// Representation of c8y_LogfileRequest JSON
+/// Representation of c8y_LogfileRequest JSON object
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
+///
+/// // Example input from c8y
+/// let data = r#"
+/// {
+///     "searchText": "",
+///     "logFile": "foobar",
+///     "dateTo": "2023-11-22T22:44:34+0100",
+///     "dateFrom": "2023-11-21T22:44:34+0100",
+///     "maximumLines": 1000
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yLogfileRequest = serde_json::from_str(data).unwrap();
+/// ```
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yLogfileRequest {
-    pub search_text: Option<String>,
+    pub search_text: String,
     pub log_file: String,
     #[serde(deserialize_with = "to_datetime")]
     pub date_to: OffsetDateTime,
@@ -64,7 +113,20 @@ pub struct C8yLogfileRequest {
     pub maximum_lines: usize,
 }
 
-/// Representation of c8y_UploadConfigFile JSON
+/// Representation of c8y_UploadConfigFile JSON object
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
+///
+/// // Example input from c8y
+/// let data = r#"
+/// {
+///     "type": "/etc/tedge/tedge.toml"
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yUploadConfigFile = serde_json::from_str(data).unwrap();
+/// ```
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUploadConfigFile {
