@@ -342,8 +342,11 @@ impl GenericCommandState {
         match output {
             Ok(output) => {
                 if output.status.success() {
-                    match String::from_utf8(output.stdout) {
-                        Ok(stdout) => match serde_json::from_str(&stdout) {
+                    match String::from_utf8(output.stdout)
+                        .ok()
+                        .and_then(extract_script_output)
+                    {
+                        Some(stdout) => match serde_json::from_str(&stdout) {
                             Ok(json) => self.update_from_json(json),
                             Err(err) => {
                                 let reason =
@@ -351,8 +354,8 @@ impl GenericCommandState {
                                 self.fail_with(reason)
                             }
                         },
-                        Err(_) => {
-                            let reason = format!("Script {script} returned non UTF-8 stdout");
+                        None => {
+                            let reason = format!("Script {script} returned no tedge output");
                             self.fail_with(reason)
                         }
                     }
@@ -497,6 +500,15 @@ fn json_as_string(value: &Value) -> String {
         Value::String(s) => s.clone(),
         _ => value.to_string(),
     }
+}
+
+fn extract_script_output(stdout: String) -> Option<String> {
+    if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
+        if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
+            return Some(script_output.to_string());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
