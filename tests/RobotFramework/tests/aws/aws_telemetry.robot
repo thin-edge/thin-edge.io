@@ -14,7 +14,7 @@ Test Tags           theme:mqtt    theme:aws
 Publish measurements to te measurement topic
     ${timestamp}=        Get Unix Timestamp
     Execute Command    tedge mqtt pub te/device/main///m/ '{"temperature": 10}'
-    Should Have MQTT Messages    aws/td/device:main/m/   message_contains="temperature"    date_from=${timestamp}   minimum=1    maximum=1
+    Should Have MQTT Messages    aws/td/device:main/m/    message_contains="temperature"    date_from=${timestamp}   minimum=1    maximum=1
 
 Publish measurements to te measurement topic with measurement type
     ${timestamp}=        Get Unix Timestamp

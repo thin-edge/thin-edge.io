@@ -2596,6 +2596,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         auth_proxy_port,
         Protocol::Http,
         MqttSchema::default(),
+        true,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
