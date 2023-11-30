@@ -353,6 +353,7 @@ mod tests {
                                 .await
                                 .context("writing chunk")?;
                         }
+                        file.flush().await.context("flushing buffer of file")?;
                         Ok(StatusCode::CREATED)
                     }
                 }
