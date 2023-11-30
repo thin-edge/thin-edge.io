@@ -355,19 +355,20 @@ impl ConfigManagerActor {
                         Utf8Path::new(&file_entry.path),
                     );
 
-            if let Err(err) = tedge_write_process {
-                let error_message = format!(
+            let tedge_write_output = match tedge_write_process {
+                Ok(output) => output,
+                Err(err) => {
+                    let error_message = format!(
                     "Handling of operation failed with: Could not start tedge-write process: {err}",
                 );
 
-                request.failed(&error_message);
-                error!("{}", error_message);
-                self.publish_command_status(&topic, &ConfigOperation::Update(request))
-                    .await?;
-                return Ok(());
-            }
-
-            let tedge_write_output = tedge_write_process?;
+                    request.failed(&error_message);
+                    error!("{}", error_message);
+                    self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                        .await?;
+                    return Ok(());
+                }
+            };
 
             if !tedge_write_output.status.success() {
                 let error_message = format!(

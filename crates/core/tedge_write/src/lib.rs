@@ -3,14 +3,15 @@
 //!
 //! tedge-agent handles a `config_update` operation, during which we need to overwrite configuration
 //! files with newer versions. However, we run tedge-agent as `tedge` user, but some of these files
-//! are not writeable by `tedge`. For this reason, we make use of sudo, adding a rule that allows
-//! `tedge` to call `tedge-write` with root permissions in order to write to these files. When
+//! are not writeable by this user. For this reason, we use sudo, adding a rule that allows `tedge`
+//! to call `tedge-write` with root permissions using `sudo` in order to write to these files. When
 //! handling operations where we need to write to user-owned files, tedge components will spawn a
 //! `tedge-write` process in order to reduce the surface where the root permissions are used.
 //!
 //! This behaviour can be disabled by setting an `enable.sudo` flag to `false`. `tedge-write` will
-//! then be ran with effective permissions of `tedge` user and group. With this configuration, it
-//! will be necessary to modify affected files to be writable by `tedge` user or group.
+//! then be ran with effective permissions of the user running the `tedge-agent` binary. With this
+//! configuration, it the agent will only be able to update configuration files which are writable
+//! by this user (in practice `tedge` or `root`)
 //!
 //! This crate consists of 2 parts:
 //!
