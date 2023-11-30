@@ -160,15 +160,16 @@ async fn spawn_software_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config = SoftwareManagerConfig::new(
-        &EntityTopicId::default_main_device(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-        None,
-        &TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
-    );
+    let config = SoftwareManagerConfig {
+        device: EntityTopicId::default_main_device(),
+        tmp_dir: tmp_dir.utf8_path_buf(),
+        config_dir: tmp_dir.utf8_path_buf(),
+        state_dir: "/some/unknown/dir".into(),
+        sm_plugins_dir: tmp_dir.utf8_path_buf(),
+        log_dir: tmp_dir.utf8_path_buf(),
+        default_plugin_type: None,
+        config_location: TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
+    };
 
     let mut software_actor_builder = SoftwareManagerBuilder::new(config);
     converter_builder.set_connection(&mut software_actor_builder);
