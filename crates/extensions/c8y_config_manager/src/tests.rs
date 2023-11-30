@@ -338,7 +338,7 @@ async fn test_child_device_config_upload_failed_response_mapping() -> Result<(),
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,\"upload failed\"\n",
+                "502,c8y_UploadConfigFile,upload failed\n",
             ),
         ])
         .await;
@@ -390,7 +390,7 @@ async fn test_invalid_config_snapshot_response_child_device() -> Result<(), DynE
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,\"Failed to parse response from child device with: expected value at line 1 column 1\"\n",
+                "502,c8y_UploadConfigFile,Failed to parse response from child device with: expected value at line 1 column 1\n",
             ),
         ],
     )
@@ -455,7 +455,7 @@ async fn test_timeout_on_no_config_snapshot_response_child_device() -> Result<()
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,\"Timeout due to lack of response from child device: child-aa for config type: file_a\"\n",
+                "502,c8y_UploadConfigFile,Timeout due to lack of response from child device: child-aa for config type: file_a\n",
             ),
         ],
     )
@@ -603,7 +603,7 @@ async fn test_child_config_snapshot_successful_response_without_uploaded_file_ma
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,\"Failed with file not found\"\n",
+                "502,c8y_UploadConfigFile,Failed with file not found\n",
             ),
         ])
         .await;
@@ -832,7 +832,7 @@ async fn test_child_device_config_update_failed_response_mapping() -> Result<(),
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_DownloadConfigFile,\"download failed\"\n",
+                "502,c8y_DownloadConfigFile,download failed\n",
             ),
         ])
         .await;
@@ -899,7 +899,7 @@ async fn test_child_device_config_download_fail_with_broken_url() -> Result<(), 
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_DownloadConfigFile,\"Downloading the config file update from bad-url failed with Failed with file not found\"\n",
+                "502,c8y_DownloadConfigFile,Downloading the config file update from bad-url failed with Failed with file not found\n",
             ),
         ],
     )

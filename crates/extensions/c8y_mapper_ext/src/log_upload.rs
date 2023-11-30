@@ -568,7 +568,7 @@ mod tests {
         // Expect `502` smartrest message on `c8y/s/us`.
         assert_received_contains_str(
             &mut mqtt,
-            [("c8y/s/us", "502,c8y_LogfileRequest,\"Unknown reason\"")],
+            [("c8y/s/us", "502,c8y_LogfileRequest,Unknown reason")],
         )
         .await;
     }
@@ -650,7 +650,7 @@ mod tests {
             &mut mqtt,
             [(
                 "c8y/s/us/test-device:device:child1",
-                "502,c8y_LogfileRequest,\"Something went wrong\"",
+                "502,c8y_LogfileRequest,Something went wrong",
             )],
         )
         .await;

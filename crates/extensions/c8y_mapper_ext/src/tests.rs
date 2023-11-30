@@ -397,7 +397,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_SoftwareUpdate,\"Partial failure: Couldn\'t install collectd and nginx\"\n",
+            "502,c8y_SoftwareUpdate,Partial failure: Couldn't install collectd and nginx\n",
         )],
     )
     .await;

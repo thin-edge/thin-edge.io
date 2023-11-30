@@ -1,11 +1,9 @@
 use crate::smartrest::error::SmartRestSerializerError;
 use crate::smartrest::topic::C8yTopic;
-use csv::QuoteStyle;
 use csv::WriterBuilder;
 use mqtt_channel::Message;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::Serializer;
 
 pub type SmartRest = String;
 
@@ -146,7 +144,6 @@ impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToSuccessful {}
 pub struct SmartRestSetOperationToFailed {
     pub message_id: &'static str,
     pub operation: &'static str,
-    #[serde(serialize_with = "reason_to_string_with_quotes")]
     pub reason: String,
 }
 
@@ -162,20 +159,8 @@ impl SmartRestSetOperationToFailed {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToFailed {}
 
-fn reason_to_string_with_quotes<S>(reason: &str, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let s = format!("\"{}\"", reason);
-    serializer.serialize_str(&s)
-}
-
 fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSerializerError> {
-    let mut wtr = WriterBuilder::new()
-        .has_headers(false)
-        .quote_style(QuoteStyle::Never)
-        .double_quote(false)
-        .from_writer(vec![]);
+    let mut wtr = WriterBuilder::new().has_headers(false).from_writer(vec![]);
     wtr.serialize(record)?;
 
     // csv::IntoInnerError still contains the writer and we can use it to
@@ -263,7 +248,21 @@ mod tests {
         .unwrap();
         assert_eq!(
             smartrest,
-            "502,c8y_SoftwareUpdate,\"Failed due to permission.\"\n"
+            "502,c8y_SoftwareUpdate,Failed due to permission.\n"
+        );
+    }
+
+    #[test]
+    fn serialize_smartrest_set_operation_to_failed_with_quotes() {
+        let smartrest = SmartRestSetOperationToFailed::new(
+            CumulocitySupportedOperations::C8ySoftwareUpdate,
+            "Failed due to permi\"ssion.".into(),
+        )
+        .to_smartrest()
+        .unwrap();
+        assert_eq!(
+            smartrest,
+            "502,c8y_SoftwareUpdate,\"Failed due to permi\"\"ssion.\"\n"
         );
     }
 
@@ -289,6 +288,6 @@ mod tests {
         )
         .to_smartrest()
         .unwrap();
-        assert_eq!(smartrest, "502,c8y_SoftwareUpdate,\"\"\n");
+        assert_eq!(smartrest, "502,c8y_SoftwareUpdate,\n");
     }
 }
