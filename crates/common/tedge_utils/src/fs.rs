@@ -1,5 +1,6 @@
 use nix::NixPath;
 use std::fs as std_fs;
+use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -8,7 +9,10 @@ use tokio::fs as tokio_fs;
 use tokio::io::AsyncWriteExt;
 
 /// Write file to filesystem atomically using std::fs synchronously.
-pub fn atomically_write_file_sync(dest: impl AsRef<Path>, content: &[u8]) -> std::io::Result<()> {
+pub fn atomically_write_file_sync(
+    dest: impl AsRef<Path>,
+    mut reader: impl Read,
+) -> std::io::Result<()> {
     let dest_dir = parent_dir(dest.as_ref());
     // FIXME: `.with_extension` replaces file extension, so if we used this
     // function to write files `file.txt`, `file.bin`, `file.jpg`, etc.
@@ -21,7 +25,7 @@ pub fn atomically_write_file_sync(dest: impl AsRef<Path>, content: &[u8]) -> std
         .create_new(true)
         .open(&tempfile)?;
 
-    if let Err(err) = file.write_all(content) {
+    if let Err(err) = std::io::copy(&mut reader, &mut file) {
         let _ = std_fs::remove_file(tempfile);
         return Err(err);
     }

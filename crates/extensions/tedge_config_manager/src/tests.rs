@@ -25,6 +25,7 @@ use crate::actor::ConfigUploadRequest;
 use crate::actor::ConfigUploadResult;
 use crate::ConfigManagerBuilder;
 use crate::ConfigManagerConfig;
+use crate::TedgeWriteStatus;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_secs(5);
 
@@ -81,7 +82,7 @@ async fn new_config_manager_builder(
         .try_into()
         .expect("Infallible"),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
-        is_sudo_enabled: true,
+        use_tedge_write: TedgeWriteStatus::Disabled,
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
     };

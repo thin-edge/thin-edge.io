@@ -33,10 +33,12 @@ pub struct ConfigManagerConfig {
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
     pub tmp_path: Arc<Utf8Path>,
-    pub is_sudo_enabled: bool,
     pub config_reload_topics: TopicFilter,
     pub config_update_topic: TopicFilter,
     pub config_snapshot_topic: TopicFilter,
+
+    /// If enabled, config file updates are deployed by tedge-write.
+    pub use_tedge_write: TedgeWriteStatus,
 }
 
 pub struct ConfigManagerOptions {
@@ -80,11 +82,13 @@ impl ConfigManagerConfig {
             config_dir,
             plugin_config_dir,
             plugin_config_path,
-            is_sudo_enabled: true,
             tmp_path: cliopts.tmp_path,
             config_reload_topics,
             config_update_topic,
             config_snapshot_topic,
+            use_tedge_write: TedgeWriteStatus::Enabled {
+                sudo: cliopts.is_sudo_enabled,
+            },
         })
     }
 }
@@ -245,4 +249,10 @@ impl PluginConfig {
             .map(|x| x.config_type.to_string())
             .collect::<Vec<_>>()
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TedgeWriteStatus {
+    Enabled { sudo: bool },
+    Disabled,
 }

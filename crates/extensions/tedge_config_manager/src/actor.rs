@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use log::debug;
 use log::error;
 use log::info;
@@ -25,6 +26,9 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
+use tedge_write::CopyOptions;
+
+use crate::TedgeWriteStatus;
 
 use super::config::PluginConfig;
 use super::error::ConfigManagementError;
@@ -329,52 +333,13 @@ impl ConfigManagerActor {
         };
 
         // new config was downloaded into tmpdir, we need to write it into destination using tedge-write
-        let file_entry = self
-            .plugin_config
-            .get_file_entry_from_type(&request.config_type)?;
+        let from = Utf8Path::from_path(response.file_path.as_path()).unwrap();
 
-        // when testing, `tedge-agent` binary is not available. need to do the switch here, because
-        // conditional compilation in tedge-write crate here doesn't work
-        #[cfg(test)]
-        {
-            std::fs::copy(&response.file_path, &file_entry.path)?;
-        }
-        #[cfg(not(test))]
-        {
-            let mode = file_entry.file_permissions.mode;
-            let user = file_entry.file_permissions.user.as_deref();
-            let group = file_entry.file_permissions.group.as_deref();
-
-            let tedge_write_process =
-                tedge_write::CopyOptions::with_sudo(self.config.is_sudo_enabled)
-                    .mode(mode)
-                    .user(user)
-                    .group(group)
-                    .copy(
-                        Utf8Path::from_path(response.file_path.as_path()).unwrap(),
-                        Utf8Path::new(&file_entry.path),
-                    );
-
-            let tedge_write_output = match tedge_write_process {
-                Ok(output) => output,
-                Err(err) => {
-                    let error_message = format!(
-                    "Handling of operation failed with: Could not start tedge-write process: {err}",
-                );
-
-                    request.failed(&error_message);
-                    error!("{}", error_message);
-                    self.publish_command_status(&topic, &ConfigOperation::Update(request))
-                        .await?;
-                    return Ok(());
-                }
-            };
-
-            if !tedge_write_output.status.success() {
+        let deployed_to_path = match self.deploy_config_file(from, &request.config_type) {
+            Ok(path) => path,
+            Err(err) => {
                 let error_message = format!(
-                    "Handling of operation failed with: {}",
-                    String::from_utf8(tedge_write_output.stderr)
-                        .expect("tedge-write output should be utf-8")
+                    "Handling of operation failed with: Could not write to config file: {err}",
                 );
 
                 request.failed(&error_message);
@@ -383,9 +348,9 @@ impl ConfigManagerActor {
                     .await?;
                 return Ok(());
             }
-        }
+        };
 
-        request.successful(&file_entry.path);
+        request.successful(deployed_to_path);
         info!(
             "Config Update request processed for config type: {}.",
             request.config_type
@@ -394,6 +359,48 @@ impl ConfigManagerActor {
             .await?;
 
         Ok(())
+    }
+
+    /// Deploys the new version of the configuration file and returns the path under which it was
+    /// deployed.
+    ///
+    /// This function ensures that the configuration file under `dest` is overwritten by a new
+    /// version currently stored in a temporary directory under `src`. Depending on if
+    /// `use_tedge_write` is used, either a new `tedge-write` process is spawned, or a file is
+    /// copied directly.
+    fn deploy_config_file(
+        &self,
+        from: &Utf8Path,
+        config_type: &str,
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
+        let file_entry = self.plugin_config.get_file_entry_from_type(config_type)?;
+
+        let mode = file_entry.file_permissions.mode;
+        let user = file_entry.file_permissions.user.as_deref();
+        let group = file_entry.file_permissions.group.as_deref();
+
+        let to = Utf8PathBuf::from(&file_entry.path);
+
+        match self.config.use_tedge_write {
+            TedgeWriteStatus::Disabled => {
+                let src_file = std::fs::File::open(from)?;
+                tedge_utils::fs::atomically_write_file_sync(&to, src_file)?;
+            }
+
+            TedgeWriteStatus::Enabled { sudo } => {
+                let options = CopyOptions {
+                    from,
+                    to: to.as_path(),
+                    sudo,
+                    mode,
+                    user,
+                    group,
+                };
+                options.copy()?;
+            }
+        }
+
+        Ok(to)
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {
