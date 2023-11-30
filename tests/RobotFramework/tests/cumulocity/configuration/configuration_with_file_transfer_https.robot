@@ -47,11 +47,11 @@ Configuration operation fails when configuration-plugin does not supply client c
     Disable HTTP Client Certificate for Child Device
     Get Configuration Should Fail
     ...  device=${CHILD_SN}
-    ...  failure_reason=tedge-configuration-plugin failed uploading configuration snapshot:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...  failure_reason=config-manager failed uploading configuration snapshot:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
     ...  device=${CHILD_SN}
-    ...  failure_reason=tedge-configuration-plugin failed downloading a file:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...  failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration snapshot fails when mapper does not supply client certificate
