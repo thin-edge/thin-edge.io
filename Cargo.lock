@@ -3832,6 +3832,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "shell-words",
  "test-case",
  "thiserror",
  "time",

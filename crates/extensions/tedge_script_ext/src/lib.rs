@@ -1,6 +1,4 @@
 pub use shell_words::ParseError;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
@@ -20,6 +18,15 @@ pub struct Execute {
 }
 
 impl Execute {
+    /// A new command with its arguments
+    pub fn new(command: String, args: Vec<String>) -> Self {
+        Execute {
+            command,
+            args,
+            timeouts: None,
+        }
+    }
+
     /// Parse the command line into a program and its arguments
     pub fn try_new(command_line: &str) -> Result<Self, ParseError> {
         let mut args = shell_words::split(command_line)?;
@@ -27,12 +34,7 @@ impl Execute {
             Err(ParseError)
         } else {
             let command = args.remove(0);
-            let timeouts = None;
-            Ok(Execute {
-                command,
-                args,
-                timeouts,
-            })
+            Ok(Execute::new(command, args))
         }
     }
 
@@ -58,18 +60,6 @@ impl Execute {
             timeouts: Some(timeouts),
             ..self
         }
-    }
-}
-
-impl Display for Execute {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.command)?;
-        for arg in self.args.iter() {
-            f.write_str(" '")?;
-            f.write_str(arg)?;
-            f.write_str("'")?;
-        }
-        Ok(())
     }
 }
 

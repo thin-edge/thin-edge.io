@@ -6,11 +6,16 @@ use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use mqtt_channel::QoS::AtLeastOnce;
 use mqtt_channel::Topic;
+use serde::de::Error;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 pub type StateName = String;
 pub type OperationName = String;
@@ -37,10 +42,55 @@ pub struct OperationState {
     pub owner: Option<String>,
 
     /// Possibly a script to handle the operation when in that state
-    pub script: Option<String>,
+    pub script: Option<ShellScript>,
 
     /// Transitions
     pub next: Vec<StateName>,
+}
+
+/// A parsed Unix command line
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShellScript {
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+/// Deserialize an Unix command line
+impl<'de> Deserialize<'de> for ShellScript {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let command_line = String::deserialize(deserializer)?;
+        let mut args = shell_words::split(&command_line).map_err(D::Error::custom)?;
+        if args.is_empty() {
+            Err(D::Error::custom(shell_words::ParseError))
+        } else {
+            let script = args.remove(0);
+            Ok(ShellScript {
+                command: script,
+                args,
+            })
+        }
+    }
+}
+
+/// Serialize an Unix command line, using appropriate quotes
+impl Serialize for ShellScript {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl Display for ShellScript {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut args = vec![self.command.clone()];
+        args.append(&mut self.args.clone());
+        f.write_str(&shell_words::join(args))
+    }
 }
 
 /// What needs to be done to advance an operation request in some state
@@ -64,10 +114,26 @@ pub enum OperationAction {
     },
 
     /// A script has to be executed
-    Script(String),
+    Script(ShellScript),
 
     /// The command has been fully processed and needs to be cleared
     Clear,
+}
+
+impl Display for OperationAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            OperationAction::MoveTo(step) => format!("move to {step} state"),
+            OperationAction::BuiltIn => "builtin".to_string(),
+            OperationAction::Delegate(owner) => {
+                format!("wait for {owner} to perform required actions")
+            }
+            OperationAction::Restart { .. } => "trigger device restart".to_string(),
+            OperationAction::Script(script) => script.to_string(),
+            OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
+        };
+        f.write_str(&str)
+    }
 }
 
 /// Error preventing a workflow to be registered
@@ -238,7 +304,10 @@ impl OperationWorkflow {
                     operation: (&self.operation).into(),
                     step: cmd.status.clone(),
                 })
-                .map(|state| Some((cmd, OperationAction::from(state)))),
+                .map(|state| {
+                    let action = OperationAction::from(state).inject_state(&cmd);
+                    Some((cmd, action))
+                }),
             Ok(None) => Ok(None),
             Err(err) => Err(err),
         }
@@ -249,7 +318,7 @@ impl From<&OperationState> for OperationAction {
     // TODO this must be called when an operation is registered, not when invoked.
     fn from(state: &OperationState) -> Self {
         match &state.script {
-            Some(script) if script == "restart" => {
+            Some(script) if script.command == "restart" => {
                 let (on_exec, on_success, on_error) = match &state.next[..] {
                     [] => ("executing", "successful", "failed"),
                     [restarting] => (restarting.as_ref(), "successful", "failed"),
@@ -266,7 +335,7 @@ impl From<&OperationState> for OperationAction {
                     on_error: on_error.to_string(),
                 }
             }
-            Some(script) => OperationAction::Script(script.to_owned()),
+            Some(script) => OperationAction::Script(script.clone()),
             None => match &state.owner {
                 Some(owner) if owner == "tedge" => OperationAction::BuiltIn,
                 Some(owner) => OperationAction::Delegate(owner.to_owned()),
@@ -276,6 +345,18 @@ impl From<&OperationState> for OperationAction {
                     _ => OperationAction::Delegate("unknown".to_string()),
                 },
             },
+        }
+    }
+}
+
+impl OperationAction {
+    pub fn inject_state(self, state: &GenericCommandState) -> Self {
+        match self {
+            OperationAction::Script(script) => OperationAction::Script(ShellScript {
+                command: state.inject_parameter(&script.command),
+                args: state.inject_parameters(&script.args),
+            }),
+            _ => self,
         }
     }
 }

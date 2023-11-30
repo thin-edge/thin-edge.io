@@ -194,28 +194,16 @@ impl TedgeOperationConverterActor {
             }
             OperationAction::Script(script) => {
                 let step = &state.status;
+                info!("Processing {operation} operation {step} step with script: {script}");
 
-                if let Ok(mut command) = Execute::try_new(&script) {
-                    command.args = state.inject_parameters(&command.args);
-                    info!("Processing {operation} operation {step} step with script: {command}");
-                    log_file.log(&format!("{command}")).await;
+                let script_name = script.command.clone();
+                let command = Execute::new(script_name.clone(), script.args);
+                let output = self.script_runner.await_response(command).await?;
+                log_file.log_script_output(&output).await;
 
-                    let output = self.script_runner.await_response(command).await?;
-                    log_file.log_script_output(&output).await;
-
-                    let new_state = state.update_with_script_output(script, output);
-                    self.publish_command_state(operation, cmd_id, new_state)
-                        .await
-                } else {
-                    info!("Processing {operation} operation {step} step with script: {script}");
-                    let error = format!("Fail to parse the command line: {script}");
-                    error!("{}", &error);
-                    log_file.log_step(step, &error).await;
-
-                    let new_state = state.fail_with(error);
-                    self.publish_command_state(operation, cmd_id, new_state)
-                        .await
-                }
+                let new_state = state.update_with_script_output(script_name, output);
+                self.publish_command_state(operation, cmd_id, new_state)
+                    .await
             }
         }
     }
@@ -352,7 +340,7 @@ impl CommandLog {
         let message = format!(
             r#"
 State: {state}
-Action: {action:?}
+Action: {action}
 "#
         );
         self.log_step(step, &message).await
@@ -370,12 +358,6 @@ Action: {action:?}
 "#
         );
         if let Err(err) = self.write(&message).await {
-            error!("Fail to log to {}: {err}", self.path)
-        }
-    }
-
-    async fn log(&mut self, line: &str) {
-        if let Err(err) = self.write(&format!("{line}\n\n")).await {
             error!("Fail to log to {}: {err}", self.path)
         }
     }
