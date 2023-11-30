@@ -182,7 +182,9 @@ impl ConfigManagerActor {
                     .insert(topic.name.clone(), ConfigOperation::Snapshot(request));
             }
             Err(error) => {
-                let error_message = format!("Handling of operation failed with: {}", error);
+                let error_message = format!(
+                    "Failed to initiate configuration snapshot upload to file-transfer service: {error}",
+                );
                 request.failed(&error_message);
                 error!("{}", error_message);
                 self.publish_command_status(topic, &ConfigOperation::Snapshot(request))
@@ -235,7 +237,10 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 Err(err) => {
-                    let error_message = format!("Handling of operation failed with: {}", err);
+                    let error_message = format!(
+                        "tedge-configuration-plugin failed uploading configuration snapshot: {}",
+                        err
+                    );
                     request.failed(&error_message);
                     error!("{}", error_message);
                     self.publish_command_status(&topic, &ConfigOperation::Snapshot(request))
@@ -258,7 +263,10 @@ impl ConfigManagerActor {
                     .insert(topic.name.clone(), ConfigOperation::Update(request));
             }
             Err(error) => {
-                let error_message = format!("Handling of operation failed with: {}", error);
+                let error_message = format!(
+                    "tedge-configuration-plugin failed to start downloading configuration: {}",
+                    error
+                );
                 request.failed(&error_message);
                 error!("{}", error_message);
                 self.publish_command_status(topic, &ConfigOperation::Update(request))
@@ -311,7 +319,8 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 Err(err) => {
-                    let error_message = format!("Handling of operation failed with: {}", err);
+                    let error_message =
+                        format!("tedge-configuration-plugin failed downloading a file: {err}",);
                     request.failed(&error_message);
                     error!("{}", error_message);
                     self.publish_command_status(&topic, &ConfigOperation::Update(request))

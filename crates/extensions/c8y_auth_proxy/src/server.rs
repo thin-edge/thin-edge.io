@@ -12,8 +12,10 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
+use axum_tls::config::load_ssl_config;
+use axum_tls::config::PemReader;
+use axum_tls::config::TrustStoreLoader;
 use axum_tls::start_tls_server;
-use camino::Utf8Path;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::HeaderMap;
@@ -25,6 +27,7 @@ use std::io;
 use std::net::IpAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
+use tedge_config_macros::OptionalConfig;
 use tracing::error;
 use tracing::info;
 
@@ -37,14 +40,12 @@ impl Server {
         state: AppState,
         address: IpAddr,
         port: u16,
-        cert_and_private_key: Option<(Vec<Vec<u8>>, Vec<u8>)>,
-        ca_path: Option<&Utf8Path>,
+        cert_path: OptionalConfig<impl PemReader>,
+        key_path: OptionalConfig<impl PemReader>,
+        ca_path: OptionalConfig<impl TrustStoreLoader>,
     ) -> anyhow::Result<Self> {
         let app = create_app(state);
-        let root_certs = ca_path.map(axum_tls::read_trust_store).transpose()?;
-        let server_config = cert_and_private_key
-            .map(|(cert, key)| axum_tls::ssl_config(cert, key, root_certs))
-            .transpose()?;
+        let server_config = load_ssl_config(cert_path, key_path, ca_path, "Cumulocity proxy")?;
         let fut = if let Some(server_config) = server_config {
             try_bind_with_tls(app, address, port, server_config)?.boxed()
         } else {

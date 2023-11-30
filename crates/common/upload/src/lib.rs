@@ -24,8 +24,9 @@
 //!         "https://example.com/destination_file",
 //!     );
 //!
+//!     let identity = unimplemented!("Get client certificate from configuration");
 //!     // Create uploader instance with source file path.
-//!     let uploader = Uploader::new("/tmp/test_upload".into());
+//!     let uploader = Uploader::new("/tmp/test_upload".into(), identity);
 //!
 //!     // Call `upload` method to send data to url.
 //!     uploader.upload(&url_data).await?;

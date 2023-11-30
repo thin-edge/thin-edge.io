@@ -1,5 +1,5 @@
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
-use crate::file_transfer_server::http_rest::HttpConfig;
+use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
@@ -16,6 +16,7 @@ use log::error;
 use reqwest::Identity;
 use std::ffi::OsStr;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use tedge_actors::Concurrent;
@@ -54,13 +55,12 @@ use tracing::instrument;
 const TEDGE_AGENT: &str = "tedge-agent";
 
 #[derive(Debug, Clone)]
-pub struct AgentConfig {
+pub(crate) struct AgentConfig {
     pub mqtt_config: MqttConfig,
-    pub http_config: HttpConfig,
+    pub http_config: FileTransferServerConfig,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,
-    pub tmp_dir: Utf8PathBuf,
     pub run_dir: Utf8PathBuf,
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
@@ -82,7 +82,6 @@ impl AgentConfig {
         let tedge_config = config_repository.load()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
-        let tmp_dir = tedge_config.tmp.path.clone();
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -106,10 +105,13 @@ impl AgentConfig {
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
-        let http_config = HttpConfig::default()
-            .with_data_dir(data_dir.clone())
-            .with_port(http_port)
-            .with_ip_address(http_bind_address);
+        let http_config = FileTransferServerConfig {
+            file_transfer_dir: data_dir.file_transfer_dir(),
+            cert_path: tedge_config.http.cert_path.clone(),
+            key_path: tedge_config.http.key_path.clone(),
+            ca_path: tedge_config.http.ca_path.clone(),
+            bind_addr: SocketAddr::from((http_bind_address, http_port)),
+        };
 
         // Restart config
         let restart_config =
@@ -134,7 +136,6 @@ impl AgentConfig {
             restart_config,
             sw_update_config,
             config_dir,
-            tmp_dir,
             run_dir,
             use_lock,
             data_dir,
@@ -155,7 +156,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
+    pub(crate) fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
         let mut flock = None;
         if config.use_lock {
             flock = check_another_instance_is_not_running(name, config.run_dir.as_std_path())?;
@@ -182,7 +183,7 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn start(&mut self, v1: bool) -> Result<(), anyhow::Error> {
+    pub async fn start(self, v1: bool) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
         self.init()?;
 
@@ -190,24 +191,18 @@ impl Agent {
         let runtime_events_logger = None;
         let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-        // File transfer server actor
-        let file_transfer_server_builder =
-            FileTransferServerBuilder::new(self.config.http_config.clone());
-
-        // Restart actor
-        let mut restart_actor_builder =
-            RestartManagerBuilder::new(self.config.restart_config.clone());
-
-        // Mqtt actor
-        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
-
-        // Software update actor
-        let mut software_update_builder =
-            SoftwareManagerBuilder::new(self.config.sw_update_config.clone());
-
         // Operation workflows
         let workflows = self.load_operation_workflows().await?;
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
+
+        // Restart actor
+        let mut restart_actor_builder = RestartManagerBuilder::new(self.config.restart_config);
+
+        // Mqtt actor
+        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config);
+
+        // Software update actor
+        let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
         // Converter actor
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
@@ -246,7 +241,7 @@ impl Agent {
             let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
             let mut downloader_actor_builder =
                 DownloaderActor::new(self.config.identity.clone()).builder();
-            let mut uploader_actor_builder = UploaderActor::new().builder();
+            let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
 
             // Instantiate config manager actor
             let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
@@ -266,7 +261,7 @@ impl Agent {
             // Instantiate log manager actor
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
-                tmp_dir: self.config.config_dir.clone().into(),
+                tmp_dir: self.config.config_dir.into(),
                 mqtt_schema,
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;
@@ -302,6 +297,9 @@ impl Agent {
             info!(
                 "Running as a main device, starting tedge_to_te_converter and file transfer actors"
             );
+
+            let file_transfer_server_builder =
+                FileTransferServerBuilder::try_bind(self.config.http_config).await?;
             runtime.spawn(tedge_to_te_converter).await?;
             runtime.spawn(file_transfer_server_builder).await?;
         } else {

@@ -17,7 +17,8 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 async fn spawn_uploader_actor() -> ClientMessageBox<(String, UploadRequest), (String, UploadResult)>
 {
-    let mut uploader_actor_builder = UploaderActor::new().builder();
+    let identity = None;
+    let mut uploader_actor_builder = UploaderActor::new(identity).builder();
     let requester = ClientMessageBox::new("UploadRequester", &mut uploader_actor_builder);
 
     tokio::spawn(uploader_actor_builder.run());
@@ -47,8 +48,8 @@ async fn upload_without_auth() -> Result<(), DynError> {
         TEST_TIMEOUT,
         requester.await_response(("id".to_string(), download_request)),
     )
-    .await?
-    .expect("timeout");
+    .await
+    .expect("timeout")?;
 
     assert_eq!(id.as_str(), "id");
     assert!(response.is_ok());
@@ -85,8 +86,8 @@ async fn upload_with_auth() -> Result<(), DynError> {
         TEST_TIMEOUT,
         requester.await_response(("id".to_string(), download_request)),
     )
-    .await?
-    .expect("timeout");
+    .await
+    .expect("timeout")?;
 
     assert_eq!(id.as_str(), "id");
     assert!(response.is_ok());

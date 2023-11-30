@@ -214,8 +214,8 @@ impl CumulocityConverter {
         let download = match download_result {
             Err(err) => {
                 let smartrest_error = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                    format!("Upload failed with {:?}", err),
+                    CumulocitySupportedOperations::C8yUploadConfigFile,
+                    format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
                 )
                 .to_smartrest()?;
 

@@ -9,21 +9,31 @@ homepage = { workspace = true }
 repository = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+error-matching = ["dep:reqwest"]
+test-helpers = ["dep:assert_matches", "error-matching"]
+
 [dependencies]
 anyhow = { workspace = true }
+assert_matches = { workspace = true, optional = true }
 axum = { workspace = true }
 axum-server = { workspace = true }
 camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
 pin-project = { workspace = true }
+reqwest = { workspace = true, features = [
+    "rustls-tls-native-roots",
+], optional = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
+tedge_config = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }
 x509-parser = { workspace = true }
+yansi = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

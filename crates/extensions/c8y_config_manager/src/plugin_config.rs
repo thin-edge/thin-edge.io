@@ -193,7 +193,9 @@ impl PluginConfig {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("The requested config_type {config_type} is not defined in the plugin configuration file.")]
+#[error(
+    "The requested config_type {config_type:?} is not defined in the plugin configuration file."
+)]
 pub struct InvalidConfigTypeError {
     pub config_type: String,
 }

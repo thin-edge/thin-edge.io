@@ -6,7 +6,7 @@ use tedge_actors::RuntimeError;
 use super::request_files::RequestPath;
 
 #[derive(Debug, thiserror::Error)]
-pub enum FileTransferError {
+pub(crate) enum FileTransferError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
@@ -19,8 +19,8 @@ pub enum FileTransferError {
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
 
-    #[error("Could not bind to address: {address}. Address already in use.")]
-    BindingAddressInUse { address: std::net::SocketAddr },
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -35,13 +35,13 @@ pub enum FileTransferRequestError {
     CannotUploadDirectory { path: RequestPath },
 
     #[error("Request to delete {path:?} failed: {source}")]
-    OtherDelete {
+    Delete {
         source: std::io::Error,
         path: RequestPath,
     },
 
     #[error("Request to upload to {path:?} failed: {source:?}")]
-    OtherUpload {
+    Upload {
         source: anyhow::Error,
         path: RequestPath,
     },
@@ -64,14 +64,14 @@ impl From<FileTransferError> for RuntimeError {
 
 impl IntoResponse for FileTransferRequestError {
     fn into_response(self) -> axum::response::Response {
-        use FileTransferRequestError::*;
+        use FileTransferRequestError as E;
         let error_message = self.to_string();
         match self {
-            PathRejection(err) => {
+            E::PathRejection(err) => {
                 tracing::error!("{error_message}");
                 err.into_response()
             }
-            FromIo(_) | OtherDelete { .. } | OtherUpload { .. } => {
+            E::FromIo(_) | E::Delete { .. } | E::Upload { .. } => {
                 tracing::error!("{error_message}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -80,10 +80,12 @@ impl IntoResponse for FileTransferRequestError {
                     .into_response()
             }
             // All of these from an invalid URL, so `Not Found` is most appropriate response
-            InvalidPath { .. } | FileNotFound(_) | CannotDeleteDirectory { .. } => {
+            E::InvalidPath { .. } | E::FileNotFound(_) | E::CannotDeleteDirectory { .. } => {
                 (StatusCode::NOT_FOUND, error_message).into_response()
             }
-            CannotUploadDirectory { .. } => (StatusCode::CONFLICT, error_message).into_response(),
+            E::CannotUploadDirectory { .. } => {
+                (StatusCode::CONFLICT, error_message).into_response()
+            }
         }
     }
 }

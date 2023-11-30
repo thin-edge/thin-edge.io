@@ -1,12 +1,12 @@
 #[derive(Debug, thiserror::Error)]
 pub enum UploadError {
-    #[error("{context} {source}")]
+    #[error("{context}: {source}")]
     Io {
         context: String,
         source: std::io::Error,
     },
 
-    #[error("Could not make a successful request to the remote server")]
+    #[error(transparent)]
     Network(#[from] reqwest::Error),
 }
 

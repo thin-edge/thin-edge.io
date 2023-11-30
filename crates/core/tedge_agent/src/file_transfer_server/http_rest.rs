@@ -3,102 +3,58 @@ use anyhow::anyhow;
 use anyhow::Context;
 use axum::body::StreamBody;
 use axum::routing::get;
-use axum::routing::IntoMakeService;
 use axum::Router;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use hyper::server::conn::AddrIncoming;
+use futures::future::FutureExt;
 use hyper::Body;
 use hyper::Request;
-use hyper::Server;
 use hyper::StatusCode;
+use rustls::ServerConfig;
+use std::future::Future;
 use std::io::ErrorKind;
-use std::net::IpAddr;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tedge_actors::futures::StreamExt;
-use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
 use tokio::fs::File;
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::net::TcpListener;
 use tokio_util::io::ReaderStream;
 
 use super::error::FileTransferRequestError as Error;
+use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
 use super::request_files::RequestPath;
 
-const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
-
-#[derive(Debug, Clone)]
-pub struct HttpConfig {
-    pub bind_address: SocketAddr,
-    pub file_transfer_dir: Utf8PathBuf,
-}
-
-impl Default for HttpConfig {
-    fn default() -> Self {
-        HttpConfig {
-            bind_address: ([127, 0, 0, 1], HTTP_FILE_TRANSFER_PORT).into(),
-            file_transfer_dir: DataDir::default().file_transfer_dir(),
-        }
-    }
-}
-
-impl HttpConfig {
-    pub fn with_ip_address(self, ip_address: IpAddr) -> HttpConfig {
-        Self {
-            bind_address: SocketAddr::new(ip_address, self.bind_address.port()),
-            ..self
-        }
-    }
-
-    pub fn with_data_dir(self, data_dir: DataDir) -> HttpConfig {
-        Self {
-            file_transfer_dir: data_dir.file_transfer_dir(),
-            ..self
-        }
-    }
-
-    pub fn with_port(self, port: u16) -> HttpConfig {
-        let mut bind_address = self.bind_address;
-        bind_address.set_port(port);
-        Self {
-            bind_address,
-            ..self
-        }
-    }
-}
-
 async fn upload_file(
-    paths: FileTransferPath,
+    path: FileTransferPath,
     mut request: Request<Body>,
 ) -> Result<StatusCode, Error> {
     fn internal_error(source: impl Into<anyhow::Error>, path: RequestPath) -> Error {
-        Error::OtherUpload {
+        Error::Upload {
             source: source.into(),
             path,
         }
     }
 
-    if let Some(directory) = paths.full.parent() {
+    if let Some(directory) = path.full.parent() {
         if let Err(err) = create_directories(directory) {
-            return Err(internal_error(err, paths.request));
+            return Err(internal_error(err, path.request));
         }
 
-        match stream_request_body_to_path(&paths.full, request.body_mut()).await {
+        match stream_request_body_to_path(&path.full, request.body_mut()).await {
             Ok(()) => Ok(StatusCode::CREATED),
-            Err(err) if source_err_is_is_a_directory(&err) => Err(Error::CannotUploadDirectory {
-                path: paths.request,
-            }),
-            Err(err) => Err(internal_error(err, paths.request)),
+            Err(err) if source_err_is_is_a_directory(&err) => {
+                Err(Error::CannotUploadDirectory { path: path.request })
+            }
+            Err(err) => Err(internal_error(err, path.request)),
         }
     } else {
         Err(internal_error(
-            anyhow!("cannot retrieve directory name for {}", paths.full),
-            paths.request,
+            anyhow!("cannot retrieve directory name for {}", path.full),
+            path.request,
         ))
     }
 }
@@ -111,10 +67,10 @@ fn source_err_is_is_a_directory(error: &anyhow::Error) -> bool {
 }
 
 async fn download_file(
-    paths: FileTransferPath,
+    path: FileTransferPath,
 ) -> Result<StreamBody<ReaderStream<BufReader<File>>>, Error> {
     let reader: Result<_, io::Error> = async {
-        let mut buf_reader = BufReader::new(File::open(paths.full).await?);
+        let mut buf_reader = BufReader::new(File::open(path.full).await?);
         // Filling the buffer will ensure the file can actually be read from,
         // which isn't true if it's a directory, but `File::open` alone won't
         // catch that
@@ -127,7 +83,7 @@ async fn download_file(
         Ok(reader) => Ok(StreamBody::new(ReaderStream::new(reader))),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) {
-                Err(Error::FileNotFound(paths.request))
+                Err(Error::FileNotFound(path.request))
             } else {
                 Err(Error::FromIo(e))
             }
@@ -136,32 +92,32 @@ async fn download_file(
 }
 
 // Not a typo, snake_case for: 'err is "is a directory"'
-fn err_is_is_a_directory(e: &std::io::Error) -> bool {
+fn err_is_is_a_directory(e: &io::Error) -> bool {
     // At the time of writing, `ErrorKind::IsADirectory` is feature-gated (https://github.com/rust-lang/rust/issues/86442)
     // Hence the string conversion rather than a direct comparison
     // If the error for reading a directory as a file changes, the unit tests should catch this
     e.kind().to_string() == "is a directory"
 }
 
-async fn delete_file(req: FileTransferPath) -> Result<StatusCode, Error> {
-    match tokio::fs::remove_file(&req.full).await {
+async fn delete_file(path: FileTransferPath) -> Result<StatusCode, Error> {
+    match tokio::fs::remove_file(&path.full).await {
         Ok(()) => Ok(StatusCode::ACCEPTED),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
         Err(e) if err_is_is_a_directory(&e) => {
-            Err(Error::CannotDeleteDirectory { path: req.request })
+            Err(Error::CannotDeleteDirectory { path: path.request })
         }
-        Err(err) => Err(Error::OtherDelete {
+        Err(err) => Err(Error::Delete {
             source: err,
-            path: req.request,
+            path: path.request,
         }),
     }
 }
 
 async fn stream_request_body_to_path(
     path: &Utf8Path,
-    body_stream: &mut hyper::Body,
+    body_stream: &mut Body,
 ) -> anyhow::Result<()> {
-    let mut buffer = tokio::fs::File::create(path)
+    let mut buffer = File::create(path)
         .await
         .with_context(|| format!("creating {path:?}"))?;
     while let Some(data) = body_stream.next().await {
@@ -175,27 +131,32 @@ async fn stream_request_body_to_path(
     Ok(())
 }
 
-pub fn http_file_transfer_server(
-    config: HttpConfig,
-) -> Result<Server<AddrIncoming, IntoMakeService<Router>>, FileTransferError> {
-    let bind_address = config.bind_address;
-    let router = http_file_transfer_router(config);
-    let server_builder = Server::try_bind(&bind_address);
-    match server_builder {
-        Ok(server) => Ok(server.serve(router.into_make_service())),
-        Err(_err) => Err(FileTransferError::BindingAddressInUse {
-            address: bind_address,
-        }),
-    }
+pub(crate) fn http_file_transfer_server(
+    listener: TcpListener,
+    file_transfer_dir: Utf8PathBuf,
+    rustls_config: Option<ServerConfig>,
+) -> Result<impl Future<Output = io::Result<()>>, FileTransferError> {
+    let router = http_file_transfer_router(file_transfer_dir);
+    let listener = listener.into_std()?;
+
+    let server = if let Some(rustls_config) = rustls_config {
+        axum_tls::start_tls_server(listener, rustls_config, router).boxed()
+    } else {
+        axum_server::from_tcp(listener)
+            .serve(router.into_make_service())
+            .boxed()
+    };
+
+    Ok(server)
 }
 
-fn http_file_transfer_router(config: HttpConfig) -> Router {
+fn http_file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
     Router::new()
         .route(
             "/tedge/file-transfer/*path",
             get(download_file).put(upload_file).delete(delete_file),
         )
-        .with_state(Arc::new(config))
+        .with_state(FileTransferDir::new(file_transfer_dir))
 }
 
 #[cfg(test)]
@@ -206,6 +167,7 @@ mod tests {
     use http_body::combinators::UnsyncBoxBody;
     use hyper::Method;
     use hyper::StatusCode;
+    use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
     use test_case::test_matrix;
@@ -431,11 +393,8 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let tempdir_path = ttd.utf8_path_buf();
-        let http_config = HttpConfig::default()
-            .with_data_dir(tempdir_path.into())
-            .with_port(3333);
-        let router = http_file_transfer_router(http_config);
+        let ftd = DataDir::from(ttd.utf8_path_buf()).file_transfer_dir();
+        let router = http_file_transfer_router(ftd);
         (ttd, router)
     }
 

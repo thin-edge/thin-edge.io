@@ -12,6 +12,7 @@ pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;
 pub use tedge_config_macros::all_or_nothing;
+pub use tedge_config_macros::OptionalConfig;
 
 /// loads the new tedge config from system default
 pub fn get_new_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {

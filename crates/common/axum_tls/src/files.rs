@@ -1,3 +1,4 @@
+use crate::config::PemReader;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -11,8 +12,7 @@ use std::fs::File;
 use std::io;
 use std::sync::Arc;
 
-/// Read a directory into a RootCertStore
-// TODO unit test me
+/// Read a directory into a [RootCertStore]
 pub fn read_trust_store(ca_dir: &Utf8Path) -> anyhow::Result<RootCertStore> {
     let mut roots = RootCertStore::empty();
 
@@ -69,23 +69,28 @@ pub fn ssl_config(
 }
 
 /// Load the server certificate
-pub fn load_cert(filename: &Utf8Path) -> anyhow::Result<Vec<Vec<u8>>> {
-    let certfile = File::open(filename)
-        .with_context(|| format!("cannot open certificate file: {filename:?}"))?;
-    let mut reader = std::io::BufReader::new(certfile);
+pub fn load_cert(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<Vec<u8>>> {
+    let file = path
+        .open()
+        .with_context(|| format!("cannot open certificate file: {path:?}"))?;
+    let mut reader = std::io::BufReader::new(file);
     rustls_pemfile::certs(&mut reader)
-        .with_context(|| format!("parsing PEM-encoded certificate from {filename:?}"))
+        .with_context(|| format!("parsing PEM-encoded certificate from {path:?}"))
 }
 
 /// Load the server private key
-pub fn load_pkey(filename: &Utf8Path) -> anyhow::Result<Vec<u8>> {
-    let keyfile =
-        File::open(filename).with_context(|| format!("cannot open key file {filename:?}"))?;
-    let mut reader = std::io::BufReader::new(keyfile);
-    pkey_from_pem(&mut reader, filename)
+pub fn load_pkey(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<u8>> {
+    let key_file = path
+        .open()
+        .with_context(|| format!("cannot open certificate file: {path:?}"))?;
+    let mut reader = std::io::BufReader::new(key_file);
+    pkey_from_pem(&mut reader, path)
 }
 
-pub fn pkey_from_pem(reader: &mut dyn io::BufRead, filename: &Utf8Path) -> anyhow::Result<Vec<u8>> {
+pub fn pkey_from_pem(
+    reader: &mut dyn io::BufRead,
+    filename: &(impl PemReader + ?Sized),
+) -> anyhow::Result<Vec<u8>> {
     rustls_pemfile::read_one(reader)
         .with_context(|| format!("reading PEM-encoded private key from {filename:?}"))?
         .ok_or(anyhow!(

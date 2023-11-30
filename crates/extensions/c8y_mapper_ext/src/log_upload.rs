@@ -197,7 +197,9 @@ impl CumulocityConverter {
             Err(err) => {
                 let smartrest_error = SmartRestSetOperationToFailed::new(
                     CumulocitySupportedOperations::C8yLogFileRequest,
-                    format!("Upload failed with {:?}", err),
+                    format!(
+                        "tedge-mapper-c8y failed to download log from file transfer service: {err}",
+                    ),
                 )
                 .to_smartrest()?;
 

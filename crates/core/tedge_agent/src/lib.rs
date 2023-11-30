@@ -77,7 +77,7 @@ pub async fn run(agent_opt: AgentOpt, v1: bool) -> Result<(), anyhow::Error> {
 
     let init = agent_opt.init;
 
-    let mut agent = agent::Agent::try_new(
+    let agent = agent::Agent::try_new(
         "tedge-agent",
         AgentConfig::from_config_and_cliopts(&tedge_config_location, agent_opt)?,
     )?;

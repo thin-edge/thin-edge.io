@@ -125,9 +125,9 @@ async fn run_with(
     );
     let identity = tedge_config.http.client.auth.identity()?;
 
-    let mut downloader_actor = DownloaderActor::new(identity).builder();
+    let mut downloader_actor = DownloaderActor::new(identity.clone()).builder();
 
-    let mut uploader_actor = UploaderActor::new().builder();
+    let mut uploader_actor = UploaderActor::new(identity).builder();
 
     // Instantiate config manager actor
     let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {

@@ -4,6 +4,8 @@
 //! values, but with the addition of metadata (such as the relevant
 //! configuration key) to aid in producing informative error messages.
 
+use std::ops::Deref;
+
 #[derive(serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(into = "Option<T>", bound = "T: Clone + serde::Serialize")]
 /// The value for an optional configuration (i.e. one without a default value)
@@ -22,6 +24,16 @@ pub enum OptionalConfig<T> {
     /// Equivalent to `None`, but stores the configuration key to create a
     /// better error message
     Empty(&'static str),
+}
+
+impl<T> OptionalConfig<T> {
+    pub fn present(value: T, key: &'static str) -> Self {
+        Self::Present { value, key }
+    }
+
+    pub fn empty(key: &'static str) -> Self {
+        Self::Empty(key)
+    }
 }
 
 impl<T> From<OptionalConfig<T>> for Option<T> {
@@ -73,6 +85,19 @@ impl<T> OptionalConfig<T> {
         match self {
             Self::Present { value, .. } => Ok(value),
             Self::Empty(key) => Err(ConfigNotSet { key }),
+        }
+    }
+
+    pub fn as_deref(&self) -> OptionalConfig<&<T as Deref>::Target>
+    where
+        T: Deref,
+    {
+        match self {
+            Self::Present { ref value, key } => OptionalConfig::Present {
+                value: value.deref(),
+                key,
+            },
+            Self::Empty(key) => OptionalConfig::Empty(key),
         }
     }
 
