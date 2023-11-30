@@ -468,8 +468,7 @@ impl CumulocityConverter {
                     threshold: self.size_threshold.0,
                 });
             }
-        };
-
+        }
         Ok(mqtt_messages)
     }
 
@@ -533,8 +532,7 @@ impl CumulocityConverter {
                 self.http_proxy.send_event(create_event).await?;
                 return Ok(vec![]);
             }
-        };
-
+        }
         Ok(messages)
     }
 
@@ -976,25 +974,31 @@ impl CumulocityConverter {
             _ => {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(&source).is_none() {
-                    let auto_registration_messages =
-                        match self.entity_store.auto_register_entity(&source) {
-                            Ok(auto_registration_messages) => auto_registration_messages,
-                            Err(e) => match e {
-                                Error::NonDefaultTopicScheme(eid) => {
-                                    debug!("{}", Error::NonDefaultTopicScheme(eid.clone()));
-                                    return Ok(vec![self.new_error_message(
-                                        ConversionError::FromEntityStoreError(
-                                            entity_store::Error::NonDefaultTopicScheme(eid),
-                                        ),
-                                    )]);
-                                }
-                                e => return Err(e.into()),
-                            },
-                        };
-                    for auto_registration_message in &auto_registration_messages {
-                        registration_messages.append(
-                            &mut self.register_and_convert_entity(auto_registration_message)?,
-                        );
+                    if self.config.enable_auto_register {
+                        let auto_registration_messages =
+                            match self.entity_store.auto_register_entity(&source) {
+                                Ok(auto_registration_messages) => auto_registration_messages,
+                                Err(e) => match e {
+                                    Error::NonDefaultTopicScheme(eid) => {
+                                        debug!("{}", Error::NonDefaultTopicScheme(eid.clone()));
+                                        return Ok(vec![self.new_error_message(
+                                            ConversionError::FromEntityStoreError(
+                                                entity_store::Error::NonDefaultTopicScheme(eid),
+                                            ),
+                                        )]);
+                                    }
+                                    e => return Err(e.into()),
+                                },
+                            };
+                        for auto_registration_message in &auto_registration_messages {
+                            registration_messages.append(
+                                &mut self.register_and_convert_entity(auto_registration_message)?,
+                            );
+                        }
+                    } else {
+                        return Err(ConversionError::AutoRegistrationDisabled(
+                            source.to_string(),
+                        ));
                     }
                 }
             }
@@ -3123,6 +3127,7 @@ pub(crate) mod tests {
             auth_proxy_port,
             auth_proxy_protocol,
             MqttSchema::default(),
+            true,
         )
     }
     fn create_c8y_converter_from_config(

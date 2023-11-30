@@ -443,6 +443,12 @@ define_tedge_config! {
                 local_cleansession: AutoFlag,
             }
         },
+
+        entity_store: {
+            /// Enable auto registration feature
+            #[tedge_config(example = "true", default(value = true))]
+            auto_register: bool,
+        },
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
