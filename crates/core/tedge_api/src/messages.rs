@@ -544,7 +544,7 @@ struct RestartContext {
 impl RestartContext {
     pub fn resume(&self, status: CommandStatus) -> Option<GenericCommandState> {
         match status {
-            CommandStatus::Init | CommandStatus::Scheduled => None,
+            CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Unknown => None,
             CommandStatus::Executing => Some(self.command.clone().move_to(self.on_exec.clone())),
             CommandStatus::Successful => {
                 Some(self.command.clone().move_to(self.on_success.clone()))
@@ -574,6 +574,10 @@ pub enum CommandStatus {
         #[serde(default = "default_failure_reason")]
         reason: String,
     },
+
+    /// Unknown status used by a custom workflow
+    #[serde(other)]
+    Unknown,
 }
 
 fn default_failure_reason() -> String {
@@ -815,5 +819,23 @@ mod tests {
         let parsed_request = SoftwareUpdateCommandPayload::from_json(&actual_json)
             .expect("Fail to parse the json request");
         assert_eq!(parsed_request, request);
+    }
+
+    #[test]
+    fn serde_custom_command_status() {
+        let request = SoftwareListCommandPayload {
+            status: CommandStatus::Unknown,
+            current_software_list: vec![],
+        };
+
+        // The `CommandStatus::Unknown` variant is used when the status is unknown.
+        // This is notably the case when the status is produced by a custom operation workflow.
+        assert_eq!(
+            request,
+            SoftwareListCommandPayload::from_json(r#"{"status":"some-custom-status"}"#).unwrap()
+        );
+
+        // However, if serialized again the custom status is lost
+        assert_eq!(request.to_json(), r#"{"status":"unknown"}"#);
     }
 }
