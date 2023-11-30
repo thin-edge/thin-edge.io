@@ -209,6 +209,45 @@ and hence there is no mapping done for main device registration messages.
 Inventory data updates for the main device are handled differently.
 :::
 
+## Auto Registration of an entity
+
+Before any data messages from an entity can be processed, the entity has to be registered first.
+The entity can be registered either explicitly or implicitly (Auto registration).
+
+With auto-registration, an entity does not need to explicitly send a registration message,
+and the registration is done automatically by the mapper on receipt of the first message from that entity.
+But, auto-registration is allowed only when the entity follows the default topic scheme: `te/device/<device-id>/service/<service-id>`.
+
+For example, sending a measurement message to `te/device/child1///m/temperature` will result in the auto-registration of the device entity with topic id: `device/child1//` and the auto-generated external id: `<main-device-id>:device:child1`, derived from the topic id.
+Similarly, a measurement message on `te/device/child1/service/my-service/m/temperature` results in the auto-registration of both
+the device entity: `device/child1//` and the service entity: `device/child1/service/my-service` with their respective auto-generated external IDs, in that order.
+
+**Pros:**
+* No need to have a separate registration message for an entity.
+   This would be ideal for simple devices where programming an additional registration logic is not possible ( e.g: simple sensors that can only generate telemetry messages).
+
+**Cons:**
+* Auto-registration of all entities is not possible in complex deployments with nested/hierarchical devices, as the parent of a nested child device can't be identified solely from its topic id (e.g: `te/device/nested-child//`).
+The parent information must be provided explicitly using a registration message so that any nested child devices are not wrongly auto-registered as immediate child devices of the main device.
+* Auto-registration results in the auto-generation of the device external id as well. If the user wants more control over it, then an explicit registration must be done.
+	
+Auto-registration can be enabled/disabled based on the complexity of the deployment.
+For simpler deployments with just a single level child devices, following the default topic scheme,
+auto-registration can be kept enabled.
+For any complex deployments requiring external id customizations or with nested child devices,
+auto-registration **must be disabled**.
+
+Auto-registration can be disabled using the following `tedge config` command:
+```sh
+sudo tedge config set c8y.entity_store.auto_register false
+```
+
+Auto-registration is enabled, by default.
+When the auto registration is disabled, and if the device is not explicitly registered,
+then the c8y-mapper will ignore all the data messages received from that device,
+logging that error message on the `te/errors` topic indicating that the entity is not registered.
+
+
 ## Telemetry
 
 Telemetry data types like measurements, events and alarms are mapped to their respective equivalents in Cumulocity as follows:
