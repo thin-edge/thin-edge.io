@@ -652,6 +652,17 @@ define_tedge_config! {
         ca_path: Utf8PathBuf,
     },
 
+    agent: {
+        state: {
+            /// The directory where the tedge-agent persists its state across restarts
+            #[tedge_config(note = "If the given directory doesn't exists, `/etc/tedge/.agent` is used as a fallback irrespective of the current setting.")]
+            #[tedge_config(default(value = "/data/tedge/agent"))]
+            #[tedge_config(example = "/data/tedge/agent")]
+            #[doku(as = "PathBuf")]
+            path: Utf8PathBuf,
+        },
+    },
+
     software: {
         plugin: {
             /// The default software plugin to be used for software management on the device

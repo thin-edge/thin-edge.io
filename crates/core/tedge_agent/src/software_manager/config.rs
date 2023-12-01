@@ -6,6 +6,7 @@ pub struct SoftwareManagerConfig {
     pub device: EntityTopicId,
     pub tmp_dir: Utf8PathBuf,
     pub config_dir: Utf8PathBuf,
+    pub state_dir: Utf8PathBuf,
     pub sm_plugins_dir: Utf8PathBuf,
     pub log_dir: Utf8PathBuf,
     pub default_plugin_type: Option<String>,
@@ -13,26 +14,6 @@ pub struct SoftwareManagerConfig {
 }
 
 impl SoftwareManagerConfig {
-    pub fn new(
-        device: &EntityTopicId,
-        tmp_dir: &Utf8PathBuf,
-        config_dir: &Utf8PathBuf,
-        sm_plugins_dir: &Utf8PathBuf,
-        log_dir: &Utf8PathBuf,
-        default_plugin_type: Option<String>,
-        config_location: &TEdgeConfigLocation,
-    ) -> Self {
-        Self {
-            device: device.clone(),
-            tmp_dir: tmp_dir.clone(),
-            config_dir: config_dir.clone(),
-            sm_plugins_dir: sm_plugins_dir.clone(),
-            log_dir: log_dir.clone(),
-            default_plugin_type,
-            config_location: config_location.clone(),
-        }
-    }
-
     pub fn from_tedge_config(
         tedge_config_location: &TEdgeConfigLocation,
     ) -> Result<SoftwareManagerConfig, tedge_config::TEdgeConfigError> {
@@ -40,11 +21,8 @@ impl SoftwareManagerConfig {
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
 
-        let config_dir = tedge_config_location.tedge_config_root_path.clone();
+        let config_dir = &tedge_config_location.tedge_config_root_path;
 
-        let tmp_dir = &tedge_config.tmp.path;
-        let sm_plugins_dir = config_dir.join("sm-plugins");
-        let log_dir = tedge_config.logs.path.join("agent");
         let default_plugin_type = tedge_config
             .software
             .plugin
@@ -53,20 +31,21 @@ impl SoftwareManagerConfig {
             .or_none()
             .cloned();
 
-        let device = &tedge_config
+        let device = tedge_config
             .mqtt
             .device_topic_id
             .parse()
             .unwrap_or(EntityTopicId::default_main_device());
 
-        Ok(Self::new(
+        Ok(SoftwareManagerConfig {
             device,
-            tmp_dir,
-            &config_dir,
-            &sm_plugins_dir,
-            &log_dir,
+            tmp_dir: tedge_config.tmp.path.clone(),
+            config_dir: config_dir.clone(),
+            state_dir: tedge_config.agent.state.path.clone(),
+            sm_plugins_dir: config_dir.join("sm-plugins"),
+            log_dir: tedge_config.logs.path.join("agent"),
             default_plugin_type,
-            tedge_config_location,
-        ))
+            config_location: tedge_config_location.clone(),
+        })
     }
 }

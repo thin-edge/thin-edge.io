@@ -124,9 +124,11 @@ impl SoftwareManagerActor {
         config: SoftwareManagerConfig,
         message_box: SimpleMessageBox<SoftwareCommand, SoftwareCommand>,
     ) -> Self {
-        let state_repository =
-            AgentStateRepository::new(config.config_dir.clone(), "software-current-operation");
-
+        let state_repository = AgentStateRepository::new(
+            config.state_dir.clone(),
+            config.config_dir.clone(),
+            "software-current-operation",
+        );
         let (output_sender, input_receiver) = message_box.into_split();
 
         Self {

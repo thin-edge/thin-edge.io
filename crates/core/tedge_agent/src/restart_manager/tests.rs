@@ -110,11 +110,12 @@ async fn spawn_restart_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config = RestartManagerConfig::new(
-        &EntityTopicId::default_main_device(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-    );
+    let config = RestartManagerConfig {
+        device_topic_id: EntityTopicId::default_main_device(),
+        tmp_dir: tmp_dir.utf8_path_buf(),
+        config_dir: tmp_dir.utf8_path_buf(),
+        state_dir: "/some/unknown/dir".into(),
+    };
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);
     converter_builder.set_connection(&mut restart_actor_builder);
