@@ -338,9 +338,8 @@ impl ConfigManagerActor {
         let deployed_to_path = match self.deploy_config_file(from, &request.config_type) {
             Ok(path) => path,
             Err(err) => {
-                let error_message = format!(
-                    "Handling of operation failed with: Could not write to config file: {err}",
-                );
+                let error_message =
+                    format!("config-manager failed writing updated configuration file: {err}",);
 
                 request.failed(&error_message);
                 error!("{}", error_message);

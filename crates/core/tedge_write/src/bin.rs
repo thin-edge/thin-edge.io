@@ -106,12 +106,7 @@ fn write_stdin_to_file_atomic(target_filepath: &Utf8Path) -> anyhow::Result<()> 
         .write(true)
         .create_new(true)
         .open(temp_filepath.as_std_path())
-        .with_context(|| {
-            format!(
-                "Could not open temporary file `{}` for writing",
-                temp_filepath
-            )
-        })?;
+        .with_context(|| format!("Could not open temporary file `{temp_filepath}` for writing"))?;
 
     let mut stdin = std::io::stdin().lock();
     io::copy(&mut stdin, &mut temp_file)

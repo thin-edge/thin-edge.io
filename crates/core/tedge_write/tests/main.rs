@@ -46,7 +46,7 @@ fn sets_file_permissions_if_file_doesnt_exist() {
     // Assert
     let dest_mode = destination_path.metadata().unwrap().permissions().mode();
     // .mode() returns st_mode, we only need to compare a subset
-    assert_eq!(dest_mode & 0o600, 0o600);
+    assert_eq!(dest_mode & 0o777, 0o600);
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn doesnt_change_permissions_if_file_exists() {
 
     // Assert
     let dest_mode = destination_path.metadata().unwrap().permissions().mode();
-    assert_eq!(dest_mode & 0o644, 0o644);
+    assert_eq!(dest_mode & 0o777, 0o644);
 }
 
 fn setup_source_file() -> (TempDir, PathBuf) {
