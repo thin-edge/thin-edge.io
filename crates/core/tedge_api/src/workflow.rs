@@ -4,11 +4,18 @@ use crate::mqtt_topics::OperationType;
 use log::info;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
+use mqtt_channel::QoS::AtLeastOnce;
+use mqtt_channel::Topic;
+use serde::de::Error;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 pub type StateName = String;
 pub type OperationName = String;
@@ -35,10 +42,55 @@ pub struct OperationState {
     pub owner: Option<String>,
 
     /// Possibly a script to handle the operation when in that state
-    pub script: Option<String>,
+    pub script: Option<ShellScript>,
 
     /// Transitions
     pub next: Vec<StateName>,
+}
+
+/// A parsed Unix command line
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShellScript {
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+/// Deserialize an Unix command line
+impl<'de> Deserialize<'de> for ShellScript {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let command_line = String::deserialize(deserializer)?;
+        let mut args = shell_words::split(&command_line).map_err(D::Error::custom)?;
+        if args.is_empty() {
+            Err(D::Error::custom(shell_words::ParseError))
+        } else {
+            let script = args.remove(0);
+            Ok(ShellScript {
+                command: script,
+                args,
+            })
+        }
+    }
+}
+
+/// Serialize an Unix command line, using appropriate quotes
+impl Serialize for ShellScript {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl Display for ShellScript {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut args = vec![self.command.clone()];
+        args.append(&mut self.args.clone());
+        f.write_str(&shell_words::join(args))
+    }
 }
 
 /// What needs to be done to advance an operation request in some state
@@ -54,11 +106,34 @@ pub enum OperationAction {
     /// The command is delegated to a participant identified by its name
     Delegate(String),
 
+    /// Restart the device
+    Restart {
+        on_exec: StateName,
+        on_success: StateName,
+        on_error: StateName,
+    },
+
     /// A script has to be executed
-    Script(String),
+    Script(ShellScript),
 
     /// The command has been fully processed and needs to be cleared
     Clear,
+}
+
+impl Display for OperationAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            OperationAction::MoveTo(step) => format!("move to {step} state"),
+            OperationAction::BuiltIn => "builtin".to_string(),
+            OperationAction::Delegate(owner) => {
+                format!("wait for {owner} to perform required actions")
+            }
+            OperationAction::Restart { .. } => "trigger device restart".to_string(),
+            OperationAction::Script(script) => script.to_string(),
+            OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
+        };
+        f.write_str(&str)
+    }
 }
 
 /// Error preventing a workflow to be registered
@@ -229,7 +304,10 @@ impl OperationWorkflow {
                     operation: (&self.operation).into(),
                     step: cmd.status.clone(),
                 })
-                .map(|state| Some((cmd, OperationAction::from(state)))),
+                .map(|state| {
+                    let action = OperationAction::from(state).inject_state(&cmd);
+                    Some((cmd, action))
+                }),
             Ok(None) => Ok(None),
             Err(err) => Err(err),
         }
@@ -240,7 +318,24 @@ impl From<&OperationState> for OperationAction {
     // TODO this must be called when an operation is registered, not when invoked.
     fn from(state: &OperationState) -> Self {
         match &state.script {
-            Some(script) => OperationAction::Script(script.to_owned()),
+            Some(script) if script.command == "restart" => {
+                let (on_exec, on_success, on_error) = match &state.next[..] {
+                    [] => ("executing", "successful", "failed"),
+                    [restarting] => (restarting.as_ref(), "successful", "failed"),
+                    [restarting, successful] => {
+                        (restarting.as_ref(), successful.as_ref(), "failed")
+                    }
+                    [restarting, successful, failed, ..] => {
+                        (restarting.as_ref(), successful.as_ref(), failed.as_str())
+                    }
+                };
+                OperationAction::Restart {
+                    on_exec: on_exec.to_string(),
+                    on_success: on_success.to_string(),
+                    on_error: on_error.to_string(),
+                }
+            }
+            Some(script) => OperationAction::Script(script.clone()),
             None => match &state.owner {
                 Some(owner) if owner == "tedge" => OperationAction::BuiltIn,
                 Some(owner) => OperationAction::Delegate(owner.to_owned()),
@@ -254,10 +349,22 @@ impl From<&OperationState> for OperationAction {
     }
 }
 
+impl OperationAction {
+    pub fn inject_state(self, state: &GenericCommandState) -> Self {
+        match self {
+            OperationAction::Script(script) => OperationAction::Script(ShellScript {
+                command: state.inject_parameter(&script.command),
+                args: state.inject_parameters(&script.args),
+            }),
+            _ => self,
+        }
+    }
+}
+
 /// Generic command state that can be used to manipulate any type of command payload.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct GenericCommandState {
-    pub topic: String,
+    pub topic: Topic,
     pub status: String,
     pub payload: Value,
 }
@@ -269,7 +376,7 @@ impl GenericCommandState {
         if payload.is_empty() {
             return Ok(None);
         }
-        let topic = message.topic.name.clone();
+        let topic = message.topic.clone();
         let json: Value = serde_json::from_slice(payload)?;
         let status = GenericCommandState::extract_text_property(&json, "status")
             .ok_or(WorkflowExecutionError::MissingStatus)?;
@@ -278,6 +385,14 @@ impl GenericCommandState {
             status,
             payload: json,
         }))
+    }
+
+    pub fn into_message(self) -> Message {
+        let topic = &self.topic;
+        let payload = self.payload.to_string();
+        Message::new(topic, payload)
+            .with_retain()
+            .with_qos(AtLeastOnce)
     }
 
     /// Serialize the command state as a json payload
@@ -308,8 +423,11 @@ impl GenericCommandState {
         match output {
             Ok(output) => {
                 if output.status.success() {
-                    match String::from_utf8(output.stdout) {
-                        Ok(stdout) => match serde_json::from_str(&stdout) {
+                    match String::from_utf8(output.stdout)
+                        .ok()
+                        .and_then(extract_script_output)
+                    {
+                        Some(stdout) => match serde_json::from_str(&stdout) {
                             Ok(json) => self.update_from_json(json),
                             Err(err) => {
                                 let reason =
@@ -317,8 +435,8 @@ impl GenericCommandState {
                                 self.fail_with(reason)
                             }
                         },
-                        Err(_) => {
-                            let reason = format!("Script {script} returned non UTF-8 stdout");
+                        None => {
+                            let reason = format!("Script {script} returned no tedge output");
                             self.fail_with(reason)
                         }
                     }
@@ -360,6 +478,11 @@ impl GenericCommandState {
             status: status.to_owned(),
             ..self
         }
+    }
+
+    /// Return the error reason if any
+    pub fn failure_reason(&self) -> Option<String> {
+        GenericCommandState::extract_text_property(&self.payload, "reason")
     }
 
     /// Extract a text property from a Json object
@@ -404,12 +527,12 @@ impl GenericCommandState {
         match path {
             "." => Some(
                 json!({
-                    "topic": self.topic,
+                    "topic": self.topic.name,
                     "payload": self.payload
                 })
                 .to_string(),
             ),
-            ".topic" => Some(self.topic.clone()),
+            ".topic" => Some(self.topic.name.clone()),
             ".topic.target" => self.target(),
             ".topic.operation" => self.operation(),
             ".topic.cmd_id" => self.cmd_id(),
@@ -421,21 +544,21 @@ impl GenericCommandState {
     }
 
     fn target(&self) -> Option<String> {
-        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
             _ => None,
         }
     }
 
     fn operation(&self) -> Option<String> {
-        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
             _ => None,
         }
     }
 
     fn cmd_id(&self) -> Option<String> {
-        match self.topic.split('/').collect::<Vec<&str>>()[..] {
+        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
             _ => None,
         }
@@ -460,6 +583,15 @@ fn json_as_string(value: &Value) -> String {
     }
 }
 
+fn extract_script_output(stdout: String) -> Option<String> {
+    if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
+        if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
+            return Some(script_output.to_string());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,7 +609,7 @@ mod tests {
         assert_eq!(
             cmd,
             GenericCommandState {
-                topic: "te/device/main///cmd/make_it/123".to_string(),
+                topic: topic.clone(),
                 status: "init".to_string(),
                 payload: json!({
                     "status": "init",
@@ -493,7 +625,7 @@ mod tests {
         assert_eq!(
             update_cmd,
             GenericCommandState {
-                topic: "te/device/main///cmd/make_it/123".to_string(),
+                topic: topic.clone(),
                 status: "executing".to_string(),
                 payload: json!({
                     "status": "executing",
@@ -509,7 +641,7 @@ mod tests {
         assert_eq!(
             final_cmd,
             GenericCommandState {
-                topic: "te/device/main///cmd/make_it/123".to_string(),
+                topic: topic.clone(),
                 status: "failed".to_string(),
                 payload: json!({
                     "status": "failed",
@@ -544,7 +676,10 @@ mod tests {
                 }
             })
         );
-        assert_eq!(cmd.inject_parameter("${.topic}"), cmd.topic);
+        assert_eq!(
+            cmd.inject_parameter("${.topic}"),
+            "te/device/main///cmd/make_it/123"
+        );
         assert_eq!(cmd.inject_parameter("${.topic.target}"), "device/main//");
         assert_eq!(cmd.inject_parameter("${.topic.operation}"), "make_it");
         assert_eq!(cmd.inject_parameter("${.topic.cmd_id}"), "123");

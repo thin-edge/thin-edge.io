@@ -120,6 +120,7 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 CommandStatus::Scheduled
+                | CommandStatus::Unknown
                 | CommandStatus::Successful
                 | CommandStatus::Failed { .. } => {}
             },
@@ -138,6 +139,7 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 CommandStatus::Scheduled
+                | CommandStatus::Unknown
                 | CommandStatus::Successful
                 | CommandStatus::Failed { .. } => {}
             },

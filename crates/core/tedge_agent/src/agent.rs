@@ -4,6 +4,7 @@ use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
+use crate::state_repository::state::agent_state_dir;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
@@ -172,7 +173,7 @@ impl Agent {
     #[instrument(skip(self), name = "sm-agent")]
     pub fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(self.config.config_dir.join(".agent"))?;
+        create_directory_with_defaults(agent_state_dir(self.config.config_dir.clone()))?;
         create_directory_with_defaults(&self.config.log_dir)?;
         create_directory_with_defaults(&self.config.data_dir)?;
         create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
@@ -209,6 +210,7 @@ impl Agent {
             self.config.mqtt_topic_root.as_ref(),
             self.config.mqtt_device_topic_id.clone(),
             workflows,
+            self.config.log_dir.clone(),
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,

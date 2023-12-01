@@ -4,13 +4,13 @@ use camino::Utf8Path;
 #[allow(clippy::enum_variant_names)]
 pub enum StateError {
     #[error("State file `{path}` contains invalid syntax: {source}")]
-    FromTOMLParse {
+    InvalidJson {
         path: Box<Utf8Path>,
-        source: toml::de::Error,
+        source: serde_json::Error,
     },
 
     #[error(transparent)]
-    FromInvalidTOML(#[from] toml::ser::Error),
+    NotJsonSerializable(#[from] serde_json::Error),
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),

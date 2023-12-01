@@ -2,10 +2,12 @@ use crate::errors::MqttError;
 use crate::Message;
 use rumqttc::QoS;
 use rumqttc::SubscribeFilter;
+use serde::Deserialize;
+use serde::Serialize;
 use std::convert::TryInto;
 
 /// An MQTT topic
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Topic {
     pub name: String,
 }

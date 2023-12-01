@@ -1,0 +1,23 @@
+operation = "controlled_restart"
+
+[init]
+script = "/etc/tedge/operations/log-restart.sh ${.topic.cmd_id} ${.payload.status}"
+next = ["scheduled"]
+
+[scheduled]
+script = "restart"
+next = ["restarting", "successful_restart", "failed_restart"]
+
+[successful_restart]
+script = "/etc/tedge/operations/log-restart.sh ${.topic.cmd_id} ${.payload.status}"
+next = ["successful"]
+
+[failed_restart]
+script = "/etc/tedge/operations/log-restart.sh ${.topic.cmd_id} ${.payload.status} ${.payload.restartError}"
+next = ["failed"]
+
+[successful]
+next = []
+
+[failed]
+next = []

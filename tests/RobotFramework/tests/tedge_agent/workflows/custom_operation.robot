@@ -26,6 +26,13 @@ Override Built-In Operation
     Should Contain      ${software_list[0]}    "tedge"
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 ''
 
+Trigger A Restart
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/controlled_restart/robot-789 '{"status":"init"}'
+    ${cmd_outcome}      Should Have MQTT Messages    te/device/main///cmd/controlled_restart/robot-789    message_pattern=.*successful.*   maximum=2
+    ${actual_log}       Execute Command    cat /etc/tedge/operations/restart-robot-789
+    ${expected_log}     Get File    ${CURDIR}/restart-command-expected.log
+    Should Be Equal     ${actual_log}    ${expected_log}
+
 *** Keywords ***
 
 Custom Setup
@@ -42,3 +49,5 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/schedule-download.sh     /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/launch-download.sh       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/check-download.sh        /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_restart.toml      /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/log-restart.sh           /etc/tedge/operations/

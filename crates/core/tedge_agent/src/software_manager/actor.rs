@@ -1,16 +1,15 @@
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::software_manager::error::SoftwareManagerError;
 use crate::software_manager::error::SoftwareManagerError::NoPlugins;
+use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
-use crate::state_repository::state::SoftwareOperationVariants;
-use crate::state_repository::state::State;
-use crate::state_repository::state::StateRepository;
-use crate::state_repository::state::StateStatus;
 use async_trait::async_trait;
 use plugin_sm::operation_logs::LogKind;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -36,7 +35,7 @@ const SUDO: &str = "sudo";
 #[cfg(test)]
 const SUDO: &str = "echo";
 
-fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand] : Debug, Eq, PartialEq);
+fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand] : Debug, Eq, PartialEq, Deserialize, Serialize);
 
 /// Actor which performs software operations.
 ///
@@ -50,7 +49,7 @@ fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand]
 /// operation.
 pub struct SoftwareManagerActor {
     config: SoftwareManagerConfig,
-    state_repository: AgentStateRepository,
+    state_repository: AgentStateRepository<SoftwareCommand>,
 
     // the Option is necessary to be able to concurrently handle a request,
     // which mutably borrows the sender, and listen on signals, which mutably
@@ -125,10 +124,8 @@ impl SoftwareManagerActor {
         config: SoftwareManagerConfig,
         message_box: SimpleMessageBox<SoftwareCommand, SoftwareCommand>,
     ) -> Self {
-        let state_repository = AgentStateRepository::new_with_file_name(
-            config.config_dir.clone(),
-            "software-current-operation",
-        );
+        let state_repository =
+            AgentStateRepository::new(config.config_dir.clone(), "software-current-operation");
 
         let (output_sender, input_receiver) = message_box.into_split();
 
@@ -168,35 +165,31 @@ impl SoftwareManagerActor {
     }
 
     async fn process_pending_sm_operation(&mut self) -> Result<(), SoftwareManagerError> {
-        let state: Result<State, _> = self.state_repository.load().await;
-
-        if let Ok(State {
-            operation_id: Some(cmd_id),
-            operation: Some(operation),
-        }) = state
-        {
-            match operation {
-                StateStatus::Software(SoftwareOperationVariants::Update) => {
-                    let response = SoftwareUpdateCommand::new(&self.config.device, cmd_id)
-                        .with_error(
-                            "Software Update command cancelled on agent restart".to_string(),
-                        );
-                    self.output_sender.send(response.into()).await?;
-                }
-                StateStatus::Software(SoftwareOperationVariants::List) => {
-                    let response = SoftwareListCommand::new(&self.config.device, cmd_id)
-                        .with_error("Software List request cancelled on agent restart".to_string());
-                    self.output_sender.send(response.into()).await?;
-                }
-                StateStatus::Restart(_) => {
-                    error!("RestartOperation in store.");
-                }
-                StateStatus::UnknownOperation => {
-                    error!("UnknownOperation in store.");
-                }
-            };
-        }
-        let _state: State = self.state_repository.clear().await?;
+        match self.state_repository.load().await {
+            Ok(Some(SoftwareCommand::SoftwareUpdateCommand(request))) => {
+                let response = request.with_error(
+                    "Software Update command cancelled due to unexpected agent restart".to_string(),
+                );
+                self.output_sender.send(response.into()).await?;
+            }
+            Ok(Some(SoftwareCommand::SoftwareListCommand(request))) => {
+                let response = request.with_error(
+                    "Software List request cancelled due to unexpected agent restart".to_string(),
+                );
+                self.output_sender.send(response.into()).await?;
+            }
+            Err(StateError::LoadingFromFileFailed { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound =>
+            {
+                // file missing means the operation has never been performed, so just do nothing
+            }
+            Err(err) => {
+                // if read failed for some other reason, we should probably log it
+                error!("{err}");
+            }
+            Ok(None) => (),
+        };
+        self.state_repository.clear().await?;
         Ok(())
     }
 
@@ -214,12 +207,7 @@ impl SoftwareManagerActor {
         plugins.load()?;
         plugins.update_default(&get_default_plugin(&self.config.config_location)?)?;
 
-        self.state_repository
-            .store(&State {
-                operation_id: Some(request.cmd_id.clone()),
-                operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
-            })
-            .await?;
+        self.state_repository.store(&request.clone().into()).await?;
 
         // Send 'executing'
         let executing_response = request.clone().with_status(CommandStatus::Executing);
@@ -238,8 +226,7 @@ impl SoftwareManagerActor {
         };
         self.output_sender.send(response.into()).await?;
 
-        let _state: State = self.state_repository.clear().await?;
-
+        self.state_repository.clear().await?;
         Ok(())
     }
 
@@ -254,12 +241,7 @@ impl SoftwareManagerActor {
             return Ok(());
         }
 
-        self.state_repository
-            .store(&State {
-                operation_id: Some(request.cmd_id.clone()),
-                operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
-            })
-            .await?;
+        self.state_repository.store(&request.clone().into()).await?;
 
         // Send 'executing'
         let executing_response = request.clone().with_status(CommandStatus::Executing);
@@ -274,8 +256,7 @@ impl SoftwareManagerActor {
         };
         self.output_sender.send(response.into()).await?;
 
-        let _state: State = self.state_repository.clear().await?;
-
+        self.state_repository.clear().await?;
         Ok(())
     }
 }

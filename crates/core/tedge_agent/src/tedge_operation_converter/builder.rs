@@ -1,6 +1,7 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::actor::AgentInput;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
+use camino::Utf8PathBuf;
 use log::error;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
@@ -29,6 +30,7 @@ pub struct TedgeOperationConverterBuilder {
     mqtt_schema: MqttSchema,
     device_topic_id: EntityTopicId,
     workflows: WorkflowSupervisor,
+    log_dir: Utf8PathBuf,
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareCommand>,
     restart_sender: LoggingSender<RestartCommand>,
@@ -38,10 +40,12 @@ pub struct TedgeOperationConverterBuilder {
 }
 
 impl TedgeOperationConverterBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mqtt_topic_root: &str,
         device_topic_id: EntityTopicId,
         mut workflows: WorkflowSupervisor,
+        log_dir: Utf8PathBuf,
         software_actor: &mut impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
@@ -83,6 +87,7 @@ impl TedgeOperationConverterBuilder {
             mqtt_schema,
             device_topic_id,
             workflows,
+            log_dir,
             input_receiver,
             software_sender,
             restart_sender,
@@ -123,6 +128,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
             mqtt_schema: self.mqtt_schema,
             device_topic_id: self.device_topic_id,
             workflows: self.workflows,
+            log_dir: self.log_dir,
             input_receiver: self.input_receiver,
             software_sender: self.software_sender,
             restart_sender: self.restart_sender,
