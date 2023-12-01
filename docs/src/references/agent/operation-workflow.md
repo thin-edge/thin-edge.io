@@ -165,6 +165,7 @@ Each workflow is defined using a TOML file stored in `/etc/tedge/operations`. Ea
   - the set of states which can be an outcome for this state actions
   - possible extra instructions on how to process the command at this stage, e.g.
     - run a script
+    - restart the device
 
 ```toml title="file: firmware_update_example.toml"
 operation = "firmware_update"
@@ -210,7 +211,8 @@ i.e. `te/+/+/+/+/cmd/+/+`.
 - Each running instance of the __tedge_agent__ reacts only on commands targeting its own device.
 - If a user-defined workflow has been defined for this operation, then this workflow is used to determine the required action.
 - If no workflow has been defined by the user for this operation, then the built-in workflow is used.
-- If there is no workflow or no defined action for the current state, then the __tedge_agent__ fails the command.
+- If there is no workflow or no defined action for the current state,
+  then the __tedge_agent__ simply waits for another component to take over the command.
 
 ### Built-in Actions
 
@@ -287,3 +289,164 @@ next = ["restarting", "successful_restart", "failed_restart"]
 :::note
 This file format is not finalized and will likely be revised.
 :::
+
+## Proposal for improvements
+
+### Next step determined by script exit status
+
+The exit status of the script processing a command state
+can be used to determine the next state of the workflow.
+
+The workflow can specify for each exit status:
+- the next status
+- a failure reason
+
+```toml
+script = "/some/script.sh with some args"
+on_exit.0 = "next_state"                                  # next state for an exit status
+on_exit.1 = { status = "retry_state", reason = "busy"}    # next status with fields 
+on_exit.2-5 = { status = "fatal_state", reason = "oops"}  # next state for a range of exit status
+on_exit._ = "failed"                                      # wildcard for any other non successful exit
+on_kill = { status = "failed", reason = "killed"}         # next status when killed
+```
+
+- `on_success` is syntactic sugar for `on_exit.0`
+- `on_error` is syntactic sugar for `on_exit._`
+- This is an error to provide more than one handler for an exit code (overlapping ranges).
+- If no reason is provided for an exit code, the default reason is `"${program} exited with ${code}"`.
+- If no reason is provided for the on kill handler, the reason is `"${program} killed by ${code}"`.
+- The default for the `on-error` and `on-kill` status is `"failed"`.
+- There is no default for the `on-success` status.
+  In such a case the output of the script is used to determine the next status.
+
+If the standard output of the script contains a JSON object surrounded by `:::begin-tedge:::` and `:::end-tedge:::` markers,
+then this object is injected in the command state message payload.
+There are two exceptions, though.
+The `status` and `reason` fields are determined after the exit code and not the standard output.
+
+### Next step determined by script output
+
+The output of the script processing a command state
+can be used to determine the next state of the workflow.
+
+For that to work:
+- no `on_success` nor `on_exit.0` status must be given as this would make the next status computed after the exit code
+- the standard output of the script must emit a JSON object surrounded by `:::begin-tedge:::` and `:::end-tedge:::` markers.
+- this JSON object must provide a `status` field and possibly a `reason` field.
+
+```toml
+script = "/some/script.sh with some args"                                # no given `on_exit.0` status
+on_error = { status = "fatal_state", reason = "fail to run the script"}  # possibly some `on_error` and `on_kill` handlers
+next = ["state-1", "state-2", "state-3"]                                 # the list of status accepted as next status
+```
+
+- If the script is successful and its output returns some `status` and `reason` fields, these are used for the next state.
+- If the script is successful but its output contains no `status` field, then `on_error` is used.
+- If the script cannot be executed, is killed or returns a non-zero code,
+  then the `status` and `reason` fields are determined by the `on_error` and `on_kill` handlers
+  (or if none where provided using the default `on_error` and `on_kill` handlers).
+- The fields of the JSON object extracted from the script output are injected into the command state message payload
+  - This is done in the successful as well as the failed cases,
+    for all the fields, except for the `status` and `reason` fields.
+  - Notably, when the script returns with a non-successful status code,
+    the `on_error` definition trumps over any `status` and `reason` fields provided over the script stdout.
+
+### Using a script to trigger a restart
+
+A workflow state can be handled using a *background script*.
+When executed, as a detached process, by the __tedge_agent__ no response nor exit status is expected from the script.
+In any case the workflow will be moved to the given next state.
+And this move to the next state is even persisted *before* the script is executed.
+This can notably be used to restart the device or the agent.
+After the restart, the workflow will resume in the state specified by the workflow.
+
+```toml
+["agent-restart"]
+background_script = "sudo systemctl restart tedge-agent"
+on_exec = "waiting-for-restart"
+
+["waiting-for-restart"]
+script = "/some/script.sh checking restart"
+next = ["waiting-for-restart", "successful_restart", "failed_restart"]
+```
+
+Note that:
+- No `on_exit` nor `on_kill` status can be provided, as the script is not monitored.
+- If the script cannot be launched, the workflow will be moved to the final `"failed"` state.
+
+### Appropriate syntax for restart action
+
+First proposal:
+```toml
+["device-restart"]
+builtin_action = "restart"
+on_exec = "waiting-for-restart"
+on_success = "successful_restart"
+on_error = "failed_restart"
+```
+
+Pros:
+- closer to the internal behavior
+
+Cons:
+- state with no representation
+
+Alternative proposal:
+
+```toml
+["device-restart"]
+builtin_action = "restart"
+on_exec = "waiting-for-restart"
+
+["waiting-for-restart"]
+builtin_action = "waiting-for-restart"
+on_success = "successful_restart"
+on_error = "failed_restart"
+```
+
+Pros:
+- closer to the observed behavior
+- no implicit state
+
+Cons:
+- the two states must be consistent
+
+### Setting step execution timeout
+
+The execution time of the state transitions of a workflow can be limited using timeouts.
+- A default timeout can be set at the level of an operation for all the transitions.
+- Individual timeout can be set to each state of the workflow.
+
+```toml
+timeout_second = 300
+on_timeout = { status = "failed", reason = "timeout" }
+```
+
+Some scripts cannot be directly controlled.
+This is notably the case for the restart builtin action and the background scripts.
+For those any timeout has to be set on the waiting state.
+
+```toml
+["device-restart"]
+builtin_action = "restart"
+on_exec = "waiting-for-restart"
+
+["waiting-for-restart"]
+builtin_action = "waiting-for-restart"
+timeout_second = 600
+on_timeout = "timeout_restart"
+on_success = "successful_restart"
+on_error = "failed_restart"
+```
+
+### Role of next states
+
+Do we need to explicitly list the `next` states for each state?
+
+Cons:
+- less specific than states with specific purpose as on `on_success` or `on_exit.1`
+- most of the time redundant
+
+Pros:
+- documentation
+- sanity checks
