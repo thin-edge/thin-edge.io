@@ -4,6 +4,7 @@ mod cli;
 mod create;
 mod error;
 mod remove;
+mod renew;
 mod show;
 mod upload;
 
