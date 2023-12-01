@@ -1,3 +1,4 @@
+use camino::Utf8Path;
 use log::error;
 use log::info;
 use log::warn;
@@ -9,6 +10,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -30,15 +32,21 @@ pub struct ConfigManagerConfig {
     pub config_dir: PathBuf,
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
+    pub tmp_path: Arc<Utf8Path>,
     pub config_reload_topics: TopicFilter,
     pub config_update_topic: TopicFilter,
     pub config_snapshot_topic: TopicFilter,
+
+    /// If enabled, config file updates are deployed by tedge-write.
+    pub use_tedge_write: TedgeWriteStatus,
 }
 
 pub struct ConfigManagerOptions {
     pub config_dir: PathBuf,
     pub mqtt_topic_root: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
+    pub tmp_path: Arc<Utf8Path>,
+    pub is_sudo_enabled: bool,
 }
 
 impl ConfigManagerConfig {
@@ -74,9 +82,13 @@ impl ConfigManagerConfig {
             config_dir,
             plugin_config_dir,
             plugin_config_path,
+            tmp_path: cliopts.tmp_path,
             config_reload_topics,
             config_update_topic,
             config_snapshot_topic,
+            use_tedge_write: TedgeWriteStatus::Enabled {
+                sudo: cliopts.is_sudo_enabled,
+            },
         })
     }
 }
@@ -122,8 +134,8 @@ impl PartialEq for FileEntry {
     }
 }
 
-impl Borrow<String> for FileEntry {
-    fn borrow(&self) -> &String {
+impl Borrow<str> for FileEntry {
+    fn borrow(&self) -> &str {
         &self.config_type
     }
 }
@@ -225,15 +237,10 @@ impl PluginConfig {
     pub fn get_file_entry_from_type(
         &self,
         config_type: &str,
-    ) -> Result<FileEntry, InvalidConfigTypeError> {
-        let file_entry = self
-            .files
-            .get(&config_type.to_string())
-            .ok_or(InvalidConfigTypeError {
-                config_type: config_type.to_owned(),
-            })?
-            .to_owned();
-        Ok(file_entry)
+    ) -> Result<&FileEntry, InvalidConfigTypeError> {
+        self.files.get(config_type).ok_or(InvalidConfigTypeError {
+            config_type: config_type.to_owned(),
+        })
     }
 
     pub fn get_all_file_types(&self) -> Vec<String> {
@@ -242,4 +249,10 @@ impl PluginConfig {
             .map(|x| x.config_type.to_string())
             .collect::<Vec<_>>()
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TedgeWriteStatus {
+    Enabled { sudo: bool },
+    Disabled,
 }

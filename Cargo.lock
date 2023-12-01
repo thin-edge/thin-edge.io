@@ -3619,6 +3619,7 @@ dependencies = [
  "tedge-log-plugin",
  "tedge-mapper",
  "tedge-watchdog",
+ "tedge-write",
  "tedge_config",
  "tedge_utils",
  "tempfile",
@@ -3803,6 +3804,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge-write"
+version = "0.13.1"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "camino",
+ "clap",
+ "nix",
+ "path-clean",
+ "tempfile",
+ "uzers",
+]
+
+[[package]]
 name = "tedge_actors"
 version = "0.13.1"
 dependencies = [
@@ -3913,6 +3928,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "tedge-write",
  "tedge_actors",
  "tedge_api",
  "tedge_config",

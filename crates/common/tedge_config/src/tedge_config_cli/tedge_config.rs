@@ -730,7 +730,15 @@ define_tedge_config! {
         /// The filtering criterion that is used to filter packages list output by maintainer
         #[tedge_config(example = "thin-edge.io team.*")]
         maintainer: String,
-    }
+    },
+
+    enable: {
+        /// Determines if thin-edge should use `sudo` when attempting to write to files possibly
+        /// not owned by `tedge`.
+        #[tedge_config(default(value = true), example = "true", example = "false")]
+        sudo: bool,
+    },
+
 }
 
 fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {

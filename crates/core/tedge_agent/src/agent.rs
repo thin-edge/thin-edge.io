@@ -9,6 +9,7 @@ use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use anyhow::Context;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
@@ -62,6 +63,7 @@ pub(crate) struct AgentConfig {
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,
+    pub tmp_dir: Arc<Utf8Path>,
     pub run_dir: Utf8PathBuf,
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
@@ -71,6 +73,7 @@ pub(crate) struct AgentConfig {
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
     pub identity: Option<Identity>,
+    pub is_sudo_enabled: bool,
 }
 
 impl AgentConfig {
@@ -83,6 +86,7 @@ impl AgentConfig {
         let tedge_config = config_repository.load()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
+        let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -131,6 +135,8 @@ impl AgentConfig {
 
         let identity = tedge_config.http.client.auth.identity()?;
 
+        let is_sudo_enabled = tedge_config.enable.sudo;
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -138,6 +144,7 @@ impl AgentConfig {
             sw_update_config,
             config_dir,
             run_dir,
+            tmp_dir,
             use_lock,
             data_dir,
             log_dir,
@@ -146,6 +153,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
             identity,
+            is_sudo_enabled,
         })
     }
 }
@@ -250,6 +258,8 @@ impl Agent {
                 config_dir: self.config.config_dir.clone().into(),
                 mqtt_topic_root: mqtt_schema.clone(),
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+                tmp_path: self.config.tmp_dir.clone(),
+                is_sudo_enabled: self.config.is_sudo_enabled,
             })?;
             let config_actor_builder = ConfigManagerBuilder::try_new(
                 manager_config,

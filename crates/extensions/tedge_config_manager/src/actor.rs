@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use log::debug;
 use log::error;
 use log::info;
 use serde_json::json;
 use std::collections::HashMap;
-use std::path::Path;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -26,6 +26,9 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
+use tedge_write::CopyOptions;
+
+use crate::TedgeWriteStatus;
 
 use super::config::PluginConfig;
 use super::error::ConfigManagementError;
@@ -67,7 +70,7 @@ impl Actor for ConfigManagerActor {
                 ConfigInput::MqttMessage(message) => self.process_mqtt_message(message).await,
                 ConfigInput::FsWatchEvent(event) => self.process_file_watch_events(event).await,
                 ConfigInput::ConfigDownloadResult((topic, result)) => {
-                    self.process_downloaded_config(&topic, result).await
+                    Ok(self.process_downloaded_config(&topic, result).await?)
                 }
                 ConfigInput::ConfigUploadResult((topic, result)) => {
                     self.process_uploaded_config(&topic, result).await
@@ -287,9 +290,12 @@ impl ConfigManagerActor {
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
 
-        let download_request =
-            DownloadRequest::new(&request.tedge_url, Path::new(&file_entry.path))
-                .with_permission(file_entry.file_permissions);
+        // because we might not have permissions to write to destination, save in tmpdir and then
+        // move to destination later
+        let temp_path = &self.config.tmp_path.join(&file_entry.config_type);
+
+        let download_request = DownloadRequest::new(&request.tedge_url, temp_path.as_std_path())
+            .with_permission(file_entry.file_permissions.to_owned());
 
         info!(
             "Awaiting download for config type: {} from url: {}",
@@ -307,30 +313,95 @@ impl ConfigManagerActor {
         &mut self,
         topic: &str,
         result: DownloadResult,
-    ) -> Result<(), ChannelError> {
-        if let Some(ConfigOperation::Update(mut request)) = self.pending_operations.remove(topic) {
-            let topic = Topic::new_unchecked(topic);
-            match result {
-                Ok(response) => {
-                    request.successful(response.file_path.as_path().to_str().unwrap());
-                    info!(
-                        "Config Update request processed for config type: {}.",
-                        request.config_type
-                    );
-                    self.publish_command_status(&topic, &ConfigOperation::Update(request))
-                        .await?;
-                }
-                Err(err) => {
-                    let error_message =
-                        format!("tedge-configuration-plugin failed downloading a file: {err}",);
-                    request.failed(&error_message);
-                    error!("{}", error_message);
-                    self.publish_command_status(&topic, &ConfigOperation::Update(request))
-                        .await?;
-                }
+    ) -> Result<(), ConfigManagementError> {
+        let Some(ConfigOperation::Update(mut request)) = self.pending_operations.remove(topic)
+        else {
+            return Ok(());
+        };
+
+        let topic = Topic::new_unchecked(topic);
+
+        let response = match result {
+            Ok(response) => response,
+            Err(err) => {
+                let error_message =
+                    format!("tedge-configuration-plugin failed downloading a file: {err}",);
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                    .await?;
+                return Ok(());
+            }
+        };
+
+        // new config was downloaded into tmpdir, we need to write it into destination using tedge-write
+        let from = Utf8Path::from_path(response.file_path.as_path()).unwrap();
+
+        let deployed_to_path = match self.deploy_config_file(from, &request.config_type) {
+            Ok(path) => path,
+            Err(err) => {
+                let error_message =
+                    format!("config-manager failed writing updated configuration file: {err}",);
+
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                    .await?;
+                return Ok(());
+            }
+        };
+
+        request.successful(deployed_to_path);
+        info!(
+            "Config Update request processed for config type: {}.",
+            request.config_type
+        );
+        self.publish_command_status(&topic, &ConfigOperation::Update(request))
+            .await?;
+
+        Ok(())
+    }
+
+    /// Deploys the new version of the configuration file and returns the path under which it was
+    /// deployed.
+    ///
+    /// This function ensures that the configuration file under `dest` is overwritten by a new
+    /// version currently stored in a temporary directory under `src`. Depending on if
+    /// `use_tedge_write` is used, either a new `tedge-write` process is spawned, or a file is
+    /// copied directly.
+    fn deploy_config_file(
+        &self,
+        from: &Utf8Path,
+        config_type: &str,
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
+        let file_entry = self.plugin_config.get_file_entry_from_type(config_type)?;
+
+        let mode = file_entry.file_permissions.mode;
+        let user = file_entry.file_permissions.user.as_deref();
+        let group = file_entry.file_permissions.group.as_deref();
+
+        let to = Utf8PathBuf::from(&file_entry.path);
+
+        match self.config.use_tedge_write {
+            TedgeWriteStatus::Disabled => {
+                let src_file = std::fs::File::open(from)?;
+                tedge_utils::fs::atomically_write_file_sync(&to, src_file)?;
+            }
+
+            TedgeWriteStatus::Enabled { sudo } => {
+                let options = CopyOptions {
+                    from,
+                    to: to.as_path(),
+                    sudo,
+                    mode,
+                    user,
+                    group,
+                };
+                options.copy()?;
             }
         }
-        Ok(())
+
+        Ok(to)
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {

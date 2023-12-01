@@ -140,6 +140,7 @@ tedge-configuration-plugin = { path = "plugins/tedge_configuration_plugin" }
 tedge-log-plugin = { path = "plugins/tedge_log_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
+tedge-write = { path = "crates/core/tedge_write" }
 tedge_actors = { path = "crates/core/tedge_actors" }
 tedge_api = { path = "crates/core/tedge_api" }
 tedge_config = { path = "crates/common/tedge_config" }
