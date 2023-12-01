@@ -62,9 +62,10 @@ impl<'de> Deserialize<'de> for ShellScript {
         D: Deserializer<'de>,
     {
         let command_line = String::deserialize(deserializer)?;
-        let mut args = shell_words::split(&command_line).map_err(D::Error::custom)?;
+        let mut args = shell_words::split(&command_line)
+            .map_err(|err| D::Error::custom(format!("invalid script: {command_line}: {err}")))?;
         if args.is_empty() {
-            Err(D::Error::custom(shell_words::ParseError))
+            Err(D::Error::custom("invalid script: empty"))
         } else {
             let script = args.remove(0);
             Ok(ShellScript {
