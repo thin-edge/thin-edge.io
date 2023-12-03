@@ -3615,8 +3615,6 @@ dependencies = [
  "strum_macros",
  "tedge-agent",
  "tedge-apt-plugin",
- "tedge-configuration-plugin",
- "tedge-log-plugin",
  "tedge-mapper",
  "tedge-watchdog",
  "tedge-write",

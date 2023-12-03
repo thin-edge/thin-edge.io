@@ -248,7 +248,8 @@ impl Agent {
         let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
 
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
-        let mut downloader_actor_builder = DownloaderActor::new(self.config.identity.clone()).builder();
+        let mut downloader_actor_builder =
+            DownloaderActor::new(self.config.identity.clone()).builder();
         let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
 
         // Instantiate config manager actor

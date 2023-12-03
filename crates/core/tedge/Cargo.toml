@@ -41,8 +41,6 @@ serde_json = { workspace = true }
 strum_macros = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
-tedge-configuration-plugin = { workspace = true }
-tedge-log-plugin = { workspace = true }
 tedge-mapper = { workspace = true }
 tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
