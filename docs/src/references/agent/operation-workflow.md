@@ -297,8 +297,8 @@ This file format is not finalized and will likely be revised.
 The exit status of the script processing a command state
 can be used to determine the next state of the workflow.
 
-The workflow can specify for each exit status:
-- the next status
+The workflow can specify for each exit code:
+- the next command status
 - a failure reason
 
 ```toml
