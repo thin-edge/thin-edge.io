@@ -18,6 +18,7 @@ use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperations;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
+use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
@@ -585,23 +586,22 @@ impl CumulocityConverter {
             Ok(vec![])
         } else if let Some(value) = operation.extras.get("c8y_LogfileRequest") {
             let request: C8yLogfileRequest = serde_json::from_value(value.clone()).unwrap();
-            dbg!(&request);
             let msgs = self.convert_log_upload_request(device_xid, cmd_id, request)?;
             Ok(msgs)
         } else if let Some(value) = operation.extras.get("c8y_UploadConfigFile") {
             let request: C8yUploadConfigFile = serde_json::from_value(value.clone()).unwrap();
-            dbg!(&request);
             let msgs = self.convert_config_snapshot_request(device_xid, cmd_id, request)?;
             Ok(msgs)
         } else if let Some(value) = operation.extras.get("c8y_DownloadConfigFile") {
             let request: C8yDownloadConfigFile = serde_json::from_value(value.clone()).unwrap();
-            dbg!(&request);
             let msgs = self
                 .convert_config_update_request(device_xid, cmd_id, request)
                 .await?;
             Ok(msgs)
-        } else if let Some(_value) = operation.extras.get("c8y_Firmware") {
-            Ok(vec![])
+        } else if let Some(value) = operation.extras.get("c8y_Firmware") {
+            let request: C8yFirmware = serde_json::from_value(value.clone()).unwrap();
+            let msgs = self.convert_firmware_update_request(device_xid, cmd_id, request)?;
+            Ok(msgs)
         } else {
             dbg!("error");
             Ok(vec![])
@@ -648,9 +648,6 @@ impl CumulocityConverter {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
                     // Need a check of capabilities so that user can still use custom template if disabled
-                    "515" if self.config.capabilities.firmware_update => {
-                        self.convert_firmware_update_request(payload)
-                    }
                     "528" => self.forward_software_request(payload).await,
                     "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
