@@ -1081,14 +1081,7 @@ impl CumulocityConverter {
                 self.process_alarm_messages(&source, message, alarm_type)
             }
 
-            Channel::Command {
-                operation: _,
-                cmd_id,
-            } if message.payload_bytes().is_empty() => {
-                // The command has been fully processed
-                self.active_commands.remove(cmd_id);
-                Ok(vec![])
-            }
+            Channel::Health => self.process_health_status_message(&source, message).await,
 
             Channel::CommandMetadata { operation } => {
                 self.validate_operation_supported(operation, &source)?;
@@ -1114,63 +1107,45 @@ impl CumulocityConverter {
                 }
             }
 
-            Channel::Command {
-                operation: OperationType::Restart,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_restart_operation_status(&source, cmd_id, message)
-                    .await
+            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
+                // The command has been fully processed
+                self.active_commands.remove(cmd_id);
+                Ok(vec![])
             }
 
-            Channel::Command {
-                operation: OperationType::SoftwareList,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_software_list(&source, cmd_id, message).await
-            }
-
-            Channel::Command {
-                operation: OperationType::SoftwareUpdate,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_software_update_status(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::LogUpload,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
+            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
-                self.handle_log_upload_state_change(&source, cmd_id, message)
-                    .await
+                match operation {
+                    OperationType::Restart => {
+                        self.publish_restart_operation_status(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::SoftwareList => {
+                        self.publish_software_list(&source, cmd_id, message).await
+                    }
+                    OperationType::SoftwareUpdate => {
+                        self.publish_software_update_status(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::LogUpload => {
+                        self.handle_log_upload_state_change(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::ConfigSnapshot => {
+                        self.handle_config_snapshot_state_change(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::ConfigUpdate => {
+                        self.handle_config_update_state_change(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::FirmwareUpdate => {
+                        self.handle_firmware_update_state_change(&source, message)
+                            .await
+                    }
+                    _ => Ok(vec![]),
+                }
             }
-
-            Channel::Command {
-                operation: OperationType::ConfigSnapshot,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_config_snapshot_state_change(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::ConfigUpdate,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_config_update_state_change(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::FirmwareUpdate,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_firmware_update_state_change(&source, message)
-                    .await
-            }
-
-            Channel::Health => self.process_health_status_message(&source, message).await,
 
             _ => Ok(vec![]),
         }
