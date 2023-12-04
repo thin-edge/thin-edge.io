@@ -38,7 +38,6 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
@@ -582,8 +581,9 @@ impl CumulocityConverter {
         // Check extras if it contains operation fragment
         if let Some(_value) = operation.extras.get("c8y_SoftwareUpdate") {
             Ok(vec![])
-        } else if let Some(_value) = operation.extras.get("c8y_Restart") {
-            Ok(vec![])
+        } else if operation.extras.contains_key("c8y_Restart") {
+            let msgs = self.forward_restart_request(device_xid, cmd_id)?;
+            Ok(msgs)
         } else if let Some(value) = operation.extras.get("c8y_LogfileRequest") {
             let request: C8yLogfileRequest = serde_json::from_value(value.clone()).unwrap();
             let msgs = self.convert_log_upload_request(device_xid, cmd_id, request)?;
@@ -649,7 +649,6 @@ impl CumulocityConverter {
                 match get_smartrest_template_id(payload).as_str() {
                     // Need a check of capabilities so that user can still use custom template if disabled
                     "528" => self.forward_software_request(payload).await,
-                    "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
@@ -706,12 +705,11 @@ impl CumulocityConverter {
 
     fn forward_restart_request(
         &mut self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
-        let device_id = &request.device.into();
-        let target = self.entity_store.try_get_by_external_id(device_id)?;
-        let cmd_id = self.command_id.new_id();
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
         let command = RestartCommand::new(&target.topic_id, cmd_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
