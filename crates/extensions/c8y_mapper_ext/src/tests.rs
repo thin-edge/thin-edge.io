@@ -397,7 +397,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_SoftwareUpdate,Partial failure: Couldn't install collectd and nginx\n",
+            "502,c8y_SoftwareUpdate,Partial failure: Couldn't install collectd and nginx",
         )],
     )
     .await;
@@ -1459,7 +1459,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
         &mut mqtt,
         [
             ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
-            ("c8y/s/us/child1", "114,c8y_ChildTestOp1,c8y_ChildTestOp2\n"),
+            ("c8y/s/us/child1", "114,c8y_ChildTestOp1,c8y_ChildTestOp2"),
         ],
     )
     .await;
@@ -1500,7 +1500,7 @@ async fn mapping_child_device_dirs_with_forbidden_characters() {
                 "c8y/s/us",
                 "101,simple_child,simple_child,thin-edge.io-child",
             ),
-            ("c8y/s/us/simple_child", "114,c8y_ChildTestOp2\n"),
+            ("c8y/s/us/simple_child", "114,c8y_ChildTestOp2"),
         ],
     )
     .await;
@@ -2068,7 +2068,7 @@ async fn custom_operation_timeout_sigterm() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_Command,\"operation failed due to timeout: duration=1s\"",
+            "502,c8y_Command,operation failed due to timeout: duration=1s",
         )],
     )
     .await;
@@ -2141,7 +2141,7 @@ async fn custom_operation_timeout_sigkill() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_Command,\"operation failed due to timeout: duration=1s\"",
+            "502,c8y_Command,operation failed due to timeout: duration=1s",
         )],
     )
     .await;

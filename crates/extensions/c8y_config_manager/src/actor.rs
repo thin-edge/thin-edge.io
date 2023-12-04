@@ -15,7 +15,7 @@ use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use log::error;
@@ -117,16 +117,13 @@ impl ConfigManagerActor {
                                 ConfigOperation::Update,
                                 None,
                                 ActiveOperationState::Pending,
-                                format!("Failed due to {}", err),
+                                &format!("Failed due to {err}"),
                                 &mut self.messages,
                             )
                             .await?;
                         }
                     } else {
-                        error!(
-                            "Incorrect Download SmartREST payload: {}",
-                            smartrest_message
-                        );
+                        error!("Incorrect Download SmartREST payload: {smartrest_message}");
                     }
                     Ok(())
                 }
@@ -146,13 +143,13 @@ impl ConfigManagerActor {
                                 ConfigOperation::Snapshot,
                                 None,
                                 ActiveOperationState::Pending,
-                                format!("Failed due to {}", err),
+                                &format!("Failed due to {err}"),
                                 &mut self.messages,
                             )
                             .await?;
                         }
                     } else {
-                        error!("Incorrect Upload SmartREST payload: {}", smartrest_message);
+                        error!("Incorrect Upload SmartREST payload: {smartrest_message}");
                     }
                     Ok(())
                 }
@@ -209,7 +206,7 @@ impl ConfigManagerActor {
                     config_operation,
                     Some(child_id),
                     ActiveOperationState::Pending,
-                    err.to_string(),
+                    &err.to_string(),
                     &mut self.messages,
                 )
                 .await
@@ -290,7 +287,7 @@ impl ConfigManagerActor {
         config_operation: ConfigOperation,
         child_id: Option<String>,
         op_state: ActiveOperationState,
-        failure_reason: String,
+        failure_reason: &str,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
@@ -305,33 +302,33 @@ impl ConfigManagerActor {
                 ConfigOperation::Snapshot => {
                     executing_msg = MqttMessage::new(
                         &c8y_child_topic,
-                        UploadConfigFileStatusMessage::status_executing()?,
+                        UploadConfigFileStatusMessage::status_executing(),
                     );
                     failed_msg = MqttMessage::new(
                         &c8y_child_topic,
-                        UploadConfigFileStatusMessage::status_failed(failure_reason)?,
+                        UploadConfigFileStatusMessage::status_failed(failure_reason),
                     );
                 }
                 ConfigOperation::Update => {
                     executing_msg = MqttMessage::new(
                         &c8y_child_topic,
-                        DownloadConfigFileStatusMessage::status_executing()?,
+                        DownloadConfigFileStatusMessage::status_executing(),
                     );
                     failed_msg = MqttMessage::new(
                         &c8y_child_topic,
-                        DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
+                        DownloadConfigFileStatusMessage::status_failed(failure_reason),
                     );
                 }
             }
         } else {
             match config_operation {
                 ConfigOperation::Snapshot => {
-                    executing_msg = UploadConfigFileStatusMessage::executing()?;
-                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
+                    executing_msg = UploadConfigFileStatusMessage::executing();
+                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason);
                 }
                 ConfigOperation::Update => {
-                    executing_msg = DownloadConfigFileStatusMessage::executing()?;
-                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
+                    executing_msg = DownloadConfigFileStatusMessage::executing();
+                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason);
                 }
             };
         }

@@ -10,11 +10,10 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8PathBuf;
 use sha256::digest;
@@ -131,12 +130,10 @@ impl CumulocityConverter {
         let payload = message.payload_str()?;
         let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
 
-        let messages = match response.status {
+        let messages = match &response.status {
             CommandStatus::Executing => {
-                let smartrest_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yUploadConfigFile,
-                )
-                .to_smartrest()?;
+                let smartrest_operation_status =
+                    set_operation_executing(CumulocitySupportedOperations::C8yUploadConfigFile);
                 vec![Message::new(&smartrest_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
@@ -177,12 +174,9 @@ impl CumulocityConverter {
 
                 vec![] // No mqtt message can be published in this state
             }
-            CommandStatus::Failed { ref reason } => {
-                let smartrest_operation_status = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yUploadConfigFile,
-                    reason.clone(),
-                )
-                .to_smartrest()?;
+            CommandStatus::Failed { reason } => {
+                let smartrest_operation_status =
+                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, reason);
                 let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
                 let clear_local_cmd = Message::new(&message.topic, "")
                     .with_retain()
@@ -213,11 +207,11 @@ impl CumulocityConverter {
 
         let download = match download_result {
             Err(err) => {
-                let smartrest_error = SmartRestSetOperationToFailed::new(
+                let smartrest_error =
+                    fail_operation(
                     CumulocitySupportedOperations::C8yUploadConfigFile,
-                    format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
-                )
-                .to_smartrest()?;
+                    &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
+                    );
 
                 let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
                 let clean_operation = Message::new(&fts_download.message.topic, "")
@@ -369,18 +363,15 @@ impl CumulocityConverter {
             }
             Err(download_err) => {
                 let sm_topic = self.smartrest_publish_topic_for_entity(&target.topic_id)?;
-                let smartrest_executing = SmartRestSetOperationToExecuting::new(
+                let smartrest_executing =
+                    set_operation_executing(CumulocitySupportedOperations::C8yDownloadConfigFile);
+                let smartrest_failed = fail_operation(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
-                )
-                .to_smartrest()?;
-                let smartrest_failed = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yDownloadConfigFile,
-                    format!(
+                    &format!(
                         "Download from {} failed with {}",
                         smartrest.url, download_err
                     ),
-                )
-                .to_smartrest()?;
+                );
 
                 Ok(vec![
                     Message::new(&sm_topic, smartrest_executing),
@@ -411,19 +402,17 @@ impl CumulocityConverter {
         let payload = message.payload_str()?;
         let response = &ConfigUpdateCmdPayload::from_json(payload)?;
 
-        let messages = match response.status {
+        let messages = match &response.status {
             CommandStatus::Executing => {
-                let smartrest_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yDownloadConfigFile,
-                )
-                .to_smartrest()?;
+                let smartrest_operation_status =
+                    set_operation_executing(CumulocitySupportedOperations::C8yDownloadConfigFile);
+
                 vec![Message::new(&sm_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
-                let smartrest_operation_status = SmartRestSetOperationToSuccessful::new(
+                let smartrest_operation_status = succeed_operation_no_payload(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
-                )
-                .to_smartrest()?;
+                );
                 let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
                 let clear_local_cmd = Message::new(&message.topic, "")
                     .with_retain()
@@ -433,12 +422,9 @@ impl CumulocityConverter {
 
                 vec![c8y_notification, clear_local_cmd]
             }
-            CommandStatus::Failed { ref reason } => {
-                let smartrest_operation_status = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yDownloadConfigFile,
-                    reason.clone(),
-                )
-                .to_smartrest()?;
+            CommandStatus::Failed { reason } => {
+                let smartrest_operation_status =
+                    fail_operation(CumulocitySupportedOperations::C8yDownloadConfigFile, reason);
                 let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
                 let clear_local_cmd = Message::new(&message.topic, "")
                     .with_retain()

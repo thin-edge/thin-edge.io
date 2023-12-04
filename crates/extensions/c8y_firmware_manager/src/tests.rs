@@ -274,11 +274,11 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
         .assert_received([
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                "501,c8y_Firmware\n",
+                "501,c8y_Firmware",
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                format!("502,c8y_Firmware,Download from {DOWNLOAD_URL} failed with fail\n"),
+                format!("502,c8y_Firmware,Download from {DOWNLOAD_URL} failed with fail"),
             ),
         ])
         .await;
@@ -360,7 +360,7 @@ async fn handle_response_successful_child_device() -> Result<(), DynError> {
         .assert_received([
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                "501,c8y_Firmware\n",
+                "501,c8y_Firmware",
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
@@ -368,7 +368,7 @@ async fn handle_response_successful_child_device() -> Result<(), DynError> {
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                "503,c8y_Firmware,\n",
+                "503,c8y_Firmware",
             ),
         ])
         .await;
@@ -404,7 +404,7 @@ async fn handle_response_executing_and_failed_child_device() -> Result<(), DynEr
     mqtt_message_box
         .assert_received([MqttMessage::new(
             &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-            "501,c8y_Firmware\n",
+            "501,c8y_Firmware",
         )])
         .await;
 
@@ -415,7 +415,7 @@ async fn handle_response_executing_and_failed_child_device() -> Result<(), DynEr
     mqtt_message_box
         .assert_received([MqttMessage::new(
             &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-            "502,c8y_Firmware,No failure reason provided by child device.\n",
+            "502,c8y_Firmware,No failure reason provided by child device.",
         )])
         .await;
 
@@ -524,11 +524,11 @@ async fn handle_request_timeout_child_device() -> Result<(), DynError> {
         .assert_received([
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                "501,c8y_Firmware\n",
+                "501,c8y_Firmware",
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                format!("502,c8y_Firmware,{expected_failure_text}\n"),
+                format!("502,c8y_Firmware,{expected_failure_text}"),
             ),
         ])
         .await;
@@ -572,7 +572,7 @@ async fn handle_child_response_while_busy_downloading() -> Result<(), DynError> 
         .assert_received([
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                "501,c8y_Firmware\n",
+                "501,c8y_Firmware",
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
@@ -580,7 +580,7 @@ async fn handle_child_response_while_busy_downloading() -> Result<(), DynError> 
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                "503,c8y_Firmware,\n",
+                "503,c8y_Firmware",
             ),
         ])
         .await;

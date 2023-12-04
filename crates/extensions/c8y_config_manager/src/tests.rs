@@ -96,7 +96,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
     mqtt_message_box
         .assert_received([MqttMessage::new(
             &C8yTopic::SmartRestResponse.to_topic()?,
-            "501,c8y_UploadConfigFile\n",
+            "501,c8y_UploadConfigFile",
         )])
         .await;
 
@@ -118,7 +118,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
     mqtt_message_box
         .assert_received([MqttMessage::new(
             &C8yTopic::SmartRestResponse.to_topic()?,
-            "503,c8y_UploadConfigFile,test-url\n",
+            "503,c8y_UploadConfigFile,test-url",
         )])
         .await;
 
@@ -160,7 +160,7 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
     mqtt_message_box
         .assert_received([MqttMessage::new(
             &C8yTopic::SmartRestResponse.to_topic()?,
-            "501,c8y_DownloadConfigFile\n",
+            "501,c8y_DownloadConfigFile",
         )])
         .await;
 
@@ -182,7 +182,7 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
     mqtt_message_box
         .assert_received([MqttMessage::new(
             &C8yTopic::SmartRestResponse.to_topic()?,
-            "503,c8y_DownloadConfigFile,\n",
+            "503,c8y_DownloadConfigFile",
         )])
         .await;
 
@@ -283,7 +283,7 @@ async fn test_child_device_config_upload_executing_response_mapping() -> Result<
         .with_timeout(TEST_TIMEOUT)
         .assert_received([MqttMessage::new(
             &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-            "501,c8y_UploadConfigFile\n",
+            "501,c8y_UploadConfigFile",
         )])
         .await;
 
@@ -334,11 +334,11 @@ async fn test_child_device_config_upload_failed_response_mapping() -> Result<(),
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_UploadConfigFile\n",
+                "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,upload failed\n",
+                "502,c8y_UploadConfigFile,upload failed",
             ),
         ])
         .await;
@@ -386,11 +386,11 @@ async fn test_invalid_config_snapshot_response_child_device() -> Result<(), DynE
         [
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_UploadConfigFile\n",
+                "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,Failed to parse response from child device with: expected value at line 1 column 1\n",
+                "502,c8y_UploadConfigFile,Failed to parse response from child device with: expected value at line 1 column 1",
             ),
         ],
     )
@@ -451,11 +451,11 @@ async fn test_timeout_on_no_config_snapshot_response_child_device() -> Result<()
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_UploadConfigFile\n",
+                "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,Timeout due to lack of response from child device: child-aa for config type: file_a\n",
+                "502,c8y_UploadConfigFile,Timeout due to lack of response from child device: child-aa for config type: file_a",
             ),
         ],
     )
@@ -525,11 +525,11 @@ async fn test_child_device_successful_config_snapshot_response_mapping() -> Resu
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_UploadConfigFile\n",
+                "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "503,c8y_UploadConfigFile,test-url\n",
+                "503,c8y_UploadConfigFile,test-url",
             ),
         ])
         .await;
@@ -599,11 +599,11 @@ async fn test_child_config_snapshot_successful_response_without_uploaded_file_ma
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_UploadConfigFile\n",
+                "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_UploadConfigFile,Failed with file not found\n",
+                "502,c8y_UploadConfigFile,Failed with file not found",
             ),
         ])
         .await;
@@ -722,7 +722,7 @@ async fn test_child_device_config_update_executing_response_mapping() -> Result<
         .with_timeout(TEST_TIMEOUT)
         .assert_received([MqttMessage::new(
             &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-            "501,c8y_DownloadConfigFile\n",
+            "501,c8y_DownloadConfigFile",
         )])
         .await;
 
@@ -772,11 +772,11 @@ async fn test_child_device_config_update_successful_response_mapping() -> Result
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_DownloadConfigFile\n",
+                "501,c8y_DownloadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "503,c8y_DownloadConfigFile,\n",
+                "503,c8y_DownloadConfigFile",
             ),
         ])
         .await;
@@ -828,11 +828,11 @@ async fn test_child_device_config_update_failed_response_mapping() -> Result<(),
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_DownloadConfigFile\n",
+                "501,c8y_DownloadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_DownloadConfigFile,download failed\n",
+                "502,c8y_DownloadConfigFile,download failed",
             ),
         ])
         .await;
@@ -895,11 +895,11 @@ async fn test_child_device_config_download_fail_with_broken_url() -> Result<(), 
         .with_timeout(TEST_TIMEOUT)
         .assert_received([MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "501,c8y_DownloadConfigFile\n",
+                "501,c8y_DownloadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
-                "502,c8y_DownloadConfigFile,Downloading the config file update from bad-url failed with Failed with file not found\n",
+                "502,c8y_DownloadConfigFile,Downloading the config file update from bad-url failed with Failed with file not found",
             ),
         ],
     )
@@ -954,11 +954,11 @@ async fn test_multiline_smartrest_requests() -> Result<(), DynError> {
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::SmartRestResponse.to_topic()?,
-                "501,c8y_UploadConfigFile\n",
+                "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
                 &C8yTopic::SmartRestResponse.to_topic()?,
-                "503,c8y_UploadConfigFile,test-url\n",
+                "503,c8y_UploadConfigFile,test-url",
             ),
         ])
         .await;

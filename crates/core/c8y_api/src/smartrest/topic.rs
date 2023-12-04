@@ -93,12 +93,12 @@ impl From<&C8yAlarm> for C8yTopic {
 /// - `["main"]` -> `c8y/s/us`
 /// - `["child1", "main"]` -> `c8y/s/us/child1`
 /// - `["child2", "child1", "main"]` -> `c8y/s/us/child1/child2`
-pub fn publish_topic_from_ancestors(ancestors: &[String]) -> Topic {
+pub fn publish_topic_from_ancestors(ancestors: &[impl AsRef<str>]) -> Topic {
     let mut target_topic = SMARTREST_PUBLISH_TOPIC.to_string();
     for ancestor in ancestors.iter().rev().skip(1) {
         // Skipping the last ancestor as it is the main device represented by the root topic itself
         target_topic.push('/');
-        target_topic.push_str(ancestor);
+        target_topic.push_str(ancestor.as_ref());
     }
 
     Topic::new_unchecked(&target_topic)
@@ -124,8 +124,7 @@ mod tests {
     #[test_case(&["child1", "main"], "c8y/s/us/child1")]
     #[test_case(&["child3", "child2", "child1", "main"], "c8y/s/us/child1/child2/child3")]
     fn topic_from_ancestors(ancestors: &[&str], topic: &str) {
-        let ancestors: Vec<String> = ancestors.iter().map(|v| v.to_string()).collect();
-        let nested_child_topic = publish_topic_from_ancestors(&ancestors);
+        let nested_child_topic = publish_topic_from_ancestors(ancestors);
         assert_eq!(nested_child_topic, Topic::new_unchecked(topic));
     }
 }

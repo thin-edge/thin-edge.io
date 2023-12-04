@@ -3,7 +3,7 @@ use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::credentials::JwtRetriever;
 use camino::Utf8PathBuf;
@@ -641,7 +641,7 @@ impl FirmwareManagerActor {
         );
         let executing_msg = MqttMessage::new(
             &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_executing()?,
+            DownloadFirmwareStatusMessage::status_executing(),
         );
         self.message_box.mqtt_publisher.send(executing_msg).await?;
         Ok(())
@@ -656,7 +656,7 @@ impl FirmwareManagerActor {
         );
         let successful_msg = MqttMessage::new(
             &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_successful(None)?,
+            DownloadFirmwareStatusMessage::status_successful(None),
         );
         self.message_box.mqtt_publisher.send(successful_msg).await?;
         Ok(())
@@ -672,7 +672,7 @@ impl FirmwareManagerActor {
         );
         let failed_msg = MqttMessage::new(
             &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_failed(failure_reason.to_string())?,
+            DownloadFirmwareStatusMessage::status_failed(failure_reason),
         );
         self.message_box.mqtt_publisher.send(failed_msg).await?;
         Ok(())

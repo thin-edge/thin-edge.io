@@ -8,10 +8,9 @@ use crate::error::CumulocityMapperError;
 use anyhow::Context;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
@@ -114,12 +113,10 @@ impl CumulocityConverter {
         let payload = message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
 
-        let messages = match response.status {
+        let messages = match &response.status {
             CommandStatus::Executing => {
-                let smartrest_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                )
-                .to_smartrest()?;
+                let smartrest_operation_status =
+                    set_operation_executing(CumulocitySupportedOperations::C8yLogFileRequest);
                 vec![Message::new(&smartrest_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
@@ -159,12 +156,9 @@ impl CumulocityConverter {
 
                 vec![] // No mqtt message can be published in this state
             }
-            CommandStatus::Failed { ref reason } => {
-                let smartrest_operation_status = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                    reason.clone(),
-                )
-                .to_smartrest()?;
+            CommandStatus::Failed { reason } => {
+                let smartrest_operation_status =
+                    fail_operation(CumulocitySupportedOperations::C8yLogFileRequest, reason);
                 let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
                 let clean_operation = Message::new(&message.topic, "")
                     .with_retain()
@@ -195,13 +189,12 @@ impl CumulocityConverter {
 
         let download_response = match download_result {
             Err(err) => {
-                let smartrest_error = SmartRestSetOperationToFailed::new(
+                let smartrest_error = fail_operation(
                     CumulocitySupportedOperations::C8yLogFileRequest,
-                    format!(
+                    &format!(
                         "tedge-mapper-c8y failed to download log from file transfer service: {err}",
                     ),
-                )
-                .to_smartrest()?;
+                );
 
                 let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
                 let clean_operation = Message::new(&fts_download.message.topic, "")

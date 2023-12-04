@@ -3,13 +3,11 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::converter::FtsDownloadOperationType;
 use async_trait::async_trait;
-use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -242,12 +240,12 @@ impl C8yMapperActor {
         match self.converter.pending_upload_operations.remove(&cmd_id) {
             None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
             Some(queued_data) => {
-                let serialize_result = match queued_data.operation {
+                let payload = match queued_data.operation {
                     CumulocitySupportedOperations::C8yLogFileRequest
                     | CumulocitySupportedOperations::C8yUploadConfigFile => self
                         .get_smartrest_response_for_upload_result(
                             upload_result,
-                            queued_data.c8y_binary_url,
+                            &queued_data.c8y_binary_url,
                             queued_data.operation,
                         ),
                     other_type => {
@@ -256,20 +254,12 @@ impl C8yMapperActor {
                     }
                 };
 
-                match serialize_result {
-                    Ok(sr_payload) => {
-                        let c8y_notification =
-                            Message::new(&queued_data.smartrest_topic, sr_payload);
-                        let clear_local_cmd = Message::new(&queued_data.clear_cmd_topic, "")
-                            .with_retain()
-                            .with_qos(QoS::AtLeastOnce);
-                        for converted_message in [c8y_notification, clear_local_cmd] {
-                            self.mqtt_publisher.send(converted_message).await?
-                        }
-                    }
-                    Err(err) => {
-                        error!("Error occurred while processing an upload result. {err}")
-                    }
+                let c8y_notification = Message::new(&queued_data.smartrest_topic, payload);
+                let clear_local_cmd = Message::new(&queued_data.clear_cmd_topic, "")
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce);
+                for converted_message in [c8y_notification, clear_local_cmd] {
+                    self.mqtt_publisher.send(converted_message).await?
                 }
             }
         };
@@ -280,17 +270,12 @@ impl C8yMapperActor {
     fn get_smartrest_response_for_upload_result(
         &self,
         upload_result: UploadResult,
-        binary_url: String,
+        binary_url: &str,
         operation: CumulocitySupportedOperations,
-    ) -> Result<SmartRest, SmartRestSerializerError> {
+    ) -> SmartRest {
         match upload_result {
-            Ok(_) => SmartRestSetOperationToSuccessful::new(operation)
-                .with_response_parameter(&binary_url)
-                .to_smartrest(),
-            Err(err) => {
-                SmartRestSetOperationToFailed::new(operation, format!("Upload failed with {}", err))
-                    .to_smartrest()
-            }
+            Ok(_) => succeed_static_operation(operation, Some(binary_url)),
+            Err(err) => fail_operation(operation, &format!("Upload failed with {err}")),
         }
     }
 
