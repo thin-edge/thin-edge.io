@@ -1,13 +1,13 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use std::sync::Arc;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::ConfigUpdateCmdPayload;
@@ -98,16 +98,15 @@ impl CumulocityConverter {
     /// command channel.
     pub async fn convert_config_update_request(
         &mut self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
+        config_download_request: C8yDownloadConfigFile,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let smartrest = SmartRestConfigDownloadRequest::from_smartrest(smartrest)?;
-        let target = self
-            .entity_store
-            .try_get_by_external_id(&smartrest.device.clone().into())?;
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
 
-        let cmd_id = self.command_id.new_id();
-
-        let message = self.create_config_update_cmd(cmd_id.into(), &smartrest, target);
+        let message =
+            self.create_config_update_cmd(cmd_id.into(), &config_download_request, target);
         Ok(message)
     }
 
@@ -129,7 +128,7 @@ impl CumulocityConverter {
     fn create_config_update_cmd(
         &self,
         cmd_id: Arc<str>,
-        smartrest: &SmartRestConfigDownloadRequest,
+        config_download_request: &C8yDownloadConfigFile,
         target: &EntityMetadata,
     ) -> Vec<Message> {
         let channel = Channel::Command {
@@ -140,16 +139,16 @@ impl CumulocityConverter {
 
         let proxy_url = self
             .c8y_endpoint
-            .maybe_tenant_url(&smartrest.url)
+            .maybe_tenant_url(&config_download_request.url)
             .map(|cumulocity_url| self.auth_proxy.proxy_url(cumulocity_url).into());
 
-        let remote_url = proxy_url.unwrap_or(smartrest.url.to_string());
+        let remote_url = proxy_url.unwrap_or(config_download_request.url.to_string());
 
         let request = ConfigUpdateCmdPayload {
             status: CommandStatus::Init,
             tedge_url: None,
             remote_url,
-            config_type: smartrest.config_type.clone(),
+            config_type: config_download_request.config_type.clone(),
             path: None,
         };
 
@@ -162,17 +161,13 @@ impl CumulocityConverter {
 mod tests {
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
-    use c8y_api::smartrest::topic::C8yTopic;
+    use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
-    use sha256::digest;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
-    use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
-    use tedge_api::mqtt_topics::Channel;
-    use tedge_api::mqtt_topics::MqttSchema;
-    use tedge_api::mqtt_topics::OperationType;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
+    use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -180,57 +175,48 @@ mod tests {
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[tokio::test]
-    async fn mapper_converts_smartrest_config_download_req_with_new_download_for_main_device() {
+    async fn mapper_converts_config_download_op_for_main_device() {
         let ttd = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate c8y_DownloadConfigFile SmartREST request
+        // Simulate c8y_DownloadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yTopic::downstream_topic(),
-            "524,test-device,http://www.my.url,path/config/A",
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_DownloadConfigFile": {
+                    "type": "path/config/A",
+                    "url": "http://www.my.url"
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
         ))
         .await
         .expect("Send failed");
 
-        // New config_update command should be published
-        let (topic, received_json) = mqtt
-            .recv()
-            .await
-            .map(|msg| {
-                (
-                    msg.topic,
-                    serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
-                        .expect("JSON"),
-                )
-            })
-            .unwrap();
-
-        let mqtt_schema = MqttSchema::default();
-        let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
-        assert_eq!(entity, "device/main//");
-
-        let Channel::Command {
-            operation: OperationType::ConfigUpdate,
-            ..
-        } = channel
-        else {
-            panic!("Unexpected response on channel: {:?}", topic)
-        };
-
-        // Validate the payload JSON
-        let expected_json = json!({
-            "status": "init",
-            "remoteUrl": "http://www.my.url",
-            "type": "path/config/A",
-        });
-        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/config_update/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "remoteUrl": "http://www.my.url",
+                    "type": "path/config/A",
+                }),
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
-    async fn mapper_converts_smartrest_config_download_req_for_child_device() {
+    async fn mapper_converts_config_download_op_for_child_device() {
         let ttd = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -247,49 +233,37 @@ mod tests {
 
         mqtt.skip(2).await; // Skip child device registration messages
 
-        // Cache is already available
-        ttd.dir("cache").file(&digest("http://www.my.url"));
-
-        // Simulate c8y_DownloadConfigFile SmartREST request
+        // Simulate c8y_DownloadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yTopic::downstream_topic(),
-            "524,child1,http://www.my.url,configA",
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_DownloadConfigFile": {
+                    "type": "configA",
+                    "url": "http://www.my.url"
+                },
+                "externalSource": {
+                    "externalId": "child1",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
         ))
         .await
         .expect("Send failed");
 
-        // New config_update command should be published
-        let (topic, received_json) = mqtt
-            .recv()
-            .await
-            .map(|msg| {
-                (
-                    msg.topic,
-                    serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
-                        .expect("JSON"),
-                )
-            })
-            .unwrap();
-
-        let mqtt_schema = MqttSchema::default();
-        let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
-        assert_eq!(entity, "device/child1//");
-
-        let Channel::Command {
-            operation: OperationType::ConfigUpdate,
-            ..
-        } = channel
-        else {
-            panic!("Unexpected response on channel: {:?}", topic)
-        };
-
-        // Validate the payload JSON
-        let expected_json = json!({
-            "status": "init",
-            "remoteUrl": "http://www.my.url",
-            "type": "configA",
-        });
-        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/child1///cmd/config_update/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "remoteUrl": "http://www.my.url",
+                    "type": "configA",
+                }),
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]

@@ -19,6 +19,16 @@ impl C8yDeviceControlTopic {
     }
 }
 
+#[derive(Debug)]
+pub enum C8yDeviceControlOperations {
+    Restart,
+    SoftwareUpdate,
+    LogfileRequest(C8yLogfileRequest),
+    UploadConfigFile(C8yUploadConfigFile),
+    DownloadConfigFile(C8yDownloadConfigFile),
+    Firmware,
+}
+
 /// Representation of operation object received via JSON over MQTT
 ///
 /// A lot information come from c8y, however, we only need these items:
@@ -57,7 +67,7 @@ impl C8yDeviceControlTopic {
 ///
 /// // Get data for processing command
 /// let device_xid = op.external_source.external_id;
-/// let operation_id = op.id;
+/// let operation_id = op.op_id;
 /// if let Some(v) = op.extras.get("c8y_UploadConfigFile") {
 ///     let c8y_upload_config_file: C8yUploadConfigFile = serde_json::from_value(v.clone()).unwrap();
 /// }
@@ -65,11 +75,12 @@ impl C8yDeviceControlTopic {
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yOperation {
-    // externalSource
+    /// externalSource
     pub external_source: ExternalSource,
 
-    // Operation ID
-    pub id: String,
+    /// Operation ID
+    #[serde(rename = "id")]
+    pub op_id: String,
 
     #[serde(flatten)]
     pub extras: std::collections::HashMap<String, serde_json::Value>,
@@ -132,4 +143,27 @@ pub struct C8yLogfileRequest {
 pub struct C8yUploadConfigFile {
     #[serde(rename = "type")]
     pub config_type: String,
+}
+
+/// Representation of c8y_DownloadConfigFile JSON object
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
+///
+/// // Example input from c8y
+/// let data = r#"
+/// {
+///     "type": "/etc/tedge/tedge.toml",
+///     "url": "https://example.cumulocity.com/inventory/binaries/757538"
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yDownloadConfigFile = serde_json::from_str(data).unwrap();
+/// ```
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yDownloadConfigFile {
+    #[serde(rename = "type")]
+    pub config_type: String,
+    pub url: String,
 }
