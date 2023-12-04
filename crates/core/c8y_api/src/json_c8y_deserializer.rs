@@ -26,7 +26,7 @@ pub enum C8yDeviceControlOperations {
     LogfileRequest(C8yLogfileRequest),
     UploadConfigFile(C8yUploadConfigFile),
     DownloadConfigFile(C8yDownloadConfigFile),
-    Firmware,
+    Firmware(C8yFirmware),
 }
 
 /// Representation of operation object received via JSON over MQTT
@@ -165,5 +165,29 @@ pub struct C8yUploadConfigFile {
 pub struct C8yDownloadConfigFile {
     #[serde(rename = "type")]
     pub config_type: String,
+    pub url: String,
+}
+
+/// Representation of c8y_Firmware JSON object
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yFirmware;
+///
+/// // Example input from c8y
+/// let data = r#"
+/// {
+///     "name": "foo",
+///     "version": "1.0.2",
+///     "url": "https://dummy.url/firmware.zip"
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yFirmware = serde_json::from_str(data).unwrap();
+/// ```
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yFirmware {
+    pub name: String,
+    pub version: String,
     pub url: String,
 }
