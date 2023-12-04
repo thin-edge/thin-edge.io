@@ -47,9 +47,7 @@ pub fn assert_message_contains_str(message: &Message, expected: (&str, &str)) {
     let payload = message.payload_str().expect("non UTF-8 payload");
     assert!(
         payload.contains(expected_payload),
-        "Payload assertion failed.\n Actual: {} \n Expected: {}",
-        payload,
-        expected_payload
+        "Payload assertion failed.\n Actual: {payload:?} \n Expected: {expected_payload:?}",
     )
 }
 
