@@ -15,7 +15,9 @@ use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::json_c8y_deserializer::C8yDeviceControlOperations;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
+use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
@@ -100,7 +102,6 @@ use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::log::warn;
 use tracing::trace;
 
 const C8Y_CLOUD: &str = "c8y";
@@ -180,6 +181,10 @@ pub struct UploadOperationData {
     pub file_dir: tempfile::TempDir,
 }
 
+pub struct DownloadOperationData {
+    pub entity_xid: EntityExternalId,
+    pub operation: C8yDeviceControlOperations,
+}
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: C8yMapperConfig,
@@ -566,7 +571,7 @@ impl CumulocityConverter {
         dbg!(&operation);
 
         let device_xid = operation.external_source.external_id;
-        let cmd_id = self.command_id.new_id_with_str(&operation.id);
+        let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
         if self.active_commands.contains(&cmd_id) {
             info!("{cmd_id} is already addressed");
@@ -579,25 +584,22 @@ impl CumulocityConverter {
         } else if let Some(_value) = operation.extras.get("c8y_Restart") {
             Ok(vec![])
         } else if let Some(value) = operation.extras.get("c8y_LogfileRequest") {
-            if !self.config.capabilities.log_upload {
-                warn!("Received a c8y_LogfileRequest operation, however, log_upload feature is disabled");
-                return Ok(vec![]);
-            }
             let request: C8yLogfileRequest = serde_json::from_value(value.clone()).unwrap();
             dbg!(&request);
             let msgs = self.convert_log_upload_request(device_xid, cmd_id, request)?;
             Ok(msgs)
         } else if let Some(value) = operation.extras.get("c8y_UploadConfigFile") {
-            if !self.config.capabilities.config_snapshot {
-                warn!("Received a c8y_UploadConfigFile operation, however, config_snapshot feature is disabled");
-                return Ok(vec![]);
-            }
             let request: C8yUploadConfigFile = serde_json::from_value(value.clone()).unwrap();
             dbg!(&request);
             let msgs = self.convert_config_snapshot_request(device_xid, cmd_id, request)?;
             Ok(msgs)
-        } else if let Some(_value) = operation.extras.get("c8y_DownloadConfigFile") {
-            Ok(vec![])
+        } else if let Some(value) = operation.extras.get("c8y_DownloadConfigFile") {
+            let request: C8yDownloadConfigFile = serde_json::from_value(value.clone()).unwrap();
+            dbg!(&request);
+            let msgs = self
+                .convert_config_update_request(device_xid, cmd_id, request)
+                .await?;
+            Ok(msgs)
         } else if let Some(_value) = operation.extras.get("c8y_Firmware") {
             Ok(vec![])
         } else {
@@ -646,9 +648,6 @@ impl CumulocityConverter {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
                     // Need a check of capabilities so that user can still use custom template if disabled
-                    "524" if self.config.capabilities.config_update => {
-                        self.convert_config_update_request(payload).await
-                    }
                     "515" if self.config.capabilities.firmware_update => {
                         self.convert_firmware_update_request(payload)
                     }
