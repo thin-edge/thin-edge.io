@@ -94,6 +94,20 @@ pub struct ExternalSource {
     pub source_type: String,
 }
 
+/// Representation of c8y_Restart JSON object
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yRestart;
+///
+/// // Example input from c8y
+/// let data = "{}";
+///
+/// // Parse the data
+/// let req: C8yRestart = serde_json::from_str(data).unwrap();
+/// ```
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+pub struct C8yRestart {}
+
 /// Representation of c8y_LogfileRequest JSON object
 ///
 /// ```rust
