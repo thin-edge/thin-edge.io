@@ -15,6 +15,38 @@ pub struct GenericCommandState {
     pub payload: Value,
 }
 
+/// User-friendly representation of a command state; as used in the operation TOML definition files
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum TomlStateUpdate {
+    /// In the simple format, only a status is specified, eg.
+    /// `on_error = "<status>"`
+    Simple(String),
+    /// The simple format is equivalent to a detailed command update
+    /// specifying only a status, eg.
+    /// `on_error = { status = "<status>" }`
+    Detailed(GenericStateUpdate),
+}
+
+/// Update for a command state
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GenericStateUpdate {
+    pub status: String,
+    pub reason: Option<String>,
+}
+
+impl From<TomlStateUpdate> for GenericStateUpdate {
+    fn from(value: TomlStateUpdate) -> Self {
+        match value {
+            TomlStateUpdate::Simple(status) => GenericStateUpdate {
+                status,
+                reason: None,
+            },
+            TomlStateUpdate::Detailed(update) => update,
+        }
+    }
+}
+
 impl GenericCommandState {
     /// Extract a command state from a json payload
     pub fn from_command_message(message: &Message) -> Result<Option<Self>, WorkflowExecutionError> {
