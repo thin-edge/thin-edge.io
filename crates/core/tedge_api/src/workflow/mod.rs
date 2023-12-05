@@ -2,6 +2,7 @@ pub mod error;
 pub mod script;
 pub mod state;
 pub mod supervisor;
+pub mod toml_config;
 
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
@@ -10,6 +11,7 @@ pub use error::*;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use script::ShellScript;
+pub use script::*;
 use serde::Deserialize;
 use serde::Serialize;
 pub use state::*;
