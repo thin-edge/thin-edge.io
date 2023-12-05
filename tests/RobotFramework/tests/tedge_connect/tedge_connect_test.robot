@@ -37,7 +37,7 @@ tedge_connect_test_sm_services
 tedge_disconnect_test_sm_services
     ${output}=    Execute Command    sudo tedge disconnect c8y
     Should Contain    ${output}    Cumulocity Bridge successfully disconnected!
-    Should Contain    ${output}    tedge-agent service successfully stopped and disabled!
+    Should Not Contain    ${output}    tedge-agent service successfully stopped and disabled!
     Should Contain    ${output}    tedge-mapper-c8y service successfully stopped and disabled!
 
 *** Keywords ***

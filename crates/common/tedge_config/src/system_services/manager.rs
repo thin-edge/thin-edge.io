@@ -16,6 +16,9 @@ pub trait SystemServiceManager: Debug {
     /// Stops the specified system service.
     fn stop_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
 
+    /// Starts the specified system service.
+    fn start_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
+
     /// Restarts the specified system service.
     fn restart_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
 

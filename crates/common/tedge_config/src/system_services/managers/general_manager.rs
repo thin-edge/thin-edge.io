@@ -53,6 +53,12 @@ impl SystemServiceManager for GeneralServiceManager {
             .must_succeed()
     }
 
+    fn start_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
+        let exec_command = ServiceCommand::Start(service).try_exec_command(self)?;
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
+            .must_succeed()
+    }
+
     fn restart_service(&self, service: SystemService) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::Restart(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())?
@@ -163,6 +169,7 @@ fn replace_with_service_name(
 enum ServiceCommand {
     CheckManager,
     Stop(SystemService),
+    Start(SystemService),
     Restart(SystemService),
     Enable(SystemService),
     Disable(SystemService),
@@ -193,6 +200,12 @@ impl ServiceCommand {
                 config_path,
                 *service,
             ),
+            Self::Start(service) => ExecCommand::try_new_with_placeholder(
+                service_manager.init_config.start.clone(),
+                ServiceCommand::Enable(*service),
+                config_path,
+                *service,
+            ),
             Self::Enable(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.enable.clone(),
                 ServiceCommand::Enable(*service),
@@ -220,6 +233,7 @@ impl fmt::Display for ServiceCommand {
         match self {
             Self::CheckManager => write!(f, "is_available"),
             Self::Stop(_service) => write!(f, "stop"),
+            Self::Start(_service) => write!(f, "start"),
             Self::Restart(_service) => write!(f, "restart"),
             Self::Enable(_service) => write!(f, "enable"),
             Self::Disable(_service) => write!(f, "disable"),

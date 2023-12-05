@@ -25,6 +25,7 @@ pub struct InitConfig {
     pub is_available: Vec<String>,
     pub restart: Vec<String>,
     pub stop: Vec<String>,
+    pub start: Vec<String>,
     pub enable: Vec<String>,
     pub disable: Vec<String>,
     pub is_active: Vec<String>,
@@ -71,6 +72,7 @@ impl Default for InitConfig {
             is_available: vec!["/bin/systemctl".into(), "--version".into()],
             restart: vec!["/bin/systemctl".into(), "restart".into(), "{}".into()],
             stop: vec!["/bin/systemctl".into(), "stop".into(), "{}".into()],
+            start: vec!["/bin/systemctl".into(), "start".into(), "{}".into()],
             enable: vec!["/bin/systemctl".into(), "enable".into(), "{}".into()],
             disable: vec!["/bin/systemctl".into(), "disable".into(), "{}".into()],
             is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()],
@@ -116,6 +118,7 @@ mod tests {
             is_available = ["/bin/systemctl", "--version"]
             restart = ["/bin/systemctl", "restart", "{}"]
             stop =  ["/bin/systemctl", "stop", "{}"]
+            start =  ["/bin/systemctl", "start", "{}"]
             enable =  ["/bin/systemctl", "enable", "{}"]
             disable =  ["/bin/systemctl", "disable", "{}"]
             is_active = ["/bin/systemctl", "is-active", "{}"]
@@ -140,6 +143,7 @@ mod tests {
         );
         assert_eq!(config.init.restart, vec!["/bin/systemctl", "restart", "{}"]);
         assert_eq!(config.init.stop, vec!["/bin/systemctl", "stop", "{}"]);
+        assert_eq!(config.init.start, vec!["/bin/systemctl", "start", "{}"]);
         assert_eq!(config.init.enable, vec!["/bin/systemctl", "enable", "{}"]);
         assert_eq!(config.init.disable, vec!["/bin/systemctl", "disable", "{}"]);
         assert_eq!(
