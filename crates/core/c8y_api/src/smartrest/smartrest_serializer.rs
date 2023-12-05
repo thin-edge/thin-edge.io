@@ -158,7 +158,7 @@ impl Serialize for EmbeddedCsv {
         S: Serializer,
         S::Error: serde::ser::Error,
     {
-        let record = dbg!(parse_single_record(&self.0)?);
+        let record = parse_single_record(&self.0)?;
         let mut seq = serializer.serialize_seq(Some(record.len()))?;
         for field in record.iter() {
             seq.serialize_element(field)?;
