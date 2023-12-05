@@ -17,11 +17,9 @@ use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperations;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
-use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
-use c8y_api::json_c8y_deserializer::C8yFirmware;
-use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
+use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
 use c8y_api::json_c8y_deserializer::C8yOperation;
-use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
+use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
@@ -38,7 +36,6 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
@@ -103,6 +100,7 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
+use tracing::warn;
 
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
@@ -565,10 +563,7 @@ impl CumulocityConverter {
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let operation: C8yOperation =
-            serde_json::from_str(message.payload.as_str().unwrap()).unwrap();
-        dbg!(&operation);
-
+        let operation = C8yOperation::from_json(message.payload.as_str()?)?;
         let device_xid = operation.external_source.external_id;
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
@@ -577,34 +572,72 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        // Check extras if it contains operation fragment
-        if let Some(_value) = operation.extras.get("c8y_SoftwareUpdate") {
-            Ok(vec![])
-        } else if operation.extras.contains_key("c8y_Restart") {
-            let msgs = self.forward_restart_request(device_xid, cmd_id)?;
-            Ok(msgs)
-        } else if let Some(value) = operation.extras.get("c8y_LogfileRequest") {
-            let request: C8yLogfileRequest = serde_json::from_value(value.clone()).unwrap();
-            let msgs = self.convert_log_upload_request(device_xid, cmd_id, request)?;
-            Ok(msgs)
-        } else if let Some(value) = operation.extras.get("c8y_UploadConfigFile") {
-            let request: C8yUploadConfigFile = serde_json::from_value(value.clone()).unwrap();
-            let msgs = self.convert_config_snapshot_request(device_xid, cmd_id, request)?;
-            Ok(msgs)
-        } else if let Some(value) = operation.extras.get("c8y_DownloadConfigFile") {
-            let request: C8yDownloadConfigFile = serde_json::from_value(value.clone()).unwrap();
-            let msgs = self
-                .convert_config_update_request(device_xid, cmd_id, request)
-                .await?;
-            Ok(msgs)
-        } else if let Some(value) = operation.extras.get("c8y_Firmware") {
-            let request: C8yFirmware = serde_json::from_value(value.clone()).unwrap();
-            let msgs = self.convert_firmware_update_request(device_xid, cmd_id, request)?;
-            Ok(msgs)
-        } else {
-            dbg!("error");
-            Ok(vec![])
+        let mut output: Vec<Message> = Vec::new();
+        let result = self
+            .process_json_over_mqtt(device_xid, cmd_id, &operation.extras)
+            .await;
+
+        match result {
+            Err(
+                ref err @ CumulocityMapperError::FromC8ySoftwareUpdateDeserializerError(
+                    C8yJsonOverMqttDeserializerError::InvalidParameter { ref operation, .. },
+                )
+                | ref err @ CumulocityMapperError::ExecuteFailed {
+                    operation_name: ref operation,
+                    ..
+                },
+            ) => {
+                let topic = C8yTopic::SmartRestResponse.to_topic()?;
+                let msg1 = Message::new(&topic, format!("501,{operation}"));
+                let msg2 =
+                    Message::new(&topic, format!("502,{operation},\"{}\"", &err.to_string()));
+                error!("{err}");
+                output.extend_from_slice(&[msg1, msg2]);
+            }
+            Err(err) => {
+                error!("{err}");
+            }
+
+            Ok(msgs) => output.extend_from_slice(&msgs),
         }
+
+        Ok(output)
+    }
+
+    async fn process_json_over_mqtt(
+        &mut self,
+        device_xid: String,
+        cmd_id: String,
+        extras: &HashMap<String, Value>,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let msgs = match C8yDeviceControlOperations::from_extras(extras)? {
+            C8yDeviceControlOperations::Restart(_) => {
+                self.forward_restart_request(device_xid, cmd_id)?
+            }
+            C8yDeviceControlOperations::SoftwareUpdate(request) => {
+                self.forward_software_request(device_xid, cmd_id, request)
+                    .await?
+            }
+            C8yDeviceControlOperations::LogfileRequest(request) => {
+                self.convert_log_upload_request(device_xid, cmd_id, request)?
+            }
+            C8yDeviceControlOperations::UploadConfigFile(request) => {
+                self.convert_config_snapshot_request(device_xid, cmd_id, request)?
+            }
+            C8yDeviceControlOperations::DownloadConfigFile(request) => {
+                self.convert_config_update_request(device_xid, cmd_id, request)
+                    .await?
+            }
+            C8yDeviceControlOperations::Firmware(request) => {
+                self.convert_firmware_update_request(device_xid, cmd_id, request)?
+            }
+            C8yDeviceControlOperations::Custom => {
+                warn!("Received unsupported operation on JSON over MQTT topic");
+                vec![]
+            }
+        };
+
+        Ok(msgs)
     }
 
     async fn parse_c8y_smartrest_topics(
@@ -647,7 +680,6 @@ impl CumulocityConverter {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
                     // Need a check of capabilities so that user can still use custom template if disabled
-                    "528" => self.forward_software_request(payload).await,
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
@@ -676,13 +708,14 @@ impl CumulocityConverter {
 
     async fn forward_software_request(
         &mut self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
+        software_update_request: C8ySoftwareUpdate,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let update_software = SmartRestUpdateSoftware::from_smartrest(smartrest)?;
-        let device_id = &update_software.external_id.clone().into();
-        let target = self.entity_store.try_get_by_external_id(device_id)?;
-        let cmd_id = self.command_id.new_id();
-        let mut command = update_software.into_software_update_command(&target.topic_id, cmd_id)?;
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let mut command =
+            software_update_request.into_software_update_command(&target.topic_id, cmd_id)?;
 
         command.payload.update_list.iter_mut().for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
@@ -1638,6 +1671,7 @@ pub(crate) mod tests {
     use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
+    use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
     use c8y_auth_proxy::url::Protocol;
@@ -2742,8 +2776,27 @@ pub(crate) mod tests {
             EntityFilter::Entity(&child),
             ChannelFilter::Command(OperationType::SoftwareUpdate),
         );
+        let mqtt_message = MqttMessage::new(
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_SoftwareUpdate": [
+                    {
+                        "name": "software_a",
+                        "action": "install",
+                        "version": "version_a",
+                        "url": "url_a"
+                    }
+                ],
+                "externalSource": {
+                    "externalId": "test-device:device:childId",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        );
         let command = converter
-            .process_smartrest("528,test-device:device:childId,software_a,version_a,url_a,install")
+            .parse_c8y_devicecontrol_topic(&mqtt_message)
             .await
             .unwrap()
             .get(0)
