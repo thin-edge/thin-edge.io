@@ -263,7 +263,7 @@ Suite Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
     # Child
-    Setup Child Device    parent_ip=${parent_ip}    install_package=tedge-configuration-plugin
+    Setup Child Device    parent_ip=${parent_ip}    install_package=tedge-agent
 
 Setup Child Device
     [Arguments]    ${parent_ip}    ${install_package}
@@ -271,7 +271,7 @@ Setup Child Device
     Set Suite Variable    $CHILD_SN    ${child_sn}
 
     Set Device Context    ${CHILD_SN}
-    Execute Command    sudo dpkg -i packages/tedge_*.deb
+    Execute Command    sudo dpkg -i packages/tedge_*.deb packages/${install_package}*.deb
 
     Execute Command    sudo tedge config set mqtt.client.host ${parent_ip}
     Execute Command    sudo tedge config set mqtt.client.port 1883
@@ -279,10 +279,8 @@ Setup Child Device
     Execute Command    sudo tedge config set mqtt.topic_root te
     Execute Command    sudo tedge config set mqtt.device_topic_id device/${child_sn}//
 
-    # Install plugin after the default settings have been updated to prevent it from starting up as the main plugin
-    Execute Command    sudo dpkg -i packages/${install_package}*.deb
-    Execute Command    sudo systemctl enable ${install_package}
-    Execute Command    sudo systemctl start ${install_package}
+    Enable Service    ${install_package}
+    Start Service     ${install_package}
 
     Copy Configuration Files    ${child_sn}
 
@@ -300,9 +298,10 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config2.json         /etc/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/binary-config1.tar.gz         /etc/
 
+    # Remove line below after https://github.com/thin-edge/thin-edge.io/issues/2456 is resolved
+    Execute Command    chgrp tedge /etc/ && chmod g+w /etc/
     # Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
-    # Uncomment once https://github.com/thin-edge/thin-edge.io/issues/2253 is resolved
-    # ThinEdgeIO.Service Health Status Should Be Up    tedge-configuration-plugin    device=child1
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
 
 Publish and Verify Local Command
     [Arguments]    ${topic}    ${payload}    ${expected_status}=successful    ${c8y_fragment}=

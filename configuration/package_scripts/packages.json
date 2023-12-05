@@ -12,7 +12,7 @@
                 // Don't stop or restart service when upgrading as the old agent
                 // is responsible for the entire OTA update (as the packages are installed by the agent)
                 // and restarting the service would kill the maintainer scripts mid-execution
-                {"name": "tedge-agent", "enable": false, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": false}
+                {"name": "tedge-agent", "enable": false, "start": false, "restart_after_upgrade": false, "stop_on_upgrade": false}
             ]
         },
         "c8y-configuration-plugin": {
@@ -20,19 +20,9 @@
                 {"name": "c8y-configuration-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
-        "tedge-configuration-plugin": {
-            "services": [
-                {"name": "tedge-configuration-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
-            ]
-        },
         "c8y-log-plugin": {
             "services": [
                 {"name": "c8y-log-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
-            ]
-        },
-        "tedge-log-plugin": {
-            "services": [
-                {"name": "tedge-log-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
         "c8y-firmware-plugin": {

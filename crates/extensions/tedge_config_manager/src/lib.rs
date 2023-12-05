@@ -112,7 +112,7 @@ impl ConfigManagerBuilder {
         }
 
         // create tedge-configuration-plugin.toml
-        let example_config = r#"# Add the configurations to be managed by tedge-configuration-plugin
+        let example_config = r#"# Add the configurations to be managed
 files = [
 #    { path = '/etc/tedge/tedge.toml' },
 #    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },

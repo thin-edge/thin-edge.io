@@ -91,7 +91,7 @@ impl LogManagerBuilder {
         }
 
         // creating tedge-log-plugin.toml
-        let example_config = r#"# Add the list of log files that should be managed by tedge-log-plugin
+        let example_config = r#"# Add the list of log files that should be managed
 files = [
 #    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
 #    { type = "software-management", path = '/var/log/tedge/agent/software-*' },

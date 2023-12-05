@@ -32,8 +32,6 @@ overrides:
         # Watchdog does not make sense on apk as it does not use systemd
         # - tedge-watchdog = ${GIT_SEMVER}
         - tedge-apt-plugin = ${GIT_SEMVER}
-        - tedge-log-plugin = ${GIT_SEMVER}
-        - tedge-configuration-plugin = ${GIT_SEMVER}
         - c8y-remote-access-plugin = ${GIT_SEMVER}
         - c8y-firmware-plugin = ${GIT_SEMVER}
   rpm:
@@ -47,8 +45,6 @@ overrides:
         - tedge-watchdog = ${GIT_SEMVER}-1
         # tedge-apt-plugin does not make sense on rpm
         # - tedge-apt-plugin = ${GIT_SEMVER}-1
-        - tedge-log-plugin = ${GIT_SEMVER}-1
-        - tedge-configuration-plugin = ${GIT_SEMVER}-1
         - c8y-remote-access-plugin = ${GIT_SEMVER}-1
         - c8y-firmware-plugin = ${GIT_SEMVER}-1
   deb:
@@ -58,8 +54,6 @@ overrides:
         - tedge-agent (= ${GIT_SEMVER})
         - tedge-watchdog (= ${GIT_SEMVER})
         - tedge-apt-plugin (= ${GIT_SEMVER})
-        - tedge-log-plugin (= ${GIT_SEMVER})
-        - tedge-configuration-plugin (= ${GIT_SEMVER})
         - c8y-remote-access-plugin (= ${GIT_SEMVER})
         - c8y-firmware-plugin (= ${GIT_SEMVER})
 

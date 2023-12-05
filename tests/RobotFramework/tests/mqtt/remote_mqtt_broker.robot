@@ -26,17 +26,13 @@ Check remote mqtt broker #1773
     ThinEdgeIO.Service Should Be Running    mosquitto
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Stopped    tedge-agent
-    ThinEdgeIO.Service Should Be Stopped    tedge-configuration-plugin
     ThinEdgeIO.Service Should Be Stopped    c8y-firmware-plugin
-    ThinEdgeIO.Service Should Be Stopped    tedge-log-plugin
 
     ThinEdgeIO.Set Device Context    ${CONTAINER_2}
     ThinEdgeIO.Service Should Be Stopped    mosquitto
     ThinEdgeIO.Service Should Be Stopped    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-agent
-    ThinEdgeIO.Service Should Be Running    tedge-configuration-plugin
     ThinEdgeIO.Service Should Be Running    c8y-firmware-plugin
-    ThinEdgeIO.Service Should Be Running    tedge-log-plugin
 
     # Validate the device exists in the cloud
     Cumulocity.Device Should Exist    ${CONTAINER_1}
@@ -49,9 +45,7 @@ Check remote mqtt broker #1773
 
     Cumulocity.Should Have Services    name=tedge-mapper-c8y    status=up
     Cumulocity.Should Have Services    name=tedge-agent    status=up
-    Cumulocity.Should Have Services    name=tedge-configuration-plugin    status=up
     Cumulocity.Should Have Services    name=c8y-firmware-plugin    status=up
-    Cumulocity.Should Have Services    name=tedge-log-plugin    status=up
 
 
 *** Keywords ***
@@ -69,8 +63,6 @@ Custom Setup
     Restart Service    mqtt-logger
 
     Stop Service    tedge-agent
-    Stop Service    tedge-configuration-plugin
-    Stop Service    tedge-log-plugin
     Stop Service    c8y-firmware-plugin
 
     # Copy files form one device to another (use base64 encoding to prevent quoting issues)
@@ -90,8 +82,6 @@ Custom Setup
     Execute Command    sudo tedge config unset mqtt.bind.address
     Execute Command    echo "${pem}" | sudo tee "$(tedge config get device.cert_path)"
     Restart Service    c8y-firmware-plugin
-    Restart Service    tedge-log-plugin
-    Restart Service    tedge-configuration-plugin
     Restart Service    tedge-agent
 
 Custom Teardown

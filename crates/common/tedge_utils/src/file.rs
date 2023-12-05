@@ -515,7 +515,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let example_config = r#"# Add the configurations to be managed by tedge-configuration-plugin
+        let example_config = r#"# Add the configurations to be managed
         files = [
         #    { path = '/etc/tedge/tedge.toml' },
         ]"#;

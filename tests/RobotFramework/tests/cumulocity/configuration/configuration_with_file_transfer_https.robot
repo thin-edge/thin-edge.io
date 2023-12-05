@@ -101,8 +101,8 @@ Disable HTTP Client Certificate for Child Device
     Set Device Context  ${CHILD_SN}
     Execute Command    tedge config unset http.client.auth.cert_file
     Execute Command    tedge config unset http.client.auth.key_file
-    Execute Command    sudo systemctl restart tedge-configuration-plugin
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-configuration-plugin     device=${CHILD_SN}
+    Execute Command    sudo systemctl restart tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent     device=${CHILD_SN}
 
 Disable HTTP Client Certificate for Mapper
     Set Device Context  ${PARENT_SN}
@@ -145,7 +145,7 @@ Suite Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
     # Child
-    Setup Child Device    parent_ip=${parent_ip}   install_package=tedge-configuration-plugin  root_certificate=${root_certificate}   certificate=${client_certificate}    private_key=${client_key}
+    Setup Child Device    parent_ip=${parent_ip}   install_package=tedge-agent  root_certificate=${root_certificate}   certificate=${client_certificate}    private_key=${client_key}
 
 Suite Teardown
     Get Logs    name=${PARENT_SN}
@@ -189,8 +189,8 @@ Test Setup
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
     Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
     Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
-    Execute Command    sudo systemctl restart tedge-configuration-plugin
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-configuration-plugin     device=${CHILD_SN}
+    Execute Command    sudo systemctl restart tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent     device=${CHILD_SN}
 
 Copy Configuration Files
     [Arguments]    ${device}

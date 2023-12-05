@@ -31,8 +31,6 @@ Custom Suite Setup
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
     Stop Service    tedge-agent
     Stop Service    tedge-mapper-c8y
-    Stop Service    tedge-configuration-plugin
-    Stop Service    tedge-log-plugin
     Stop Service    c8y-firmware-plugin
 
     Set Suite Variable    ${DEVICE_SN}

@@ -34,43 +34,12 @@ Request with non-existing log type
     ...    timeout=120
 
 Manual log_upload operation request
-    Execute Command    sudo -u tedge mkdir -p /var/tedge/file-transfer/${DEVICE_SN}/log_upload
-    Execute Command    sudo -u tedge touch /var/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%SZ
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
     Publish and Verify Local Command    
     ...    topic=te/device/main///cmd/log_upload/example-1234
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
-    ...    c8y_fragment=c8y_DownloadConfigFile
-
-Log operation successful when file transfer service on different host
-    ${parent_ip}=    Get IP Address
-
-    ${CHILD_SN}=    Setup    skip_bootstrap=True
-    Set Device Context    ${CHILD_SN}
-    
-    # Set up a child device with only tedge-agent and connect both devices' MQTT broker and HTTP file transfer server
-    Execute Command    dpkg -i packages/tedge_*.deb packages/tedge-agent_*.deb
-    Execute Command    tedge config set http.bind.address 0.0.0.0
-    Execute Command    tedge config set mqtt.client.host ${parent_ip}
-    Restart Service    tedge-agent
-    ${child_ip}=       Get IP Address
-
-    Set Device Context    ${DEVICE_SN}
-    Execute Command    tedge config set mqtt.bind.address 0.0.0.0
-    Execute Command    tedge config set http.client.host ${child_ip}
-    Execute Command    tedge reconnect c8y
-    Stop Service       tedge-agent
-    Start Service      tedge-log-plugin
-
-
-    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${operation}=     Cumulocity.Create Operation
-    ...    description=Log file request
-    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
-    Operation Should Be SUCCESSFUL    ${operation}
-
+    ...    c8y_fragment=c8y_LogfileRequest
 
 Log file request limits maximum number of lines with text filter
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -117,7 +86,7 @@ Setup LogFiles
     # touch file again to change last modified timestamp, otherwise the logfile retrieval could be outside of the requested range
     Execute Command
     ...    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
 Custom Setup

@@ -12,8 +12,6 @@ ${APT_INSTALL}    apt-get install -y \
     ...    tedge-mapper \
     ...    tedge-agent \
     ...    tedge-apt-plugin \
-    ...    tedge-configuration-plugin \
-    ...    tedge-log-plugin \
     ...    c8y-firmware-plugin \
     ...    tedge-watchdog
 
