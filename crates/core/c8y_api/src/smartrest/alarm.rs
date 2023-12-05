@@ -1,5 +1,6 @@
 use crate::json_c8y::AlarmSeverity;
 use crate::json_c8y::C8yAlarm;
+use crate::smartrest::csv::fields_to_csv_string;
 use time::format_description::well_known::Rfc3339;
 
 /// Serialize C8yAlarm to SmartREST message
@@ -20,7 +21,7 @@ pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<String, time::error::Form
                 alarm.time.format(&Rfc3339)?
             )
         }
-        C8yAlarm::Clear(alarm) => format!("306,{}", alarm.alarm_type),
+        C8yAlarm::Clear(alarm) => fields_to_csv_string(&["306", &alarm.alarm_type]),
     };
     Ok(smartrest)
 }

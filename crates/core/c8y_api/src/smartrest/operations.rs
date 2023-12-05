@@ -5,12 +5,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::smartrest::error::OperationsError;
-use crate::smartrest::smartrest_serializer::SmartRestSerializer;
-use crate::smartrest::smartrest_serializer::SmartRestSetSupportedOperations;
+use crate::smartrest::smartrest_serializer::declare_supported_operations;
 use serde::Deserialize;
 use serde::Deserializer;
 
-use super::error::SmartRestSerializerError;
 use std::time::Duration;
 
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
@@ -173,11 +171,11 @@ impl Operations {
             .collect::<HashSet<String>>()
     }
 
-    pub fn create_smartrest_ops_message(&self) -> Result<String, SmartRestSerializerError> {
+    pub fn create_smartrest_ops_message(&self) -> String {
         let mut ops = self.get_operations_list();
         ops.sort();
-        let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
-        SmartRestSetSupportedOperations::new(&ops).to_smartrest()
+        let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
+        declare_supported_operations(&ops)
     }
 }
 

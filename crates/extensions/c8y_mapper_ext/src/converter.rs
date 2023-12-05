@@ -22,7 +22,7 @@ use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::message::get_smartrest_template_id;
-use c8y_api::smartrest::message::sanitize_for_smartrest;
+use c8y_api::smartrest::message::sanitize_bytes_for_smartrest;
 use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::get_operations;
@@ -33,12 +33,14 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRestGetPendingOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
+use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
@@ -710,10 +712,10 @@ impl CumulocityConverter {
                 self.execute_operation(
                     payload,
                     command.as_str(),
-                    &operation.name,
                     operation.result_format(),
                     operation.graceful_timeout(),
                     operation.forceful_timeout(),
+                    operation.name,
                 )
                 .await?;
             }
@@ -726,10 +728,10 @@ impl CumulocityConverter {
         &self,
         payload: &str,
         command: &str,
-        operation_name: &str,
         result_format: ResultFormat,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
+        operation_name: String,
     ) -> Result<(), CumulocityMapperError> {
         let command = command.to_owned();
         let payload = payload.to_string();
@@ -755,15 +757,16 @@ impl CumulocityConverter {
 
         match maybe_child_process {
             Ok(child_process) => {
-                let op_name = operation_name.to_string();
+                let op_name = operation_name.to_owned();
                 let mut mqtt_publisher = self.mqtt_publisher.clone();
 
                 tokio::spawn(async move {
+                    let op_name = op_name.as_str();
                     let logger = log_file.buffer();
 
                     // mqtt client publishes executing
                     let topic = C8yTopic::SmartRestResponse.to_topic().unwrap();
-                    let executing_str = format!("501,{op_name}");
+                    let executing_str = set_operation_executing(op_name);
                     mqtt_publisher
                         .send(Message::new(&topic, executing_str.as_str()))
                         .await
@@ -779,36 +782,44 @@ impl CumulocityConverter {
                     {
                         match output.status.code() {
                             Some(0) => {
-                                let sanitized_stdout = sanitize_for_smartrest(
-                                    output.stdout,
+                                let sanitized_stdout = sanitize_bytes_for_smartrest(
+                                    &output.stdout,
                                     MAX_PAYLOAD_LIMIT_IN_BYTES,
                                 );
-                                let successful_str = match result_format {
-                                    ResultFormat::Text => {
-                                        format!("503,{op_name},\"{sanitized_stdout}\"")
-                                    }
-                                    ResultFormat::Csv => {
-                                        format!("503,{op_name},{sanitized_stdout}")
-                                    }
+                                let result = match result_format {
+                                    ResultFormat::Text => TextOrCsv::Text(sanitized_stdout),
+                                    ResultFormat::Csv => EmbeddedCsv::new(sanitized_stdout).into(),
                                 };
-                                mqtt_publisher.send(Message::new(&topic, successful_str.as_str())).await
-                                    .unwrap_or_else(|err| {
-                                        error!("Failed to publish a message: {successful_str}. Error: {err}")
-                                    })
+                                let success_message = succeed_operation(op_name, result);
+                                match success_message {
+                                    Ok(message) => mqtt_publisher.send(Message::new(&topic, message.as_str())).await
+                                        .unwrap_or_else(|err| {
+                                            error!("Failed to publish a message: {message}. Error: {err}")
+                                        }),
+                                    Err(e) => {
+                                        let fail_message = fail_operation(
+                                            op_name,
+                                            &format!("{:?}", anyhow::Error::from(e).context("Custom operation process exited successfully, but couldn't convert output to valid SmartREST message")));
+                                        mqtt_publisher.send(Message::new(&topic, fail_message.as_str())).await.unwrap_or_else(|err| {
+                                            error!("Failed to publish a message: {fail_message}. Error: {err}")
+                                        })
+                                    }
+                                }
                             }
                             _ => {
                                 let failure_reason = get_failure_reason_for_smartrest(
-                                    output.stderr,
+                                    &output.stderr,
                                     MAX_PAYLOAD_LIMIT_IN_BYTES,
                                 );
-                                let failed_str = format!("502,{op_name},\"{failure_reason}\"");
+                                let payload = fail_operation(op_name, &failure_reason);
+
                                 mqtt_publisher
-                                    .send(Message::new(&topic, failed_str.as_str()))
+                                    .send(Message::new(&topic, payload.as_bytes()))
                                     .await
                                     .unwrap_or_else(|err| {
                                         error!(
-                                        "Failed to publish a message: {failed_str}. Error: {err}"
-                                    )
+                                            "Failed to publish a message: {payload}. Error: {err}"
+                                        )
                                     })
                             }
                         }
@@ -897,7 +908,7 @@ impl CumulocityConverter {
             let ops = Operations::try_new(path_to_child_devices.join(&child_id))?;
             self.children
                 .insert(child_external_id.clone().into(), ops.clone());
-            let ops_msg = ops.create_smartrest_ops_message()?;
+            let ops_msg = ops.create_smartrest_ops_message();
             let topic = C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic()?;
             messages_vec.push(Message::new(&topic, ops_msg));
         }
@@ -1241,13 +1252,13 @@ impl CumulocityConverter {
             let topic = C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic()?;
             Ok(Message::new(
                 &topic,
-                Operations::try_new(path)?.create_smartrest_ops_message()?,
+                Operations::try_new(path)?.create_smartrest_ops_message(),
             ))
         } else {
             // operations for parent
             Ok(Message::new(
                 &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                Operations::try_new(path)?.create_smartrest_ops_message()?,
+                Operations::try_new(path)?.create_smartrest_ops_message(),
             ))
         }
     }
@@ -1305,10 +1316,8 @@ fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
 }
 
 fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
-    let data = SmartRestGetPendingOperations::default();
     let topic = C8yTopic::SmartRestResponse.to_topic()?;
-    let payload = data.to_smartrest()?;
-    Ok(Message::new(&topic, payload))
+    Ok(Message::new(&topic, request_pending_operations()))
 }
 
 fn is_child_operation_path(path: &Path) -> bool {
@@ -1393,18 +1402,13 @@ impl CumulocityConverter {
 
         match command.status() {
             CommandStatus::Executing => {
-                let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yRestartRequest,
-                )
-                .to_smartrest()?;
-
+                let smartrest_set_operation =
+                    set_operation_executing(CumulocitySupportedOperations::C8yRestartRequest);
                 Ok(vec![Message::new(&topic, smartrest_set_operation)])
             }
             CommandStatus::Successful => {
-                let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
-                    CumulocitySupportedOperations::C8yRestartRequest,
-                )
-                .to_smartrest()?;
+                let smartrest_set_operation =
+                    succeed_operation_no_payload(CumulocitySupportedOperations::C8yRestartRequest);
 
                 Ok(vec![
                     command.clearing_message(&self.mqtt_schema),
@@ -1412,11 +1416,11 @@ impl CumulocityConverter {
                 ])
             }
             CommandStatus::Failed { ref reason } => {
-                let smartrest_set_operation = SmartRestSetOperationToFailed::new(
+                let smartrest_set_operation = fail_operation(
                     CumulocitySupportedOperations::C8yRestartRequest,
-                    format!("Restart Failed: {}", reason),
-                )
-                .to_smartrest()?;
+                    &format!("Restart Failed: {reason}"),
+                );
+
                 Ok(vec![
                     command.clearing_message(&self.mqtt_schema),
                     Message::new(&topic, smartrest_set_operation),
@@ -1484,17 +1488,13 @@ impl CumulocityConverter {
                 Ok(vec![])
             }
             CommandStatus::Executing => {
-                let smartrest_set_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8ySoftwareUpdate,
-                )
-                .to_smartrest()?;
+                let smartrest_set_operation_status =
+                    set_operation_executing(CumulocitySupportedOperations::C8ySoftwareUpdate);
                 Ok(vec![Message::new(&topic, smartrest_set_operation_status)])
             }
             CommandStatus::Successful => {
-                let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
-                    CumulocitySupportedOperations::C8ySoftwareUpdate,
-                )
-                .to_smartrest()?;
+                let smartrest_set_operation =
+                    succeed_operation_no_payload(CumulocitySupportedOperations::C8ySoftwareUpdate);
 
                 Ok(vec![
                     Message::new(&topic, smartrest_set_operation),
@@ -1503,11 +1503,9 @@ impl CumulocityConverter {
                 ])
             }
             CommandStatus::Failed { reason } => {
-                let smartrest_set_operation = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8ySoftwareUpdate,
-                    reason,
-                )
-                .to_smartrest()?;
+                let smartrest_set_operation =
+                    fail_operation(CumulocitySupportedOperations::C8ySoftwareUpdate, &reason);
+
                 Ok(vec![
                     Message::new(&topic, smartrest_set_operation),
                     response.clearing_message(&self.mqtt_schema),
@@ -2654,10 +2652,10 @@ pub(crate) mod tests {
             .execute_operation(
                 "5",
                 "sleep",
-                "sleep_ten",
                 ResultFormat::Text,
                 tokio::time::Duration::from_secs(10),
                 tokio::time::Duration::from_secs(1),
+                "sleep_ten".to_owned(),
             )
             .await
             .unwrap();
@@ -2665,10 +2663,10 @@ pub(crate) mod tests {
             .execute_operation(
                 "5",
                 "sleep",
-                "sleep_twenty",
                 ResultFormat::Text,
                 tokio::time::Duration::from_secs(20),
                 tokio::time::Duration::from_secs(1),
+                "sleep_twenty".to_owned(),
             )
             .await
             .unwrap();

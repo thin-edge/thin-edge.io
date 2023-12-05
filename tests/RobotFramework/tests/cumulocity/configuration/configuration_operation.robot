@@ -157,7 +157,7 @@ Get Unknown Configuration Type From Device
     [Arguments]    ${test_desc}    ${external_id}    ${config_type}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
-    Operation Should Be FAILED    ${operation}    failure_reason=.*requested config_type ${config_type} is not defined in the plugin configuration file.*
+    Operation Should Be FAILED    ${operation}    failure_reason=.*requested config_type "${config_type}" is not defined in the plugin configuration file.*
 
 Get non existent configuration file From Device
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}

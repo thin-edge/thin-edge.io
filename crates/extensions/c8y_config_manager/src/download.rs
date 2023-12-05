@@ -16,15 +16,13 @@ use super::plugin_config::FileEntry;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
-use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use log::error;
 use log::info;
 use log::warn;
@@ -79,7 +77,7 @@ impl ConfigDownloadManager {
         smartrest_request: SmartRestConfigDownloadRequest,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
-        let executing_message = DownloadConfigFileStatusMessage::executing()?;
+        let executing_message = DownloadConfigFileStatusMessage::executing();
         message_box.mqtt_publisher.send(executing_message).await?;
 
         let target_config_type = smartrest_request.config_type.clone();
@@ -104,7 +102,7 @@ impl ConfigDownloadManager {
             Ok(_) => {
                 info!("The configuration download for '{target_config_type}' is successful.");
 
-                let successful_message = DownloadConfigFileStatusMessage::successful(None)?;
+                let successful_message = DownloadConfigFileStatusMessage::successful(None);
                 message_box.mqtt_publisher.send(successful_message).await?;
 
                 let notification_message = get_file_change_notification_message(
@@ -120,7 +118,7 @@ impl ConfigDownloadManager {
             Err(err) => {
                 error!("The configuration download for '{target_config_type}' failed.",);
 
-                let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
+                let failed_message = DownloadConfigFileStatusMessage::failed(&err.to_string());
                 message_box.mqtt_publisher.send(failed_message).await?;
                 Err(err)
             }
@@ -196,7 +194,7 @@ impl ConfigDownloadManager {
                         ConfigOperation::Update,
                         Some(child_id),
                         ActiveOperationState::Pending,
-                        failure_reason,
+                        &failure_reason,
                         message_box,
                     )
                     .await?;
@@ -249,7 +247,7 @@ impl ConfigDownloadManager {
         if let Some(operation_status) = child_device_payload.status {
             let current_operation_state = self.active_child_ops.get(&operation_key);
             if current_operation_state != Some(&ActiveOperationState::Executing) {
-                let executing_status_payload = DownloadConfigFileStatusMessage::status_executing()?;
+                let executing_status_payload = DownloadConfigFileStatusMessage::status_executing();
                 mapped_responses.push(MqttMessage::new(&c8y_child_topic, executing_status_payload));
             }
 
@@ -263,7 +261,7 @@ impl ConfigDownloadManager {
                         config_response,
                     );
                     let successful_status_payload =
-                        DownloadConfigFileStatusMessage::status_successful(None)?;
+                        DownloadConfigFileStatusMessage::status_successful(None);
                     mapped_responses.push(MqttMessage::new(
                         &c8y_child_topic,
                         successful_status_payload,
@@ -279,14 +277,13 @@ impl ConfigDownloadManager {
                     );
                     if let Some(error_message) = &child_device_payload.reason {
                         let failed_status_payload =
-                            DownloadConfigFileStatusMessage::status_failed(error_message.clone())?;
+                            DownloadConfigFileStatusMessage::status_failed(error_message);
                         mapped_responses
                             .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     } else {
-                        let default_error_message =
-                            String::from("No fail reason provided by child device.");
+                        let default_error_message = "No fail reason provided by child device.";
                         let failed_status_payload =
-                            DownloadConfigFileStatusMessage::status_failed(default_error_message)?;
+                            DownloadConfigFileStatusMessage::status_failed(default_error_message);
                         mapped_responses
                             .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     }
@@ -326,7 +323,7 @@ impl ConfigDownloadManager {
                 ConfigOperation::Update,
                 Some(child_id.clone()),
                 operation_state,
-                format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
+                &format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
                 message_box,
             ).await
         } else {
@@ -348,24 +345,20 @@ pub fn get_file_change_notification_message(file_path: &str, config_type: &str) 
 
 pub struct DownloadConfigFileStatusMessage {}
 
-impl TryIntoOperationStatusMessage for DownloadConfigFileStatusMessage {
-    fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yDownloadConfigFile)
-            .to_smartrest()
+impl DownloadConfigFileStatusMessage {
+    const OP: CumulocitySupportedOperations = CumulocitySupportedOperations::C8yDownloadConfigFile;
+}
+
+impl OperationStatusMessage for DownloadConfigFileStatusMessage {
+    fn status_executing() -> SmartRest {
+        set_operation_executing(Self::OP)
     }
 
-    fn status_successful(
-        _parameter: Option<String>,
-    ) -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yDownloadConfigFile)
-            .to_smartrest()
+    fn status_successful(parameter: Option<&str>) -> SmartRest {
+        succeed_static_operation(Self::OP, parameter)
     }
 
-    fn status_failed(failure_reason: String) -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToFailed::new(
-            CumulocitySupportedOperations::C8yDownloadConfigFile,
-            failure_reason,
-        )
-        .to_smartrest()
+    fn status_failed(failure_reason: &str) -> SmartRest {
+        fail_operation(Self::OP, failure_reason)
     }
 }

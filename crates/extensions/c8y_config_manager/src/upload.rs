@@ -14,15 +14,13 @@ use super::child_device::ConfigOperationResponse;
 use super::error::ConfigManagementError;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
-use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use log::error;
 use log::info;
 use log::warn;
@@ -78,7 +76,7 @@ impl ConfigUploadManager {
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         // set config upload request to executing
-        let msg = UploadConfigFileStatusMessage::executing()?;
+        let msg = UploadConfigFileStatusMessage::executing();
         message_box.mqtt_publisher.send(msg).await?;
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
@@ -105,13 +103,13 @@ impl ConfigUploadManager {
                 info!("The configuration upload for '{target_config_type}' is successful.");
 
                 let successful_message =
-                    UploadConfigFileStatusMessage::successful(Some(upload_event_url))?;
+                    UploadConfigFileStatusMessage::successful(Some(&upload_event_url));
                 message_box.mqtt_publisher.send(successful_message).await?;
             }
             Err(err) => {
                 error!("The configuration upload for '{target_config_type}' failed.",);
 
-                let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
+                let failed_message = UploadConfigFileStatusMessage::failed(&err.to_string());
                 message_box.mqtt_publisher.send(failed_message).await?;
             }
         }
@@ -195,7 +193,7 @@ impl ConfigUploadManager {
         if let Some(operation_status) = payload.status {
             let current_operation_state = self.active_child_ops.get(&operation_key);
             if current_operation_state != Some(&ActiveOperationState::Executing) {
-                let executing_status_payload = UploadConfigFileStatusMessage::status_executing()?;
+                let executing_status_payload = UploadConfigFileStatusMessage::status_executing();
                 mapped_responses.push(MqttMessage::new(&c8y_child_topic, executing_status_payload));
             }
 
@@ -213,7 +211,7 @@ impl ConfigUploadManager {
                         Ok(message) => mapped_responses.push(message),
                         Err(err) => {
                             let failed_status_payload =
-                                UploadConfigFileStatusMessage::status_failed(err.to_string())?;
+                                UploadConfigFileStatusMessage::status_failed(&err.to_string());
                             mapped_responses
                                 .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                         }
@@ -223,16 +221,14 @@ impl ConfigUploadManager {
                     self.active_child_ops.remove(&operation_key);
 
                     if let Some(error_message) = &payload.reason {
-                        let failed_status_payload = UploadConfigFileStatusMessage::status_failed(
-                            error_message.to_string(),
-                        )?;
+                        let failed_status_payload =
+                            UploadConfigFileStatusMessage::status_failed(error_message);
                         mapped_responses
                             .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     } else {
-                        let default_error_message =
-                            String::from("No failure reason provided by child device.");
+                        let default_error_message = "No failure reason provided by child device.";
                         let failed_status_payload =
-                            UploadConfigFileStatusMessage::status_failed(default_error_message)?;
+                            UploadConfigFileStatusMessage::status_failed(default_error_message);
                         mapped_responses
                             .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     }
@@ -347,7 +343,7 @@ impl ConfigUploadManager {
 
         info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {c8y_upload_event_url}");
         let successful_status_payload =
-            UploadConfigFileStatusMessage::status_successful(Some(c8y_upload_event_url))?;
+            UploadConfigFileStatusMessage::status_successful(Some(&c8y_upload_event_url));
         let message = MqttMessage::new(&c8y_child_topic, successful_status_payload);
 
         Ok(message)
@@ -385,7 +381,7 @@ impl ConfigUploadManager {
                 ConfigOperation::Snapshot,
                 Some(child_id.clone()),
                 operation_state,
-                format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
+                &format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
                 message_box,
             ).await
         } else {
@@ -397,29 +393,26 @@ impl ConfigUploadManager {
 
 pub struct UploadConfigFileStatusMessage {}
 
-impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
+impl UploadConfigFileStatusMessage {
+    const OP: CumulocitySupportedOperations = CumulocitySupportedOperations::C8yUploadConfigFile;
+}
+
+impl OperationStatusMessage for UploadConfigFileStatusMessage {
     // returns a c8y message specifying to set the upload config file operation status to executing.
     // example message: '501,c8y_UploadConfigFile'
-    fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yUploadConfigFile)
-            .to_smartrest()
+    fn status_executing() -> SmartRest {
+        set_operation_executing(Self::OP)
     }
 
     // returns a c8y SmartREST message indicating the success of the upload config file operation.
     // example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
-    fn status_successful(parameter: Option<String>) -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yUploadConfigFile)
-            .with_response_parameter(parameter.unwrap_or_default().as_str())
-            .to_smartrest()
+    fn status_successful(parameter: Option<&str>) -> SmartRest {
+        succeed_static_operation(Self::OP, parameter)
     }
 
     // returns a c8y SmartREST message indicating the failure of the upload config file operation.
     // example message: '502,c8y_UploadConfigFile,"failure reason"'
-    fn status_failed(failure_reason: String) -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToFailed::new(
-            CumulocitySupportedOperations::C8yUploadConfigFile,
-            failure_reason,
-        )
-        .to_smartrest()
+    fn status_failed(failure_reason: &str) -> SmartRest {
+        fail_operation(Self::OP, failure_reason)
     }
 }

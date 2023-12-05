@@ -34,17 +34,18 @@ pub fn get_smartrest_template_id(payload: &str) -> String {
 /// - Strip the input according to `max_size`.
 // TODO: make this return Result
 // TODO: make a variant which assumes `max_size = MAX_PAYLOAD_LIMIT_IN_BYTES`
-pub fn sanitize_for_smartrest(input: Vec<u8>, max_size: usize) -> String {
-    String::from_utf8(input)
-        .unwrap_or_else(|err| {
-            error!("The input contains invalid UTF-8: {err}");
-            String::default()
-        })
+pub fn sanitize_bytes_for_smartrest(input: &[u8], max_size: usize) -> String {
+    let input = std::str::from_utf8(input).unwrap_or_else(|err| {
+        error!("The input contains invalid UTF-8: {err}");
+        ""
+    });
+    sanitize_for_smartrest(input, max_size)
+}
+
+pub fn sanitize_for_smartrest(input: &str, max_size: usize) -> String {
+    input
         .chars()
         .filter(|&c| c == '\r' || c == '\n' || c == '\t' || !c.is_control())
-        .collect::<String>()
-        .replace('"', "\"\"")
-        .chars()
         .scan(0, |bytes_count, c| {
             *bytes_count += c.len_utf8();
             Some((*bytes_count, c))
@@ -62,17 +63,16 @@ pub fn sanitize_for_smartrest(input: Vec<u8>, max_size: usize) -> String {
 /// If the input has only one line, returns the line only.
 /// If the input is empty or contains invalid UTF-8, it returns an empty String.
 /// The output is ensured to be SmartREST compatible.
-pub fn get_failure_reason_for_smartrest(input: Vec<u8>, max_size: usize) -> String {
-    let input_string = String::from_utf8(input).unwrap_or_else(|err| {
+pub fn get_failure_reason_for_smartrest(input: &[u8], max_size: usize) -> String {
+    let input_string = std::str::from_utf8(input).unwrap_or_else(|err| {
         error!("The input contains invalid UTF-8: {err}");
-        String::default()
+        ""
     });
-    let last_line = input_string.lines().last().unwrap_or_default();
-    let failure_reason = match input_string.lines().count() {
-        0 | 1 => last_line.to_string(),
-        _ => format!("{}\n\n{}", last_line, input_string.as_str()),
-    };
-    sanitize_for_smartrest(failure_reason.as_bytes().to_vec(), max_size)
+    let last_line = input_string.trim_end().lines().last().unwrap_or_default();
+    match input_string.lines().count() {
+        0 | 1 => sanitize_for_smartrest(last_line, max_size),
+        _ => sanitize_for_smartrest(&format!("{last_line}\n\n{input_string}"), max_size),
+    }
 }
 
 /// Split MQTT message payload to multiple SmartREST messages.
@@ -139,7 +139,6 @@ pub fn collect_smartrest_messages(data: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use regex::Regex;
     use test_case::test_case;
 
     #[test_case("512,device_id", Some("device_id"); "valid")]
@@ -167,54 +166,54 @@ mod tests {
 
     #[test]
     fn selected_control_chars_remain() {
-        let input = vec![0x00, 0x09, 0x0A, 0x0D]; // NULL, \t, \n, \r
-        let sanitized = sanitize_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        let input = b"\0\t\n\r";
+        let sanitized = sanitize_bytes_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
         assert_eq!(sanitized, "\t\n\r".to_string());
     }
 
     #[test]
     fn control_chars_are_removed() {
-        let input: Vec<u8> = (0x00..0xff).collect();
-        let sanitized = sanitize_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        let re = Regex::new(r"[^\x20-\x7E\xA0-\xFF\t\n\r]").unwrap();
-        assert!(!re.is_match(&sanitized));
+        let input: Vec<u8> = (0x00..=0x7f).collect();
+        let sanitized = sanitize_bytes_for_smartrest(&input, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        assert_eq!(
+            sanitized,
+            "\t\n\r !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+        );
     }
 
     #[test]
     fn invalid_utf8_is_contained() {
         let invalid_sparkle_heart = vec![0, 159, 146, 150];
-        let sanitized = sanitize_for_smartrest(invalid_sparkle_heart, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(sanitized, "".to_string());
+        let sanitized =
+            sanitize_bytes_for_smartrest(&invalid_sparkle_heart, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        assert_eq!(sanitized, "");
     }
 
     #[test]
     fn invalid_utf8_is_contained_last_line() {
         let invalid_sparkle_heart = vec![0, 159, 146, 150];
         let last_line =
-            get_failure_reason_for_smartrest(invalid_sparkle_heart, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(last_line, "".to_string());
+            get_failure_reason_for_smartrest(&invalid_sparkle_heart, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        assert_eq!(last_line, "");
     }
 
     #[test_case("foo bar baz\n", "foo bar baz\n"; "standard")]
-    #[test_case("foo\r\nbar\tbaz\0\"", "foo\r\nbar\tbaz\"\""; "with control chars")]
+    #[test_case("foo\r\nbar\tbaz\0\"", "foo\r\nbar\tbaz\""; "with control chars")]
     #[test_case("baz", "baz"; "no new line")]
     #[test_case("", ""; "empty")]
     #[test_case("こんにちは", "こんにちは"; "no ascii")]
-    #[test_case("こんにちは\"\n\0こんにちは", "こんにちは\"\"\nこんにちは"; "no ascii and control chars")]
+    #[test_case("こんにちは\"\n\0こんにちは", "こんにちは\"\nこんにちは"; "no ascii and control chars")]
     fn u8_vec_is_sanitized(input: &str, expected_output: &str) {
-        let vec_u8 = input.as_bytes().to_vec();
-        let sanitized = sanitize_for_smartrest(vec_u8, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        let sanitized = sanitize_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
         assert_eq!(sanitized, expected_output.to_string());
     }
 
     #[test_case("foo bar bye", "foo bar by"; "ascii")]
     #[test_case("こんにちは", "こんに"; "no ascii")]
     fn size_u8_vec_is_stripped(input: &str, expected_output: &str) {
-        let vec_u8 = input.as_bytes().to_vec();
-        let stripped = sanitize_for_smartrest(vec_u8, 10);
+        let stripped = sanitize_for_smartrest(input, 10);
         assert_eq!(stripped, expected_output.to_string());
     }
-
     #[test_case("baz\n", "baz"; "one line")]
     #[test_case("baz", "baz"; "no new line")]
     #[test_case("foo\r\nbar\n\nbaz\n", "baz\n\nfoo\r\n"; "multiline")]
@@ -222,8 +221,7 @@ mod tests {
     #[test_case("おはよう\nこんにちは\n", "こんに"; "no ascii")]
     #[test_case("あ\nい\nう\nえ\nお\n", "お\n\nあ\n"; "no ascii2")]
     fn return_formatted_text_for_failure_reason_from_vec_u8(input: &str, expected_output: &str) {
-        let vec_u8 = input.as_bytes().to_vec();
-        let last_line = get_failure_reason_for_smartrest(vec_u8, 10);
+        let last_line = get_failure_reason_for_smartrest(input.as_bytes(), 10);
         assert_eq!(last_line.as_str(), expected_output);
     }
 

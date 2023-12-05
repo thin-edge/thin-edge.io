@@ -3,11 +3,10 @@ use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use tedge_api::entity_store::EntityType;
 use tedge_api::messages::FirmwareMetadata;
 use tedge_api::messages::FirmwareUpdateCmdPayload;
@@ -89,20 +88,16 @@ impl CumulocityConverter {
         let payload = message.payload_str()?;
         let response = &FirmwareUpdateCmdPayload::from_json(payload)?;
 
-        let messages = match response.status {
+        let messages = match &response.status {
             CommandStatus::Executing => {
-                let smartrest_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yFirmware,
-                )
-                .to_smartrest()?;
+                let smartrest_operation_status =
+                    set_operation_executing(CumulocitySupportedOperations::C8yFirmware);
 
                 vec![Message::new(&sm_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
-                let smartrest_operation_status = SmartRestSetOperationToSuccessful::new(
-                    CumulocitySupportedOperations::C8yFirmware,
-                )
-                .to_smartrest()?;
+                let smartrest_operation_status =
+                    succeed_operation_no_payload(CumulocitySupportedOperations::C8yFirmware);
                 let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
 
                 let clear_local_cmd = Message::new(&message.topic, "")
@@ -126,12 +121,9 @@ impl CumulocityConverter {
 
                 vec![c8y_notification, clear_local_cmd, update_metadata]
             }
-            CommandStatus::Failed { ref reason } => {
-                let smartrest_operation_status = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yFirmware,
-                    reason.clone(),
-                )
-                .to_smartrest()?;
+            CommandStatus::Failed { reason } => {
+                let smartrest_operation_status =
+                    fail_operation(CumulocitySupportedOperations::C8yFirmware, reason);
                 let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
                 let clear_local_cmd = Message::new(&message.topic, "")
                     .with_retain()
@@ -399,7 +391,7 @@ mod tests {
         // Expect `502` smartrest message on `c8y/s/us`.
         assert_received_contains_str(
             &mut mqtt,
-            [("c8y/s/us", "502,c8y_Firmware,\"Something went wrong\"")],
+            [("c8y/s/us", "502,c8y_Firmware,Something went wrong")],
         )
         .await;
     }
@@ -455,7 +447,7 @@ mod tests {
             &mut mqtt,
             [(
                 "c8y/s/us/test-device:device:child1",
-                "502,c8y_Firmware,\"Something went wrong\"",
+                "502,c8y_Firmware,Something went wrong",
             )],
         )
         .await;

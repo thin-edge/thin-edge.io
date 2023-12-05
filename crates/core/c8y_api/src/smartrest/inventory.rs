@@ -9,6 +9,7 @@
 // smartrest messages are sent. There should be one comprehensive API for
 // generating them.
 
+use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::topic::publish_topic_from_ancestors;
 use mqtt_channel::Message;
 
@@ -92,11 +93,13 @@ pub fn service_creation_message(
 
     Ok(Message::new(
         &publish_topic_from_ancestors(ancestors),
-        // XXX: if any arguments contain commas, output will be wrong
-        format!(
-            "102,{},{},{},{}",
-            service_id, service_type, service_name, service_status
-        ),
+        fields_to_csv_string(&[
+            "102",
+            service_id,
+            service_type,
+            service_name,
+            service_status,
+        ]),
     ))
 }
 
@@ -110,21 +113,16 @@ pub fn service_creation_message(
 /// to set the status of).
 ///
 /// https://cumulocity.com/guides/reference/smartrest-two/#104
-pub fn service_status_update_message(external_ids: &[String], service_status: &str) -> Message {
+pub fn service_status_update_message(
+    external_ids: &[impl AsRef<str>],
+    service_status: &str,
+) -> Message {
     let topic = publish_topic_from_ancestors(external_ids);
 
-    let mut service_status = sanitize_for_smartrest(
-        service_status.into(),
-        super::message::MAX_PAYLOAD_LIMIT_IN_BYTES,
-    );
+    let service_status =
+        sanitize_for_smartrest(service_status, super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);
 
-    if service_status.contains(',') {
-        service_status = format!("\"{service_status}\"");
-    }
-
-    let payload = format!("104,{service_status}");
-
-    Message::new(&topic, payload)
+    Message::new(&topic, fields_to_csv_string(&["104", &service_status]))
 }
 
 #[derive(thiserror::Error, Debug)]

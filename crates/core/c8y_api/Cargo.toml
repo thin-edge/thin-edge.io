@@ -31,7 +31,6 @@ anyhow = { workspace = true }
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 maplit = { workspace = true }
-regex = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 time = { workspace = true, features = ["macros"] }

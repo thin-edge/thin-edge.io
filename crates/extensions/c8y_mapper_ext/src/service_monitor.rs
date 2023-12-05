@@ -68,7 +68,7 @@ mod tests {
         r#"{"pid":"1234","status":"up"}"#,
         "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
         r#"104,up"#;
-        "service-monitoring-thin-edge-device"
+        "service monitoring thin-edge device"
     )]
     #[test_case(
         "test_device",
@@ -76,7 +76,7 @@ mod tests {
         r#"{"pid":"1234","status":"up"}"#,
         "c8y/s/us/test_device:device:child/test_device:device:child:service:tedge-mapper-c8y",
         r#"104,up"#;
-        "service-monitoring-thin-edge-child-device"
+        "service monitoring thin-edge child device"
     )]
     #[test_case(
         "test_device",
@@ -84,7 +84,7 @@ mod tests {
         r#"{"pid":"123456"}"#,
         "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
         r#"104,unknown"#;
-        "service-monitoring-thin-edge-no-status"
+        "service monitoring thin-edge no status"
     )]
     #[test_case(
         "test_device",
@@ -92,7 +92,7 @@ mod tests {
         r#"{"status":""}"#,
         "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
         r#"104,unknown"#;
-        "service-monitoring-empty-status"
+        "service monitoring empty status"
     )]
     #[test_case(
         "test_device",
@@ -100,7 +100,7 @@ mod tests {
         "{}",
         "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
         r#"104,unknown"#;
-        "service-monitoring-empty-health-message"
+        "service monitoring empty health message"
     )]
     #[test_case(
         "test_device",
@@ -108,15 +108,15 @@ mod tests {
         r#"{"status":"up,down"}"#,
         "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
         r#"104,"up,down""#;
-        "service-monitoring-type-with-comma-health-message"
+        "service monitoring type with comma health message"
     )]
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"status":"up\"down"}"#,
         "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,up""down"#;
-        "service-monitoring-double-quotes-health-message"
+        r#"104,"up""down""#;
+        "service monitoring double quotes health message"
     )]
     fn translate_health_status_to_c8y_service_monitoring_message(
         device_name: &str,

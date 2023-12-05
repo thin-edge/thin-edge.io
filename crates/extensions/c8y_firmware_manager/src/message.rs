@@ -1,14 +1,13 @@
 use crate::error::FirmwareManagementError;
 use crate::operation::FirmwareOperationEntry;
 
-use c8y_api::smartrest::error::SmartRestSerializerError;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations::C8yFirmware;
+use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
@@ -115,25 +114,21 @@ impl TryFrom<&MqttMessage> for FirmwareOperationResponse {
 
 pub struct DownloadFirmwareStatusMessage {}
 
-impl TryIntoOperationStatusMessage for DownloadFirmwareStatusMessage {
-    fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yFirmware)
-            .to_smartrest()
+impl DownloadFirmwareStatusMessage {
+    const OP: CumulocitySupportedOperations = C8yFirmware;
+}
+
+impl OperationStatusMessage for DownloadFirmwareStatusMessage {
+    fn status_executing() -> SmartRest {
+        set_operation_executing(Self::OP)
     }
 
-    fn status_successful(
-        _parameter: Option<String>,
-    ) -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yFirmware)
-            .to_smartrest()
+    fn status_successful(parameter: Option<&str>) -> SmartRest {
+        succeed_static_operation(Self::OP, parameter)
     }
 
-    fn status_failed(failure_reason: String) -> Result<SmartRest, SmartRestSerializerError> {
-        SmartRestSetOperationToFailed::new(
-            CumulocitySupportedOperations::C8yFirmware,
-            failure_reason,
-        )
-        .to_smartrest()
+    fn status_failed(failure_reason: &str) -> SmartRest {
+        fail_operation(Self::OP, failure_reason)
     }
 }
 

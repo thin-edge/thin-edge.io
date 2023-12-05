@@ -647,7 +647,6 @@ dependencies = [
  "futures",
  "maplit",
  "mqtt_channel",
- "regex",
  "reqwest",
  "serde",
  "serde_json",

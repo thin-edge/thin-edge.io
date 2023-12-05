@@ -3,12 +3,11 @@ use async_trait::async_trait;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
-use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::is_c8y_bridge_up;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -113,7 +112,7 @@ impl LogManagerActor {
         &mut self,
         smartrest_request: &SmartRestLogRequest,
     ) -> Result<(), anyhow::Error> {
-        let executing = LogfileRequest::executing()?;
+        let executing = LogfileRequest::executing();
         self.mqtt_publisher.send(executing).await?;
 
         let log_path = log_manager::new_read_logs(
@@ -136,7 +135,7 @@ impl LogManagerActor {
             )
             .await?;
 
-        let successful = LogfileRequest::successful(Some(upload_event_url))?;
+        let successful = LogfileRequest::successful(Some(&upload_event_url));
         self.mqtt_publisher.send(successful).await?;
 
         std::fs::remove_file(log_path)?;
@@ -155,7 +154,7 @@ impl LogManagerActor {
             Ok(()) => Ok(()),
             Err(error) => {
                 let error_message = format!("Handling of operation failed with {}", error);
-                let failed_msg = LogfileRequest::failed(error_message)?;
+                let failed_msg = LogfileRequest::failed(&error_message);
                 self.mqtt_publisher.send(failed_msg).await?;
                 error!(
                     "Handling of operation for log type {} failed with: {}",
@@ -242,40 +241,24 @@ impl Actor for LogManagerActor {
 
 pub struct LogfileRequest {}
 
-impl TryIntoOperationStatusMessage for LogfileRequest {
+impl LogfileRequest {
+    const OP: CumulocitySupportedOperations = CumulocitySupportedOperations::C8yLogFileRequest;
+}
+
+impl OperationStatusMessage for LogfileRequest {
     /// returns a c8y message specifying to set log status to executing.
     ///
     /// example message: '501,c8y_LogfileRequest'
-    fn status_executing() -> Result<
-        c8y_api::smartrest::smartrest_serializer::SmartRest,
-        c8y_api::smartrest::error::SmartRestSerializerError,
-    > {
-        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
-            .to_smartrest()
+    fn status_executing() -> String {
+        set_operation_executing(Self::OP)
     }
 
-    fn status_successful(
-        parameter: Option<String>,
-    ) -> Result<
-        c8y_api::smartrest::smartrest_serializer::SmartRest,
-        c8y_api::smartrest::error::SmartRestSerializerError,
-    > {
-        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yLogFileRequest)
-            .with_response_parameter(&parameter.unwrap())
-            .to_smartrest()
+    fn status_successful(parameter: Option<&str>) -> String {
+        succeed_static_operation(Self::OP, parameter)
     }
 
-    fn status_failed(
-        failure_reason: String,
-    ) -> Result<
-        c8y_api::smartrest::smartrest_serializer::SmartRest,
-        c8y_api::smartrest::error::SmartRestSerializerError,
-    > {
-        SmartRestSetOperationToFailed::new(
-            CumulocitySupportedOperations::C8yLogFileRequest,
-            failure_reason,
-        )
-        .to_smartrest()
+    fn status_failed(failure_reason: &str) -> String {
+        fail_operation(Self::OP, failure_reason)
     }
 }
 
@@ -467,7 +450,7 @@ mod tests {
         // The log manager notifies C8Y that the request has been received and is processed
         assert_eq!(
             mqtt.recv().await,
-            Some(MqttMessage::new(&c8y_s_us, "501,c8y_LogfileRequest\n"))
+            Some(MqttMessage::new(&c8y_s_us, "501,c8y_LogfileRequest"))
         );
 
         // Then uploads the requested content over HTTP
@@ -487,10 +470,7 @@ mod tests {
         // Finally, the log manager uses the event id to notify C8Y that the request has been fully processed
         assert_eq!(
             mqtt.recv().await,
-            Some(MqttMessage::new(
-                &c8y_s_us,
-                "503,c8y_LogfileRequest,12345\n"
-            ))
+            Some(MqttMessage::new(&c8y_s_us, "503,c8y_LogfileRequest,12345"))
         );
 
         Ok(())

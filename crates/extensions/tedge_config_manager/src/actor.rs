@@ -243,7 +243,7 @@ impl ConfigManagerActor {
                 }
                 Err(err) => {
                     let error_message = format!(
-                        "tedge-configuration-plugin failed uploading configuration snapshot: {}",
+                        "config-manager failed uploading configuration snapshot: {}",
                         err
                     );
                     request.failed(&error_message);
@@ -269,7 +269,7 @@ impl ConfigManagerActor {
             }
             Err(error) => {
                 let error_message = format!(
-                    "tedge-configuration-plugin failed to start downloading configuration: {}",
+                    "config-manager failed to start downloading configuration: {}",
                     error
                 );
                 request.failed(&error_message);
@@ -324,8 +324,7 @@ impl ConfigManagerActor {
         let response = match result {
             Ok(response) => response,
             Err(err) => {
-                let error_message =
-                    format!("tedge-configuration-plugin failed downloading a file: {err}",);
+                let error_message = format!("config-manager failed downloading a file: {err}",);
                 request.failed(&error_message);
                 error!("{}", error_message);
                 self.publish_command_status(&topic, &ConfigOperation::Update(request))
