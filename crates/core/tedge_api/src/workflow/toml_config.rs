@@ -1,6 +1,7 @@
 use crate::workflow::ExitHandlers;
 use crate::workflow::GenericStateUpdate;
 use crate::workflow::ScriptDefinitionError;
+use crate::workflow::ShellScript;
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -12,6 +13,44 @@ use std::fmt::Formatter;
 use std::fmt::Write;
 use std::num::ParseIntError;
 use std::str::FromStr;
+
+/// User-friendly representation of an [OperationWorkflow]
+///
+/// The user view of an operation workflow configured using a TOML file.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TomlOperationWorkflow {
+    /// The operation to which this workflow applies
+    pub operation: String,
+
+    /// Default handlers used to determine the next state from an action outcome
+    #[serde(flatten)]
+    pub handlers: TomlExitHandlers,
+
+    /// The states of the state machine
+    #[serde(flatten)]
+    pub states: HashMap<String, TomlOperationState>,
+}
+
+/// User-friendly representation of an [OperationState]
+#[derive(Clone, Debug, Deserialize)]
+pub struct TomlOperationState {
+    /// The action driving the operation when in that state
+    #[serde(flatten)]
+    pub action: TomlOperationAction,
+
+    /// Handlers used to determine the next state from the action outcome
+    #[serde(flatten)]
+    pub handlers: TomlExitHandlers,
+}
+
+/// User-friendly representation of an [OperationAction]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TomlOperationAction {
+    Script(ShellScript),
+    BackgroundScript(ShellScript),
+    BuiltinAction(ShellScript),
+}
 
 /// User-friendly representation of a [GenericStateUpdate]
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -46,6 +85,12 @@ impl From<TomlStateUpdate> for GenericStateUpdate {
 /// - A wildcard handler can be defined as a default handler
 /// - `on_success` is syntactic sugar for `on_exit.0`
 /// - `on_error` is syntactic sugar for `on_exit._`
+///
+/// Some combinations are not valid and are rejected when the operation model is built from its TOML representation.
+/// - `on_success` and `on_exit.0` are are synonyms and cannot be both provided
+/// - `on_error` and `on_exit._` are are synonyms and cannot be both provided
+/// - `on_success` and `from_stdout` are incompatible, as the next state is either determined from the script stdout or its exit codes
+/// - `on_exec` is only meaningful in the context of a background script or a builtin action
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct TomlExitHandlers {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,6 +104,18 @@ pub struct TomlExitHandlers {
 
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     on_exit: HashMap<ExitCodes, TomlStateUpdate>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout_second: Option<usize>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_timeout: Option<TomlStateUpdate>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    from_stdout: Vec<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_exec: Option<TomlStateUpdate>,
 }
 
 impl TryFrom<TomlExitHandlers> for ExitHandlers {
@@ -195,7 +252,11 @@ on_kill = { status = "failed", reason = "killed"}         # next status when kil
                         })
                     ),
                     (AnyError, TomlStateUpdate::Simple("failed".to_string())),
-                ])
+                ]),
+                timeout_second: None,
+                on_timeout: None,
+                from_stdout: Vec::new(),
+                on_exec: None,
             }
         )
     }
@@ -287,6 +348,35 @@ on_exit.5-1 = "oops"
         assert_eq!(
             handlers.state_update_on_kill(9).reason.unwrap(),
             "killed by signal 9"
+        );
+    }
+
+    #[test]
+    fn parse_operation_toml() {
+        let file = r#"
+operation = "check"
+timeout_second = 3600
+on_timeout = "timeout"
+
+[step1]
+script = "/home/pi/step1.sh"
+on_success = "step2"
+
+[step2]
+background_script = "/home/pi/reboot.sh arg1 arg2"
+on_next = "step3"
+
+[step3]
+builtin_action = "waiting /home/pi/reboot.sh"
+on_success = "successful_reboot"
+on_error = "failed_reboot"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        assert_eq!(input.operation, "check");
+        assert_eq!(input.handlers.timeout_second, Some(3600));
+        assert_eq!(
+            input.handlers.on_timeout,
+            Some(TomlStateUpdate::Simple("timeout".to_string()))
         );
     }
 }

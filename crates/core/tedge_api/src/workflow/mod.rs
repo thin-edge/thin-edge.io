@@ -10,7 +10,6 @@ use crate::mqtt_topics::OperationType;
 pub use error::*;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
-use script::ShellScript;
 pub use script::*;
 use serde::Deserialize;
 use serde::Serialize;
