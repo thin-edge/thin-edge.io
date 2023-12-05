@@ -15,6 +15,7 @@ fastrand = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 rumqttc = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time"] }
 zeroize = { workspace = true }

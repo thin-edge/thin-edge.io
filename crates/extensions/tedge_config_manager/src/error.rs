@@ -28,6 +28,9 @@ pub enum ConfigManagementError {
 
     #[error("Directory {path} is not found.")]
     DirectoryNotFound { path: std::path::PathBuf },
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl From<ConfigManagementError> for RuntimeError {

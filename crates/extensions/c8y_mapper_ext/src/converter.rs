@@ -1483,7 +1483,7 @@ impl CumulocityConverter {
             .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
 
         match response.status() {
-            CommandStatus::Init | CommandStatus::Scheduled => {
+            CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Unknown => {
                 // The command has not been processed yet
                 Ok(vec![])
             }
@@ -1552,7 +1552,10 @@ impl CumulocityConverter {
                 Ok(vec![response.clearing_message(&self.mqtt_schema)])
             }
 
-            CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Executing => {
+            CommandStatus::Init
+            | CommandStatus::Scheduled
+            | CommandStatus::Executing
+            | CommandStatus::Unknown => {
                 // C8Y doesn't expect any message to be published
                 Ok(Vec::new())
             }

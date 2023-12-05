@@ -47,6 +47,7 @@ fn main() -> anyhow::Result<()> {
         TEdgeOptMulticall::Component(Component::TedgeWatchdog(opt)) => {
             block_on(tedge_watchdog::run(opt))
         }
+        TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => tedge_write::bin::run(opt),
         TEdgeOptMulticall::Tedge { cmd, config_dir } => {
             set_log_level(tracing::Level::WARN);
 

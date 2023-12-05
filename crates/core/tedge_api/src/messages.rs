@@ -4,16 +4,19 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::software::*;
+use crate::workflow::GenericCommandState;
+use crate::workflow::StateName;
 use download::DownloadInfo;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use time::OffsetDateTime;
 
 /// A command instance with its target and its current state of execution
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Command<Payload> {
     pub target: EntityTopicId,
     pub cmd_id: String,
@@ -457,12 +460,60 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
 /// Command to restart a device
 pub type RestartCommand = Command<RestartCommandPayload>;
 
+impl RestartCommand {
+    /// Create a restart command to be executed now (i.e. its status is scheduled)
+    /// On success the triggering command will be resumed in the `on_success` state.
+    /// On error the triggering command will be resumed in the `on_error` state.
+    pub fn with_context(
+        target: EntityTopicId,
+        cmd_id: String,
+        command: GenericCommandState,
+        on_exec: StateName,
+        on_success: StateName,
+        on_error: StateName,
+    ) -> Self {
+        let payload = RestartCommandPayload {
+            status: CommandStatus::Scheduled,
+            context: Some(RestartContext {
+                command,
+                on_exec,
+                on_success,
+                on_error,
+            }),
+        };
+        Command {
+            target,
+            cmd_id,
+            payload,
+        }
+    }
+
+    pub fn resume_context(&self) -> Option<GenericCommandState> {
+        self.payload
+            .context
+            .as_ref()
+            .and_then(|context| context.resume(self.status()))
+    }
+}
+
 /// Command to restart a device
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartCommandPayload {
     #[serde(flatten)]
     pub status: CommandStatus,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<RestartContext>,
+}
+
+impl RestartCommandPayload {
+    pub fn new(status: CommandStatus) -> Self {
+        RestartCommandPayload {
+            status,
+            context: None,
+        }
+    }
 }
 
 impl<'a> Jsonify<'a> for RestartCommandPayload {}
@@ -481,6 +532,36 @@ impl CommandPayload for RestartCommandPayload {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct RestartContext {
+    command: GenericCommandState,
+    on_exec: StateName,
+    on_success: StateName,
+    on_error: StateName,
+}
+
+impl RestartContext {
+    pub fn resume(&self, status: CommandStatus) -> Option<GenericCommandState> {
+        match status {
+            CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Unknown => None,
+            CommandStatus::Executing => Some(self.command.clone().move_to(self.on_exec.clone())),
+            CommandStatus::Successful => {
+                Some(self.command.clone().move_to(self.on_success.clone()))
+            }
+            CommandStatus::Failed { reason } => {
+                let command = self.command.clone();
+                if self.on_error == "failed" {
+                    Some(command.fail_with(reason))
+                } else {
+                    let command = command.update_from_json(json!({ "restartError": reason }));
+                    Some(command.move_to(self.on_error.clone()))
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum CommandStatus {
@@ -493,6 +574,10 @@ pub enum CommandStatus {
         #[serde(default = "default_failure_reason")]
         reason: String,
     },
+
+    /// Unknown status used by a custom workflow
+    #[serde(other)]
+    Unknown,
 }
 
 fn default_failure_reason() -> String {
@@ -734,5 +819,23 @@ mod tests {
         let parsed_request = SoftwareUpdateCommandPayload::from_json(&actual_json)
             .expect("Fail to parse the json request");
         assert_eq!(parsed_request, request);
+    }
+
+    #[test]
+    fn serde_custom_command_status() {
+        let request = SoftwareListCommandPayload {
+            status: CommandStatus::Unknown,
+            current_software_list: vec![],
+        };
+
+        // The `CommandStatus::Unknown` variant is used when the status is unknown.
+        // This is notably the case when the status is produced by a custom operation workflow.
+        assert_eq!(
+            request,
+            SoftwareListCommandPayload::from_json(r#"{"status":"some-custom-status"}"#).unwrap()
+        );
+
+        // However, if serialized again the custom status is lost
+        assert_eq!(request.to_json(), r#"{"status":"unknown"}"#);
     }
 }

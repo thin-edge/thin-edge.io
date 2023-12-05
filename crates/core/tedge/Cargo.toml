@@ -45,6 +45,7 @@ tedge-configuration-plugin = { workspace = true }
 tedge-log-plugin = { workspace = true }
 tedge-mapper = { workspace = true }
 tedge-watchdog = { workspace = true }
+tedge-write = { workspace = true }
 tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }

@@ -1,5 +1,6 @@
 use crate::software_manager::actor::SoftwareCommand;
 use async_trait::async_trait;
+use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use std::process::Output;
@@ -25,6 +26,10 @@ use tedge_api::workflow::WorkflowSupervisor;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
+use time::format_description;
+use time::OffsetDateTime;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 
 fan_in_message_type!(AgentInput[MqttMessage, SoftwareCommand, RestartCommand] : Debug);
 
@@ -32,6 +37,7 @@ pub struct TedgeOperationConverterActor {
     pub(crate) mqtt_schema: MqttSchema,
     pub(crate) device_topic_id: EntityTopicId,
     pub(crate) workflows: WorkflowSupervisor,
+    pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: LoggingReceiver<AgentInput>,
     pub(crate) software_sender: LoggingSender<SoftwareCommand>,
     pub(crate) restart_sender: LoggingSender<RestartCommand>,
@@ -89,54 +95,115 @@ impl TedgeOperationConverterActor {
             }
         };
 
+        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
         match self
             .workflows
             .get_workflow_current_action(&operation, &message)
         {
-            Ok(None) | Ok(Some((_, OperationAction::Clear))) => {
-                // The command has been fully processed
+            Ok(None) => {
+                log_file
+                    .log_step("", "The command has been fully processed")
+                    .await;
+            }
+            Ok(Some((state, action))) => {
+                self.process_workflow_action(
+                    &mut log_file,
+                    message,
+                    target,
+                    operation,
+                    cmd_id,
+                    state,
+                    action,
+                )
+                .await?;
+            }
+            Err(WorkflowExecutionError::UnknownOperation { operation }) => {
+                info!("Ignoring {operation} operation which is not registered");
+            }
+            Err(WorkflowExecutionError::UnknownStep { operation, step }) => {
+                info!("No action defined for {operation} operation {step} step");
+                log_file.log_step(&step, "No action defined").await;
+            }
+            Err(err) => {
+                error!("{operation} operation request cannot be processed: {err}");
+                log_file
+                    .log_step("Unknown", &format!("Error: {err}\n"))
+                    .await;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn process_workflow_action(
+        &mut self,
+        log_file: &mut CommandLog,
+        message: MqttMessage,
+        target: EntityTopicId,
+        operation: OperationType,
+        cmd_id: String,
+        state: GenericCommandState,
+        action: OperationAction,
+    ) -> Result<(), RuntimeError> {
+        log_file.log_state_action(&state, &action).await;
+
+        match action {
+            OperationAction::Clear => {
+                info!(
+                    "Waiting {} {operation} operation to be cleared",
+                    state.status
+                );
                 Ok(())
             }
-            Ok(Some((state, OperationAction::MoveTo(next_step)))) => {
+            OperationAction::MoveTo(next_step) => {
+                info!("Moving {operation} operation to state: {next_step}");
                 let new_state = state.move_to(next_step);
                 self.publish_command_state(operation, cmd_id, new_state)
                     .await
             }
-            Ok(Some((state, OperationAction::BuiltIn))) => {
+            OperationAction::BuiltIn => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
                 self.process_internal_operation(target, operation, cmd_id, message)
                     .await
             }
-            Ok(Some((state, OperationAction::Delegate(participant)))) => {
+            OperationAction::Delegate(participant) => {
                 let step = &state.status;
                 info!("Delegating {operation} operation {step} step to: {participant}");
                 // TODO fail the operation on timeout
                 Ok(())
             }
-            Ok(Some((state, OperationAction::Script(script)))) => {
+            OperationAction::Restart {
+                on_exec,
+                on_success,
+                on_error,
+            } => {
+                let step = &state.status;
+                info!("Restarting in the context of {operation} operation {step} step");
+                let cmd = RestartCommand::with_context(
+                    target,
+                    cmd_id.clone(),
+                    state.clone(),
+                    on_exec,
+                    on_success,
+                    on_error,
+                );
+                self.restart_sender.send(cmd).await?;
+                Ok(())
+            }
+            OperationAction::Script(script) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
-                if let Ok(mut command) = Execute::try_new(&script) {
-                    command.args = state.inject_parameters(&command.args);
-                    let output = self.script_runner.await_response(command).await?;
-                    let new_state = state.update_with_script_output(script, output);
-                    self.publish_command_state(operation, cmd_id, new_state)
-                        .await
-                } else {
-                    let reason = format!("Fail to parse the command line: {script}");
-                    let new_state = state.fail_with(reason);
-                    self.publish_command_state(operation, cmd_id, new_state)
-                        .await
-                }
-            }
-            Err(WorkflowExecutionError::UnknownOperation { operation }) => {
-                info!("Ignoring {operation} operation which is not registered");
-                Ok(())
-            }
-            Err(err) => {
-                error!("{operation} operation request cannot be processed: {err}");
-                Ok(())
+
+                let script_name = script.command.clone();
+                let command = Execute::new(script_name.clone(), script.args);
+                let output = self.script_runner.await_response(command).await?;
+                log_file.log_script_output(&output).await;
+
+                let new_state = state.update_with_script_output(script_name, output);
+                self.publish_command_state(operation, cmd_id, new_state)
+                    .await
             }
         }
     }
@@ -213,7 +280,10 @@ impl TedgeOperationConverterActor {
         &mut self,
         response: RestartCommand,
     ) -> Result<(), RuntimeError> {
-        let message = response.command_message(&self.mqtt_schema);
+        let message = match response.resume_context() {
+            None => response.command_message(&self.mqtt_schema),
+            Some(context) => context.into_message(),
+        };
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }
@@ -233,6 +303,88 @@ impl TedgeOperationConverterActor {
             .with_qos(QoS::AtLeastOnce)
             .with_retain();
         self.mqtt_publisher.send(message).await?;
+        Ok(())
+    }
+}
+
+struct CommandLog {
+    path: Utf8PathBuf,
+    file: Option<File>,
+}
+
+impl CommandLog {
+    pub async fn new(log_dir: Utf8PathBuf, operation: &OperationType, cmd_id: &str) -> Self {
+        let path = log_dir
+            .clone()
+            .join(format!("workflow-{}-{}.log", operation, cmd_id));
+        match File::options()
+            .append(true)
+            .create(true)
+            .open(path.clone())
+            .await
+        {
+            Ok(file) => CommandLog {
+                path,
+                file: Some(file),
+            },
+            Err(err) => {
+                error!("Fail to open log file {path}: {err}");
+                CommandLog { path, file: None }
+            }
+        }
+    }
+
+    async fn log_state_action(&mut self, state: &GenericCommandState, action: &OperationAction) {
+        let step = &state.status;
+        let state = &state.payload.to_string();
+        let message = format!(
+            r#"
+State: {state}
+Action: {action}
+"#
+        );
+        self.log_step(step, &message).await
+    }
+
+    async fn log_step(&mut self, step: &str, action: &str) {
+        let now = OffsetDateTime::now_utc()
+            .format(&format_description::well_known::Rfc3339)
+            .unwrap();
+        let message = format!(
+            r#"------------------------------------
+{step}: {now}
+{action}
+
+"#
+        );
+        if let Err(err) = self.write(&message).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
+        if let Err(err) = self.write_script_output(result).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    async fn write_script_output(
+        &mut self,
+        result: &Result<Output, std::io::Error>,
+    ) -> Result<(), std::io::Error> {
+        if let Some(file) = self.file.as_mut() {
+            logged_command::LoggedCommand::log_outcome("", result, file).await?;
+            file.sync_all().await?;
+        }
+        Ok(())
+    }
+
+    async fn write(&mut self, message: &str) -> Result<(), std::io::Error> {
+        if let Some(file) = self.file.as_mut() {
+            file.write_all(message.as_bytes()).await?;
+            file.flush().await?;
+            file.sync_all().await?;
+        }
         Ok(())
     }
 }

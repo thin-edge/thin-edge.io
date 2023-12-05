@@ -107,6 +107,7 @@ impl LogManagerActor {
                             .await?;
                     }
                     CommandStatus::Scheduled
+                    | CommandStatus::Unknown
                     | CommandStatus::Successful
                     | CommandStatus::Failed { .. } => {}
                 },

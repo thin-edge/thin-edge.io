@@ -1,5 +1,6 @@
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
+use serde_json::json;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -22,11 +23,17 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 #[tokio::test]
 async fn test_pending_restart_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
-    let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
+    let content = json!({
+            "target": "device/main//",
+            "cmd_id": "1234",
+            "payload": {
+                "status": "executing",
+            }
+    });
     temp_dir
         .dir(".agent")
         .file("restart-current-operation")
-        .with_raw_content(content);
+        .with_raw_content(&content.to_string());
 
     let mut converter_box = spawn_restart_manager(&temp_dir).await?;
 
@@ -34,9 +41,7 @@ async fn test_pending_restart_operation() -> Result<(), DynError> {
         .assert_received([RestartCommand {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Successful,
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Successful),
         }])
         .await;
 
@@ -46,11 +51,17 @@ async fn test_pending_restart_operation() -> Result<(), DynError> {
 #[tokio::test]
 async fn test_pending_restart_operation_failed() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
-    let content = "operation_id = \'1234\'\noperation = \"Pending\"";
+    let content = json!({
+            "target": "device/main//",
+            "cmd_id": "1234",
+            "payload": {
+                "status": "scheduled",
+            }
+    });
     temp_dir
         .dir(".agent")
         .file("restart-current-operation")
-        .with_raw_content(content);
+        .with_raw_content(&content.to_string());
 
     let mut converter_box = spawn_restart_manager(&temp_dir).await?;
 
@@ -58,35 +69,9 @@ async fn test_pending_restart_operation_failed() -> Result<(), DynError> {
         .assert_received([RestartCommand {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Failed {
-                    reason: "The agent has been restarted but not the device".to_string(),
-                },
-            },
-        }])
-        .await;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_pending_restart_operation_successful() -> Result<(), DynError> {
-    let temp_dir = TempTedgeDir::new();
-    let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
-    temp_dir
-        .dir(".agent")
-        .file("restart-current-operation")
-        .with_raw_content(content);
-
-    let mut converter_box = spawn_restart_manager(&temp_dir).await?;
-
-    converter_box
-        .assert_received([RestartCommand {
-            target: EntityTopicId::default_main_device(),
-            cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Successful,
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Failed {
+                reason: "The agent has been restarted but not the device".to_string(),
+            }),
         }])
         .await;
 
@@ -106,9 +91,7 @@ async fn test_new_restart_operation() -> Result<(), DynError> {
         .send(RestartCommand {
             target: EntityTopicId::default_main_device(),
             cmd_id: "1234".to_string(),
-            payload: RestartCommandPayload {
-                status: CommandStatus::Scheduled,
-            },
+            payload: RestartCommandPayload::new(CommandStatus::Scheduled),
         })
         .await?;
 
@@ -127,11 +110,12 @@ async fn spawn_restart_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config = RestartManagerConfig::new(
-        &EntityTopicId::default_main_device(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-    );
+    let config = RestartManagerConfig {
+        device_topic_id: EntityTopicId::default_main_device(),
+        tmp_dir: tmp_dir.utf8_path_buf(),
+        config_dir: tmp_dir.utf8_path_buf(),
+        state_dir: "/some/unknown/dir".into(),
+    };
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);
     converter_builder.set_connection(&mut restart_actor_builder);

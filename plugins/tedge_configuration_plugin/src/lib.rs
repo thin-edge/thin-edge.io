@@ -134,6 +134,8 @@ async fn run_with(
         config_dir: cliopts.config_dir,
         mqtt_topic_root: MqttSchema::with_root(mqtt_topic_root.to_string()),
         mqtt_device_topic_id: mqtt_device_topic_id.to_string().parse()?,
+        tmp_path: Arc::from(tedge_config.tmp.path.as_path()),
+        is_sudo_enabled: tedge_config.enable.sudo,
     })?;
 
     let config_actor = ConfigManagerBuilder::try_new(

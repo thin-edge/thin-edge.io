@@ -1,6 +1,7 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
+use serde_json::json;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -28,11 +29,18 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 #[tokio::test]
 async fn test_pending_software_update_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
-    let content = "operation_id = \'1234\'\noperation = \"update\"";
+    let content = json!({
+        "SoftwareUpdateCommand": {
+            "target": "device/main//",
+            "cmd_id": "1234",
+            "payload": {
+                "status": "scheduled",
+            }
+    }});
     temp_dir
         .dir(".agent")
         .file("software-current-operation")
-        .with_raw_content(content);
+        .with_raw_content(&content.to_string());
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
@@ -41,7 +49,7 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
         cmd_id: "1234".to_string(),
         payload: SoftwareUpdateCommandPayload::default(),
     }
-    .with_error("Software Update command cancelled on agent restart".to_string());
+    .with_error("Software Update command cancelled due to unexpected agent restart".to_string());
     converter_box
         .assert_received([software_request_response])
         .await;
@@ -95,17 +103,26 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
 #[tokio::test]
 async fn test_pending_software_list_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
-    let content = "operation_id = \'1234\'\noperation = \"list\"";
+    let content = json!({
+        "SoftwareListCommand": {
+            "target": "device/main//",
+            "cmd_id": "1234",
+            "payload": {
+                "status": "scheduled",
+            }
+    }});
     temp_dir
         .dir(".agent")
         .file("software-current-operation")
-        .with_raw_content(content);
+        .with_raw_content(&content.to_string());
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
     let software_request_response =
         SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string())
-            .with_error("Software List request cancelled on agent restart".to_string());
+            .with_error(
+                "Software List request cancelled due to unexpected agent restart".to_string(),
+            );
     converter_box
         .assert_received([software_request_response])
         .await;
@@ -143,15 +160,16 @@ async fn spawn_software_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config = SoftwareManagerConfig::new(
-        &EntityTopicId::default_main_device(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-        &tmp_dir.utf8_path_buf(),
-        None,
-        &TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
-    );
+    let config = SoftwareManagerConfig {
+        device: EntityTopicId::default_main_device(),
+        tmp_dir: tmp_dir.utf8_path_buf(),
+        config_dir: tmp_dir.utf8_path_buf(),
+        state_dir: "/some/unknown/dir".into(),
+        sm_plugins_dir: tmp_dir.utf8_path_buf(),
+        log_dir: tmp_dir.utf8_path_buf(),
+        default_plugin_type: None,
+        config_location: TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
+    };
 
     let mut software_actor_builder = SoftwareManagerBuilder::new(config);
     converter_builder.set_connection(&mut software_actor_builder);

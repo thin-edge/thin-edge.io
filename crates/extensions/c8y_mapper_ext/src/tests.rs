@@ -2028,19 +2028,11 @@ async fn custom_operation_timeout_sigterm() {
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
     let content = r#"#!/usr/bin/env bash
-    handle_term() {
-        for i in {1..1}
-        do
-            echo "sigterm $i"
-            sleep 1
-        done
-        exit 124
-    }
-    trap handle_term SIGTERM
+    trap 'echo received SIGTERM; exit 124' SIGTERM
     for i in {1..10}
     do
         echo "main $i"
-        sleep 1
+        sleep 2
     done
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
@@ -2079,7 +2071,7 @@ exit status: 124
 
 stdout <<EOF
 main 1
-sigterm 1
+received SIGTERM
 EOF
 
 stderr <<EOF
@@ -2101,19 +2093,11 @@ async fn custom_operation_timeout_sigkill() {
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
     let content = r#"#!/usr/bin/env bash
-    handle_term() {
-        for i in {1..50}
-        do
-            echo "sigterm $i"
-            sleep 1
-        done
-        exit 124
-    }
-    trap handle_term SIGTERM
+    trap 'echo ignore SIGTERM' SIGTERM
     for i in {1..50}
     do
         echo "main $i"
-        sleep 1
+        sleep 2
     done
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
@@ -2148,12 +2132,12 @@ async fn custom_operation_timeout_sigkill() {
 
     // assert the signterm is handled
     let expected_content = "command \"511,test-device,c8y_Command\"
-exit status: unknown
+killed by signal: 9
 
 stdout <<EOF
 main 1
-sigterm 1
-sigterm 2
+ignore SIGTERM
+main 2
 EOF
 
 stderr <<EOF

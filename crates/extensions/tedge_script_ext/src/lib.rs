@@ -18,6 +18,15 @@ pub struct Execute {
 }
 
 impl Execute {
+    /// A new command with its arguments
+    pub fn new(command: String, args: Vec<String>) -> Self {
+        Execute {
+            command,
+            args,
+            timeouts: None,
+        }
+    }
+
     /// Parse the command line into a program and its arguments
     pub fn try_new(command_line: &str) -> Result<Self, ParseError> {
         let mut args = shell_words::split(command_line)?;
@@ -25,12 +34,7 @@ impl Execute {
             Err(ParseError)
         } else {
             let command = args.remove(0);
-            let timeouts = None;
-            Ok(Execute {
-                command,
-                args,
-                timeouts,
-            })
+            Ok(Execute::new(command, args))
         }
     }
 
