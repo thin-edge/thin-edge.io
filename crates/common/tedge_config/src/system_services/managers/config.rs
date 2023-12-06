@@ -19,7 +19,7 @@ pub struct SystemConfig {
 }
 
 #[derive(Deserialize, Debug, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "InitConfigToml")]
 pub struct InitConfig {
     pub name: String,
     pub is_available: Vec<String>,
@@ -30,6 +30,35 @@ pub struct InitConfig {
     pub disable: Vec<String>,
     pub is_active: Vec<String>,
 }
+
+#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct InitConfigToml {
+    name: String,
+    is_available: Vec<String>,
+    restart: Vec<String>,
+    stop: Vec<String>,
+    start: Option<Vec<String>>,
+    enable: Vec<String>,
+    disable: Vec<String>,
+    is_active: Vec<String>,
+}
+
+impl From<InitConfigToml> for InitConfig {
+    fn from(value: InitConfigToml) -> Self {
+        Self {
+            name: value.name,
+            is_available: value.is_available,
+            start: value.start.unwrap_or(value.restart.clone()),
+            restart: value.restart,
+            stop: value.stop,
+            enable: value.enable,
+            disable: value.disable,
+            is_active: value.is_active,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SystemSpecificCommands {
@@ -159,6 +188,25 @@ mod tests {
         assert_eq!(config.log.get("tedge_watchdog").unwrap(), "Warn");
         assert_eq!(config.log.get("c8y_log_plugin").unwrap(), "Error");
         assert_eq!(config.log.get("c8y_config_plugin").unwrap(), "Debug");
+    }
+
+    #[test]
+    fn deserialize_init_config_without_start_field() {
+        let config: SystemConfig = toml::from_str(
+            r#"
+            [init]
+            name = "systemd"
+            is_available = ["/bin/systemctl", "--version"]
+            restart = ["/bin/systemctl", "restart", "{}"]
+            stop =  ["/bin/systemctl", "stop", "{}"]
+            enable =  ["/bin/systemctl", "enable", "{}"]
+            disable =  ["/bin/systemctl", "disable", "{}"]
+            is_active = ["/bin/systemctl", "is-active", "{}"]
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.init.start, vec!["/bin/systemctl", "restart", "{}"]);
     }
 
     #[test]
