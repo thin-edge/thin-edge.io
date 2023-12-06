@@ -36,6 +36,7 @@ Prerequisite Parent
     Set external MQTT port    #Setting external MQTT port which child will use for communication Default:1883
 
     Sleep    3s
+    Restart Service    tedge-agent
     Execute Command    sudo tedge connect c8y
     Restart Firmware plugin    #Stop and Start c8y-firmware-plugin
     Cumulocity.Log Device Info

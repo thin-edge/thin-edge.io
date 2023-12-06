@@ -46,6 +46,7 @@ Prerequisite Parent
     Check for child related content    #Checks if folders that will trigger child device creation are existing
     Set external MQTT bind address    #Setting external MQTT bind address which child will use for communication
     Set external MQTT port    #Setting external MQTT port which child will use for communication Default:1883
+    Restart agent
 
     Sleep    3s
     Execute Command    sudo tedge connect c8y
@@ -80,6 +81,10 @@ Set external MQTT port
     Set Device Context    ${PARENT_SN}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
 
+Restart agent
+    Set Device Context    ${PARENT_SN}
+    Restart Service     tedge-agent
+
 Check for child related content
     Set Device Context    ${CHILD_SN}
     Directory Should Not Have Sub Directories    /etc/tedge/operations/c8y
@@ -95,10 +100,6 @@ Delete child related content
 Check parent child relationship
     Cumulocity.Set Device    ${PARENT_SN}
     Cumulocity.Device Should Have A Child Devices    ${CHILD_SN}
-
-Reconnect c8y
-    Execute Command    sudo tedge disconnect c8y
-    Execute Command    sudo tedge connect c8y
 
 Restart Configuration plugin
     Restart Service    c8y-configuration-plugin.service

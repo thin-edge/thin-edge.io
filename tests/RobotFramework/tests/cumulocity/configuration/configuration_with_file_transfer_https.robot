@@ -141,6 +141,7 @@ Suite Setup
     ${client_certificate}=    Execute Command    cat /etc/tedge/device-local-certs/tedge-client.crt
     ${client_key}=    Execute Command    cat /etc/tedge/device-local-certs/tedge-client.key
 
+    Restart Service    tedge-agent
     ThinEdgeIO.Disconnect Then Connect Mapper    c8y
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
