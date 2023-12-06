@@ -2,21 +2,24 @@ operation = "download"
 
 [init]
 script = "/etc/tedge/operations/schedule-download.sh ${.topic.cmd_id} ${.topic.target}"
-next = ["scheduled"]
+on_exit.0 = "scheduled"
+on_exit._ = { status = "failed", reason = "not timely"}
 
 [scheduled]
 script = "/etc/tedge/operations/launch-download.sh ${.topic.cmd_id} ${.payload.url} ${.payload.file}"
-next = ["downloading"]
+on_success = "downloading"
+on_error = { status = "failed", reason = "no network"}
 
 [downloading]
-next = ["downloaded"]
+action = "proceed"
+on_success = "downloaded"
 
 [downloaded]
 script = "/etc/tedge/operations/check-download.sh ${.topic.cmd_id} ${.}"
-next = ["successful", "failed"]
+on_stdout = ["successful", "failed"]
 
 [successful]
-next = []
+action = "cleanup"
 
 [failed]
-next = []
+action = "cleanup"

@@ -6,6 +6,12 @@ pub enum WorkflowDefinitionError {
 
     #[error("Missing transition for state: {state}")]
     MissingTransition { state: String },
+
+    #[error(transparent)]
+    ScriptDefinitionError(#[from] ScriptDefinitionError),
+
+    #[error("Unknown action: {action}")]
+    UnknownAction { action: String },
 }
 
 /// Error related to a script definition
@@ -16,6 +22,9 @@ pub enum ScriptDefinitionError {
 
     #[error("Successful handler provided for 'on_success' and 'on_exit.0'")]
     DuplicatedOnSuccessHandler,
+
+    #[error("Successful handler provided for 'on_success' and 'on_stdout'")]
+    DuplicatedOnStdoutHandler,
 
     #[error("Overlapping handlers provided for '{first}' and 'second' exit code ranges")]
     OverlappingHandler { first: String, second: String },

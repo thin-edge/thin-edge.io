@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde_json::Value;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::os::unix::prelude::ExitStatusExt;
@@ -56,12 +57,13 @@ impl Display for ShellScript {
 }
 
 /// Define how to interpret the exit code of a script as the next state for a command
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ExitHandlers {
     on_success: Option<GenericStateUpdate>,
     on_error: Option<GenericStateUpdate>,
     on_kill: Option<GenericStateUpdate>,
     on_exit: Vec<(u8, u8, GenericStateUpdate)>,
+    on_stdout: Vec<String>,
 }
 
 impl ExitHandlers {
@@ -70,6 +72,7 @@ impl ExitHandlers {
         mut on_success: Option<GenericStateUpdate>,
         mut on_error: Option<GenericStateUpdate>,
         on_kill: Option<GenericStateUpdate>,
+        on_stdout: Vec<String>,
         wildcard: Option<GenericStateUpdate>,
     ) -> Result<Self, ScriptDefinitionError> {
         // The on exit error handlers are sorted by range min
@@ -88,6 +91,9 @@ impl ExitHandlers {
         if let Some((0, _, update)) = on_exit.get(0) {
             if on_success.is_some() {
                 return Err(ScriptDefinitionError::DuplicatedOnSuccessHandler);
+            }
+            if !on_stdout.is_empty() {
+                return Err(ScriptDefinitionError::DuplicatedOnStdoutHandler);
             }
             on_success = Some(update.clone())
         }
@@ -117,52 +123,97 @@ impl ExitHandlers {
             on_error,
             on_kill,
             on_exit,
+            on_stdout,
         })
     }
 
-    pub fn state_update(&self, exit_status: std::process::ExitStatus) -> GenericStateUpdate {
-        match exit_status.code() {
-            None => self.state_update_on_kill(exit_status.signal().unwrap_or(0) as u8),
-            Some(code) => self.state_update_on_exit(code as u8),
+    pub fn state_update(
+        &self,
+        program: &str,
+        outcome: std::io::Result<std::process::Output>,
+    ) -> Value {
+        match outcome {
+            Ok(output) => match output.status.code() {
+                None => self
+                    .state_update_on_kill(program, output.status.signal().unwrap_or(0) as u8)
+                    .into_json(),
+                Some(0) => {
+                    match (&self.on_success, self.json_stdout_excerpt(program, output.stdout)) {
+                        (None, Err(reason)) => GenericStateUpdate::failed(reason).into_json(),
+                        (None, Ok(json_update)) => json_update,
+                        (Some(successful_state), Ok(json_update)) => successful_state.clone().inject_into_json(json_update),
+                        (Some(successful_state), Err(_)) => successful_state.clone().into_json(),
+                    }
+                }
+                Some(code) => self.state_update_on_exit(program, code as u8).into_json(),
+            },
+            Err(err) => self.state_update_on_error(program, err).into_json(),
         }
     }
 
-    pub fn state_update_on_exit(&self, code: u8) -> GenericStateUpdate {
+    pub fn state_update_on_exit(&self, program: &str, code: u8) -> GenericStateUpdate {
         if code == 0 {
             return self.state_update_on_success();
         }
         for (from, to, update) in self.on_exit.iter() {
             if code < *from {
-                return self.state_update_on_error(code);
+                return self.state_update_on_unknown_exit_code(program, code);
             }
             if *from <= code && code <= *to {
                 return update.clone();
             }
         }
 
-        self.state_update_on_error(code)
+        self.state_update_on_unknown_exit_code(program, code)
     }
 
     pub fn state_update_on_success(&self) -> GenericStateUpdate {
         self.on_success
             .clone()
-            .unwrap_or_else(|| GenericStateUpdate {
-                status: "successful".to_string(),
-                reason: None,
-            })
+            .unwrap_or_else(GenericStateUpdate::successful)
     }
 
-    fn state_update_on_error(&self, code: u8) -> GenericStateUpdate {
-        self.on_error.clone().unwrap_or_else(|| GenericStateUpdate {
-            status: "failed".to_string(),
-            reason: Some(format!("returned exit code {code}")),
+    fn json_stdout_excerpt(&self, program: &str, stdout: Vec<u8>) -> Result<Value, String> {
+        match String::from_utf8(stdout) {
+            Err(_) => Err(format!("{program} returned no UTF8 stdout")),
+            Ok(content) => match extract_script_output(content) {
+                None => Err(format!(
+                    "{program} returned no :::tedge::: content on stdout"
+                )),
+                Some(excerpt) => match serde_json::from_str(&excerpt) {
+                    Ok(json) => Ok(json),
+                    Err(err) => Err(format!(
+                        "{program} returned non JSON content on stdout: {err}"
+                    )),
+                },
+            },
+        }
+    }
+
+    fn state_update_on_error(&self, program: &str, err: std::io::Error) -> GenericStateUpdate {
+        self.on_error.clone().unwrap_or_else(|| {
+            GenericStateUpdate::failed(format!("Failed to launch {program}: {err}"))
         })
     }
 
-    pub fn state_update_on_kill(&self, signal: u8) -> GenericStateUpdate {
-        self.on_kill.clone().unwrap_or_else(|| GenericStateUpdate {
-            status: "failed".to_string(),
-            reason: Some(format!("killed by signal {signal}")),
+    fn state_update_on_unknown_exit_code(&self, program: &str, code: u8) -> GenericStateUpdate {
+        self.on_error.clone().unwrap_or_else(|| {
+            GenericStateUpdate::failed(format!("{program} returned exit code {code}"))
         })
     }
+
+    pub fn state_update_on_kill(&self, program: &str, signal: u8) -> GenericStateUpdate {
+        self.on_kill.clone().unwrap_or_else(|| {
+            GenericStateUpdate::failed(format!("{program} killed by signal {signal}"))
+        })
+    }
+}
+
+fn extract_script_output(stdout: String) -> Option<String> {
+    if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
+        if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
+            return Some(script_output.to_string());
+        }
+    }
+    None
 }

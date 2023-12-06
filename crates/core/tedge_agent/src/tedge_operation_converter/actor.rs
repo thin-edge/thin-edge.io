@@ -192,7 +192,7 @@ impl TedgeOperationConverterActor {
                 self.restart_sender.send(cmd).await?;
                 Ok(())
             }
-            OperationAction::Script(script) => {
+            OperationAction::Script(script, handlers) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
 
@@ -201,7 +201,7 @@ impl TedgeOperationConverterActor {
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
 
-                let new_state = state.update_with_script_output(script_name, output);
+                let new_state = state.update_with_script_output(script_name, output, handlers);
                 self.publish_command_state(operation, cmd_id, new_state)
                     .await
             }

@@ -1,3 +1,4 @@
+use crate::workflow::ExitHandlers;
 use crate::workflow::WorkflowExecutionError;
 use mqtt_channel::Message;
 use mqtt_channel::QoS::AtLeastOnce;
@@ -55,7 +56,7 @@ impl GenericCommandState {
     }
 
     /// Inject a json payload into this one
-    pub fn update_from_json(mut self, json: Value) -> Self {
+    pub fn update_with_json(mut self, json: Value) -> Self {
         if let (Some(values), Some(new_values)) = (self.payload.as_object_mut(), json.as_object()) {
             for (k, v) in new_values {
                 values.insert(k.to_string(), v.clone());
@@ -72,46 +73,10 @@ impl GenericCommandState {
         self,
         script: String,
         output: std::io::Result<std::process::Output>,
+        handlers: ExitHandlers,
     ) -> Self {
-        match output {
-            Ok(output) => {
-                if output.status.success() {
-                    match String::from_utf8(output.stdout)
-                        .ok()
-                        .and_then(extract_script_output)
-                    {
-                        Some(stdout) => match serde_json::from_str(&stdout) {
-                            Ok(json) => self.update_from_json(json),
-                            Err(err) => {
-                                let reason =
-                                    format!("Script {script} returned non JSON stdout: {err}");
-                                self.fail_with(reason)
-                            }
-                        },
-                        None => {
-                            let reason = format!("Script {script} returned no tedge output");
-                            self.fail_with(reason)
-                        }
-                    }
-                } else {
-                    match String::from_utf8(output.stderr) {
-                        Ok(stderr) => {
-                            let reason = format!("Script {script} failed with: {stderr}");
-                            self.fail_with(reason)
-                        }
-                        Err(_) => {
-                            let reason =
-                                format!("Script {script} failed and returned non UTF-8 stderr");
-                            self.fail_with(reason)
-                        }
-                    }
-                }
-            }
-            Err(err) => {
-                let reason = format!("Failed to launch {script}: {err}");
-                self.fail_with(reason)
-            }
-        }
+        let json_update = handlers.state_update(&script, output);
+        self.update_with_json(json_update)
     }
 
     /// Update the command state with a new status describing the next state
@@ -218,6 +183,62 @@ impl GenericCommandState {
     }
 }
 
+impl GenericStateUpdate {
+    pub fn successful() -> Self {
+        GenericStateUpdate {
+            status: "successful".to_string(),
+            reason: None,
+        }
+    }
+
+    pub fn failed(reason: String) -> Self {
+        GenericStateUpdate {
+            status: "failed".to_string(),
+            reason: Some(reason),
+        }
+    }
+
+    pub fn into_json(self) -> Value {
+        self.into()
+    }
+
+    pub fn inject_into_json(self, mut json: Value) -> Value {
+        match json.as_object_mut() {
+            None => self.into_json(),
+            Some(object) => {
+                object.insert("status".to_string(), self.status.into());
+                if let Some(reason) = self.reason {
+                    object.insert("reason".to_string(), reason.into());
+                }
+                json
+            }
+        }
+    }
+}
+
+impl From<String> for GenericStateUpdate {
+    fn from(status: String) -> Self {
+        GenericStateUpdate {
+            status,
+            reason: None,
+        }
+    }
+}
+
+impl From<GenericStateUpdate> for Value {
+    fn from(update: GenericStateUpdate) -> Self {
+        match update.reason {
+            None => json!({
+                "status": update.status
+            }),
+            Some(reason) => json!({
+                "status": update.status,
+                "reason": reason,
+            }),
+        }
+    }
+}
+
 fn json_excerpt(value: &Value, path: &str) -> Option<String> {
     match path.split_once('.') {
         None if path.is_empty() => Some(json_as_string(value)),
@@ -234,15 +255,6 @@ fn json_as_string(value: &Value) -> String {
         Value::String(s) => s.clone(),
         _ => value.to_string(),
     }
-}
-
-fn extract_script_output(stdout: String) -> Option<String> {
-    if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
-        if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
-            return Some(script_output.to_string());
-        }
-    }
-    None
 }
 
 #[cfg(test)]

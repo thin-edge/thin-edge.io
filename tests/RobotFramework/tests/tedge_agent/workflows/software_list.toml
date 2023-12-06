@@ -2,18 +2,18 @@ operation = "software_list"                            # A built in operation ca
 
 [init]
 script = "/etc/tedge/operations/init-software-list.sh ${.topic}" # The json output of the script is used for the next step
-next = ["scheduled"]
+on_stdout = ["scheduled"]
 
 [scheduled]
-owner = "tedge"                                        # Builtin behavior
-next = ["executing"]
+action = "builtin"
+on_success = "executing"
 
 [executing]
-owner = "tedge"                                        # Builtin behavior
-next = ["successful", "failed"]
+action = "builtin"
+on_success = "successful"
 
 [successful]
-next = []
+action = "cleanup"
 
 [failed]
-next = []
+action = "cleanup"

@@ -11,8 +11,6 @@ pub use error::*;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 pub use script::*;
-use serde::Deserialize;
-use serde::Serialize;
 pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -20,34 +18,21 @@ use std::fmt::Formatter;
 pub use supervisor::*;
 
 pub type StateName = String;
-pub type OperationName = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct OperationWorkflow {
     /// The operation to which this workflow applies
     pub operation: OperationType,
 
     /// Mark this workflow as built_in
-    #[serde(default, skip)]
     pub built_in: bool,
 
+    /// Default action outcome handlers
+    pub handlers: ExitHandlers,
+
     /// The states of the state machine
-    #[serde(flatten)]
-    pub states: HashMap<StateName, OperationState>,
-}
-
-/// The current state of an operation request
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OperationState {
-    /// Possibly a participant to which the action is delegated
-    pub owner: Option<String>,
-
-    /// Possibly a script to handle the operation when in that state
-    pub script: Option<ShellScript>,
-
-    /// Transitions
-    pub next: Vec<StateName>,
+    pub states: HashMap<StateName, OperationAction>,
 }
 
 /// What needs to be done to advance an operation request in some state
@@ -55,15 +40,33 @@ pub struct OperationState {
 pub enum OperationAction {
     /// Nothing has to be done: simply move to the next step.
     /// Such steps are intended to be overridden.
+    ///
+    /// ```toml
+    /// on_exec = "<state>"
+    /// builtin_action = "none"
+    /// ```
     MoveTo(StateName),
 
     /// The built-in behavior is used
+    ///
+    /// No TOML representation
     BuiltIn,
 
     /// The command is delegated to a participant identified by its name
+    ///
+    /// ```toml
+    /// builtin_action = "waiting <action>"
+    /// ```
     Delegate(String),
 
     /// Restart the device
+    ///
+    /// ```toml
+    /// builtin_action = "restart"
+    /// on_exec = "<state>"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
     Restart {
         on_exec: StateName,
         on_success: StateName,
@@ -71,7 +74,7 @@ pub enum OperationAction {
     },
 
     /// A script has to be executed
-    Script(ShellScript),
+    Script(ShellScript, ExitHandlers),
 
     /// The command has been fully processed and needs to be cleared
     Clear,
@@ -86,7 +89,7 @@ impl Display for OperationAction {
                 format!("wait for {owner} to perform required actions")
             }
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
-            OperationAction::Script(script) => script.to_string(),
+            OperationAction::Script(script, _) => script.to_string(),
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
         };
         f.write_str(&str)
@@ -97,32 +100,20 @@ impl OperationWorkflow {
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
         let states = [
-            ("init", false, vec!["scheduled"]),
-            ("scheduled", true, vec!["executing"]),
-            ("executing", true, vec!["successful", "failed"]),
-            ("successful", false, vec![]),
-            ("failed", false, vec![]),
+            ("init", OperationAction::MoveTo("scheduled".to_string())),
+            ("scheduled", OperationAction::BuiltIn),
+            ("executing", OperationAction::BuiltIn),
+            ("successful", OperationAction::Clear),
+            ("failed", OperationAction::Clear),
         ]
         .into_iter()
-        .map(|(step, delegate, next)| {
-            (
-                step.to_string(),
-                OperationState {
-                    owner: if delegate {
-                        Some("tedge".to_string())
-                    } else {
-                        None
-                    },
-                    script: None,
-                    next: next.into_iter().map(|s| s.to_string()).collect(),
-                },
-            )
-        })
+        .map(|(state, action)| (state.to_string(), action))
         .collect();
 
         OperationWorkflow {
             built_in: true,
             operation,
+            handlers: ExitHandlers::default(),
             states,
         }
     }
@@ -154,9 +145,9 @@ impl OperationWorkflow {
                     operation: (&self.operation).into(),
                     step: cmd.status.clone(),
                 })
-                .map(|state| {
-                    let action = OperationAction::from(state).inject_state(&cmd);
-                    Some((cmd, action))
+                .map(|action| {
+                    let contextualized_action = action.inject_state(&cmd);
+                    Some((cmd, contextualized_action))
                 }),
             Ok(None) => Ok(None),
             Err(err) => Err(err),
@@ -164,49 +155,17 @@ impl OperationWorkflow {
     }
 }
 
-impl From<&OperationState> for OperationAction {
-    // TODO this must be called when an operation is registered, not when invoked.
-    fn from(state: &OperationState) -> Self {
-        match &state.script {
-            Some(script) if script.command == "restart" => {
-                let (on_exec, on_success, on_error) = match &state.next[..] {
-                    [] => ("executing", "successful", "failed"),
-                    [restarting] => (restarting.as_ref(), "successful", "failed"),
-                    [restarting, successful] => {
-                        (restarting.as_ref(), successful.as_ref(), "failed")
-                    }
-                    [restarting, successful, failed, ..] => {
-                        (restarting.as_ref(), successful.as_ref(), failed.as_str())
-                    }
-                };
-                OperationAction::Restart {
-                    on_exec: on_exec.to_string(),
-                    on_success: on_success.to_string(),
-                    on_error: on_error.to_string(),
-                }
-            }
-            Some(script) => OperationAction::Script(script.clone()),
-            None => match &state.owner {
-                Some(owner) if owner == "tedge" => OperationAction::BuiltIn,
-                Some(owner) => OperationAction::Delegate(owner.to_owned()),
-                None => match &state.next[..] {
-                    [] => OperationAction::Clear,
-                    [next] => OperationAction::MoveTo(next.to_owned()),
-                    _ => OperationAction::Delegate("unknown".to_string()),
-                },
-            },
-        }
-    }
-}
-
 impl OperationAction {
-    pub fn inject_state(self, state: &GenericCommandState) -> Self {
+    pub fn inject_state(&self, state: &GenericCommandState) -> Self {
         match self {
-            OperationAction::Script(script) => OperationAction::Script(ShellScript {
-                command: state.inject_parameter(&script.command),
-                args: state.inject_parameters(&script.args),
-            }),
-            _ => self,
+            OperationAction::Script(script, handlers) => OperationAction::Script(
+                ShellScript {
+                    command: state.inject_parameter(&script.command),
+                    args: state.inject_parameters(&script.args),
+                },
+                handlers.clone(),
+            ),
+            _ => self.clone(),
         }
     }
 }

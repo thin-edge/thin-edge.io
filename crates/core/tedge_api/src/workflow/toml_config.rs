@@ -1,7 +1,12 @@
+use crate::mqtt_topics::OperationType;
+use crate::workflow::toml_config::TomlOperationAction::Action;
 use crate::workflow::ExitHandlers;
 use crate::workflow::GenericStateUpdate;
+use crate::workflow::OperationAction;
+use crate::workflow::OperationWorkflow;
 use crate::workflow::ScriptDefinitionError;
 use crate::workflow::ShellScript;
+use crate::workflow::WorkflowDefinitionError;
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -20,7 +25,7 @@ use std::str::FromStr;
 #[derive(Clone, Debug, Deserialize)]
 pub struct TomlOperationWorkflow {
     /// The operation to which this workflow applies
-    pub operation: String,
+    pub operation: OperationType,
 
     /// Default handlers used to determine the next state from an action outcome
     #[serde(flatten)]
@@ -31,11 +36,11 @@ pub struct TomlOperationWorkflow {
     pub states: HashMap<String, TomlOperationState>,
 }
 
-/// User-friendly representation of an [OperationState]
+/// User-friendly representation of an [OperationAction] and associated handlers.
 #[derive(Clone, Debug, Deserialize)]
 pub struct TomlOperationState {
     /// The action driving the operation when in that state
-    #[serde(flatten)]
+    #[serde(default, flatten)]
     pub action: TomlOperationAction,
 
     /// Handlers used to determine the next state from the action outcome
@@ -49,7 +54,16 @@ pub struct TomlOperationState {
 pub enum TomlOperationAction {
     Script(ShellScript),
     BackgroundScript(ShellScript),
-    BuiltinAction(ShellScript),
+    Action(ShellScript), // TODO use a proper BuiltAction enum
+}
+
+impl Default for TomlOperationAction {
+    fn default() -> Self {
+        Action(ShellScript {
+            command: "proceed".to_string(),
+            args: vec![],
+        })
+    }
 }
 
 /// User-friendly representation of a [GenericStateUpdate]
@@ -77,6 +91,85 @@ impl From<TomlStateUpdate> for GenericStateUpdate {
     }
 }
 
+impl TryFrom<TomlOperationState> for OperationAction {
+    type Error = WorkflowDefinitionError;
+
+    fn try_from(input: TomlOperationState) -> Result<Self, Self::Error> {
+        match input.action {
+            TomlOperationAction::Script(script) => {
+                let handlers = TryInto::<ExitHandlers>::try_into(input.handlers)?;
+                Ok(OperationAction::Script(script, handlers))
+            }
+            TomlOperationAction::BackgroundScript(_script) => {
+                todo!()
+            }
+            TomlOperationAction::Action(ShellScript { command, args }) => match command.as_str() {
+                "builtin" => Ok(OperationAction::BuiltIn),
+                "cleanup" => Ok(OperationAction::Clear),
+                "waiting" => Ok(OperationAction::Delegate(
+                    args.get(0)
+                        .map(|o| o.to_owned())
+                        .unwrap_or_else(|| "unknown".to_string()),
+                )),
+                "proceed" => {
+                    let on_success: GenericStateUpdate = input
+                        .handlers
+                        .on_success
+                        .map(|u| u.into())
+                        .unwrap_or_else(|| "successful".to_string().into());
+                    Ok(OperationAction::MoveTo(on_success.status))
+                }
+                "restart" => {
+                    // TODO impl a clean From<TomlExitHandlers> implementation
+                    let on_exec: GenericStateUpdate = input
+                        .handlers
+                        .on_exec
+                        .map(|u| u.into())
+                        .unwrap_or_else(|| "executing".to_string().into());
+                    let on_success: GenericStateUpdate = input
+                        .handlers
+                        .on_success
+                        .map(|u| u.into())
+                        .unwrap_or_else(|| "successful".to_string().into());
+                    let on_error: GenericStateUpdate = input
+                        .handlers
+                        .on_error
+                        .map(|u| u.into())
+                        .unwrap_or_else(|| "failed".to_string().into());
+
+                    Ok(OperationAction::Restart {
+                        on_exec: on_exec.status,
+                        on_success: on_success.status,
+                        on_error: on_error.status,
+                    })
+                }
+                _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
+            },
+        }
+    }
+}
+
+impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
+    type Error = WorkflowDefinitionError;
+
+    fn try_from(input: TomlOperationWorkflow) -> Result<Self, Self::Error> {
+        let operation = input.operation;
+        let handlers = input.handlers.try_into()?;
+        let mut states = HashMap::new();
+        for (state, action_spec) in input.states.into_iter() {
+            let action = TryInto::<OperationAction>::try_into(action_spec)?;
+            states.insert(state, action);
+        }
+
+        Ok(OperationWorkflow {
+            operation,
+            built_in: false,
+            handlers,
+            states,
+        })
+    }
+}
+
 /// User-Friendly representation of an [ExitHandlers]; as used in the operation TOML definition files
 ///
 /// A user don't have to give a handler for all possible exit code.
@@ -89,7 +182,7 @@ impl From<TomlStateUpdate> for GenericStateUpdate {
 /// Some combinations are not valid and are rejected when the operation model is built from its TOML representation.
 /// - `on_success` and `on_exit.0` are are synonyms and cannot be both provided
 /// - `on_error` and `on_exit._` are are synonyms and cannot be both provided
-/// - `on_success` and `from_stdout` are incompatible, as the next state is either determined from the script stdout or its exit codes
+/// - `on_success` and `on_stdout` are incompatible, as the next state is either determined from the script stdout or its exit codes
 /// - `on_exec` is only meaningful in the context of a background script or a builtin action
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct TomlExitHandlers {
@@ -112,7 +205,7 @@ pub struct TomlExitHandlers {
     on_timeout: Option<TomlStateUpdate>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    from_stdout: Vec<String>,
+    on_stdout: Vec<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     on_exec: Option<TomlStateUpdate>,
@@ -125,6 +218,7 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
         let on_error = value.on_error.map(|u| u.into());
         let on_success = value.on_success.map(|u| u.into());
         let on_kill = value.on_kill.map(|u| u.into());
+        let on_stdout = value.on_stdout;
         let wildcard = value
             .on_exit
             .get(&ExitCodes::AnyError)
@@ -142,7 +236,7 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
             })
             .collect();
 
-        ExitHandlers::try_new(on_exit, on_success, on_error, on_kill, wildcard)
+        ExitHandlers::try_new(on_exit, on_success, on_error, on_kill, on_stdout, wildcard)
     }
 }
 
@@ -255,7 +349,7 @@ on_kill = { status = "failed", reason = "killed"}         # next status when kil
                 ]),
                 timeout_second: None,
                 on_timeout: None,
-                from_stdout: Vec::new(),
+                on_stdout: Vec::new(),
                 on_exec: None,
             }
         )
@@ -273,14 +367,20 @@ on_exit.1 = "1"
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
         let handlers: ExitHandlers = input.try_into().unwrap();
         assert_eq!(handlers.state_update_on_success().status, "0");
-        assert_eq!(handlers.state_update_on_exit(0).status, "0");
-        assert_eq!(handlers.state_update_on_exit(1).status, "1");
-        assert_eq!(handlers.state_update_on_exit(2).status, "wildcard");
-        assert_eq!(handlers.state_update_on_exit(3).status, "3-5");
-        assert_eq!(handlers.state_update_on_exit(4).status, "3-5");
-        assert_eq!(handlers.state_update_on_exit(5).status, "3-5");
-        assert_eq!(handlers.state_update_on_exit(6).status, "wildcard");
-        assert_eq!(handlers.state_update_on_kill(9).status, "killed");
+        assert_eq!(handlers.state_update_on_exit("foo.sh", 0).status, "0");
+        assert_eq!(handlers.state_update_on_exit("foo.sh", 1).status, "1");
+        assert_eq!(
+            handlers.state_update_on_exit("foo.sh", 2).status,
+            "wildcard"
+        );
+        assert_eq!(handlers.state_update_on_exit("foo.sh", 3).status, "3-5");
+        assert_eq!(handlers.state_update_on_exit("foo.sh", 4).status, "3-5");
+        assert_eq!(handlers.state_update_on_exit("foo.sh", 5).status, "3-5");
+        assert_eq!(
+            handlers.state_update_on_exit("foo.sh", 6).status,
+            "wildcard"
+        );
+        assert_eq!(handlers.state_update_on_kill("foo.sh", 9).status, "killed");
     }
 
     #[test]
@@ -342,12 +442,12 @@ on_exit.5-1 = "oops"
         let handlers = TryInto::<ExitHandlers>::try_into(input).unwrap();
         assert_eq!(handlers.state_update_on_success().status, "successful");
         assert_eq!(
-            handlers.state_update_on_exit(1).reason.unwrap(),
-            "returned exit code 1"
+            handlers.state_update_on_exit("foo.sh", 1).reason.unwrap(),
+            "foo.sh returned exit code 1"
         );
         assert_eq!(
-            handlers.state_update_on_kill(9).reason.unwrap(),
-            "killed by signal 9"
+            handlers.state_update_on_kill("foo.sh", 9).reason.unwrap(),
+            "foo.sh killed by signal 9"
         );
     }
 
@@ -367,12 +467,12 @@ background_script = "/home/pi/reboot.sh arg1 arg2"
 on_next = "step3"
 
 [step3]
-builtin_action = "waiting /home/pi/reboot.sh"
+action = "waiting /home/pi/reboot.sh"
 on_success = "successful_reboot"
 on_error = "failed_reboot"
 "#;
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        assert_eq!(input.operation, "check");
+        assert_eq!(input.operation, "check".parse().unwrap());
         assert_eq!(input.handlers.timeout_second, Some(3600));
         assert_eq!(
             input.handlers.on_timeout,

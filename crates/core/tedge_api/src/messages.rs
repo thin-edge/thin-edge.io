@@ -554,7 +554,7 @@ impl RestartContext {
                 if self.on_error == "failed" {
                     Some(command.fail_with(reason))
                 } else {
-                    let command = command.update_from_json(json!({ "restartError": reason }));
+                    let command = command.update_with_json(json!({ "restartError": reason }));
                     Some(command.move_to(self.on_error.clone()))
                 }
             }
