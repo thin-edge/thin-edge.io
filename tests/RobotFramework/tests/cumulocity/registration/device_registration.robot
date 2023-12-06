@@ -31,17 +31,6 @@ Child device registration
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Be A Child Device Of Device    ${CHILD_SN}
 
-Auto register disabled
-    ${timestamp}=        Get Unix Timestamp
-    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
-    Restart Service    tedge-mapper-c8y    
-    Service Health Status Should Be Up    tedge-mapper-c8y    
-    Execute Command    sudo tedge mqtt pub 'te/device/auto_reg_device///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-01T05:30:45+00:00" }' -q 2 -r
-    Should Have MQTT Messages    te/errors    message_contains=The provided entity: device/auto_reg_device// was not found and could not be auto-registered either, because it is disabled    date_from=${timestamp}   minimum=1    maximum=1
-    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
-    Restart Service    tedge-mapper-c8y
-
-
 Register child device with defaults via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_XID}    child_type=thin-edge.io-child
@@ -137,6 +126,33 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
     Cumulocity.Restart Device
     Should Have MQTT Messages    te/device/offlinechild1///cmd/restart/+
 
+Early data messages cached and processed
+    ${timestamp}=        Get Unix Timestamp
+    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
+    Restart Service    tedge-mapper-c8y    
+    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    ${children}=    Create List    child0    child00    child01    child000    child0000    child00000
+    FOR    ${child}    IN    @{children}
+        Execute Command    sudo tedge mqtt pub 'te/device/${child}///m/environment' '{ "temp": 50 }'
+        Execute Command    sudo tedge mqtt pub 'te/device/${child}///twin/maintenance_mode' 'true'
+    END
+
+    Execute Command    tedge mqtt pub --retain 'te/device/child000//' '{"@type":"child-device","@id":"child000","@parent": "device/child00//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child00000//' '{"@type":"child-device","@id":"child00000","@parent": "device/child0000//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0000//' '{"@type":"child-device","@id":"child0000","@parent": "device/child000//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child01//' '{"@type":"child-device","@id":"child01","@parent": "device/child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child00//' '{"@type":"child-device","@id":"child00","@parent": "device/child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0//' '{"@type":"child-device","@id":"child0"}'
+
+    FOR    ${child}    IN    @{children}
+        Cumulocity.Set Device    ${child}
+        Device Should Have Measurements    type=environment    minimum=1    maximum=1
+        Device Should Have Fragments    maintenance_mode
+    END
+
+    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
+    Restart Service    tedge-mapper-c8y
 
 *** Keywords ***
 

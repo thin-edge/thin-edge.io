@@ -83,6 +83,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_config::TEdgeConfigError;
@@ -108,6 +109,7 @@ const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const REQUESTER_NAME: &str = "c8y-mapper";
+const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -281,10 +283,12 @@ impl CumulocityConverter {
 
         let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
         let entity_store = EntityStore::with_main_device_and_default_service_type(
+            mqtt_schema.clone(),
             main_device,
             service_type.clone(),
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
+            EARLY_MESSAGE_BUFFER_SIZE,
         )
         .unwrap();
 
@@ -973,10 +977,22 @@ impl CumulocityConverter {
                         Err(e) => {
                             error!("Entity registration failed: {e}");
                         }
-                        Ok(affected_entities) if !affected_entities.is_empty() => {
-                            let mut c8y_message =
-                                self.try_convert_entity_registration(&register_message)?;
-                            registration_messages.append(&mut c8y_message);
+                        Ok((affected_entities, pending_entities))
+                            if !affected_entities.is_empty() =>
+                        {
+                            for pending_entity in pending_entities {
+                                // Register and convert the entity registration first
+                                let mut c8y_message = self
+                                    .try_convert_entity_registration(&pending_entity.reg_message)?;
+                                registration_messages.append(&mut c8y_message);
+
+                                // Process all the cached data messages for that entity
+                                let mut cached_messages =
+                                    self.process_cached_entity_data(pending_entity).await?;
+                                registration_messages.append(&mut cached_messages);
+                            }
+
+                            return Ok(registration_messages);
                         }
                         Ok(_) => {}
                     }
@@ -1007,57 +1023,72 @@ impl CumulocityConverter {
                             );
                         }
                     } else {
-                        return Err(ConversionError::AutoRegistrationDisabled(
-                            source.to_string(),
-                        ));
+                        // When an entity data message is received before the entity itself is registered,
+                        // cache it in the unregistered entity store to be processed after the entity is registered
+                        self.entity_store.cache_early_data_message(message.clone());
+                        return Ok(vec![]);
                     }
                 }
             }
         }
 
-        let mut messages = match &channel {
+        let mut messages = self
+            .try_convert_data_message(source, channel, message)
+            .await?;
+
+        registration_messages.append(&mut messages);
+        Ok(registration_messages)
+    }
+
+    async fn try_convert_data_message(
+        &mut self,
+        source: EntityTopicId,
+        channel: Channel,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        match &channel {
             Channel::EntityTwinData { fragment_key } => {
-                self.try_convert_entity_twin_data(&source, message, fragment_key)?
+                self.try_convert_entity_twin_data(&source, message, fragment_key)
             }
 
             Channel::Measurement { measurement_type } => {
-                self.try_convert_measurement(&source, message, measurement_type)?
+                self.try_convert_measurement(&source, message, measurement_type)
             }
 
             Channel::Event { event_type } => {
-                self.try_convert_event(&source, message, event_type).await?
+                self.try_convert_event(&source, message, event_type).await
             }
 
             Channel::Alarm { alarm_type } => {
-                self.process_alarm_messages(&source, message, alarm_type)?
+                self.process_alarm_messages(&source, message, alarm_type)
             }
 
             Channel::Command { .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
-                vec![]
+                Ok(vec![])
             }
 
             Channel::CommandMetadata { operation } => {
                 self.validate_operation_supported(operation, &source)?;
                 match operation {
-                    OperationType::Restart => self.register_restart_operation(&source).await?,
+                    OperationType::Restart => self.register_restart_operation(&source).await,
                     OperationType::SoftwareList => {
-                        self.register_software_list_operation(&source).await?
+                        self.register_software_list_operation(&source).await
                     }
                     OperationType::SoftwareUpdate => {
-                        self.register_software_update_operation(&source).await?
+                        self.register_software_update_operation(&source).await
                     }
-                    OperationType::LogUpload => self.convert_log_metadata(&source, message)?,
+                    OperationType::LogUpload => self.convert_log_metadata(&source, message),
                     OperationType::ConfigSnapshot => {
-                        self.convert_config_snapshot_metadata(&source, message)?
+                        self.convert_config_snapshot_metadata(&source, message)
                     }
                     OperationType::ConfigUpdate => {
-                        self.convert_config_update_metadata(&source, message)?
+                        self.convert_config_update_metadata(&source, message)
                     }
                     OperationType::FirmwareUpdate => {
-                        self.convert_firmware_metadata(&source, message)?
+                        self.convert_firmware_metadata(&source, message)
                     }
-                    _ => vec![],
+                    _ => Ok(vec![]),
                 }
             }
 
@@ -1066,14 +1097,14 @@ impl CumulocityConverter {
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
                 self.publish_restart_operation_status(&source, cmd_id, message)
-                    .await?
+                    .await
             }
 
             Channel::Command {
                 operation: OperationType::SoftwareList,
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_software_list(&source, cmd_id, message).await?
+                self.publish_software_list(&source, cmd_id, message).await
             }
 
             Channel::Command {
@@ -1081,7 +1112,7 @@ impl CumulocityConverter {
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
                 self.publish_software_update_status(&source, cmd_id, message)
-                    .await?
+                    .await
             }
 
             Channel::Command {
@@ -1089,7 +1120,7 @@ impl CumulocityConverter {
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_log_upload_state_change(&source, cmd_id, message)
-                    .await?
+                    .await
             }
 
             Channel::Command {
@@ -1097,7 +1128,7 @@ impl CumulocityConverter {
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_config_snapshot_state_change(&source, cmd_id, message)
-                    .await?
+                    .await
             }
 
             Channel::Command {
@@ -1105,7 +1136,7 @@ impl CumulocityConverter {
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_config_update_state_change(&source, cmd_id, message)
-                    .await?
+                    .await
             }
 
             Channel::Command {
@@ -1113,16 +1144,30 @@ impl CumulocityConverter {
                 cmd_id,
             } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_firmware_update_state_change(&source, message)
-                    .await?
+                    .await
             }
 
-            Channel::Health => self.process_health_status_message(&source, message).await?,
+            Channel::Health => self.process_health_status_message(&source, message).await,
 
-            _ => vec![],
-        };
+            _ => Ok(vec![]),
+        }
+    }
 
-        registration_messages.append(&mut messages);
-        Ok(registration_messages)
+    async fn process_cached_entity_data(
+        &mut self,
+        cached_entity: PendingEntityData,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut converted_messages = vec![];
+        for message in cached_entity.data_messages {
+            let (source, channel) = self.mqtt_schema.entity_channel_of(&message.topic).unwrap();
+            converted_messages.append(
+                &mut self
+                    .try_convert_data_message(source, channel, &message)
+                    .await?,
+            );
+        }
+
+        Ok(converted_messages)
     }
 
     fn validate_operation_supported(
@@ -1382,7 +1427,7 @@ impl CumulocityConverter {
         target: &EntityTopicId,
         cmd_id: &str,
         message: &Message,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<Message>, ConversionError> {
         let command = match RestartCommand::try_from(
             target.clone(),
             cmd_id.to_owned(),
@@ -1463,7 +1508,7 @@ impl CumulocityConverter {
         target: &EntityTopicId,
         cmd_id: &str,
         message: &Message,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<Message>, ConversionError> {
         let response = match SoftwareUpdateCommand::try_from(
             target.clone(),
             cmd_id.to_string(),
@@ -1520,7 +1565,7 @@ impl CumulocityConverter {
         target: &EntityTopicId,
         cmd_id: &str,
         message: &Message,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<Message>, ConversionError> {
         let response = match SoftwareListCommand::try_from(
             target.clone(),
             cmd_id.to_owned(),
@@ -3009,6 +3054,16 @@ pub(crate) mod tests {
                 .to_string(),
             ))
             .await;
+        // Register immediate child device
+        let _ = converter
+            .convert(&Message::new(
+                &Topic::new_unchecked("te/device/immediate_child//"),
+                json!({
+                    "@type":"child-device",
+                })
+                .to_string(),
+            ))
+            .await;
         // Register immediate child device service
         let _ = converter
             .convert(&Message::new(
@@ -3080,6 +3135,167 @@ pub(crate) mod tests {
         pop_captured().unwrap().message();
         assert_eq!(pop_captured().unwrap().message(), expected_log);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn early_messages_cached_and_processed_only_after_registration() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.enable_auto_register = false;
+
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
+        // Publish some measurements that are only cached and not converted
+        for i in 0..3 {
+            let measurement_message = Message::new(
+                &Topic::new_unchecked("te/custom/child1///m/environment"),
+                json!({"temperature": i}).to_string(),
+            );
+            let mapped_messages = converter.convert(&measurement_message).await;
+            assert!(
+                mapped_messages.is_empty(),
+                "Expected the early telemetry messages to be cached and not mapped"
+            )
+        }
+
+        // Publish a twin message which is also cached
+        let twin_message = Message::new(
+            &Topic::new_unchecked("te/custom/child1///twin/foo"),
+            r#"5.6789"#,
+        );
+        let mapped_messages = converter.convert(&twin_message).await;
+        assert!(
+            mapped_messages.is_empty(),
+            "Expected the early twin messages to be cached and not mapped"
+        );
+
+        // Publish the registration message which will trigger the conversion of cached messages as well
+        let reg_message = Message::new(
+            &Topic::new_unchecked("te/custom/child1//"),
+            json!({"@type": "child-device", "@id": "child1", "name": "child1"}).to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+
+        // Assert that the registration message, the twin updates and the cached measurement messages are converted
+        assert_messages_matching(
+            &messages,
+            [
+                ("c8y/s/us", "101,child1,child1,thin-edge.io-child".into()),
+                (
+                    "c8y/inventory/managedObjects/update/child1",
+                    json!({
+                        "foo": 5.6789
+                    })
+                    .into(),
+                ),
+                (
+                    "c8y/measurement/measurements/create",
+                    json!({
+                        "temperature":{
+                            "temperature":{
+                                "value": 0.0
+                            }
+                        },
+                    })
+                    .into(),
+                ),
+                (
+                    "c8y/measurement/measurements/create",
+                    json!({
+                        "temperature":{
+                            "temperature":{
+                                "value": 1.0
+                            }
+                        },
+                    })
+                    .into(),
+                ),
+                (
+                    "c8y/measurement/measurements/create",
+                    json!({
+                        "temperature":{
+                            "temperature":{
+                                "value": 2.0
+                            }
+                        },
+                    })
+                    .into(),
+                ),
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn early_child_device_registrations_processed_only_after_parent_registration() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.enable_auto_register = false;
+
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
+        // Publish great-grand-child registration before grand-child and child
+        let reg_message = Message::new(
+            &Topic::new_unchecked("te/device/child000//"),
+            json!({
+                "@type": "child-device",
+                "@id": "child000",
+                "name": "child000",
+                "@parent": "device/child00//",
+            })
+            .to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+        assert!(
+            messages.is_empty(),
+            "Expected child device registration messages to be cached and not mapped"
+        );
+
+        // Publish grand-child registration before child
+        let reg_message = Message::new(
+            &Topic::new_unchecked("te/device/child00//"),
+            json!({
+                "@type": "child-device",
+                "@id": "child00",
+                "name": "child00",
+                "@parent": "device/child0//",
+            })
+            .to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+        assert!(
+            messages.is_empty(),
+            "Expected child device registration messages to be cached and not mapped"
+        );
+
+        // Register the immediate child device which will trigger the conversion of cached messages as well
+        let reg_message = Message::new(
+            &Topic::new_unchecked("te/device/child0//"),
+            json!({
+                "@type": "child-device",
+                "@id": "child0",
+                "name": "child0",
+                "@parent": "device/main//",
+            })
+            .to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+        dbg!(&messages);
+
+        // Assert that the registration message, the twin updates and the cached measurement messages are converted
+        assert_messages_matching(
+            &messages,
+            [
+                ("c8y/s/us", "101,child0,child0,thin-edge.io-child".into()),
+                (
+                    "c8y/s/us/child0",
+                    "101,child00,child00,thin-edge.io-child".into(),
+                ),
+                (
+                    "c8y/s/us/child0/child00",
+                    "101,child000,child000,thin-edge.io-child".into(),
+                ),
+            ],
+        );
     }
 
     pub(crate) async fn create_c8y_converter(

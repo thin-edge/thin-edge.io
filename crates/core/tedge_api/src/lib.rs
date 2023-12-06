@@ -11,6 +11,8 @@ pub mod messages;
 pub mod mqtt_topics;
 pub mod parser;
 pub mod path;
+pub mod pending_entity_store;
+mod ring_buffer;
 pub mod serialize;
 mod software;
 pub mod topic;
