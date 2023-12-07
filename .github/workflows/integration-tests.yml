@@ -70,7 +70,7 @@ jobs:
           fetch-depth: 0
 
       # Install nfpm used to for linux packaging
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
           cache: false
