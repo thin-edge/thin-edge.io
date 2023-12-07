@@ -92,10 +92,12 @@ impl ExitHandlers {
             if on_success.is_some() {
                 return Err(ScriptDefinitionError::DuplicatedOnSuccessHandler);
             }
-            if !on_stdout.is_empty() {
-                return Err(ScriptDefinitionError::DuplicatedOnStdoutHandler);
-            }
             on_success = Some(update.clone())
+        }
+
+        // `on_success` and `on_stdout` are not compatible
+        if on_success.is_some() && !on_stdout.is_empty() {
+            return Err(ScriptDefinitionError::DuplicatedOnStdoutHandler);
         }
 
         // Not two ranges can overlap
@@ -138,10 +140,15 @@ impl ExitHandlers {
                     .state_update_on_kill(program, output.status.signal().unwrap_or(0) as u8)
                     .into_json(),
                 Some(0) => {
-                    match (&self.on_success, self.json_stdout_excerpt(program, output.stdout)) {
+                    match (
+                        &self.on_success,
+                        self.json_stdout_excerpt(program, output.stdout),
+                    ) {
                         (None, Err(reason)) => GenericStateUpdate::failed(reason).into_json(),
                         (None, Ok(json_update)) => json_update,
-                        (Some(successful_state), Ok(json_update)) => successful_state.clone().inject_into_json(json_update),
+                        (Some(successful_state), Ok(json_update)) => {
+                            successful_state.clone().inject_into_json(json_update)
+                        }
                         (Some(successful_state), Err(_)) => successful_state.clone().into_json(),
                     }
                 }
@@ -216,4 +223,180 @@ fn extract_script_output(stdout: String) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::OperationAction;
+    use serde_json::json;
+    use std::process::Command;
+
+    #[test]
+    fn successful_exit_code_determines_next_state() {
+        let file = r#"
+script = "sh -c 'exit 0'"
+on_exit.0 = "yeah"
+on_exit._ = "oops"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "yeah"
+            })
+        )
+    }
+
+    #[test]
+    fn exit_code_determines_next_state() {
+        let file = r#"
+script = "sh -c 'exit 3'"
+on_exit.0 = "yeah"
+on_exit.3 = "got 3"
+on_exit._ = "oops"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "got 3"
+            })
+        )
+    }
+
+    #[test]
+    fn signal_determines_next_state() {
+        let file = r#"
+script = "sh -c 'sleep 10'"
+on_exit.0 = "yeah"
+on_exit._ = "oops"
+on_kill = "killed"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let mut process = Command::new(script.command.clone())
+            .args(script.args.clone())
+            .spawn()
+            .unwrap();
+        let _ = process.kill();
+        let output = process.wait_with_output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "killed"
+            })
+        )
+    }
+
+    #[test]
+    fn stdout_determines_next_state() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"status\\\": \\\"next\\\"\\}; echo :::end-tedge:::'"
+on_stdout = ["next"]
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "next"
+            })
+        )
+    }
+
+    #[test]
+    fn when_stdout_determines_next_state_it_must_be_provided() {
+        // Case where the `:::begin-tedge:::` and `:::end-tedge:::` are missing
+        let file = r#"
+script = "sh -c 'echo \\{\\\"status\\\": \\\"next\\\"\\}'"
+on_stdout = ["next"]
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "failed",
+                "reason": "sh returned no :::tedge::: content on stdout"
+            })
+        )
+    }
+
+    #[test]
+    fn on_success_stdout_is_injected_into_the_next_state() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"foo\\\": \\\"bar\\\"\\}; echo :::end-tedge:::'"
+on_success = "yeah"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "yeah",
+                "foo": "bar"
+            })
+        )
+    }
+
+    #[test]
+    fn on_success_trumps_stdout_status() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"status\\\":\\\"failed\\\", \\\"foo\\\":\\\"bar\\\"\\}; echo :::end-tedge:::'"
+on_success = "yeah"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "yeah",
+                "foo": "bar"
+            })
+        )
+    }
+
+    #[test]
+    fn on_error_stdout_is_ignored() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"foo\\\": \\\"bar\\\"\\}; echo :::end-tedge:::; exit 1'"
+on_error = "oops"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "oops"
+            })
+        )
+    }
+
+    impl ShellScript {
+        pub fn output(&self) -> std::io::Result<std::process::Output> {
+            Command::new(self.command.clone())
+                .args(self.args.clone())
+                .output()
+        }
+    }
+
+    fn script_from_toml(file: &str) -> (ShellScript, ExitHandlers) {
+        if let OperationAction::Script(script, handlers) =
+            toml::from_str(file).expect("Expect TOML input")
+        {
+            return (script, handlers);
+        }
+
+        panic!("Expect a script with handlers")
+    }
 }

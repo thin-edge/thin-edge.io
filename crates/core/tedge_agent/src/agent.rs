@@ -33,7 +33,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
-use tedge_api::workflow::toml_config::TomlOperationWorkflow;
 use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_config_manager::ConfigManagerBuilder;
@@ -347,8 +346,7 @@ async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyho
     let context = || format!("Reading operation workflow from {path:?}");
     let bytes = tokio::fs::read(path).await.with_context(context)?;
     let input = std::str::from_utf8(&bytes).with_context(context)?;
-    let toml = toml::from_str::<TomlOperationWorkflow>(input)?; //.with_context(context)?;
-    let workflow = TryInto::<OperationWorkflow>::try_into(toml).with_context(context)?;
+    let workflow = toml::from_str::<OperationWorkflow>(input)?; //.with_context(context)?;
     Ok(workflow)
 }
 

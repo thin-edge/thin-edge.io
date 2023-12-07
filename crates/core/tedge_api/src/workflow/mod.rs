@@ -2,7 +2,7 @@ pub mod error;
 pub mod script;
 pub mod state;
 pub mod supervisor;
-pub mod toml_config;
+mod toml_config;
 
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
@@ -11,6 +11,7 @@ pub use error::*;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 pub use script::*;
+use serde::Deserialize;
 pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -20,7 +21,8 @@ pub use supervisor::*;
 pub type StateName = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(try_from = "toml_config::TomlOperationWorkflow")]
 pub struct OperationWorkflow {
     /// The operation to which this workflow applies
     pub operation: OperationType,
@@ -36,7 +38,8 @@ pub struct OperationWorkflow {
 }
 
 /// What needs to be done to advance an operation request in some state
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(try_from = "toml_config::TomlOperationState")]
 pub enum OperationAction {
     /// Nothing has to be done: simply move to the next step.
     /// Such steps are intended to be overridden.

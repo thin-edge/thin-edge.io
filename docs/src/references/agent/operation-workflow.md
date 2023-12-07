@@ -330,14 +330,15 @@ The output of the script processing a command state
 can be used to determine the next state of the workflow.
 
 For that to work:
-- no `on_success` nor `on_exit.0` status must be given as this would make the next status computed after the exit code
-- the standard output of the script must emit a JSON object surrounded by `:::begin-tedge:::` and `:::end-tedge:::` markers.
-- this JSON object must provide a `status` field and possibly a `reason` field.
+- An `on_stdout` handler must be provided, listing all the states that can possibly be dictated by the script output. 
+- Neither `on_success` nor `on_exit.0` status must be given as this would make the next status computed after the exit code.
+- The standard output of the script must emit a JSON object surrounded by `:::begin-tedge:::` and `:::end-tedge:::` markers.
+- This JSON object must provide a `status` field and possibly a `reason` field.
 
 ```toml
 script = "/some/script.sh with some args"                                # no given `on_exit.0` status
 on_error = { status = "fatal_state", reason = "fail to run the script"}  # possibly some `on_error` and `on_kill` handlers
-next = ["state-1", "state-2", "state-3"]                                 # the list of status accepted as next status
+on_stdout = ["state-1", "state-2", "state-3"]                            # the list of status accepted as next status
 ```
 
 - If the script is successful and its output returns some `status` and `reason` fields, these are used for the next state.
@@ -351,7 +352,7 @@ next = ["state-1", "state-2", "state-3"]                                 # the l
   - Notably, when the script returns with a non-successful status code,
     the `on_error` definition trumps over any `status` and `reason` fields provided over the script stdout.
 
-### Using a script to trigger a restart
+### Background scripts
 
 A workflow state can be handled using a *background script*.
 When executed, as a detached process, by the __tedge_agent__ no response nor exit status is expected from the script.
@@ -367,49 +368,12 @@ on_exec = "waiting-for-restart"
 
 ["waiting-for-restart"]
 script = "/some/script.sh checking restart"
-next = ["waiting-for-restart", "successful_restart", "failed_restart"]
+on_stdout = ["waiting-for-restart", "successful_restart", "failed_restart"]
 ```
 
 Note that:
 - No `on_exit` nor `on_kill` status can be provided, as the script is not monitored.
 - If the script cannot be launched, the workflow will be moved to the final `"failed"` state.
-
-### Appropriate syntax for restart action
-
-First proposal:
-```toml
-["device-restart"]
-builtin_action = "restart"
-on_exec = "waiting-for-restart"
-on_success = "successful_restart"
-on_error = "failed_restart"
-```
-
-Pros:
-- closer to the internal behavior
-
-Cons:
-- state with no representation
-
-Alternative proposal:
-
-```toml
-["device-restart"]
-builtin_action = "restart"
-on_exec = "waiting-for-restart"
-
-["waiting-for-restart"]
-builtin_action = "waiting-for-restart"
-on_success = "successful_restart"
-on_error = "failed_restart"
-```
-
-Pros:
-- closer to the observed behavior
-- no implicit state
-
-Cons:
-- the two states must be consistent
 
 ### Setting step execution timeout
 
@@ -439,14 +403,154 @@ on_success = "successful_restart"
 on_error = "failed_restart"
 ```
 
-### Role of next states
+### Running builtin actions
 
-Do we need to explicitly list the `next` states for each state?
+Builtin actions can be used to control a command at some state.
 
-Cons:
-- less specific than states with specific purpose as on `on_success` or `on_exit.1`
-- most of the time redundant
+```toml
+["<state>"]
+action = "<action-name> <possibly-with-arguments>"
+```
+
+As for scripts, these actions can be complemented with handlers dictating how to proceed when the action is successful or failed.
+The set of accepted handlers for an action are the following:
+
+- `on_success = "<state>"` defines the next state when the action is successful
+- `on_error = { status = "<state>", reason = "<message>"}` defines the next state when the action failed
+- `timeout_second = 3600` the number of second given to the action to execute
+- `on_timeout = { status = "<state>", reason = "<message>"}` defines the next state when the action is not be completed within the time limit 
+
+For some action, notably a device `restart`, the handlers are limited to one:
+- `on_exec = "<state>"` defines the next state once the action has been launched in the background.
+  The action outcome will have to be observed in this `on_exec` state.
+
+Currently, here are the available actions:
+
+- `restart` triggers a reboot of the device
+- `waiting <delegate>` means that agent itself has nothing to do but to wait that another component,
+  to which the action has been delegated, finalizes its task and notifies the new state for the command.  
+- `builtin` is used when a builtin operation is overwritten by a custom workflow and indicates that for that state
+  the builtin action has to be applied.
+- `proceed` is a no-op action, simply proceeding to the next state, which is useful when a builtin operation is customized
+   but no specific behavior has to be added on a workflow extension point.
+- `cleanup` marks the terminal state of the workflow where the command has been fully processed
+  and where the original requester is expected to clean up the command retained message storing its state.
+
+#### Restart
+
+First proposal:
+```toml
+["device-restart"]
+action = "restart"
+on_exec = "waiting-for-restart"
+on_success = "successful_restart"
+on_error = "failed_restart"
+```
 
 Pros:
-- documentation
-- sanity checks
+- closer to the internal behavior
+
+Cons:
+- state with no representation
+
+Alternative proposal:
+
+```toml
+["device-restart"]
+action = "restart"
+on_exec = "waiting-for-restart"
+
+["waiting-for-restart"]
+action = "waiting restart"
+on_success = "successful_restart"
+on_error = "failed_restart"
+```
+
+Pros:
+- closer to the observed behavior
+- no implicit state
+
+Cons:
+- the two states must be consistent
+
+#### Waiting
+
+```toml
+["<state>"]
+action = "waiting <delegate>"
+on_success = "<successful_state>"
+on_error = "<failed_state>"
+```
+
+
+#### Cleanup
+
+```toml
+["successful"]
+action = "cleanup"
+
+["failed"]
+action = "cleanup"
+```
+
+#### Proceed and Builtin actions
+
+The `"proceed"` and `"builtin"` actions are useful when customizing a builtin operation
+(`software_list`, `software_update`, `restart`, `config_snapshot`, `config_update`, `log_upload`).
+Indeed, the first step is to start with a workflow specification which mimics the builtin behavior.
+
+For instance, here is the builtin workflow for the `software_update` operation:
+
+```toml
+operation = "software_update"       # an operation for which tedge-agent provides an implementation
+
+["init"]
+action = "proceed"                  # open to customization
+on_success = "scheduled"
+
+[scheduled]
+action = "builtin"                  # delegated to the tedge-agent
+on_success = "executing"
+
+[executing]
+action = "builtin"                  # delegated to the tedge-agent
+on_success = "successful"
+
+[successful]
+action = "cleanup"                  # waiting for the mapper to clean up the command
+
+[failed]
+action = "cleanup"                  # waiting for the mapper to clean up the command
+```
+
+The action for the `"init"` state is a `"proceed"` action, meaning nothing specific is done by the __tedge-agent__
+and that a user can provide its own implementation.
+
+By contrast, the actions marked as `"builtin"` are those delegated to the __tedge-agent__
+and where the main task of the operation is performed, in that case, installing software.
+
+Here is a customized version of the same operation. 
+
+```toml
+operation = "software_update"                             # a customized workflow
+
+[init]
+script = "/usr/bin/schedule-software-update.sh ${.}"      # checking is the software update command is timely
+on_success = ["scheduled"]
+on_error = { status = "failed", reason = "not timely" }
+
+[scheduled]
+action = "builtin"                                        # the software installation steps are unchanged
+on_success = "executing"
+
+[executing]
+action = "builtin"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+```
+

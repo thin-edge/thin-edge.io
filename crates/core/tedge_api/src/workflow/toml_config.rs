@@ -316,7 +316,7 @@ mod tests {
 on_exit.0 = "next_state"                                  # next state for an exit status
 on_exit.1 = { status = "retry_state", reason = "busy"}    # next status with fields
 on_exit.2-5 = { status = "fatal_state", reason = "oops"}  # next state for a range of exit status
-on_exit._ = "failed"                                      # wildcard for any other non successfull exit
+on_exit._ = "failed"                                      # wildcard for any other non successful exit
 on_kill = { status = "failed", reason = "killed"}         # next status when killed
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
@@ -433,6 +433,28 @@ on_exit.5-1 = "oops"
             error,
             ScriptDefinitionError::IncorrectRange { from: 5, to: 1 }
         )
+    }
+
+    #[test]
+    fn forbid_combination_of_on_success_and_on_stdout() {
+        let file = r#"
+on_success = "successful_state"
+on_stdout = ["other_successful_state_extracted_from_json"]
+        "#;
+        let input: TomlExitHandlers = toml::from_str(file).unwrap();
+        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        assert_eq!(error, ScriptDefinitionError::DuplicatedOnStdoutHandler)
+    }
+
+    #[test]
+    fn forbid_combination_of_on_exit_0_and_on_stdout() {
+        let file = r#"
+on_exit.0 = "successful_state"
+on_stdout = ["other_successful_state_extracted_from_json"]
+        "#;
+        let input: TomlExitHandlers = toml::from_str(file).unwrap();
+        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        assert_eq!(error, ScriptDefinitionError::DuplicatedOnStdoutHandler)
     }
 
     #[test]
