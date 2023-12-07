@@ -559,20 +559,19 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output: Vec<Message> = Vec::new();
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
-            match self.process_smartrest(smartrest_message.as_str()).await {
+            match &self.process_smartrest(smartrest_message.as_str()).await {
                 Err(
-                    ref err @ CumulocityMapperError::FromSmartRestDeserializer(
-                        SmartRestDeserializerError::InvalidParameter { ref operation, .. },
+                    err @ CumulocityMapperError::FromSmartRestDeserializer(
+                        SmartRestDeserializerError::InvalidParameter { operation, .. },
                     )
-                    | ref err @ CumulocityMapperError::ExecuteFailed {
-                        operation_name: ref operation,
+                    | err @ CumulocityMapperError::ExecuteFailed {
+                        operation_name: operation,
                         ..
                     },
                 ) => {
                     let topic = C8yTopic::SmartRestResponse.to_topic()?;
-                    let msg1 = Message::new(&topic, format!("501,{operation}"));
-                    let msg2 =
-                        Message::new(&topic, format!("502,{operation},\"{}\"", &err.to_string()));
+                    let msg1 = Message::new(&topic, set_operation_executing(operation));
+                    let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
                     error!("{err}");
                     output.extend_from_slice(&[msg1, msg2]);
                 }
@@ -580,7 +579,7 @@ impl CumulocityConverter {
                     error!("{err}");
                 }
 
-                Ok(msgs) => output.extend_from_slice(&msgs),
+                Ok(msgs) => output.extend_from_slice(msgs),
             }
         }
         Ok(output)

@@ -8,18 +8,17 @@ pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<String, time::error::Form
     let smartrest = match c8y_alarm {
         C8yAlarm::Create(alarm) => {
             let smartrest_code = match alarm.severity {
-                AlarmSeverity::Critical => 301,
-                AlarmSeverity::Major => 302,
-                AlarmSeverity::Minor => 303,
-                AlarmSeverity::Warning => 304,
+                AlarmSeverity::Critical => "301",
+                AlarmSeverity::Major => "302",
+                AlarmSeverity::Minor => "303",
+                AlarmSeverity::Warning => "304",
             };
-            format!(
-                "{},{},\"{}\",{}",
+            fields_to_csv_string(&[
                 smartrest_code,
-                alarm.alarm_type,
-                alarm.text,
-                alarm.time.format(&Rfc3339)?
-            )
+                &alarm.alarm_type,
+                &alarm.text,
+                &alarm.time.format(&Rfc3339)?,
+            ])
         }
         C8yAlarm::Clear(alarm) => fields_to_csv_string(&["306", &alarm.alarm_type]),
     };
@@ -45,7 +44,7 @@ mod tests {
             time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: hashmap!{},
         }),
-        "301,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
+        "301,temperature_alarm,I raised it,2021-04-23T19:00:00+05:00"
         ;"critical alarm translation"
     )]
     #[test_case(
@@ -57,7 +56,7 @@ mod tests {
             time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: hashmap!{},
         }),
-        "302,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
+        "302,temperature_alarm,I raised it,2021-04-23T19:00:00+05:00"
         ;"major alarm translation"
     )]
     #[test_case(
@@ -69,7 +68,7 @@ mod tests {
             time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: hashmap!{},
         }),
-        "303,temperature_alarm,\"\",2021-04-23T19:00:00+05:00"
+        "303,temperature_alarm,,2021-04-23T19:00:00+05:00"
         ;"minor alarm translation without message"
     )]
     #[test_case(
@@ -96,7 +95,7 @@ mod tests {
             time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: hashmap!{},
         }),
-        "304,temperature_alarm,\"External sensor raised alarm\",2021-04-23T19:00:00+05:00"
+        "304,temperature_alarm,External sensor raised alarm,2021-04-23T19:00:00+05:00"
         ;"warning alarm translation by external sensor"
     )]
     #[test_case(
