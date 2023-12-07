@@ -1,5 +1,6 @@
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
+use crate::operation_file_cache::FileCacheActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
@@ -75,6 +76,7 @@ pub(crate) struct AgentConfig {
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
     pub identity: Option<Identity>,
+    pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
 }
@@ -145,6 +147,11 @@ impl AgentConfig {
             config_snapshot: tedge_config.agent.enable.config_snapshot,
             log_upload: tedge_config.agent.enable.log_upload,
         };
+        let fts_url = format!(
+            "{}:{}",
+            tedge_config.http.client.host, tedge_config.http.client.port
+        )
+        .into();
 
         Ok(Self {
             mqtt_config,
@@ -162,6 +169,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
             identity,
+            fts_url,
             is_sudo_enabled,
             capabilities,
         })
@@ -295,7 +303,7 @@ impl Agent {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
                 tmp_dir: self.config.config_dir.into(),
-                mqtt_schema,
+                mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;
             Some(
@@ -310,6 +318,30 @@ impl Agent {
         } else {
             None
         };
+
+        // TODO: replace with a call to entity store when we stop assuming default MQTT schema
+        let is_main_device =
+            self.config.mqtt_device_topic_id == EntityTopicId::default_main_device();
+        if is_main_device {
+            info!("Running as a main device, starting tedge_to_te_converter and File Transfer Service");
+
+            runtime.spawn(tedge_to_te_converter).await?;
+
+            let file_transfer_server_builder =
+                FileTransferServerBuilder::try_bind(self.config.http_config).await?;
+            runtime.spawn(file_transfer_server_builder).await?;
+
+            let operation_file_cache_builder = FileCacheActorBuilder::new(
+                mqtt_schema,
+                self.config.fts_url.clone(),
+                self.config.data_dir,
+                &mut downloader_actor_builder,
+                &mut mqtt_actor_builder,
+            );
+            runtime.spawn(operation_file_cache_builder).await?;
+        } else {
+            info!("Running as a child device, tedge_to_te_converter and File Transfer Service disabled");
+        }
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;
@@ -328,22 +360,6 @@ impl Agent {
         runtime.spawn(script_runner).await?;
         runtime.spawn(converter_actor_builder).await?;
         runtime.spawn(health_actor).await?;
-
-        // TODO: replace with a call to entity store when we stop assuming default MQTT schema
-        let is_main_device =
-            self.config.mqtt_device_topic_id == EntityTopicId::default_main_device();
-        if is_main_device {
-            info!(
-                "Running as a main device, starting tedge_to_te_converter and file transfer actors"
-            );
-
-            let file_transfer_server_builder =
-                FileTransferServerBuilder::try_bind(self.config.http_config).await?;
-            runtime.spawn(tedge_to_te_converter).await?;
-            runtime.spawn(file_transfer_server_builder).await?;
-        } else {
-            info!("Running as a child device, tedge_to_te_converter and file transfer actors disabled");
-        }
 
         runtime.run_to_completion().await?;
 

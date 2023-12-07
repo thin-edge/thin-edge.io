@@ -3,7 +3,6 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::operations::FtsDownloadOperationType;
 use async_trait::async_trait;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -284,45 +283,28 @@ impl C8yMapperActor {
         cmd_id: CmdId,
         result: DownloadResult,
     ) -> Result<(), RuntimeError> {
-        let operation_result = match self.converter.pending_download_operations.remove(&cmd_id) {
-            None => {
-                // download not from c8y_proxy, check if it was from FTS
-                if let Some(fts_download) = self
-                    .converter
-                    .pending_fts_download_operations
-                    .remove(&cmd_id)
-                {
-                    let cmd_id = cmd_id.clone();
-                    match fts_download.download_type {
-                        FtsDownloadOperationType::ConfigDownload => {
-                            self.converter
-                                .handle_fts_config_download_result(cmd_id, result, fts_download)
-                                .await
-                        }
-                        FtsDownloadOperationType::LogDownload => {
-                            self.converter
-                                .handle_fts_log_download_result(cmd_id, result, fts_download)
-                                .await
-                        }
-                    }
-                } else {
-                    error!("Received a download result for the unknown command ID: {cmd_id}");
-                    return Ok(());
-                }
-            }
-
-            Some(operation) => match operation {
-                SmartRestOperationVariant::DownloadConfigFile(smartrest) => {
+        // download not from c8y_proxy, check if it was from FTS
+        let operation_result = if let Some(fts_download) = self
+            .converter
+            .pending_fts_download_operations
+            .remove(&cmd_id)
+        {
+            let cmd_id = cmd_id.clone();
+            match fts_download.download_type {
+                FtsDownloadOperationType::ConfigDownload => {
                     self.converter
-                        .process_download_result_for_config_update(
-                            cmd_id.into(),
-                            &smartrest,
-                            result,
-                        )
+                        .handle_fts_config_download_result(cmd_id, result, fts_download)
                         .await
                 }
-                _other_types => return Ok(()), // unsupported
-            },
+                FtsDownloadOperationType::LogDownload => {
+                    self.converter
+                        .handle_fts_log_download_result(cmd_id, result, fts_download)
+                        .await
+                }
+            }
+        } else {
+            error!("Received a download result for the unknown command ID: {cmd_id}");
+            return Ok(());
         };
 
         match operation_result {

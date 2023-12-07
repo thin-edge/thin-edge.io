@@ -129,7 +129,7 @@ impl ConfigManagerActor {
             },
             Ok(Some(ConfigOperation::Update(request))) => match request.status {
                 CommandStatus::Init => {
-                    info!("Config Snapshot received: {request:?}");
+                    info!("Config Update received: {request:?}");
                     self.start_executing_config_request(
                         &message.topic,
                         ConfigOperation::Update(request),
@@ -294,12 +294,17 @@ impl ConfigManagerActor {
         // move to destination later
         let temp_path = &self.config.tmp_path.join(&file_entry.config_type);
 
-        let download_request = DownloadRequest::new(&request.tedge_url, temp_path.as_std_path())
+        let Some(tedge_url) = &request.tedge_url else {
+            debug!("tedge_url not present in config update payload, ignoring");
+            return Ok(());
+        };
+
+        let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path())
             .with_permission(file_entry.file_permissions.to_owned());
 
         info!(
             "Awaiting download for config type: {} from url: {}",
-            request.config_type, request.tedge_url
+            request.config_type, tedge_url
         );
 
         self.download_sender

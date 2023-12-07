@@ -3658,6 +3658,7 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
+ "sha256",
  "tedge_actors",
  "tedge_api",
  "tedge_config",

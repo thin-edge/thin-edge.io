@@ -20,7 +20,7 @@ pub enum C8yEndPointError {
 }
 
 /// Define a C8y endpoint
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct C8yEndPoint {
     c8y_host: String,
     pub device_id: String,
