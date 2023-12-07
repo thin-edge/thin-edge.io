@@ -4,12 +4,14 @@
 //!
 use crate::measurement::MeasurementVisitor;
 use serde::de::DeserializeSeed;
+use serde::de::Error;
 use serde::de::MapAccess;
 use serde::de::{self};
 use serde::Deserializer;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
+use std::fmt::Formatter;
 use time::format_description;
 use time::OffsetDateTime;
 
@@ -72,6 +74,52 @@ struct ThinEdgeValueParser<'key, 'vis, T> {
     visitor: &'vis mut T,
 }
 
+struct IsoOrUnix(OffsetDateTime);
+
+struct IsoOrUnixVisitor;
+
+impl<'de> de::Visitor<'de> for IsoOrUnixVisitor {
+    type Value = IsoOrUnix;
+
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+        formatter.write_str("a date formatted as a unix timestamp (as an integer number of seconds) or an ISO-8601 string")
+    }
+
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        self.visit_i64(v.try_into().map_err(|err| de::Error::custom(format!("invalid unix timestamp, expecting a 64 bit signed integer. provided value ({v}) is too large: {err}")))?)
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        OffsetDateTime::from_unix_timestamp(v)
+            .map(IsoOrUnix)
+            .map_err(|err| de::Error::custom(invalid_unix_timestamp(v, err)))
+    }
+
+    fn visit_borrowed_str<E>(self, timestamp_str: &str) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        OffsetDateTime::parse(timestamp_str, &format_description::well_known::Rfc3339)
+            .map(IsoOrUnix)
+            .map_err(|err| de::Error::custom(invalid_iso8601(timestamp_str, err)))
+    }
+}
+
+impl<'de> de::Deserialize<'de> for IsoOrUnix {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(IsoOrUnixVisitor)
+    }
+}
+
 impl<'vis, 'de, T> de::Visitor<'de> for ThinEdgeJsonParser<'vis, T>
 where
     T: MeasurementVisitor,
@@ -93,12 +141,7 @@ where
 
             match key.as_ref() {
                 "time" => {
-                    let timestamp_str: &str = map.next_value()?;
-                    let timestamp = OffsetDateTime::parse(
-                        timestamp_str,
-                        &format_description::well_known::Rfc3339,
-                    )
-                    .map_err(|err| de::Error::custom(invalid_timestamp(timestamp_str, err)))?;
+                    let IsoOrUnix(timestamp) = map.next_value()?;
 
                     self.visitor
                         .visit_timestamp(timestamp)
@@ -268,7 +311,14 @@ fn invalid_json_number(key: &str) -> String {
     )
 }
 
-fn invalid_timestamp(value: &str, err: impl std::fmt::Display) -> String {
+fn invalid_unix_timestamp(value: i64, err: impl std::fmt::Display) -> String {
+    format!(
+        "Invalid unix timestamp (reading integer value in seconds): {:?}; {}",
+        value, err
+    )
+}
+
+fn invalid_iso8601(value: &str, err: impl std::fmt::Display) -> String {
     format!(
         "Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): {:?}: {}",
         value, err
@@ -298,6 +348,7 @@ fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
 #[cfg(test)]
 mod tests {
     use time::macros::datetime;
+    use time::OffsetDateTime;
 
     use crate::parser::parse_str;
 
@@ -344,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn it_shows_input_excerpt_on_error() -> anyhow::Result<()> {
+    fn it_shows_input_excerpt_on_error() {
         use crate::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : null\n}";
@@ -353,18 +404,46 @@ mod tests {
 
         let res = parse_str(input, &mut builder);
 
-        assert!(res.is_err());
-
         assert_eq!(
-        res.unwrap_err().to_string(),
-        "Invalid JSON: invalid type: null, expected a borrowed string at line 2 column 13: `l\n}\n`",
-    );
-
-        Ok(())
+            res.unwrap_err().to_string(),
+            "Invalid JSON: invalid type: null, expected a date formatted as a unix timestamp (as an integer number of seconds) or an ISO-8601 string at line 2 column 13: `l\n}\n`",
+        );
     }
 
     #[test]
-    fn parse_type_as_measurement() -> anyhow::Result<()> {
+    fn it_accepts_unix_timestamps_in_place_of_iso_8601() {
+        use crate::builder::ThinEdgeJsonBuilder;
+
+        let input = "{\n\"time\" : 1701949168,\n\"test\": 1023}";
+        let expected_timestamp = OffsetDateTime::parse(
+            "2023-12-07T11:39:28Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+
+        let mut builder = ThinEdgeJsonBuilder::default();
+
+        parse_str(input, &mut builder).unwrap();
+
+        assert_eq!(builder.done().unwrap().timestamp, Some(expected_timestamp),);
+    }
+
+    #[test]
+    fn sensible_error_when_unix_timestamp_is_out_of_range() {
+        use crate::builder::ThinEdgeJsonBuilder;
+
+        let input = "{\n\"time\" : -377705116801,\n\"test\": 1023}";
+        let mut builder = ThinEdgeJsonBuilder::default();
+
+        let error = parse_str(input, &mut builder).unwrap_err().to_string();
+
+        assert_eq!(error,
+                   "Invalid JSON: Invalid unix timestamp (reading integer value in seconds): -377705116801; timestamp must be in the range -377705116800..=253402300799 at line 2 column 22: `1,\n\"test\": 1023}\n`"
+        );
+    }
+
+    #[test]
+    fn parse_type_as_measurement() {
         use crate::builder::ThinEdgeJsonBuilder;
 
         let input = r#"{
@@ -375,10 +454,6 @@ mod tests {
 
         let mut builder = ThinEdgeJsonBuilder::default();
 
-        let res = parse_str(input, &mut builder);
-
-        assert!(res.is_ok());
-
-        Ok(())
+        parse_str(input, &mut builder).unwrap();
     }
 }

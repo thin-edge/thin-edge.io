@@ -1,4 +1,0 @@
-Invalid JSON: invalid type: integer `40`, expected a borrowed string at line 2 column 12: `0,
-  "pressure": 220
-}
-`
