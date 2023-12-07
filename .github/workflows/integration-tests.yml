@@ -147,7 +147,7 @@ jobs:
           echo 'C8Y_USER="${{ secrets.C8Y_USER }}"' >> .env
           echo 'C8Y_PASSWORD="${{ secrets.C8Y_PASSWORD }}"' >> .env
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           cache: 'pip'
