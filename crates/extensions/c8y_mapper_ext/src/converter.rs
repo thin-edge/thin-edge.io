@@ -619,17 +619,37 @@ impl CumulocityConverter {
                     .await?
             }
             C8yDeviceControlOperations::LogfileRequest(request) => {
-                self.convert_log_upload_request(device_xid, cmd_id, request)?
+                if self.config.capabilities.log_upload {
+                    self.convert_log_upload_request(device_xid, cmd_id, request)?
+                } else {
+                    warn!("Received a c8y_LogfileRequest operation, however, log_upload feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperations::UploadConfigFile(request) => {
-                self.convert_config_snapshot_request(device_xid, cmd_id, request)?
+                if self.config.capabilities.config_snapshot {
+                    self.convert_config_snapshot_request(device_xid, cmd_id, request)?
+                } else {
+                    warn!("Received a c8y_UploadConfigFile operation, however, config_snapshot feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperations::DownloadConfigFile(request) => {
-                self.convert_config_update_request(device_xid, cmd_id, request)
-                    .await?
+                if self.config.capabilities.config_update {
+                    self.convert_config_update_request(device_xid, cmd_id, request)
+                        .await?
+                } else {
+                    warn!("Received a c8y_DownloadConfigFile operation, however, config_update feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperations::Firmware(request) => {
-                self.convert_firmware_update_request(device_xid, cmd_id, request)?
+                if self.config.capabilities.firmware_update {
+                    self.convert_firmware_update_request(device_xid, cmd_id, request)?
+                } else {
+                    warn!("Received a c8y_Firmware operation, however, firmware_update feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperations::Custom => {
                 warn!("Received unsupported operation on JSON over MQTT topic");
@@ -679,7 +699,6 @@ impl CumulocityConverter {
         match get_smartrest_device_id(payload) {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    // Need a check of capabilities so that user can still use custom template if disabled
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
@@ -1008,7 +1027,7 @@ impl CumulocityConverter {
         trace!("Message content: {:?}", message.payload_str());
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
-            Err(_) => self.try_convert_tedge_topics(message).await,
+            Err(_) => self.try_convert_tedge_and_c8y_topics(message).await,
         }
     }
 
@@ -1277,7 +1296,7 @@ impl CumulocityConverter {
         .with_retain()
     }
 
-    async fn try_convert_tedge_topics(
+    async fn try_convert_tedge_and_c8y_topics(
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
