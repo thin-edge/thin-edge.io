@@ -12,7 +12,7 @@ impl SystemServiceManagerExt for &dyn SystemServiceManager {
         let mut failed = false;
 
         let _ = writeln!(&mut wr, "Starting {} service.\n", service);
-        if let Err(err) = self.restart_service(service) {
+        if let Err(err) = self.start_service(service) {
             let _ = writeln!(&mut wr, "Failed to stop {} service: {:?}", service, err);
             failed = true;
         }

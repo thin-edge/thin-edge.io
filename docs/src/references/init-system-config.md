@@ -17,6 +17,7 @@ name = "systemd"
 is_available = ["/bin/systemctl", "--version"]
 restart = ["/bin/systemctl", "restart", "{}"]
 stop =  ["/bin/systemctl", "stop", "{}"]
+start =  ["/bin/systemctl", "start", "{}"]
 enable =  ["/bin/systemctl", "enable", "{}"]
 disable =  ["/bin/systemctl", "disable", "{}"]
 is_active = ["/bin/systemctl", "is-active", "{}"]
@@ -47,15 +48,16 @@ will be interpreted as
 
 ## Keys
 
-|Property|Description|
-|--------|-----------|
-|`name`|An identifier of the init system. It is used in the output of `tedge connect` and `tedge disconnect`|
-|`is_available`|The command to check if the init is available on your system|
-|`restart`|The command to restart a service by the init system|
-|`stop`|The command to stop a service by the init system|
-|`enable`|The command to enable a service by the init system|
-|`disable`|The command to disable a service by the init system|
-|`is_active`|The command to check if the service is running by the init system|
+| Property       | Description                                                                                          |
+|----------------|------------------------------------------------------------------------------------------------------|
+| `name`         | An identifier of the init system. It is used in the output of `tedge connect` and `tedge disconnect` |
+| `is_available` | The command to check if the init is available on your system                                         |
+| `restart`      | The command to restart a service by the init system                                                  |
+| `stop`         | The command to stop a service by the init system                                                     |
+| `start`        | The command to start a service by the init system                                                    |
+| `enable`       | The command to enable a service by the init system                                                   |
+| `disable`      | The command to disable a service by the init system                                                  |
+| `is_active`    | The command to check if the service is running by the init system                                    |
 
 ## Default settings
 

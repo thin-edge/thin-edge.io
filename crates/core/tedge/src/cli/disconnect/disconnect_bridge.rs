@@ -61,12 +61,6 @@ impl DisconnectBridgeCommand {
                 .stop_and_disable_service(self.cloud.mapper_service(), std::io::stdout());
         }
 
-        if self.use_agent && which("tedge-agent").is_ok() {
-            failed = self
-                .service_manager()
-                .stop_and_disable_service(SystemService::TEdgeSMAgent, std::io::stdout());
-        }
-
         match failed {
             false => Ok(()),
             true => Err(DisconnectBridgeError::ServiceFailed),

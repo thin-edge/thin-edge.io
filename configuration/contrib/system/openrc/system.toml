@@ -2,6 +2,7 @@
 name = "OpenRC"
 is_available = ["/sbin/rc-service", "-l"]
 restart = ["/sbin/rc-service", "{}", "restart"]
+start = ["/sbin/rc-service", "{}", "start"]
 stop =  ["/sbin/rc-service", "{}", "stop"]
 enable =  ["/sbin/rc-update", "add", "{}"]
 disable =  ["/sbin/rc-update", "delete", "{}"]

@@ -37,8 +37,20 @@ tedge_connect_test_sm_services
 tedge_disconnect_test_sm_services
     ${output}=    Execute Command    sudo tedge disconnect c8y
     Should Contain    ${output}    Cumulocity Bridge successfully disconnected!
-    Should Contain    ${output}    tedge-agent service successfully stopped and disabled!
+    Should Not Contain    ${output}    tedge-agent service successfully stopped and disabled!
     Should Contain    ${output}    tedge-mapper-c8y service successfully stopped and disabled!
+
+tedge reconnect does not restart agent
+    ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${output}=    Execute Command    sudo tedge reconnect c8y
+    ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Should Be Equal    ${pid_before}    ${pid_after}
+
+tedge reconnect restarts mapper
+    ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y
+    ${output}=    Execute Command    sudo tedge reconnect c8y
+    ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y
+    Should Not Be Equal    ${pid_before}    ${pid_after}
 
 *** Keywords ***
 

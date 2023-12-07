@@ -2,6 +2,7 @@
 name = "systemd"
 is_available = ["/bin/systemctl", "--version"]
 restart = ["/bin/systemctl", "restart", "{}"]
+start = ["/bin/systemctl", "start", "{}"]
 stop =  ["/bin/systemctl", "stop", "{}"]
 enable =  ["/bin/systemctl", "enable", "{}"]
 disable =  ["/bin/systemctl", "disable", "{}"]
