@@ -15,7 +15,7 @@ use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
-use c8y_api::json_c8y_deserializer::C8yDeviceControlOperations;
+use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
 use c8y_api::json_c8y_deserializer::C8yOperation;
@@ -181,7 +181,7 @@ pub struct UploadOperationData {
 
 pub struct DownloadOperationData {
     pub entity_xid: EntityExternalId,
-    pub operation: C8yDeviceControlOperations,
+    pub operation: C8yDeviceControlOperation,
 }
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -578,9 +578,9 @@ impl CumulocityConverter {
             .process_json_over_mqtt(device_xid, cmd_id, &operation.extras)
             .await;
 
-        match result {
+        match &result {
             Err(
-                ref err @ CumulocityMapperError::FromC8ySoftwareUpdateDeserializerError(
+                ref err @ CumulocityMapperError::FromC8yJsonOverMqttDeserializerError(
                     C8yJsonOverMqttDeserializerError::InvalidParameter { ref operation, .. },
                 )
                 | ref err @ CumulocityMapperError::ExecuteFailed {
@@ -589,9 +589,8 @@ impl CumulocityConverter {
                 },
             ) => {
                 let topic = C8yTopic::SmartRestResponse.to_topic()?;
-                let msg1 = Message::new(&topic, format!("501,{operation}"));
-                let msg2 =
-                    Message::new(&topic, format!("502,{operation},\"{}\"", &err.to_string()));
+                let msg1 = Message::new(&topic, set_operation_executing(operation));
+                let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
                 error!("{err}");
                 output.extend_from_slice(&[msg1, msg2]);
             }
@@ -599,7 +598,7 @@ impl CumulocityConverter {
                 error!("{err}");
             }
 
-            Ok(msgs) => output.extend_from_slice(&msgs),
+            Ok(msgs) => output.extend_from_slice(msgs),
         }
 
         Ok(output)
@@ -611,15 +610,15 @@ impl CumulocityConverter {
         cmd_id: String,
         extras: &HashMap<String, Value>,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let msgs = match C8yDeviceControlOperations::from_extras(extras)? {
-            C8yDeviceControlOperations::Restart(_) => {
+        let msgs = match C8yDeviceControlOperation::from_json_object(extras)? {
+            C8yDeviceControlOperation::Restart(_) => {
                 self.forward_restart_request(device_xid, cmd_id)?
             }
-            C8yDeviceControlOperations::SoftwareUpdate(request) => {
+            C8yDeviceControlOperation::SoftwareUpdate(request) => {
                 self.forward_software_request(device_xid, cmd_id, request)
                     .await?
             }
-            C8yDeviceControlOperations::LogfileRequest(request) => {
+            C8yDeviceControlOperation::LogfileRequest(request) => {
                 if self.config.capabilities.log_upload {
                     self.convert_log_upload_request(device_xid, cmd_id, request)?
                 } else {
@@ -627,7 +626,7 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
-            C8yDeviceControlOperations::UploadConfigFile(request) => {
+            C8yDeviceControlOperation::UploadConfigFile(request) => {
                 if self.config.capabilities.config_snapshot {
                     self.convert_config_snapshot_request(device_xid, cmd_id, request)?
                 } else {
@@ -635,7 +634,7 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
-            C8yDeviceControlOperations::DownloadConfigFile(request) => {
+            C8yDeviceControlOperation::DownloadConfigFile(request) => {
                 if self.config.capabilities.config_update {
                     self.convert_config_update_request(device_xid, cmd_id, request)
                         .await?
@@ -644,7 +643,7 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
-            C8yDeviceControlOperations::Firmware(request) => {
+            C8yDeviceControlOperation::Firmware(request) => {
                 if self.config.capabilities.firmware_update {
                     self.convert_firmware_update_request(device_xid, cmd_id, request)?
                 } else {
@@ -652,8 +651,9 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
-            C8yDeviceControlOperations::Custom => {
-                warn!("Received unsupported operation on JSON over MQTT topic");
+            C8yDeviceControlOperation::Custom => {
+                // Ignores custom and static template operations unsupported by thin-edge
+                // However, these operations can be addressed by SmartREST that is published together with JSON over MQTT
                 vec![]
             }
         };

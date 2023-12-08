@@ -26,7 +26,7 @@ impl C8yDeviceControlTopic {
 }
 
 #[derive(Debug)]
-pub enum C8yDeviceControlOperations {
+pub enum C8yDeviceControlOperation {
     Restart(C8yRestart),
     SoftwareUpdate(C8ySoftwareUpdate),
     LogfileRequest(C8yLogfileRequest),
@@ -36,32 +36,32 @@ pub enum C8yDeviceControlOperations {
     Custom,
 }
 
-impl C8yDeviceControlOperations {
-    pub fn from_extras(
+impl C8yDeviceControlOperation {
+    pub fn from_json_object(
         hashmap: &HashMap<String, serde_json::Value>,
     ) -> Result<Self, serde_json::Error> {
         let op = if let Some(value) = hashmap.get("c8y_Restart") {
-            C8yDeviceControlOperations::Restart(C8yRestart::from_value(value.clone())?)
+            C8yDeviceControlOperation::Restart(C8yRestart::from_json_value(value.clone())?)
         } else if let Some(value) = hashmap.get("c8y_SoftwareUpdate") {
-            C8yDeviceControlOperations::SoftwareUpdate(C8ySoftwareUpdate::from_value(
+            C8yDeviceControlOperation::SoftwareUpdate(C8ySoftwareUpdate::from_json_value(
                 value.clone(),
             )?)
         } else if let Some(value) = hashmap.get("c8y_LogfileRequest") {
-            C8yDeviceControlOperations::LogfileRequest(C8yLogfileRequest::from_value(
+            C8yDeviceControlOperation::LogfileRequest(C8yLogfileRequest::from_json_value(
                 value.clone(),
             )?)
         } else if let Some(value) = hashmap.get("c8y_UploadConfigFile") {
-            C8yDeviceControlOperations::UploadConfigFile(C8yUploadConfigFile::from_value(
+            C8yDeviceControlOperation::UploadConfigFile(C8yUploadConfigFile::from_json_value(
                 value.clone(),
             )?)
         } else if let Some(value) = hashmap.get("c8y_DownloadConfigFile") {
-            C8yDeviceControlOperations::DownloadConfigFile(C8yDownloadConfigFile::from_value(
+            C8yDeviceControlOperation::DownloadConfigFile(C8yDownloadConfigFile::from_json_value(
                 value.clone(),
             )?)
         } else if let Some(value) = hashmap.get("c8y_Firmware") {
-            C8yDeviceControlOperations::Firmware(C8yFirmware::from_value(value.clone())?)
+            C8yDeviceControlOperation::Firmware(C8yFirmware::from_json_value(value.clone())?)
         } else {
-            C8yDeviceControlOperations::Custom
+            C8yDeviceControlOperation::Custom
         };
 
         Ok(op)
@@ -413,8 +413,8 @@ pub struct C8yFirmware {
     pub url: String,
 }
 
-pub trait C8yJsonOverMqttOperation {
-    fn from_value(value: serde_json::Value) -> Result<Self, serde_json::Error>
+pub trait C8yDeviceControlOperationHelper {
+    fn from_json_value(value: serde_json::Value) -> Result<Self, serde_json::Error>
     where
         Self: Sized + serde::de::DeserializeOwned,
     {
@@ -422,12 +422,12 @@ pub trait C8yJsonOverMqttOperation {
     }
 }
 
-impl C8yJsonOverMqttOperation for C8yRestart {}
-impl C8yJsonOverMqttOperation for C8ySoftwareUpdate {}
-impl C8yJsonOverMqttOperation for C8yLogfileRequest {}
-impl C8yJsonOverMqttOperation for C8yUploadConfigFile {}
-impl C8yJsonOverMqttOperation for C8yDownloadConfigFile {}
-impl C8yJsonOverMqttOperation for C8yFirmware {}
+impl C8yDeviceControlOperationHelper for C8yRestart {}
+impl C8yDeviceControlOperationHelper for C8ySoftwareUpdate {}
+impl C8yDeviceControlOperationHelper for C8yLogfileRequest {}
+impl C8yDeviceControlOperationHelper for C8yUploadConfigFile {}
+impl C8yDeviceControlOperationHelper for C8yDownloadConfigFile {}
+impl C8yDeviceControlOperationHelper for C8yFirmware {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum C8yJsonOverMqttDeserializerError {
@@ -437,4 +437,269 @@ pub enum C8yJsonOverMqttDeserializerError {
         parameter: String,
         hint: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::json_c8y_deserializer::C8yDeviceControlOperationHelper;
+    use crate::json_c8y_deserializer::C8yOperation;
+    use crate::json_c8y_deserializer::C8ySoftwareUpdate;
+    use crate::json_c8y_deserializer::C8ySoftwareUpdateModule;
+    use assert_json_diff::assert_json_eq;
+    use serde_json::json;
+    use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::Jsonify;
+    use tedge_api::SoftwareModule;
+    use tedge_api::SoftwareModuleUpdate;
+    use tedge_api::SoftwareUpdateCommand;
+
+    #[test]
+    fn verify_get_module_version_and_type() {
+        let mut module = C8ySoftwareUpdateModule {
+            name: "software1".into(),
+            version: "".into(),
+            url: None,
+            software_type: None,
+            action: "install".into(),
+            id: None,
+        }; // ""
+        assert_eq!(module.get_module_version_and_type(), (None, None));
+
+        module.version = " ".into(); // " " (space)
+        assert_eq!(module.get_module_version_and_type(), (None, None));
+
+        module.version = "::debian".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (None, Some("debian".to_string()))
+        );
+
+        module.version = "1.0.0::debian".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0".to_string()), Some("debian".to_string()))
+        );
+
+        module.version = "1.0.0::1::debian".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::1".to_string()), Some("debian".to_string()))
+        );
+
+        module.version = "1.0.0::1::".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::1".to_string()), None)
+        );
+
+        module.version = "1.0.0".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0".to_string()), None)
+        );
+    }
+
+    #[test]
+    fn deserialize_incorrect_software_update_action() {
+        let device = EntityTopicId::default_main_device();
+
+        let data = json!([
+            {
+                "name": "bar",
+                "action": "unknown",
+                "version": "1.0.1"
+            }
+        ]);
+
+        assert!(serde_json::from_str::<C8ySoftwareUpdate>(&data.to_string())
+            .unwrap()
+            .into_software_update_command(&device, "123".to_string())
+            .is_err());
+    }
+
+    #[test]
+    fn from_json_over_mqtt_update_software_to_software_update_cmd() {
+        let json_over_mqtt_payload = json!(
+        {
+            "delivery": {
+                "log": [],
+                "time": "2023-02-08T06:51:19.350Z",
+                "status": "PENDING"
+            },
+            "agentId": "22519994",
+            "creationTime": "2023-02-08T06:51:19.318Z",
+            "deviceId": "22519994",
+            "id": "522559",
+            "status": "PENDING",
+            "description": "test operation",
+            "c8y_SoftwareUpdate": [
+                {
+                    "softwareType": "dummy",
+                    "name": "software1",
+                    "action": "install",
+                    "id": "123456",
+                    "version": "version1::debian",
+                    "url": "url1"
+                },
+                {
+                    "name": "software2",
+                    "action": "delete",
+                    "version": ""
+                }
+            ],
+            "externalSource": {
+                "externalId": "external_id",
+                "type": "c8y_Serial"
+            }
+        });
+
+        let op: C8yOperation = serde_json::from_str(&json_over_mqtt_payload.to_string()).unwrap();
+        let req = C8ySoftwareUpdate::from_json_value(
+            op.extras
+                .get("c8y_SoftwareUpdate")
+                .expect("c8y_SoftwareUpdate field is missing")
+                .to_owned(),
+        )
+        .expect("Failed to deserialize");
+        let device = EntityTopicId::default_main_device();
+        let thin_edge_json = req
+            .into_software_update_command(&device, "123".to_string())
+            .unwrap();
+
+        let mut expected_thin_edge_json = SoftwareUpdateCommand::new(&device, "123".to_string());
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "software1".to_string(),
+            version: Some("version1".to_string()),
+            url: Some("url1".into()),
+            file_path: None,
+        }));
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+            module_type: Some("".to_string()),
+            name: "software2".to_string(),
+            version: None,
+            url: None,
+            file_path: None,
+        }));
+
+        assert_eq!(thin_edge_json, expected_thin_edge_json);
+    }
+
+    #[test]
+    fn from_c8y_json_to_thin_edge_software_update_json() {
+        let data = json!([
+            {
+                "name": "nodered",
+                "action": "install",
+                "version": "1.0.0::debian",
+                "url": ""
+            },
+            {
+                "name": "collectd",
+                "action": "install",
+                "version": "5.7::debian",
+                "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
+            },
+            {
+                "name": "nginx",
+                "action": "install",
+                "version": "1.21.0::docker",
+                "url": ""
+            },
+            {
+                "name": "mongodb",
+                "action": "delete",
+                "version": "4.4.6::docker"
+            }
+        ]);
+
+        let req: C8ySoftwareUpdate = serde_json::from_str(&data.to_string()).unwrap();
+
+        let software_update_request = req
+            .into_software_update_command(&EntityTopicId::default_main_device(), "123".to_string())
+            .unwrap();
+
+        let output_json = software_update_request.payload.to_json();
+
+        let expected_json = json!({
+            "status": "init",
+            "updateList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7",
+                            "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2",
+                            "action": "install"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action": "remove"
+                        }
+                    ]
+                }
+            ]
+        });
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(output_json.as_str()).unwrap(),
+            expected_json
+        );
+    }
+
+    #[test]
+    fn access_c8y_software_update_modules() {
+        let data = json!([
+            {
+                "name": "software1",
+                "action": "install",
+                "version": "version1",
+                "url": "url1"
+            },
+            {
+                "name": "software2",
+                "action": "delete",
+                "version": ""
+            }
+        ]);
+
+        let update_software = serde_json::from_str::<C8ySoftwareUpdate>(&data.to_string()).unwrap();
+
+        let expected_vec = vec![
+            C8ySoftwareUpdateModule {
+                name: "software1".into(),
+                version: "version1".into(),
+                url: Some("url1".into()),
+                software_type: None,
+                action: "install".into(),
+                id: None,
+            },
+            C8ySoftwareUpdateModule {
+                name: "software2".into(),
+                version: "".into(),
+                url: None,
+                software_type: None,
+                action: "delete".into(),
+                id: None,
+            },
+        ];
+
+        assert_eq!(update_software.modules(), &expected_vec);
+    }
 }
