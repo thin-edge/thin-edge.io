@@ -241,6 +241,20 @@ fn extract_script_output(stdout: String) -> Option<String> {
     None
 }
 
+/// Define how to handle a background script
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BgExitHandlers {
+    pub on_exec: GenericStateUpdate,
+}
+
+impl BgExitHandlers {
+    pub fn try_new(on_exec: Option<GenericStateUpdate>) -> Result<Self, ScriptDefinitionError> {
+        Ok(BgExitHandlers {
+            on_exec: on_exec.unwrap_or_else(GenericStateUpdate::successful),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

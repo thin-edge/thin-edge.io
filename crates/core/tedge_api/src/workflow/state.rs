@@ -55,6 +55,17 @@ impl GenericCommandState {
         self.payload.to_string()
     }
 
+    /// Update this state
+    pub fn update(mut self, update: GenericStateUpdate) -> Self {
+        let status = update.status;
+        GenericCommandState::inject_text_property(&mut self.payload, "status", &status);
+        if let Some(reason) = &update.reason {
+            GenericCommandState::inject_text_property(&mut self.payload, "reason", reason)
+        };
+
+        GenericCommandState { status, ..self }
+    }
+
     /// Inject a json payload into this one
     pub fn update_with_json(mut self, json: Value) -> Self {
         if let (Some(values), Some(new_values)) = (self.payload.as_object_mut(), json.as_object()) {
@@ -213,6 +224,12 @@ impl GenericStateUpdate {
                 json
             }
         }
+    }
+}
+
+impl Default for GenericStateUpdate {
+    fn default() -> Self {
+        GenericStateUpdate::successful()
     }
 }
 

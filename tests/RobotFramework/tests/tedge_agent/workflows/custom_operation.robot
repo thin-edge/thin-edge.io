@@ -26,7 +26,7 @@ Override Built-In Operation
     Should Contain      ${software_list[0]}    "tedge"
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 ''
 
-Trigger A Restart
+Trigger Device Restart
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/controlled_restart/robot-789 '{"status":"init"}'
     ${cmd_outcome}      Should Have MQTT Messages    te/device/main///cmd/controlled_restart/robot-789    message_pattern=.*successful.*   maximum=2
     ${actual_log}       Execute Command    cat /etc/tedge/operations/restart-robot-789
@@ -37,6 +37,13 @@ Timeout An Action
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/slow_operation/robot-1 '{"status":"init"}'
     Should Have MQTT Messages    te/device/main///cmd/slow_operation/robot-1    message_pattern=.*timeout.*   maximum=1
 
+Trigger Agent Restart
+    ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent/robot-1 '{"status":"init"}'
+    Should Have MQTT Messages    te/device/main///cmd/restart-tedge-agent/robot-1    message_pattern=.*tedge-agent-restarted.*   maximum=1    timeout=180
+    ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
+
 *** Keywords ***
 
 Custom Setup
@@ -45,6 +52,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     Copy Configuration Files
     Restart Service    tedge-agent
+    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/software_list.toml       /etc/tedge/operations/

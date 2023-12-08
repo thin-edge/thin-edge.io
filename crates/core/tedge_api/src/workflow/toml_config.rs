@@ -1,5 +1,6 @@
 use crate::mqtt_topics::OperationType;
 use crate::workflow::toml_config::TomlOperationAction::Action;
+use crate::workflow::BgExitHandlers;
 use crate::workflow::ExitHandlers;
 use crate::workflow::GenericStateUpdate;
 use crate::workflow::OperationAction;
@@ -101,8 +102,9 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 let handlers = TryInto::<ExitHandlers>::try_into(input.handlers)?;
                 Ok(OperationAction::Script(script, handlers))
             }
-            TomlOperationAction::BackgroundScript(_script) => {
-                todo!()
+            TomlOperationAction::BackgroundScript(script) => {
+                let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
+                Ok(OperationAction::BgScript(script, handlers))
             }
             TomlOperationAction::Action(ShellScript { command, args }) => match command.as_str() {
                 "builtin" => Ok(OperationAction::BuiltIn),
@@ -241,6 +243,15 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
         ExitHandlers::try_new(
             on_exit, on_success, on_error, on_kill, on_stdout, wildcard, timeout,
         )
+    }
+}
+
+impl TryFrom<TomlExitHandlers> for BgExitHandlers {
+    type Error = ScriptDefinitionError;
+
+    fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+        let on_exec = value.on_exec.map(|u| u.into());
+        BgExitHandlers::try_new(on_exec)
     }
 }
 

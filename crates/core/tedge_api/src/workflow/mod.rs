@@ -82,6 +82,15 @@ pub enum OperationAction {
     /// A script has to be executed
     Script(ShellScript, ExitHandlers),
 
+    /// Executes a script but move to the next state without waiting for that script to return
+    ///
+    /// Notably such a script can trigger a device reboot or an agent restart.
+    /// ```toml
+    /// background_script = "sudo systemctl restart tedge-agent"
+    /// on_exec = "<state>"
+    /// ```
+    BgScript(ShellScript, BgExitHandlers),
+
     /// The command has been fully processed and needs to be cleared
     Clear,
 }
@@ -96,6 +105,7 @@ impl Display for OperationAction {
             }
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
+            OperationAction::BgScript(script, _) => script.to_string(),
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
         };
         f.write_str(&str)

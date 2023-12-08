@@ -217,6 +217,21 @@ impl TedgeOperationConverterActor {
                 self.publish_command_state(operation, cmd_id, new_state)
                     .await
             }
+            OperationAction::BgScript(script, handlers) => {
+                let next_state = &handlers.on_exec.status;
+                info!(
+                    "Moving {operation} operation to {next_state} state before running: {script}"
+                );
+                let new_state = state.update(handlers.on_exec);
+                self.publish_command_state(operation, cmd_id, new_state)
+                    .await?;
+
+                // Run the command, but ignore its result
+                let command = Execute::new(script.command, script.args);
+                let output = self.script_runner.await_response(command).await?;
+                log_file.log_script_output(&output).await;
+                Ok(())
+            }
         }
     }
 
