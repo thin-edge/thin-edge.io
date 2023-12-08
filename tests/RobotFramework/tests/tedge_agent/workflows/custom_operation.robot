@@ -33,6 +33,10 @@ Trigger A Restart
     ${expected_log}     Get File    ${CURDIR}/restart-command-expected.log
     Should Be Equal     ${actual_log}    ${expected_log}
 
+Timeout An Action
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/slow_operation/robot-1 '{"status":"init"}'
+    Should Have MQTT Messages    te/device/main///cmd/slow_operation/robot-1    message_pattern=.*timeout.*   maximum=1
+
 *** Keywords ***
 
 Custom Setup
@@ -51,3 +55,6 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/check-download.sh        /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_restart.toml      /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/log-restart.sh           /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/slow-operation.toml      /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh       /etc/tedge/operations/

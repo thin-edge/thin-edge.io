@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::fmt::Write;
 use std::num::ParseIntError;
 use std::str::FromStr;
+use std::time::Duration;
 
 /// User-friendly representation of an [OperationWorkflow]
 ///
@@ -199,7 +200,7 @@ pub struct TomlExitHandlers {
     on_exit: HashMap<ExitCodes, TomlStateUpdate>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    timeout_second: Option<usize>,
+    timeout_second: Option<u64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     on_timeout: Option<TomlStateUpdate>,
@@ -235,8 +236,11 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
                 }
             })
             .collect();
+        let timeout = value.timeout_second.map(Duration::from_secs);
 
-        ExitHandlers::try_new(on_exit, on_success, on_error, on_kill, on_stdout, wildcard)
+        ExitHandlers::try_new(
+            on_exit, on_success, on_error, on_kill, on_stdout, wildcard, timeout,
+        )
     }
 }
 

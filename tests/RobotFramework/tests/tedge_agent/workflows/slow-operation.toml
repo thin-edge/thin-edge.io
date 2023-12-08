@@ -1,0 +1,13 @@
+operation = "slow_operation"
+
+[init]
+script = "sh -c 'while true; do sleep 1; done'"
+timeout_second = 1
+on_success = "successful"
+on_kill = { status = "failed", reason = "timeout" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

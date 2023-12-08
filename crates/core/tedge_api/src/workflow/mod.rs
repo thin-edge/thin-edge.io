@@ -45,20 +45,23 @@ pub enum OperationAction {
     /// Such steps are intended to be overridden.
     ///
     /// ```toml
-    /// on_exec = "<state>"
-    /// builtin_action = "none"
+    /// action = "proceed"
+    /// on_success = "<state>"
     /// ```
     MoveTo(StateName),
 
     /// The built-in behavior is used
     ///
-    /// No TOML representation
+    /// ```toml
+    /// action = "builtin"
+    /// on_success = "<state>"
+    /// ```
     BuiltIn,
 
     /// The command is delegated to a participant identified by its name
     ///
     /// ```toml
-    /// builtin_action = "waiting <action>"
+    /// action = "waiting <delegate>"
     /// ```
     Delegate(String),
 

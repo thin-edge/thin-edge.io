@@ -6,9 +6,11 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 use serde_json::Value;
+use std::cmp::min;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::os::unix::prelude::ExitStatusExt;
+use std::time::Duration;
 
 /// A parsed Unix command line
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,6 +66,7 @@ pub struct ExitHandlers {
     on_kill: Option<GenericStateUpdate>,
     on_exit: Vec<(u8, u8, GenericStateUpdate)>,
     on_stdout: Vec<String>,
+    timeout: Option<Duration>,
 }
 
 impl ExitHandlers {
@@ -74,6 +77,7 @@ impl ExitHandlers {
         on_kill: Option<GenericStateUpdate>,
         on_stdout: Vec<String>,
         wildcard: Option<GenericStateUpdate>,
+        timeout: Option<Duration>,
     ) -> Result<Self, ScriptDefinitionError> {
         // The on exit error handlers are sorted by range min
         // to ease the implementation of `ExitHandlers::state_update()`
@@ -126,6 +130,7 @@ impl ExitHandlers {
             on_kill,
             on_exit,
             on_stdout,
+            timeout,
         })
     }
 
@@ -212,6 +217,17 @@ impl ExitHandlers {
     pub fn state_update_on_kill(&self, program: &str, signal: u8) -> GenericStateUpdate {
         self.on_kill.clone().unwrap_or_else(|| {
             GenericStateUpdate::failed(format!("{program} killed by signal {signal}"))
+        })
+    }
+
+    pub fn graceful_timeout(&self) -> Option<Duration> {
+        self.timeout
+    }
+
+    pub fn forceful_timeout_extension(&self) -> Option<Duration> {
+        self.timeout.map(|timeout| {
+            let extra = min(60, timeout.as_secs() / 20);
+            Duration::from_secs(extra)
         })
     }
 }

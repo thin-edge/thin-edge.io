@@ -197,7 +197,19 @@ impl TedgeOperationConverterActor {
                 info!("Processing {operation} operation {step} step with script: {script}");
 
                 let script_name = script.command.clone();
-                let command = Execute::new(script_name.clone(), script.args);
+                let command = {
+                    let command = Execute::new(script_name.clone(), script.args);
+                    match (
+                        handlers.graceful_timeout(),
+                        handlers.forceful_timeout_extension(),
+                    ) {
+                        (Some(timeout), Some(extra)) => command
+                            .with_graceful_timeout(timeout)
+                            .with_forceful_timeout_extension(extra),
+                        (Some(timeout), None) => command.with_graceful_timeout(timeout),
+                        (None, _) => command,
+                    }
+                };
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
 
