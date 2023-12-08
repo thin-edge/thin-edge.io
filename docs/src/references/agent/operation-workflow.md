@@ -23,33 +23,33 @@ Thin-edge **tedge-agent** provides the tools to:
 
 Here is an example where three software components participate in a `firmware_update` command.
 - The **tedge-mapper** creates the initial state of the command
-  providing the required information to install a new version for a configuration file;
+  providing the required information to install a new version of the device firmware;
   and then waits for the final outcome (in black).
 - The **tedge-agent** handles the main steps (in red): downloading the file and installing it where expected.
-- User-provided scripts handle domain-specific checks (in blue)
+- User-provided **scripts** handle domain-specific checks (in blue)
   to timely schedule the command as well as to ensure the configuration file is not corrupted and properly installed.
 
 ```mermaid
 stateDiagram-v2
     [*] --> init
-    init --> download
-    download --> downloaded
-    downloaded --> install
-    install --> installed 
-    installed --> successful
+    init --> install
+    install --> reboot 
+    reboot --> verify
+    verify --> commit
+    commit --> successful
     init --> failed
-    download --> failed
-    downloaded --> failed
     install --> failed
-    installed --> failed
+    verify --> rollback
+    commit --> rollback
+    rollback --> failed
     successful --> [*]
     failed --> [*]
     
     classDef specific color:blue;
-    class init, downloaded, installed specific
+    class init, verify specific
     
     classDef plugin color:red;
-    class download, install plugin
+    class install, reboot, commit, rollback plugin
        
     classDef mapper color:black;
     class successful, failed mapper
@@ -62,7 +62,7 @@ Observe on the example that:
 - At any state, *one and only one* participant is responsible to move the operation forward.
 - Publishing a state to the MQTT command topic, can be seen as passing the baton from one participant to another.
   The mapper creates the **init** state and then lets the other components work.
-  The agent tells the download has been successful by publishing the **downloaded** state,
+  The agent tells the installation has been successful by publishing the **reboot** state,
   but do nothing till the domain-specific component has checked the file and move the command state to **install**.
 - Each software component has to know only *some* states of the whole workflow:
   - the states they are responsible for
@@ -75,27 +75,19 @@ Observe on the example that:
 The benefits are that:
 - A participant can be substituted by another implementation as long as the substitute implementation
   is ready to process at least all the states processed by the former implementation.
-  - This is the key principle used by thin-edge to provide extensible operation support.
-  - The **tedge-agent** defines the **downloaded** and *installed** states
-    with no specific behavior beyond proceeding to the next step;
-    so, a domain specific component can be substituted to add extra checks and actions before moving forward.
 - Extra states and participants can be added as long as each state is owned by one participant.
   - For instance, an agent developer can introduce a **rollback** state in the `firmware_update` workflow,
     associated by another software component responsible for these rollbacks.
-
-Furthermore, specific versions of the same workflow can be defined on different targets.
-The main and child devices can each run their own version of a workflow for an operation.
-Indeed, all the status updates for a command on a given thin-edge entity or component
-are published on an MQTT topic with the entity identifier as the prefix.
 - The same executable can be used to handle operations on different targets.
   For instance, the **tedge-agent** can run on the main device `te/device/main//`
   as well as on a child-device identified by `te/device/child-xyz//`.
+- Specific versions of the same workflow can be defined on different targets.
+  The main and child devices can each run their own version of a workflow for an operation.
+  As an example, an agent developer can define an extra rollback state on the main device but not on the child devices.
 - A specific executable can be substituted on a specific target.
   If for some reasons, **tedge-agent** cannot be installed on a child-device,
   then a specific implementation of the `firmware_update` MQTT API can be used to serve firmware updates
-  on, say, `te/micro-controller/xyz//`.
-- A workflow can be extended differently for each target.
-  As an example, an agent developer can define an extra rollback state on the main device but not on the child devices.
+  on that specific hardware.
 
 ## Operation API
 
@@ -150,9 +142,9 @@ However, there are some rules and best practices.
   - The terminal states, a.k.a **successful** and **failed**, are owned by the process which created the **init** state (in practice, the mapper).
     Only this process should clear the retained message state for an operation instance by sending an empty payload on command's topic.
 
-### Workflow Overriding
+## User-defined Operation Workflow
 
-Thin-edge provides a mechanism to override, extend and combine workflows.
+Thin-edge provides a mechanism to define, extend and combine workflows.
 
 This mechanism is provided by the **tedge-agent** which gathers a set of user-defined workflows
 and combined them with the builtin workflows implemented by the agent itself.
@@ -162,47 +154,49 @@ Each workflow is defined using a TOML file stored in `/etc/tedge/operations`. Ea
   such as `firmware_update` or `restart`- the list of states
 - for each state:
   - the state name as defined by the operation API
-  - the set of states which can be an outcome for this state actions
-  - possible extra instructions on how to process the command at this stage, e.g.
+  - an action to process the command at this stage, e.g.
     - run a script
     - restart the device
+    - let the agent applies the builtin behavior
+  - instructions on how to proceed given the successful or failed outcome of the action.
 
 ```toml title="file: firmware_update_example.toml"
 operation = "firmware_update"
 
+on_error = "failed"
+
 [init]
   script = "/usr/bin/firmware_handler.sh plan"
-  next = ["scheduled", "failed"]
-
-[scheduled]
-  next = ["install"]
+  on_success = "install"
+  on_error = { status = "failed", reason = "not timely" }
 
 [install]
   script = "/usr/bin/firmware_handler.sh install ${.payload.url}"
-  next = ["reboot", "failed"]
+  on_success = "reboot"
 
 [reboot]
-  next = "verify"
+  script = "/usr/bin/firmware_handler.sh reboot"
+  on_exec = "verify"
 
 [verify]
   script = "/usr/bin/firmware_handler.sh verify"
-  next = ["commit", "rollback"]
+  on_success = "commit"
+  on_error = { status = "rollback", reason = "sanity check failed" }
 
 [commit]
-  next = ["successful", "rollback_reboot"]
+  script = "/usr/bin/firmware_handler.sh commit"
+  on_success = "successful"
+  on_error = { status = "rollback", reason = "commit failed" }
 
 [rollback]
   script = "/usr/bin/firmware_handler.sh rollback"
-  next = ["rollback_reboot"]
-
-[rollback_reboot]
-  next = ["failed"]
+  on_success = "failed"
 
 [successful]
-  next = []
+  action = "cleanup"
 
 [failed]
-  next = []
+  action = "cleanup"
 ```
 
 Thin-edge combines all these workflows to determine what has to be done
@@ -213,20 +207,6 @@ i.e. `te/+/+/+/+/cmd/+/+`.
 - If no workflow has been defined by the user for this operation, then the built-in workflow is used.
 - If there is no workflow or no defined action for the current state,
   then the __tedge_agent__ simply waits for another component to take over the command.
-
-### Built-in Actions
-
-For operations supported by the __tedge-agent__, the built-in behavior is the default.
-In other words, if no alternative actions is specified by a user-provided workflow,
-the commands are processed following the built-in behavior.
-
-If alternative actions are only given on some states, then the built-in behavior is applied to all others.
-This gives the ability to override parts of the built-in operation workflow.
-
-The __successful__ and __failed__ states are also handled in a specific way.
-Only the command issuer is supposed to react on those,
-pushing a retained empty message on the command request topic when done.
-This ends the command workflow.
 
 ### Script Execution
 
@@ -265,32 +245,6 @@ The script exit status and output is used to determine the next step for the com
     (adding new fields, overriding overlapping ones, keeping previous unchanged ones).
   - If this excerpt is a json payload with a `status` field, then this status is used as the new status for the command.
 - If the script output is empty, then the exit status of the process is used to determine the next step. 
-
-### Restart action
-
-A workflow can trigger a device restart, using the builtin __restart__ action.
-
-This action is controlled by three states:
-- the *on_executing* state to which the workflow moves before the reboot is triggered
-- the *on_success* state to which the workflow resumes after a successful device reboot
-- the *on_error* state to which the workflow resumes in case the reboot fails
-
-For instance, the following triggers a reboot from the `reboot_required` state
-and moves to `restarting` waiting for the device to restart
-and finally to either `successful_restart` or `failed_restart`,
-depending on the actual status of the reboot. 
-
-```
-[reboot_required]
-script = "restart"
-next = ["restarting", "successful_restart", "failed_restart"]
-```
-
-:::note
-This file format is not finalized and will likely be revised.
-:::
-
-## Proposal for improvements
 
 ### Next step determined by script exit status
 
@@ -343,14 +297,16 @@ on_stdout = ["state-1", "state-2", "state-3"]                            # the l
 
 - If the script is successful and its output returns some `status` and `reason` fields, these are used for the next state.
 - If the script is successful but its output contains no `status` field, then `on_error` is used.
-- If the script cannot be executed, is killed or returns a non-zero code,
+- If the script cannot be executed, is killed or return an error with no specific `on_exit` handler,
   then the `status` and `reason` fields are determined by the `on_error` and `on_kill` handlers
   (or if none where provided using the default `on_error` and `on_kill` handlers).
-- The fields of the JSON object extracted from the script output are injected into the command state message payload
-  - This is done in the successful as well as the failed cases,
-    for all the fields, except for the `status` and `reason` fields.
-  - Notably, when the script returns with a non-successful status code,
-    the `on_error` definition trumps over any `status` and `reason` fields provided over the script stdout.
+- If the script is successful or returns an expected exit code (i.e. one with a specific `on_exit` handler),
+  then the fields of the JSON object extracted from the script output are injected into the command state message payload.
+  - This is done in the successful as well as the failed cases.
+  - If a `status` field is also provided by the message payload,
+    then the `status` provided by the workflow definition trumps the value provided by the script.
+  - For the `reason` field, the rule is reversed:
+    the value provided by the script trumps the `reason` provided by the workflow definition if any.
 
 ### Background scripts
 
@@ -362,13 +318,13 @@ This can notably be used to restart the device or the agent.
 After the restart, the workflow will resume in the state specified by the workflow.
 
 ```toml
-["agent-restart"]
+[agent-restart]
 background_script = "sudo systemctl restart tedge-agent"
 on_exec = "waiting-for-restart"
 
-["waiting-for-restart"]
+[waiting-for-restart]
 script = "/some/script.sh checking restart"
-on_stdout = ["waiting-for-restart", "successful_restart", "failed_restart"]
+on_stdout = [ "successful_restart", "failed_restart"]
 ```
 
 Note that:
@@ -427,8 +383,6 @@ For some action, notably a device `restart`, the handlers are limited to one:
 Currently, here are the available actions:
 
 - `restart` triggers a reboot of the device
-- `waiting <delegate>` means that agent itself has nothing to do but to wait that another component,
-  to which the action has been delegated, finalizes its task and notifies the new state for the command.  
 - `builtin` is used when a builtin operation is overwritten by a custom workflow and indicates that for that state
   the builtin action has to be applied.
 - `proceed` is a no-op action, simply proceeding to the next state, which is useful when a builtin operation is customized
@@ -438,7 +392,18 @@ Currently, here are the available actions:
 
 #### Restart
 
-First proposal:
+A workflow can trigger a device restart, using the builtin __restart__ action.
+
+This action is controlled by three states:
+- the *on_exec* state to which the workflow moves before the reboot is triggered
+- the *on_success* state to which the workflow resumes after a successful device reboot
+- the *on_error* state to which the workflow resumes in case the reboot fails
+
+For instance, the following triggers a reboot from the `reboot_required` state
+and moves to `restarting` waiting for the device to restart
+and finally to either `successful_restart` or `failed_restart`,
+depending on the actual status of the reboot.
+
 ```toml
 ["device-restart"]
 action = "restart"
@@ -446,44 +411,11 @@ on_exec = "waiting-for-restart"
 on_success = "successful_restart"
 on_error = "failed_restart"
 ```
-
-Pros:
-- closer to the internal behavior
-
-Cons:
-- state with no representation
-
-Alternative proposal:
-
-```toml
-["device-restart"]
-action = "restart"
-on_exec = "waiting-for-restart"
-
-["waiting-for-restart"]
-action = "waiting restart"
-on_success = "successful_restart"
-on_error = "failed_restart"
-```
-
-Pros:
-- closer to the observed behavior
-- no implicit state
-
-Cons:
-- the two states must be consistent
-
-#### Waiting
-
-```toml
-["<state>"]
-action = "waiting <delegate>"
-on_success = "<successful_state>"
-on_error = "<failed_state>"
-```
-
 
 #### Cleanup
+
+Used to automatically cleanup the retained command from the MQTT broker after the workflow execution completes.
+To be used only on terminal states: `successful` and `failed`.
 
 ```toml
 ["successful"]

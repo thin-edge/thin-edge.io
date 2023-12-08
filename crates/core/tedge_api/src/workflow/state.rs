@@ -213,13 +213,20 @@ impl GenericStateUpdate {
         self.into()
     }
 
+    /// Inject this state update into a given JSON representing the state update returned by a script.
+    ///
+    /// - The status field of self always trumps the status field contained by the JSON value (if any).
+    /// - The error field of self acts only as a default
+    ///   and is injected only no such field is provided by the JSON value.
     pub fn inject_into_json(self, mut json: Value) -> Value {
         match json.as_object_mut() {
             None => self.into_json(),
             Some(object) => {
                 object.insert("status".to_string(), self.status.into());
-                if let Some(reason) = self.reason {
-                    object.insert("reason".to_string(), reason.into());
+                if object.get("reason").is_none() {
+                    if let Some(reason) = self.reason {
+                        object.insert("reason".to_string(), reason.into());
+                    }
                 }
                 json
             }

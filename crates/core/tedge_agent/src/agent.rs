@@ -333,7 +333,7 @@ impl Agent {
                         info!("Using operation workflow definition from {file:?} for '{cmd}' operation");
                     }
                     Err(err) => {
-                        error!("Ignoring operation workflow definition from {file:?}: {err}")
+                        error!("Ignoring operation workflow definition from {file:?}: {err:?}")
                     }
                 };
             }
@@ -343,10 +343,11 @@ impl Agent {
 }
 
 async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyhow::Error> {
-    let context = || format!("Reading operation workflow from {path:?}");
-    let bytes = tokio::fs::read(path).await.with_context(context)?;
-    let input = std::str::from_utf8(&bytes).with_context(context)?;
-    let workflow = toml::from_str::<OperationWorkflow>(input)?; //.with_context(context)?;
+    let bytes = tokio::fs::read(path)
+        .await
+        .context("Reading file content")?;
+    let input = std::str::from_utf8(&bytes).context("Expecting UTF8 content")?;
+    let workflow = toml::from_str::<OperationWorkflow>(input).context("Parsing TOML content")?;
     Ok(workflow)
 }
 

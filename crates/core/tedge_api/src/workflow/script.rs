@@ -150,16 +150,26 @@ impl ExitHandlers {
                         self.json_stdout_excerpt(program, output.stdout),
                     ) {
                         (None, Err(reason)) => GenericStateUpdate::failed(reason).into_json(),
-                        (None, Ok(json_update)) => json_update,
-                        (Some(successful_state), Ok(json_update)) => {
-                            successful_state.clone().inject_into_json(json_update)
+                        (None, Ok(dynamic_update)) => dynamic_update,
+                        (Some(successful_state), Ok(dynamic_update)) => {
+                            successful_state.clone().inject_into_json(dynamic_update)
                         }
                         (Some(successful_state), Err(_)) => successful_state.clone().into_json(),
                     }
                 }
-                Some(code) => self.state_update_on_exit(program, code as u8).into_json(),
+                Some(code) => match self.state_update_on_error(code as u8) {
+                    None => self
+                        .state_update_on_unknown_exit_code(program, code as u8)
+                        .into_json(),
+                    Some(error_state) => {
+                        match self.json_stdout_excerpt(program, output.stdout).ok() {
+                            None => error_state.into_json(),
+                            Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
+                        }
+                    }
+                },
             },
-            Err(err) => self.state_update_on_error(program, err).into_json(),
+            Err(err) => self.state_update_on_launch_error(program, err).into_json(),
         }
     }
 
@@ -167,16 +177,21 @@ impl ExitHandlers {
         if code == 0 {
             return self.state_update_on_success();
         }
+
+        self.state_update_on_error(code)
+            .unwrap_or_else(|| self.state_update_on_unknown_exit_code(program, code))
+    }
+
+    fn state_update_on_error(&self, code: u8) -> Option<GenericStateUpdate> {
         for (from, to, update) in self.on_exit.iter() {
             if code < *from {
-                return self.state_update_on_unknown_exit_code(program, code);
+                return None;
             }
             if *from <= code && code <= *to {
-                return update.clone();
+                return Some(update.clone());
             }
         }
-
-        self.state_update_on_unknown_exit_code(program, code)
+        None
     }
 
     pub fn state_update_on_success(&self) -> GenericStateUpdate {
@@ -202,7 +217,11 @@ impl ExitHandlers {
         }
     }
 
-    fn state_update_on_error(&self, program: &str, err: std::io::Error) -> GenericStateUpdate {
+    fn state_update_on_launch_error(
+        &self,
+        program: &str,
+        err: std::io::Error,
+    ) -> GenericStateUpdate {
         self.on_error.clone().unwrap_or_else(|| {
             GenericStateUpdate::failed(format!("Failed to launch {program}: {err}"))
         })
@@ -408,6 +427,46 @@ on_error = "oops"
             state_update,
             json! ({
                 "status": "oops"
+            })
+        )
+    }
+
+    #[test]
+    fn on_expected_exit_code_stdout_reason_trumps_static_reason() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"status\\\":\\\"failed\\\", \\\"reason\\\":\\\"expected\\\", \\\"foo\\\":\\\"bar\\\"\\}; echo :::end-tedge:::; exit 1'"
+on_exit.1 = { status = "handle_exit_1", reason = "exit 1"}
+on_exit._ = "oops"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "handle_exit_1",
+                "reason": "expected",
+                "foo": "bar"
+            })
+        )
+    }
+
+    #[test]
+    fn on_expected_exit_code_static_reason_is_the_default() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"status\\\":\\\"failed\\\", \\\"foo\\\":\\\"bar\\\"\\}; echo :::end-tedge:::; exit 1'"
+on_exit.1 = { status = "handle_exit_1", reason = "exit 1"}
+on_exit._ = "oops"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "handle_exit_1",
+                "reason": "exit 1",
+                "foo": "bar"
             })
         )
     }
