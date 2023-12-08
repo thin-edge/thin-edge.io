@@ -136,6 +136,7 @@ async fn run_with(
         mqtt_device_topic_id: mqtt_device_topic_id.to_string().parse()?,
         tmp_path: Arc::from(tedge_config.tmp.path.as_path()),
         is_sudo_enabled: tedge_config.enable.sudo,
+        config_update_enabled: true,
     })?;
 
     let config_actor = ConfigManagerBuilder::try_new(

@@ -39,6 +39,8 @@ pub struct ConfigManagerConfig {
 
     /// If enabled, config file updates are deployed by tedge-write.
     pub use_tedge_write: TedgeWriteStatus,
+
+    pub config_update_enabled: bool,
 }
 
 pub struct ConfigManagerOptions {
@@ -47,6 +49,7 @@ pub struct ConfigManagerOptions {
     pub mqtt_device_topic_id: EntityTopicId,
     pub tmp_path: Arc<Utf8Path>,
     pub is_sudo_enabled: bool,
+    pub config_update_enabled: bool,
 }
 
 impl ConfigManagerConfig {
@@ -89,6 +92,7 @@ impl ConfigManagerConfig {
             use_tedge_write: TedgeWriteStatus::Enabled {
                 sudo: cliopts.is_sudo_enabled,
             },
+            config_update_enabled: cliopts.config_update_enabled,
         })
     }
 }
