@@ -37,6 +37,22 @@ total 8
 -r-------- 1 mosquitto mosquitto 246 May 31 09:26 tedge-private-key.pem
 ```
 
+## Renew self-signed certificate
+
+To renew the expired certificate you can use [`tedge cert renew`](../../references/cli/tedge-cert.md) thin-edge.io command:
+
+```sh
+sudo tedge cert renew
+```
+
+```text title="Output"
+Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud
+```
+
+:::note
+`tedge cert renew` will get the device-id from the existing expired certificate and then renews it.
+:::
+
 ## Errors
 
 ### Certificate creation fails due to invalid device id
