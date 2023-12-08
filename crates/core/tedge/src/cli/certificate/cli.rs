@@ -2,6 +2,7 @@ use tedge_config::OptionalConfigError;
 
 use super::create::CreateCertCmd;
 use super::remove::RemoveCertCmd;
+use super::renew::RenewCertCmd;
 use super::show::ShowCertCmd;
 use super::upload::*;
 
@@ -18,6 +19,9 @@ pub enum TEdgeCertCli {
         #[clap(long = "device-id")]
         id: String,
     },
+
+    /// Renew the device certificate
+    Renew,
 
     /// Show the device certificate, if any
     Show,
@@ -70,8 +74,14 @@ impl BuildCommand for TEdgeCertCli {
                 };
                 cmd.into_boxed()
             }
+            TEdgeCertCli::Renew => {
+                let cmd = RenewCertCmd {
+                    cert_path: config.device.cert_path.clone(),
+                    key_path: config.device.key_path.clone(),
+                };
+                cmd.into_boxed()
+            }
         };
-
         Ok(cmd)
     }
 }

@@ -36,7 +36,10 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+    pub(crate) fn create_test_certificate(
+        &self,
+        config: &NewCertificateConfig,
+    ) -> Result<(), CertError> {
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 

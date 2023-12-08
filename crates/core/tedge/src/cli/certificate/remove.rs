@@ -29,7 +29,7 @@ impl Command for RemoveCertCmd {
 }
 
 impl RemoveCertCmd {
-    fn remove_certificate(&self) -> Result<RemoveCertResult, CertError> {
+    pub(crate) fn remove_certificate(&self) -> Result<RemoveCertResult, CertError> {
         match fs::remove_file(&self.cert_path).and_then(|()| fs::remove_file(&self.key_path)) {
             Ok(()) => Ok(RemoveCertResult::Removed),
             Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(RemoveCertResult::NotFound),
@@ -38,7 +38,7 @@ impl RemoveCertCmd {
     }
 }
 
-enum RemoveCertResult {
+pub(crate) enum RemoveCertResult {
     Removed,
     NotFound,
 }
