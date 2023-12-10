@@ -36,7 +36,7 @@ Request with non-existing log type
 Manual log_upload operation request
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%SZ
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
-    Publish and Verify Local Command    
+    Publish and Verify Local Command
     ...    topic=te/device/main///cmd/log_upload/example-1234
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_LogfileRequest
@@ -76,7 +76,22 @@ Log file request supports date/time filters and can search across multiple log f
     ${logfile3_contents}=    OperatingSystem.Get File    ${CURDIR}/logfile.3.log
     ${logfile2_contents}=    OperatingSystem.Get File    ${CURDIR}/logfile.2.log
     ${expected_contents}=    OperatingSystem.Get File    ${CURDIR}/example.log
-    Log File Contents Should Be Equal    ${operation}    filename: logfile.3.log\n${logfile3_contents}\nfilename: logfile.2.log\n${logfile2_contents}\n
+    Log File Contents Should Be Equal
+    ...    ${operation}
+    ...    filename: logfile.3.log\n${logfile3_contents}\nfilename: logfile.2.log\n${logfile2_contents}\n
+
+Log file request not processed if operation is disabled for tedge-agent
+    Execute Command    tedge config set agent.enable.log_upload false
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%SZ
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/log_upload/example-1234
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
+    ...    expected_status=init
+    ...    c8y_fragment=c8y_LogfileRequest
+
 
 *** Keywords ***
 Setup LogFiles
@@ -98,22 +113,36 @@ Custom Setup
 
 Publish and Verify Local Command
     [Arguments]    ${topic}    ${payload}    ${expected_status}=successful    ${c8y_fragment}=
-    [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
     Execute Command    tedge mqtt pub --retain '${topic}' '${payload}'
-    ${messages}=    Should Have MQTT Messages    ${topic}    minimum=1    maximum=1    message_contains="status":"${expected_status}"
+    ${messages}=    Should Have MQTT Messages
+    ...    ${topic}
+    ...    minimum=1
+    ...    maximum=1
+    ...    message_contains="status":"${expected_status}"
 
     Sleep    5s    reason=Given mapper a chance to react, if it does not react with 5 seconds it never will
-    ${retained_message}    Execute Command    timeout 1 tedge mqtt sub --no-topic '${topic}'    ignore_exit_code=${True}    strip=${True}
+    ${retained_message}=    Execute Command
+    ...    timeout 1 tedge mqtt sub --no-topic '${topic}'
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
     Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
 
     IF    "${c8y_fragment}"
         # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
-        Should Have MQTT Messages    c8y/s/ds    message_pattern=^(501|502|503),${c8y_fragment}.*    minimum=0    maximum=0
+        Should Have MQTT Messages
+        ...    c8y/s/ds
+        ...    message_pattern=^(501|502|503),${c8y_fragment}.*
+        ...    minimum=0
+        ...    maximum=0
     END
+    [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
 
 Log File Contents Should Be Equal
     [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8
     ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
     ${event_id}=    Set Variable    ${event_url_parts}[-2]
-    ${contents}=    Cumulocity.Event Should Have An Attachment    ${event_id}    expected_contents=${expected_contents}    encoding=${encoding}
+    ${contents}=    Cumulocity.Event Should Have An Attachment
+    ...    ${event_id}
+    ...    expected_contents=${expected_contents}
+    ...    encoding=${encoding}
     RETURN    ${contents}
