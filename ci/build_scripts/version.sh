@@ -11,6 +11,8 @@ The following environment variables are set:
 * APK_VERSION
 * DEB_VERSION
 * RPM_VERSION
+* CONTAINER_VERSION
+* TARBALL_VERSION
 
 NOTES
 
@@ -22,7 +24,7 @@ Example:
     . $0
 
 USAGE
-    $0 [apk|deb|rpm|all]
+    $0 [apk|deb|rpm|container|tarball|all]
     # Print out a version
 
     # importing values via a script
@@ -132,12 +134,15 @@ set_version_variables() {
     APK_VERSION="${GIT_SEMVER//\~/_rc}"
     DEB_VERSION="$GIT_SEMVER"
     RPM_VERSION="$GIT_SEMVER"
+    # container tags are quite limited, so replace forbidden characters with '-'
+    CONTAINER_VERSION="${GIT_SEMVER//[^a-zA-Z0-9_.-]/-}"
     TARBALL_VERSION="${GIT_SEMVER//\~/-rc}"
 
     export GIT_SEMVER
     export APK_VERSION
     export DEB_VERSION
     export RPM_VERSION
+    export CONTAINER_VERSION
     export TARBALL_VERSION
 }
 
@@ -228,11 +233,15 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         tarball)
             echo "$TARBALL_VERSION"
             ;;
+        container)
+            echo "$CONTAINER_VERSION"
+            ;;
         all)
             echo "GIT_SEMVER: $GIT_SEMVER"
             echo "APK_VERSION: $APK_VERSION"
             echo "DEB_VERSION: $DEB_VERSION"
             echo "RPM_VERSION: $RPM_VERSION"
+            echo "CONTAINER_VERSION: $CONTAINER_VERSION"
             echo "TARBALL_VERSION: $TARBALL_VERSION"
             ;;
         *)
