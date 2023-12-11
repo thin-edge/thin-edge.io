@@ -134,6 +134,20 @@ impl ExitHandlers {
         })
     }
 
+    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
+        if self.timeout.is_none() {
+            self.timeout = default.timeout
+        }
+        if self.on_kill.is_none() {
+            self.on_kill = default.on_timeout.clone()
+        }
+        if self.on_error.is_none() {
+            self.on_error = default.on_error.clone()
+        }
+
+        self
+    }
+
     pub fn state_update(
         &self,
         program: &str,
@@ -270,6 +284,28 @@ impl BgExitHandlers {
     pub fn try_new(on_exec: Option<GenericStateUpdate>) -> Result<Self, ScriptDefinitionError> {
         Ok(BgExitHandlers {
             on_exec: on_exec.unwrap_or_else(GenericStateUpdate::successful),
+        })
+    }
+}
+
+/// Define default handlers for all state of an operation workflow
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DefaultHandlers {
+    pub timeout: Option<Duration>,
+    pub on_timeout: Option<GenericStateUpdate>,
+    pub on_error: Option<GenericStateUpdate>,
+}
+
+impl DefaultHandlers {
+    pub fn try_new(
+        timeout: Option<Duration>,
+        on_timeout: Option<GenericStateUpdate>,
+        on_error: Option<GenericStateUpdate>,
+    ) -> Result<Self, ScriptDefinitionError> {
+        Ok(DefaultHandlers {
+            timeout,
+            on_timeout,
+            on_error,
         })
     }
 }

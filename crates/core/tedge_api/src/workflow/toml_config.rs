@@ -1,6 +1,7 @@
 use crate::mqtt_topics::OperationType;
 use crate::workflow::toml_config::TomlOperationAction::Action;
 use crate::workflow::BgExitHandlers;
+use crate::workflow::DefaultHandlers;
 use crate::workflow::ExitHandlers;
 use crate::workflow::GenericStateUpdate;
 use crate::workflow::OperationAction;
@@ -157,17 +158,17 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
 
     fn try_from(input: TomlOperationWorkflow) -> Result<Self, Self::Error> {
         let operation = input.operation;
-        let handlers = input.handlers.try_into()?;
+        let default_handlers = TryInto::<DefaultHandlers>::try_into(input.handlers)?;
         let mut states = HashMap::new();
         for (state, action_spec) in input.states.into_iter() {
             let action = TryInto::<OperationAction>::try_into(action_spec)?;
-            states.insert(state, action);
+            states.insert(state, action.with_default(&default_handlers));
         }
 
         Ok(OperationWorkflow {
             operation,
             built_in: false,
-            handlers,
+            handlers: default_handlers,
             states,
         })
     }
@@ -252,6 +253,18 @@ impl TryFrom<TomlExitHandlers> for BgExitHandlers {
     fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
         let on_exec = value.on_exec.map(|u| u.into());
         BgExitHandlers::try_new(on_exec)
+    }
+}
+
+impl TryFrom<TomlExitHandlers> for DefaultHandlers {
+    type Error = ScriptDefinitionError;
+
+    fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+        let timeout = value.timeout_second.map(Duration::from_secs);
+        let on_timeout = value.on_timeout.map(|u| u.into());
+        let on_error = value.on_error.map(|u| u.into());
+
+        DefaultHandlers::try_new(timeout, on_timeout, on_error)
     }
 }
 

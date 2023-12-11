@@ -31,7 +31,7 @@ pub struct OperationWorkflow {
     pub built_in: bool,
 
     /// Default action outcome handlers
-    pub handlers: ExitHandlers,
+    pub handlers: DefaultHandlers,
 
     /// The states of the state machine
     pub states: HashMap<StateName, OperationAction>,
@@ -129,7 +129,7 @@ impl OperationWorkflow {
         OperationWorkflow {
             built_in: true,
             operation,
-            handlers: ExitHandlers::default(),
+            handlers: DefaultHandlers::default(),
             states,
         }
     }
@@ -172,6 +172,15 @@ impl OperationWorkflow {
 }
 
 impl OperationAction {
+    pub fn with_default(self, default: &DefaultHandlers) -> Self {
+        match self {
+            OperationAction::Script(script, handlers) => {
+                OperationAction::Script(script, handlers.with_default(default))
+            }
+            action => action,
+        }
+    }
+
     pub fn inject_state(&self, state: &GenericCommandState) -> Self {
         match self {
             OperationAction::Script(script, handlers) => OperationAction::Script(
