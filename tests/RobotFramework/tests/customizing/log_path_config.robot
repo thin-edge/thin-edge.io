@@ -17,8 +17,6 @@ Validate updated log path used by tedge-agent
 *** Keywords ***
 Custom Setup
     Setup
-    Execute Command    sudo mkdir /var/test
-    Execute Command    sudo chown tedge:tedge /var/test
 
 Custom Teardown
     Execute Command    sudo tedge config unset logs.path
