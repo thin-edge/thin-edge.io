@@ -12,7 +12,7 @@ use std::hash::Hash;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use strum_macros::Display;
+use strum::Display;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver;
 

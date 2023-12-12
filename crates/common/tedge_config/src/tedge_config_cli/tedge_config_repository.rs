@@ -55,6 +55,22 @@ impl TEdgeConfigRepository {
         Ok(dto)
     }
 
+    #[cfg(feature = "test")]
+    /// A test only method designed for injecting configuration into tests
+    ///
+    /// ```
+    /// use tedge_config::TEdgeConfigRepository;
+    /// let config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+    ///
+    /// assert_eq!(&config.service.ty, "service");
+    /// // Defaults are preserved
+    /// assert_eq!(config.enable.sudo, true);
+    /// ```
+    pub fn load_toml_str(toml: &str) -> TEdgeConfig {
+        let dto = super::figment::extract_from_toml_str(toml).unwrap();
+        TEdgeConfig::from_dto(&dto, &TEdgeConfigLocation::default())
+    }
+
     fn load_dto_with_warnings<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,

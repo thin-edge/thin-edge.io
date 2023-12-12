@@ -121,7 +121,7 @@ async fn run_with(
         service,
         &mut mqtt_actor,
         &mqtt_schema,
-        tedge_config.service.ty.clone(),
+        &tedge_config.service,
     );
     let identity = tedge_config.http.client.auth.identity()?;
 

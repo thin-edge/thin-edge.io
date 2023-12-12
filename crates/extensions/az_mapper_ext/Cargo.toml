@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
+tedge_config = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

@@ -20,6 +20,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
+use tedge_config::TEdgeConfigReaderService;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
@@ -39,8 +40,10 @@ impl HealthMonitorBuilder {
         mqtt: &mut (impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> + AsMut<MqttConfig>),
         // TODO: pass it less annoying way
         mqtt_schema: &MqttSchema,
-        mut service_type: String,
+        service_config: &TEdgeConfigReaderService,
     ) -> Self {
+        let mut service_type = service_config.ty.as_str();
+        let time_format = service_config.timestamp_format;
         let service_topic_id = &service.service_topic_id;
 
         let mut box_builder = SimpleMessageBoxBuilder::new(service_topic_id.as_str(), 16);
@@ -72,7 +75,7 @@ impl HealthMonitorBuilder {
             .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));
 
         if service_type.is_empty() {
-            service_type = "service".to_string()
+            service_type = "service"
         }
 
         let registration_message = EntityRegistrationMessage {
@@ -87,7 +90,8 @@ impl HealthMonitorBuilder {
         };
         let registration_message = registration_message.to_mqtt_message(mqtt_schema);
 
-        let health_topic = ServiceHealthTopic::from_new_topic(service_topic_id, mqtt_schema);
+        let health_topic =
+            ServiceHealthTopic::from_new_topic(service_topic_id, mqtt_schema, time_format);
 
         let builder = HealthMonitorBuilder {
             health_topic,

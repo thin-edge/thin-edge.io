@@ -99,6 +99,21 @@ mod tests {
         ;"warning alarm translation by external sensor"
     )]
     #[test_case(
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "temperature_alarm".into(),
+            source: Some(SourceInfo {
+                id: "External_source".into(),
+                source_type: "c8y_Serial".into()
+            }),
+            severity: AlarmSeverity::Warning,
+            text: "External \"sensor\" raised alarm".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: hashmap!{},
+        }),
+        "304,temperature_alarm,\"External \"\"sensor\"\" raised alarm\",2021-04-23T19:00:00+05:00"
+        ; "warning with double quote in message"
+    )]
+    #[test_case(
         C8yAlarm::Clear(C8yClearAlarm {
             alarm_type: "temperature_alarm".into(),
             source: None,

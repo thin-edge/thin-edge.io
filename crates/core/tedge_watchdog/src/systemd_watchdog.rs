@@ -10,11 +10,13 @@ use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::process;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use std::time::Duration;
 use std::time::Instant;
 use tedge_api::health::ServiceHealthTopic;
 use tedge_api::mqtt_topics::Channel;
@@ -22,7 +24,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_config::TEdgeConfigLocation;
-use time::format_description;
+use tedge_utils::timestamp::IsoOrUnix;
 use time::OffsetDateTime;
 use tracing::debug;
 use tracing::error;
@@ -36,7 +38,7 @@ const SERVICE_NAME: &str = "tedge-watchdog";
 pub struct HealthStatus {
     status: String,
     pid: u32,
-    time: String,
+    time: Value,
 }
 
 pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
@@ -173,8 +175,9 @@ async fn monitor_tedge_service(
     let service_topic_id = mqtt_device_topic_id
         .default_service_for_device(SERVICE_NAME)
         .unwrap();
+    let time_format = tedge_config.service.timestamp_format;
     let service_health_topic =
-        ServiceHealthTopic::from_new_topic(&service_topic_id.into(), &mqtt_schema);
+        ServiceHealthTopic::from_new_topic(&service_topic_id.into(), &mqtt_schema, time_format);
 
     let _service_health_topic = service_health_topic.clone();
 
@@ -208,14 +211,9 @@ async fn monitor_tedge_service(
 
         let start = Instant::now();
 
-        let request_timestamp = OffsetDateTime::now_utc();
-        let request_timestamp = request_timestamp
-            .format(&time::format_description::well_known::Rfc3339)?
-            .as_str()
-            .into();
         match tokio::time::timeout(
-            tokio::time::Duration::from_secs(interval),
-            get_latest_health_status_message(request_timestamp, &mut received),
+            Duration::from_secs(interval),
+            get_latest_health_status_message(OffsetDateTime::now_utc(), &mut received),
         )
         .await
         {
@@ -233,47 +231,37 @@ async fn monitor_tedge_service(
         }
 
         let elapsed = start.elapsed();
-        if elapsed < tokio::time::Duration::from_secs(interval) {
-            tokio::time::sleep(tokio::time::Duration::from_secs(interval) - elapsed).await;
+        if elapsed < Duration::from_secs(interval) {
+            tokio::time::sleep(Duration::from_secs(interval) - elapsed).await;
             warn!("tedge systemd watchdog not started because no services to monitor")
         }
     }
 }
 
 async fn get_latest_health_status_message(
-    request_timestamp: String,
+    request_timestamp: OffsetDateTime,
     messages: &mut mpsc::UnboundedReceiver<Message>,
 ) -> Result<HealthStatus, WatchdogError> {
-    loop {
-        if let Some(message) = messages.next().await {
-            if let Ok(message) = message.payload_str() {
-                debug!("Health response received: {}", message);
-                if let Ok(health_status) = serde_json::from_str::<HealthStatus>(message) {
-                    let request_timestamp = OffsetDateTime::parse(
-                        &request_timestamp,
-                        &format_description::well_known::Rfc3339,
-                    )?
-                    .unix_timestamp();
-                    let datetime = OffsetDateTime::parse(
-                        &health_status.time,
-                        &format_description::well_known::Rfc3339,
-                    )?
-                    .unix_timestamp();
+    while let Some(message) = messages.next().await {
+        if let Ok(message) = message.payload_str() {
+            debug!("Health response received: {message}");
+            if let Ok(health_status) = serde_json::from_str::<HealthStatus>(message) {
+                let datetime = IsoOrUnix::try_from(&health_status.time)?;
 
-                    if datetime >= request_timestamp {
-                        return Ok(health_status);
-                    } else {
-                        debug!(
-                            "Ignoring stale health response: {:?} older than request time: {}",
-                            health_status, request_timestamp
-                        );
-                    }
+                // Compare to a slightly old timestamp to avoid false negatives from floating-point error in unix timestamps
+                if datetime.into_inner() >= request_timestamp - Duration::from_millis(10) {
+                    return Ok(health_status);
                 } else {
-                    error!("Invalid health response received: {}", message);
+                    debug!(
+                        "Ignoring stale health response: {health_status:?} older than request time: {request_timestamp}",
+                    );
                 }
+            } else {
+                error!("Invalid health response received: {message}");
             }
         }
     }
+    Err(WatchdogError::ChannelClosed)
 }
 
 fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
@@ -310,10 +298,9 @@ fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use anyhow::Result;
     use serde_json::json;
+    use tedge_utils::timestamp::TimeFormat;
 
     use super::*;
 
@@ -326,9 +313,7 @@ mod tests {
 
         for x in 1..5u64 {
             let incremented_datetime = base_timestamp + Duration::from_secs(x);
-            let timestamp_str = incremented_datetime
-                .format(&time::format_description::well_known::Rfc3339)
-                .unwrap();
+            let timestamp_str = TimeFormat::Rfc3339.to_json(incremented_datetime).unwrap();
 
             let health_status = json!({
                 "status": "up",
@@ -340,25 +325,50 @@ mod tests {
             sender.publish(health_message).await?;
         }
 
-        let base_timestamp_str = (base_timestamp + Duration::from_secs(3))
-            .format(&time::format_description::well_known::Rfc3339)
-            .unwrap();
+        let request_timestamp = base_timestamp + Duration::from_secs(3);
         let health_status =
-            get_latest_health_status_message(base_timestamp_str.clone(), &mut receiver).await;
+            get_latest_health_status_message(request_timestamp, &mut receiver).await;
 
-        assert_eq!(health_status.unwrap().time, base_timestamp_str);
+        let expected_timestamp = TimeFormat::Rfc3339.to_json(request_timestamp).unwrap();
+        assert_eq!(health_status.unwrap().time, expected_timestamp);
 
-        let base_timestamp_str = (base_timestamp + Duration::from_secs(5))
-            .format(&time::format_description::well_known::Rfc3339)
-            .unwrap();
-
+        sender.close_channel();
+        let base_timestamp = base_timestamp + Duration::from_secs(5);
         let timeout_error = tokio::time::timeout(
-            tokio::time::Duration::from_secs(1),
-            get_latest_health_status_message(base_timestamp_str, &mut receiver),
+            Duration::from_secs(1),
+            get_latest_health_status_message(base_timestamp, &mut receiver),
         )
         .await;
-        assert!(timeout_error.is_err());
+        assert!(timeout_error.unwrap().is_err());
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_latest_health_status_message_unix() {
+        let (mut sender, mut receiver) = mpsc::unbounded::<Message>();
+        let health_topic =
+            Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
+        let request_timestamp = OffsetDateTime::parse(
+            "2023-12-15T14:31:03.234Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+        let incremented_datetime = request_timestamp + Duration::from_secs(3);
+        let payload_timestamp = TimeFormat::Unix.to_json(incremented_datetime).unwrap();
+
+        let health_status = json!({
+            "status": "up",
+            "pid": 123u32,
+            "time": payload_timestamp,
+        })
+        .to_string();
+        let health_message = Message::new(&health_topic, health_status);
+        sender.publish(health_message).await.unwrap();
+        sender.close_channel();
+
+        let health_status =
+            get_latest_health_status_message(request_timestamp, &mut receiver).await;
+        assert_eq!(health_status.unwrap().time, payload_timestamp);
     }
 }

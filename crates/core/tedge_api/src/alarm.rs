@@ -1,10 +1,10 @@
 use crate::mqtt_topics::EntityTopicId;
-use clock::Timestamp;
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use tedge_utils::timestamp::deserialize_optional_string_or_unix_timestamp;
+use time::OffsetDateTime;
 
 /// Internal representation of ThinEdge alarm model.
 #[derive(Debug, Eq, PartialEq)]
@@ -22,15 +22,15 @@ pub struct ThinEdgeAlarm {
 }
 
 /// Internal representation of the JSON MQTT payload.
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarmData {
     pub severity: Option<String>,
 
     pub text: Option<String>,
 
     #[serde(default)]
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub time: Option<Timestamp>,
+    #[serde(deserialize_with = "deserialize_optional_string_or_unix_timestamp")]
+    pub time: Option<OffsetDateTime>,
 
     #[serde(default)]
     #[serde(flatten)]
@@ -136,11 +136,31 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 severity: Some("high".into()),
                 text: Some("I raised it".into()),
-                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                time: Some(datetime ! (2021 - 04 - 23 19: 00: 00 + 05: 00)),
                 extras: hashmap!{},
             }),
         };
         "alarm parsing for main device"
+    )]
+    #[test_case(
+        "temperature_alarm",
+        EntityTopicId::default_main_device(),
+        json!({
+            "severity": "high",
+            "text": "I raised it",
+            "time": 1701954000,
+        }),
+        ThinEdgeAlarm {
+            alarm_type: "temperature_alarm".into(),
+            source: EntityTopicId::default_main_device(),
+            data: Some(ThinEdgeAlarmData {
+                severity: Some("high".into()),
+                text: Some("I raised it".into()),
+                time: Some(datetime!(2023-12-07 13:00:00 +00:00)),
+                extras: hashmap!{},
+            }),
+        };
+        "alarm parsing with unix timestamp"
     )]
     #[test_case(
         "temperature_alarm",

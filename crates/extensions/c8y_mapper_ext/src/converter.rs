@@ -52,8 +52,6 @@ use camino::Utf8Path;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
@@ -95,7 +93,6 @@ use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
-use time::format_description::well_known::Rfc3339;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::log::error;
@@ -224,10 +221,10 @@ impl CumulocityConverter {
         let device_topic_id = config.device_topic_id.clone();
         let device_type = config.device_type.clone();
 
-        let service_type = if config.service_type.is_empty() {
-            "service".to_string()
+        let service_type = if config.service.ty.is_empty() {
+            "service".to_owned()
         } else {
-            config.service_type.clone()
+            config.service.ty.clone()
         };
 
         let c8y_host = config.c8y_host.clone();
@@ -899,7 +896,9 @@ impl CumulocityConverter {
             CREATE_EVENT_SMARTREST_CODE,
             c8y_event.event_type,
             c8y_event.text,
-            c8y_event.time.format(&Rfc3339)?
+            c8y_event
+                .time
+                .format(&time::format_description::well_known::Rfc3339)?
         ))
     }
 
@@ -1586,9 +1585,7 @@ impl CumulocityConverter {
 ///
 /// The set of all locally available child devices is defined as any directory
 /// created under "`config_dir`/operations/c8y" for example "/etc/tedge/operations/c8y"
-pub fn get_local_child_devices_list(
-    path: &Path,
-) -> Result<std::collections::HashSet<String>, CumulocityMapperError> {
+pub fn get_local_child_devices_list(path: &Path) -> Result<HashSet<String>, CumulocityMapperError> {
     Ok(fs::read_dir(path)
         .map_err(|_| CumulocityMapperError::ReadDirError {
             dir: PathBuf::from(&path),
@@ -1598,14 +1595,7 @@ pub fn get_local_child_devices_list(
         .into_iter()
         .filter(|path| path.is_dir())
         .map(|entry| entry.file_name().unwrap().to_string_lossy().to_string()) // safe unwrap
-        .collect::<std::collections::HashSet<String>>())
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct HealthStatus {
-    #[serde(skip)]
-    pub pid: u64,
-    pub status: String,
+        .collect::<HashSet<String>>())
 }
 
 #[cfg(test)]
@@ -1651,6 +1641,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::SoftwareUpdateCommand;
+    use tedge_config::TEdgeConfigRepository;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
@@ -2930,7 +2921,8 @@ pub(crate) mod tests {
     async fn handles_empty_service_type_2383() {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
-        config.service_type = String::new();
+        let tedge_config = TEdgeConfigRepository::load_toml_str("service.ty = \"\"");
+        config.service = tedge_config.service.clone();
 
         let (mut converter, _) = create_c8y_converter_from_config(config);
 
@@ -3289,7 +3281,7 @@ pub(crate) mod tests {
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
         let device_type = "test-device-type".into();
-        let service_type = "service".into();
+        let tedge_config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
         let mqtt_schema = MqttSchema::default();
@@ -3311,7 +3303,7 @@ pub(crate) mod tests {
             device_id,
             device_topic_id,
             device_type,
-            service_type,
+            tedge_config.service.clone(),
             c8y_host,
             tedge_http_host,
             topics,

@@ -132,6 +132,7 @@ sha256 = "1.1"
 shell-words = "1.1"
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+strum = "0.24"
 strum_macros = "0.24"
 syn = { version = "2", features = ["full", "extra-traits"] }
 tedge-agent = { path = "crates/core/tedge_agent" }
@@ -190,3 +191,7 @@ opt-level = "z"
 panic = "abort"
 strip = "symbols"
 overflow-checks = true
+[profile.dev]
+codegen-units = 16
+opt-level = "z"
+strip = "symbols"

@@ -73,6 +73,22 @@ pub fn extract_data<T: DeserializeOwned, Sources: ConfigSources>(
     }
 }
 
+#[cfg(feature = "test")]
+pub fn extract_from_toml_str<T: DeserializeOwned>(toml: &str) -> Result<T, TEdgeConfigError> {
+    let env = TEdgeEnv::default();
+    let figment = Figment::new().merge(Toml::string(toml));
+
+    let data = extract_exact(&figment, &env);
+
+    let warnings = unused_value_warnings::<T>(&figment, &env)
+        .ok()
+        .map(UnusedValueWarnings)
+        .unwrap_or_default();
+
+    warnings.emit();
+    data
+}
+
 fn unused_value_warnings<T: DeserializeOwned>(
     figment: &Figment,
     env: &TEdgeEnv,

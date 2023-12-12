@@ -125,7 +125,7 @@ async fn run_with(
         service,
         &mut mqtt_actor,
         &mqtt_schema,
-        tedge_config.service.ty.clone(),
+        &tedge_config.service,
     );
 
     // Instantiate config manager actor

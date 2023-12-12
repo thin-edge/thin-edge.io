@@ -20,6 +20,7 @@ use tedge_api::path::DataDir;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigReaderService;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
@@ -32,7 +33,7 @@ pub struct C8yMapperConfig {
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
     pub device_type: String,
-    pub service_type: String,
+    pub service: TEdgeConfigReaderService,
     pub ops_dir: PathBuf,
     pub tmp_dir: Arc<Utf8Path>,
     pub c8y_host: String,
@@ -56,7 +57,7 @@ impl C8yMapperConfig {
         device_id: String,
         device_topic_id: EntityTopicId,
         device_type: String,
-        service_type: String,
+        service: TEdgeConfigReaderService,
         c8y_host: String,
         tedge_http_host: Arc<str>,
         topics: TopicFilter,
@@ -76,7 +77,7 @@ impl C8yMapperConfig {
             device_id,
             device_topic_id,
             device_type,
-            service_type,
+            service,
             ops_dir,
             tmp_dir,
             c8y_host,
@@ -104,7 +105,7 @@ impl C8yMapperConfig {
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
         let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
-        let service_type = tedge_config.service.ty.clone();
+        let service = tedge_config.service.clone();
         let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
@@ -174,7 +175,7 @@ impl C8yMapperConfig {
             device_id,
             device_topic_id,
             device_type,
-            service_type,
+            service,
             c8y_host,
             tedge_http_host,
             topics,

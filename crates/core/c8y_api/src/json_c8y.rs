@@ -21,7 +21,7 @@ const EMPTY_STRING: &str = "";
 const DEFAULT_ALARM_SEVERITY: AlarmSeverity = AlarmSeverity::Minor;
 const DEFAULT_ALARM_TYPE: &str = "ThinEdgeAlarm";
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yCreateEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -102,7 +102,7 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
+#[derive(Debug, Serialize, Eq, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUpdateSoftwareListResponse {
     #[serde(rename = "c8y_SoftwareList")]
@@ -208,7 +208,7 @@ fn make_c8y_source_fragment(source_name: &str) -> SourceInfo {
     SourceInfo::new(source_name.into(), "c8y_Serial".into())
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceInfo {
     #[serde(rename = "externalId")]
@@ -233,7 +233,7 @@ pub enum C8yAlarm {
 /// Internal representation of creating an alarm in c8y.
 /// Note: text and time are optional for SmartREST, however,
 /// mandatory for JSON over MQTT. Hence, here they are mandatory.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yCreateAlarm {
     /// Alarm type, default is "ThinEdgeAlarm".
@@ -257,7 +257,7 @@ pub struct C8yCreateAlarm {
 }
 
 /// Internal representation of clearing an alarm in c8y.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yClearAlarm {
     /// Alarm type, default is "ThinEdgeAlarm".

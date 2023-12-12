@@ -32,7 +32,7 @@ pub async fn start_basic_actors(
         service,
         &mut mqtt_actor,
         &mqtt_schema,
-        config.service.ty.clone(),
+        &config.service,
     );
 
     // Shutdown on SIGINT
