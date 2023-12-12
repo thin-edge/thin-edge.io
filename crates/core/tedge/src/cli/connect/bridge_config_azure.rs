@@ -65,8 +65,8 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 pub_msg_topic,
                 sub_msg_topic,
                 // Direct methods (request/response)
-                r##"topic methods/POST/# in 1 az/ $iothub/"##.into(),
-                r##"topic methods/res/# out 1 az/ $iothub/"##.into(),
+                r##"methods/POST/# in 1 az/ $iothub/"##.into(),
+                r##"methods/res/# out 1 az/ $iothub/"##.into(),
                 // Digital twin
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r##"twin/GET/# out 1 az/ $iothub/"##.into(),
@@ -108,8 +108,8 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         topics: vec![
             r#"messages/events/# out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# in 1 az/ devices/alpha/"##.into(),
-            r##"topic methods/POST/# in 1 az/ $iothub/"##.into(),
-            r##"topic methods/res/# out 1 az/ $iothub/"##.into(),
+            r##"methods/POST/# in 1 az/ $iothub/"##.into(),
+            r##"methods/res/# out 1 az/ $iothub/"##.into(),
             r##"twin/res/# in 1 az/ $iothub/"##.into(),
             r##"twin/GET/# out 1 az/ $iothub/"##.into(),
             r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
