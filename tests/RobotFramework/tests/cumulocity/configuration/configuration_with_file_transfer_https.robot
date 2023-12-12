@@ -10,6 +10,11 @@ Test Setup          Test Setup
 
 Test Tags          theme:configuration    theme:childdevices
 
+Documentation       This suite aims to test the configuration update and snapshot operations when
+...                 the File Transfer Service is located in another container of the main device,
+...                 and operations are triggered for a separate child device, which makes 3
+...                 containers in total.
+
 *** Variables ***
 ${PARENT_SN}
 ${CHILD_SN}
@@ -18,21 +23,21 @@ ${CHILD_SN}
 *** Test Cases ***
 File Transfer Service has HTTPS enabled
     ThinEdgeIO.Set Device Context  ${PARENT_SN}
-    ${code}=    Execute Command     curl --output /dev/null --write-out \%\{http_code\} https://localhost:8000/tedge/file-transfer/non-existent-file     timeout=0
+    ${code}=    Execute Command     curl --output /dev/null --write-out \%\{http_code\} https://${FTS_IP}:8000/tedge/file-transfer/non-existent-file     timeout=0
     Should Be Equal     ${code}     404
 
 File Transfer Service redirects HTTP to HTTPS
     ThinEdgeIO.Set Device Context  ${PARENT_SN}
-    ${code}=    Execute Command     curl --output /dev/null --write-out \%\{http_code\} http://localhost:8000/tedge/file-transfer/non-existent-file     timeout=0
+    ${code}=    Execute Command     curl --output /dev/null --write-out \%\{http_code\} http://${FTS_IP}:8000/tedge/file-transfer/non-existent-file     timeout=0
     Should Be Equal     ${code}     307
-    ${GET_url_effective}=    Execute Command     curl --output /dev/null --write-out \%\{url_effective\} -L http://localhost:8000/tedge/file-transfer/non-existent-file     timeout=0
-    Should Be Equal     ${GET_url_effective}     https://localhost:8000/tedge/file-transfer/non-existent-file
-    ${HEAD_url_effective}=    Execute Command     curl --head --output /dev/null --write-out \%\{url_effective\} -L http://localhost:8000/tedge/file-transfer/non-existent-file     timeout=0
-    Should Be Equal     ${HEAD_url_effective}     https://localhost:8000/tedge/file-transfer/non-existent-file
+    ${GET_url_effective}=    Execute Command     curl --output /dev/null --write-out \%\{url_effective\} -L http://${FTS_IP}:8000/tedge/file-transfer/non-existent-file     timeout=0
+    Should Be Equal     ${GET_url_effective}     https://${FTS_IP}:8000/tedge/file-transfer/non-existent-file
+    ${HEAD_url_effective}=    Execute Command     curl --head --output /dev/null --write-out \%\{url_effective\} -L http://${FTS_IP}:8000/tedge/file-transfer/non-existent-file     timeout=0
+    Should Be Equal     ${HEAD_url_effective}     https://${FTS_IP}:8000/tedge/file-transfer/non-existent-file
 
 File Transfer Service is accessible over HTTPS from child device
     ThinEdgeIO.Set Device Context  ${CHILD_SN}
-    ${code}=    Execute Command     curl --output /dev/null --write-out \%\{http_code\} https://${parent_ip}:8000/tedge/file-transfer/non-existent-file     timeout=0
+    ${code}=    Execute Command     curl --output /dev/null --write-out \%\{http_code\} https://${FTS_IP}:8000/tedge/file-transfer/non-existent-file     timeout=0
     Should Be Equal     ${code}     404
 
 Configuration snapshots are uploaded to File Transfer Service via HTTPS
@@ -44,28 +49,30 @@ Configuration snapshots are uploaded to File Transfer Service via HTTPS with cli
 
 Configuration operation fails when configuration-plugin does not supply client certificate
     Enable Certificate Authentication for File Transfer Service
-    Disable HTTP Client Certificate for Child Device
+    Disable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
     ...  device=${CHILD_SN}
-    ...  failure_reason=config-manager failed uploading configuration snapshot:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...  failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
     ...  device=${CHILD_SN}
-    ...  failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...  failure_reason=config-manager failed downloading a file:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration snapshot fails when mapper does not supply client certificate
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for Mapper
+    Enable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
     ...  device=${CHILD_SN}
-    ...  failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${parent_ip}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...  failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
     [Teardown]  Re-enable HTTP Client Certificate for Mapper
 
 Configuration update succeeds despite mapper not supplying client certificate
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for Mapper
+    Enable HTTP Client Certificate for FTS client
     Update Configuration Should Succeed
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
     [Teardown]  Re-enable HTTP Client Certificate for Mapper
@@ -108,17 +115,24 @@ Update Configuration Should Succeed
     Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
 
 Enable Certificate Authentication for File Transfer Service
-    Set Device Context  ${PARENT_SN}
+    Set Device Context  ${FTS_SN}
     Execute Command    sudo tedge config set http.ca_path /etc/tedge/device-local-certs/roots
     Execute Command    sudo systemctl restart tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
-Disable HTTP Client Certificate for Child Device
+Disable HTTP Client Certificate for FTS client
     Set Device Context  ${CHILD_SN}
     Execute Command    tedge config unset http.client.auth.cert_file
     Execute Command    tedge config unset http.client.auth.key_file
     Execute Command    sudo systemctl restart tedge-agent
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent     device=${CHILD_SN}
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
+
+Enable HTTP Client Certificate for FTS client
+    Set Device Context  ${CHILD_SN}
+    Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
+    Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
+    Execute Command    sudo systemctl restart tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
 
 Disable HTTP Client Certificate for Mapper
     Set Device Context  ${PARENT_SN}
@@ -130,8 +144,8 @@ Disable HTTP Client Certificate for Mapper
 
 Re-enable HTTP Client Certificate for Mapper
     Set Device Context  ${PARENT_SN}
-    Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/main-agent.crt
-    Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/main-agent.key
+    Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
+    Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
     Execute Command    sudo systemctl restart tedge-mapper-c8y
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
@@ -142,53 +156,99 @@ Re-enable HTTP Client Certificate for Mapper
 Suite Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=${False}
+    Execute Command    apt-get -y remove tedge-agent
     Set Suite Variable    $PARENT_SN    ${parent_sn}
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}
+
+    # Main device agent
+    ${FTS_SN}=    Setup    skip_bootstrap=${True}
+    Set Suite Variable    $FTS_SN    ${FTS_SN}
+
+    ${FTS_IP}=    Get IP Address
+    Set Suite Variable   $FTS_IP    ${FTS_IP}
+
+    # Child device
+    ${child_sn}=    Setup    skip_bootstrap=${True}
+    Set Suite Variable    $CHILD_SN    ${child_sn}
+
+
+    Set Device Context    ${PARENT_SN}
+
+    Execute Command    sudo tedge config set http.client.host ${FTS_IP}
+
     Execute Command    sudo tedge config set mqtt.external.bind.address ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
-    Execute Command    sudo tedge config set http.bind.address 0.0.0.0
-    Execute Command    sudo tedge config set http.client.host ${parent_ip}
+
+    Execute Command    sudo tedge config set c8y.proxy.bind.address ${parent_ip}
+    Execute Command    sudo tedge config set c8y.proxy.client.host ${parent_ip}
 
     ThinEdgeIO.Transfer To Device    ${CURDIR}/generate_certificates.sh    /etc/tedge/
     Execute Command    /etc/tedge/generate_certificates.sh  timeout=0
     ${root_certificate}=    Execute Command    cat /etc/tedge/device-local-certs/roots/tedge-local-ca.crt
+
     ${client_certificate}=    Execute Command    cat /etc/tedge/device-local-certs/tedge-client.crt
     ${client_key}=    Execute Command    cat /etc/tedge/device-local-certs/tedge-client.key
 
-    Restart Service    tedge-agent
+    ${agent_certificate}=    Execute Command    cat /etc/tedge/device-local-certs/main-agent.crt
+    ${agent_key}=    Execute Command    cat /etc/tedge/device-local-certs/main-agent.key
+
+    Execute Command    echo "${root_certificate}" > /usr/local/share/ca-certificates/tedge-ca.crt
+    Execute Command    sudo update-ca-certificates
+
+    Execute Command    tedge config set c8y.proxy.ca_path /etc/tedge/device-local-certs/roots
+    Execute Command    tedge config set c8y.proxy.cert_path /etc/tedge/device-local-certs/c8y-mapper.crt
+    Execute Command    tedge config set c8y.proxy.key_path /etc/tedge/device-local-certs/c8y-mapper.key
+
+    Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
+    Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
+
     ThinEdgeIO.Disconnect Then Connect Mapper    c8y
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
     # Child
-    Setup Child Device    parent_ip=${parent_ip}   install_package=tedge-agent  root_certificate=${root_certificate}   certificate=${client_certificate}    private_key=${client_key}
+    Setup Child Device    ${child_sn}    parent_ip=${parent_ip}   install_package=tedge-agent
+    ...    root_certificate=${root_certificate}
+    ...    agent_certificate=${agent_certificate}    agent_private_key=${agent_key}
+    ...    client_certificate=${client_certificate}    client_key=${client_key}
+    
+    Setup Main Device Agent    ${root_certificate}    ${agent_certificate}    ${agent_key}
+    ...    ${client_certificate}    ${client_key}
+
+    Set Device Context    ${PARENT_SN}
+
 
 Suite Teardown
     Get Logs    name=${PARENT_SN}
+    Get Logs    name=${FTS_SN}
     Get Logs    name=${CHILD_SN}
 
 Setup Child Device
-    [Arguments]    ${parent_ip}   ${install_package}   ${root_certificate}    ${certificate}   ${private_key}
-    ${child_sn}=    Setup    skip_bootstrap=${True}
-    Set Suite Variable    $CHILD_SN    ${child_sn}
+    [Arguments]    ${child_sn}    ${parent_ip}   ${install_package}   ${root_certificate}
+    ...    ${agent_certificate}   ${agent_private_key}
+    ...    ${client_certificate}    ${client_key}
 
     Set Device Context    ${CHILD_SN}
+    
     Execute Command    sudo dpkg -i packages/tedge_*.deb
 
-    Execute Command    sudo tedge config set mqtt.client.host ${parent_ip}
-    Execute Command    sudo tedge config set mqtt.client.port 1883
-    Execute Command    sudo tedge config set http.client.host ${parent_ip}
-    Execute Command    sudo tedge config set mqtt.topic_root te
-    Execute Command    sudo tedge config set mqtt.device_topic_id device/${child_sn}//
+    Execute Command    sudo tedge config set mqtt.device_topic_id device/${CHILD_SN}//
 
-    Execute Command    mkdir -p /etc/tedge/device-local-certs
+    Execute Command    sudo tedge config set http.client.host ${FTS_IP}
+    Execute Command    sudo tedge config set mqtt.client.host ${parent_ip}
+
+    Execute Command    mkdir -p /etc/tedge/device-local-certs/roots
     Execute Command    echo "${root_certificate}" > /usr/local/share/ca-certificates/tedge-ca.crt
+    Execute Command    echo "${root_certificate}" > /etc/tedge/device-local-certs/roots/tedge-local-ca.crt
     Execute Command    sudo update-ca-certificates
+
     Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
     Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
-    Execute Command    echo "${certificate}" | sudo tee "$(tedge config get http.client.auth.cert_file)"
-    Execute Command    echo "${private_key}" | sudo tee "$(tedge config get http.client.auth.key_file)"
+
+    Execute Command    echo "${client_certificate}" | tee "$(tedge config get http.client.auth.cert_file)"
+    Execute Command    echo "${client_key}" | tee "$(tedge config get http.client.auth.key_file)"
+
     Execute Command    chown -R tedge:tedge /etc/tedge/device-local-certs
 
     # Install plugin after the default settings have been updated to prevent it from starting up as the main plugin
@@ -200,14 +260,47 @@ Setup Child Device
 
     RETURN    ${child_sn}
 
+Setup Main Device Agent
+    [Arguments]    ${root_certificate}    ${agent_certificate}    ${agent_key}
+    ...    ${client_certificate}    ${client_key}
+    Set Device Context    ${FTS_SN}
+
+    Execute Command    sudo dpkg -i packages/tedge_*.deb
+    
+    Execute Command    sudo tedge config set http.client.host ${FTS_IP}
+    Execute Command    sudo tedge config set mqtt.client.host ${PARENT_IP}
+
+    Execute Command    sudo tedge config set http.bind.address 0.0.0.0
+
+    Execute Command    mkdir -p /etc/tedge/device-local-certs/roots
+    Execute Command    echo "${root_certificate}" > /usr/local/share/ca-certificates/tedge-ca.crt
+    Execute Command    echo "${root_certificate}" > /etc/tedge/device-local-certs/roots/tedge-local-ca.crt
+    Execute Command    sudo update-ca-certificates
+
+    Execute Command    tedge config set http.cert_path /etc/tedge/device-local-certs/main-agent.crt
+    Execute Command    tedge config set http.key_path /etc/tedge/device-local-certs/main-agent.key
+
+    Execute Command    echo "${agent_certificate}" | tee "$(tedge config get http.cert_path)"
+    Execute Command    echo "${agent_key}" | tee "$(tedge config get http.key_path)"
+
+    Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
+    Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
+
+    Execute Command    echo "${client_certificate}" | tee "$(tedge config get http.client.auth.cert_file)"
+    Execute Command    echo "${client_key}" | tee "$(tedge config get http.client.auth.key_file)"
+
+    Execute Command    chown -R tedge:tedge /etc/tedge/device-local-certs
+
+    Execute Command    sudo dpkg -i packages/tedge-agent*.deb
+    Execute Command    sudo systemctl enable tedge-agent
+    Execute Command    sudo systemctl start tedge-agent
+
 Test Setup
     Copy Configuration Files    ${PARENT_SN}
     Copy Configuration Files    ${CHILD_SN}
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
-    Execute Command    tedge config set http.client.auth.cert_file /etc/tedge/device-local-certs/tedge-client.crt
-    Execute Command    tedge config set http.client.auth.key_file /etc/tedge/device-local-certs/tedge-client.key
     Execute Command    sudo systemctl restart tedge-agent
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent     device=${CHILD_SN}
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Copy Configuration Files
     [Arguments]    ${device}

@@ -180,7 +180,57 @@ mod tests {
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[tokio::test]
-    async fn mapper_converts_smartrest_config_download_req_without_new_download_for_child_device() {
+    async fn mapper_converts_smartrest_config_download_req_with_new_download_for_main_device() {
+        let ttd = TempTedgeDir::new();
+        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate c8y_DownloadConfigFile SmartREST request
+        mqtt.send(MqttMessage::new(
+            &C8yTopic::downstream_topic(),
+            "524,test-device,http://www.my.url,path/config/A",
+        ))
+        .await
+        .expect("Send failed");
+
+        // New config_update command should be published
+        let (topic, received_json) = mqtt
+            .recv()
+            .await
+            .map(|msg| {
+                (
+                    msg.topic,
+                    serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
+                        .expect("JSON"),
+                )
+            })
+            .unwrap();
+
+        let mqtt_schema = MqttSchema::default();
+        let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
+        assert_eq!(entity, "device/main//");
+
+        let Channel::Command {
+            operation: OperationType::ConfigUpdate,
+            ..
+        } = channel
+        else {
+            panic!("Unexpected response on channel: {:?}", topic)
+        };
+
+        // Validate the payload JSON
+        let expected_json = json!({
+            "status": "init",
+            "remoteUrl": "http://www.my.url",
+            "type": "path/config/A",
+        });
+        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+    }
+
+    #[tokio::test]
+    async fn mapper_converts_smartrest_config_download_req_for_child_device() {
         let ttd = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -250,16 +300,6 @@ mod tests {
 
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate a symlink exists
-        ttd.dir("file-transfer")
-            .dir("test-device")
-            .dir("config_update")
-            .file("typeA-c8y-mapper-1234");
-        assert!(ttd
-            .path()
-            .join("file-transfer/test-device/config_update/typeA-c8y-mapper-1234")
-            .exists());
-
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
@@ -301,12 +341,6 @@ mod tests {
             )],
         )
         .await;
-
-        // Assert symlink is removed
-        assert!(!ttd
-            .path()
-            .join("file-transfer/test-device/config_update/typeA-c8y-mapper-1234")
-            .exists());
     }
 
     #[tokio::test]
@@ -382,16 +416,6 @@ mod tests {
 
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate a symlink exists
-        ttd.dir("file-transfer")
-            .dir("test-device")
-            .dir("config_update")
-            .file("path:type:A-c8y-mapper-1234");
-        assert!(ttd
-            .path()
-            .join("file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234")
-            .exists());
-
         // Simulate config_update command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
@@ -408,12 +432,6 @@ mod tests {
 
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_DownloadConfigFile")]).await;
-
-        // Assert symlink is removed
-        assert!(!ttd
-            .path()
-            .join("file-transfer/test-device/config_update/path:type:A-1234")
-            .exists());
     }
 
     #[tokio::test]
