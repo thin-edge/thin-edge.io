@@ -5,6 +5,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=notify
+ExecStartPre=-/usr/bin/tedge init
 ExecStart=/usr/bin/tedge-watchdog
 Restart=on-failure
 WatchdogSec=30
