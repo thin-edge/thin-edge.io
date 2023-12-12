@@ -48,6 +48,8 @@ docs/src/src
 .build
 dist/
 tmp/
+containers/tedge/packages/
+containers/tedge/*.tar
 
 # Other files
 Makefile.toml

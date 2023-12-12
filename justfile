@@ -17,6 +17,10 @@ info:
     @echo "VERSION:        {{VERSION}}"
     @echo "DEFAULT_TARGET: {{DEFAULT_TARGET}}"
 
+# Print the current git generated version
+version TYPE="all":
+    @./ci/build_scripts/version.sh {{TYPE}} 2>/dev/null || exit 0
+
 # Default recipe
 [private]
 default:

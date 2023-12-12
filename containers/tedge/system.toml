@@ -1,0 +1,2 @@
+[system]
+reboot = ["kill", "-15", "1"]
