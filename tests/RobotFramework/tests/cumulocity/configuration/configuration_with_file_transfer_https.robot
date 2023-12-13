@@ -63,6 +63,13 @@ Configuration snapshot fails when mapper does not supply client certificate
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
     [Teardown]  Re-enable HTTP Client Certificate for Mapper
 
+Configuration update succeeds despite mapper not supplying client certificate
+    Enable Certificate Authentication for File Transfer Service
+    Disable HTTP Client Certificate for Mapper
+    Update Configuration Should Succeed
+    ...  external_id=${PARENT_SN}:device:${CHILD_SN}
+    [Teardown]  Re-enable HTTP Client Certificate for Mapper
+
 *** Keywords ***
 Get Configuration Should Succeed
     [Arguments]    ${device}    ${external_id}
@@ -79,7 +86,7 @@ Get Configuration Should Succeed
 Get Configuration Should Fail
     [Arguments]    ${failure_reason}    ${device}    ${external_id}
     Cumulocity.Set Device    ${external_id}
-    ${operation}=    Cumulocity.Get Configuration    CONFIG1
+    ${operation}=    Cumulocity.Get Configuration    tedge-configuration-plugin
     Operation Should Be FAILED    ${operation}    failure_reason=${failure_reason}   timeout=120
 
 Update Configuration Should Fail
@@ -87,9 +94,18 @@ Update Configuration Should Fail
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     ${config_url}=    Cumulocity.Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin-updated.toml
-    ${operation}=    Cumulocity.Set Configuration    CONFIG1    ${config_url}
+    ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    ${config_url}
     Operation Should Be FAILED    ${operation}    failure_reason=${failure_reason}   timeout=120
     Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+
+Update Configuration Should Succeed
+    [Arguments]    ${external_id}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    ${config_url}=    Cumulocity.Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin-updated.toml
+    ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    ${config_url}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
 
 Enable Certificate Authentication for File Transfer Service
     Set Device Context  ${PARENT_SN}
