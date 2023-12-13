@@ -55,6 +55,7 @@ RUN addgroup -S tedge \
 # Add custom config
 COPY system.toml /etc/tedge/
 
+ENV TEDGE_MQTT_BIND_ADDRESS 0.0.0.0
 ENV TEDGE_C8Y_PROXY_BIND_ADDRESS 0.0.0.0
 ENV TEDGE_HTTP_BIND_ADDRESS 0.0.0.0
 ENV TEDGE_MQTT_CLIENT_HOST mqtt-broker
