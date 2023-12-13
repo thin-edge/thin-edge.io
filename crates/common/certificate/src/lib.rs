@@ -1,6 +1,7 @@
 use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
+use rcgen::KeyPair;
 use rcgen::RcgenError;
 use sha1::Digest;
 use sha1::Sha1;
@@ -94,6 +95,13 @@ impl PemCertificate {
     }
 }
 
+pub enum KeyKind {
+    /// Create a new key
+    New,
+    /// Reuse the existing PEM-encoded key pair
+    Reuse { keypair_pem: String },
+}
+
 pub struct KeyCertPair {
     certificate: Zeroizing<rcgen::Certificate>,
 }
@@ -102,16 +110,18 @@ impl KeyCertPair {
     pub fn new_selfsigned_certificate(
         config: &NewCertificateConfig,
         id: &str,
+        key_kind: &KeyKind,
     ) -> Result<KeyCertPair, CertificateError> {
         let today = OffsetDateTime::now_utc();
         let not_before = today - Duration::days(1); // Ensure the certificate is valid today
-        KeyCertPair::new_selfsigned_certificate_at(config, id, not_before)
+        KeyCertPair::new_selfsigned_certificate_at(config, id, not_before, key_kind)
     }
 
-    pub fn new_selfsigned_certificate_at(
+    fn new_selfsigned_certificate_at(
         config: &NewCertificateConfig,
         id: &str,
         not_before: OffsetDateTime,
+        cert_kind: &KeyKind,
     ) -> Result<KeyCertPair, CertificateError> {
         KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
@@ -130,6 +140,9 @@ impl KeyCertPair {
         params.not_after = not_after;
         params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
+        if let KeyKind::Reuse { keypair_pem } = cert_kind {
+            params.key_pair = Some(KeyPair::from_pem(keypair_pem)?);
+        }
 
         Ok(KeyCertPair {
             certificate: Zeroizing::new(Certificate::from_params(params)?),
@@ -228,11 +241,18 @@ impl Default for NewCertificateConfig {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::error::Error;
-
     use time::macros::datetime;
 
-    use super::*;
+    impl KeyCertPair {
+        fn new_selfsigned_certificate_with_new_key(
+            config: &NewCertificateConfig,
+            id: &str,
+        ) -> Result<KeyCertPair, CertificateError> {
+            KeyCertPair::new_selfsigned_certificate(config, id, &KeyKind::New)
+        }
+    }
 
     fn pem_of_keypair(keypair: &KeyCertPair) -> PemCertificate {
         let pem_string = keypair
@@ -251,7 +271,7 @@ mod tests {
         };
         let id = "device-serial-number";
 
-        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
+        let keypair = KeyCertPair::new_selfsigned_certificate_with_new_key(&config, id)
             .expect("Fail to create a certificate");
 
         // Check the subject
@@ -270,7 +290,7 @@ mod tests {
         };
         let device_id = "device-identifier";
 
-        let keypair = KeyCertPair::new_selfsigned_certificate(&config, device_id)
+        let keypair = KeyCertPair::new_selfsigned_certificate_with_new_key(&config, device_id)
             .expect("Fail to create a certificate");
 
         // Check the subject's common_name
@@ -291,7 +311,7 @@ mod tests {
         };
         let id = "device-serial-number";
 
-        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
+        let keypair = KeyCertPair::new_selfsigned_certificate_with_new_key(&config, id)
             .expect("Fail to create a certificate");
 
         // Check the issuer
@@ -307,8 +327,9 @@ mod tests {
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
-        let keypair = KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate)
-            .expect("Fail to create a certificate");
+        let keypair =
+            KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate, &KeyKind::New)
+                .expect("Fail to create a certificate");
 
         // Check the not_before date
         let pem = pem_of_keypair(&keypair);
@@ -328,8 +349,9 @@ mod tests {
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
-        let keypair = KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate)
-            .expect("Fail to create a certificate");
+        let keypair =
+            KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate, &KeyKind::New)
+                .expect("Fail to create a certificate");
 
         // Check the not_after date
         let pem = pem_of_keypair(&keypair);
@@ -342,7 +364,7 @@ mod tests {
         // Create a certificate key pair
         let id = "my-device-id";
         let config = NewCertificateConfig::default();
-        let keypair = KeyCertPair::new_selfsigned_certificate(&config, id)
+        let keypair = KeyCertPair::new_selfsigned_certificate_with_new_key(&config, id)
             .expect("Fail to create a certificate");
 
         // Read the certificate pem

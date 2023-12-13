@@ -2,6 +2,7 @@ use super::error::CertError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
 use certificate::KeyCertPair;
+use certificate::KeyKind;
 use certificate::NewCertificateConfig;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -36,21 +37,30 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    pub(crate) fn create_test_certificate(
+    pub fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+        self.create_test_certificate_for(config, &KeyKind::New)
+    }
+
+    pub fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+        let keypair_pem = std::fs::read_to_string(&self.key_path)
+            .map_err(|e| CertError::IoError(e).key_context(self.key_path.clone()))?;
+        self.create_test_certificate_for(config, &KeyKind::Reuse { keypair_pem })
+    }
+
+    fn create_test_certificate_for(
         &self,
         config: &NewCertificateConfig,
+        key_kind: &KeyKind,
     ) -> Result<(), CertError> {
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
-        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id)?;
+        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, key_kind)?;
 
         // Creating files with permission 644 owned by the MQTT broker
         let mut cert_file =
             create_new_file(&self.cert_path, crate::BROKER_USER, crate::BROKER_GROUP)
                 .map_err(|err| err.cert_context(self.cert_path.clone()))?;
-        let mut key_file = create_new_file(&self.key_path, crate::BROKER_USER, crate::BROKER_GROUP)
-            .map_err(|err| err.key_context(self.key_path.clone()))?;
 
         let cert_pem = cert.certificate_pem_string()?;
         cert_file.write_all(cert_pem.as_bytes())?;
@@ -59,7 +69,11 @@ impl CreateCertCmd {
         // Prevent the certificate to be overwritten
         set_permission(&cert_file, 0o444)?;
 
-        {
+        if let KeyKind::New = key_kind {
+            let mut key_file =
+                create_new_file(&self.key_path, crate::BROKER_USER, crate::BROKER_GROUP)
+                    .map_err(|err| err.key_context(self.key_path.clone()))?;
+
             // Make sure the key is secret, before write
             set_permission(&key_file, 0o600)?;
 
@@ -180,6 +194,24 @@ mod tests {
             .create_test_certificate(&NewCertificateConfig::default())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
+    }
+
+    #[test]
+    fn renew_certificate_without_key() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let key_path = Utf8PathBuf::from("/non/existent/key/path");
+
+        let cmd = CreateCertCmd {
+            id: "my-device-id".into(),
+            cert_path,
+            key_path,
+        };
+
+        let cert_error = cmd
+            .renew_test_certificate(&NewCertificateConfig::default())
+            .unwrap_err();
+        assert_matches!(cert_error, CertError::KeyNotFound { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
