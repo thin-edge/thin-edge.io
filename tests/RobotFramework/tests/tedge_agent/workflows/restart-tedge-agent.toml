@@ -1,0 +1,21 @@
+operation = "restart-tedge-agent"
+
+[init]
+script = "/etc/tedge/operations/tedge-agent-pid.sh probe"
+on_success = "restart"
+
+[restart]
+background_script = "sudo systemctl restart tedge-agent"
+on_exec = "restarting"
+
+[restarting]
+script = "/etc/tedge/operations/tedge-agent-pid.sh test ${.payload.tedge-agent-pid}"
+timeout_second = 10
+on_success = "tedge-agent-restarted"
+on_kill = { status = "failed", reason = "tedge-agent not restarted" }
+
+[tedge-agent-restarted]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

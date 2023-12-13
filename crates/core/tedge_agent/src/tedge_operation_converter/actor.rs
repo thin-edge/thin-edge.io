@@ -192,18 +192,45 @@ impl TedgeOperationConverterActor {
                 self.restart_sender.send(cmd).await?;
                 Ok(())
             }
-            OperationAction::Script(script) => {
+            OperationAction::Script(script, handlers) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
 
                 let script_name = script.command.clone();
-                let command = Execute::new(script_name.clone(), script.args);
+                let command = {
+                    let command = Execute::new(script_name.clone(), script.args);
+                    match (
+                        handlers.graceful_timeout(),
+                        handlers.forceful_timeout_extension(),
+                    ) {
+                        (Some(timeout), Some(extra)) => command
+                            .with_graceful_timeout(timeout)
+                            .with_forceful_timeout_extension(extra),
+                        (Some(timeout), None) => command.with_graceful_timeout(timeout),
+                        (None, _) => command,
+                    }
+                };
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
 
-                let new_state = state.update_with_script_output(script_name, output);
+                let new_state = state.update_with_script_output(script_name, output, handlers);
                 self.publish_command_state(operation, cmd_id, new_state)
                     .await
+            }
+            OperationAction::BgScript(script, handlers) => {
+                let next_state = &handlers.on_exec.status;
+                info!(
+                    "Moving {operation} operation to {next_state} state before running: {script}"
+                );
+                let new_state = state.update(handlers.on_exec);
+                self.publish_command_state(operation, cmd_id, new_state)
+                    .await?;
+
+                // Run the command, but ignore its result
+                let command = Execute::new(script.command, script.args);
+                let output = self.script_runner.await_response(command).await?;
+                log_file.log_script_output(&output).await;
+                Ok(())
             }
         }
     }

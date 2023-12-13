@@ -2,22 +2,24 @@ operation = "controlled_restart"
 
 [init]
 script = "/etc/tedge/operations/log-restart.sh ${.topic.cmd_id} ${.payload.status}"
-next = ["scheduled"]
+on_stdout = ["scheduled"]
 
 [scheduled]
-script = "restart"
-next = ["restarting", "successful_restart", "failed_restart"]
+action = "restart"
+on_exec = "restarting"
+on_success = "successful_restart"
+on_error = "failed_restart"
 
 [successful_restart]
 script = "/etc/tedge/operations/log-restart.sh ${.topic.cmd_id} ${.payload.status}"
-next = ["successful"]
+on_stdout = ["successful"]
 
 [failed_restart]
 script = "/etc/tedge/operations/log-restart.sh ${.topic.cmd_id} ${.payload.status} ${.payload.restartError}"
-next = ["failed"]
+on_stdout = ["failed"]
 
 [successful]
-next = []
+action = "cleanup"
 
 [failed]
-next = []
+action = "cleanup"
