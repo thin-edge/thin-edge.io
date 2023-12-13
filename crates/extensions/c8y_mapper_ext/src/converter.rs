@@ -9,6 +9,7 @@ use crate::actor::IdUploadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
+use crate::operations::FtsDownloadOperationData;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -173,32 +174,6 @@ pub struct UploadOperationData {
 
     // used to automatically remove the temporary file after operation is finished
     pub file_dir: tempfile::TempDir,
-}
-
-/// Represents a pending download performed by the downloader from the FTS.
-///
-/// Functions which download files from the tedge File Transfer Service as part of handling
-/// operations (e.g. when performing `log_upload` or `config_snapshot`, the relevant file is
-/// uploaded into FTS) will use this type for communicating with the Downloader actor.
-pub struct FtsDownloadOperationData {
-    pub download_type: FtsDownloadOperationType,
-    pub url: String,
-
-    // used to automatically remove the temporary file after operation is finished
-    pub file_dir: tempfile::TempDir,
-
-    // the message that triggeered the operation
-    pub message: MqttMessage,
-
-    pub entity_topic_id: EntityTopicId,
-}
-
-/// Used to denote as type of what operation was the file downloaded from the FTS.
-///
-/// Used to dispatch download result to the correct operation handler.
-pub enum FtsDownloadOperationType {
-    LogDownload,
-    ConfigDownload,
 }
 
 pub struct CumulocityConverter {
@@ -3108,7 +3083,9 @@ pub(crate) mod tests {
         let auth_proxy_protocol = Protocol::Http;
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
-        topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
+        topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
+            &mqtt_schema,
+        ));
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         C8yMapperConfig::new(

@@ -141,22 +141,22 @@ impl C8yMapperConfig {
         }
 
         if capabilities.log_upload {
-            topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
+            topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
+                &mqtt_schema,
+            ));
         }
         if capabilities.config_snapshot {
-            topics.add_all(crate::config_operations::config_snapshot_topic_filter(
+            topics.add_all(crate::operations::config_snapshot::topic_filter(
                 &mqtt_schema,
             ));
         }
         if capabilities.config_update {
-            topics.add_all(crate::config_operations::config_update_topic_filter(
-                &mqtt_schema,
-            ));
+            topics.add_all(crate::operations::config_update::topic_filter(&mqtt_schema));
         }
         if capabilities.firmware_update {
-            topics.add_all(crate::firmware_update::firmware_update_topic_filter(
-                &mqtt_schema,
-            ));
+            topics.add_all(
+                crate::operations::firmware_update::firmware_update_topic_filter(&mqtt_schema),
+            );
         }
 
         // Add user configurable external topic filters
