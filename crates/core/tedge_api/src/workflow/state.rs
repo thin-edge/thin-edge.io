@@ -179,18 +179,22 @@ impl GenericCommandState {
         }
     }
 
-    fn operation(&self) -> Option<String> {
+    pub fn operation(&self) -> Option<String> {
         match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
             _ => None,
         }
     }
 
-    fn cmd_id(&self) -> Option<String> {
+    pub fn cmd_id(&self) -> Option<String> {
         match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
             _ => None,
         }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(self.status.as_str(), "successful" | "failed")
     }
 }
 

@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 pub use supervisor::*;
 
 pub type StateName = String;
+pub type CommandId = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
@@ -154,20 +155,27 @@ impl OperationWorkflow {
         message: &Message,
     ) -> Result<Option<(GenericCommandState, OperationAction)>, WorkflowExecutionError> {
         match GenericCommandState::from_command_message(message) {
-            Ok(Some(cmd)) => self
-                .states
-                .get(&cmd.status)
-                .ok_or_else(|| WorkflowExecutionError::UnknownStep {
-                    operation: (&self.operation).into(),
-                    step: cmd.status.clone(),
-                })
-                .map(|action| {
-                    let contextualized_action = action.inject_state(&cmd);
-                    Some((cmd, contextualized_action))
-                }),
+            Ok(Some(command_state)) => {
+                let contextualized_action = self.get_action(&command_state)?;
+                Ok(Some((command_state, contextualized_action)))
+            }
             Ok(None) => Ok(None),
             Err(err) => Err(err),
         }
+    }
+
+    /// Return the action to be performed on a given state
+    pub fn get_action(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Result<OperationAction, WorkflowExecutionError> {
+        self.states
+            .get(&command_state.status)
+            .ok_or_else(|| WorkflowExecutionError::UnknownStep {
+                operation: (&self.operation).into(),
+                step: command_state.status.clone(),
+            })
+            .map(|action| action.inject_state(command_state))
     }
 }
 
