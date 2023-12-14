@@ -39,8 +39,6 @@ Custom Setup
     ${PARENT_SN}=    Setup
     Set Suite Variable    $PARENT_SN
     Set Suite Variable    $CHILD_SN    ${PARENT_SN}_child
-    Execute Command    sudo mkdir /var/test
-    Execute Command    sudo chown tedge:tedge /var/test
     Execute Command    sudo tedge config set data.path /var/test
 
 Custom Teardown
