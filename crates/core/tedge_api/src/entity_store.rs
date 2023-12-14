@@ -12,6 +12,8 @@ use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::TopicIdError;
+use crate::pending_entity_store::PendingEntityData;
+use crate::pending_entity_store::PendingEntityStore;
 use log::debug;
 use mqtt_channel::Message;
 use serde_json::json;
@@ -133,6 +135,7 @@ pub struct EntityStore {
     external_id_validator_fn: ExternalIdValidatorFn,
     // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.
     default_service_type: String,
+    pending_entity_store: PendingEntityStore,
 }
 
 impl EntityStore {
@@ -150,19 +153,23 @@ impl EntityStore {
         SF: 'static + Send + Sync,
     {
         Self::with_main_device_and_default_service_type(
+            MqttSchema::default(),
             main_device,
             "service".to_string(),
             external_id_mapper_fn,
             external_id_validator_fn,
+            100,
         )
     }
 
     #[must_use]
     pub fn with_main_device_and_default_service_type<MF, SF>(
+        mqtt_schema: MqttSchema,
         main_device: EntityRegistrationMessage,
         default_service_type: String,
         external_id_mapper_fn: MF,
         external_id_validator_fn: SF,
+        telemetry_cache_size: usize,
     ) -> Option<Self>
     where
         MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
@@ -191,6 +198,7 @@ impl EntityStore {
             external_id_mapper: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
             default_service_type,
+            pending_entity_store: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
         })
     }
 
@@ -330,17 +338,58 @@ impl EntityStore {
     pub fn update(
         &mut self,
         message: EntityRegistrationMessage,
+    ) -> Result<(Vec<EntityTopicId>, Vec<PendingEntityData>), Error> {
+        match self.register_entity(message.clone()) {
+            Ok(affected_entities) => {
+                if affected_entities.is_empty() {
+                    Ok((vec![], vec![]))
+                } else {
+                    let topic_id = message.topic_id.clone();
+                    let current_entity_data =
+                        self.pending_entity_store.take_cached_entity_data(message);
+                    let mut pending_entities = vec![current_entity_data];
+
+                    let pending_children = self
+                        .pending_entity_store
+                        .take_cached_child_entities_data(&topic_id);
+                    for pending_child in pending_children {
+                        let child_reg_message = pending_child.reg_message.clone();
+                        self.register_entity(child_reg_message)?;
+                        pending_entities.push(pending_child);
+                    }
+
+                    Ok((affected_entities, pending_entities))
+                }
+            }
+            Err(Error::NoParent(_)) => {
+                // When a child device registration message is received before the parent is registered,
+                // cache it in the unregistered entity store to be processed later
+                self.pending_entity_store
+                    .cache_early_registration_message(message);
+                Ok((vec![], vec![]))
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn register_entity(
+        &mut self,
+        message: EntityRegistrationMessage,
     ) -> Result<Vec<EntityTopicId>, Error> {
         debug!("Processing entity registration message, {:?}", message);
-        let topic_id = message.topic_id;
+        let topic_id = message.topic_id.clone();
 
         let mut affected_entities = vec![];
 
         let parent = match message.r#type {
             EntityType::MainDevice => None,
-            EntityType::ChildDevice => message.parent.or_else(|| Some(self.main_device.clone())),
+            EntityType::ChildDevice => message
+                .parent
+                .clone()
+                .or_else(|| Some(self.main_device.clone())),
             EntityType::Service => message
                 .parent
+                .clone()
                 .or_else(|| topic_id.default_parent_identifier())
                 .or_else(|| Some(self.main_device.clone())),
         };
@@ -512,6 +561,10 @@ impl EntityStore {
         }
 
         Ok(true)
+    }
+
+    pub fn cache_early_data_message(&mut self, message: Message) {
+        self.pending_entity_store.cache_early_data_message(message)
     }
 }
 
@@ -691,6 +744,31 @@ impl EntityRegistrationMessage {
         })
     }
 
+    pub fn new_custom(topic_id: EntityTopicId, r#type: EntityType) -> Self {
+        EntityRegistrationMessage {
+            topic_id,
+            r#type,
+            external_id: None,
+            parent: None,
+            other: Map::new(),
+        }
+    }
+
+    pub fn with_parent(mut self, parent: EntityTopicId) -> Self {
+        let _ = self.parent.insert(parent);
+        self
+    }
+
+    pub fn with_external_id(mut self, external_id: EntityExternalId) -> Self {
+        let _ = self.external_id.insert(external_id);
+        self
+    }
+
+    pub fn with_other_fragment(mut self, key: String, value: JsonValue) -> Self {
+        let _ = self.other.insert(key, value);
+        self
+    }
+
     /// Creates a entity registration message for a main device.
     pub fn main_device(main_device_id: String) -> Self {
         Self {
@@ -830,7 +908,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(updated_entities, ["device/main//"]);
+        assert_eq!(updated_entities.0, ["device/main//"]);
         assert_eq!(
             store.child_devices(&EntityTopicId::default_main_device()),
             ["device/child1//"]
@@ -845,7 +923,7 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
-        assert_eq!(updated_entities, ["device/main//"]);
+        assert_eq!(updated_entities.0, ["device/main//"]);
         let children = store.child_devices(&EntityTopicId::default_main_device());
         assert!(children.iter().any(|&e| e == "device/child1//"));
         assert!(children.iter().any(|&e| e == "device/child2//"));
@@ -866,7 +944,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(updated_entities, ["device/main//"]);
+        assert_eq!(updated_entities.0, ["device/main//"]);
         assert_eq!(
             store.services(&EntityTopicId::default_main_device()),
             ["device/main/service/service1"]
@@ -882,7 +960,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(updated_entities, ["device/main//"]);
+        assert_eq!(updated_entities.0, ["device/main//"]);
         let services = store.services(&EntityTopicId::default_main_device());
         assert!(services
             .iter()
@@ -890,21 +968,6 @@ mod tests {
         assert!(services
             .iter()
             .any(|&e| e == &EntityTopicId::default_main_service("service2").unwrap()));
-    }
-
-    #[test]
-    fn forbids_nonexistent_parents() {
-        let mut store = new_entity_store();
-
-        let res = store.update(EntityRegistrationMessage {
-            topic_id: EntityTopicId::default_main_device(),
-            external_id: None,
-            r#type: EntityType::ChildDevice,
-            parent: Some(EntityTopicId::default_child_device("myawesomeparent").unwrap()),
-            other: Map::new(),
-        });
-
-        assert!(matches!(res, Err(Error::NoParent(_))));
     }
 
     #[test]

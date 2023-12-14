@@ -51,7 +51,7 @@ const ENTITY_ID_SEGMENTS: usize = 4;
 ///     topic.name
 /// );
 /// ```
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MqttSchema {
     pub root: String,
 }
