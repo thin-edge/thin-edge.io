@@ -1,5 +1,4 @@
 use super::error::CertError;
-use super::remove::RemoveCertCmd;
 use crate::command::Command;
 use crate::CreateCertCmd;
 use camino::Utf8PathBuf;
@@ -27,20 +26,19 @@ impl Command for RenewCertCmd {
 impl RenewCertCmd {
     fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let id = self.cn_of_self_signed_certificate()?;
-        // Remove existing certificate
-        let rm_cmd = RemoveCertCmd {
-            cert_path: self.cert_path.clone(),
-            key_path: self.key_path.clone(),
-        };
-        rm_cmd.remove_certificate()?;
 
-        // Re-create the certificate, with new validity
+        // Remove only certificate
+        std::fs::remove_file(&self.cert_path)
+            .map_err(|e| CertError::IoError(e).cert_context(self.cert_path.clone()))?;
+
+        // Re-create the certificate from the key, with new validity
         let create_cmd = CreateCertCmd {
             id,
             cert_path: self.cert_path.clone(),
             key_path: self.key_path.clone(),
         };
-        create_cmd.create_test_certificate(config)
+
+        create_cmd.renew_test_certificate(config)
     }
 
     fn cn_of_self_signed_certificate(&self) -> Result<String, CertError> {
@@ -64,9 +62,9 @@ impl RenewCertCmd {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_matches::assert_matches;
-    use std::fs;
     use std::path::Path;
+    use std::thread::sleep;
+    use std::time::Duration;
     use tempfile::*;
 
     #[test]
@@ -81,30 +79,56 @@ mod tests {
             key_path: key_path.clone(),
         };
 
-        assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default()),
-            Ok(())
-        );
+        // First create both cert and key
+        cmd.create_test_certificate(&NewCertificateConfig::default())
+            .unwrap();
 
+        // Keep the cert and key data for validation
+        let first_key = std::fs::read_to_string(&key_path).unwrap();
+        let first_pem = parse_pem_file(&cert_path);
+        let first_x509_cert = first_pem.parse_x509().expect("X.509: decoding DER failed");
+
+        // Wait 2 secs to get different timestamp for the certificate validity
+        sleep(Duration::from_secs(2));
+
+        // Renew the certificate from the existing key
         let cmd = RenewCertCmd {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
         };
+        cmd.renew_test_certificate(&NewCertificateConfig::default())
+            .unwrap();
 
-        assert_matches!(
-            cmd.renew_test_certificate(&NewCertificateConfig::default()),
-            Ok(())
+        // Get the cert and key data for validation
+        let second_key = std::fs::read_to_string(&key_path).unwrap();
+        let second_pem = parse_pem_file(&cert_path);
+        let second_x509_cert = second_pem.parse_x509().expect("X.509: decoding DER failed");
+
+        // The key must be unchanged
+        assert_eq!(first_key, second_key);
+
+        // The new cert must have newer validity than the first one
+        assert!(
+            second_x509_cert.validity.not_before.timestamp()
+                > first_x509_cert.validity.not_before.timestamp()
         );
-        assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
-        assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
+
+        // The renewed cert is issued by thin-edge
+        assert_eq!(
+            second_x509_cert.issuer().to_string(),
+            "CN=my-device-id, O=Thin Edge, OU=Test Device"
+        );
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
         dir.path().join(filename).try_into().unwrap()
     }
 
-    fn parse_pem_file(path: impl AsRef<Path>) -> Result<pem::Pem, String> {
-        let content = fs::read(path).map_err(|err| err.to_string())?;
-        pem::parse(content).map_err(|err| err.to_string())
+    fn parse_pem_file(path: impl AsRef<Path>) -> x509_parser::pem::Pem {
+        let content = std::fs::read(path).expect("fail to read {path}");
+        x509_parser::pem::Pem::iter_from_buffer(&content)
+            .next()
+            .unwrap()
+            .expect("Reading PEM block failed")
     }
 }
