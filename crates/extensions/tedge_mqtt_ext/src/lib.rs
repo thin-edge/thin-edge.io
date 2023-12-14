@@ -27,6 +27,7 @@ use tedge_actors::WrappedInput;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
+pub use mqtt_channel::DebugPayload;
 pub use mqtt_channel::Message;
 pub use mqtt_channel::MqttError;
 pub use mqtt_channel::QoS;

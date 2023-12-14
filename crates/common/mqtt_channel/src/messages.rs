@@ -2,17 +2,42 @@ use crate::errors::MqttError;
 use crate::topics::Topic;
 use rumqttc::Publish;
 use rumqttc::QoS;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Write;
 
 /// A message to be sent to or received from MQTT.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub topic: Topic,
     pub payload: DebugPayload,
+    #[serde(serialize_with = "serialize_qos", deserialize_with = "deserialize_qos")]
     pub qos: QoS,
     pub retain: bool,
+}
+
+fn serialize_qos<S>(qos: &QoS, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    (*qos as u8).serialize(serializer)
+}
+
+fn deserialize_qos<'de, D>(deserializer: D) -> Result<QoS, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = u8::deserialize(deserializer)?;
+    match value {
+        0 => Ok(QoS::AtMostOnce),
+        1 => Ok(QoS::AtLeastOnce),
+        2 => Ok(QoS::ExactlyOnce),
+        _ => Err(serde::de::Error::custom("Invalid QoS value")),
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -40,6 +65,57 @@ impl From<String> for DebugPayload {
 impl AsRef<Payload> for DebugPayload {
     fn as_ref(&self) -> &Payload {
         &self.0
+    }
+}
+
+impl Serialize for DebugPayload {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match std::str::from_utf8(&self.0) {
+            Ok(payload_str) => {
+                // Serialize as a string if all characters are valid UTF-8
+                serializer.serialize_str(payload_str)
+            }
+            Err(_) => {
+                // Serialize as a byte array otherwise
+                serializer.serialize_bytes(&self.0)
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for DebugPayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct DebugPayloadVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for DebugPayloadVisitor {
+            type Value = DebugPayload;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string or a sequence of bytes")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(DebugPayload(value.as_bytes().to_vec()))
+            }
+
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(DebugPayload(value.to_vec()))
+            }
+        }
+
+        deserializer.deserialize_any(DebugPayloadVisitor)
     }
 }
 
@@ -138,6 +214,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -187,5 +265,20 @@ mod tests {
             message.payload_str().unwrap_err().to_string(),
             "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 0: ..."
         );
+    }
+
+    #[test]
+    fn message_serialize_deserialize() {
+        let message = Message {
+            topic: Topic::new("test").unwrap(),
+            payload: DebugPayload("test-payload".as_bytes().to_vec()),
+            qos: QoS::AtMostOnce,
+            retain: true,
+        };
+
+        let json = serde_json::to_value(&message).expect("Serialization failed");
+        assert_eq!(json.get("payload").unwrap(), &json!("test-payload"));
+        let deserialized: Message = serde_json::from_value(json).expect("Deserialization failed");
+        assert_eq!(deserialized, message);
     }
 }

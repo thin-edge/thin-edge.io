@@ -136,12 +136,17 @@ mod tests {
             c8y_monitor_payload.as_bytes(),
         );
 
+        let temp_dir = tempfile::tempdir().unwrap();
         let main_device_registration =
             EntityRegistrationMessage::main_device(device_name.to_string());
-        let mut entity_store = EntityStore::with_main_device(
+        let mut entity_store = EntityStore::with_main_device_and_default_service_type(
+            MqttSchema::default(),
             main_device_registration,
+            "service".into(),
             crate::converter::CumulocityConverter::map_to_c8y_external_id,
             crate::converter::CumulocityConverter::validate_external_id,
+            5,
+            &temp_dir,
         )
         .unwrap();
 

@@ -127,9 +127,10 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
     Should Have MQTT Messages    te/device/offlinechild1///cmd/restart/+
 
 Early data messages cached and processed
+    [Teardown]    Re-enable Auto-registration
     ${timestamp}=        Get Unix Timestamp
     Execute Command    sudo tedge config set c8y.entity_store.auto_register false
-    Restart Service    tedge-mapper-c8y    
+    Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y
 
     ${children}=    Create List    child0    child00    child01    child000    child0000    child00000
@@ -151,10 +152,47 @@ Early data messages cached and processed
         Device Should Have Fragments    maintenance_mode
     END
 
-    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
     Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+
+
+Entities persisted and restored
+    ${timestamp}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"plc1"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"plc2"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"plc1-sensor1","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor2' '{"@type":"child-device","@id":"plc1-sensor2","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/sensor1' '{"@type":"child-device","@id":"plc2-sensor1","@parent":"factory/shop/plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"plc1-metrics","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"plc2-metrics","@parent":"factory/shop/plc2/"}'
+
+    Should Have MQTT Messages    c8y/s/us    message_contains=101,plc1    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us    message_contains=101,plc2    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/plc1    message_contains=101,plc1-sensor1    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/plc1    message_contains=101,plc1-sensor2    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/plc2    message_contains=101,plc2-sensor1    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/plc1    message_contains=102,plc1-metrics    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/plc2    message_contains=102,plc2-metrics    date_from=${timestamp}    minimum=1    maximum=1
+
+    FOR    ${counter}    IN RANGE    0    5
+        ${timestamp}=    Get Unix Timestamp
+        Restart Service    tedge-mapper-c8y
+        Service Health Status Should Be Up    tedge-mapper-c8y
+
+        # Assert that the restored entities are not converted again
+        Should Have MQTT Messages    c8y/s/us    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/plc1    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/plc2    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/plc1    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/plc2    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
+    END
+
 
 *** Keywords ***
+
+Re-enable Auto-registration
+    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
+    Restart Service    tedge-mapper-c8y
 
 Check Child Device
     [Arguments]    ${parent_sn}    ${child_sn}    ${child_name}    ${child_type}

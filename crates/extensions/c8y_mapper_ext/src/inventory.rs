@@ -8,6 +8,7 @@ use serde_json::Value as JsonValue;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::Message;
@@ -42,11 +43,11 @@ impl CumulocityConverter {
         if let JsonValue::Object(map) = inventory_base {
             for (key, value) in map {
                 let main_device_tid = self.entity_store.main_device().clone();
-                let _ = self.entity_store.update_twin_data(
-                    &main_device_tid,
+                let _ = self.entity_store.update_twin_data(EntityTwinMessage::new(
+                    main_device_tid.clone(),
                     key.clone(),
                     value.clone(),
-                )?;
+                ))?;
                 let mapped_message =
                     self.entity_twin_data_message(&main_device_tid, key.clone(), value.clone());
                 messages.push(mapped_message);
@@ -92,11 +93,11 @@ impl CumulocityConverter {
             serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
-        let updated = self.entity_store.update_twin_data(
-            source,
+        let updated = self.entity_store.update_twin_data(EntityTwinMessage::new(
+            source.clone(),
             fragment_key.into(),
             fragment_value.clone(),
-        )?;
+        ))?;
         if !updated {
             return Ok(vec![]);
         }

@@ -23,4 +23,5 @@ zeroize = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 mqtt_tests = { workspace = true }
+serde_json = { workspace = true }
 serial_test = { workspace = true }
