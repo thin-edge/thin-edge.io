@@ -38,7 +38,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/main///cmd/software_list/some-cmd-id"),
-        r#"{ "status": "scheduled" }"#,
+        r#"{ "status": "init" }"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -62,7 +62,7 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     // Simulate SoftwareUpdate MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child001///cmd/software_update/1234"),
-        r#"{"status":"scheduled","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
+        r#"{"status":"init","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -106,7 +106,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
     // Simulate Restart MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked(&format!("te/{target_device}/cmd/restart/random")),
-        r#"{"status": "scheduled"}"#,
+        r#"{"status": "init"}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 

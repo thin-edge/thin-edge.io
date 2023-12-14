@@ -56,29 +56,10 @@ impl WorkflowSupervisor {
             .collect()
     }
 
-    /// Extract the current action to be performed on a command request
-    ///
-    /// Returns:
-    /// - `Ok(Some(action)` when the request is well-formed
-    /// - `Ok(None)` when the request is finalized, i.e. when the command topic hase been cleared
-    /// - `Err(error)` when the request is ill-formed
-    pub fn get_workflow_current_action(
-        &self,
-        operation: &OperationType,
-        status: &Message,
-    ) -> Result<Option<(GenericCommandState, OperationAction)>, WorkflowExecutionError> {
-        self.workflows
-            .get(operation)
-            .ok_or_else(|| WorkflowExecutionError::UnknownOperation {
-                operation: operation.into(),
-            })
-            .and_then(|workflow| OperationWorkflow::get_operation_current_action(workflow, status))
-    }
-
     /// Update the state of the command board on reception of a message sent by a peer over MQTT
     ///
     /// Return the new CommandRequest state if any.
-    pub fn inject_external_update(
+    pub fn apply_external_update(
         &mut self,
         operation: &OperationType,
         message: &Message,
@@ -88,14 +69,13 @@ impl WorkflowSupervisor {
                 operation: operation.to_string(),
             });
         };
-
         match GenericCommandState::from_command_message(message)? {
             None => {
                 // The command has been cleared
                 self.commands.remove(&message.topic.name);
                 Ok(None)
             }
-            Some(command_state) if command_state.status == "init " => {
+            Some(command_state) if command_state.status == "init" => {
                 // This is a new command request
                 self.commands.insert(command_state.clone())?;
                 Ok(Some(command_state))
@@ -115,10 +95,10 @@ impl WorkflowSupervisor {
     /// Return the action to be performed on a given command state
     pub fn get_action(
         &self,
-        command_state: GenericCommandState,
+        command_state: &GenericCommandState,
     ) -> Result<OperationAction, WorkflowExecutionError> {
         let Some(operation_name) = command_state.operation() else {
-            return Err(WorkflowExecutionError::InvalidCmdTopic { topic: command_state.topic.name })
+            return Err(WorkflowExecutionError::InvalidCmdTopic { topic: command_state.topic.name.clone() })
         };
 
         self.workflows
@@ -126,7 +106,7 @@ impl WorkflowSupervisor {
             .ok_or(WorkflowExecutionError::UnknownOperation {
                 operation: operation_name,
             })
-            .and_then(|workflow| workflow.get_action(&command_state))
+            .and_then(|workflow| workflow.get_action(command_state))
     }
 
     /// Update the state of the command board on reception of new state for a command
@@ -135,18 +115,8 @@ impl WorkflowSupervisor {
     pub fn apply_internal_update(
         &mut self,
         new_command_state: GenericCommandState,
-    ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
-        self.commands.update(new_command_state.clone())?;
-
-        if new_command_state.is_terminal() {
-            // TODO: There is exception here - not implemented yet:
-            //       when the next step is delegated to an external process,
-            //       nothing has to be returned here (aka Ok(None))
-            //       as the agent has nothing to do except await a response over MQTT.
-            Ok(Some(new_command_state))
-        } else {
-            Ok(None)
-        }
+    ) -> Result<(), WorkflowExecutionError> {
+        self.commands.update(new_command_state)
     }
 }
 

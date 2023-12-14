@@ -41,18 +41,14 @@ impl GenericCommandState {
         }))
     }
 
-    pub fn into_message(self) -> Message {
+    /// Build an MQTT message to publish the command state
+    pub fn into_message(mut self) -> Message {
+        GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
         let topic = &self.topic;
         let payload = self.payload.to_string();
         Message::new(topic, payload)
             .with_retain()
             .with_qos(AtLeastOnce)
-    }
-
-    /// Serialize the command state as a json payload
-    pub fn to_json_string(mut self) -> String {
-        GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
-        self.payload.to_string()
     }
 
     /// Update this state

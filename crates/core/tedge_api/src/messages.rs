@@ -10,6 +10,7 @@ use download::DownloadInfo;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -86,6 +87,25 @@ where
     }
 }
 
+impl<Payload> Command<Payload>
+where
+    Payload: DeserializeOwned,
+{
+    /// Return the Command from a JSON payload
+    pub fn try_from_json(
+        target: EntityTopicId,
+        cmd_id: String,
+        json: serde_json::Value,
+    ) -> Result<Self, serde_json::Error> {
+        let payload = serde_json::from_value(json)?;
+        Ok(Command {
+            target,
+            cmd_id,
+            payload,
+        })
+    }
+}
+
 impl<'a, Payload> Command<Payload>
 where
     Payload: Jsonify<'a> + Deserialize<'a> + Serialize + CommandPayload,
@@ -105,6 +125,18 @@ where
                 cmd_id,
                 payload,
             }))
+        }
+    }
+
+    /// Return the generic command representation for this command
+    pub fn into_generic_command(self, schema: &MqttSchema) -> GenericCommandState {
+        let topic = self.topic(schema);
+        let status = self.status().to_string();
+        let payload = serde_json::to_value(self.payload).unwrap(); // any command payload can be converted into JSON
+        GenericCommandState {
+            topic,
+            status,
+            payload,
         }
     }
 
@@ -591,6 +623,20 @@ pub enum CommandStatus {
 
 fn default_failure_reason() -> String {
     "Unknown reason".to_string()
+}
+
+impl ToString for CommandStatus {
+    fn to_string(&self) -> String {
+        let str = match self {
+            CommandStatus::Init => "init",
+            CommandStatus::Scheduled => "scheduled",
+            CommandStatus::Executing => "executing",
+            CommandStatus::Successful => "successful",
+            CommandStatus::Failed { .. } => "failed",
+            CommandStatus::Unknown => "unknown",
+        };
+        str.to_string()
+    }
 }
 
 /// TODO: Deprecate OperationStatus

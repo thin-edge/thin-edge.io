@@ -20,6 +20,7 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
@@ -34,6 +35,7 @@ pub struct TedgeOperationConverterBuilder {
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareCommand>,
     restart_sender: LoggingSender<RestartCommand>,
+    command_sender: DynSender<GenericCommandState>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -67,6 +69,7 @@ impl TedgeOperationConverterBuilder {
 
         let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
+        let command_sender = input_sender.clone().into();
 
         let mqtt_publisher = mqtt_actor.connect_consumer(
             Self::subscriptions(&mqtt_schema, &device_topic_id),
@@ -91,6 +94,7 @@ impl TedgeOperationConverterBuilder {
             input_receiver,
             software_sender,
             restart_sender,
+            command_sender,
             mqtt_publisher,
             signal_sender,
             script_runner,
@@ -133,6 +137,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
             software_sender: self.software_sender,
             restart_sender: self.restart_sender,
             mqtt_publisher: self.mqtt_publisher,
+            command_sender: self.command_sender,
             script_runner: self.script_runner,
         }
     }
