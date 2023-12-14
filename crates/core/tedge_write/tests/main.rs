@@ -72,6 +72,35 @@ fn doesnt_change_permissions_if_file_exists() {
     assert_eq!(dest_mode & 0o777, 0o644);
 }
 
+#[test]
+fn uses_sudo_only_if_installed() {
+    let (temp_dir, source_path) = setup_source_file();
+    let dest_path = temp_dir.path().join("destination");
+    std::env::set_var("PATH", temp_dir.path());
+
+    let options = tedge_write::CopyOptions {
+        from: source_path.as_path().try_into().unwrap(),
+        to: dest_path.as_path().try_into().unwrap(),
+        sudo: true,
+        mode: None,
+        user: None,
+        group: None,
+    };
+
+    let no_sudo_command = options.command().unwrap();
+    assert_ne!(no_sudo_command.get_program(), "sudo");
+
+    let dummy_sudo_path = temp_dir.path().join("sudo");
+    let dummy_sudo = std::fs::File::create(dummy_sudo_path).unwrap();
+    let mut dummy_sudo_permissions = dummy_sudo.metadata().unwrap().permissions();
+    // chmod +x
+    dummy_sudo_permissions.set_mode(dummy_sudo_permissions.mode() | 0o111);
+    dummy_sudo.set_permissions(dummy_sudo_permissions).unwrap();
+
+    let sudo_command = options.command().unwrap();
+    assert_eq!(sudo_command.get_program(), "sudo");
+}
+
 fn setup_source_file() -> (TempDir, PathBuf) {
     let temp_dir = tempfile::tempdir().unwrap();
 
