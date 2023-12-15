@@ -1,5 +1,4 @@
 use crate::mqtt_topics::OperationType;
-use crate::workflow::toml_config::TomlOperationAction::Action;
 use crate::workflow::BgExitHandlers;
 use crate::workflow::DefaultHandlers;
 use crate::workflow::ExitHandlers;
@@ -57,15 +56,12 @@ pub struct TomlOperationState {
 pub enum TomlOperationAction {
     Script(ShellScript),
     BackgroundScript(ShellScript),
-    Action(ShellScript), // TODO use a proper BuiltAction enum
+    Action(String),
 }
 
 impl Default for TomlOperationAction {
     fn default() -> Self {
-        Action(ShellScript {
-            command: "proceed".to_string(),
-            args: vec![],
-        })
+        TomlOperationAction::Action("proceed".to_string())
     }
 }
 
@@ -107,14 +103,9 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
                 Ok(OperationAction::BgScript(script, handlers))
             }
-            TomlOperationAction::Action(ShellScript { command, args }) => match command.as_str() {
+            TomlOperationAction::Action(command) => match command.as_str() {
                 "builtin" => Ok(OperationAction::BuiltIn),
                 "cleanup" => Ok(OperationAction::Clear),
-                "waiting" => Ok(OperationAction::Delegate(
-                    args.get(0)
-                        .map(|o| o.to_owned())
-                        .unwrap_or_else(|| "unknown".to_string()),
-                )),
                 "proceed" => {
                     let on_success: GenericStateUpdate = input
                         .handlers
@@ -145,6 +136,24 @@ impl TryFrom<TomlOperationState> for OperationAction {
                         on_exec: on_exec.status,
                         on_success: on_success.status,
                         on_error: on_error.status,
+                    })
+                }
+                "await-agent-restart" => {
+                    let on_success: GenericStateUpdate = input
+                        .handlers
+                        .on_success
+                        .map(|u| u.into())
+                        .unwrap_or_else(GenericStateUpdate::successful);
+                    let on_timeout: GenericStateUpdate = input
+                        .handlers
+                        .on_error
+                        .map(|u| u.into())
+                        .unwrap_or_else(|| GenericStateUpdate::failed("timeout".to_string()));
+                    let timeout = Duration::from_secs(input.handlers.timeout_second.unwrap_or(300));
+                    Ok(OperationAction::AwaitingAgentRestart {
+                        on_success,
+                        timeout,
+                        on_timeout,
                     })
                 }
                 _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),

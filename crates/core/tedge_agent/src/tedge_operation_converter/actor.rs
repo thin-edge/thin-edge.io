@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use std::process::Output;
+use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
@@ -32,6 +33,7 @@ use time::format_description;
 use time::OffsetDateTime;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::time::sleep;
 
 fan_in_message_type!(AgentInput[MqttMessage, GenericCommandState, SoftwareCommand, RestartCommand] : Debug);
 
@@ -182,11 +184,19 @@ impl TedgeOperationConverterActor {
                 self.process_internal_operation(target, operation, cmd_id, state.payload)
                     .await
             }
-            OperationAction::Delegate(participant) => {
+            OperationAction::AwaitingAgentRestart {
+                timeout,
+                on_timeout,
+                ..
+            } => {
                 let step = &state.status;
-                info!("Delegating {operation} operation {step} step to: {participant}");
-                // TODO fail the operation on timeout
-                Ok(())
+                info!("{operation} operation {step} waiting for agent restart");
+                // The following sleep is expected to be interrupted by a restart
+                sleep(timeout + Duration::from_secs(60)).await;
+                // As the sleep completes, it means the agent was not restarted
+                // hence the operation is moved to its `on_timeout` target state
+                let new_state = state.update(on_timeout);
+                self.publish_command_state(new_state).await
             }
             OperationAction::Restart {
                 on_exec,
@@ -333,8 +343,11 @@ impl TedgeOperationConverterActor {
         match self.state_repository.load().await {
             Ok(Some(pending_commands)) => {
                 self.workflows.load_pending_commands(pending_commands);
-                for (_, command) in self.workflows.pending_commands().iter() {
-                    self.command_sender.send(command.clone()).await?;
+                for (timestamp, command) in self.workflows.pending_commands().iter() {
+                    if let Some(resumed_command) = self.workflows.resume_command(timestamp, command)
+                    {
+                        self.command_sender.send(resumed_command).await?;
+                    }
                 }
             }
             Ok(None) => {}

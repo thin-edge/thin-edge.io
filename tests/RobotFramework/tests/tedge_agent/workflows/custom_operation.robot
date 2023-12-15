@@ -6,6 +6,7 @@ Library             OperatingSystem
 
 Force Tags          theme:tedge_agent
 Suite Setup         Custom Setup
+Test Setup          Custom Test Setup
 Test Teardown       Get Logs
 
 *** Test Cases ***
@@ -44,7 +45,30 @@ Trigger Agent Restart
     ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
 
+Trigger native-reboot within workflow (on_success)
+    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/sbin/reboot, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
+    ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/native-reboot/robot-1 '{"status":"init"}'
+    Should Have MQTT Messages    te/device/main///cmd/native-reboot/robot-1    message_pattern=.*successful.*   maximum=1    timeout=300
+    ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
+    ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-1.log
+    Should Contain    ${workflow_log}    restarted:    msg=restarted state should have been executed
+
+Trigger native-reboot within workflow (on_error) - missing sudoers entry for reboot
+    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync' > /etc/sudoers.d/tedge
+    ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/native-reboot/robot-2 '{"status":"init"}'
+    Should Have MQTT Messages    te/device/main///cmd/native-reboot/robot-2    message_pattern=.*failed.*   maximum=1    timeout=180
+    ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Should Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should not have been restarted
+    ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-2.log
+    Should Not Contain    ${workflow_log}    restarted:    msg=restarted state should not have been executed
+
 *** Keywords ***
+
+Custom Test Setup
+    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
 
 Custom Setup
     ${DEVICE_SN}=    Setup
@@ -52,7 +76,6 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     Copy Configuration Files
     Restart Service    tedge-agent
-    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/software_list.toml       /etc/tedge/operations/
@@ -66,3 +89,4 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/slow-operation.toml      /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml       /etc/tedge/operations/

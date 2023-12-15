@@ -16,6 +16,7 @@ pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
 pub use supervisor::*;
 
 pub type StateName = String;
@@ -62,9 +63,15 @@ pub enum OperationAction {
     /// The command is delegated to a participant identified by its name
     ///
     /// ```toml
-    /// action = "waiting <delegate>"
+    /// awaiting = "agent-restart"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
     /// ```
-    Delegate(String),
+    AwaitingAgentRestart {
+        on_success: GenericStateUpdate,
+        timeout: Duration,
+        on_timeout: GenericStateUpdate,
+    },
 
     /// Restart the device
     ///
@@ -101,9 +108,7 @@ impl Display for OperationAction {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn => "builtin".to_string(),
-            OperationAction::Delegate(owner) => {
-                format!("wait for {owner} to perform required actions")
-            }
+            OperationAction::AwaitingAgentRestart { .. } => "awaiting agent restart".to_string(),
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),

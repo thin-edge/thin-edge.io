@@ -108,7 +108,9 @@ impl WorkflowSupervisor {
         command_state: &GenericCommandState,
     ) -> Result<OperationAction, WorkflowExecutionError> {
         let Some(operation_name) = command_state.operation() else {
-            return Err(WorkflowExecutionError::InvalidCmdTopic { topic: command_state.topic.name.clone() })
+            return Err(WorkflowExecutionError::InvalidCmdTopic {
+                topic: command_state.topic.name.clone(),
+            });
         };
 
         self.workflows
@@ -127,6 +129,28 @@ impl WorkflowSupervisor {
         new_command_state: GenericCommandState,
     ) -> Result<(), WorkflowExecutionError> {
         self.commands.update(new_command_state)
+    }
+
+    /// Resume the given command when the agent is restarting after an interruption
+    pub fn resume_command(
+        &self,
+        _timestamp: &Timestamp,
+        command: &GenericCommandState,
+    ) -> Option<GenericCommandState> {
+        let Ok(action) = self.get_action(command) else {
+            return None;
+        };
+
+        match action {
+            OperationAction::AwaitingAgentRestart { on_success, .. } => {
+                Some(command.clone().update(on_success))
+            }
+
+            _ => {
+                // TODO: Use the timestamp to filter out action pending since too long
+                Some(command.clone())
+            }
+        }
     }
 }
 

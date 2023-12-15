@@ -3684,6 +3684,7 @@ dependencies = [
  "tedge_test_utils",
  "tedge_uploader_ext",
  "tedge_utils",
+ "tempfile",
  "test-case",
  "thiserror",
  "time",

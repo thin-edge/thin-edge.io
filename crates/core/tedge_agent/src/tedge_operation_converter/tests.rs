@@ -1,6 +1,7 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_operation_converter::config::OperationConfig;
+use camino::Utf8Path;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -59,7 +60,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
 async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
     let (mut software_box, _restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter("device/main//").await?;
+        spawn_mqtt_operation_converter("device/child001//").await?;
 
     // Simulate SoftwareUpdate MQTT message received.
     let mqtt_message = MqttMessage::new(
@@ -257,12 +258,14 @@ async fn spawn_mqtt_operation_converter(
 
     let workflows = WorkflowSupervisor::default();
 
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+    let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
     let config = OperationConfig {
         mqtt_schema: MqttSchema::new(),
         device_topic_id: device_topic_id.parse().expect("Invalid topic id"),
-        log_dir: "/tmp".into(),
-        config_dir: "/tmp".into(),
-        state_dir: "/tmp".into(),
+        log_dir: tmp_path.into(),
+        config_dir: tmp_path.into(),
+        state_dir: tmp_path.into(),
     };
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
         config,

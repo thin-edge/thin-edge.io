@@ -348,15 +348,14 @@ For those any timeout has to be set on the waiting state.
 
 ```toml
 ["device-restart"]
-builtin_action = "restart"
+background_script = "sudo reboot"
 on_exec = "waiting-for-restart"
 
 ["waiting-for-restart"]
-builtin_action = "waiting-for-restart"
+action = "await-agent-restart"
 timeout_second = 600
 on_timeout = "timeout_restart"
 on_success = "successful_restart"
-on_error = "failed_restart"
 ```
 
 ### Running builtin actions
@@ -410,6 +409,35 @@ action = "restart"
 on_exec = "waiting-for-restart"
 on_success = "successful_restart"
 on_error = "failed_restart"
+```
+
+#### Awaiting the agent to restart
+
+When the expected outcome of a script is to restart the device or the agent,
+this script cannot be monitored end-to-end by the agent which will die executing the script.
+The success or failure of the script can only be detected when the agent resumes.
+
+This is done using a combination of the `background_script` directive with an additional state
+that awaits the agent restart using the `await-agent-restart` action after the script is triggered.
+
+1. The script is declared as a `background_script` with an `on_exec` handler.
+   This handler tells the agent to move to the next state awaiting the agent restart after the script is executed.
+   The agent persists this next state on disk before launching the script that can result in a reboot.
+3. The action attached to this next state is to `await-agent-restart`
+   with two handlers for the successful and timeout cases.
+3. On a successful reboot, the agent resumes from this persisted state awaiting restart and simply moves to the successful case.
+4. If for some reason, no restart happens within the given timeout window, the agent moves to the `on_timeout` operation state.
+
+```toml
+["device-restart"]
+background_script = "sudo reboot"
+on_exec = "waiting-for-restart"
+
+["waiting-for-restart"]
+action = "await-agent-restart"
+timeout_second = 600
+on_timeout = "timeout_restart"
+on_success = "successful_restart"
 ```
 
 #### Cleanup

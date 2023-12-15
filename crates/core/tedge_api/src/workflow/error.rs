@@ -43,7 +43,7 @@ pub enum WorkflowRegistrationError {
 /// Error preventing to infer the current action for an operation instance
 #[derive(thiserror::Error, Debug)]
 pub enum WorkflowExecutionError {
-    #[error("No a command topic: {topic}")]
+    #[error("Not a command topic: {topic}")]
     InvalidCmdTopic { topic: String },
 
     #[error("The command payload is not a JSON object")]
