@@ -680,7 +680,8 @@ impl ConfigSnapshotCmdPayload {
 pub struct ConfigUpdateCmdPayload {
     #[serde(flatten)]
     pub status: CommandStatus,
-    pub tedge_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tedge_url: Option<String>,
     pub remote_url: String,
     #[serde(rename = "type")]
     pub config_type: String,

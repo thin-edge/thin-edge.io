@@ -645,7 +645,7 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         key_path: Utf8PathBuf,
 
-        /// Path to a file containing the PEM encoded CA certificates that are
+        /// Path to a directory containing the PEM encoded CA certificates that are
         /// trusted when checking incoming client certificates for the File Transfer Service
         #[tedge_config(example = "/etc/ssl/certs")]
         #[doku(as = "PathBuf")]

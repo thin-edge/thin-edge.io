@@ -30,7 +30,6 @@ use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
@@ -202,7 +201,6 @@ pub struct CumulocityConverter {
     pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
     pub pending_upload_operations: HashMap<CmdId, UploadOperationData>,
-    pub pending_download_operations: HashMap<CmdId, SmartRestOperationVariant>,
 
     /// Used to store pending downloads from the FTS.
     // Using a separate field to not mix downloads from FTS and HTTP proxy
@@ -293,7 +291,6 @@ impl CumulocityConverter {
             uploader_sender,
             downloader_sender,
             pending_upload_operations: HashMap::new(),
-            pending_download_operations: HashMap::new(),
             pending_fts_download_operations: HashMap::new(),
             command_id,
         })
@@ -3293,16 +3290,11 @@ pub(crate) mod tests {
         let service_type = "service".into();
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
-        let mqtt_schema = MqttSchema::default();
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
-        let mut topics =
+        let topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
-        topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
-            &mqtt_schema,
-        ));
-        topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         C8yMapperConfig::new(
             tmp_dir.to_path_buf(),

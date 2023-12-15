@@ -3,8 +3,8 @@
 set -e
 
 DEVICE=$(tedge config get device.id)
-COMMON_NAME=$(tedge config get http.client.host)
-echo "Generating certificate with SAN $COMMON_NAME"
+C8Y_PROXY_COMMON_NAME=$(tedge config get c8y.proxy.client.host)
+FTS_COMMON_NAME=$(tedge config get http.client.host)
 
 ## Signing certificate
 openssl req \
@@ -22,40 +22,48 @@ openssl req \
 openssl genrsa -out c8y-mapper.key 2048
 
 openssl req -out c8y-mapper.csr -key c8y-mapper.key \
-    -subj "/O=thin-edge/OU=$DEVICE/SN=c8y-mapper/CN=localhost" \
+    -subj "/O=thin-edge/OU=$DEVICE/SN=c8y-mapper/CN=$C8Y_PROXY_COMMON_NAME" \
     -new
 
-cat > v3.ext << EOF
+cat > v3.c8yproxy.ext << EOF
 authorityKeyIdentifier=keyid
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, keyAgreement
 extendedKeyUsage = serverAuth, clientAuth
-subjectAltName=DNS:localhost,IP:$COMMON_NAME
+subjectAltName=DNS:localhost,IP:$C8Y_PROXY_COMMON_NAME
 EOF
 
 openssl x509 -req \
     -in c8y-mapper.csr \
     -CA tedge-local-ca.crt \
     -CAkey tedge-local-ca.key \
-    -extfile v3.ext \
+    -extfile v3.c8yproxy.ext \
     -CAcreateserial \
     -out c8y-mapper.crt \
     -days 100
 
 ## main agent certificate
 
+cat > v3.agent.ext << EOF
+authorityKeyIdentifier=keyid
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, keyAgreement
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName=DNS:localhost,IP:$FTS_COMMON_NAME
+EOF
+
 openssl genrsa -out main-agent.key 2048
 
 openssl req -out main-agent.csr \
     -key main-agent.key \
-    -subj "/O=thin-edge/OU=$DEVICE/SN=main-agent/CN=$COMMON_NAME" \
+    -subj "/O=thin-edge/OU=$DEVICE/SN=main-agent/CN=$FTS_COMMON_NAME" \
     -new
 
 openssl x509 -req \
     -in main-agent.csr \
     -CA tedge-local-ca.crt \
     -CAkey tedge-local-ca.key \
-    -extfile v3.ext \
+    -extfile v3.agent.ext \
     -CAcreateserial \
     -out main-agent.crt \
     -days 100
