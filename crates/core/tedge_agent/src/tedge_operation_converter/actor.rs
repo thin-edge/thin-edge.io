@@ -1,4 +1,5 @@
 use crate::software_manager::actor::SoftwareCommand;
+use crate::state_repository::state::AgentStateRepository;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
@@ -20,6 +21,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::WorkflowExecutionError;
@@ -37,6 +39,7 @@ pub struct TedgeOperationConverterActor {
     pub(crate) mqtt_schema: MqttSchema,
     pub(crate) device_topic_id: EntityTopicId,
     pub(crate) workflows: WorkflowSupervisor,
+    pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: LoggingReceiver<AgentInput>,
     pub(crate) software_sender: LoggingSender<SoftwareCommand>,
@@ -54,6 +57,7 @@ impl Actor for TedgeOperationConverterActor {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.publish_operation_capabilities().await?;
+        self.load_command_board().await?;
 
         while let Some(input) = self.input_receiver.recv().await {
             match input {
@@ -106,9 +110,11 @@ impl TedgeOperationConverterActor {
                     log_file
                         .log_step("", "The command has been fully processed")
                         .await;
+                    self.persist_command_board().await?;
                 }
             }
             Ok(Some(state)) => {
+                self.persist_command_board().await?;
                 self.process_command_state_update(state).await?;
             }
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {
@@ -316,8 +322,42 @@ impl TedgeOperationConverterActor {
         if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
             error!("Fail to persist workflow operation state: {err}");
         }
+        self.persist_command_board().await?;
         self.command_sender.send(new_state.clone()).await?;
         self.mqtt_publisher.send(new_state.into_message()).await?;
+        Ok(())
+    }
+
+    /// Reload from disk the current state of the pending command requests
+    async fn load_command_board(&mut self) -> Result<(), RuntimeError> {
+        match self.state_repository.load().await {
+            Ok(Some(pending_commands)) => {
+                self.workflows.load_pending_commands(pending_commands);
+                for (_, command) in self.workflows.pending_commands().iter() {
+                    self.command_sender.send(command.clone()).await?;
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                error!(
+                    "Fail to reload pending command requests from {} due to: {}",
+                    self.state_repository.state_repo_path, err
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Persist on-disk the current state of the pending command requests
+    async fn persist_command_board(&mut self) -> Result<(), RuntimeError> {
+        let pending_commands = self.workflows.pending_commands();
+        if let Err(err) = self.state_repository.store(pending_commands).await {
+            error!(
+                "Fail to persist pending command requests in {} due to: {}",
+                self.state_repository.state_repo_path, err
+            );
+        }
+
         Ok(())
     }
 }

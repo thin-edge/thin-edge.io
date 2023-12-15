@@ -7,6 +7,7 @@ use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_state_dir;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
+use crate::tedge_operation_converter::config::OperationConfig;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use crate::Capabilities;
@@ -66,6 +67,7 @@ pub(crate) struct AgentConfig {
     pub http_config: FileTransferServerConfig,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
+    pub operation_config: OperationConfig,
     pub config_dir: Utf8PathBuf,
     pub tmp_dir: Arc<Utf8Path>,
     pub run_dir: Utf8PathBuf,
@@ -131,6 +133,10 @@ impl AgentConfig {
         // Software update config
         let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
 
+        // Operation Workflow config
+        let operation_config =
+            OperationConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)?;
+
         // For flockfile
         let run_dir = tedge_config.run.path.clone();
         let use_lock = tedge_config.run.lock_files;
@@ -159,6 +165,7 @@ impl AgentConfig {
             http_config,
             restart_config,
             sw_update_config,
+            operation_config,
             config_dir,
             run_dir,
             tmp_dir,
@@ -234,10 +241,8 @@ impl Agent {
 
         // Converter actor
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
-            self.config.mqtt_topic_root.as_ref(),
-            self.config.mqtt_device_topic_id.clone(),
+            self.config.operation_config,
             workflows,
-            self.config.log_dir.clone(),
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,

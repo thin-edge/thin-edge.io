@@ -1,5 +1,6 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
+use crate::tedge_operation_converter::config::OperationConfig;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -19,6 +20,7 @@ use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -255,11 +257,16 @@ async fn spawn_mqtt_operation_converter(
 
     let workflows = WorkflowSupervisor::default();
 
+    let config = OperationConfig {
+        mqtt_schema: MqttSchema::new(),
+        device_topic_id: device_topic_id.parse().expect("Invalid topic id"),
+        log_dir: "/tmp".into(),
+        config_dir: "/tmp".into(),
+        state_dir: "/tmp".into(),
+    };
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
-        "te",
-        device_topic_id.parse().expect("Invalid topic id"),
+        config,
         workflows,
-        "/tmp".into(),
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,

@@ -45,6 +45,16 @@ impl WorkflowSupervisor {
         Ok(())
     }
 
+    /// The set of pending commands
+    pub fn pending_commands(&self) -> &CommandBoard {
+        &self.commands
+    }
+
+    /// The set of pending commands
+    pub fn load_pending_commands(&mut self, commands: CommandBoard) {
+        self.commands = commands
+    }
+
     /// List the capabilities provided by the registered workflows
     pub fn capability_messages(&self, schema: &MqttSchema, target: &EntityTopicId) -> Vec<Message> {
         // To ease testing the capability messages are emitted in a deterministic order
@@ -124,19 +134,25 @@ impl WorkflowSupervisor {
 ///
 ///
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-struct CommandBoard {
+pub struct CommandBoard {
     /// For each command instance (uniquely identified by its cmd topic):
     /// - the full state of the command
     /// - a timestamp marking since when the command request is in this state
     ///
     /// TODO: use the timestamp to mark faulty any request making no progress
+    #[serde(flatten)]
     commands: HashMap<TopicName, (Timestamp, GenericCommandState)>,
 }
 
-type TopicName = String;
-type Timestamp = time::OffsetDateTime;
+pub type TopicName = String;
+pub type Timestamp = time::OffsetDateTime;
 
 impl CommandBoard {
+    /// Iterate over the pending commands
+    pub fn iter(&self) -> impl Iterator<Item = &(Timestamp, GenericCommandState)> {
+        self.commands.values()
+    }
+
     /// Insert a new operation request into the [CommandBoard]
     ///
     /// Reject the request if there is already an entry with the same command id, but in a different state
