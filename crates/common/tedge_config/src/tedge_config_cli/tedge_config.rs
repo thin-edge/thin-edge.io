@@ -661,6 +661,20 @@ define_tedge_config! {
             #[doku(as = "PathBuf")]
             path: Utf8PathBuf,
         },
+
+        enable: {
+            /// Determines if tedge-agent should enable config_update operation
+            #[tedge_config(example = "true", default(value = true))]
+            config_update: bool,
+
+            /// Determines if tedge-agent should enable config_snapshot operation
+            #[tedge_config(example = "true", default(value = true))]
+            config_snapshot: bool,
+
+            /// Determines if tedge-agent should enable log_upload operation
+            #[tedge_config(example = "true", default(value = true))]
+            log_upload: bool,
+        },
     },
 
     software: {

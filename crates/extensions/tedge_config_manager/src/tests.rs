@@ -85,6 +85,7 @@ async fn new_config_manager_builder(
         use_tedge_write: TedgeWriteStatus::Disabled,
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
+        config_update_enabled: true,
     };
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

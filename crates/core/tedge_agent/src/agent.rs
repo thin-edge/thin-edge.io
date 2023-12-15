@@ -8,6 +8,7 @@ use crate::state_repository::state::agent_state_dir;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
+use crate::Capabilities;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -53,6 +54,7 @@ use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
+use tracing::warn;
 
 const TEDGE_AGENT: &str = "tedge-agent";
 
@@ -74,6 +76,7 @@ pub(crate) struct AgentConfig {
     pub service_type: String,
     pub identity: Option<Identity>,
     pub is_sudo_enabled: bool,
+    pub capabilities: Capabilities,
 }
 
 impl AgentConfig {
@@ -137,6 +140,12 @@ impl AgentConfig {
 
         let is_sudo_enabled = tedge_config.enable.sudo;
 
+        let capabilities = Capabilities {
+            config_update: tedge_config.agent.enable.config_update,
+            config_snapshot: tedge_config.agent.enable.config_snapshot,
+            log_upload: tedge_config.agent.enable.log_upload,
+        };
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -154,6 +163,7 @@ impl AgentConfig {
             service_type: tedge_config.service.ty.clone(),
             identity,
             is_sudo_enabled,
+            capabilities,
         })
     }
 }
@@ -252,37 +262,54 @@ impl Agent {
             DownloaderActor::new(self.config.identity.clone()).builder();
         let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
 
-        // Instantiate config manager actor
-        let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
-            config_dir: self.config.config_dir.clone().into(),
-            mqtt_topic_root: mqtt_schema.clone(),
-            mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
-            tmp_path: self.config.tmp_dir.clone(),
-            is_sudo_enabled: self.config.is_sudo_enabled,
-        })?;
-        let config_actor_builder = ConfigManagerBuilder::try_new(
-            manager_config,
-            &mut mqtt_actor_builder,
-            &mut fs_watch_actor_builder,
-            &mut downloader_actor_builder,
-            &mut uploader_actor_builder,
-        )
-        .await?;
+        // Instantiate config manager actor if config_snapshot or both operations are enabled
+        let config_actor_builder: Option<ConfigManagerBuilder> =
+            if self.config.capabilities.config_snapshot {
+                let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
+                    config_dir: self.config.config_dir.clone().into(),
+                    mqtt_topic_root: mqtt_schema.clone(),
+                    mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+                    tmp_path: self.config.tmp_dir.clone(),
+                    is_sudo_enabled: self.config.is_sudo_enabled,
+                    config_update_enabled: self.config.capabilities.config_update,
+                })?;
+                Some(
+                    ConfigManagerBuilder::try_new(
+                        manager_config,
+                        &mut mqtt_actor_builder,
+                        &mut fs_watch_actor_builder,
+                        &mut downloader_actor_builder,
+                        &mut uploader_actor_builder,
+                    )
+                    .await?,
+                )
+            } else if self.config.capabilities.config_update {
+                warn!("Config_snapshot operation must be enabled to run config_update!");
+                None
+            } else {
+                None
+            };
 
-        // Instantiate log manager actor
-        let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
-            config_dir: self.config.config_dir.clone().into(),
-            tmp_dir: self.config.config_dir.into(),
-            mqtt_schema,
-            mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
-        })?;
-        let log_actor_builder = LogManagerBuilder::try_new(
-            log_manager_config,
-            &mut mqtt_actor_builder,
-            &mut fs_watch_actor_builder,
-            &mut uploader_actor_builder,
-        )
-        .await?;
+        // Instantiate log manager actor if the operation is enabled
+        let log_actor_builder = if self.config.capabilities.log_upload {
+            let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
+                config_dir: self.config.config_dir.clone().into(),
+                tmp_dir: self.config.config_dir.into(),
+                mqtt_schema,
+                mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+            })?;
+            Some(
+                LogManagerBuilder::try_new(
+                    log_manager_config,
+                    &mut mqtt_actor_builder,
+                    &mut fs_watch_actor_builder,
+                    &mut uploader_actor_builder,
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;
@@ -290,8 +317,12 @@ impl Agent {
         runtime.spawn(fs_watch_actor_builder).await?;
         runtime.spawn(downloader_actor_builder).await?;
         runtime.spawn(uploader_actor_builder).await?;
-        runtime.spawn(config_actor_builder).await?;
-        runtime.spawn(log_actor_builder).await?;
+        if let Some(config_actor_builder) = config_actor_builder {
+            runtime.spawn(config_actor_builder).await?;
+        }
+        if let Some(log_actor_builder) = log_actor_builder {
+            runtime.spawn(log_actor_builder).await?;
+        }
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(script_runner).await?;

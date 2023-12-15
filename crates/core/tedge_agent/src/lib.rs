@@ -90,3 +90,21 @@ pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
     }
     Ok(())
 }
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct Capabilities {
+    config_update: bool,
+    config_snapshot: bool,
+    log_upload: bool,
+}
+
+#[cfg(test)]
+impl Default for Capabilities {
+    fn default() -> Self {
+        Capabilities {
+            config_update: true,
+            config_snapshot: true,
+            log_upload: true,
+        }
+    }
+}

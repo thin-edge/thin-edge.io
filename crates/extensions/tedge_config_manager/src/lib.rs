@@ -129,7 +129,9 @@ files = [
     fn subscriptions(config: &ConfigManagerConfig) -> TopicFilter {
         let mut topic_filter = TopicFilter::empty();
         topic_filter.add_all(config.config_snapshot_topic.clone());
-        topic_filter.add_all(config.config_update_topic.clone());
+        if config.config_update_enabled {
+            topic_filter.add_all(config.config_update_topic.clone());
+        }
         topic_filter
     }
 
