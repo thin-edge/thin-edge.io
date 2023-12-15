@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/packages/*.*
