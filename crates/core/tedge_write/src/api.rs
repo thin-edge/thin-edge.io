@@ -30,14 +30,31 @@ impl<'a> CopyOptions<'a> {
     ///
     /// Stdin and Stdout are UTF-8.
     pub fn copy(self) -> anyhow::Result<()> {
-        let mut command = match self.sudo {
-            true => {
-                let mut command = Command::new("sudo");
-                command.arg(crate::TEDGE_WRITE_PATH);
-                command
-            }
-            false => Command::new(crate::TEDGE_WRITE_PATH),
+        let output = self
+            .command()?
+            .output()
+            .context("Starting tedge-write process failed")?;
+
+        if !output.status.success() {
+            return Err(anyhow!(
+                String::from_utf8(output.stderr).expect("output should be utf-8")
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn command(&self) -> std::io::Result<Command> {
+        let is_sudo_installed = which::which_global("sudo").is_ok();
+
+        let mut command = if is_sudo_installed && self.sudo {
+            let mut command = Command::new("sudo");
+            command.arg(crate::TEDGE_WRITE_PATH);
+            command
+        } else {
+            Command::new(crate::TEDGE_WRITE_PATH)
         };
+
         let from_reader = std::fs::File::open(self.from)?;
         command.stdin(from_reader).arg(self.to);
 
@@ -51,16 +68,6 @@ impl<'a> CopyOptions<'a> {
             command.arg("--group").arg(group);
         }
 
-        let output = command
-            .output()
-            .context("Starting tedge-write process failed")?;
-
-        if !output.status.success() {
-            return Err(anyhow!(
-                String::from_utf8(output.stderr).expect("output should be utf-8")
-            ));
-        }
-
-        Ok(())
+        Ok(command)
     }
 }

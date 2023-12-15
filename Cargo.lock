@@ -3813,6 +3813,7 @@ dependencies = [
  "path-clean",
  "tempfile",
  "uzers",
+ "which",
 ]
 
 [[package]]
