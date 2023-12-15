@@ -159,6 +159,13 @@ After changing the configuration, you need to restart the mapper service by:
 sudo systemctl restart tedge-mapper-az
 ```
 
+### Timestamp output format
+
+The format that is used for the `time` field can be configured to either a UNIX timestamp (a number of seconds since the
+UNIX epoch), or RFC-3339 using the configuration value `az.mapper.timestamp_format` to either `unix` or `rfc-3339`.
+This setting affects not only the timestamps added by the mapper, but it will also transform the existing `time` field
+to the specified format.
+
 ## AWS mapper
 
 The AWS mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
