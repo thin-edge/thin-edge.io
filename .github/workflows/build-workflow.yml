@@ -98,7 +98,7 @@ jobs:
           cache: 'pip'
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: packages-${{ matrix.job.target }}
@@ -142,7 +142,7 @@ jobs:
       # The docker build step will select the correct target for the
       # given container target platform
       - name: Download release artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: containers/tedge/packages/
 
