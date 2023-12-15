@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: packages-x86_64-unknown-linux-musl
@@ -176,21 +176,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: packages-armv7-unknown-linux-gnueabihf
           path: package_unpack
 
       - name: Download sawtooth publisher
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: sawtooth-publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
       - name: Download tedge-dummy-plugin
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge-dummy-plugin_armv7-unknown-linux-gnueabihf
