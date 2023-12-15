@@ -48,7 +48,7 @@ jobs:
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: packages-x86_64-unknown-linux-musl
           path: target/x86_64-unknown-linux-musl/packages/*.deb
@@ -118,21 +118,21 @@ jobs:
 
       - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/packages/*.deb
 
       - name: Upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sawtooth-publisher_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sawtooth-publisher
 
       - name: Upload dummy-plugin as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tedge-dummy-plugin_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/tedge-dummy-plugin
