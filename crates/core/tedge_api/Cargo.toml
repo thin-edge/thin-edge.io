@@ -19,6 +19,7 @@ mqtt_channel = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shell-words = { workspace = true }
+tedge_utils = { workspace = true, features = ["timestamp"] }
 thiserror = { workspace = true }
 time = { workspace = true, features = [
     "formatting",

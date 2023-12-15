@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
+tedge_config = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
@@ -23,3 +24,4 @@ tokio = { workspace = true, features = ["macros"] }
 [dev-dependencies]
 anyhow = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_config = { workspace = true, features = ["test"] }

@@ -124,6 +124,12 @@ impl<'a> C8yOperation for &'a str {
     }
 }
 
+impl<'a> C8yOperation for &'a String {
+    fn name(&self) -> &str {
+        self.as_str()
+    }
+}
+
 #[derive(Debug, Serialize, Eq, PartialEq)]
 #[serde(untagged)]
 pub enum TextOrCsv {

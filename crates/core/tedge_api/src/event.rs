@@ -2,12 +2,12 @@ use self::error::ThinEdgeJsonDeserializerError;
 use crate::entity_store::EntityMetadata;
 use clock::Timestamp;
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use tedge_utils::timestamp::deserialize_optional_string_or_unix_timestamp;
 
 /// In-memory representation of ThinEdge JSON event.
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeEvent {
     #[serde(rename = "type")]
     pub name: String,
@@ -17,12 +17,12 @@ pub struct ThinEdgeEvent {
 }
 
 /// In-memory representation of ThinEdge JSON event payload
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeEventData {
     pub text: Option<String>,
 
     #[serde(default)]
-    #[serde(with = "time::serde::rfc3339::option")]
+    #[serde(deserialize_with = "deserialize_optional_string_or_unix_timestamp")]
     pub time: Option<Timestamp>,
 
     #[serde(flatten)]
@@ -189,21 +189,6 @@ mod tests {
                 .unwrap();
 
         assert_eq!(event, expected_event);
-    }
-
-    #[test]
-    fn event_translation_empty_payload() {
-        let event_data = ThinEdgeEventData {
-            text: Some("foo".to_string()),
-            time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-            extras: HashMap::new(),
-        };
-
-        let serialized = serde_json::to_string(&event_data).unwrap();
-        assert_eq!(
-            r#"{"text":"foo","time":"2021-04-23T19:00:00+05:00"}"#,
-            serialized
-        );
     }
 
     #[test]

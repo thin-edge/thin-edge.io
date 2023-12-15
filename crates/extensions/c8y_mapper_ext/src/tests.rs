@@ -32,6 +32,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
+use tedge_config::TEdgeConfigRepository;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -450,7 +451,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
             ),
             (
                 "c8y/s/us",
-                "502,c8y_SoftwareUpdate,\"Parameter remove is not recognized. It must be install or delete.\""
+                "502,c8y_SoftwareUpdate,Parameter remove is not recognized. It must be install or delete."
             )
         ],
     )
@@ -475,7 +476,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "302,temperature_alarm,\"Temperature high\"")],
+        [("c8y/s/us", "302,temperature_alarm,Temperature high")],
     )
     .await;
 }
@@ -519,7 +520,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
             ),
             (
                 "c8y/s/us/test-device:device:external_sensor",
-                "303,temperature_high,\"Temperature high\"",
+                "303,temperature_high,Temperature high",
             ),
         ],
     )
@@ -894,7 +895,7 @@ async fn c8y_mapper_alarm_empty_json_payload() {
         .payload
         .as_str()
         .unwrap()
-        .starts_with(r#"303,empty_temperature_alarm,"empty_temperature_alarm""#));
+        .starts_with("303,empty_temperature_alarm,empty_temperature_alarm"));
 }
 
 #[tokio::test]
@@ -1175,7 +1176,7 @@ async fn c8y_mapper_child_service_alarm() {
         &mut mqtt,
         [(
             "c8y/s/us/test-device:device:external_sensor:service:service_child",
-            r#"301,custom_alarm,"temperature alarm",2023-01-25T18:41:14.776170774Z"#,
+            "301,custom_alarm,temperature alarm,2023-01-25T18:41:14.776170774Z",
         )],
     )
     .await;
@@ -1233,7 +1234,7 @@ async fn c8y_mapper_main_service_alarm() {
         &mut mqtt,
         [(
             "c8y/s/us/test-device:device:main:service:service_main",
-            r#"301,custom_alarm,"temperature alarm",2023-01-25T18:41:14.776170774Z"#,
+            "301,custom_alarm,temperature alarm,2023-01-25T18:41:14.776170774Z",
         )],
     )
     .await;
@@ -2252,7 +2253,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
             ),
             (
                 "c8y/s/us/nested_child",
-                "303,ThinEdgeAlarm,\"Temperature high\",2023-10-13T15:00:07.172674353Z",
+                "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
             ),
         ],
     )
@@ -2384,7 +2385,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
         &mut mqtt,
         [(
             "c8y/s/us/nested_service",
-            "303,ThinEdgeAlarm,\"Temperature high\",2023-10-13T15:00:07.172674353Z",
+            "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
         )],
     )
     .await;
@@ -2547,7 +2548,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let device_name = "test-device".into();
     let device_topic_id = EntityTopicId::default_main_device();
     let device_type = "test-device-type".into();
-    let service_type = "service".into();
+    let config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
     let c8y_host = "test.c8y.io".into();
     let tedge_http_host = "localhost:8888".into();
     let mqtt_schema = MqttSchema::default();
@@ -2571,7 +2572,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         device_name,
         device_topic_id,
         device_type,
-        service_type,
+        config.service.clone(),
         c8y_host,
         tedge_http_host,
         topics,

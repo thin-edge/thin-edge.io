@@ -37,6 +37,7 @@ use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
 use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::WorkflowSupervisor;
+use tedge_config::TEdgeConfigReaderService;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;
@@ -74,7 +75,7 @@ pub(crate) struct AgentConfig {
     pub operations_dir: Utf8PathBuf,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
-    pub service_type: String,
+    pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
@@ -167,10 +168,10 @@ impl AgentConfig {
             operations_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
-            service_type: tedge_config.service.ty.clone(),
             identity,
             fts_url,
             is_sudo_enabled,
+            service: tedge_config.service.clone(),
             capabilities,
         })
     }
@@ -259,7 +260,7 @@ impl Agent {
             service,
             &mut mqtt_actor_builder,
             &mqtt_schema,
-            self.config.service_type.clone(),
+            &self.config.service,
         );
 
         // Tedge to Te topic converter

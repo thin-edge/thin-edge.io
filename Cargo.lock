@@ -281,6 +281,7 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_mqtt_ext",
+ "tedge_utils",
  "thiserror",
  "time",
  "tokio",
@@ -408,6 +409,7 @@ dependencies = [
  "serde_json",
  "tedge_actors",
  "tedge_api",
+ "tedge_config",
  "tedge_mqtt_ext",
  "test-case",
  "thiserror",
@@ -3493,6 +3495,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "strum"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
 name = "strum_macros"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3848,6 +3859,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "tedge_utils",
  "test-case",
  "thiserror",
  "time",
@@ -3870,6 +3882,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_ignored",
+ "serde_json",
+ "strum",
  "strum_macros",
  "tedge_config_macros",
  "tedge_test_utils",
@@ -3985,6 +3999,7 @@ dependencies = [
  "serde_json",
  "tedge_actors",
  "tedge_api",
+ "tedge_config",
  "tedge_mqtt_ext",
  "thiserror",
  "tokio",
@@ -4108,6 +4123,7 @@ version = "0.13.1"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "doku",
  "futures",
  "maplit",
  "mqtt_channel",
@@ -4115,10 +4131,13 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "once_cell",
- "strum_macros",
+ "serde",
+ "serde_json",
+ "strum",
  "tedge_test_utils",
  "tempfile",
  "thiserror",
+ "time",
  "tokio",
  "tracing",
  "uzers",

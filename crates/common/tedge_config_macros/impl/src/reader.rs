@@ -124,7 +124,7 @@ fn generate_structs(
         .unzip();
 
     Ok(quote! {
-        #[derive(::doku::Document, ::serde::Serialize, Debug)]
+        #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
         #[non_exhaustive]
         #[doc = #doc_comment]
         pub struct #name {

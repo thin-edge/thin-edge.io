@@ -12,6 +12,9 @@ pub enum WatchdogError {
     #[error("The watchdog is not available on this platform")]
     WatchdogNotAvailable,
 
+    #[error("MQTT receiver closed")]
+    ChannelClosed,
+
     #[error("Fail to run `{cmd}`: {from}")]
     CommandExecError { cmd: String, from: std::io::Error },
 

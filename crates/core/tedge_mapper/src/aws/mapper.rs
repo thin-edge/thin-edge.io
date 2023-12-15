@@ -32,8 +32,12 @@ impl TEdgeComponent for AwsMapper {
             start_basic_actors(self.session_name(), &tedge_config).await?;
         let clock = Box::new(WallClock);
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let aws_converter =
-            AwsConverter::new(tedge_config.aws.mapper.timestamp, clock, mqtt_schema);
+        let aws_converter = AwsConverter::new(
+            tedge_config.aws.mapper.timestamp,
+            clock,
+            mqtt_schema,
+            tedge_config.aws.mapper.timestamp_format,
+        );
         let mut aws_converting_actor = ConvertingActor::builder(
             "AwsConverter",
             aws_converter,

@@ -8,3 +8,6 @@ pub mod timers;
 pub mod futures;
 #[cfg(feature = "fs-notify")]
 pub mod notify;
+
+#[cfg(feature = "timestamp")]
+pub mod timestamp;

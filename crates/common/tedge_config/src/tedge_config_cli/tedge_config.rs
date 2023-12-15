@@ -1,3 +1,4 @@
+use super::models::timestamp::TimeFormat;
 use crate::AutoFlag;
 use crate::ConnectUrl;
 use crate::HostPort;
@@ -468,6 +469,12 @@ define_tedge_config! {
             #[tedge_config(example = "true")]
             #[tedge_config(default(value = true))]
             timestamp: bool,
+
+            /// The format that will be used by the mapper when sending timestamps to Azure IoT
+            #[tedge_config(example = "rfc-3339")]
+            #[tedge_config(example = "unix")]
+            #[tedge_config(default(variable = "TimeFormat::Unix"))]
+            timestamp_format: TimeFormat,
         },
 
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
@@ -492,6 +499,12 @@ define_tedge_config! {
             #[tedge_config(example = "true")]
             #[tedge_config(default(value = true))]
             timestamp: bool,
+
+            /// The format that will be used by the mapper when sending timestamps to AWS IoT
+            #[tedge_config(example = "rfc-3339")]
+            #[tedge_config(example = "unix")]
+            #[tedge_config(default(variable = "TimeFormat::Unix"))]
+            timestamp_format: TimeFormat,
         },
 
         /// Set of MQTT topics the AWS IoT mapper should subscribe to
@@ -735,6 +748,12 @@ define_tedge_config! {
         /// The thin-edge.io service's service type
         #[tedge_config(rename = "type", example = "systemd", default(value = "service"))]
         ty: String,
+
+        /// The format that will be used for the timestamp when generating service "up" messages in thin-edge JSON
+        #[tedge_config(example = "rfc-3339")]
+        #[tedge_config(example = "unix")]
+        #[tedge_config(default(variable = "TimeFormat::Unix"))]
+        timestamp_format: TimeFormat,
     },
 
     apt: {

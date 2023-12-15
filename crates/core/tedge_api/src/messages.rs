@@ -88,7 +88,7 @@ where
 
 impl<'a, Payload> Command<Payload>
 where
-    Payload: Jsonify<'a> + CommandPayload,
+    Payload: Jsonify<'a> + Deserialize<'a> + Serialize + CommandPayload,
 {
     /// Return the Command received on a topic
     pub fn try_from(
@@ -144,23 +144,32 @@ pub trait CommandPayload {
 }
 
 /// All the messages are serialized using json.
-pub trait Jsonify<'a>
-where
-    Self: Deserialize<'a> + Serialize + Sized,
-{
-    fn from_json(json_str: &'a str) -> Result<Self, serde_json::Error> {
+pub trait Jsonify<'a> {
+    fn from_json(json_str: &'a str) -> Result<Self, serde_json::Error>
+    where
+        Self: Deserialize<'a>,
+    {
         serde_json::from_str(json_str)
     }
 
-    fn from_slice(bytes: &'a [u8]) -> Result<Self, serde_json::Error> {
+    fn from_slice(bytes: &'a [u8]) -> Result<Self, serde_json::Error>
+    where
+        Self: Deserialize<'a>,
+    {
         serde_json::from_slice(bytes)
     }
 
-    fn to_json(&self) -> String {
+    fn to_json(&self) -> String
+    where
+        Self: Serialize,
+    {
         serde_json::to_string(self).unwrap() // all thin-edge data can be serialized to json
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8>
+    where
+        Self: Serialize,
+    {
         serde_json::to_vec(self).unwrap() // all thin-edge data can be serialized to json
     }
 }

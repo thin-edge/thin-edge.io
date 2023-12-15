@@ -9,6 +9,7 @@ use tedge_actors::Converter;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_config::timestamp::TimeFormat;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
@@ -19,6 +20,7 @@ const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-az-bridge
 pub struct MapperConfig {
     pub out_topic: Topic,
     pub errors_topic: Topic,
+    pub time_format: TimeFormat,
 }
 
 pub struct AzureConverter {
@@ -30,10 +32,16 @@ pub struct AzureConverter {
 }
 
 impl AzureConverter {
-    pub fn new(add_timestamp: bool, clock: Box<dyn Clock>, mqtt_schema: MqttSchema) -> Self {
+    pub fn new(
+        add_timestamp: bool,
+        clock: Box<dyn Clock>,
+        mqtt_schema: MqttSchema,
+        time_format: TimeFormat,
+    ) -> Self {
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked("az/messages/events/"),
             errors_topic: mqtt_schema.error_topic(),
+            time_format,
         };
         let size_threshold = SizeThreshold(AZ_MQTT_THRESHOLD);
         AzureConverter {
@@ -95,18 +103,20 @@ impl AzureConverter {
     }
 
     fn with_timestamp(&mut self, input: &MqttMessage) -> Result<String, ConversionError> {
-        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
-        let mut payload_json: Map<String, Value> =
-            serde_json::from_slice(input.payload.as_bytes())?;
+        let time_format = self.mapper_config.time_format;
+        let mut payload: Map<String, Value> = serde_json::from_slice(input.payload.as_bytes())?;
 
-        if let Some(timestamp) = default_timestamp {
-            let timestamp = timestamp
-                .format(&time::format_description::well_known::Rfc3339)?
-                .as_str()
-                .into();
-            payload_json.entry("time").or_insert(timestamp);
+        let time = match payload.remove("time") {
+            Some(time) => Some(time_format.reformat_json(time)?),
+            None if self.add_timestamp => Some(time_format.to_json(self.clock.now())?),
+            None => None,
+        };
+
+        if let Some(time) = time {
+            payload.insert("time".to_owned(), time);
         }
-        Ok(serde_json::to_string(&payload_json)?)
+
+        Ok(serde_json::to_string(&payload)?)
     }
 
     fn wrap_errors(
@@ -162,7 +172,12 @@ mod tests {
 
     #[test]
     fn convert_error() {
-        let mut converter = AzureConverter::new(true, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = "Invalid JSON";
 
@@ -177,7 +192,12 @@ mod tests {
 
     #[test]
     fn try_convert_invalid_json_returns_error() {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
@@ -187,8 +207,13 @@ mod tests {
 
     #[test]
     fn try_convert_exceeding_threshold_returns_error() {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default())
-            .with_threshold(SizeThreshold(1));
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        )
+        .with_threshold(SizeThreshold(1));
 
         let _topic = "az/messages/events/".to_string();
         let input = r#"{
@@ -208,7 +233,12 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = r#"{
             "temperature": 23.0
@@ -230,7 +260,12 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
     {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -254,7 +289,12 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
     {
-        let mut converter = AzureConverter::new(true, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -276,9 +316,71 @@ mod tests {
     }
 
     #[test]
+    fn converting_input_with_unix_timestamp_produces_output_with_rfc3339_timestamp_given_add_timestamp_is_true(
+    ) {
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
+
+        let input = r#"{
+            "time" : 1702029646,
+            "temperature": 23.0
+        }"#;
+
+        let expected_output = json!({
+            "time" : "2023-12-08T10:00:46Z",
+            "temperature": 23.0
+        });
+
+        let output = converter.convert(&new_tedge_message(input)).unwrap();
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
+            expected_output
+        );
+    }
+
+    #[test]
+    fn converting_input_with_unix_timestamp_preserved() {
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
+
+        let input = r#"{
+            "time" : 1702029646,
+            "temperature": 23.0
+        }"#;
+
+        let expected_output = json!({
+            "time" : "2023-12-08T10:00:46Z",
+            "temperature": 23.0
+        });
+
+        let output = converter.convert(&new_tedge_message(input)).unwrap();
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
+            expected_output
+        );
+    }
+
+    #[test]
     fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AzureConverter::new(true, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = r#"{
             "temperature": 23.0
@@ -371,7 +473,12 @@ mod tests {
         ; "child device service alarm"
     )]
     fn converting_az_telemetry(input_topic: &str, output_topic: &str, input: &str) {
-        let mut converter = AzureConverter::new(true, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
         let input_message = MqttMessage::new(&Topic::new_unchecked(input_topic), input);
 
         let output = converter.convert(&input_message).unwrap();
@@ -382,7 +489,12 @@ mod tests {
 
     #[test]
     fn converting_bridge_health_status() {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
@@ -395,7 +507,12 @@ mod tests {
 
     #[test]
     fn converting_service_health_status_up_message() {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Unix,
+        );
 
         let input = r#"{"pid":1234,"status":"up","time":1694586060}"#;
         let result = converter.try_convert(&MqttMessage::new(
@@ -410,7 +527,12 @@ mod tests {
 
     #[test]
     fn converting_service_health_status_down_message() {
-        let mut converter = AzureConverter::new(false, Box::new(TestClock), MqttSchema::default());
+        let mut converter = AzureConverter::new(
+            false,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+        );
 
         let input = r#"{"pid":1234,"status":"up"}"#;
         let result = converter.try_convert(&MqttMessage::new(
