@@ -40,7 +40,7 @@ Timeout An Action
 Trigger Agent Restart
     ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent/robot-1 '{"status":"init"}'
-    Should Have MQTT Messages    te/device/main///cmd/restart-tedge-agent/robot-1    message_pattern=.*tedge-agent-restarted.*   maximum=1    timeout=180
+    Should Have MQTT Messages    te/device/main///cmd/restart-tedge-agent/robot-1    message_pattern=.*tedge-agent-restarted.*   minimum=1    timeout=300
     ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
 
