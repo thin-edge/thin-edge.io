@@ -132,8 +132,20 @@ sudo tedge cert upload c8y --user "john.smith@example.com"
 ```
 
 :::tip
-To upload the certificate to cumulocity this user needs to have "Tenant management" admin rights.
-If you get an error `403 Forbidden` here, check the appropriate rights in cumulocity user management.
+The user/email is case-sensitive, so make sure the user matches your configured Cumulocity IoT user. If you get a 401 (Unauthorized) error, then check that you are using the correct Cumulocity IoT url, user and password.
+:::
+
+:::tip
+If you get a 403 (Forbidden) error, it means that your Cumulocity IoT user does not have the correct permissions to be able to upload the device certificate as a **Trusted certificate**.
+
+To add a new device certificate to Cumulocity IoT's **Trusted certificates** your user needs to have the **Tenant Manager** Global Role assigned to it. Global roles can be assigned to users via the Cumulocity IoT **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section.
+
+![User Global Roles](./c8y-user-globl-roles.png)
+
+
+Alternatively, you can explicitly add one of the following roles permissions to your Cumulocity IoT user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`. See the official [Cumulocity IoT OpenAPI docs](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource) for more details.
+
+Please read official [Cumulocity IoT documentation](https://cumulocity.com/guides/device-integration/mqtt/#upload-your-ca-certificate) for more details about their **Trusted certificates** feature.
 :::
 
 ## Connect the device
