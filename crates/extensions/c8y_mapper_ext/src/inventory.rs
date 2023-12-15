@@ -75,11 +75,15 @@ impl CumulocityConverter {
         &mut self,
         source: &EntityTopicId,
         message: &Message,
-        fragment_key: &str,
+        mut fragment_key: &str,
     ) -> Result<Vec<Message>, ConversionError> {
         if fragment_key == "name" || fragment_key == "type" {
             warn!("Updating the entity `name` and `type` fields via the twin/ topic channel is not supported");
             return Ok(vec![]);
+        }
+
+        if fragment_key == "firmware" {
+            fragment_key = "c8y_Firmware";
         }
 
         let fragment_value = if message.payload_bytes().is_empty() {
@@ -413,5 +417,62 @@ mod tests {
         // Assert duplicate payload converted after it was cleared
         let inventory_messages = converter.convert(&twin_message).await;
         assert_messages_matching(&inventory_messages, [expected_message]);
+    }
+
+    #[tokio::test]
+    async fn convert_entity_twin_data_with_firmware_update_for_main_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let twin_message = Message::new(
+            &Topic::new_unchecked("te/device/main///twin/firmware"),
+            r#"{"name":"firmware", "version":"1.0"}"#,
+        );
+
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/test-device",
+                json!({"c8y_Firmware":{"name":"firmware","version":"1.0"}}).into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_entity_twin_data_with_firmware_update_for_child_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let twin_message = Message::new(
+            &Topic::new_unchecked("te/device/child1///twin/firmware"),
+            r#"{"name":"firmware", "version":"1.0"}"#,
+        );
+
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        assert_messages_matching(
+            &inventory_messages,
+            [
+                (
+                    "te/device/child1//",
+                    json!({
+                        "@type":"child-device",
+                        "@id":"test-device:device:child1",
+                        "name":"child1"
+                    })
+                    .into(),
+                ),
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child".into(),
+                ),
+                (
+                    "c8y/inventory/managedObjects/update/test-device:device:child1",
+                    json!({"c8y_Firmware":{"name":"firmware","version":"1.0"}}).into(),
+                ),
+            ],
+        );
     }
 }

@@ -1061,7 +1061,7 @@ impl CumulocityConverter {
                         self.convert_config_update_metadata(&source, message)
                     }
                     OperationType::FirmwareUpdate => {
-                        self.convert_firmware_metadata(&source, message)
+                        self.register_firmware_update_operation(&source)
                     }
                     _ => Ok(vec![]),
                 }
