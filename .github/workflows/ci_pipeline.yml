@@ -84,6 +84,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
+        fail-fast: false
         # Add only arm targets here as we use a custom strip binary!
         target:
           [
@@ -141,6 +142,7 @@ jobs:
 
   clean-up-rpi-matrix:
     strategy:
+      fail-fast: false
       matrix:
         rpi: [ m32sd10a, m32sd10b, m32sd10c, m32sd10d ]
     runs-on:
@@ -162,6 +164,7 @@ jobs:
 
   install-and-use-rpi-matrix:
     strategy:
+      fail-fast: false
       matrix:
         rpi: [ m32sd10a, m32sd10b, m32sd10c, m32sd10d ]
     runs-on:
