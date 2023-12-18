@@ -34,7 +34,7 @@ Images can be built using Rugpi using a CI Workflow. An example for a Github Wor
 
 ## Building your image
 
-The [tedge-rugpi-images](https://github.com/thin-edge/tedge-rugpi-image) is project which includes out of the box configuration to perform robust Over-the-Air Operating System updates.
+The [tedge-rugpi-images](https://github.com/thin-edge/tedge-rugpi-image) project includes out of the box configurations to perform robust Over-the-Air Operating System updates.
 
 Feel free to clone the project if you want to make your own customizations, however please always refer back to the project if you run into any problems (as it may have changed in the meantime).
 
@@ -74,6 +74,10 @@ Feel free to clone the project if you want to make your own customizations, howe
 
     # ...
     ```
+
+    :::tip
+    This step is critical as it will enable you to connect via SSH to your device to perform tasks such as onboarding! If you don't set your ssh public key in the authorized keys, you then need to connect your device to a monitor/display and keyboard in order to perform the onboarding.
+    :::
 
 3. Commit the changes
 
@@ -119,6 +123,10 @@ Currently building is only supported on a Linux environment. It is strongly enco
     just IMAGE_ARCH=arm64 PROFILE=default VARIANT=pi45 build-all
     ```
 
+    :::info
+    See the [tips](#raspberry-pi-4-image-selection) for helping you select which Raspberry Pi 4 image is suitable for you (e.g. with or without the EEPROM firmware update)
+    :::
+
 2. Inspect the built image
 
     ```sh
@@ -134,8 +142,36 @@ This section contains general tips which can be helpful whilst either getting th
 
 ### Building on MacOS Apple Silicon
 
-Currently building an image is not supported on MacOS as it requires disks 
+Currently building an image is not supported on MacOS as the build process needs to create images which are incompatible with MacOS.
 
 ```
 fallocate: fallocate failed: Operation not supported
+```
+
+If you don't have a linux distribution to build the image, it is highly recommended to use a Github Runner to build the image. You can check out the [Github workflow](https://github.com/thin-edge/tedge-rugpi-image/blob/main/.github/workflows/bake-image.yml) to also port the steps to other CI runners (e.g. Gitlab, Azure DevOps etc.).
+
+### Permission denied error caused by xz
+
+Try running the command with sudo. On some systems sudo is required to properly create the compressed xz file.
+
+For exampke, the `build-all` task can be called with sudo:
+
+```sh
+sudo just IMAGE_ARCH=arm64 PROFILE=default VARIANT=pi45 build-all
+```
+
+### Raspberry Pi 4 image selection
+
+Raspberry Pi 4 devices need to have their (EEPROM) firmware updated before the OTA updates can be issued. This is because the initial Raspberry Pi 4's were released without the [tryboot feature](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#fail-safe-os-updates-tryboot). The tryboot feature is used by Rugpi to provide the reliable partition switching between the A/B partitions. Raspberry Pi 5's have support for tryboot out of the box, so they do not require a EEPROM upgrade.
+
+You can build an image which includes the required EEPROM firmware to enable the tryboot feature, however this image can only be used to deploy to Raspberry Pi 4 devices (not Raspberry Pi 5!)
+
+```sh
+just IMAGE_ARCH=arm64 PROFILE=default VARIANT=pi4 build-all
+```
+
+After the above image has been flashed to the device once, you can switch back to the image without the EEPROM firmware so that the same image can be used for both Raspberry Pi 4 and 5.
+
+```sh
+just IMAGE_ARCH=arm64 PROFILE=default VARIANT=pi45 build-all
 ```
