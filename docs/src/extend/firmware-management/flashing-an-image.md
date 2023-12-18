@@ -30,7 +30,7 @@ To following these instructions you will need to have the following software ins
     ![Select Image](./images/raspberrypi-imager-selected-file.png)
 
     :::tip
-    You may need to change the file filter to use teh "All Files" option if you intended image file is not selectable in the select file dialog.
+    You may need to change the file filter to use the "All Files" option if you intended image file is not selectable in the select file dialog.
     :::
 
 3. Choose the storage where the image will be written to
