@@ -131,10 +131,66 @@ sudo tedge cert upload c8y --user "${C8Y_USER}"
 sudo tedge cert upload c8y --user "john.smith@example.com"
 ```
 
-:::tip
-To upload the certificate to cumulocity this user needs to have "Tenant management" admin rights.
-If you get an error 503 here, check the appropriate rights in cumulocity user management.
-:::
+### Common errors
+
+Below shows some common errors that can be experienced when trying to upload the device certificate.
+
+#### 401 - Unauthorized
+
+The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity IoT url that was set in the `tedge config set c8y.url <url>` command.
+
+Check the following items to help you diagnose the root cause of the problem:
+
+* Check the configured `c8y.url`. Copy/paste the url into a Web Browser to validate that it does open the intended Cumulocity IoT tenant
+* Check your username. The user/email is case-sensitive, so make sure the user matches your configured Cumulocity IoT user
+* Check your password. Use copy/paste to enter your password as this eliminates typos
+* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity IoT user via the [Administration Pge](https://cumulocity.com/guides/users-guide/administration/#to-add-a-user)
+
+
+#### 403 - Forbidden
+
+The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the thin-edge.io's device certificate to the Cumulocity IoT's [Trusted certificates](https://cumulocity.com/guides/device-integration/mqtt/#device-certificates).
+
+Your Cumulocity IoT user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity IoT. Global roles can be assigned to users via the Cumulocity IoT **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
+
+![User Global Roles](./c8y-user-globl-roles.png)
+
+Alternatively, you can explicitly add one of the following permissions to your Cumulocity IoT user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity IoT OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
+
+If you are still having trouble, please check out the official [Cumulocity IoT documentation](https://cumulocity.com/guides/device-integration/mqtt/#upload-your-ca-certificate).
+
+
+#### Address is unreachable
+
+If you are unable to reach Cumulocity IoT, then it is likely that your device's network is not properly configured. This could be for many different reasons, however the following checks might help you spot where the mistake is:
+
+* Can you ping a well known DNS server?
+
+  ```
+  ping 8.8.8.8
+  ```
+
+  The exact address is not that important, it used to see if a well established/reliable IP address is reachable from your device. You may need to adjust the IP address if your ISP (Internet Service Provider) blocks it for some reason.
+
+* Can you reach another website?
+
+  Using Google is helpful here, as it is generally available, though you can also choose another popular/highly available website for your test.
+
+  ```sh
+  curl google.com
+  ```
+
+* Check if the configured `c8y.url` is reachable by using curl
+
+    ```sh title="bash"
+    curl "https://$(tedge config get c8y.url)/tenant/loginOptions"
+    ```
+
+    If you are having problems resolving the `c8y.url` to an IP address, then it might be worthwhile considering manually adding a nameserver to the DNS configuration file as shown below:
+
+    ```sh title="file: /etc/resolv.conf"
+    nameserver 8.8.8.8
+    ```
 
 ## Connect the device
 
