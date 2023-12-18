@@ -1,3 +1,4 @@
+pub mod apt_config;
 pub mod auto;
 pub mod connect_url;
 pub mod flag;
@@ -12,6 +13,7 @@ pub use tedge_utils::timestamp;
 pub const HTTPS_PORT: u16 = 443;
 pub const MQTT_TLS_PORT: u16 = 8883;
 
+pub use self::apt_config::*;
 pub use self::auto::*;
 pub use self::connect_url::*;
 pub use self::flag::*;

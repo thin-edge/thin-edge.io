@@ -1,0 +1,15 @@
+name: sampledeb
+arch: all
+platform: linux
+version: 2.0.0
+section: default
+priority: optional
+maintainer: Your Name <your.email@example.com>
+description: My Sample App Debian Package
+homepage: https://example.com/myapp
+license: MIT
+
+contents:
+  - src: ./sampledeb_2.cfg
+    dst: /etc/sampledeb.cfg
+    type: config

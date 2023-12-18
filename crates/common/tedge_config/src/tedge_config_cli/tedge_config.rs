@@ -1,4 +1,5 @@
 use super::models::timestamp::TimeFormat;
+use crate::AptConfig;
 use crate::AutoFlag;
 use crate::ConnectUrl;
 use crate::HostPort;
@@ -763,6 +764,17 @@ define_tedge_config! {
         /// The filtering criterion that is used to filter packages list output by maintainer
         #[tedge_config(example = "thin-edge.io team.*")]
         maintainer: String,
+
+        dpk: {
+            options: {
+                /// dpkg configuration option used to control the dpkg options "--force-confold" and
+                /// "--force-confnew" and are applied when installing apt packages via the tedge-apt-plugin.
+                /// Accepts either 'keepold' or 'keepnew'.
+                #[tedge_config(note = "If set to 'keepold', this keeps the old configuration files of the package that is being installed")]
+                #[tedge_config(example = "keepold", example = "keepnew", default(variable = "AptConfig::KeepOld"))]
+                config: AptConfig,
+            }
+        },
     },
 
     enable: {

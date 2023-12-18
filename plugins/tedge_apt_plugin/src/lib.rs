@@ -86,8 +86,8 @@ struct SoftwareModuleUpdate {
     pub path: Option<String>,
 }
 
-fn run_op(operation: PluginOp) -> Result<ExitStatus, InternalError> {
-    let status = match operation {
+fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
+    let status = match apt.operation {
         PluginOp::List { name, maintainer } => {
             let dpkg_query = Command::new("dpkg-query")
                 .args(vec![
@@ -138,10 +138,24 @@ fn run_op(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             let (installer, _metadata) = get_installer(module, version, file_path)?;
-            run_cmd(
-                "apt-get",
-                &format!("install --quiet --yes --allow-downgrades {}", installer),
-            )?
+
+            if let Some(config) = get_config(apt.config_dir) {
+                match config.apt.dpk.options.config {
+                    tedge_config::AptConfig::KeepOld => run_cmd(
+                        "apt-get",
+                        &format!(" --quiet --yes -o DPkg::Options::=--force-confold  install --allow-downgrades {}", installer),
+                    )?,
+                    tedge_config::AptConfig::KeepNew => run_cmd(
+                        "apt-get",
+                        &format!(" --quiet --yes -o DPkg::Options::=--force-confnew install --allow-downgrades {}", installer),
+                    )?,
+                }
+            } else {
+                run_cmd(
+                    "apt-get",
+                    &format!("install -o DPkg::Options::=\"--force-confnew\" --quiet --yes --allow-downgrades {}", installer),
+                )?
+            }
         }
 
         PluginOp::Remove { module, version } => {
@@ -313,7 +327,7 @@ pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
     };
 
     if let PluginOp::List { name, maintainer } = &mut apt.operation {
-        if let Some(config) = get_config(apt.config_dir) {
+        if let Some(config) = get_config(apt.config_dir.clone()) {
             if name.is_none() {
                 *name = config.apt.name.or_none().cloned();
             }
@@ -324,7 +338,7 @@ pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
         }
     }
 
-    match run_op(apt.operation) {
+    match run_op(apt) {
         Ok(status) if status.success() => {
             std::process::exit(0);
         }
@@ -367,6 +381,10 @@ mod tests {
             name: Some("".into()),
             maintainer: Some("".into()),
         };
-        assert!(run_op(filters).is_ok())
+        let apt = AptCli {
+            config_dir: "".into(),
+            operation: filters,
+        };
+        assert!(run_op(apt).is_ok())
     }
 }
