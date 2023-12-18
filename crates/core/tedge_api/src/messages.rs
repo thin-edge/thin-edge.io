@@ -719,14 +719,14 @@ impl ConfigUpdateCmdPayload {
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct FirmwareMetadata {
+pub struct FirmwareInfo {
     pub name: Option<String>,
     pub version: Option<String>,
     #[serde(rename = "url")]
     pub remote_url: Option<String>,
 }
 
-impl<'a> Jsonify<'a> for FirmwareMetadata {}
+impl<'a> Jsonify<'a> for FirmwareInfo {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -8,7 +8,7 @@ use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityType;
-use tedge_api::messages::FirmwareMetadata;
+use tedge_api::messages::FirmwareInfo;
 use tedge_api::messages::FirmwareUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter::Command;
@@ -20,7 +20,6 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::CommandStatus;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::Message;
-use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
@@ -102,22 +101,25 @@ impl CumulocityConverter {
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
-                let metadata_topic = self.mqtt_schema.topic_for(
+                let twin_metadata_topic = self.mqtt_schema.topic_for(
                     topic_id,
-                    &Channel::CommandMetadata {
-                        operation: OperationType::FirmwareUpdate,
+                    &Channel::EntityTwinData {
+                        fragment_key: "firmware".to_string(),
                     },
                 );
-                let metadata_payload = FirmwareMetadata {
+
+                let twin_metadata_payload = FirmwareInfo {
                     name: Some(response.name.clone()),
                     version: Some(response.version.clone()),
                     remote_url: Some(response.remote_url.clone()),
                 };
-                let update_metadata = Message::new(&metadata_topic, metadata_payload.to_json())
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
 
-                vec![c8y_notification, clear_local_cmd, update_metadata]
+                let twin_metadata =
+                    Message::new(&twin_metadata_topic, twin_metadata_payload.to_json())
+                        .with_retain()
+                        .with_qos(QoS::AtLeastOnce);
+
+                vec![c8y_notification, clear_local_cmd, twin_metadata]
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
@@ -137,13 +139,9 @@ impl CumulocityConverter {
         Ok(messages)
     }
 
-    /// Converts a firmware_update metadata message to
-    /// - supported operation "c8y_Firmware"
-    /// - current installed firmware
-    pub fn convert_firmware_metadata(
+    pub fn register_firmware_update_operation(
         &mut self,
         topic_id: &EntityTopicId,
-        message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         if !self.config.capabilities.firmware_update {
             warn!(
@@ -151,8 +149,6 @@ impl CumulocityConverter {
             );
             return Ok(vec![]);
         }
-
-        let metadata = FirmwareMetadata::from_json(message.payload_str()?)?;
 
         // Get the device metadata from its id
         let target = self.entity_store.try_get(topic_id)?;
@@ -169,26 +165,16 @@ impl CumulocityConverter {
                 return Ok(vec![]);
             }
         };
+
         create_directory_with_defaults(&dir_path)?;
         create_file_with_defaults(dir_path.join("c8y_Firmware"), None)?;
 
-        // To SmartREST current installed firmware message
-        let c8y_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        let payload = format!(
-            "115,{name},{version},{url}",
-            name = metadata.name.unwrap_or("".into()),
-            version = metadata.version.unwrap_or("".into()),
-            url = metadata.remote_url.unwrap_or("".into()),
-        );
-        let installed_firmware = MqttMessage::new(&c8y_topic, payload);
-
-        Ok(vec![installed_firmware])
+        Ok(vec![])
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::tests::*;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
@@ -197,13 +183,13 @@ mod tests {
     use tedge_actors::Sender;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
+    use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
-
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[tokio::test]
-    async fn mapper_converts_firmware_update_metadata_for_main_device() {
+    async fn create_firmware_operation_file_for_main_device() {
         let ttd = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -213,30 +199,29 @@ mod tests {
         // Simulate firmware_update cmd metadata message
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/firmware_update"),
-            r#"{"name":"firmware", "version":"1.0"}"#,
+            "{}",
         ))
         .await
         .expect("Send failed");
 
-        // Validate if current installed firmware message is sent
-        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "115,firmware,1.0,")]).await;
+        mqtt.skip(1).await;
 
         // Validate if the supported operation file is created
         assert!(ttd.path().join("operations/c8y/c8y_Firmware").exists());
     }
 
     #[tokio::test]
-    async fn mapper_converts_firmware_update_metadata_for_child_device() {
+    async fn create_firmware_operation_file_for_child_device() {
         let ttd = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate log_upload cmd metadata message
+        // Simulate firmware_update cmd metadata message
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/firmware_update"),
-            r#"{"name":"firmware", "version":"1.0"}"#,
+            "{}",
         ))
         .await
         .expect("Send failed");
@@ -257,13 +242,6 @@ mod tests {
                 "c8y/s/us",
                 "101,test-device:device:child1,child1,thin-edge.io-child",
             )],
-        )
-        .await;
-
-        // Validate if current installed firmware message is sent
-        assert_received_contains_str(
-            &mut mqtt,
-            [("c8y/s/us/test-device:device:child1", "115,firmware,1.0,")],
         )
         .await;
 
@@ -327,7 +305,7 @@ mod tests {
 
         // Simulate firmware_update cmd metadata message
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/firmware_update"),
+            &Topic::new_unchecked("te/device/child1///twin/firmware"),
             r#"{"name": "firmware", "version": "0.1"}"#,
         ))
         .await
@@ -506,9 +484,9 @@ mod tests {
                 ("c8y/s/us", "503,c8y_Firmware"), // SmartREST successful
                 ("te/device/main///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
                 (
-                    "te/device/main///cmd/firmware_update",
+                    "te/device/main///twin/firmware",
                     r#"{"name":"myFirmware","version":"1.0","url":"http://www.my.url"}"#,
-                ), // Update metadata
+                ), // Twin firmware metadata
             ],
         )
         .await;
@@ -547,9 +525,9 @@ mod tests {
                 ("c8y/s/us/test-device:device:child1", "503,c8y_Firmware"), // SmartREST successful
                 ("te/device/child1///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
                 (
-                    "te/device/child1///cmd/firmware_update",
+                    "te/device/child1///twin/firmware",
                     r#"{"name":"myFirmware","version":"1.0","url":"http://www.my.url"}"#,
-                ), // Update metadata
+                ), // Twin firmware metadata
             ],
         )
         .await;
