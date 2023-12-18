@@ -158,6 +158,11 @@ pub enum CumulocityMapperError {
     FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
 
     #[error(transparent)]
+    FromC8yJsonOverMqttDeserializerError(
+        #[from] c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError,
+    ),
+
+    #[error(transparent)]
     FromSmCumulocityMapperError(#[from] SMCumulocityMapperError),
 
     #[error(transparent)]

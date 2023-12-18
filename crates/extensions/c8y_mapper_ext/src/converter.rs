@@ -15,6 +15,11 @@ use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
+use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
+use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
+use c8y_api::json_c8y_deserializer::C8yOperation;
+use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
@@ -31,8 +36,6 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
@@ -94,8 +97,10 @@ use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::debug;
-use tracing::log::error;
+use tracing::error;
+use tracing::info;
 use tracing::trace;
+use tracing::warn;
 
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
@@ -204,6 +209,8 @@ pub struct CumulocityConverter {
     pub pending_fts_download_operations: HashMap<CmdId, FtsDownloadOperationData>,
 
     pub command_id: IdGenerator,
+    // Keep active command IDs to avoid creation of multiple commands for an operation
+    pub active_commands: HashSet<CmdId>,
 }
 
 impl CumulocityConverter {
@@ -290,6 +297,7 @@ impl CumulocityConverter {
             pending_upload_operations: HashMap::new(),
             pending_fts_download_operations: HashMap::new(),
             command_id,
+            active_commands: HashSet::new(),
         })
     }
 
@@ -547,36 +555,127 @@ impl CumulocityConverter {
         ))
     }
 
-    async fn parse_c8y_topics(
+    async fn parse_c8y_devicecontrol_topic(
+        &mut self,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let operation = C8yOperation::from_json(message.payload.as_str()?)?;
+        let device_xid = operation.external_source.external_id;
+        let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+
+        if self.active_commands.contains(&cmd_id) {
+            info!("{cmd_id} is already addressed");
+            return Ok(vec![]);
+        }
+
+        let result = self
+            .process_json_over_mqtt(device_xid, cmd_id, &operation.extras)
+            .await;
+        let output = self.handle_c8y_operation_result(&result);
+
+        Ok(output)
+    }
+
+    async fn process_json_over_mqtt(
+        &mut self,
+        device_xid: String,
+        cmd_id: String,
+        extras: &HashMap<String, Value>,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let msgs = match C8yDeviceControlOperation::from_json_object(extras)? {
+            C8yDeviceControlOperation::Restart(_) => {
+                self.forward_restart_request(device_xid, cmd_id)?
+            }
+            C8yDeviceControlOperation::SoftwareUpdate(request) => {
+                self.forward_software_request(device_xid, cmd_id, request)
+                    .await?
+            }
+            C8yDeviceControlOperation::LogfileRequest(request) => {
+                if self.config.capabilities.log_upload {
+                    self.convert_log_upload_request(device_xid, cmd_id, request)?
+                } else {
+                    warn!("Received a c8y_LogfileRequest operation, however, log_upload feature is disabled");
+                    vec![]
+                }
+            }
+            C8yDeviceControlOperation::UploadConfigFile(request) => {
+                if self.config.capabilities.config_snapshot {
+                    self.convert_config_snapshot_request(device_xid, cmd_id, request)?
+                } else {
+                    warn!("Received a c8y_UploadConfigFile operation, however, config_snapshot feature is disabled");
+                    vec![]
+                }
+            }
+            C8yDeviceControlOperation::DownloadConfigFile(request) => {
+                if self.config.capabilities.config_update {
+                    self.convert_config_update_request(device_xid, cmd_id, request)
+                        .await?
+                } else {
+                    warn!("Received a c8y_DownloadConfigFile operation, however, config_update feature is disabled");
+                    vec![]
+                }
+            }
+            C8yDeviceControlOperation::Firmware(request) => {
+                if self.config.capabilities.firmware_update {
+                    self.convert_firmware_update_request(device_xid, cmd_id, request)?
+                } else {
+                    warn!("Received a c8y_Firmware operation, however, firmware_update feature is disabled");
+                    vec![]
+                }
+            }
+            C8yDeviceControlOperation::Custom => {
+                // Ignores custom and static template operations unsupported by thin-edge
+                // However, these operations can be addressed by SmartREST that is published together with JSON over MQTT
+                vec![]
+            }
+        };
+
+        Ok(msgs)
+    }
+
+    async fn parse_c8y_smartrest_topics(
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output: Vec<Message> = Vec::new();
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
-            match &self.process_smartrest(smartrest_message.as_str()).await {
-                Err(
-                    err @ CumulocityMapperError::FromSmartRestDeserializer(
-                        SmartRestDeserializerError::InvalidParameter { operation, .. },
-                    )
-                    | err @ CumulocityMapperError::ExecuteFailed {
-                        operation_name: operation,
-                        ..
-                    },
-                ) => {
-                    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-                    let msg1 = Message::new(&topic, set_operation_executing(operation));
-                    let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
-                    error!("{err}");
-                    output.extend_from_slice(&[msg1, msg2]);
-                }
-                Err(err) => {
-                    error!("{err}");
-                }
-
-                Ok(msgs) => output.extend_from_slice(msgs),
-            }
+            let result = self.process_smartrest(smartrest_message.as_str()).await;
+            let mut msgs = self.handle_c8y_operation_result(&result);
+            output.append(&mut msgs)
         }
         Ok(output)
+    }
+
+    fn handle_c8y_operation_result(
+        &mut self,
+        result: &Result<Vec<Message>, CumulocityMapperError>,
+    ) -> Vec<Message> {
+        match result {
+            Err(
+                err @ CumulocityMapperError::FromSmartRestDeserializer(
+                    SmartRestDeserializerError::InvalidParameter { operation, .. },
+                )
+                | err @ CumulocityMapperError::FromC8yJsonOverMqttDeserializerError(
+                    C8yJsonOverMqttDeserializerError::InvalidParameter { operation, .. },
+                )
+                | err @ CumulocityMapperError::ExecuteFailed {
+                    operation_name: operation,
+                    ..
+                },
+            ) => {
+                let topic = C8yTopic::SmartRestResponse.to_topic().unwrap();
+                let msg1 = Message::new(&topic, set_operation_executing(operation));
+                let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
+                error!("{err}");
+                vec![msg1, msg2]
+            }
+            Err(err) => {
+                error!("{err}");
+                vec![]
+            }
+
+            Ok(msgs) => msgs.to_owned(),
+        }
     }
 
     async fn process_smartrest(
@@ -586,21 +685,6 @@ impl CumulocityConverter {
         match get_smartrest_device_id(payload) {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    // Need a check of capabilities so that user can still use custom template if disabled
-                    "522" if self.config.capabilities.log_upload => {
-                        self.convert_log_upload_request(payload)
-                    }
-                    "524" if self.config.capabilities.config_update => {
-                        self.convert_config_update_request(payload).await
-                    }
-                    "526" if self.config.capabilities.config_snapshot => {
-                        self.convert_config_snapshot_request(payload)
-                    }
-                    "515" if self.config.capabilities.firmware_update => {
-                        self.convert_firmware_update_request(payload)
-                    }
-                    "528" => self.forward_software_request(payload).await,
-                    "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
@@ -629,13 +713,14 @@ impl CumulocityConverter {
 
     async fn forward_software_request(
         &mut self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
+        software_update_request: C8ySoftwareUpdate,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let update_software = SmartRestUpdateSoftware::from_smartrest(smartrest)?;
-        let device_id = &update_software.external_id.clone().into();
-        let target = self.entity_store.try_get_by_external_id(device_id)?;
-        let cmd_id = self.command_id.new_id();
-        let mut command = update_software.into_software_update_command(&target.topic_id, cmd_id)?;
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let mut command =
+            software_update_request.into_software_update_command(&target.topic_id, cmd_id)?;
 
         command.payload.update_list.iter_mut().for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
@@ -657,12 +742,11 @@ impl CumulocityConverter {
 
     fn forward_restart_request(
         &mut self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
-        let device_id = &request.device.into();
-        let target = self.entity_store.try_get_by_external_id(device_id)?;
-        let cmd_id = self.command_id.new_id();
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
         let command = RestartCommand::new(&target.topic_id, cmd_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
@@ -929,7 +1013,7 @@ impl CumulocityConverter {
         trace!("Message content: {:?}", message.payload_str());
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
-            Err(_) => self.try_convert_tedge_topics(message).await,
+            Err(_) => self.try_convert_tedge_and_c8y_topics(message).await,
         }
     }
 
@@ -1033,8 +1117,9 @@ impl CumulocityConverter {
                 self.process_alarm_messages(&source, message, alarm_type)
             }
 
-            Channel::Command { .. } if message.payload_bytes().is_empty() => {
+            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
+                self.active_commands.remove(cmd_id);
                 Ok(vec![])
             }
 
@@ -1062,59 +1147,38 @@ impl CumulocityConverter {
                 }
             }
 
-            Channel::Command {
-                operation: OperationType::Restart,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_restart_operation_status(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::SoftwareList,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_software_list(&source, cmd_id, message).await
-            }
-
-            Channel::Command {
-                operation: OperationType::SoftwareUpdate,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.publish_software_update_status(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::LogUpload,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_log_upload_state_change(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::ConfigSnapshot,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_config_snapshot_state_change(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::ConfigUpdate,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_config_update_state_change(&source, cmd_id, message)
-                    .await
-            }
-
-            Channel::Command {
-                operation: OperationType::FirmwareUpdate,
-                cmd_id,
-            } if self.command_id.is_generator_of(cmd_id) => {
-                self.handle_firmware_update_state_change(&source, message)
-                    .await
+            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
+                self.active_commands.insert(cmd_id.clone());
+                match operation {
+                    OperationType::Restart => {
+                        self.publish_restart_operation_status(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::SoftwareList => {
+                        self.publish_software_list(&source, cmd_id, message).await
+                    }
+                    OperationType::SoftwareUpdate => {
+                        self.publish_software_update_status(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::LogUpload => {
+                        self.handle_log_upload_state_change(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::ConfigSnapshot => {
+                        self.handle_config_snapshot_state_change(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::ConfigUpdate => {
+                        self.handle_config_update_state_change(&source, cmd_id, message)
+                            .await
+                    }
+                    OperationType::FirmwareUpdate => {
+                        self.handle_firmware_update_state_change(&source, message)
+                            .await
+                    }
+                    _ => Ok(vec![]),
+                }
             }
 
             Channel::Health => self.process_health_status_message(&source, message).await,
@@ -1218,7 +1282,7 @@ impl CumulocityConverter {
         .with_retain()
     }
 
-    async fn try_convert_tedge_topics(
+    async fn try_convert_tedge_and_c8y_topics(
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
@@ -1227,7 +1291,10 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic if C8yTopic::accept(topic) => self.parse_c8y_topics(message).await,
+            topic if C8yDeviceControlTopic::accept(topic) => {
+                self.parse_c8y_devicecontrol_topic(message).await
+            }
+            topic if C8yTopic::accept(topic) => self.parse_c8y_smartrest_topics(message).await,
             _ => {
                 error!("Unsupported topic: {}", message.topic.name);
                 Ok(vec![])
@@ -1609,6 +1676,7 @@ pub(crate) mod tests {
     use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
+    use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
     use c8y_auth_proxy::url::Protocol;
@@ -2713,8 +2781,27 @@ pub(crate) mod tests {
             EntityFilter::Entity(&child),
             ChannelFilter::Command(OperationType::SoftwareUpdate),
         );
+        let mqtt_message = MqttMessage::new(
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_SoftwareUpdate": [
+                    {
+                        "name": "software_a",
+                        "action": "install",
+                        "version": "version_a",
+                        "url": "url_a"
+                    }
+                ],
+                "externalSource": {
+                    "externalId": "test-device:device:childId",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        );
         let command = converter
-            .process_smartrest("528,test-device:device:childId,software_a,version_a,url_a,install")
+            .parse_c8y_devicecontrol_topic(&mqtt_message)
             .await
             .unwrap()
             .get(0)
