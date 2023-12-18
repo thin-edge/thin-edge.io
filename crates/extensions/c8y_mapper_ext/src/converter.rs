@@ -179,10 +179,6 @@ pub struct UploadOperationData {
     pub file_dir: tempfile::TempDir,
 }
 
-pub struct DownloadOperationData {
-    pub entity_xid: EntityExternalId,
-    pub operation: C8yDeviceControlOperation,
-}
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: C8yMapperConfig,
@@ -572,33 +568,10 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let mut output: Vec<Message> = Vec::new();
         let result = self
             .process_json_over_mqtt(device_xid, cmd_id, &operation.extras)
             .await;
-
-        match &result {
-            Err(
-                ref err @ CumulocityMapperError::FromC8yJsonOverMqttDeserializerError(
-                    C8yJsonOverMqttDeserializerError::InvalidParameter { ref operation, .. },
-                )
-                | ref err @ CumulocityMapperError::ExecuteFailed {
-                    operation_name: ref operation,
-                    ..
-                },
-            ) => {
-                let topic = C8yTopic::SmartRestResponse.to_topic()?;
-                let msg1 = Message::new(&topic, set_operation_executing(operation));
-                let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
-                error!("{err}");
-                output.extend_from_slice(&[msg1, msg2]);
-            }
-            Err(err) => {
-                error!("{err}");
-            }
-
-            Ok(msgs) => output.extend_from_slice(msgs),
-        }
+        let output = self.handle_c8y_operation_result(&result);
 
         Ok(output)
     }
@@ -666,30 +639,43 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output: Vec<Message> = Vec::new();
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
-            match &self.process_smartrest(smartrest_message.as_str()).await {
-                Err(
-                    err @ CumulocityMapperError::FromSmartRestDeserializer(
-                        SmartRestDeserializerError::InvalidParameter { operation, .. },
-                    )
-                    | err @ CumulocityMapperError::ExecuteFailed {
-                        operation_name: operation,
-                        ..
-                    },
-                ) => {
-                    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-                    let msg1 = Message::new(&topic, set_operation_executing(operation));
-                    let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
-                    error!("{err}");
-                    output.extend_from_slice(&[msg1, msg2]);
-                }
-                Err(err) => {
-                    error!("{err}");
-                }
-
-                Ok(msgs) => output.extend_from_slice(msgs),
-            }
+            let result = self.process_smartrest(smartrest_message.as_str()).await;
+            let mut msgs = self.handle_c8y_operation_result(&result);
+            output.append(&mut msgs)
         }
         Ok(output)
+    }
+
+    fn handle_c8y_operation_result(
+        &mut self,
+        result: &Result<Vec<Message>, CumulocityMapperError>,
+    ) -> Vec<Message> {
+        match result {
+            Err(
+                err @ CumulocityMapperError::FromSmartRestDeserializer(
+                    SmartRestDeserializerError::InvalidParameter { operation, .. },
+                )
+                | err @ CumulocityMapperError::FromC8yJsonOverMqttDeserializerError(
+                    C8yJsonOverMqttDeserializerError::InvalidParameter { operation, .. },
+                )
+                | err @ CumulocityMapperError::ExecuteFailed {
+                    operation_name: operation,
+                    ..
+                },
+            ) => {
+                let topic = C8yTopic::SmartRestResponse.to_topic().unwrap();
+                let msg1 = Message::new(&topic, set_operation_executing(operation));
+                let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
+                error!("{err}");
+                vec![msg1, msg2]
+            }
+            Err(err) => {
+                error!("{err}");
+                vec![]
+            }
+
+            Ok(msgs) => msgs.to_owned(),
+        }
     }
 
     async fn process_smartrest(
@@ -1131,7 +1117,11 @@ impl CumulocityConverter {
                 self.process_alarm_messages(&source, message, alarm_type)
             }
 
-            Channel::Health => self.process_health_status_message(&source, message).await,
+            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
+                // The command has been fully processed
+                self.active_commands.remove(cmd_id);
+                Ok(vec![])
+            }
 
             Channel::CommandMetadata { operation } => {
                 self.validate_operation_supported(operation, &source)?;
@@ -1155,12 +1145,6 @@ impl CumulocityConverter {
                     }
                     _ => Ok(vec![]),
                 }
-            }
-
-            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
-                // The command has been fully processed
-                self.active_commands.remove(cmd_id);
-                Ok(vec![])
             }
 
             Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
@@ -1196,6 +1180,8 @@ impl CumulocityConverter {
                     _ => Ok(vec![]),
                 }
             }
+
+            Channel::Health => self.process_health_status_message(&source, message).await,
 
             _ => Ok(vec![]),
         }
