@@ -79,6 +79,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: [build]
     strategy:
+      fail-fast: false
       matrix:
         job:
           - { target: x86_64-unknown-linux-musl,      repo: tedge-main,          component: main }
