@@ -85,8 +85,9 @@ impl NotifyStream {
                     };
 
                     // simplify event type
-                    let debounced_events =
-                        debounced_events.into_iter().filter_map(|notify_event| {
+                    let mut debounced_events: Vec<_> = debounced_events
+                        .into_iter()
+                        .filter_map(|notify_event| {
                             let event = match notify_event.kind {
                                 EventKind::Access(access_kind) => match access_kind {
                                     AccessKind::Close(access_mode) => match access_mode {
@@ -114,7 +115,9 @@ impl NotifyStream {
                                 EventKind::Any | EventKind::Other => Some(FsEvent::Modified),
                             };
                             event.map(|event| (notify_event.event.paths, event))
-                        });
+                        })
+                        .collect();
+                    debounced_events.dedup();
 
                     for (paths, event) in debounced_events {
                         for path in paths {
