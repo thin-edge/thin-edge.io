@@ -26,6 +26,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
 pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
+const STATE_DIR_NAME: &str = ".tedge-mapper-c8y";
 
 pub struct C8yMapperConfig {
     pub config_dir: PathBuf,
@@ -36,6 +37,7 @@ pub struct C8yMapperConfig {
     pub device_type: String,
     pub service: TEdgeConfigReaderService,
     pub ops_dir: PathBuf,
+    pub state_dir: PathBuf,
     pub tmp_dir: Arc<Utf8Path>,
     pub c8y_host: String,
     pub tedge_http_host: Arc<str>,
@@ -70,6 +72,7 @@ impl C8yMapperConfig {
         enable_auto_register: bool,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
+        let state_dir = config_dir.join(STATE_DIR_NAME);
 
         Self {
             config_dir,
@@ -80,6 +83,7 @@ impl C8yMapperConfig {
             device_type,
             service,
             ops_dir,
+            state_dir,
             tmp_dir,
             c8y_host,
             tedge_http_host,

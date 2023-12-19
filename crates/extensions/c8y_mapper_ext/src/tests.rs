@@ -2583,6 +2583,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
 ) {
     if init {
         config_dir.dir("operations").dir("c8y");
+        config_dir.dir(".tedge-mapper-c8y");
     }
 
     let device_name = "test-device".into();

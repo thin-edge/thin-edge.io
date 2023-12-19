@@ -8,6 +8,8 @@
 // TODO: move entity business logic to its own module
 
 use crate::entity_store;
+use crate::message_log::MessageLogReader;
+use crate::message_log::MessageLogWriter;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
@@ -15,6 +17,9 @@ use crate::mqtt_topics::TopicIdError;
 use crate::pending_entity_store::PendingEntityData;
 use crate::pending_entity_store::PendingEntityStore;
 use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use mqtt_channel::Message;
 use serde_json::json;
 use serde_json::Map;
@@ -22,6 +27,7 @@ use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::path::Path;
 use thiserror::Error;
 
 /// Represents an "Entity topic identifier" portion of the MQTT topic
@@ -114,6 +120,7 @@ type ExternalIdValidatorFn =
 ///
 /// ```
 /// # use mqtt_channel::{Message, Topic};
+/// # use tedge_api::mqtt_topics::MqttSchema;
 /// # use tedge_api::entity_store::{EntityStore, EntityRegistrationMessage};
 /// let mqtt_message = Message::new(
 ///     &Topic::new("te/device/main//").unwrap(),
@@ -121,13 +128,18 @@ type ExternalIdValidatorFn =
 /// );
 /// let registration_message = EntityRegistrationMessage::try_from(&mqtt_message).unwrap();
 ///
-/// let mut entity_store = EntityStore::with_main_device(
+/// let mut entity_store = EntityStore::with_main_device_and_default_service_type(
+///     MqttSchema::default(),
 ///     registration_message,
+///     "service".into(),
 ///     |tid, xid| tid.to_string().into(),
 ///     |xid| Ok(xid.into()),
+///     5,
+///     "/tmp"
 /// );
 /// ```
 pub struct EntityStore {
+    mqtt_schema: MqttSchema,
     main_device: EntityTopicId,
     entities: HashMap<EntityTopicId, EntityMetadata>,
     entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
@@ -136,52 +148,36 @@ pub struct EntityStore {
     // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.
     default_service_type: String,
     pending_entity_store: PendingEntityStore,
+    // The persistent message log to persist entity registrations and twin data messages
+    message_log: MessageLogWriter,
 }
 
 impl EntityStore {
-    /// Creates a new entity store with a given main device.
-    #[must_use]
-    pub fn with_main_device<MF, SF>(
-        main_device: EntityRegistrationMessage,
-        external_id_mapper_fn: MF,
-        external_id_validator_fn: SF,
-    ) -> Option<Self>
-    where
-        MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
-        MF: 'static + Send + Sync,
-        SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
-        SF: 'static + Send + Sync,
-    {
-        Self::with_main_device_and_default_service_type(
-            MqttSchema::default(),
-            main_device,
-            "service".to_string(),
-            external_id_mapper_fn,
-            external_id_validator_fn,
-            100,
-        )
-    }
-
-    #[must_use]
-    pub fn with_main_device_and_default_service_type<MF, SF>(
+    pub fn with_main_device_and_default_service_type<MF, SF, P>(
         mqtt_schema: MqttSchema,
         main_device: EntityRegistrationMessage,
         default_service_type: String,
         external_id_mapper_fn: MF,
         external_id_validator_fn: SF,
         telemetry_cache_size: usize,
-    ) -> Option<Self>
+        log_dir: P,
+    ) -> Result<Self, InitError>
     where
         MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
         MF: 'static + Send + Sync,
         SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
         SF: 'static + Send + Sync,
+        P: AsRef<Path>,
     {
         if main_device.r#type != EntityType::MainDevice {
-            return None;
+            return Err(InitError::Custom(
+                "Provided main device is not of type main-device".into(),
+            ));
         }
 
-        let entity_id: EntityExternalId = main_device.external_id?;
+        let entity_id: EntityExternalId = main_device.external_id.ok_or_else(|| {
+            InitError::Custom("External id for the main device not provided".into())
+        })?;
         let metadata = EntityMetadata {
             topic_id: main_device.topic_id.clone(),
             external_id: entity_id.clone(),
@@ -191,7 +187,10 @@ impl EntityStore {
             twin_data: Map::new(),
         };
 
-        Some(EntityStore {
+        let message_log = MessageLogWriter::new(log_dir.as_ref())?;
+
+        let mut entity_store = EntityStore {
+            mqtt_schema: mqtt_schema.clone(),
             main_device: main_device.topic_id.clone(),
             entities: HashMap::from([(main_device.topic_id.clone(), metadata)]),
             entity_id_index: HashMap::from([(entity_id, main_device.topic_id)]),
@@ -199,7 +198,99 @@ impl EntityStore {
             external_id_validator_fn: Box::new(external_id_validator_fn),
             default_service_type,
             pending_entity_store: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
-        })
+            message_log,
+        };
+
+        entity_store.load_from_message_log(log_dir.as_ref());
+
+        Ok(entity_store)
+    }
+
+    pub fn load_from_message_log<P>(&mut self, log_dir: P)
+    where
+        P: AsRef<Path>,
+    {
+        info!("Loading the entity store from the log");
+        match MessageLogReader::new(log_dir) {
+            Err(err) => {
+                error!(
+                    "Failed to read the entity store log due to {err}. Ignoring and proceeding..."
+                )
+            }
+            Ok(mut message_log_reader) => {
+                loop {
+                    match message_log_reader.next_message() {
+                        Err(err) => {
+                            error!("Parsing log entry failed with {err}");
+                            continue;
+                        }
+                        Ok(None) => {
+                            info!("Finished loading the entity store from the log");
+                            return;
+                        }
+                        Ok(Some(message)) => {
+                            if let Ok((source, channel)) =
+                                self.mqtt_schema.entity_channel_of(&message.topic)
+                            {
+                                match channel {
+                                    Channel::EntityMetadata => {
+                                        if let Ok(register_message) =
+                                            EntityRegistrationMessage::try_from(&message)
+                                        {
+                                            if let Err(err) = self.register_entity(register_message)
+                                            {
+                                                error!("Failed to re-register {source} from the persistent entity store due to {err}");
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                    Channel::EntityTwinData { fragment_key } => {
+                                        let fragment_value = if message.payload_bytes().is_empty() {
+                                            JsonValue::Null
+                                        } else {
+                                            match serde_json::from_slice::<JsonValue>(
+                                                message.payload_bytes(),
+                                            ) {
+                                                Ok(json_value) => json_value,
+                                                Err(err) => {
+                                                    error!("Failed to parse twin fragment value of {fragment_key} of {source} from the persistent entity store due to {err}");
+                                                    continue;
+                                                }
+                                            }
+                                        };
+
+                                        let twin_data = EntityTwinMessage::new(
+                                            source.clone(),
+                                            fragment_key,
+                                            fragment_value,
+                                        );
+                                        if let Err(err) = self.register_twin_data(twin_data.clone())
+                                        {
+                                            error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
+                                            continue;
+                                        }
+                                    }
+                                    Channel::CommandMetadata { .. } => {
+                                        // Do nothing for now as supported operations are not part of the entity store
+                                    }
+                                    channel => {
+                                        warn!(
+                                            "Restoring messages on channel: {:?} not supported",
+                                            channel
+                                        )
+                                    }
+                                }
+                            } else {
+                                warn!(
+                                    "Ignoring unsupported message retrieved from entity store: {:?}",
+                                    message
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Returns information about an entity under a given MQTT entity topic identifier.
@@ -339,7 +430,7 @@ impl EntityStore {
         &mut self,
         message: EntityRegistrationMessage,
     ) -> Result<(Vec<EntityTopicId>, Vec<PendingEntityData>), Error> {
-        match self.register_entity(message.clone()) {
+        match self.register_and_persist_entity(message.clone()) {
             Ok(affected_entities) => {
                 if affected_entities.is_empty() {
                     Ok((vec![], vec![]))
@@ -354,7 +445,7 @@ impl EntityStore {
                         .take_cached_child_entities_data(&topic_id);
                     for pending_child in pending_children {
                         let child_reg_message = pending_child.reg_message.clone();
-                        self.register_entity(child_reg_message)?;
+                        self.register_and_persist_entity(child_reg_message.clone())?;
                         pending_entities.push(pending_child);
                     }
 
@@ -437,17 +528,19 @@ impl EntityStore {
         match previous {
             Entry::Occupied(mut occupied) => {
                 // if there is no change, no entities were affected
-                let mut existing_entity = occupied.get().clone();
-                if existing_entity == entity_metadata {
-                    return Ok(vec![]);
-                }
+                let existing_entity = occupied.get().clone();
 
-                existing_entity.other.extend(entity_metadata.other.clone());
+                let mut merged_other = existing_entity.other.clone();
+                merged_other.extend(entity_metadata.other.clone());
                 let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data,
-                    other: existing_entity.other,
+                    twin_data: existing_entity.twin_data.clone(),
+                    other: merged_other,
                     ..entity_metadata
                 };
+
+                if existing_entity == merged_entity {
+                    return Ok(vec![]);
+                }
 
                 occupied.insert(merged_entity);
                 affected_entities.push(topic_id);
@@ -459,6 +552,19 @@ impl EntityStore {
         }
         debug!("Updated entity map: {:?}", self.entities);
         debug!("Updated external id map: {:?}", self.entity_id_index);
+
+        Ok(affected_entities)
+    }
+
+    fn register_and_persist_entity(
+        &mut self,
+        message: EntityRegistrationMessage,
+    ) -> Result<Vec<EntityTopicId>, Error> {
+        let affected_entities = self.register_entity(message.clone())?;
+        if !affected_entities.is_empty() {
+            self.message_log
+                .append_message(&message.to_mqtt_message(&self.mqtt_schema))?;
+        }
 
         Ok(affected_entities)
     }
@@ -541,11 +647,18 @@ impl EntityStore {
     /// If the provided fragment already existed, `false` is returned.
     pub fn update_twin_data(
         &mut self,
-        entity_topic_id: &EntityTopicId,
-        fragment_key: String,
-        fragment_value: JsonValue,
+        twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        let entity = self.try_get_mut(entity_topic_id)?;
+        self.register_and_persist_twin_data(twin_message.clone())
+    }
+
+    pub fn register_twin_data(
+        &mut self,
+        twin_message: EntityTwinMessage,
+    ) -> Result<bool, entity_store::Error> {
+        let fragment_key = twin_message.fragment_key.clone();
+        let fragment_value = twin_message.fragment_value.clone();
+        let entity = self.try_get_mut(&twin_message.topic_id)?;
         if fragment_value.is_null() {
             let existing = entity.twin_data.remove(&fragment_key);
             if existing.is_none() {
@@ -561,6 +674,19 @@ impl EntityStore {
         }
 
         Ok(true)
+    }
+
+    pub fn register_and_persist_twin_data(
+        &mut self,
+        twin_message: EntityTwinMessage,
+    ) -> Result<bool, entity_store::Error> {
+        let updated = self.register_twin_data(twin_message.clone())?;
+        if updated {
+            self.message_log
+                .append_message(&twin_message.to_mqtt_message(&self.mqtt_schema))?;
+        }
+
+        Ok(updated)
     }
 
     pub fn cache_early_data_message(&mut self, message: Message) {
@@ -625,7 +751,7 @@ impl EntityMetadata {
 }
 
 /// Represents an error encountered while updating the store.
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Specified parent {0:?} does not exist in the store")]
     NoParent(Box<str>),
@@ -649,6 +775,27 @@ pub enum Error {
     // TODO: remove this error variant when `EntityRegistrationMessage` is changed
     #[error("`EntityRegistrationMessage::other` field needs to be a Map")]
     EntityRegistrationOtherNotMap,
+
+    #[error(transparent)]
+    FromStdIoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromSerdeJson(#[from] serde_json::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum InitError {
+    #[error(transparent)]
+    FromError(#[from] Error),
+
+    #[error(transparent)]
+    FromStdIoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromSerdeJson(#[from] serde_json::Error),
+
+    #[error("Initialization failed with: {0}")]
+    Custom(String),
 }
 
 /// An object representing a valid entity registration message.
@@ -825,6 +972,33 @@ fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntityTwinMessage {
+    topic_id: EntityTopicId,
+    fragment_key: String,
+    fragment_value: JsonValue,
+}
+
+impl EntityTwinMessage {
+    pub fn new(topic_id: EntityTopicId, fragment_key: String, fragment_value: JsonValue) -> Self {
+        EntityTwinMessage {
+            topic_id,
+            fragment_key,
+            fragment_value,
+        }
+    }
+
+    pub fn to_mqtt_message(self, mqtt_schema: &MqttSchema) -> Message {
+        let message_topic = mqtt_schema.topic_for(
+            &self.topic_id,
+            &Channel::EntityTwinData {
+                fragment_key: self.fragment_key,
+            },
+        );
+        Message::new(&message_topic, self.fragment_value.to_string()).with_retain()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -833,6 +1007,7 @@ mod tests {
     use serde_json::json;
     use std::collections::HashSet;
     use std::str::FromStr;
+    use tempfile::TempDir;
 
     fn dummy_external_id_mapper(
         entity_topic_id: &EntityTopicId,
@@ -886,7 +1061,8 @@ mod tests {
 
     #[test]
     fn registers_main_device() {
-        let store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let store = new_entity_store(&temp_dir);
 
         assert_eq!(store.main_device(), &EntityTopicId::default_main_device());
         assert!(store.get(&EntityTopicId::default_main_device()).is_some());
@@ -894,7 +1070,8 @@ mod tests {
 
     #[test]
     fn lists_child_devices() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         // If the @parent info is not provided, it is assumed to be an immediate
         // child of the main device.
@@ -931,7 +1108,8 @@ mod tests {
 
     #[test]
     fn lists_services() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         // Services are namespaced under devices, so `parent` is not necessary
         let updated_entities = store
@@ -972,7 +1150,8 @@ mod tests {
 
     #[test]
     fn list_ancestors() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         // Assert no ancestors of main device
         assert!(store
@@ -1078,7 +1257,8 @@ mod tests {
 
     #[test]
     fn list_ancestors_external_ids() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         // Assert ancestor external ids of main device
         assert!(store
@@ -1188,7 +1368,8 @@ mod tests {
 
     #[test]
     fn auto_register_service() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         let service_topic_id = EntityTopicId::default_child_service("child1", "service1").unwrap();
         let res = store.auto_register_entity(&service_topic_id).unwrap();
@@ -1218,7 +1399,8 @@ mod tests {
 
     #[test]
     fn auto_register_child_device() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         let child_topic_id = EntityTopicId::default_child_device("child2").unwrap();
         let res = store.auto_register_entity(&child_topic_id).unwrap();
@@ -1237,7 +1419,8 @@ mod tests {
 
     #[test]
     fn auto_register_custom_topic_scheme_not_supported() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
         assert_matches!(
             store.auto_register_entity(&EntityTopicId::from_str("custom/child2//").unwrap()),
             Err(Error::NonDefaultTopicScheme(_))
@@ -1246,7 +1429,8 @@ mod tests {
 
     #[test]
     fn register_main_device_custom_scheme() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         // Register main device with custom topic scheme
         let main_topic_id = EntityTopicId::from_str("custom/main//").unwrap();
@@ -1313,7 +1497,8 @@ mod tests {
 
     #[test]
     fn external_id_validation() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
         let res = store.update(EntityRegistrationMessage {
@@ -1325,22 +1510,21 @@ mod tests {
         });
 
         // Assert service registered under main device with custom topic scheme
-        assert_eq!(
-            res,
-            Err(Error::InvalidExternalIdError(InvalidExternalIdError {
-                external_id: "bad+id".into(),
-                invalid_char: '+'
-            }))
-        );
+        assert_matches!(res, Err(Error::InvalidExternalIdError(_)));
     }
 
     #[test]
     fn update_twin_data_new_fragment() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         let topic_id = EntityTopicId::default_main_device();
         let updated = store
-            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 5 }))
+            .update_twin_data(EntityTwinMessage::new(
+                topic_id.clone(),
+                "hardware".into(),
+                json!({ "version": 5 }),
+            ))
             .unwrap();
         assert!(
             updated,
@@ -1356,15 +1540,24 @@ mod tests {
 
     #[test]
     fn update_twin_data_update_existing_fragment() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         let topic_id = EntityTopicId::default_main_device();
         let _ = store
-            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 5 }))
+            .update_twin_data(EntityTwinMessage::new(
+                topic_id.clone(),
+                "hardware".into(),
+                json!({ "version": 5 }),
+            ))
             .unwrap();
 
         let updated = store
-            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 6 }))
+            .update_twin_data(EntityTwinMessage::new(
+                topic_id.clone(),
+                "hardware".into(),
+                json!({ "version": 6 }),
+            ))
             .unwrap();
         assert!(
             updated,
@@ -1380,16 +1573,25 @@ mod tests {
 
     #[test]
     fn update_twin_data_remove_fragment() {
-        let mut store = new_entity_store();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
 
         let topic_id = EntityTopicId::default_main_device();
 
         let _ = store
-            .update_twin_data(&topic_id, "foo".into(), json!("bar"))
+            .update_twin_data(EntityTwinMessage::new(
+                topic_id.clone(),
+                "foo".into(),
+                json!("bar"),
+            ))
             .unwrap();
 
         let updated = store
-            .update_twin_data(&topic_id, "foo".into(), json!(null))
+            .update_twin_data(EntityTwinMessage::new(
+                topic_id.clone(),
+                "foo".into(),
+                json!(null),
+            ))
             .unwrap();
         assert!(
             updated,
@@ -1402,9 +1604,11 @@ mod tests {
 
     #[test]
     fn updated_registration_message_after_twin_updates() {
+        let temp_dir = tempfile::tempdir().unwrap();
         // Create an entity store with main device having an explicit `name` fragment
         let topic_id = EntityTopicId::default_main_device();
-        let mut store = EntityStore::with_main_device(
+        let mut store = EntityStore::with_main_device_and_default_service_type(
+            MqttSchema::default(),
             EntityRegistrationMessage {
                 topic_id: topic_id.clone(),
                 external_id: Some("test-device".into()),
@@ -1415,14 +1619,21 @@ mod tests {
                     .unwrap()
                     .to_owned(),
             },
+            "service".into(),
             dummy_external_id_mapper,
             dummy_external_id_sanitizer,
+            5,
+            &temp_dir,
         )
         .unwrap();
 
         // Add some additional fragments to the device twin data
         let _ = store
-            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 5 }))
+            .update_twin_data(EntityTwinMessage::new(
+                topic_id.clone(),
+                "hardware".into(),
+                json!({ "version": 5 }),
+            ))
             .unwrap();
 
         // Update the name of the device with
@@ -1457,8 +1668,178 @@ mod tests {
         );
     }
 
-    fn new_entity_store() -> EntityStore {
-        EntityStore::with_main_device(
+    #[test]
+    fn duplicate_registration_message_ignored() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
+        let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
+        let reg_message = EntityRegistrationMessage {
+            topic_id: entity_topic_id.clone(),
+            r#type: EntityType::ChildDevice,
+            external_id: Some("child1".into()),
+            parent: None,
+            other: Map::new(),
+        };
+
+        let affected_entities = store.update(reg_message.clone()).unwrap();
+        assert!(!affected_entities.0.is_empty());
+
+        let affected_entities = store.update(reg_message.clone()).unwrap();
+        assert!(affected_entities.0.is_empty());
+
+        // Duplicate registration ignore even after the entity store is restored from the disk
+        let mut store = new_entity_store(&temp_dir);
+        let affected_entities = store.update(reg_message).unwrap();
+        assert!(affected_entities.0.is_empty());
+    }
+
+    #[test]
+    fn duplicate_registration_message_ignored_after_twin_update() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
+        let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
+        let reg_message = EntityRegistrationMessage {
+            topic_id: entity_topic_id.clone(),
+            r#type: EntityType::ChildDevice,
+            external_id: Some("child1".into()),
+            parent: None,
+            other: Map::new(),
+        };
+
+        let affected_entities = store.update(reg_message.clone()).unwrap();
+        assert!(!affected_entities.0.is_empty());
+
+        // Update the entity twin data
+        store
+            .update_twin_data(EntityTwinMessage::new(
+                entity_topic_id.clone(),
+                "foo".into(),
+                json!("bar"),
+            ))
+            .unwrap();
+
+        // Assert that the duplicate registration message is still ignored
+        let affected_entities = store.update(reg_message.clone()).unwrap();
+        assert!(affected_entities.0.is_empty());
+
+        // Duplicate registration ignore even after the entity store is restored from the disk
+        let mut store = new_entity_store(&temp_dir);
+        let affected_entities = store.update(reg_message).unwrap();
+        assert!(affected_entities.0.is_empty());
+    }
+
+    #[test]
+    fn early_child_device_registrations_processed_only_after_parent_registration() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir);
+
+        let child0_topic_id = EntityTopicId::default_child_device("child0").unwrap();
+        let child000_topic_id = EntityTopicId::default_child_device("child000").unwrap();
+        let child00_topic_id = EntityTopicId::default_child_device("child00").unwrap();
+
+        // Register great-grand-child before grand-child and child
+        let child000_reg_message = EntityRegistrationMessage::new_custom(
+            child000_topic_id.clone(),
+            EntityType::ChildDevice,
+        )
+        .with_parent(child00_topic_id.clone());
+        let affected_entities = store.update(child000_reg_message.clone()).unwrap();
+        assert!(affected_entities.0.is_empty());
+
+        // Register grand-child before child
+        let child00_reg_message = EntityRegistrationMessage::new_custom(
+            child00_topic_id.clone(),
+            EntityType::ChildDevice,
+        )
+        .with_parent(child0_topic_id.clone());
+        let affected_entities = store.update(child00_reg_message).unwrap();
+        assert!(affected_entities.0.is_empty());
+
+        // Register the immediate child device which will trigger the registration of its children as well
+        let child0_reg_message =
+            EntityRegistrationMessage::new_custom(child0_topic_id.clone(), EntityType::ChildDevice);
+        let affected_entities = store.update(child0_reg_message).unwrap();
+
+        // Assert that the affected entities include all the children
+        assert!(!affected_entities.0.is_empty());
+
+        let affected_entities = store.update(child000_reg_message.clone()).unwrap();
+        assert!(affected_entities.0.is_empty());
+
+        // Reload the entity store from the persistent log
+        let mut store = new_entity_store(&temp_dir);
+
+        // Assert that duplicate registrations are still ignored
+        let affected_entities = store.update(child000_reg_message).unwrap();
+        assert!(affected_entities.0.is_empty());
+    }
+
+    #[test]
+    fn entities_persisted_and_restored() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let child1_topic_id = EntityTopicId::default_child_device("child1").unwrap();
+        let child2_topic_id = EntityTopicId::default_child_device("child2").unwrap();
+
+        let twin_fragment_key = "foo".to_string();
+        let twin_fragment_value = json!("bar");
+
+        {
+            let mut store = new_entity_store(&temp_dir);
+            store
+                .update(
+                    EntityRegistrationMessage::new_custom(
+                        child1_topic_id.clone(),
+                        EntityType::ChildDevice,
+                    )
+                    .with_external_id("child1".into()),
+                )
+                .unwrap();
+            store
+                .update_twin_data(EntityTwinMessage::new(
+                    child1_topic_id.clone(),
+                    twin_fragment_key.clone(),
+                    twin_fragment_value.clone(),
+                ))
+                .unwrap();
+
+            store
+                .update(
+                    EntityRegistrationMessage::new_custom(
+                        child2_topic_id.clone(),
+                        EntityType::ChildDevice,
+                    )
+                    .with_external_id("child2".into()),
+                )
+                .unwrap();
+        }
+
+        {
+            // Reload the entity store using the same persistent file
+            let store = new_entity_store(&temp_dir);
+            let mut expected_entity_metadata =
+                EntityMetadata::child_device("child1".into()).unwrap();
+            expected_entity_metadata
+                .twin_data
+                .insert(twin_fragment_key.clone(), twin_fragment_value.clone());
+
+            let entity_metadata = store.get(&child1_topic_id).unwrap();
+            assert_eq!(entity_metadata, &expected_entity_metadata);
+            assert_eq!(
+                entity_metadata.twin_data.get(&twin_fragment_key).unwrap(),
+                &twin_fragment_value
+            );
+
+            assert_eq!(
+                store.get(&child2_topic_id).unwrap(),
+                &EntityMetadata::child_device("child2".into()).unwrap()
+            );
+        }
+    }
+
+    fn new_entity_store(temp_dir: &TempDir) -> EntityStore {
+        EntityStore::with_main_device_and_default_service_type(
+            MqttSchema::default(),
             EntityRegistrationMessage {
                 topic_id: EntityTopicId::default_main_device(),
                 external_id: Some("test-device".into()),
@@ -1466,8 +1847,11 @@ mod tests {
                 parent: None,
                 other: Map::new(),
             },
+            "service".into(),
             dummy_external_id_mapper,
             dummy_external_id_sanitizer,
+            5,
+            temp_dir,
         )
         .unwrap()
     }

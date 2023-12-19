@@ -7,6 +7,7 @@ pub mod event;
 pub mod group;
 pub mod health;
 pub mod measurement;
+pub mod message_log;
 pub mod messages;
 pub mod mqtt_topics;
 pub mod parser;

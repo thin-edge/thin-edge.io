@@ -378,6 +378,8 @@ impl C8yMapperBuilder {
         create_directory_with_defaults(config.ops_dir.clone())?;
         // Create directory for device custom fragments
         create_directory_with_defaults(config.config_dir.join("device"))?;
+        // Create directory for persistent entity store
+        create_directory_with_defaults(&config.state_dir)?;
         Ok(())
     }
 }

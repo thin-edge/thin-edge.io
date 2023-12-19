@@ -404,6 +404,7 @@ mod tests {
     use tedge_api::event::ThinEdgeEventData;
     use tedge_api::messages::SoftwareListCommandPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::mqtt_topics::MqttSchema;
     use test_case::test_case;
     use time::macros::datetime;
 
@@ -768,11 +769,16 @@ mod tests {
         ;"convert to clear alarm"
     )]
     fn check_alarm_translation(tedge_alarm: ThinEdgeAlarm, expected_c8y_alarm: C8yAlarm) {
+        let temp_dir = tempfile::tempdir().unwrap();
         let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let mut entity_store = EntityStore::with_main_device(
+        let mut entity_store = EntityStore::with_main_device_and_default_service_type(
+            MqttSchema::default(),
             main_device,
+            "service".into(),
             dummy_external_id_mapper,
             dummy_external_id_validator,
+            5,
+            &temp_dir,
         )
         .unwrap();
 
@@ -800,11 +806,16 @@ mod tests {
             }),
         };
 
+        let temp_dir = tempfile::tempdir().unwrap();
         let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let entity_store = EntityStore::with_main_device(
+        let entity_store = EntityStore::with_main_device_and_default_service_type(
+            MqttSchema::default(),
             main_device,
+            "service".into(),
             dummy_external_id_mapper,
             dummy_external_id_validator,
+            5,
+            &temp_dir,
         )
         .unwrap();
 

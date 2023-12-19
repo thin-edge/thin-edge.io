@@ -93,6 +93,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use tokio::time::Duration;
@@ -266,6 +267,7 @@ impl CumulocityConverter {
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
             EARLY_MESSAGE_BUFFER_SIZE,
+            config.state_dir.clone(),
         )
         .unwrap();
 
@@ -998,6 +1000,9 @@ pub enum CumulocityConverterBuildError {
 
     #[error(transparent)]
     OperationLogsError(#[from] OperationLogsError),
+
+    #[error(transparent)]
+    FileError(#[from] FileError),
 }
 
 impl CumulocityConverter {
@@ -3329,7 +3334,6 @@ pub(crate) mod tests {
             .to_string(),
         );
         let messages = converter.convert(&reg_message).await;
-        dbg!(&messages);
 
         // Assert that the registration message, the twin updates and the cached measurement messages are converted
         assert_messages_matching(
@@ -3361,6 +3365,7 @@ pub(crate) mod tests {
     fn c8y_converter_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("tedge").dir("agent");
+        tmp_dir.dir(".tedge-mapper-c8y");
 
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
