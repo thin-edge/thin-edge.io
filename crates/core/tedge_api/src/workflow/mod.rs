@@ -113,6 +113,52 @@ impl Display for OperationAction {
 }
 
 impl OperationWorkflow {
+    /// Return a new OperationWorkflow unless there are errors
+    /// such as missing or ill-defined states.
+    pub fn try_new(
+        operation: OperationType,
+        handlers: DefaultHandlers,
+        mut states: HashMap<StateName, OperationAction>,
+    ) -> Result<Self, WorkflowDefinitionError> {
+        // The init state is required
+        if states.get("init").is_none() {
+            return Err(WorkflowDefinitionError::MissingState {
+                state: "init".to_string(),
+            });
+        }
+
+        // The successful state can be omitted,
+        // but must be associated to a `clear` if provided.
+        let action_on_success = states
+            .entry("successful".to_string())
+            .or_insert(OperationAction::Clear);
+        if action_on_success != &OperationAction::Clear {
+            return Err(WorkflowDefinitionError::InvalidAction {
+                state: "successful".to_string(),
+                action: format!("{action_on_success:?}"),
+            });
+        }
+
+        // The failed state can be omitted,
+        // but must be associated to a `clear` if provided.
+        let action_on_error = states
+            .entry("failed".to_string())
+            .or_insert(OperationAction::Clear);
+        if action_on_error != &OperationAction::Clear {
+            return Err(WorkflowDefinitionError::InvalidAction {
+                state: "failed".to_string(),
+                action: format!("{action_on_error:?}"),
+            });
+        }
+
+        Ok(OperationWorkflow {
+            operation,
+            built_in: false,
+            handlers,
+            states,
+        })
+    }
+
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
         let states = [
