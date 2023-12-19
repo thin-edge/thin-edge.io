@@ -1,5 +1,6 @@
 use crate::workflow::*;
 use log::info;
+use on_disk::OnDiskCommandBoard;
 use serde::Serialize;
 
 /// Dispatch actions to operation participants
@@ -155,9 +156,8 @@ impl WorkflowSupervisor {
 }
 
 /// A view of all the operation instances under execution.
-///
-///
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "OnDiskCommandBoard", into = "OnDiskCommandBoard")]
 pub struct CommandBoard {
     /// For each command instance (uniquely identified by its cmd topic):
     /// - the full state of the command
@@ -172,6 +172,10 @@ pub type TopicName = String;
 pub type Timestamp = time::OffsetDateTime;
 
 impl CommandBoard {
+    pub fn new(commands: HashMap<TopicName, (Timestamp, GenericCommandState)>) -> Self {
+        CommandBoard { commands }
+    }
+
     /// Iterate over the pending commands
     pub fn iter(&self) -> impl Iterator<Item = &(Timestamp, GenericCommandState)> {
         self.commands.values()

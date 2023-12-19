@@ -1,4 +1,5 @@
 pub mod error;
+mod on_disk;
 pub mod script;
 pub mod state;
 pub mod supervisor;
