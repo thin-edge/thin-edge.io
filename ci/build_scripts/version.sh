@@ -155,8 +155,20 @@ set_version_variables() {
     else
         APK_VERSION="${GIT_SEMVER//\~/_rc}"
     fi
-    DEB_VERSION="$GIT_SEMVER"
-    RPM_VERSION="$GIT_SEMVER"
+
+    if [[ "$GIT_SEMVER" = *-rc* ]]; then
+        # Debian expects a tilde as a seperator
+        DEB_VERSION="${GIT_SEMVER//-/\~}"
+    else
+        DEB_VERSION="$GIT_SEMVER"
+    fi
+
+    if [[ "$GIT_SEMVER" = *-rc* ]]; then
+        # RPM expects a tilde as a seperator
+        RPM_VERSION="${GIT_SEMVER//-/\~}"
+    else
+        RPM_VERSION="$GIT_SEMVER"
+    fi
     # container tags are quite limited, so replace forbidden characters with '-'
     CONTAINER_VERSION="${GIT_SEMVER//[^a-zA-Z0-9_.-]/-}"
 
