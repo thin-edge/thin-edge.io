@@ -1,13 +1,169 @@
 use crate::smartrest::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
+use download::DownloadInfo;
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::SoftwareModule;
+use tedge_api::SoftwareModuleUpdate;
+use tedge_api::SoftwareUpdateCommand;
 use time::format_description;
 use time::OffsetDateTime;
+
+#[derive(Debug)]
+enum CumulocitySoftwareUpdateActions {
+    Install,
+    Delete,
+}
+
+impl TryFrom<String> for CumulocitySoftwareUpdateActions {
+    type Error = SmartRestDeserializerError;
+
+    fn try_from(action: String) -> Result<Self, Self::Error> {
+        match action.as_str() {
+            "install" => Ok(Self::Install),
+            "delete" => Ok(Self::Delete),
+            param => Err(SmartRestDeserializerError::InvalidParameter {
+                parameter: param.into(),
+                operation: "c8y_SoftwareUpdate".into(),
+                hint: "It must be install or delete.".into(),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct SmartRestUpdateSoftware {
+    pub message_id: String,
+    pub external_id: String,
+    pub update_list: Vec<SmartRestUpdateSoftwareModule>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct SmartRestUpdateSoftwareModule {
+    pub software: String,
+    pub version: Option<String>,
+    pub url: Option<String>,
+    pub action: String,
+}
+
+impl Default for SmartRestUpdateSoftware {
+    fn default() -> Self {
+        Self {
+            message_id: "528".into(),
+            external_id: "".into(),
+            update_list: vec![],
+        }
+    }
+}
+
+impl SmartRestUpdateSoftware {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+        let mut message_id = smartrest.to_string();
+        message_id.truncate(3);
+
+        let mut rdr = ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(smartrest.as_bytes());
+        let mut record: Self = Self::default();
+
+        for result in rdr.deserialize() {
+            record = result?;
+        }
+
+        Ok(record)
+    }
+
+    pub fn modules(&self) -> &Vec<SmartRestUpdateSoftwareModule> {
+        &self.update_list
+    }
+
+    pub fn into_software_update_command(
+        &self,
+        target: &EntityTopicId,
+        cmd_id: String,
+    ) -> Result<SoftwareUpdateCommand, SmartRestDeserializerError> {
+        let mut request = SoftwareUpdateCommand::new(target, cmd_id);
+        for module in self.modules() {
+            match module.action.clone().try_into()? {
+                CumulocitySoftwareUpdateActions::Install => {
+                    request.add_update(SoftwareModuleUpdate::Install {
+                        module: SoftwareModule {
+                            module_type: module.get_module_version_and_type().1,
+                            name: module.software.clone(),
+                            version: module.get_module_version_and_type().0,
+                            url: module.get_url(),
+                            file_path: None,
+                        },
+                    });
+                }
+                CumulocitySoftwareUpdateActions::Delete => {
+                    request.add_update(SoftwareModuleUpdate::Remove {
+                        module: SoftwareModule {
+                            module_type: module.get_module_version_and_type().1,
+                            name: module.software.clone(),
+                            version: module.get_module_version_and_type().0,
+                            url: None,
+                            file_path: None,
+                        },
+                    });
+                }
+            }
+        }
+        Ok(request)
+    }
+}
+
+impl SmartRestUpdateSoftwareModule {
+    fn get_module_version_and_type(&self) -> (Option<String>, Option<String>) {
+        let split;
+        match &self.version {
+            Some(version) => {
+                if version.matches("::").count() > 1 {
+                    split = version.rsplit_once("::");
+                } else {
+                    split = version.split_once("::");
+                }
+
+                match split {
+                    Some((v, t)) => {
+                        if v.is_empty() {
+                            (None, Some(t.into())) // ::debian
+                        } else if !t.is_empty() {
+                            (Some(v.into()), Some(t.into())) // 1.0::debian
+                        } else {
+                            (Some(v.into()), None)
+                        }
+                    }
+                    None => {
+                        if version == " " {
+                            (None, None) // as long as c8y UI forces version input
+                        } else {
+                            (Some(version.into()), None) // 1.0
+                        }
+                    }
+                }
+            }
+
+            None => (None, None), // (empty)
+        }
+    }
+
+    fn get_url(&self) -> Option<DownloadInfo> {
+        match &self.url {
+            Some(url) if url.trim().is_empty() => None,
+            Some(url) => Some(DownloadInfo::new(url.as_str())),
+            None => None,
+        }
+    }
+}
 
 fn fix_timezone_offset(time: &str) -> String {
     let str_size = time.len();
@@ -20,7 +176,7 @@ fn fix_timezone_offset(time: &str) -> String {
     }
 }
 
-pub fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
+fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -70,6 +226,16 @@ pub trait SmartRestRequestGeneric {
     }
 }
 
+#[derive(Debug)]
+pub enum SmartRestOperationVariant {
+    Restart(SmartRestRestartRequest),
+    SoftwareUpdate(SmartRestUpdateSoftware),
+    LogfileRequest(SmartRestLogRequest),
+    UploadConfigFile(SmartRestConfigUploadRequest),
+    DownloadConfigFile(SmartRestConfigDownloadRequest),
+    Firmware(SmartRestFirmwareRequest),
+}
+
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestLogRequest {
     pub message_id: String,
@@ -84,6 +250,14 @@ pub struct SmartRestLogRequest {
 }
 
 impl SmartRestRequestGeneric for SmartRestLogRequest {}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct SmartRestRestartRequest {
+    pub message_id: String,
+    pub device: String,
+}
+
+impl SmartRestRequestGeneric for SmartRestRestartRequest {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestConfigUploadRequest {
@@ -186,6 +360,9 @@ impl Default for AvailableChildDevices {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_json_diff::*;
+    use serde_json::json;
+    use tedge_api::*;
     use test_case::test_case;
 
     #[test]
@@ -214,9 +391,215 @@ mod tests {
     }
 
     #[test]
+    fn verify_get_module_version_and_type() {
+        let mut module = SmartRestUpdateSoftwareModule {
+            software: "software1".into(),
+            version: None,
+            url: None,
+            action: "install".into(),
+        }; // ""
+        assert_eq!(module.get_module_version_and_type(), (None, None));
+
+        module.version = Some(" ".into()); // " " (space)
+        assert_eq!(module.get_module_version_and_type(), (None, None));
+
+        module.version = Some("::debian".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (None, Some("debian".to_string()))
+        );
+
+        module.version = Some("1.0.0::debian".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0".to_string()), Some("debian".to_string()))
+        );
+
+        module.version = Some("1.0.0::1::debian".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::1".to_string()), Some("debian".to_string()))
+        );
+
+        module.version = Some("1.0.0::1::".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::1".to_string()), None)
+        );
+
+        module.version = Some("1.0.0".into());
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0".to_string()), None)
+        );
+    }
+
+    #[test]
+    fn deserialize_smartrest_update_software() {
+        let smartrest =
+            String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
+        let update_software = SmartRestUpdateSoftware::from_smartrest(&smartrest).unwrap();
+
+        let expected_update_software = SmartRestUpdateSoftware {
+            message_id: "528".into(),
+            external_id: "external_id".into(),
+            update_list: vec![
+                SmartRestUpdateSoftwareModule {
+                    software: "software1".into(),
+                    version: Some("version1".into()),
+                    url: Some("url1".into()),
+                    action: "install".into(),
+                },
+                SmartRestUpdateSoftwareModule {
+                    software: "software2".into(),
+                    version: None,
+                    url: None,
+                    action: "delete".into(),
+                },
+            ],
+        };
+
+        assert_eq!(update_software, expected_update_software);
+    }
+
+    #[test]
     fn deserialize_incorrect_smartrest_message_id() {
         let smartrest = String::from("516,external_id");
-        assert!(SmartRestConfigUploadRequest::from_smartrest(&smartrest).is_err());
+        assert!(SmartRestUpdateSoftware::from_smartrest(&smartrest).is_err());
+    }
+
+    #[test]
+    fn deserialize_incorrect_smartrest_action() {
+        let device = EntityTopicId::default_main_device();
+        let smartrest =
+            String::from("528,external_id,software1,version1,url1,action,software2,,,remove");
+        assert!(SmartRestUpdateSoftware::from_smartrest(&smartrest)
+            .unwrap()
+            .into_software_update_command(&device, "123".to_string())
+            .is_err());
+    }
+
+    #[test]
+    fn from_smartrest_update_software_to_software_update_request() {
+        let smartrest_obj = SmartRestUpdateSoftware {
+            message_id: "528".into(),
+            external_id: "external_id".into(),
+            update_list: vec![
+                SmartRestUpdateSoftwareModule {
+                    software: "software1".into(),
+                    version: Some("version1::debian".into()),
+                    url: Some("url1".into()),
+                    action: "install".into(),
+                },
+                SmartRestUpdateSoftwareModule {
+                    software: "software2".into(),
+                    version: None,
+                    url: None,
+                    action: "delete".into(),
+                },
+            ],
+        };
+        let device = EntityTopicId::default_main_device();
+        let thin_edge_json = smartrest_obj
+            .into_software_update_command(&device, "123".to_string())
+            .unwrap();
+
+        let mut expected_thin_edge_json = SoftwareUpdateCommand::new(&device, "123".to_string());
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "software1".to_string(),
+            version: Some("version1".to_string()),
+            url: Some("url1".into()),
+            file_path: None,
+        }));
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+            module_type: Some("".to_string()),
+            name: "software2".to_string(),
+            version: None,
+            url: None,
+            file_path: None,
+        }));
+
+        assert_eq!(thin_edge_json, expected_thin_edge_json);
+    }
+
+    #[test]
+    fn from_smartrest_update_software_to_json() {
+        let smartrest =
+            String::from("528,external_id,nodered,1.0.0::debian,,install,\
+            collectd,5.7::debian,https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2,install,\
+            nginx,1.21.0::docker,,install,mongodb,4.4.6::docker,,delete");
+        let software_update_request = SmartRestUpdateSoftware::from_smartrest(&smartrest)
+            .unwrap()
+            .into_software_update_command(&EntityTopicId::default_main_device(), "123".to_string())
+            .unwrap();
+
+        let output_json = software_update_request.payload.to_json();
+
+        let expected_json = json!({
+            "status": "init",
+            "updateList": [
+                {
+                    "type": "debian",
+                    "modules": [
+                        {
+                            "name": "nodered",
+                            "version": "1.0.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "collectd",
+                            "version": "5.7",
+                            "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2",
+                            "action": "install"
+                        }
+                    ]
+                },
+                {
+                    "type": "docker",
+                    "modules": [
+                        {
+                            "name": "nginx",
+                            "version": "1.21.0",
+                            "action": "install"
+                        },
+                        {
+                            "name": "mongodb",
+                            "version": "4.4.6",
+                            "action": "remove"
+                        }
+                    ]
+                }
+            ]
+        });
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(output_json.as_str()).unwrap(),
+            expected_json
+        );
+    }
+
+    #[test]
+    fn access_smartrest_update_modules() {
+        let smartrest =
+            String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
+        let update_software = SmartRestUpdateSoftware::from_smartrest(&smartrest).unwrap();
+
+        let expected_vec = vec![
+            SmartRestUpdateSoftwareModule {
+                software: "software1".into(),
+                version: Some("version1".into()),
+                url: Some("url1".into()),
+                action: "install".into(),
+            },
+            SmartRestUpdateSoftwareModule {
+                software: "software2".into(),
+                version: None,
+                url: None,
+                action: "delete".into(),
+            },
+        ];
+
+        assert_eq!(update_software.modules(), &expected_vec);
     }
 
     #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+0200"; "c8y expected")]
@@ -231,6 +614,13 @@ mod tests {
             date_from, date_to
         ));
         let log = SmartRestLogRequest::from_smartrest(&smartrest);
+        assert!(log.is_ok());
+    }
+
+    #[test]
+    fn deserialize_smartrest_restart_request_operation() {
+        let smartrest = "510,user".to_string();
+        let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
     }
 

@@ -22,6 +22,7 @@ logged_command = { workspace = true }
 plugin_sm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha256 = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }

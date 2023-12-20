@@ -1,5 +1,4 @@
 use crate::Capabilities;
-use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
@@ -199,7 +198,6 @@ impl C8yMapperConfig {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.to_string().as_str(),
-            C8yDeviceControlTopic::name(),
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
