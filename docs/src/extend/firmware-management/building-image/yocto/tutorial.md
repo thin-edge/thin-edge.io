@@ -127,7 +127,7 @@ Using shared folders will help reduce the overall build times when building for 
     ls -l tmp
     ```
 
-3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image) page
+3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image.md) page
 
 ### Building an image with a package manager
 

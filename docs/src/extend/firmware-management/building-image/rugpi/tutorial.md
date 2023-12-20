@@ -133,7 +133,7 @@ Currently building is only supported on a Linux environment. It is strongly enco
     ls -ltr build/*.img
     ```
 
-3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image) page
+3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image.md) page
 
 
 ## Tips
