@@ -8,7 +8,6 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
-use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::Protocol;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -282,7 +281,7 @@ async fn service_registration_mapping() {
 
 #[tokio::test]
 async fn mapper_publishes_software_update_request() {
-    // The test assures c8y mapper correctly receives software update request from JSON over MQTT
+    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `te/device/main///cmd/software_update/+`.
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
@@ -292,25 +291,10 @@ async fn mapper_publishes_software_update_request() {
 
     skip_init_messages(&mut mqtt).await;
 
-    // Simulate c8y_SoftwareUpdate JSON over MQTT request
+    // Simulate c8y_SoftwareUpdate SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(),
-        json!({
-            "id": "123456",
-            "c8y_SoftwareUpdate": [
-                {
-                    "name": "nodered",
-                    "action": "install",
-                    "version": "1.0.0::debian",
-                    "url": ""
-                }
-            ],
-            "externalSource": {
-                "externalId": "test-device",
-                "type": "c8y_Serial"
-            }
-        })
-        .to_string(),
+        &C8yTopic::downstream_topic(),
+        "528,test-device,nodered,1.0.0::debian,,install",
     ))
     .await
     .expect("Send failed");
@@ -318,7 +302,7 @@ async fn mapper_publishes_software_update_request() {
     assert_received_includes_json(
         &mut mqtt,
         [(
-            "te/device/main///cmd/software_update/c8y-mapper-123456",
+            "te/device/main///cmd/software_update/+",
             json!({
                 "status": "init",
                 "updateList": [
@@ -439,10 +423,10 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
 #[tokio::test]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
-    // The test assures c8y-mapper correctly receives software update request via JSON over MQTT
-    // Then the c8y-mapper finds out that wrong action as part of the update request.
-    // Then c8y-mapper publishes an operation status message as executing `501,c8y_SoftwareUpdate'
-    // Then c8y-mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
+    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
+    // Then the SM Mapper finds out that wrong action as part of the update request.
+    // Then SM Mapper publishes an operation status message as executing `501,c8y_SoftwareUpdate'
+    // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
     let cfg_dir = TempTedgeDir::new();
@@ -451,27 +435,11 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
-    // Publish a c8y_SoftwareUpdate via JSON over MQTT that contains a wrong action `remove`, that is not known by c8y.
-    mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(),
-        json!({
-            "id": "123456",
-            "c8y_SoftwareUpdate": [
-                {
-                    "name": "nodered",
-                    "action": "remove",
-                    "version": "1.0.0::debian"
-                }
-            ],
-            "externalSource": {
-                "externalId": "test-device",
-                "type": "c8y_Serial"
-            }
-        })
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
+    // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,remove"#;
+    mqtt.send(MqttMessage::new(&C8yTopic::downstream_topic(), smartrest))
+        .await
+        .expect("Send failed");
 
     // Expect a 501 (executing) followed by a 502 (failed)
     assert_received_contains_str(
@@ -1303,8 +1271,8 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
 }
 
 #[tokio::test]
-async fn mapper_handles_multiple_modules_in_update_list_sm_requests() {
-    // The test assures if Mapper can handle multiple update modules received via JSON over MQTT
+async fn mapper_handles_multiline_sm_requests() {
+    // The test assures if Mapper can handle multiline smartrest messages arrived on `c8y/s/ds`
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
@@ -1313,60 +1281,52 @@ async fn mapper_handles_multiple_modules_in_update_list_sm_requests() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
-    // Publish multiple modules software update via JSON over MQTT.
-    mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(),
-        json!({
-            "id": "123456",
-            "c8y_SoftwareUpdate": [
-                {
-                    "name": "nodered",
-                    "action": "install",
-                    "version": "1.0.0::debian",
-                    "url": ""
-                },
-                {
-                    "name": "rolldice",
-                    "action": "install",
-                    "version": "2.0.0::debian",
-                    "url": ""
-                }
-            ],
-            "externalSource": {
-                "externalId": "test-device",
-                "type": "c8y_Serial"
-            }
-        })
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
+    // Prepare and publish multiline software update smartrest requests on `c8y/s/ds`.
+    let smartrest = "528,test-device,nodered,1.0.0::debian,,install\n528,test-device,rolldice,2.0.0::debian,,install".to_string();
+    mqtt.send(MqttMessage::new(&C8yTopic::downstream_topic(), smartrest))
+        .await
+        .expect("Send failed");
 
     assert_received_includes_json(
         &mut mqtt,
-        [(
-            "te/device/main///cmd/software_update/c8y-mapper-123456",
-            json!({
-                "status": "init",
-                "updateList": [
-                    {
-                        "type": "debian",
-                        "modules": [
-                            {
-                                "name": "nodered",
-                                "version": "1.0.0",
-                                "action": "install"
-                            },
-                            {
-                                "name": "rolldice",
-                                "version": "2.0.0",
-                                "action": "install"
-                            }
-                        ]
-                    }
-                ]
-            }),
-        )],
+        [
+            (
+                "te/device/main///cmd/software_update/+",
+                json!({
+                    "status": "init",
+                    "updateList": [
+                        {
+                            "type": "debian",
+                            "modules": [
+                                {
+                                    "name": "nodered",
+                                    "version": "1.0.0",
+                                    "action": "install"
+                                }
+                            ]
+                        }
+                    ]
+                }),
+            ),
+            (
+                "te/device/main///cmd/software_update/+",
+                json!({
+                    "status": "init",
+                    "updateList": [
+                        {
+                            "type": "debian",
+                            "modules": [
+                                {
+                                    "name": "rolldice",
+                                    "version": "2.0.0",
+                                    "action": "install"
+                                }
+                            ]
+                        }
+                    ]
+                }),
+            ),
+        ],
     )
     .await;
 }

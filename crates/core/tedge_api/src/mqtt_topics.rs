@@ -710,10 +710,6 @@ impl IdGenerator {
         )
     }
 
-    pub fn new_id_with_str(&self, value: &str) -> String {
-        format!("{}-{}", self.prefix, value)
-    }
-
     pub fn is_generator_of(&self, cmd_id: &str) -> bool {
         cmd_id.contains(&self.prefix)
     }

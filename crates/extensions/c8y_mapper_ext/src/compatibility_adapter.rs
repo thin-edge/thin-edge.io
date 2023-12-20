@@ -150,12 +150,9 @@ fn convert_from_old_agent_response(
     if let Ok(Value::Object(response)) = serde_json::from_slice(payload) {
         if let Some(Value::String(cmd_id)) = response.get("id") {
             // The new mapper expects command ids with a specific prefix
-            let topic_name = if cmd_id.contains("c8y-mapper") {
-                format!("te/device/main///cmd/{cmd_type}/{cmd_id}")
-            } else {
-                format!("te/device/main///cmd/{cmd_type}/c8y-mapper-{cmd_id}")
-            };
-            if let Ok(topic) = Topic::new(&topic_name) {
+            if let Ok(topic) = Topic::new(&format!(
+                "te/device/main///cmd/{cmd_type}/c8y-mapper-{cmd_id}"
+            )) {
                 return Ok(Some(
                     MqttMessage::new(&topic, payload)
                         .with_retain()
