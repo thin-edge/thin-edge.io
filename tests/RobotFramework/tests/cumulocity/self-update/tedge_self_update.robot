@@ -34,8 +34,11 @@ Update tedge version from previous using Cumulocity
     # Software list reported by the former agent, which is still running
     Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
 
+    # Restart tedge-agent from Cumulocity
+    ${operation}=    Cumulocity.Restart Device
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=180
+
     # Software list reported by the new agent
-    Restart Service    tedge-agent
     Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
 
     # Check if services are still stopped and disabled
