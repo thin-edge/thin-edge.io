@@ -1,0 +1,11 @@
+---
+title: Building an Image
+tags: [Extend]
+sidebar_position: 1
+---
+
+import DocCardList from '@theme/DocCardList';
+
+Instructions on how to build different Operation System images with thin-edge.io setup to perform Over-the-Air (OTA) updates of the operating system.
+
+<DocCardList />
