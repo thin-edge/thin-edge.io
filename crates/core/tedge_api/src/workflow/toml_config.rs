@@ -174,12 +174,7 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
             states.insert(state, action.with_default(&default_handlers));
         }
 
-        Ok(OperationWorkflow {
-            operation,
-            built_in: false,
-            handlers: default_handlers,
-            states,
-        })
+        OperationWorkflow::try_new(operation, default_handlers, states)
     }
 }
 
@@ -537,5 +532,38 @@ on_error = "failed_reboot"
             input.handlers.on_timeout,
             Some(TomlStateUpdate::Simple("timeout".to_string()))
         );
+    }
+
+    #[test]
+    fn reject_script_on_the_failed_state() {
+        let file = r#"
+operation = "infinite-loop"
+
+[init]
+action = "proceed"
+on_success = "failed"
+
+[failed]
+script = "/some/script/which/fails"
+"#;
+
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let error = OperationWorkflow::try_from(input).unwrap_err();
+        assert_eq!(
+            error,
+            WorkflowDefinitionError::InvalidAction {
+                state: "failed".to_string(),
+                action: format!(
+                    "{:?}",
+                    OperationAction::Script(
+                        ShellScript {
+                            command: "/some/script/which/fails".to_string(),
+                            args: vec![]
+                        },
+                        ExitHandlers::default()
+                    )
+                ),
+            }
+        )
     }
 }

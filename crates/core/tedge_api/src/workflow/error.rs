@@ -4,8 +4,8 @@ pub enum WorkflowDefinitionError {
     #[error("Missing mandatory state: {state}")]
     MissingState { state: String },
 
-    #[error("Missing transition for state: {state}")]
-    MissingTransition { state: String },
+    #[error("Invalid action on {state} state: {action}")]
+    InvalidAction { state: String, action: String },
 
     #[error(transparent)]
     ScriptDefinitionError(#[from] ScriptDefinitionError),
