@@ -26,36 +26,36 @@ overrides:
   # slightly different formats
   apk:
     depends:
-        - tedge = ${GIT_SEMVER}
-        - tedge-mapper = ${GIT_SEMVER}
-        - tedge-agent = ${GIT_SEMVER}
+        - tedge = ${APK_VERSION}
+        - tedge-mapper = ${APK_VERSION}
+        - tedge-agent = ${APK_VERSION}
         # Watchdog does not make sense on apk as it does not use systemd
-        # - tedge-watchdog = ${GIT_SEMVER}
-        - tedge-apt-plugin = ${GIT_SEMVER}
-        - c8y-remote-access-plugin = ${GIT_SEMVER}
-        - c8y-firmware-plugin = ${GIT_SEMVER}
+        # - tedge-watchdog = ${APK_VERSION}
+        - tedge-apt-plugin = ${APK_VERSION}
+        - c8y-remote-access-plugin = ${APK_VERSION}
+        - c8y-firmware-plugin = ${APK_VERSION}
   rpm:
     depends:
         # FIXME: Work out a better way to reference the full package specific version which includes the release number (-1) suffix
         # without having to manually add it
         - ca-certificates
-        - tedge = ${GIT_SEMVER}-1
-        - tedge-mapper = ${GIT_SEMVER}-1
-        - tedge-agent = ${GIT_SEMVER}-1
-        - tedge-watchdog = ${GIT_SEMVER}-1
+        - tedge = ${RPM_VERSION}-1
+        - tedge-mapper = ${RPM_VERSION}-1
+        - tedge-agent = ${RPM_VERSION}-1
+        - tedge-watchdog = ${RPM_VERSION}-1
         # tedge-apt-plugin does not make sense on rpm
-        # - tedge-apt-plugin = ${GIT_SEMVER}-1
-        - c8y-remote-access-plugin = ${GIT_SEMVER}-1
-        - c8y-firmware-plugin = ${GIT_SEMVER}-1
+        # - tedge-apt-plugin = ${RPM_VERSION}-1
+        - c8y-remote-access-plugin = ${RPM_VERSION}-1
+        - c8y-firmware-plugin = ${RPM_VERSION}-1
   deb:
     depends:
-        - tedge (= ${GIT_SEMVER})
-        - tedge-mapper (= ${GIT_SEMVER})
-        - tedge-agent (= ${GIT_SEMVER})
-        - tedge-watchdog (= ${GIT_SEMVER})
-        - tedge-apt-plugin (= ${GIT_SEMVER})
-        - c8y-remote-access-plugin (= ${GIT_SEMVER})
-        - c8y-firmware-plugin (= ${GIT_SEMVER})
+        - tedge (= ${DEB_VERSION})
+        - tedge-mapper (= ${DEB_VERSION})
+        - tedge-agent (= ${DEB_VERSION})
+        - tedge-watchdog (= ${DEB_VERSION})
+        - tedge-apt-plugin (= ${DEB_VERSION})
+        - c8y-remote-access-plugin (= ${DEB_VERSION})
+        - c8y-firmware-plugin (= ${DEB_VERSION})
 
 deb:
   fields:
