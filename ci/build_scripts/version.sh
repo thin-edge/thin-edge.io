@@ -157,14 +157,14 @@ set_version_variables() {
     fi
 
     if [[ "$GIT_SEMVER" = *-rc* ]]; then
-        # Debian expects a tilde as a seperator
+        # Debian expects a tilde as a separator
         DEB_VERSION="${GIT_SEMVER//-/\~}"
     else
         DEB_VERSION="$GIT_SEMVER"
     fi
 
     if [[ "$GIT_SEMVER" = *-rc* ]]; then
-        # RPM expects a tilde as a seperator
+        # RPM expects a tilde as a separator
         RPM_VERSION="${GIT_SEMVER//-/\~}"
     else
         RPM_VERSION="$GIT_SEMVER"
