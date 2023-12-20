@@ -26,18 +26,18 @@ overrides:
   # slightly different formats
   apk:
     depends:
-        - tedge = ${GIT_SEMVER}
-        - tedge-mapper = ${GIT_SEMVER}
+        - tedge = ${APK_VERSION}
+        - tedge-mapper = ${APK_VERSION}
   rpm:
     depends:
         # FIXME: Work out a better way to reference the full package specific version which includes the release number (-1) suffix
         # without having to manually add it
-        - tedge = ${GIT_SEMVER}-1
-        - tedge-mapper = ${GIT_SEMVER}-1
+        - tedge = ${RPM_VERSION}-1
+        - tedge-mapper = ${RPM_VERSION}-1
   deb:
     depends:
-        - tedge (= ${GIT_SEMVER})
-        - tedge-mapper (= ${GIT_SEMVER})
+        - tedge (= ${DEB_VERSION})
+        - tedge-mapper (= ${DEB_VERSION})
 
 deb:
   fields:

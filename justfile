@@ -1,4 +1,5 @@
 set ignore-comments
+set dotenv-load
 
 VERSION := `./ci/build_scripts/version.sh 2>/dev/null || exit 0`
 # Detect the default target based on the user's CPU arch.
