@@ -157,7 +157,6 @@ Early data messages cached and processed
 
 
 Entities persisted and restored
-    ${timestamp}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"plc1"}'
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"plc2"}'
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"plc1-sensor1","@parent":"factory/shop/plc1/"}'
@@ -166,18 +165,25 @@ Entities persisted and restored
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"plc1-metrics","@parent":"factory/shop/plc1/"}'
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"plc2-metrics","@parent":"factory/shop/plc2/"}'
 
-    Should Have MQTT Messages    c8y/s/us    message_contains=101,plc1    date_from=${timestamp}    minimum=1    maximum=1
-    Should Have MQTT Messages    c8y/s/us    message_contains=101,plc2    date_from=${timestamp}    minimum=1    maximum=1
-    Should Have MQTT Messages    c8y/s/us/plc1    message_contains=101,plc1-sensor1    date_from=${timestamp}    minimum=1    maximum=1
-    Should Have MQTT Messages    c8y/s/us/plc1    message_contains=101,plc1-sensor2    date_from=${timestamp}    minimum=1    maximum=1
-    Should Have MQTT Messages    c8y/s/us/plc2    message_contains=101,plc2-sensor1    date_from=${timestamp}    minimum=1    maximum=1
-    Should Have MQTT Messages    c8y/s/us/plc1    message_contains=102,plc1-metrics    date_from=${timestamp}    minimum=1    maximum=1
-    Should Have MQTT Messages    c8y/s/us/plc2    message_contains=102,plc2-metrics    date_from=${timestamp}    minimum=1    maximum=1
+    External Identity Should Exist    plc1
+    External Identity Should Exist    plc2
+    External Identity Should Exist    plc1-sensor1
+    External Identity Should Exist    plc1-sensor2
+    External Identity Should Exist    plc2-sensor1
+    External Identity Should Exist    plc1-metrics
+    External Identity Should Exist    plc2-metrics
+
+    Execute Command    cat /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
+    ${original_last_modified_time}=    Execute Command    date -r /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
 
     FOR    ${counter}    IN RANGE    0    5
         ${timestamp}=    Get Unix Timestamp
         Restart Service    tedge-mapper-c8y
         Service Health Status Should Be Up    tedge-mapper-c8y
+
+        # Assert that the file contents did not change on restart
+        ${last_modified_time}=    Execute Command    date -r /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
+        Should Be Equal    ${last_modified_time}    ${original_last_modified_time}
 
         # Assert that the restored entities are not converted again
         Should Have MQTT Messages    c8y/s/us    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
