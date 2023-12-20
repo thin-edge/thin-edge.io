@@ -171,6 +171,16 @@ class ThinEdgeIO(DeviceLibrary):
         except Exception as ex:
             log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
 
+        try:
+            # tedge-mapper-c8y message log (if they exist)
+            log.info("tedge-mapper-c8y message log: /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl")
+            device.execute_command(
+                "cat /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl || true",
+                shell=True,
+            )
+        except Exception as ex:
+            log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
+
         log_output = super().get_logs(device.get_id(), date_from=date_from, show=False)
         if show:
             hide_sensitive = self._hide_sensitive_factory()
