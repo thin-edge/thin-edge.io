@@ -41,18 +41,14 @@ impl GenericCommandState {
         }))
     }
 
-    pub fn into_message(self) -> Message {
+    /// Build an MQTT message to publish the command state
+    pub fn into_message(mut self) -> Message {
+        GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
         let topic = &self.topic;
         let payload = self.payload.to_string();
         Message::new(topic, payload)
             .with_retain()
             .with_qos(AtLeastOnce)
-    }
-
-    /// Serialize the command state as a json payload
-    pub fn to_json_string(mut self) -> String {
-        GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
-        self.payload.to_string()
     }
 
     /// Update this state
@@ -179,18 +175,22 @@ impl GenericCommandState {
         }
     }
 
-    fn operation(&self) -> Option<String> {
+    pub fn operation(&self) -> Option<String> {
         match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
             _ => None,
         }
     }
 
-    fn cmd_id(&self) -> Option<String> {
+    pub fn cmd_id(&self) -> Option<String> {
         match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
             _ => None,
         }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(self.status.as_str(), "successful" | "failed")
     }
 }
 

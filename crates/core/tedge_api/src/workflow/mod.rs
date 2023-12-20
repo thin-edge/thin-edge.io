@@ -1,4 +1,5 @@
 pub mod error;
+mod on_disk;
 pub mod script;
 pub mod state;
 pub mod supervisor;
@@ -16,9 +17,11 @@ pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
 pub use supervisor::*;
 
 pub type StateName = String;
+pub type CommandId = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
@@ -61,9 +64,15 @@ pub enum OperationAction {
     /// The command is delegated to a participant identified by its name
     ///
     /// ```toml
-    /// action = "waiting <delegate>"
+    /// awaiting = "agent-restart"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
     /// ```
-    Delegate(String),
+    AwaitingAgentRestart {
+        on_success: GenericStateUpdate,
+        timeout: Duration,
+        on_timeout: GenericStateUpdate,
+    },
 
     /// Restart the device
     ///
@@ -100,9 +109,7 @@ impl Display for OperationAction {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn => "builtin".to_string(),
-            OperationAction::Delegate(owner) => {
-                format!("wait for {owner} to perform required actions")
-            }
+            OperationAction::AwaitingAgentRestart { .. } => "awaiting agent restart".to_string(),
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
@@ -154,20 +161,27 @@ impl OperationWorkflow {
         message: &Message,
     ) -> Result<Option<(GenericCommandState, OperationAction)>, WorkflowExecutionError> {
         match GenericCommandState::from_command_message(message) {
-            Ok(Some(cmd)) => self
-                .states
-                .get(&cmd.status)
-                .ok_or_else(|| WorkflowExecutionError::UnknownStep {
-                    operation: (&self.operation).into(),
-                    step: cmd.status.clone(),
-                })
-                .map(|action| {
-                    let contextualized_action = action.inject_state(&cmd);
-                    Some((cmd, contextualized_action))
-                }),
+            Ok(Some(command_state)) => {
+                let contextualized_action = self.get_action(&command_state)?;
+                Ok(Some((command_state, contextualized_action)))
+            }
             Ok(None) => Ok(None),
             Err(err) => Err(err),
         }
+    }
+
+    /// Return the action to be performed on a given state
+    pub fn get_action(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Result<OperationAction, WorkflowExecutionError> {
+        self.states
+            .get(&command_state.status)
+            .ok_or_else(|| WorkflowExecutionError::UnknownStep {
+                operation: (&self.operation).into(),
+                step: command_state.status.clone(),
+            })
+            .map(|action| action.inject_state(command_state))
     }
 }
 

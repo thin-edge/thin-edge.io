@@ -43,6 +43,9 @@ pub enum WorkflowRegistrationError {
 /// Error preventing to infer the current action for an operation instance
 #[derive(thiserror::Error, Debug)]
 pub enum WorkflowExecutionError {
+    #[error("Not a command topic: {topic}")]
+    InvalidCmdTopic { topic: String },
+
     #[error("The command payload is not a JSON object")]
     InvalidPayload(#[from] serde_json::Error),
 
@@ -51,6 +54,12 @@ pub enum WorkflowExecutionError {
 
     #[error("No workflow is defined for the operation: {operation}")]
     UnknownOperation { operation: String },
+
+    #[error("No command has been initiated on the command topic: {topic}")]
+    UnknownRequest { topic: String },
+
+    #[error("Two concurrent requests are under execution on the same topic: {topic}")]
+    DuplicatedRequest { topic: String },
 
     #[error("No such step is defined for {operation}: {step}")]
     UnknownStep { operation: String, step: String },

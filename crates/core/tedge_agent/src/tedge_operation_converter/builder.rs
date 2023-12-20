@@ -1,7 +1,8 @@
 use crate::software_manager::actor::SoftwareCommand;
+use crate::state_repository::state::AgentStateRepository;
 use crate::tedge_operation_converter::actor::AgentInput;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
-use camino::Utf8PathBuf;
+use crate::tedge_operation_converter::config::OperationConfig;
 use log::error;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
@@ -20,6 +21,7 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
@@ -27,31 +29,26 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
 
 pub struct TedgeOperationConverterBuilder {
-    mqtt_schema: MqttSchema,
-    device_topic_id: EntityTopicId,
+    config: OperationConfig,
     workflows: WorkflowSupervisor,
-    log_dir: Utf8PathBuf,
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareCommand>,
     restart_sender: LoggingSender<RestartCommand>,
+    command_sender: DynSender<GenericCommandState>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
 impl TedgeOperationConverterBuilder {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        mqtt_topic_root: &str,
-        device_topic_id: EntityTopicId,
+        config: OperationConfig,
         mut workflows: WorkflowSupervisor,
-        log_dir: Utf8PathBuf,
         software_actor: &mut impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         script_runner: &mut impl ServiceProvider<Execute, std::io::Result<Output>, NoConfig>,
     ) -> Self {
-        let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
         let (input_sender, input_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
 
@@ -67,9 +64,10 @@ impl TedgeOperationConverterBuilder {
 
         let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
+        let command_sender = input_sender.clone().into();
 
         let mqtt_publisher = mqtt_actor.connect_consumer(
-            Self::subscriptions(&mqtt_schema, &device_topic_id),
+            Self::subscriptions(&config.mqtt_schema, &config.device_topic_id),
             input_sender.into(),
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
@@ -84,13 +82,12 @@ impl TedgeOperationConverterBuilder {
         }
 
         Self {
-            mqtt_schema,
-            device_topic_id,
+            config,
             workflows,
-            log_dir,
             input_receiver,
             software_sender,
             restart_sender,
+            command_sender,
             mqtt_publisher,
             signal_sender,
             script_runner,
@@ -124,15 +121,19 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
     }
 
     fn build(self) -> TedgeOperationConverterActor {
+        let repository =
+            AgentStateRepository::new(self.config.state_dir, self.config.config_dir, "workflows");
         TedgeOperationConverterActor {
-            mqtt_schema: self.mqtt_schema,
-            device_topic_id: self.device_topic_id,
+            mqtt_schema: self.config.mqtt_schema,
+            device_topic_id: self.config.device_topic_id,
             workflows: self.workflows,
-            log_dir: self.log_dir,
+            state_repository: repository,
+            log_dir: self.config.log_dir,
             input_receiver: self.input_receiver,
             software_sender: self.software_sender,
             restart_sender: self.restart_sender,
             mqtt_publisher: self.mqtt_publisher,
+            command_sender: self.command_sender,
             script_runner: self.script_runner,
         }
     }

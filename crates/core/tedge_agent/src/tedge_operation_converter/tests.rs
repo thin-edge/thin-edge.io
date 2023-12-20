@@ -1,5 +1,7 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
+use crate::tedge_operation_converter::config::OperationConfig;
+use camino::Utf8Path;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -19,6 +21,7 @@ use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -38,7 +41,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/main///cmd/software_list/some-cmd-id"),
-        r#"{ "status": "scheduled" }"#,
+        r#"{ "status": "init" }"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -57,12 +60,12 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
 async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
     let (mut software_box, _restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter("device/main//").await?;
+        spawn_mqtt_operation_converter("device/child001//").await?;
 
     // Simulate SoftwareUpdate MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child001///cmd/software_update/1234"),
-        r#"{"status":"scheduled","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
+        r#"{"status":"init","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -106,7 +109,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
     // Simulate Restart MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked(&format!("te/{target_device}/cmd/restart/random")),
-        r#"{"status": "scheduled"}"#,
+        r#"{"status": "init"}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -255,11 +258,18 @@ async fn spawn_mqtt_operation_converter(
 
     let workflows = WorkflowSupervisor::default();
 
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+    let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
+    let config = OperationConfig {
+        mqtt_schema: MqttSchema::new(),
+        device_topic_id: device_topic_id.parse().expect("Invalid topic id"),
+        log_dir: tmp_path.into(),
+        config_dir: tmp_path.into(),
+        state_dir: tmp_path.into(),
+    };
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
-        "te",
-        device_topic_id.parse().expect("Invalid topic id"),
+        config,
         workflows,
-        "/tmp".into(),
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,

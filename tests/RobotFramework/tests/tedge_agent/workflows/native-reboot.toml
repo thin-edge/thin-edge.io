@@ -1,0 +1,29 @@
+operation = "native-reboot"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+script = "uptime"
+on_success = { status = "restart" }
+
+[restart]
+background_script = "sudo reboot"
+on_exec = "restarting"
+
+[restarting]
+action = "await-agent-restart"
+on_success = "restarted"
+timeout_second = 30
+on_timeout = "failed"
+
+[restarted]
+script = "uptime"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
