@@ -83,8 +83,8 @@ jobs:
     name: Build for ${{ matrix.target }}
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
-        fail-fast: false
         # Add only arm targets here as we use a custom strip binary!
         target:
           [
