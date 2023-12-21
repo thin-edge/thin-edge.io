@@ -30,7 +30,7 @@ Install specific version via script (from current branch)
 
 Install latest tedge via script
     Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
-    Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+(-rc\\.\d+)?$
+    Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?$
 
 Install then uninstall latest tedge via script (from main branch)
     # Install (just install everything, don't set anything up)
