@@ -402,13 +402,6 @@ Where:
 * `path` is the full path to the configuration file.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
 
-If the configuration plugin service has not ready started, then you can configure the service to start automatically on boot, and start it now using (if you are using `systemd` on your device):
-
-```sh
-sudo systemctl enable tedge-configuration-plugin
-sudo systemctl start tedge-configuration-plugin
-```
-
 Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find tedge-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
 
 
@@ -490,13 +483,6 @@ files = [
 ]
 ```
 
-The service can be started and enabled via:
-
-```sh
-sudo systemctl enable tedge-log-plugin
-sudo systemctl start tedge-log-plugin
-```
-
 To see the content of the log files in Cumulocity IoT, take the following steps:
 
 1. Go to device management and select the right device.
@@ -511,8 +497,6 @@ To see the content of the log files in Cumulocity IoT, take the following steps:
 ![Request Log file](./images/RequestLogfile.png)
 
 If `tedge-log-plugin.toml` is added to the `tedge-configuration-plugin.toml` it is possible to do the administration from there.
-
-<!-- TODO: Check if restarting the tedge-log-plugin is required each time the log file is edited -->
 
 However, keep in mind that the daemon has to be restarted every time the `/etc/tedge/plugins/tedge-log-plugin.toml` is touched via the command line.
 

@@ -93,11 +93,9 @@ curl -1sLf \
         tedge-mapper \
         tedge-agent \
         tedge-watchdog \
-        tedge-configuration-plugin \
         tedge-apt-plugin \
         c8y-firmware-plugin \
-        c8y-remote-access-plugin \
-        tedge-log-plugin
+        c8y-remote-access-plugin
     ```
 
     The latest version will be automatically selected by `apt-get`.

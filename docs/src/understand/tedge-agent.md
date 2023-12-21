@@ -20,9 +20,7 @@ In the current version of thin-edge, the agent features are not implemented by a
 but by a set of executables:
 
 - `tedge-agent`
-- `tedge-configuration-plugin`
 - `c8y-firmware-plugin`
-- `tedge-log-plugin`
 - `c8y-remote-access-plugin`
 
 The short-term plan is to re-organize these plugins to move the Cumulocity aspects into the Cumulocity mapper
