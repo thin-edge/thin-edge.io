@@ -14,5 +14,5 @@ sudo apt-get --assume-yes install "${EXTERNAL_AMD64_PACKAGES[@]}"
 # Install thin-edge packages
 for PACKAGE in "${RELEASE_PACKAGES[@]}"
 do
-    sudo dpkg -i ./"$PKG_DIR"/"$PACKAGE"_0.*_amd64.deb
+    sudo dpkg -i ./"$PKG_DIR"/"$PACKAGE"_*_amd64.deb
 done
