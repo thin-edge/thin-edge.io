@@ -6,27 +6,11 @@ sidebar_position: 3
 
 # How to retrieve logs with the log plugin
 
-You can now access any type of logs directly from your Cumulocity UI, using the
-`tedge-log-plugin` daemon. To get started install the `tedge-log-plugin` via the
-debian package.
-
-If you have not installed via the debian package, make sure you have the following:
-
-- a `tedge-log-plugin.service` file in `/lib/systemd/system/tedge-log-plugin.service`
-- a `tedge-log-plugin` binary in `/usr/bin/`
-
-After the device is connected to Cumulocity, this plugin needs to be started and
-enabled as follows:
-
-```sh
-sudo systemctl enable tedge-log-plugin
-sudo systemctl start tedge-log-plugin
-```
+The **tedge-agent** service provides out of the box support for requesting log files from a device directly from your Cumulocity UI.
 
 If you go to Cumulocity, you should see that you are able to see the logs tab.
 However, no log type is yet available.
 To add a new log type, you need to edit the `tedge-log-plugin.toml` in `/etc/tedge/plugins/tedge-log-plugin.toml`.
-The file is created once you start the `tedge-log-plugin`.
 
 In this toml file you specify the log type and log path of the logs wished to
 be retrieved from Cumulocity UI.
