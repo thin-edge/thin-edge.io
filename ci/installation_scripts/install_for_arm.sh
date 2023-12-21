@@ -14,7 +14,7 @@ sudo apt-get --assume-yes install "${EXTERNAL_ARM_PACKAGES[@]}"
 # Install thin-edge packages
 for PACKAGE in "${RELEASE_PACKAGES[@]}"
 do
-    sudo dpkg -i ./"$PKG_DIR"/"$PACKAGE"_0.*_armhf.deb
+    sudo dpkg -i ./"$PKG_DIR"/"$PACKAGE"_*_armhf.deb
 done
 
 # Configure collectd

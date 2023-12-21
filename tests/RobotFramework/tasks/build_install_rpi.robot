@@ -13,7 +13,7 @@ ${HOST}
 ${USERNAME}       pi
 ${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=    
 ${DeviceID}       
-${Version}        0.*
+${Version}        *.*
 ${download_dir}    /home/pi/
 ${url_dow}    https://github.com/thin-edge/thin-edge.io/actions
 ${user_git}    crypt:3Uk76kNdyyYOXxus2GFoLf8eRlt/W77eEkcSiswwh04HNfwt0NlJwI7ATKPABmxKk8K1a8NsI5QH0w8EmT8GWeqrFwX2    

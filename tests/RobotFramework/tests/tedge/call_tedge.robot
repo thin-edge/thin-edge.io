@@ -19,7 +19,7 @@ ${version}
 Install thin-edge.io
     ${output}=    Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s    #running the script for installing latest version of tedge
     # Use apt-cache policy to get the installed version as the script lets apt handle this
-    ${version}=    Execute Command    apt-cache policy tedge | grep "Installed:" | cut -d":" -f2 | xargs
+    ${version}=    Execute Command    apt-cache policy tedge | grep "Installed:" | cut -d":" -f2 | sed 's/~rc\./-rc./' | xargs
     Set Suite Variable    ${version}
 
 call tedge -V
