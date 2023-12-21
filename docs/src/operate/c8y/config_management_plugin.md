@@ -11,7 +11,7 @@ With `thin-edge.io`, you can manage config files on a device by using the [Cumul
 If you are new to the Cumulocity **Configuration Management** feature,
 we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) along with this how-to guide.
 
-The configuration management functionality is provided by the `tedge-configuration-plugin` package which is installed by default. If it is not installed then please install the components again following the [install guide](../../install/index.md).
+The configuration management functionality is provided by the **tedge-agent** service which is installed by default. If it is not installed then please install the components again following the [install guide](../../install/index.md).
 
 ## Getting started
 
@@ -41,20 +41,6 @@ You can also configure the `tedge-configuration-plugin.toml` from the cloud late
 :::
 
 **Step 2**
-Start the configuration plugin process and enable it on boot by `systemctl` (recommended).
-
-```sh
-sudo systemctl enable tedge-configuration-plugin
-sudo systemctl start tedge-configuration-plugin
-```
-
-Alternatively, you can run the process directly.
-
-```sh
-sudo tedge-configuration-plugin
-```
-
-**Step 3**
 Navigate to your Cumulocity Device Management and the desired device. Open its **Configuration** tab.
 You can find `tedge-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
 
@@ -62,7 +48,7 @@ You can find `tedge-configuration-plugin` and more are listed as supported confi
 
 This is the configuration file of `tedge-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
-## Update tedge-configuration-plugin from Cumulocity
+## Update tedge-configuration-plugin configuration from Cumulocity
 
 To update any configuration file, create a local copy of that config file and then upload that file to the [Cumulocity configuration repository](https://cumulocity.com/guides/users-guide/device-management/#to-add-a-configuration-snapshot) with the appropriate configuration type.
 
