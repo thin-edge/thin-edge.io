@@ -9,7 +9,7 @@ Test Teardown    Get Logs
 *** Test Cases ***
 Install latest via script (from current branch)
     Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
-    Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+(-rc\\.\d+)?$
+    Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?$
 
     # Uninstall
     Uninstall tedge using local Script
