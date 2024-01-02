@@ -142,13 +142,45 @@ This section contains general tips which can be helpful whilst either getting th
 
 ### Building on MacOS Apple Silicon
 
-Currently building an image is not supported on MacOS as the build process needs to create images which are incompatible with MacOS.
+If you receive the following error during the build process, then it indicates that your current docker setup needs to be adjusted:
 
-```
+```sh
 fallocate: fallocate failed: Operation not supported
 ```
 
-If you don't have a linux distribution to build the image, it is highly recommended to use a Github Runner to build the image. You can check out the [Github workflow](https://github.com/thin-edge/tedge-rugpi-image/blob/main/.github/workflows/bake-image.yml) to also port the steps to other CI runners (e.g. Gitlab, Azure DevOps etc.).
+On MacOS, there are a few solutions which provide the docker engine for us within MacOS, some known solutions are:
+
+* Docker Desktop
+* Rancher Desktop
+* colima
+
+Generally all of the above solutions require creating some kind of Virtual Machine (vm), however it is important that the virtual machine uses `virtiofs` (not `sshfs`) for managing the shared disks. Most of the above solutions should work out-of-the-box, however check below for any solution-specific instructions.
+
+#### colima
+
+Earlier [colima](https://github.com/abiosoft/colima) versions use `qemu` as the default vm-type, however this type uses `sshfs` to manage the VMs shared disk. Newer versions will use `vz` and `virtiofs` by default, however you will have to delete your existing colima instance, and recreate it opting into the `vz` vm-type.
+
+For example, you can remove any existing instance, and create an instance which uses `vz` instead of `qemu`:
+
+```sh
+colima delete
+colima start --vm-type=vz
+```
+
+After starting colima, you can verify the "mountType" (disk type) by checking the `colima status`:
+
+```sh
+colima status 
+```
+
+```text title="Output"
+INFO[0000] colima is running using macOS Virtualization.Framework 
+INFO[0000] arch: aarch64                                
+INFO[0000] runtime: docker                              
+INFO[0000] mountType: virtiofs                          
+INFO[0000] socket: unix:///Users/johnsmith/.colima/default/docker.sock
+```
+
 
 ### Permission denied error caused by xz
 
