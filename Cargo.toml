@@ -195,3 +195,6 @@ overflow-checks = true
 codegen-units = 16
 opt-level = "z"
 strip = "symbols"
+
+[workspace.lints.clippy]
+get_first = "allow"

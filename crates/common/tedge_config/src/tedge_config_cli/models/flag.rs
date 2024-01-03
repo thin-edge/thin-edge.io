@@ -51,7 +51,6 @@ impl Flag {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryInto;
 
     #[test]
     fn convert_string_true_to_bool_true() {
@@ -76,14 +75,14 @@ mod tests {
     #[test]
     fn convert_bool_true_to_string_true() {
         let input = true;
-        let output: String = Flag::try_into(Flag(input)).unwrap();
+        let output: String = Flag(input).into();
         assert_eq!(output, "true");
     }
 
     #[test]
     fn convert_bool_false_to_string_false() {
         let input = false;
-        let output: String = Flag::try_into(Flag(input)).unwrap();
+        let output: String = Flag(input).into();
         assert_eq!(output, "false");
     }
 }

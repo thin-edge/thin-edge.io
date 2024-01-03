@@ -25,3 +25,6 @@ tokio = { workspace = true, features = ["macros"] }
 anyhow = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_config = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true

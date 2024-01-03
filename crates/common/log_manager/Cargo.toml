@@ -23,3 +23,6 @@ toml = { workspace = true }
 filetime = { workspace = true }
 tedge_test_utils = { workspace = true }
 time = { workspace = true, features = ["macros"] }
+
+[lints]
+workspace = true

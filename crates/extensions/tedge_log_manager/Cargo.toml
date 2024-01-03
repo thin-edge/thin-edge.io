@@ -31,3 +31,6 @@ assert-json-diff = { workspace = true }
 filetime = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
+
+[lints]
+workspace = true

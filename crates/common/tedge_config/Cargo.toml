@@ -40,3 +40,6 @@ serde_json = { workspace = true }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+
+[lints]
+workspace = true

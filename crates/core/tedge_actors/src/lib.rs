@@ -348,9 +348,7 @@ pub use servers::*;
 pub use futures;
 use futures::channel::mpsc;
 
-#[macro_use]
 mod macros;
-pub use macros::*;
 
 #[cfg(test)]
 #[cfg(feature = "test-helpers")]

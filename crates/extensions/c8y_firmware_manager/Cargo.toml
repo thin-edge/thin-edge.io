@@ -38,3 +38,6 @@ tokio = { workspace = true, default_features = false, features = [
     "test-util",
     "rt-multi-thread",
 ] }
+
+[lints]
+workspace = true

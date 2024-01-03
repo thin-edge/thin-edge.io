@@ -25,3 +25,6 @@ tedge_signal_ext = { workspace = true }
 tedge_utils = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

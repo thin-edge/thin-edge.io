@@ -26,3 +26,6 @@ futures = { workspace = true }
 mockito = { workspace = true }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

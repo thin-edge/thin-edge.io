@@ -123,9 +123,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let elapsedm: u32 = u32::try_from(elapsed.as_millis()).unwrap();
-    let elapsedmsf: f64 = f64::try_from(elapsedm).unwrap();
-    let rate: f64 =
-        elapsedmsf / (f64::try_from(height).unwrap() * f64::try_from(iterations).unwrap());
+    let elapsedmsf: f64 = f64::from(elapsedm);
+    let rate: f64 = elapsedmsf / (f64::from(height) * f64::from(iterations));
 
     let pubpersec = 1.0 / rate * 1000.0;
     println!("Publish rate: {:.3} ms/pub", rate);

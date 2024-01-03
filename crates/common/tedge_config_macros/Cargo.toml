@@ -20,3 +20,6 @@ url = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true, features = ["rc"] }
+
+[lints]
+workspace = true

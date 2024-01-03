@@ -15,3 +15,6 @@ signal-hook = { workspace = true }
 signal-hook-tokio = { workspace = true }
 tedge_actors = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
+
+[lints]
+workspace = true

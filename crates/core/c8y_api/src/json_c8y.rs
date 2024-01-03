@@ -623,7 +623,7 @@ mod tests {
         tedge_event: ThinEdgeEvent,
         expected_c8y_event: C8yCreateEvent,
     ) -> Result<()> {
-        let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        let actual_c8y_event = C8yCreateEvent::from(tedge_event);
 
         assert_eq!(expected_c8y_event, actual_c8y_event);
 
@@ -642,7 +642,7 @@ mod tests {
             source: None,
         };
 
-        let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        let actual_c8y_event = C8yCreateEvent::from(tedge_event);
 
         assert_eq!(actual_c8y_event.event_type, "empty_event".to_string());
         assert_eq!(actual_c8y_event.text, "empty_event".to_string());
@@ -661,7 +661,7 @@ mod tests {
             source: None,
         };
 
-        let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        let actual_c8y_event = C8yCreateEvent::from(tedge_event);
 
         assert_eq!(actual_c8y_event.event_type, "empty_event".to_string());
         assert_eq!(actual_c8y_event.text, "empty_event".to_string());
