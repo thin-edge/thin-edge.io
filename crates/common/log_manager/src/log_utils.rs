@@ -291,7 +291,6 @@ mod tests {
         let mut log_file = std::fs::OpenOptions::new()
             .append(true)
             .create(false)
-            .write(true)
             .open(file_path)
             .unwrap();
 
@@ -344,7 +343,6 @@ mod tests {
             let mut log_file = std::fs::OpenOptions::new()
                 .append(true)
                 .create(false)
-                .write(true)
                 .open(file_path)
                 .unwrap();
 

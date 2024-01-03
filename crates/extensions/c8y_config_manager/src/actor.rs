@@ -75,10 +75,9 @@ impl ConfigManagerActor {
     ) -> Result<(), ConfigManagementError> {
         if self.config.c8y_request_topics.accept(&message) {
             self.process_smartrest_message(message).await?;
-        } else if self.config.config_snapshot_response_topics.accept(&message) {
-            self.handle_child_device_config_operation_response(&message)
-                .await?;
-        } else if self.config.config_update_response_topics.accept(&message) {
+        } else if self.config.config_snapshot_response_topics.accept(&message)
+            || self.config.config_update_response_topics.accept(&message)
+        {
             self.handle_child_device_config_operation_response(&message)
                 .await?;
         } else {
