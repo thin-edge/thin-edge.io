@@ -8,6 +8,7 @@ use crate::smartrest::error::OperationsError;
 use crate::smartrest::smartrest_serializer::declare_supported_operations;
 use serde::Deserialize;
 use serde::Deserializer;
+use tracing::warn;
 
 use std::time::Duration;
 
@@ -194,6 +195,9 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
     for path in dir_entries {
         if let Some(file_name) = path.file_name().and_then(|file_name| file_name.to_str()) {
             if !is_valid_operation_name(file_name) {
+                // Warn user about invalid operation names, otherwise the
+                // user does not know that the operation is being ignored
+                warn!("Ignoring custom operation definition as the filename uses an invalid character. Only [A-Za-z0-9_] characters are accepted. file={}", path.display());
                 continue;
             }
 
