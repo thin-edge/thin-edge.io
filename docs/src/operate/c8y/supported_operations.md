@@ -173,6 +173,10 @@ First we create a file with the name of the operation:
 sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Command
 ```
 
+:::tip
+A custom operation definition filename **MUST** only use alphanumeric and underscore characters, e.g. `A-Z`, `a-z`, `0-9` and `_`. You cannot use a dash "-", or any other characters in the filename, otherwise the custom operation definition will be ignored.
+:::
+
 :::note
 The needs to be readable by `thin-edge.io` user - `tedge` - and should have permissions `644`.
 :::
