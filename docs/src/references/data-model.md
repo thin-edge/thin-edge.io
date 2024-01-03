@@ -22,8 +22,8 @@ Any malicious access to the broker can hazard **thin-edge** and all connected de
 All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has its specific subtopic (e.g. `te/+/+/+/+/m/+`, `te/+/+/+/+/e/+`, `te/+/+/+/+/a/+` etc.).
 
   * each provider of a **measurement**, **event** or **alarm** sends the occurring data to **thin-edge's** MQTT broker
-    * a provider can be the domain application[^1], other SW components / 3rd parties
-  * all processes (e.g. the domain application[^1], other SW components / 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
+    * a provider can be the domain application, other SW components / 3rd parties
+  * all processes (e.g. the domain application, other SW components / 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
   * the cloud mapper on the **main-device** picks-up _all_ telemetry data from the MQTT broker and transfers those to the cloud
 
 The communication diagram below illustrates that behaviour.
@@ -32,7 +32,7 @@ The communication diagram below illustrates that behaviour.
 
 ### Telemetry Data for Child-Devices
 
-All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device** (see more details about **child-devices** in the [domain model](domain-model.md#child-devices)).
+All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device**.
 
 Therefore the `child-id` of the **child-device** is can be appended to the MQTT topic, if the message is meant for a **child-device**;
 or no `child-id` is appended, if the message is meant for the **main-device**.
@@ -59,7 +59,7 @@ te/device/<child-id>///a/<alarm-type>
 **Telemetry Data** consists of **measurements**, **events** and **alarms**. Each is defined by a set of data-elements, each with specific behaviour.
 
 ### Measurements
-**Measurements** carry values from physical **Sensors**[^1] or a device's **Domain Application**[^1];
+**Measurements** carry values from physical **Sensors** or a device's **Domain Application**;
 e.g. voltage and current of an electricity meter, or current state of the manufacturing control process
 
 #### MQTT topics for measurements
@@ -113,7 +113,7 @@ One MQTT message can contain a mixture of more than one single-value and multi-v
 
 ### Events
 **Events** are notifications that something happened on a device's environment or software system;
-e.g. a sensor[^1] detected something like a door has been closed, or a system notification that e.g. a user has started an ssh session
+e.g. a sensor detected something like a door has been closed, or a system notification that e.g. a user has started an ssh session
 
 #### MQTT topics for events
 
@@ -192,5 +192,3 @@ te/device/<child-id>///a/<alarm-type>
 - all alarms shall be published as MQTT retain message to reflect the alarm's stateful behaviour in the broker; The retain messages is kept in
   the MQTT broker as long as the alarm is raised. When a raised alarm is gone again, an empty retain message shall be published to clear
   the alarm message in the broker.
-
-[^1]: details see "Domain Model" appendix [Device Domain](domain-model.md#device-overview) -->
