@@ -40,7 +40,7 @@ sudo tedge config set c8y.smartrest.templates template-1,template-2
 After adding or removing a template, you will need to run the following command before thin-edge.io will use the new settings:
 
 ```sh
-tedge reconnect c8y
+sudo tedge reconnect c8y
 ```
 
 :::note
@@ -101,5 +101,5 @@ tedge config get c8y.smartrest.templates
 After adding or removing a template, you will need to run the following command before thin-edge.io will use the new settings:
 
 ```sh
-tedge reconnect c8y
+sudo tedge reconnect c8y
 ```
