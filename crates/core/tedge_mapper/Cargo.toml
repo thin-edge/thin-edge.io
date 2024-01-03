@@ -48,3 +48,6 @@ tracing = { workspace = true }
 
 [features]
 integration-test = []
+
+[lints]
+workspace = true

@@ -63,3 +63,6 @@ tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 tower = { workspace = true }
+
+[lints]
+workspace = true

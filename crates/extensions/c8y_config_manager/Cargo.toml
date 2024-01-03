@@ -32,3 +32,6 @@ tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 tokio = { workspace = true, features = ["time", "test-util"] }
 toml = { workspace = true }
+
+[lints]
+workspace = true

@@ -30,3 +30,6 @@ tokio = { workspace = true, features = ["macros"] }
 filetime = { workspace = true }
 tedge_test_utils = { workspace = true }
 time = { workspace = true }
+
+[lints]
+workspace = true

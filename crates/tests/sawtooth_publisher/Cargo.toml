@@ -14,3 +14,6 @@ log = { workspace = true }
 mqtt_channel = { workspace = true }
 tedge_config = { workspace = true }
 tokio = { workspace = true, features = ["sync", "macros"] }
+
+[lints]
+workspace = true

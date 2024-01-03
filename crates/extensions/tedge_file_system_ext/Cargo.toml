@@ -21,3 +21,6 @@ try-traits = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[lints]
+workspace = true

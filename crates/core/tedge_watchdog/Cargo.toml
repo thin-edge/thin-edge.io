@@ -24,3 +24,6 @@ thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting", "serde-well-known"] }
 tokio = { workspace = true, features = ["sync", "time", "rt-multi-thread"] }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

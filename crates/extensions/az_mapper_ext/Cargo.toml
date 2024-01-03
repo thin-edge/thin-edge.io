@@ -32,3 +32,6 @@ serde_json = { workspace = true }
 test-case = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["time"] }
+
+[lints]
+workspace = true

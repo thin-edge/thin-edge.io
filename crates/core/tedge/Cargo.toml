@@ -69,3 +69,6 @@ x509-parser = { workspace = true }
 
 [features]
 integration-test = []
+
+[lints]
+workspace = true

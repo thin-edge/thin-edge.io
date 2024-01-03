@@ -13,3 +13,6 @@ repository = { workspace = true }
 async-trait = { workspace = true }
 tedge_actors = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["time"] }
+
+[lints]
+workspace = true

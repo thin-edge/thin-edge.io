@@ -22,3 +22,6 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tedge_utils = { workspace = true }
 test-case = { workspace = true }
+
+[lints]
+workspace = true

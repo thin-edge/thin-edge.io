@@ -16,3 +16,6 @@ once_cell = { workspace = true }
 rumqttc = { workspace = true }
 rumqttd = { workspace = true }
 tokio = { workspace = true, default_features = false, features = [] }
+
+[lints]
+workspace = true
