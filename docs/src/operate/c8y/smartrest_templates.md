@@ -37,6 +37,12 @@ To add new template to `thin-edge.io` the `tedge config` cli tool can be used as
 sudo tedge config set c8y.smartrest.templates template-1,template-2
 ```
 
+After adding or removing a template, you will need to run the following command before thin-edge.io will use the new settings:
+
+```sh
+sudo tedge reconnect c8y
+```
+
 :::note
 To add/append a new template to a device that's already configured with some, all the existing templates should also be declared along with the new one in the `tedge config set` command.
 For example, if `template-1` is already configured on the device, as following:
@@ -90,4 +96,10 @@ tedge config get c8y.smartrest.templates
 
 ```toml title="Output"
 ["template-1"]
+```
+
+After adding or removing a template, you will need to run the following command before thin-edge.io will use the new settings:
+
+```sh
+sudo tedge reconnect c8y
 ```
