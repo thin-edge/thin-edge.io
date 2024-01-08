@@ -1,0 +1,34 @@
+# See docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default unless a later match takes precedence
+*       @reubenmiller @didier-wenzek @albinsuresh
+
+# Build
+justfile @thin-edge/contributors @thin-edge/inetum-contributors
+/.devcontainer/ @reubenmiller @albinsuresh
+
+# CI
+/.github/ @reubenmiller @Bravo555 @rina23q
+
+# Documentation
+/docs/ @reubenmiller @didier-wenzek
+/design/ @reubenmiller @didier-wenzek @albinsuresh
+/images/ @reubenmiller @didier-wenzek
+
+# Testing
+/tests/ @thin-edge/contributors
+
+# Packaging / Misc. contribution (e.g. config files)
+/configuration/ @reubenmiller @rina23q
+/containers/ @reubenmiller @rina23q
+
+# Rust
+*.rs @didier-wenzek @albinsuresh @jarhodes314 @rina23q
+Cargo.toml @didier-wenzek @albinsuresh @jarhodes314 @rina23q
+*.toml @didier-wenzek @albinsuresh @jarhodes314 @rina23q
+
+# Shell scripting
+*.sh @reubenmiller @Bravo555
+
+# Python
+*.py @reubenmiller @albinsuresh @jarhodes314
