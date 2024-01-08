@@ -16,7 +16,7 @@ justfile @thin-edge/contributors @thin-edge/inetum-contributors
 /images/ @reubenmiller @didier-wenzek
 
 # Testing
-/tests/ @reubenmiller @gligorisaev
+/tests/ @thin-edge/contributors
 
 # Packaging / Misc. contribution (e.g. config files)
 /configuration/ @reubenmiller @rina23q
