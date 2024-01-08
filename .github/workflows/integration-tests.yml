@@ -130,16 +130,9 @@ jobs:
     steps:
       # Checkout either the PR or the branch
       - name: Checkout PR
-        if: ${{ github.event.pull_request.head.sha || '' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR. Only after the manual approval process
-          fetch-depth: 0
-
-      - name: Checkout
-        if: ${{ !github.event.pull_request.head.sha }}
-        uses: actions/checkout@v4
-        with:
           fetch-depth: 0
 
       - name: Download release artifacts
