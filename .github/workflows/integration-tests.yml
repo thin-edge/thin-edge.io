@@ -105,13 +105,23 @@ jobs:
           name: packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/packages/*.deb
 
-  test:
-    name: Test ${{ matrix.job.arch }}
+  approve:
+    # Note: Use approval as a job so that the downstream jobs are only prompted once (if more than 1 matrix job is defined)
+    name: Approve
     needs: [build]
     environment:
       # For security reasons, all pull requests need to be approved first before granting access to secrets
       # So the environment should be set to have a reviewer/s inspect it before approving it
-      name: ${{ inputs.environment || 'Test Pull Request' }}
+      name: ${{ github.event_name == 'pull_request_target' && 'Test Pull Request' || 'Test Auto'  }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Wait for approval
+        run: echo "Approved"
+  test:
+    name: Test ${{ matrix.job.arch }}
+    needs: [approve]
+    environment:
+      name: Test Auto
     runs-on: ubuntu-20.04
     strategy:
       matrix:
