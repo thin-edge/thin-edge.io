@@ -8,7 +8,7 @@
 //! handling operations where we need to write to user-owned files, tedge components will spawn a
 //! `tedge-write` process in order to reduce the surface where the root permissions are used.
 //!
-//! This behaviour can be disabled by setting an `enable.sudo` flag to `false`. `tedge-write` will
+//! This behaviour can be disabled by setting an `sudo.enable` flag to `false`. `tedge-write` will
 //! then be ran with effective permissions of the user running the `tedge-agent` binary. With this
 //! configuration, it the agent will only be able to update configuration files which are writable
 //! by this user (in practice `tedge` or `root`)

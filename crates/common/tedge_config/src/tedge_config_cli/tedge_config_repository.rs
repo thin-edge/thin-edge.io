@@ -64,7 +64,7 @@ impl TEdgeConfigRepository {
     ///
     /// assert_eq!(&config.service.ty, "service");
     /// // Defaults are preserved
-    /// assert_eq!(config.enable.sudo, true);
+    /// assert_eq!(config.sudo.enable, true);
     /// ```
     pub fn load_toml_str(toml: &str) -> TEdgeConfig {
         let dto = super::figment::extract_from_toml_str(toml).unwrap();

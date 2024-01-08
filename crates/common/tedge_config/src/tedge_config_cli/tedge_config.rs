@@ -777,11 +777,11 @@ define_tedge_config! {
         },
     },
 
-    enable: {
+    sudo: {
         /// Determines if thin-edge should use `sudo` when attempting to write to files possibly
         /// not owned by `tedge`.
         #[tedge_config(default(value = true), example = "true", example = "false")]
-        sudo: bool,
+        enable: bool,
     },
 
 }
