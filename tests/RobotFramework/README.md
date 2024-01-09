@@ -44,7 +44,7 @@ The list of test hardware devices can be found [here](./TEST_DEVICES.md).
 Before you can run the tests you need to install the pre-requisites:
 
 * docker (or podman)
-* python3 (>=3.7)
+* python3 (>=3.8)
 * pip3
 * venv (python package)
 
@@ -52,7 +52,7 @@ It is assumed that you are running on either MacOS or Linux. If you are a Window
 
 ### Option 1: Installing the dependencies yourself
 
-1. Install python3 (>= 3.7)
+1. Install python3 (>= 3.8)
     
     Follow the [python instructions](https://www.python.org/downloads/), or
 
