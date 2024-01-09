@@ -147,7 +147,7 @@ impl AgentConfig {
 
         let identity = tedge_config.http.client.auth.identity()?;
 
-        let is_sudo_enabled = tedge_config.enable.sudo;
+        let is_sudo_enabled = tedge_config.sudo.enable;
 
         let capabilities = Capabilities {
             config_update: tedge_config.agent.enable.config_update,
