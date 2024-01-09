@@ -11,6 +11,7 @@ jobs:
   block-fixup:
     name: Block fixup commits
     runs-on: ubuntu-20.04
+    if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,9 +26,9 @@ jobs:
     runs-on: ubuntu-20.04
     # Set job outputs to values from filter step
     outputs:
-      docs: ${{ steps.filter.outputs.docs }}
-      rust: ${{ steps.filter.outputs.rust }}
-      workflows: ${{ steps.filter.outputs.workflows }}
+      rust: ${{ steps.filter.outputs.rust || 'true' }}
+      workflows: ${{ steps.filter.outputs.workflows || 'true' }}
+    continue-on-error: true
     steps:
       # For pull requests it's not necessary to checkout the code
       - uses: dorny/paths-filter@v2
@@ -35,8 +36,6 @@ jobs:
         id: filter
         with:
           filters: |
-            docs:
-              - 'docs/**'
             rust:
               - 'crates/**'
               - 'plugins/**'
@@ -50,6 +49,7 @@ jobs:
   check-lockfile-uptodate:
     name: Check whether Cargo.lock is up to date
     runs-on: ubuntu-20.04
+    if: ${{ github.event_name == 'pull_request' }}
     outputs:
       locks: ${{ steps.filter.outputs.locks }}
     steps:
