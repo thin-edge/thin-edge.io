@@ -33,7 +33,6 @@ Test if all c8y services are down
     tedge-agent
     c8y-firmware-plugin
 
-
 Test if all c8y services are using configured service type
     [Template]     Check if a service using configured service type
     tedge-mapper-c8y
@@ -47,8 +46,6 @@ Test if all c8y services using default service type when service type configured
     c8y-firmware-plugin
 
 Check health status of tedge-mapper-c8y service on broker stop start
-    Custom Test Setup
-
     Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
@@ -69,11 +66,8 @@ Check health status of tedge-mapper-c8y service on broker stop start
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
 
-    Custom Test Teardown
-
 Check health status of tedge-mapper-c8y service on broker restart
     [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
-    Custom Test Setup
 
     Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
@@ -88,8 +82,6 @@ Check health status of tedge-mapper-c8y service on broker restart
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
-
-    Custom Test Teardown
 
 Check health status of child device service
     [Documentation]    Test service status of child device services
@@ -119,21 +111,8 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist                      ${DEVICE_SN}
 
-Custom Test Setup
-    ThinEdgeIO.Start Service    mosquitto
-    ThinEdgeIO.Restart Service    tedge-mapper-c8y
-    ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
-    ThinEdgeIO.Restart Service    tedge-agent
-    ThinEdgeIO.Service Should Be Running    tedge-agent
-
-Custom Test Teardown
-    ThinEdgeIO.Stop Service    tedge-mapper-c8y
-    ThinEdgeIO.Service Should Be Stopped    tedge-mapper-c8y
-
 Check if a service is up
     [Arguments]    ${service_name}
-    Custom Test Setup
-    ThinEdgeIO.Start Service    ${service_name}
     ThinEdgeIO.Service Should Be Running    ${service_name}
 
     Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
@@ -144,12 +123,10 @@ Check if a service is up
     Should Be Equal    ${SERVICE["status"]}    up
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
     ThinEdgeIO.Stop Service    ${service_name}
-    Custom Test Teardown
-
 
 Check if a service is down
     [Arguments]    ${service_name}
-    Custom Test Setup
+    [Teardown]    ThinEdgeIO.Start Service    ${service_name}
     ThinEdgeIO.Start Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ThinEdgeIO.Stop Service    ${service_name}
@@ -163,12 +140,9 @@ Check if a service is down
     Should Be Equal    ${SERVICE["status"]}    down
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
-    Custom Test Teardown
-
 Check if a service using configured service type
     [Arguments]    ${service_name}
     Execute Command    tedge config set service.type thinedge
-    Custom Test Setup
     ThinEdgeIO.Restart Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    serviceType\=thinedge        timeout=${TIMEOUT}
@@ -178,12 +152,9 @@ Check if a service using configured service type
     Should Be Equal    ${SERVICE["status"]}    up
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
-    Custom Test Teardown
-
 Check if a service using configured service type as empty
     [Arguments]    ${service_name}
     Execute Command    tedge config set service.type ""
-    Custom Test Setup
     ThinEdgeIO.Restart Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up        serviceType\=service        timeout=${TIMEOUT}
@@ -192,5 +163,3 @@ Check if a service using configured service type as empty
     Should Be Equal    ${SERVICE["serviceType"]}    service
     Should Be Equal    ${SERVICE["status"]}    up
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
-
-    Custom Test Teardown
