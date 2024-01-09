@@ -1,11 +1,11 @@
-use crate::cli::connect::BridgeConfig;
+use super::BridgeConfig;
 use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
 
-const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-az-bridge/status/health";
+const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-aws-bridge/status/health";
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct BridgeConfigAzureParams {
+pub struct BridgeConfigAwsParams {
     pub connect_url: ConnectUrl,
     pub mqtt_tls_port: u16,
     pub config_file: String,
@@ -15,9 +15,9 @@ pub struct BridgeConfigAzureParams {
     pub bridge_keyfile: Utf8PathBuf,
 }
 
-impl From<BridgeConfigAzureParams> for BridgeConfig {
-    fn from(params: BridgeConfigAzureParams) -> Self {
-        let BridgeConfigAzureParams {
+impl From<BridgeConfigAwsParams> for BridgeConfig {
+    fn from(params: BridgeConfigAwsParams) -> Self {
+        let BridgeConfigAwsParams {
             connect_url,
             mqtt_tls_port,
             config_file,
@@ -28,24 +28,32 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
         } = params;
 
         let address = format!("{}:{}", connect_url, mqtt_tls_port);
-        let user_name = format!(
-            "{}/{}/?api-version=2018-06-30",
-            connect_url, remote_clientid
+        let user_name = remote_clientid.to_string();
+
+        // telemetry/command topics for use by the user
+        let pub_msg_topic = format!("td/# out 1 aws/ thinedge/{remote_clientid}/");
+        let sub_msg_topic = format!("cmd/# in 1 aws/ thinedge/{remote_clientid}/");
+
+        // topic to interact with the shadow of the device
+        let shadow_topic = format!("shadow/# both 1 aws/ $aws/things/{remote_clientid}/");
+
+        // echo topic mapping to check the connection
+        let connection_check_pub_msg_topic = format!(
+            r#""" out 1 aws/test-connection thinedge/devices/{remote_clientid}/test-connection"#
         );
-        let pub_msg_topic = format!("messages/events/# out 1 az/ devices/{}/", remote_clientid);
-        let sub_msg_topic = format!(
-            "messages/devicebound/# in 1 az/ devices/{}/",
-            remote_clientid
+        let connection_check_sub_msg_topic = format!(
+            r#""" in 1 aws/connection-success thinedge/devices/{remote_clientid}/test-connection"#
         );
+
         Self {
-            cloud_name: "az".into(),
+            cloud_name: "aws".into(),
             config_file,
-            connection: "edge_to_az".into(),
+            connection: "edge_to_aws".into(),
             address,
             remote_username: Some(user_name),
             bridge_root_cert_path,
             remote_clientid,
-            local_clientid: "Azure".into(),
+            local_clientid: "Aws".into(),
             bridge_certfile,
             bridge_keyfile,
             use_mapper: true,
@@ -60,30 +68,24 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![
-                // See Azure IoT Hub documentation for detailed explanation on the topics
-                // https://learn.microsoft.com/en-us/azure/iot/iot-mqtt-connect-to-iot-hub#receiving-cloud-to-device-messages
                 pub_msg_topic,
                 sub_msg_topic,
-                // Direct methods (request/response)
-                r##"methods/POST/# in 1 az/ $iothub/"##.into(),
-                r##"methods/res/# out 1 az/ $iothub/"##.into(),
-                // Digital twin
-                r##"twin/res/# in 1 az/ $iothub/"##.into(),
-                r##"twin/GET/# out 1 az/ $iothub/"##.into(),
-                r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
+                shadow_topic,
+                connection_check_pub_msg_topic,
+                connection_check_sub_msg_topic,
             ],
         }
     }
 }
 
 #[test]
-fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
+fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
     use std::convert::TryFrom;
 
-    let params = BridgeConfigAzureParams {
+    let params = BridgeConfigAwsParams {
         connect_url: ConnectUrl::try_from("test.test.io")?,
         mqtt_tls_port: 8883,
-        config_file: "az-bridge.conf".into(),
+        config_file: "aws-bridge.conf".into(),
         remote_clientid: "alpha".into(),
         bridge_root_cert_path: "./test_root.pem".into(),
         bridge_certfile: "./test-certificate.pem".into(),
@@ -93,26 +95,24 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
     let bridge = BridgeConfig::from(params);
 
     let expected = BridgeConfig {
-        cloud_name: "az".into(),
-        config_file: "az-bridge.conf".to_string(),
-        connection: "edge_to_az".into(),
+        cloud_name: "aws".into(),
+        config_file: "aws-bridge.conf".to_string(),
+        connection: "edge_to_aws".into(),
         address: "test.test.io:8883".into(),
-        remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
+        remote_username: Some("alpha".into()),
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),
-        local_clientid: "Azure".into(),
+        local_clientid: "Aws".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         use_mapper: true,
         use_agent: false,
         topics: vec![
-            r#"messages/events/# out 1 az/ devices/alpha/"#.into(),
-            r##"messages/devicebound/# in 1 az/ devices/alpha/"##.into(),
-            r##"methods/POST/# in 1 az/ $iothub/"##.into(),
-            r##"methods/res/# out 1 az/ $iothub/"##.into(),
-            r##"twin/res/# in 1 az/ $iothub/"##.into(),
-            r##"twin/GET/# out 1 az/ $iothub/"##.into(),
-            r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
+            "td/# out 1 aws/ thinedge/alpha/".into(),
+            "cmd/# in 1 aws/ thinedge/alpha/".into(),
+            "shadow/# both 1 aws/ $aws/things/alpha/".into(),
+            r#""" out 1 aws/test-connection thinedge/devices/alpha/test-connection"#.into(),
+            r#""" in 1 aws/connection-success thinedge/devices/alpha/test-connection"#.into(),
         ],
         try_private: false,
         start_type: "automatic".into(),

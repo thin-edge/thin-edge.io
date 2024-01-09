@@ -1,3 +1,8 @@
+use crate::bridge::aws::BridgeConfigAwsParams;
+use crate::bridge::azure::BridgeConfigAzureParams;
+use crate::bridge::c8y::BridgeConfigC8yParams;
+use crate::bridge::BridgeConfig;
+use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
 use crate::cli::connect::jwt_token::*;
 use crate::cli::connect::*;
@@ -20,21 +25,21 @@ use tedge_utils::paths::ok_if_not_found;
 use tedge_utils::paths::DraftFile;
 use which::which;
 
+use crate::bridge::AWS_CONFIG_FILENAME;
+use crate::bridge::AZURE_CONFIG_FILENAME;
+use crate::bridge::C8Y_CONFIG_FILENAME;
+use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
+
 const WAIT_FOR_CHECK_SECONDS: u64 = 2;
-const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
-const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
-const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
-const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 pub struct ConnectCommand {
     pub config_location: TEdgeConfigLocation,
     pub config_repository: TEdgeConfigRepository,
     pub cloud: Cloud,
-    pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
@@ -55,12 +60,14 @@ impl Command for ConnectCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         let config = self.config_repository.load()?;
+        let bridge_config = bridge_config(&config, self.cloud)?;
+        let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&config);
+
         if self.is_test_connection {
-            let br_config = self.bridge_config(&config)?;
-            if self.check_if_bridge_exists(&br_config) {
+            if self.check_if_bridge_exists(&bridge_config) {
                 return match self.check_connection(&config) {
                     Ok(DeviceStatus::AlreadyExists) => {
-                        let cloud = br_config.cloud_name;
+                        let cloud = bridge_config.cloud_name;
                         println!("Connection check to {} cloud is successful.\n", cloud);
                         Ok(())
                     }
@@ -74,30 +81,6 @@ impl Command for ConnectCommand {
                 .into());
             }
         }
-
-        let bridge_config = self.bridge_config(&config)?;
-        let updated_mosquitto_config = self
-            .common_mosquitto_config
-            .clone()
-            .with_internal_opts(
-                config.mqtt.bind.port.into(),
-                config.mqtt.bind.address.to_string(),
-            )
-            .with_external_opts(
-                config.mqtt.external.bind.port.or_none().cloned(),
-                config
-                    .mqtt
-                    .external
-                    .bind
-                    .address
-                    .or_none()
-                    .cloned()
-                    .map(|a| a.to_string()),
-                config.mqtt.external.bind.interface.or_none().cloned(),
-                config.mqtt.external.ca_path.or_none().cloned(),
-                config.mqtt.external.cert_file.or_none().cloned(),
-                config.mqtt.external.key_file.or_none().cloned(),
-            );
 
         let device_type = &config.device.ty;
 
@@ -158,56 +141,6 @@ impl Command for ConnectCommand {
 }
 
 impl ConnectCommand {
-    fn bridge_config(&self, config: &TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
-        match self.cloud {
-            Cloud::Azure => {
-                let params = BridgeConfigAzureParams {
-                    connect_url: config.az.url.or_config_not_set()?.clone(),
-                    mqtt_tls_port: MQTT_TLS_PORT,
-                    config_file: AZURE_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.az.root_cert_path.clone(),
-                    remote_clientid: config.device.id.try_read(config)?.clone(),
-                    bridge_certfile: config.device.cert_path.clone(),
-                    bridge_keyfile: config.device.key_path.clone(),
-                };
-
-                Ok(BridgeConfig::from(params))
-            }
-            Cloud::Aws => {
-                let params = BridgeConfigAwsParams {
-                    connect_url: config.aws.url.or_config_not_set()?.clone(),
-                    mqtt_tls_port: MQTT_TLS_PORT,
-                    config_file: AWS_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.aws.root_cert_path.clone(),
-                    remote_clientid: config.device.id.try_read(config)?.clone(),
-                    bridge_certfile: config.device.cert_path.clone(),
-                    bridge_keyfile: config.device.key_path.clone(),
-                };
-
-                Ok(BridgeConfig::from(params))
-            }
-            Cloud::C8y => {
-                let params = BridgeConfigC8yParams {
-                    mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
-                    config_file: C8Y_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.c8y.root_cert_path.clone(),
-                    remote_clientid: config.device.id.try_read(config)?.clone(),
-                    bridge_certfile: config.device.cert_path.clone(),
-                    bridge_keyfile: config.device.key_path.clone(),
-                    smartrest_templates: config.c8y.smartrest.templates.clone(),
-                    include_local_clean_session: config
-                        .c8y
-                        .bridge
-                        .include
-                        .local_cleansession
-                        .clone(),
-                };
-
-                Ok(BridgeConfig::from(params))
-            }
-        }
-    }
-
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
@@ -228,6 +161,54 @@ impl ConnectCommand {
             .join(br_config.config_file.clone());
 
         Path::new(&bridge_conf_path).exists()
+    }
+}
+
+pub fn bridge_config(
+    config: &TEdgeConfig,
+    cloud: self::Cloud,
+) -> Result<BridgeConfig, ConfigError> {
+    match cloud {
+        Cloud::Azure => {
+            let params = BridgeConfigAzureParams {
+                connect_url: config.az.url.or_config_not_set()?.clone(),
+                mqtt_tls_port: MQTT_TLS_PORT,
+                config_file: AZURE_CONFIG_FILENAME.into(),
+                bridge_root_cert_path: config.az.root_cert_path.clone(),
+                remote_clientid: config.device.id.try_read(config)?.clone(),
+                bridge_certfile: config.device.cert_path.clone(),
+                bridge_keyfile: config.device.key_path.clone(),
+            };
+
+            Ok(BridgeConfig::from(params))
+        }
+        Cloud::Aws => {
+            let params = BridgeConfigAwsParams {
+                connect_url: config.aws.url.or_config_not_set()?.clone(),
+                mqtt_tls_port: MQTT_TLS_PORT,
+                config_file: AWS_CONFIG_FILENAME.into(),
+                bridge_root_cert_path: config.aws.root_cert_path.clone(),
+                remote_clientid: config.device.id.try_read(config)?.clone(),
+                bridge_certfile: config.device.cert_path.clone(),
+                bridge_keyfile: config.device.key_path.clone(),
+            };
+
+            Ok(BridgeConfig::from(params))
+        }
+        Cloud::C8y => {
+            let params = BridgeConfigC8yParams {
+                mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
+                config_file: C8Y_CONFIG_FILENAME.into(),
+                bridge_root_cert_path: config.c8y.root_cert_path.clone(),
+                remote_clientid: config.device.id.try_read(config)?.clone(),
+                bridge_certfile: config.device.cert_path.clone(),
+                bridge_keyfile: config.device.key_path.clone(),
+                smartrest_templates: config.c8y.smartrest.templates.clone(),
+                include_local_clean_session: config.c8y.bridge.include.local_cleansession.clone(),
+            };
+
+            Ok(BridgeConfig::from(params))
+        }
     }
 }
 
@@ -273,6 +254,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 let token = String::from_utf8(response.payload.to_vec()).unwrap();
+                // FIXME: what does this magic number mean?
                 if token.contains("71") {
                     return Ok(DeviceStatus::AlreadyExists);
                 }
@@ -555,7 +537,7 @@ fn bridge_config_exists(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    if Path::new(&path).exists() {
+    if path.exists() {
         return Err(ConnectError::ConfigurationExists {
             cloud: bridge_config.cloud_name.to_string(),
         });

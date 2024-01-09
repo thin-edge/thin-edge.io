@@ -1,4 +1,9 @@
 use camino::Utf8PathBuf;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
+use tedge_utils::paths::DraftFile;
+
+use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
@@ -98,7 +103,7 @@ impl Default for CommonMosquittoConfig {
                 "subscribe".into(),
                 "unsubscribe".into(),
             ],
-            message_size_limit: 268435455,
+            message_size_limit: 256 * 1024 * 1024 - 1,
         }
     }
 }
@@ -162,86 +167,141 @@ impl CommonMosquittoConfig {
             ..self
         }
     }
+
+    pub fn from_tedge_config(config: &TEdgeConfig) -> Self {
+        CommonMosquittoConfig::default()
+            .with_internal_opts(
+                config.mqtt.bind.port.into(),
+                config.mqtt.bind.address.to_string(),
+            )
+            .with_external_opts(
+                config.mqtt.external.bind.port.or_none().cloned(),
+                config
+                    .mqtt
+                    .external
+                    .bind
+                    .address
+                    .or_none()
+                    .cloned()
+                    .map(|a| a.to_string()),
+                config.mqtt.external.bind.interface.or_none().cloned(),
+                config.mqtt.external.ca_path.or_none().cloned(),
+                config.mqtt.external.cert_file.or_none().cloned(),
+                config.mqtt.external.key_file.or_none().cloned(),
+            )
+    }
+
+    /// Write the configuration file in a mosquitto configuration directory relative to the main
+    /// tedge config location.
+    pub fn save(
+        &self,
+        tedge_config_location: &TEdgeConfigLocation,
+    ) -> Result<(), tedge_utils::paths::PathsError> {
+        let dir_path = tedge_config_location
+            .tedge_config_root_path
+            .join(TEDGE_BRIDGE_CONF_DIR_PATH);
+
+        tedge_utils::paths::create_directories(dir_path)?;
+
+        let config_path = self.file_path(tedge_config_location);
+        let mut config_draft = DraftFile::new(config_path)?.with_mode(0o644);
+        self.serialize(&mut config_draft)?;
+        config_draft.persist()?;
+
+        Ok(())
+    }
+
+    fn file_path(&self, tedge_config_location: &TEdgeConfigLocation) -> Utf8PathBuf {
+        tedge_config_location
+            .tedge_config_root_path
+            .join(TEDGE_BRIDGE_CONF_DIR_PATH)
+            .join(&self.config_file)
+    }
 }
 
-#[test]
-fn test_serialize() -> anyhow::Result<()> {
-    let common_mosquitto_config = CommonMosquittoConfig::default();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let mut buffer = Vec::new();
-    common_mosquitto_config.serialize(&mut buffer)?;
+    #[test]
+    fn test_serialize() -> anyhow::Result<()> {
+        let common_mosquitto_config = CommonMosquittoConfig::default();
 
-    let contents = String::from_utf8(buffer).unwrap();
-    let config_set: std::collections::HashSet<&str> = contents
-        .lines()
-        .filter(|str| !str.is_empty() && !str.starts_with('#'))
-        .collect();
-    let mut expected = std::collections::HashSet::new();
+        let mut buffer = Vec::new();
+        common_mosquitto_config.serialize(&mut buffer)?;
 
-    expected.insert("listener 1883 localhost");
-    expected.insert("allow_anonymous true");
-    expected.insert("connection_messages true");
+        let contents = String::from_utf8(buffer).unwrap();
+        let config_set: std::collections::HashSet<&str> = contents
+            .lines()
+            .filter(|str| !str.is_empty() && !str.starts_with('#'))
+            .collect();
+        let mut expected = std::collections::HashSet::new();
 
-    expected.insert("log_type error");
-    expected.insert("log_type warning");
-    expected.insert("log_type notice");
-    expected.insert("log_type information");
-    expected.insert("log_type subscribe");
-    expected.insert("log_type unsubscribe");
-    expected.insert("message_size_limit 268435455");
-    expected.insert("per_listener_settings true");
-    expected.insert("require_certificate false");
+        expected.insert("listener 1883 localhost");
+        expected.insert("allow_anonymous true");
+        expected.insert("connection_messages true");
 
-    assert_eq!(config_set, expected);
+        expected.insert("log_type error");
+        expected.insert("log_type warning");
+        expected.insert("log_type notice");
+        expected.insert("log_type information");
+        expected.insert("log_type subscribe");
+        expected.insert("log_type unsubscribe");
+        expected.insert("message_size_limit 268435455");
+        expected.insert("per_listener_settings true");
+        expected.insert("require_certificate false");
 
-    Ok(())
-}
+        assert_eq!(config_set, expected);
 
-#[test]
-fn test_serialize_with_opts() -> anyhow::Result<()> {
-    let common_mosquitto_config = CommonMosquittoConfig::default();
-    let mosquitto_config_with_opts = common_mosquitto_config
-        .with_internal_opts(1234, "1.2.3.4".into())
-        .with_external_opts(
-            Some(2345),
-            Some("0.0.0.0".to_string()),
-            Some("wlan0".into()),
-            Some("/etc/ssl/certs".into()),
-            Some("cert.pem".into()),
-            Some("key.pem".into()),
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize_with_opts() -> anyhow::Result<()> {
+        let common_mosquitto_config = CommonMosquittoConfig::default();
+        let mosquitto_config_with_opts = common_mosquitto_config
+            .with_internal_opts(1234, "1.2.3.4".into())
+            .with_external_opts(
+                Some(2345),
+                Some("0.0.0.0".to_string()),
+                Some("wlan0".into()),
+                Some("/etc/ssl/certs".into()),
+                Some("cert.pem".into()),
+                Some("key.pem".into()),
+            );
+
+        assert!(mosquitto_config_with_opts
+            .internal_listener
+            .port
+            .eq(&Some(1234)));
+
+        let mut buffer = Vec::new();
+        mosquitto_config_with_opts.serialize(&mut buffer)?;
+
+        let contents = String::from_utf8(buffer).unwrap();
+        let expected = concat!(
+            "per_listener_settings true\n",
+            "connection_messages true\n",
+            "log_type error\n",
+            "log_type warning\n",
+            "log_type notice\n",
+            "log_type information\n",
+            "log_type subscribe\n",
+            "log_type unsubscribe\n",
+            "message_size_limit 268435455\n",
+            "listener 1234 1.2.3.4\n",
+            "allow_anonymous true\n",
+            "require_certificate false\n",
+            "listener 2345 0.0.0.0\n",
+            "allow_anonymous false\n",
+            "require_certificate true\n",
+            "bind_interface wlan0\n",
+            "capath /etc/ssl/certs\n",
+            "certfile cert.pem\n",
+            "keyfile key.pem\n"
         );
+        assert_eq!(contents, expected);
 
-    assert!(mosquitto_config_with_opts
-        .internal_listener
-        .port
-        .eq(&Some(1234)));
-
-    let mut buffer = Vec::new();
-    mosquitto_config_with_opts.serialize(&mut buffer)?;
-
-    let contents = String::from_utf8(buffer).unwrap();
-    let expected = concat!(
-        "per_listener_settings true\n",
-        "connection_messages true\n",
-        "log_type error\n",
-        "log_type warning\n",
-        "log_type notice\n",
-        "log_type information\n",
-        "log_type subscribe\n",
-        "log_type unsubscribe\n",
-        "message_size_limit 268435455\n",
-        "listener 1234 1.2.3.4\n",
-        "allow_anonymous true\n",
-        "require_certificate false\n",
-        "listener 2345 0.0.0.0\n",
-        "allow_anonymous false\n",
-        "require_certificate true\n",
-        "bind_interface wlan0\n",
-        "capath /etc/ssl/certs\n",
-        "certfile cert.pem\n",
-        "keyfile key.pem\n"
-    );
-    assert_eq!(contents, expected);
-
-    Ok(())
+        Ok(())
+    }
 }

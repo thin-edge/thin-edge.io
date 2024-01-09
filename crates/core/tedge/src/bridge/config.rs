@@ -1,11 +1,16 @@
-use crate::cli::connect::ConnectError;
-
 use camino::Utf8PathBuf;
-use reqwest::Url;
+use tedge_config::TEdgeConfigLocation;
+use tedge_utils::paths::DraftFile;
+use url::Url;
+
+use crate::ConnectError;
+
+use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfig {
     pub cloud_name: String,
+    // XXX: having file name squished together with 20 fields which go into file content is a bit obscure
     pub config_file: String,
     pub connection: String,
     pub address: String,
@@ -96,6 +101,33 @@ impl BridgeConfig {
         }
 
         Ok(())
+    }
+
+    /// Write the configuration file in a mosquitto configuration directory relative to the main
+    /// tedge config location.
+    pub fn save(
+        &self,
+        tedge_config_location: &TEdgeConfigLocation,
+    ) -> Result<(), tedge_utils::paths::PathsError> {
+        let dir_path = tedge_config_location
+            .tedge_config_root_path
+            .join(TEDGE_BRIDGE_CONF_DIR_PATH);
+
+        tedge_utils::paths::create_directories(dir_path)?;
+
+        let config_path = self.file_path(tedge_config_location);
+        let mut config_draft = DraftFile::new(config_path)?.with_mode(0o644);
+        self.serialize(&mut config_draft)?;
+        config_draft.persist()?;
+
+        Ok(())
+    }
+
+    fn file_path(&self, tedge_config_location: &TEdgeConfigLocation) -> Utf8PathBuf {
+        tedge_config_location
+            .tedge_config_root_path
+            .join(TEDGE_BRIDGE_CONF_DIR_PATH)
+            .join(&self.config_file)
     }
 }
 

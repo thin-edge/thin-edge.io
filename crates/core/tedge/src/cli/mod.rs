@@ -6,7 +6,7 @@ use crate::command::BuildContext;
 use crate::command::Command;
 use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
-pub use connect::*;
+pub use connect::ConnectError;
 use tedge_agent::AgentOpt;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_mapper::MapperOpt;
