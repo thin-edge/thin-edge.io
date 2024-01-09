@@ -2,6 +2,7 @@
 Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
+Library    DateTime
 
 Test Tags    theme:c8y    theme:installation
 Test Setup    Custom Setup
@@ -11,6 +12,7 @@ Test Teardown    Get Logs
 
 Update tedge version from previous using Cumulocity
     [Tags]    test:retry(1)    workaround
+
     ${PREV_VERSION}=    Set Variable    0.8.1
     # Install base version
     Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s ${PREV_VERSION}
@@ -46,6 +48,31 @@ Update tedge version from previous using Cumulocity
     Should Be Equal    ${OUTPUT}    inactive    msg=Service should still be stopped
     ${OUTPUT}    Execute Command    systemctl is-enabled tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
     Should Be Equal    ${OUTPUT}    disabled    msg=Service should still be disabled
+
+
+Refreshes mosquitto bridge configuration
+    ${PREV_VERSION}=    Set Variable    0.10.0
+    # Install base version
+    Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s ${PREV_VERSION}
+
+    # Register device (using already installed version)
+    Execute Command    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install --no-secure || true
+    Device Should Exist                      ${DEVICE_SN}
+
+    # get bridge modification time
+    ${before_upgrade_time}=    Execute Command      stat /etc/tedge/mosquitto-conf/c8y-bridge.conf -c %Y    strip=True
+
+    # Install newer version
+    Create Local Repository
+    ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-agent,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=180
+
+    # TODO: check that this new configuration is actually used by mosquitto
+    ${c8y_bridge_mod_time}=    Execute Command      stat /etc/tedge/mosquitto-conf/c8y-bridge.conf -c %Y    strip=True
+    Should Not Be Equal    ${c8y_bridge_mod_time}    ${before_upgrade_time}
+
+    # Mosquitto should be restarted with new bridge
+    Execute Command    cmd=sh -c '[ $(journalctl -u mosquitto | grep -c "Loading config file /etc/tedge/mosquitto-conf/c8y-bridge.conf") = 2 ]'
 
 *** Keywords ***
 

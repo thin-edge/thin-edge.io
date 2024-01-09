@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 pub use self::certificate::*;
+use self::refresh_bridges::RefreshBridgesCmd;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
@@ -22,6 +23,7 @@ mod disconnect;
 mod init;
 mod mqtt;
 mod reconnect;
+mod refresh_bridges;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -104,6 +106,9 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Reconnect(reconnect::TEdgeReconnectCli),
 
+    /// Refresh all currently active mosquitto bridges
+    RefreshBridges,
+
     /// Publish a message on a topic and subscribe a topic.
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
@@ -164,6 +169,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Config(opt) => opt.build_command(context),
             TEdgeOpt::Connect(opt) => opt.build_command(context),
             TEdgeOpt::Disconnect(opt) => opt.build_command(context),
+            TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(&context).map(Command::into_boxed),
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
             TEdgeOpt::Reconnect(opt) => opt.build_command(context),
         }

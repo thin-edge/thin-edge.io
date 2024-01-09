@@ -32,3 +32,4 @@ fi
 
 # Initialize the tedge
 tedge init
+tedge refresh-bridges
