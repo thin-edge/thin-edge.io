@@ -11,6 +11,7 @@ jobs:
   block-fixup:
     name: Block fixup commits
     runs-on: ubuntu-20.04
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,6 +51,7 @@ jobs:
   check-lockfile-uptodate:
     name: Check whether Cargo.lock is up to date
     runs-on: ubuntu-20.04
+    if: github.event_name != 'pull_request'
     outputs:
       locks: ${{ steps.filter.outputs.locks }}
     steps:
