@@ -7,4 +7,4 @@ ${DEVICE_ADAPTER}    %{DEVICE_ADAPTER=docker}
 &{LOCAL_CONFIG}      skip_bootstrap=False    bootstrap_script=%{LOCAL_CONFIG_BOOTSTRAP_SCRIPT= }
 
 # Cumulocity settings
-&{C8Y_CONFIG}        host=%{C8Y_BASEURL= }    username=%{C8Y_USER= }    password=%{C8Y_PASSWORD= }    tenant=%{C8Y_TENANT= }
+&{C8Y_CONFIG}        host=%{C8Y_BASEURL= }    username=%{C8Y_USER= }    password=%{C8Y_PASSWORD= }

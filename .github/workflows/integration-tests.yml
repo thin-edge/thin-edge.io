@@ -7,8 +7,7 @@ on:
   # Reference: https://dev.to/petrsvihlik/using-environment-protection-rules-to-secure-secrets-when-building-external-forks-with-pullrequesttarget-hci
   pull_request_target:
     branches: [ main ]
-  push:
-    branches: [ main ]
+  merge_group:
   workflow_dispatch:
     inputs:
       environment:
@@ -105,13 +104,23 @@ jobs:
           name: packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/packages/*.deb
 
-  test:
-    name: Test ${{ matrix.job.arch }}
+  approve:
+    # Note: Use approval as a job so that the downstream jobs are only prompted once (if more than 1 matrix job is defined)
+    name: Approve
     needs: [build]
     environment:
       # For security reasons, all pull requests need to be approved first before granting access to secrets
       # So the environment should be set to have a reviewer/s inspect it before approving it
-      name: ${{ inputs.environment || 'Test Pull Request' }}
+      name: ${{ github.event_name == 'pull_request_target' && 'Test Pull Request' || 'Test Auto'  }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Wait for approval
+        run: echo "Approved"
+  test:
+    name: Test ${{ matrix.job.arch }}
+    needs: [approve]
+    environment:
+      name: Test Auto
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -120,16 +129,9 @@ jobs:
     steps:
       # Checkout either the PR or the branch
       - name: Checkout PR
-        if: ${{ github.event.pull_request.head.sha || '' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR. Only after the manual approval process
-          fetch-depth: 0
-
-      - name: Checkout
-        if: ${{ !github.event.pull_request.head.sha }}
-        uses: actions/checkout@v4
-        with:
           fetch-depth: 0
 
       - name: Download release artifacts
@@ -143,7 +145,6 @@ jobs:
         run: |
           touch .env
           echo 'C8Y_BASEURL="${{ secrets.C8Y_BASEURL }}"' >> .env
-          echo 'C8Y_TENANT="${{ secrets.C8Y_TENANT }}"' >> .env
           echo 'C8Y_USER="${{ secrets.C8Y_USER }}"' >> .env
           echo 'C8Y_PASSWORD="${{ secrets.C8Y_PASSWORD }}"' >> .env
 
