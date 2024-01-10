@@ -71,7 +71,7 @@ In this case, the mapper uses the device's local timezone. If you want another t
 as both a fragment type and a fragment series in [Cumulocity's measurements](https://cumulocity.com/guides/reference/measurements/#examples).
 
 After the mapper publishes a message on the topic `c8y/measurement/measurements/create`,
-the message will be transferred to the topic `measurement/measurements/create` by [the MQTT bridge](../references/mqtt-topics.md).
+the message will be transferred to the topic `measurement/measurements/create` by [the MQTT bridge](../references/mappers/mqtt-topics.md).
 
 ### For child devices
 

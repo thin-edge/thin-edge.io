@@ -187,5 +187,5 @@ You can now:
 
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from AWS](../references/mqtt-topics.md#aws-mqtt-topics)
+* or have a detailed view of the [topics mapped to and from AWS](../references/mappers/mqtt-topics.md#aws-mqtt-topics)
   if you prefer to use directly AWS specific formats and protocols.

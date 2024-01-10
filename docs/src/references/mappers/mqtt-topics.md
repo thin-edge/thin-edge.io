@@ -1,18 +1,12 @@
 ---
 title: MQTT Topics
-tags: [Reference, MQTT]
-sidebar_position: 5
+tags: [Reference, Mappers, MQTT]
+sidebar_position: 2
 ---
 
 # MQTT topics
 
-This document lists the MQTT topics that are supported by the thin-edge.io.
-
-## Thin Edge JSON MQTT Topics
-
-To send the Thin Edge JSON measurements to a supported IoT cloud, the device should publish a message to the
-**measurements** topic. Internally the tedge-mapper will consume the measurements from this topic, translates and
-send them to the cloud that the device has been connected to by the `tedge connect` command.
+This document lists the MQTT topics that are used by the mappers.
 
 ## Cumulocity MQTT Topics
 
@@ -90,7 +84,7 @@ The AWS topics are prefixed by `aws/`.
 
 ## Collectd topics
 
-When the [device monitoring feature is enabled](../start/device-monitoring.md),
+When the [device monitoring feature is enabled](../../start/device-monitoring.md),
 monitoring metrics are emitted by `collectd` on a hierarchy of MQTT topics.
 
 * `collectd/$HOSTNAME/#` - All the metrics collected on the device (which hostname is `$HOSTNAME`).
@@ -100,7 +94,7 @@ monitoring metrics are emitted by `collectd` on a hierarchy of MQTT topics.
    in the format `$TIMESTAMP:$VALUE`. For example, `1623155717:98.6`.
 
 The `collectd-mapper` daemon process ingests these measurements and emits translated messages
-to the measurements topic.
+to the measurement topic.
 
 * This process groups the atomic measurements that have been received during the same time-window (currently 200 ms)
 * and produces a single thin-edge-json for the whole group of measurements.
