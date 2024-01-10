@@ -1,7 +1,7 @@
 ---
 title: The Agent
 tags: [Reference, Agent]
-sidebar_position: 1
+sidebar_position: 2
 ---
 
 import DocCardList from '@theme/DocCardList';

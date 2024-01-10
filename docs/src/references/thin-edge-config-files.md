@@ -1,7 +1,7 @@
 ---
 title: Configuration files
 tags: [Reference, Configuration]
-sidebar_position: 2
+sidebar_position: 5
 ---
 
 # Thin-edge config files
