@@ -1,5 +1,5 @@
-use super::BridgeConfig;
 use super::ConnectError;
+use crate::bridge::BridgeConfig;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use certificate::parse_root_certificate::create_tls_config;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
@@ -15,7 +15,6 @@ use rumqttc::Packet;
 use rumqttc::QoS;
 use rumqttc::TlsError;
 use rumqttc::Transport;
-use rumqttc::{self};
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub fn create_device_with_direct_connection(

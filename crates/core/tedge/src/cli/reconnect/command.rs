@@ -4,8 +4,8 @@ use tedge_config::system_services::SystemServiceManager;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 
+use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
-use crate::cli::connect::CommonMosquittoConfig;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
@@ -57,7 +57,6 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
             config_location: reconnect_cmd.config_location.clone(),
             config_repository: reconnect_cmd.config_repository.clone(),
             cloud: reconnect_cmd.cloud,
-            common_mosquitto_config: reconnect_cmd.common_mosquitto_config.clone(),
             is_test_connection: false,
             service_manager: reconnect_cmd.service_manager.clone(),
         }

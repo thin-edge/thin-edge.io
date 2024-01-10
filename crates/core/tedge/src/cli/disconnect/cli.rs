@@ -3,9 +3,9 @@ use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
 use tedge_config::system_services::service_manager;
 
-const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
-const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
-const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
+use crate::bridge::AWS_CONFIG_FILENAME;
+use crate::bridge::AZURE_CONFIG_FILENAME;
+use crate::bridge::C8Y_CONFIG_FILENAME;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeDisconnectBridgeCli {
