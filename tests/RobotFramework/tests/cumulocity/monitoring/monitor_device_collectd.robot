@@ -39,9 +39,8 @@ Check thin-edge monitoring
     Execute Command    sudo systemctl enable tedge-mapper-collectd
     Execute Command    sudo systemctl start tedge-mapper-collectd
     # Check thin-edge monitoring
-    ${tedge_messages}=    Should Have MQTT Messages    topic=te/device/main///m/    minimum=1    maximum=None
+    ${tedge_messages}=    Should Have MQTT Messages    topic=te/device/main///m/    minimum=1    maximum=None    message_pattern=.*(memory|cpu|df-root).*
     Should Contain    ${tedge_messages[0]}   "time"
-    Should Contain Any    ${tedge_messages[0]}    "memory"    "cpu"    "df-root"
     ${c8y_messages}=    Should Have MQTT Messages    topic=c8y/measurement/measurements/create    minimum=1    maximum=None
     Should Contain    ${c8y_messages[0]}    "type":"ThinEdgeMeasurement"
 
