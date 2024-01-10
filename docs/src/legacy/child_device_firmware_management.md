@@ -1,17 +1,21 @@
 ---
 title: Child Device Firmware Management
-tags: [Operate, Cumulocity, Child Device, Firmware]
+tags: [Cumulocity, Firmware, Legacy]
 sidebar_position: 7
 ---
 
 # Enable firmware management on child devices with Cumulocity
+
+:::caution
+- This is a legacy API. For new developments, the recommended approach is to implement a [custom workflow](../references/agent/operation-workflow.md).
+:::
 
 Firmware management can be enabled for child devices using the `c8y-firmware-plugin`.
 This thin-edge plugin coordinates the firmware update operation handling with Cumulocity,
 by establishing secure communication with the cloud,
 managing firmware file downloads, which are typically large files, even over flaky networks,
 caching the downloaded files for re-use across multiple child devices etc.
-For more details on the inner workings of this plugin, refer to the [reference guide](../../references/c8y-firmware-management.md).
+For more details on the inner workings of this plugin, refer to the [reference guide](c8y-firmware-management.md).
 
 In order to install the firmware itself on the child device,
 an additional piece of software must be developed by the child device owner as well,
@@ -24,7 +28,7 @@ The responsibilities of the child device connector are:
 * Download and apply the updated firmware from thin-edge
 * Send status updates on the progress of the firmware update operation to thin-edge
 
-Handling the above mentioned responsibilities involves
+Handling the above-mentioned responsibilities involves
 multiple interactions with thin-edge over its MQTT and HTTP APIs.
 In cases where the child device connector is installed alongside thin-edge on the same device,
 these APIs can be accessed via a local IP or even `127.0.0.1`.
@@ -41,7 +45,7 @@ provides firmware management support for that device.
 ## Declare firmware management support of child device
 
 At first, the child device needs to declare that it supports firmware management from Cumulocity
-using the [supported operations API](supported_operations.md) of thin-edge
+using the [supported operations API](../operate/c8y/supported_operations.md) of thin-edge
 by simply creating an empty operations file on the thin-edge device as follows:
 
 ```sh
