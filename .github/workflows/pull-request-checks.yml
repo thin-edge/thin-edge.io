@@ -32,6 +32,7 @@ jobs:
     steps:
       # For pull requests it's not necessary to checkout the code
       - uses: dorny/paths-filter@v2
+        if: ${{ github.event_name == 'pull_request' }}
         # https://github.com/dorny/paths-filter
         id: filter
         with:
