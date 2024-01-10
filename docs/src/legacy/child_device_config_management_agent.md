@@ -1,6 +1,6 @@
 ---
 title: Child Device Configuration Management
-tags: [Extend, Cumulocity, Child Device, Configuration]
+tags: [Cumulocity, Configuration, Legacy]
 sidebar_position: 6
 ---
 
@@ -54,7 +54,7 @@ This bootstrapping is a 3 step process:
 1. Notify thin-edge about the upload via MQTT
 
 The child device agent needs to capture the list of configuration files that needs be managed from the cloud
-in a `c8y-configuration-plugin.toml` file in the same format as specified in the [configuration management documentation](config_management_plugin.md) as follows:
+in a `c8y-configuration-plugin.toml` file in the same format as specified in the [configuration management documentation](../operate/c8y/config_management_plugin.md) as follows:
 
 ```toml title="file: c8y-configuration-plugin.toml"
 files = [
@@ -66,13 +66,11 @@ files = [
 * `path` is the full path to the configuration file on the child device file system.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI
 
-The child device agent needs to upload this file to thin-edge [File Transfer Service][fts] with an HTTP PUT request
+The child device agent needs to upload this file to thin-edge [File Transfer Service](../references/tedge-file-transfer-service.md) with an HTTP PUT request
 to the URL: `http://{fts-address}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
 
-* {fts-address}` is the address of the thin-edge.io device on which the [File Transfer Service][fts] is running
+* `{fts-address}` is the address of the thin-edge.io device on which the [File Transfer Service](../references/tedge-file-transfer-service.md) is running
 * `{child-id}` is the child-device-id
-
-[fts]: ../../references/tedge-file-transfer-service.md
 
 Once the upload is complete, the agent should notify thin-edge about the upload by sending the following MQTT message:
 
@@ -222,10 +220,3 @@ a "failed" status update must be sent instead, to the same topic as follows:
   "path": "/child/local/fs/path" 
 }
 ```
-
-## References
-
-* Configuration Management [documentation](config_management_plugin.md)
-* Reference implementation of a [child device agent](https://github.com/thin-edge/thin-edge.io_examples/tree/main/child-device-agent) written in Python to demonstrate the contract described in this document.
-
-
