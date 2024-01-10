@@ -585,7 +585,14 @@ remove_tedge() {
 }
 
 install_tedge() {
-    configure_repos
+    case "$INSTALL_METHOD" in
+        local)
+            echo "Skipping repo configuration as thin-edge.io is being installed using local packages" >&2
+            ;;
+        *)
+            configure_repos
+            ;;
+    esac
 
     # Check if any packages are incompatible, if so remove the previous version first
     # Use new and old packages names, and check each of them one by one
