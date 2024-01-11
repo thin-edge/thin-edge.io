@@ -28,14 +28,11 @@ All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with
 
 The communication diagram below illustrates that behaviour.
 
-![MQTT communication flow](../understand/images/MQTT-communication.svg)
+![MQTT communication flow](../../understand/images/MQTT-communication.svg)
 
 ### Telemetry Data for Child-Devices
 
 All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device**.
-
-Therefore the `child-id` of the **child-device** is can be appended to the MQTT topic, if the message is meant for a **child-device**;
-or no `child-id` is appended, if the message is meant for the **main-device**.
 
 MQTT topics for the **main-device**:
 
