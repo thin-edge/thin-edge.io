@@ -1,7 +1,7 @@
 ---
-title: MQTT Authentication
+title: MQTT Local Authentication
 tags: [Operate, Security, MQTT]
-sidebar_position: 1
+sidebar_position: 4
 ---
 
 # Use MQTT authentication for local broker

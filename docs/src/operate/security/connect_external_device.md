@@ -1,10 +1,10 @@
 ---
-title: Local Connection
+title: MQTT Local Connections
 tags: [Operate, Connection, MQTT]
-sidebar_position: 1
+sidebar_position: 3
 ---
 
-# Connecting an external device
+# Enabling MQTT Local Connections
 
 With `thin-edge.io` you can enable connection for external devices to your `thin-edge.io` enabled device with the use of a few commands.
 

@@ -1,10 +1,10 @@
 ---
-title: Cloud Authentication
+title: Self-signed Device Certificate
 tags: [Operate, Security, Cloud]
 sidebar_position: 1
 ---
 
-# How to register?
+# Self-signed Device Certificate
 
 ## Create self-signed certificate
 

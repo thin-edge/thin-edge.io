@@ -1,7 +1,7 @@
 ---
-title: Self-signed Device Certificate
+title: Self-signed Cloud Certificate
 tags: [Operate, Security]
-sidebar_position: 1
+sidebar_position: 2
 ---
 
 # How to add self-signed certificate to trusted certificates list
