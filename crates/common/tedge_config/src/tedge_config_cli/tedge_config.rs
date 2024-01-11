@@ -517,10 +517,13 @@ define_tedge_config! {
     mqtt: {
         /// MQTT topic root
         #[tedge_config(default(value = "te"))]
+        #[tedge_config(example = "te")]
         topic_root: String,
 
         /// The device MQTT topic identifier
         #[tedge_config(default(value = "device/main//"))]
+        #[tedge_config(example = "device/main//")]
+        #[tedge_config(example = "device/child_001//")]
         device_topic_id: String,
 
         bind: {
