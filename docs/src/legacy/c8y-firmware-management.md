@@ -1,14 +1,19 @@
 ---
 title: Firmware Management
-tags: [Reference, Firmware]
+tags: [Firmware, Legacy]
 sidebar_position: 9
 ---
 
-# Device Firmware Management using Cumulocity
+# Child-Device Firmware Management using Cumulocity (legacy API)
 
-Thin-edge provides an operation plugin to
-[manage device firmware using Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#firmware-repo).
-Firmware management is currently supported only for child devices and not for the main tedge device.
+Thin-edge provides a legacy operation plugin to
+[manage device firmware using Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#firmware-repo)
+on child devices.
+
+:::caution
+- This operation plugin only supports firmware update on child devices and not on the main tedge device.
+- This is a legacy API. For new developments, the recommended approach is to implement a [custom workflow](../references/agent/operation-workflow.md).
+:::
 
 - The firmware update operations are defined and triggered from Cumulocity
 - Thin-edge acts as the proxy between Cumulocity and the child device
@@ -34,6 +39,13 @@ as this plugin doesn't support firmware updates for the tedge device.
 Operation files for child devices must be created as part of their bootstrap process, which is explained later.
 
 ## Configuration
+
+Support for this plugin is disabled by default and must be explicitly enabled on the c8y mapper.
+
+```sh
+sudo tedge config set c8y.enable.firmware_update true
+sudo systemctl restart tedge-mapper-c8y.service
+```
 
 The plugin supports a single tedge configuration named `firmware.child.update.timeout`,
 that defines the amount of time the plugin wait for a child device to finish a firmware update once the request is delivered.

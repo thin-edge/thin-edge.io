@@ -421,5 +421,3 @@ Performing config update is an 8-step process:
 ## References
 
 * Configuration Management [documentation](../c8y/config_management_plugin.md)
-* Reference implementation of a [child-device connector](https://github.com/thin-edge/thin-edge.io_examples/tree/main/child-device-agent) written in Python to demonstrate the contract described in this document.
-* How to enable configuration [management on child-devices](../c8y/child_device_config_management_agent.md)
