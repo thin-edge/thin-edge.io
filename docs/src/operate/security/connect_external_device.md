@@ -1,7 +1,7 @@
 ---
 title: MQTT Local Connections
 tags: [Operate, Connection, MQTT]
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Enabling MQTT Local Connections

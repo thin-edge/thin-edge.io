@@ -1,7 +1,7 @@
 ---
 title: Self-signed Cloud Certificate
 tags: [Operate, Security]
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # How to add self-signed certificate to trusted certificates list
