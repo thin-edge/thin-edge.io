@@ -59,7 +59,7 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-const TEDGE_AGENT: &str = "tedge-agent";
+pub const TEDGE_AGENT: &str = "tedge-agent";
 
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
@@ -219,7 +219,8 @@ impl Agent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn start(self) -> Result<(), anyhow::Error> {
-        info!("Starting tedge agent");
+        let version = env!("CARGO_PKG_VERSION");
+        info!("Starting tedge-agent v{}", version);
         self.init()?;
 
         // Runtime

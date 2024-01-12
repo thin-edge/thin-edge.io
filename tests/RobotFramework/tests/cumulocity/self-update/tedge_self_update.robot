@@ -49,7 +49,6 @@ Update tedge version from previous using Cumulocity
     ${OUTPUT}    Execute Command    systemctl is-enabled tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
     Should Be Equal    ${OUTPUT}    disabled    msg=Service should still be disabled
 
-
 Refreshes mosquitto bridge configuration
     ${PREV_VERSION}=    Set Variable    0.10.0
     # Install base version
@@ -74,6 +73,29 @@ Refreshes mosquitto bridge configuration
     # Mosquitto should be restarted with new bridge
     Execute Command    cmd=sh -c '[ $(journalctl -u mosquitto | grep -c "Loading config file /etc/tedge/mosquitto-conf/c8y-bridge.conf") = 2 ]'
 
+Update tedge version from base to current using Cumulocity
+    ${arch}=    Get Debian Architecture
+    Execute Command    mkdir -p /setup/base-version
+    # These base-version packages are built using the ci/build_scripts/build.sh script for all 4 supported architectures
+    # by overriding the version to a lower number using the GIT_SEMVER env variable
+    Transfer To Device    ${CURDIR}/base-version/*${arch}.deb    /setup/base-version/
+
+    # Install base version with self-update capability
+    Install Packages    /setup/base-version
+    Execute Command    cd /setup && test -f ./bootstrap.sh && ./bootstrap.sh --no-install --no-secure
+    Device Should Exist                      ${DEVICE_SN}
+    ${pid_before}=    Execute Command    pgrep tedge-agent    strip=${True}
+
+    # Upgrade to current version
+    Create Local Repository
+    ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-agent,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
+
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+    Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
+
+    ${pid_after}=    Execute Command    pgrep tedge-agent    strip=${True}
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
 *** Keywords ***
 
 Custom Setup
@@ -85,12 +107,19 @@ Custom Setup
     Execute Command    cmd=rm -f /etc/apt/sources.list.d/thinedge*.list /etc/apt/sources.list.d/tedge*.list    # Remove any existing repositories (due to candidate bug in <= 0.8.1)
 
 Create Local Repository
+    [Arguments]    ${packages_dir}=/setup/packages
     # Create local apt repo
     Execute Command    apt-get install -y --no-install-recommends dpkg-dev
-    Execute Command    mkdir -p /opt/repository/local && find /setup -type f -name "*.deb" -exec cp {} /opt/repository/local \\;
-    ${NEW_VERSION}=    Execute Command    find /setup -type f -name "tedge-mapper_*.deb" | sort -Vr | head -n1 | cut -d'_' -f 2    strip=True
+    Execute Command    mkdir -p /opt/repository/local && find ${packages_dir} -type f -name "*.deb" -exec cp {} /opt/repository/local \\;
+    ${NEW_VERSION}=    Execute Command    find ${packages_dir} -type f -name "tedge-mapper_*.deb" | sort -Vr | head -n1 | cut -d'_' -f 2    strip=True
     Set Suite Variable    $NEW_VERSION
     ${NEW_VERSION_ESCAPED}=    Regexp Escape      ${NEW_VERSION}
     Set Suite Variable    $NEW_VERSION_ESCAPED
     Execute Command    cd /opt/repository/local && dpkg-scanpackages -m . > Packages
     Execute Command    cmd=echo 'deb [trusted=yes] file:/opt/repository/local /' > /etc/apt/sources.list.d/tedge-local.list
+
+Install Packages
+    [Arguments]    ${packages_dir}=/setup/packages
+
+    Execute Command    apt-get update && apt-get install -y --no-install-recommends mosquitto
+    Execute Command    cd ${packages_dir} && dpkg -i tedge_*.deb && dpkg -i tedge*mapper*.deb && dpkg -i tedge*agent*.deb && dpkg -i tedge*watchdog*.deb && dpkg -i tedge*apt*plugin*.deb

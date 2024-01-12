@@ -1,8 +1,10 @@
+use crate::agent::TEDGE_AGENT;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::software_manager::error::SoftwareManagerError;
 use crate::software_manager::error::SoftwareManagerError::NoPlugins;
 use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use plugin_sm::operation_logs::LogKind;
 use plugin_sm::operation_logs::OperationLogs;
@@ -11,6 +13,7 @@ use plugin_sm::plugin_manager::Plugins;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
+use std::process::Command;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::LoggingReceiver;
@@ -101,7 +104,12 @@ impl Actor for SoftwareManagerActor {
 
         while let Some(request) = input_receiver.recv().await {
             tokio::select! {
-                _ = self.handle_request(request, &mut plugins, &operation_logs) => {}
+                _ = self.handle_request(request, &mut plugins, &operation_logs) => {
+                    if let Err(SoftwareManagerError::NotRunningLatestVersion) = Self::detect_self_update() {
+                        error!("Tedge-agent is no more running the latest-version => a restart is required");
+                        return Err(RuntimeError::ActorError(Box::new(SoftwareManagerError::NotRunningLatestVersion)));
+                    }
+                }
 
                 Some(RuntimeRequest::Shutdown) = input_receiver.recv_signal() => {
                     info!("Received shutdown request from the runtime, exiting...");
@@ -147,11 +155,12 @@ impl SoftwareManagerActor {
     ) -> Result<(), SoftwareManagerError> {
         match request {
             SoftwareCommand::SoftwareUpdateCommand(request) => {
-                if let Err(err) = self
+                match self
                     .handle_software_update_operation(request, plugins, operation_logs)
                     .await
                 {
-                    error!("{:?}", err);
+                    Ok(()) => {}
+                    Err(err) => error!("{:?}", err),
                 }
             }
             SoftwareCommand::SoftwareListCommand(request) => {
@@ -229,6 +238,42 @@ impl SoftwareManagerActor {
         self.output_sender.send(response.into()).await?;
 
         self.state_repository.clear().await?;
+        Ok(())
+    }
+
+    fn detect_self_update() -> Result<(), SoftwareManagerError> {
+        info!("Checking if tedge got self updated");
+        let current_running_version = env!("CARGO_PKG_VERSION");
+        info!("Current running version: {}", current_running_version);
+
+        let executable_path = std::env::current_exe()
+            .map_err(|e| anyhow!("Failed to retrieve running executable path due to {}", e))?;
+        let agent_binary_path = executable_path.parent().unwrap().join(TEDGE_AGENT);
+
+        let output = Command::new(agent_binary_path)
+            .args(["--version"])
+            .output()
+            .map_err(|e| anyhow!("Failed to fetch version of installed binary due to {}", e))?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "Fetching version from installed binary failed with {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+
+        let version_output = String::from_utf8_lossy(&output.stdout);
+        let version_output_split: Vec<&str> = version_output.split_whitespace().collect();
+        if let ["tedge-agent", installed_binary_version] = version_output_split.as_slice() {
+            info!("Installed binary version: {}", installed_binary_version);
+            if current_running_version != *installed_binary_version {
+                info!("Self update detected. Requesting shutdown...");
+                return Err(SoftwareManagerError::NotRunningLatestVersion);
+            }
+        } else {
+            return Err(anyhow!("Unexpected version output: {:?}", version_output).into());
+        }
+
         Ok(())
     }
 

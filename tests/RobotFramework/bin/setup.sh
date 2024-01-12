@@ -13,6 +13,12 @@ pushd "$SCRIPT_DIR/.." >/dev/null || exit 1
 # Required to prevent dbus errors on raspberry pi
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
+# Use git lfs for test artefacts
+curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+sudo apt install -y git-lfs
+git lfs install
+git lfs pull
+
 #
 # Setup python virtual environment and install dependencies
 #
