@@ -351,9 +351,9 @@ define_tedge_config! {
         #[tedge_config(reader(private))]
         url: ConnectUrl,
 
-        /// The path where Cumulocity root certificate(s) are stared
-        #[tedge_config(note = "The value can be a directory path as well as the path of the direct certificate file.")]
-        #[tedge_config(example = "/etc/tedge/az-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
+        /// The path where Cumulocity root certificate(s) are stored
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
+        #[tedge_config(example = "/etc/tedge/c8y-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
@@ -420,12 +420,12 @@ define_tedge_config! {
                 port: u16,
             },
 
-            /// The file that will be used as a the server certificate for the Cumulocity proxy
+            /// The file that will be used as the server certificate for the Cumulocity proxy
             #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_certificate.pem")]
             #[doku(as = "PathBuf")]
             cert_path: Utf8PathBuf,
 
-            /// The file that will be used as a the server private key for the Cumulocity proxy
+            /// The file that will be used as the server private key for the Cumulocity proxy
             #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_key.pem")]
             #[doku(as = "PathBuf")]
             key_path: Utf8PathBuf,
@@ -459,8 +459,8 @@ define_tedge_config! {
         #[tedge_config(example = "myazure.azure-devices.net")]
         url: ConnectUrl,
 
-        /// The path where Azure IoT root certificate(s) are stared
-        #[tedge_config(note = "The value can be a directory path as well as the path of the direct certificate file.")]
+        /// The path where Azure IoT root certificate(s) are stored
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
         #[tedge_config(example = "/etc/tedge/az-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
@@ -489,8 +489,8 @@ define_tedge_config! {
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
         url: ConnectUrl,
 
-        /// The path where AWS IoT root certificate(s) are stared
-        #[tedge_config(note = "The value can be a directory path as well as the path of the direct certificate file.")]
+        /// The path where AWS IoT root certificate(s) are stored
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
         #[tedge_config(example = "/etc/tedge/aws-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
