@@ -652,12 +652,12 @@ define_tedge_config! {
             },
         },
 
-        /// The file that will be used as a the server certificate for the File Transfer Service
+        /// The file that will be used as the server certificate for the File Transfer Service
         #[tedge_config(example = "/etc/tedge/device-certs/file_transfer_certificate.pem")]
         #[doku(as = "PathBuf")]
         cert_path: Utf8PathBuf,
 
-        /// The file that will be used as a the server private key for the File Transfer Service
+        /// The file that will be used as the server private key for the File Transfer Service
         #[tedge_config(example = "/etc/tedge/device-certs/file_transfer_key.pem")]
         #[doku(as = "PathBuf")]
         key_path: Utf8PathBuf,

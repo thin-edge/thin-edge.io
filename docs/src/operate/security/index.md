@@ -11,7 +11,7 @@ Thin-edge uses X.509 certificates as the key mechanism to authenticate peers.
   and uses certificates to authenticate the device on the cloud, as well as to authenticate the cloud on the device.
 - The local MQTT connections, from the miscellaneous services and child devices to the local MQTT broker,
   can also be configured to be established over TLS. In the stronger setting, the clients have to authenticate themselves using certificates.
-- The local HTTP services (namely the [file transfer service](../../references/tedge-file-transfer-service.md) and the [Cumulocity Auth Proxy](../../references/tedge-cumulocity-proxy.md))
+- The local HTTP services (namely the [File Transfer Service](../../references/tedge-file-transfer-service.md) and the [Cumulocity Proxy](../../references/tedge-cumulocity-proxy.md))
   can be configured to use HTTPS. As for MQTT, certificate-based authentication of the clients can also be enforced.
 
 A complete setting requires numerous private keys, certificates and trust chains.
