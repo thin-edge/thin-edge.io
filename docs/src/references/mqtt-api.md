@@ -1,7 +1,7 @@
 ---
 title: MQTT API
 tags: [Reference, MQTT]
-sidebar_position: 6
+sidebar_position: 1
 ---
 
 ## Topic Scheme

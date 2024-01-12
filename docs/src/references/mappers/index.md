@@ -1,7 +1,7 @@
 ---
 title: Mappers
 tags: [Reference, Mappers]
-sidebar_position: 1
+sidebar_position: 3
 ---
 
 import DocCardList from '@theme/DocCardList';

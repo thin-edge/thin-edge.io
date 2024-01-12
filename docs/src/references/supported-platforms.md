@@ -1,7 +1,7 @@
 ---
 title: Supported Platform
 tags: [Reference, Installation]
-sidebar_position: 1
+sidebar_position: 15
 ---
 
 # thin-edge.io platform support
