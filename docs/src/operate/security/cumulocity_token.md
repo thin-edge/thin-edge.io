@@ -102,6 +102,15 @@ curl -s -H "Authorization: Bearer $C8Y_TOKEN" \
     "$C8Y_URL/user/currentUser"
 ```
 
+:::tip
+The same functionality (as above) can be achieved by using the [Cumulocity IoT Proxy Service](../../references/tedge-cumulocity-proxy.md):
+
+```sh
+curl -s -H "Accept: application/json" \
+    "http://localhost:8001/c8y/user/currentUser"
+```
+:::
+
 ```text title="Output (pretty printed)"
 {
     "shouldResetPassword": false,
