@@ -22,6 +22,5 @@ sidebar_position: 1
 ## Device monitoring and management
 - [Monitor my device](./device-monitoring.md)
 - [Manage my device software](./software-management.md)
-- [Child device config management](../operate/configuration/child-device-config-management.md)
 - [Operations Management for Cumulocity IoT](../operate/c8y/supported_operations.md)
 
