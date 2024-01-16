@@ -22,7 +22,7 @@ pub type ServerMessageBox<Request, Response> =
 pub type ClientId = usize;
 
 /// A message box for services that handles requests concurrently
-pub struct ConcurrentServerMessageBox<Request: Debug, Response> {
+pub struct ConcurrentServerMessageBox<Request: Debug, Response: Debug> {
     /// Max concurrent requests
     max_concurrency: usize,
 
@@ -119,7 +119,7 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
 /// and synchronously wait for its response using the `await_response` function.
 ///
 /// Note that this message box sends requests and receive responses.
-pub struct ClientMessageBox<Request, Response: Debug> {
+pub struct ClientMessageBox<Request: Message, Response: Message + Debug> {
     messages: SimpleMessageBox<Response, Request>,
 }
 

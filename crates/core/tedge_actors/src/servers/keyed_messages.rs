@@ -6,9 +6,18 @@ use crate::Sender;
 use async_trait::async_trait;
 
 /// A sender that adds a key to messages on the fly
-pub struct KeyedSender<K: Message + Clone, M: Message> {
+pub struct KeyedSender<K, M> {
     key: K,
     sender: mpsc::Sender<(K, M)>,
+}
+
+impl<K: Clone, M> Clone for KeyedSender<K, M> {
+    fn clone(&self) -> Self {
+        KeyedSender {
+            key: self.key.clone(),
+            sender: self.sender.clone(),
+        }
+    }
 }
 
 impl<K: Message + Clone, M: Message> KeyedSender<K, M> {
@@ -22,18 +31,19 @@ impl<K: Message + Clone, M: Message> Sender<M> for KeyedSender<K, M> {
     async fn send(&mut self, message: M) -> Result<(), ChannelError> {
         self.sender.send((self.key.clone(), message)).await
     }
-
-    fn sender_clone(&self) -> DynSender<M> {
-        Box::new(KeyedSender {
-            key: self.key.clone(),
-            sender: self.sender.clone(),
-        })
-    }
 }
 
 /// A vector of senders addressed using a sender id attached to each message
-pub struct SenderVec<M: Message> {
+pub struct SenderVec<M> {
     senders: Vec<DynSender<M>>,
+}
+
+impl<M: 'static> Clone for SenderVec<M> {
+    fn clone(&self) -> Self {
+        SenderVec {
+            senders: self.senders.clone(),
+        }
+    }
 }
 
 impl<M: Message> SenderVec<M> {
@@ -50,10 +60,5 @@ impl<M: Message> Sender<(usize, M)> for SenderVec<M> {
             sender.send(message).await?;
         }
         Ok(())
-    }
-
-    fn sender_clone(&self) -> DynSender<(usize, M)> {
-        let senders = self.senders.iter().map(|r| r.sender_clone()).collect();
-        Box::new(SenderVec { senders })
     }
 }

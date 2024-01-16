@@ -7,21 +7,38 @@ use futures::SinkExt;
 
 /// A sender of messages of type `M`
 ///
-/// Actors don't access directly the `mpsc::Sender` of their peers,
+/// Actors don't get direct access to the `mpsc::Sender` of their peers,
 /// but use intermediate senders that adapt the messages when sent.
-pub type DynSender<M> = Box<dyn Sender<M>>;
+pub type DynSender<M> = Box<dyn CloneSender<M>>;
 
 #[async_trait]
 pub trait Sender<M>: 'static + Send + Sync {
     /// Send a message to the receiver behind this sender,
     /// returning an error if the receiver is no more expecting messages
     async fn send(&mut self, message: M) -> Result<(), ChannelError>;
-
-    /// Clone this sender in order to send messages to the same receiver from another actor
-    fn sender_clone(&self) -> DynSender<M>;
 }
 
-impl<M: Message> Clone for DynSender<M> {
+pub trait CloneSender<M>: Sender<M> {
+    /// Clone this sender in order to send messages to the same receiver from another actor
+    fn sender_clone(&self) -> DynSender<M>;
+
+    /// Clone a cast of this sender into a `Box<dyn Sender<M>>`
+    ///
+    /// This is a workaround for https://github.com/rust-lang/rust/issues/65991
+    fn sender(&self) -> Box<dyn Sender<M>>;
+}
+
+impl<M, S: Clone + Sender<M>> CloneSender<M> for S {
+    fn sender_clone(&self) -> DynSender<M> {
+        Box::new(self.clone())
+    }
+
+    fn sender(&self) -> Box<dyn Sender<M>> {
+        Box::new(self.clone())
+    }
+}
+
+impl<M: 'static> Clone for DynSender<M> {
     fn clone(&self) -> Self {
         self.sender_clone()
     }
@@ -38,10 +55,6 @@ impl<M: Message, N: Message + Into<M>> From<mpsc::Sender<M>> for DynSender<N> {
 impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
         Ok(SinkExt::send(&mut self, message.into()).await?)
-    }
-
-    fn sender_clone(&self) -> DynSender<N> {
-        Box::new(self.clone())
     }
 }
 
@@ -88,23 +101,16 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for DynSender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
         Ok(self.as_mut().send(message.into()).await?)
     }
-
-    fn sender_clone(&self) -> DynSender<N> {
-        Box::new(self.as_ref().sender_clone())
-    }
 }
 
 /// A sender that discards messages instead of sending them
+#[derive(Clone)]
 pub struct NullSender;
 
 #[async_trait]
 impl<M: Message> Sender<M> for NullSender {
     async fn send(&mut self, _message: M) -> Result<(), ChannelError> {
         Ok(())
-    }
-
-    fn sender_clone(&self) -> DynSender<M> {
-        Box::new(NullSender)
     }
 }
 
@@ -118,6 +124,15 @@ impl<M: Message> From<NullSender> for DynSender<M> {
 pub struct MappingSender<F, M> {
     inner: DynSender<M>,
     cast: std::sync::Arc<F>,
+}
+
+impl<F, M: 'static> Clone for MappingSender<F, M> {
+    fn clone(&self) -> Self {
+        MappingSender {
+            inner: self.inner.clone(),
+            cast: self.cast.clone(),
+        }
+    }
 }
 
 impl<F, M> MappingSender<F, M> {
@@ -143,13 +158,6 @@ where
             self.inner.send(out_message).await?
         }
         Ok(())
-    }
-
-    fn sender_clone(&self) -> DynSender<M> {
-        Box::new(MappingSender {
-            inner: self.inner.sender_clone(),
-            cast: self.cast.clone(),
-        })
     }
 }
 

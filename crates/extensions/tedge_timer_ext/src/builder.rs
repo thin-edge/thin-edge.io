@@ -72,6 +72,14 @@ struct TimeoutSender<T: Message> {
     inner: DynSender<Timeout<T>>,
 }
 
+impl<T: Message> Clone for TimeoutSender<T> {
+    fn clone(&self) -> Self {
+        TimeoutSender {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 #[async_trait]
 impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
     async fn send(&mut self, message: Timeout<AnyPayload>) -> Result<(), ChannelError> {
@@ -80,18 +88,13 @@ impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
         }
         Ok(())
     }
-
-    fn sender_clone(&self) -> DynSender<Timeout<AnyPayload>> {
-        Box::new(TimeoutSender {
-            inner: self.inner.sender_clone(),
-        })
-    }
 }
 
 /// A Sender that translates timeout requests on the wire
 ///
 /// This sender receives `SetTimeout<T>` requests from some actor,
 /// and translates then forwards these messages to the timer actor expecting`Timeout<AnyPayload>`
+#[derive(Clone)]
 struct SetTimeoutSender {
     inner: DynSender<SetTimeout<AnyPayload>>,
 }
@@ -102,11 +105,5 @@ impl<T: Message> Sender<SetTimeout<T>> for SetTimeoutSender {
         let duration = request.duration;
         let event: AnyPayload = Box::new(request.event);
         self.inner.send(SetTimeout { duration, event }).await
-    }
-
-    fn sender_clone(&self) -> DynSender<SetTimeout<T>> {
-        Box::new(SetTimeoutSender {
-            inner: self.inner.sender_clone(),
-        })
     }
 }

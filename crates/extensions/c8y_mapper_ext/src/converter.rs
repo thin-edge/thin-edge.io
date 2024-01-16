@@ -1613,6 +1613,7 @@ pub(crate) mod tests {
     use serde_json::Value;
     use std::str::FromStr;
     use tedge_actors::Builder;
+    use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;

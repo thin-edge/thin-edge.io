@@ -318,6 +318,15 @@ pub struct TimedMessageBox<T> {
     inner: T,
 }
 
+impl<T: Clone> Clone for TimedMessageBox<T> {
+    fn clone(&self) -> Self {
+        TimedMessageBox {
+            timeout: self.timeout,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 #[async_trait]
 impl<T, M> MessageReceiver<M> for TimedMessageBox<T>
 where
@@ -357,10 +366,6 @@ where
 {
     async fn send(&mut self, message: M) -> Result<(), ChannelError> {
         self.inner.send(message).await
-    }
-
-    fn sender_clone(&self) -> DynSender<M> {
-        self.inner.sender_clone()
     }
 }
 

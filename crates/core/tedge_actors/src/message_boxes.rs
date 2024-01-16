@@ -91,6 +91,7 @@
 //!
 use crate::channels::Sender;
 use crate::ChannelError;
+use crate::CloneSender;
 use crate::DynSender;
 use crate::Message;
 use crate::RuntimeRequest;
@@ -218,33 +219,26 @@ pub struct LoggingSender<Output> {
     sender: DynSender<Output>,
 }
 
-impl<Output> LoggingSender<Output> {
-    pub fn new(name: String, sender: DynSender<Output>) -> Self {
-        Self { name, sender }
-    }
-}
-
 impl<Output: 'static> Clone for LoggingSender<Output> {
     fn clone(&self) -> Self {
-        Self {
+        LoggingSender {
             name: self.name.clone(),
             sender: self.sender.sender_clone(),
         }
     }
 }
 
+impl<Output> LoggingSender<Output> {
+    pub fn new(name: String, sender: DynSender<Output>) -> Self {
+        Self { name, sender }
+    }
+}
+
 #[async_trait]
-impl<Output: Debug + Send + Sync + 'static> Sender<Output> for LoggingSender<Output> {
+impl<Output: Message + Debug> Sender<Output> for LoggingSender<Output> {
     async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
         log_message_sent(&self.name, &message);
         self.sender.send(message).await
-    }
-
-    fn sender_clone(&self) -> DynSender<Output> {
-        Box::new(LoggingSender {
-            name: self.name.clone(),
-            sender: self.sender.clone(),
-        })
     }
 }
 
@@ -331,7 +325,7 @@ impl<Input: Send + Debug> MessageReceiver<Input> for UnboundedLoggingReceiver<In
 /// - Log sent messages when pushed into the target box
 ///
 /// Such a box is connected to peer actors using a [SimpleMessageBoxBuilder](crate::SimpleMessageBoxBuilder).
-pub struct SimpleMessageBox<Input: Debug, Output> {
+pub struct SimpleMessageBox<Input: Debug, Output: Debug> {
     input_receiver: LoggingReceiver<Input>,
     output_sender: LoggingSender<Output>,
 }
@@ -390,9 +384,15 @@ impl<Input: Message, Output: Message> Sender<Output> for SimpleMessageBox<Input,
     async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
         self.output_sender.send(message).await
     }
+}
 
+impl<Input: Message, Output: Message> CloneSender<Output> for SimpleMessageBox<Input, Output> {
     fn sender_clone(&self) -> DynSender<Output> {
-        self.output_sender.sender_clone()
+        CloneSender::sender_clone(&self.output_sender)
+    }
+
+    fn sender(&self) -> Box<dyn Sender<Output>> {
+        CloneSender::sender(&self.output_sender)
     }
 }
 
