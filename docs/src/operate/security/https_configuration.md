@@ -1,5 +1,5 @@
 ---
-title: HTTPS Local Access
+title: HTTPS Configuration
 tags: [Operate, Security, HTTP]
 sidebar_position: 6
 ---

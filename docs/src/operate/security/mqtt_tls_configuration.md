@@ -1,10 +1,8 @@
 ---
-title: MQTT Local Authentication
+title: MQTT TLS Configuration
 tags: [Operate, Security, MQTT]
 sidebar_position: 5
 ---
-
-# Use MQTT authentication for local broker
 
 thin-edge.io supports certificate-based authentication when communicating with
 an MQTT broker. Three levels of security are supported:

@@ -18,9 +18,9 @@ A complete setting requires numerous private keys, certificates and trust chains
 Nothing really complex, but this requires rigorous settings.
 It is therefore recommended to set things up step by step.
 - The only mandatory step is to configure the authentication between the gateway device and the cloud.
-  - This can be done using a [self-signed device certificate](registration.md) or a proper [CA-signed certificate](device-certificate.md).
+  - This can be done using a [self-signed device certificate](self_signed_device_certificate.md) or a proper [CA-signed certificate](device-certificate.md).
   - Most of the time the cloud certificate will be trusted out-of-the-box,
-    but a [self-signed cloud certificate](add_self_signed_trusted.md) will need specific care.
+    but a [self-signed cloud certificate](cloud_authentication.md) will need specific care.
 - The second step is to enable TLS on the local MQTT and HTTP connections.
 - The final step is to enforce certificate-based client authentication on the local MQTT and HTTP connections.
 

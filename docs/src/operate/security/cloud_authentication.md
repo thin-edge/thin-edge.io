@@ -4,8 +4,6 @@ tags: [Operate, Security]
 sidebar_position: 3
 ---
 
-# Cloud Authentication
-
 When thin-edge connects a cloud, the cloud endpoint is authenticated using X.509 certificates.
 For that to work, the signing certificate of the cloud certificate must be trusted by the device.
 Usually, these certificates are stored in `/etc/ssl/certs` and nothing specific has to done on the device.

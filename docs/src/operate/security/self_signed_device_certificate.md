@@ -4,8 +4,6 @@ tags: [Operate, Security, Cloud]
 sidebar_position: 1
 ---
 
-# Self-signed Device Certificate
-
 Using a self-signed device certificate is the simplest way to connect a thin-edge device to the cloud.
 This is a secure method even if more adapted for testing purposes.
 Indeed, the self-signed certificates must be trusted individually by the cloud tenant,
