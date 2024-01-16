@@ -191,10 +191,6 @@ opt-level = "z"
 panic = "abort"
 strip = "symbols"
 overflow-checks = true
-[profile.dev]
-codegen-units = 16
-opt-level = "z"
-strip = "symbols"
 
 [workspace.lints.clippy]
 get_first = "allow"
