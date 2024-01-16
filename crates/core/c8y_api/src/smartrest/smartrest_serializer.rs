@@ -7,6 +7,7 @@ use serde::ser::SerializeSeq;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
+use tracing::warn;
 
 pub type SmartRest = String;
 
@@ -21,7 +22,13 @@ pub fn set_operation_executing(operation: impl C8yOperation) -> String {
 
 /// Generates a SmartREST message to set the provided operation to failed with the provided reason
 pub fn fail_operation(operation: impl C8yOperation, reason: &str) -> String {
-    fields_to_csv_string(&["502", operation.name(), reason])
+    // If the failure reason exceeds 500 bytes, trancuate it
+    if reason.len() <= 500 {
+        fields_to_csv_string(&["502", operation.name(), reason])
+    } else {
+        warn!("Failure reason too long, message trancuated to 500 bytes");
+        fields_to_csv_string(&["502", operation.name(), &reason[..500]])
+    }
 }
 
 /// Generates a SmartREST message to set the provided operation to successful without a payload
