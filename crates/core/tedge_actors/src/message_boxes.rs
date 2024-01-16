@@ -246,10 +246,6 @@ impl<Output: Debug + Send + Sync + 'static> Sender<Output> for LoggingSender<Out
             sender: self.sender.clone(),
         })
     }
-
-    fn close_sender(&mut self) {
-        Sender::<Output>::close_sender(&mut self.sender)
-    }
 }
 
 pub fn log_message_sent<I: Debug>(target: &str, message: I) {
@@ -397,10 +393,6 @@ impl<Input: Message, Output: Message> Sender<Output> for SimpleMessageBox<Input,
 
     fn sender_clone(&self) -> DynSender<Output> {
         self.output_sender.sender_clone()
-    }
-
-    fn close_sender(&mut self) {
-        self.output_sender.close_sender()
     }
 }
 

@@ -362,10 +362,6 @@ where
     fn sender_clone(&self) -> DynSender<M> {
         self.inner.sender_clone()
     }
-
-    fn close_sender(&mut self) {
-        self.inner.close_sender()
-    }
 }
 
 impl<T> AsRef<T> for TimedMessageBox<T> {

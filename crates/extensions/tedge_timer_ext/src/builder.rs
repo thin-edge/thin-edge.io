@@ -86,10 +86,6 @@ impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
             inner: self.inner.sender_clone(),
         })
     }
-
-    fn close_sender(&mut self) {
-        self.inner.as_mut().close_sender()
-    }
 }
 
 /// A Sender that translates timeout requests on the wire
@@ -112,9 +108,5 @@ impl<T: Message> Sender<SetTimeout<T>> for SetTimeoutSender {
         Box::new(SetTimeoutSender {
             inner: self.inner.sender_clone(),
         })
-    }
-
-    fn close_sender(&mut self) {
-        self.inner.as_mut().close_sender()
     }
 }

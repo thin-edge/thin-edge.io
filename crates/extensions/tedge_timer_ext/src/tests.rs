@@ -108,6 +108,7 @@ async fn should_shutdown_even_if_there_are_pending_timers() {
 #[tokio::test]
 async fn should_process_all_pending_timers_on_end_of_inputs() {
     let mut client_box_builder = SimpleMessageBoxBuilder::new("Test timers", 16);
+    let mut runtime_box = client_box_builder.get_signal_sender();
     let _ = spawn_timer_actor(&mut client_box_builder).await;
     let mut client_box = client_box_builder.build();
 
@@ -129,7 +130,10 @@ async fn should_process_all_pending_timers_on_end_of_inputs() {
         .unwrap();
 
     // Then close the stream of requests
-    client_box.close_sender();
+    runtime_box
+        .send(RuntimeRequest::Shutdown)
+        .await
+        .expect("fail to shutdown");
 
     // The actor timer is expected to shutdown,
     // but *only* after all the pending requests have been processed.

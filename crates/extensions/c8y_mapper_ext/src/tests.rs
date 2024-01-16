@@ -2010,8 +2010,6 @@ async fn inventory_registers_unknown_entity_once() {
         mqtt.send(measurement_message.clone()).await.unwrap();
     }
 
-    mqtt.close_sender();
-
     let mut messages = vec![];
     while let Some(WrappedInput::Message(msg)) = mqtt.recv_message().await {
         messages.push(msg);
