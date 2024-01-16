@@ -15,7 +15,6 @@ use tokio::net::ToSocketAddrs;
 use url::Url;
 use ws_stream_tungstenite::WsStream;
 
-use crate::auth::Jwt;
 use crate::SUCCESS_MESSAGE;
 
 /// This proxy creates a TCP connection to a local socket and creates a websocket. Cumulocity cloud will initiate a
@@ -34,10 +33,9 @@ impl WebsocketSocketProxy {
     pub async fn connect<SA: ToSocketAddrs + std::fmt::Debug>(
         url: &Url,
         socket: SA,
-        jwt: Jwt,
     ) -> miette::Result<Self> {
         let socket_future = TcpStream::connect(socket);
-        let websocket_future = Websocket::new(url, jwt.authorization_header());
+        let websocket_future = Websocket::new(url);
 
         match join(socket_future, websocket_future).await {
             (Err(socket_error), _) => Err(SocketError(socket_error))?,
@@ -78,9 +76,8 @@ fn generate_sec_websocket_key() -> String {
 }
 
 impl Websocket {
-    async fn new(url: &Url, authorization: String) -> miette::Result<Self> {
+    async fn new(url: &Url) -> miette::Result<Self> {
         let request = http::Request::builder()
-            .header("Authorization", authorization)
             .header("Sec-WebSocket-Key", generate_sec_websocket_key())
             .header("Host", url.host_str().unwrap())
             .header("Connection", "Upgrade")
@@ -94,6 +91,7 @@ impl Websocket {
         let socket = async_tungstenite::tokio::connect_async(request)
             .await
             .into_diagnostic()
+            .with_context(|| format!("host {url}"))
             .context("Connecting to Websocket")?
             .0;
         Ok(Websocket {

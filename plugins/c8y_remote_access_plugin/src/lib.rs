@@ -1,3 +1,5 @@
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::path::PathBuf;
 use std::process::Stdio;
 
@@ -18,13 +20,11 @@ use tokio::io::BufReader;
 use toml::Table;
 use url::Url;
 
-use crate::auth::Jwt;
 pub use crate::input::C8yRemoteAccessPluginOpt;
 use crate::input::Command;
 use crate::input::RemoteAccessConnect;
 use crate::proxy::WebsocketSocketProxy;
 
-mod auth;
 mod csv;
 mod input;
 mod proxy;
@@ -156,19 +156,33 @@ async fn spawn_child(command: String, config_dir: &Utf8Path) -> miette::Result<(
     }
 }
 
-async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
-    let host = config
-        .c8y
-        .http
-        .or_config_not_set()
-        .into_diagnostic()?
-        .to_string();
-    let url = build_proxy_url(host.as_str(), command.key())?;
-    let jwt = Jwt::retrieve(&config)
-        .await
-        .context("Failed when requesting JWT from Cumulocity")?;
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum WsProtocol {
+    Ws,
+    Wss,
+}
 
-    let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt).await?;
+impl Display for WsProtocol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ws => "ws".fmt(f),
+            Self::Wss => "wss".fmt(f),
+        }
+    }
+}
+
+async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
+    let host = &config.c8y.proxy.client.host;
+    let port = config.c8y.proxy.client.port;
+    let protocol = config
+        .c8y
+        .proxy
+        .cert_path
+        .or_none()
+        .map_or(WsProtocol::Ws, |_| WsProtocol::Wss);
+    let url = build_proxy_url(protocol, host, port, command.key())?;
+
+    let proxy = WebsocketSocketProxy::connect(&url, command.target_address()).await?;
 
     proxy.run().await;
     Ok(())
@@ -180,11 +194,18 @@ fn supported_operation_path(config_dir: &Utf8Path) -> Utf8PathBuf {
     path
 }
 
-fn build_proxy_url(cumulocity_host: &str, key: &str) -> miette::Result<Url> {
-    format!("wss://{cumulocity_host}/service/remoteaccess/device/{key}")
-        .parse()
-        .into_diagnostic()
-        .context("Creating websocket URL")
+fn build_proxy_url(
+    protocol: WsProtocol,
+    auth_proxy_host: &str,
+    auth_proxy_port: u16,
+    key: &str,
+) -> miette::Result<Url> {
+    format!(
+        "{protocol}://{auth_proxy_host}:{auth_proxy_port}/c8y/service/remoteaccess/device/{key}"
+    )
+    .parse()
+    .into_diagnostic()
+    .context("Creating websocket URL")
 }
 
 async fn get_executable_path(config_dir: &Utf8Path) -> miette::Result<PathBuf> {

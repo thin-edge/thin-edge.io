@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use tedge_config::TEdgeConfig;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProxyUrlGenerator {
     host: Arc<str>,
     port: u16,

@@ -19,14 +19,14 @@ use tedge_config::TEdgeConfig;
 use tedge_config_macros::OptionalConfig;
 use tracing::info;
 
-use crate::server::AppState;
+use crate::server::AppData;
 use crate::server::Server;
 use crate::tokens::TokenManager;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub struct C8yAuthProxyBuilder {
-    app_state: AppState,
+    app_data: AppData,
     bind_address: IpAddr,
     bind_port: u16,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -41,8 +41,9 @@ impl C8yAuthProxyBuilder {
         config: &TEdgeConfig,
         jwt: &mut ServerActorBuilder<C8YJwtRetriever, Sequential>,
     ) -> anyhow::Result<Self> {
-        let app_state = AppState {
-            target_host: format!("https://{}", config.c8y.http.or_config_not_set()?).into(),
+        let app_data = AppData {
+            is_https: true,
+            host: config.c8y.http.or_config_not_set()?.to_string(),
             token_manager: TokenManager::new(JwtRetriever::new("C8Y-PROXY => JWT", jwt)).shared(),
         };
         let bind = &config.c8y.proxy.bind;
@@ -52,7 +53,7 @@ impl C8yAuthProxyBuilder {
         let ca_path = config.c8y.proxy.ca_path.clone();
 
         Ok(Self {
-            app_state,
+            app_data,
             bind_address: bind.address,
             bind_port: bind.port,
             signal_sender,
@@ -69,7 +70,7 @@ impl Builder<C8yAuthProxy> for C8yAuthProxyBuilder {
 
     fn try_build(self) -> Result<C8yAuthProxy, Self::Error> {
         Ok(C8yAuthProxy {
-            app_state: self.app_state,
+            app_data: self.app_data,
             bind_address: self.bind_address,
             bind_port: self.bind_port,
             signal_receiver: self.signal_receiver,
@@ -87,7 +88,7 @@ impl RuntimeRequestSink for C8yAuthProxyBuilder {
 }
 
 pub struct C8yAuthProxy {
-    app_state: AppState,
+    app_data: AppData,
     bind_address: IpAddr,
     bind_port: u16,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
@@ -104,7 +105,7 @@ impl Actor for C8yAuthProxy {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         let server = Server::try_init(
-            self.app_state,
+            self.app_data,
             self.bind_address,
             self.bind_port,
             self.cert_path,
