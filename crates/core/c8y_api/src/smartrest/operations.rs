@@ -121,7 +121,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Operations {
     operations: Vec<Operation>,
 }
