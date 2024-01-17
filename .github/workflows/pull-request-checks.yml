@@ -28,6 +28,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       workflows: ${{ steps.filter.outputs.workflows || 'true' }}
+      docs: ${{ steps.filter.outputs.docs || 'true' }}
     continue-on-error: true
     steps:
       # For pull requests it's not necessary to checkout the code
@@ -43,6 +44,8 @@ jobs:
               - 'Cargo.*'
             workflows:
               - '.github/workflows/**'
+            docs:
+              - 'docs/**'
 
   #
   # Checking that Cargo.lock is up to date
@@ -307,3 +310,20 @@ jobs:
       - name: cargo doc
 
         run: cargo doc --no-deps --all-features --workspace
+
+  markdown:
+    # Validate that the markdown is correct before merging as errors will cause
+    # the publishing of the docs to github pages to fail
+    runs-on: ubuntu-latest
+    name: Check markdown
+    needs: changes
+    if: ${{ needs.changes.outputs.docs == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # use tedge-docs nodejs version for guidance, though it is not mandatory
+          # https://github.com/thin-edge/tedge-docs
+          node-version: '>=18.0'
+      - run: npx docusaurus-mdx-checker
+        working-directory: docs
