@@ -14,9 +14,9 @@ Files can be uploaded, downloaded and deleted from this repository via the follo
 
 |Type|Method|Endpoint|
 |----|------|--------|
-|Upload|PUT|http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}|
-|Download|GET|http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}|
-|Delete|DELETE|http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}|
+|Upload|PUT|`http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}`|
+|Download|GET|`http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}`|
+|Delete|DELETE|`http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}`|
 
 The `fts-address` is derived from `http.client.host` config setting with a default value of `127.0.0.1`.
 
