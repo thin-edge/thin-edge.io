@@ -49,6 +49,13 @@ Update tedge version from previous using Cumulocity
     ${OUTPUT}    Execute Command    systemctl is-enabled tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
     Should Be Equal    ${OUTPUT}    disabled    msg=Service should still be disabled
 
+    # Check that the mapper is reacting to operations after the upgrade
+    # Notes:
+    # * Bug as seen in the past: https://github.com/thin-edge/thin-edge.io/issues/2545
+    # * PR to switch to using devicecontrol c8y topic: https://github.com/thin-edge/thin-edge.io/issues/1718
+    ${operation}=    Cumulocity.Get Configuration    tedge-configuration-plugin
+    Operation Should Be SUCCESSFUL    ${operation}
+
 Refreshes mosquitto bridge configuration
     ${PREV_VERSION}=    Set Variable    0.10.0
     # Install base version
