@@ -1,14 +1,17 @@
 ---
-title: Cloud Authentication
+title: Self-signed Device Certificate
 tags: [Operate, Security, Cloud]
 sidebar_position: 1
 ---
 
-# How to register?
+Using a self-signed device certificate is the simplest way to connect a thin-edge device to the cloud.
+This is a secure method even if more adapted for testing purposes.
+Indeed, the self-signed certificates must be trusted individually by the cloud tenant,
+raising managing issues when there are more than a few devices.
 
 ## Create self-signed certificate
 
-To create new certificate you can use [`tedge cert create`](../../references/cli/tedge-cert.md) thin-edge.io command:
+To create a new certificate you can use [`tedge cert create`](../../references/cli/tedge-cert.md) thin-edge.io command:
 
 ```sh
 sudo tedge cert create --device-id alpha
@@ -22,7 +25,7 @@ Certificate was successfully created
 `tedge cert` requires `sudo` privilege. This command provides no output on success.
 :::
 
-[`sudo tedge cert create`](../../references/cli/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`).
+[`sudo tedge cert create`](../../references/cli/tedge-cert.md) creates the certificate in a default location (`/etc/tedge/device-certs/`).
 To use a custom location, refer to [`tedge config`](../../references/cli/tedge-config.md).
 
 Now you should have a certificate in the `/etc/tedge/device-certs/` directory.
@@ -35,6 +38,27 @@ ls -l /etc/tedge/device-certs/
 total 8
 -r--r--r-- 1 mosquitto mosquitto 664 May 31 09:26 tedge-certificate.pem
 -r-------- 1 mosquitto mosquitto 246 May 31 09:26 tedge-private-key.pem
+```
+
+## Make the cloud trust the device self-signed certificate
+
+For the cloud to trust the device certificate,
+the signing certificate must be added to the trusted list of signing certificate of the cloud tenant.
+
+The certificate created with `tedge cert create` being self-signed, one needs to add the device certificate itself to the trusted list.
+
+How this is done depends on the cloud. In the specific case of Cumulocity, this can be done using the `tedge` cli.
+
+One has first to set the Cumulocity end-point:
+
+```sh
+tedge config set c8y.url <domain-name-of-your-cumulocity-tenant>
+```
+
+And then upload the signing certificate:
+
+```sh
+tedge cert upload c8y --user <user-allowed-to-add-trusted-certificate>
 ```
 
 ## Renew self-signed certificate
