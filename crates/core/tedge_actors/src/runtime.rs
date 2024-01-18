@@ -40,13 +40,13 @@ pub enum RuntimeEvent {
     Error(RuntimeError),
     Started { task: String },
     Stopped { task: String },
-    Aborted { task: String, error: RuntimeError },
+    Aborted { task: String, error: String },
 }
 
 /// The actor runtime
 pub struct Runtime {
     handle: RuntimeHandle,
-    bg_task: JoinHandle<()>,
+    bg_task: JoinHandle<Result<(), RuntimeError>>,
 }
 
 impl Runtime {
@@ -88,17 +88,22 @@ impl Runtime {
     /// - Or, all the runtime handler clones have been dropped
     ///       and all the running tasks have reach completion (successfully or not).
     pub async fn run_to_completion(self) -> Result<(), RuntimeError> {
-        Runtime::wait_for_completion(self.bg_task).await
+        if let Err(err) = Runtime::wait_for_completion(self.bg_task).await {
+            error!("Aborted due to {err}");
+            std::process::exit(1)
+        }
+
+        Ok(())
     }
 
-    async fn wait_for_completion(bg_task: JoinHandle<()>) -> Result<(), RuntimeError> {
-        bg_task.await.map_err(|err| {
-            if err.is_panic() {
-                RuntimeError::RuntimePanic
-            } else {
-                RuntimeError::RuntimeCancellation
-            }
-        })
+    async fn wait_for_completion(
+        bg_task: JoinHandle<Result<(), RuntimeError>>,
+    ) -> Result<(), RuntimeError> {
+        match bg_task.await {
+            Ok(result) => result,
+            Err(err) if err.is_panic() => Err(RuntimeError::RuntimePanic),
+            Err(_) => Err(RuntimeError::RuntimeCancellation),
+        }
     }
 }
 
@@ -167,8 +172,9 @@ impl RuntimeActor {
         }
     }
 
-    async fn run(mut self) {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         info!(target: "Runtime", "Started");
+        let mut aborting_error = None;
         let mut actors_count: usize = 0;
         loop {
             tokio::select! {
@@ -202,7 +208,12 @@ impl RuntimeActor {
                     }
                 },
                 Some(finished_actor) = self.futures.next() => {
-                    self.handle_actor_finishing(finished_actor).await;
+                    if let Err(error) = self.handle_actor_finishing(finished_actor).await {
+                        info!(target: "Runtime", "Shutting down on error: {error}");
+                        aborting_error = Some(error);
+                        shutdown_actors(&mut self.running_actors).await;
+                        break
+                    }
                 }
             }
         }
@@ -216,30 +227,43 @@ impl RuntimeActor {
             }
             _ = self.wait_for_actors_to_finish() => info!(target: "Runtime", "All actors have finished")
         }
+
+        match aborting_error {
+            None => Ok(()),
+            Some(error) => Err(error),
+        }
     }
 
     async fn wait_for_actors_to_finish(&mut self) {
         while let Some(finished_actor) = self.futures.next().await {
-            self.handle_actor_finishing(finished_actor).await;
+            let _ = self.handle_actor_finishing(finished_actor).await;
         }
     }
 
     async fn handle_actor_finishing(
         &mut self,
         finished_actor: Result<Result<String, (String, RuntimeError)>, JoinError>,
-    ) {
+    ) -> Result<(), RuntimeError> {
         match finished_actor {
-            Err(e) => error!(target: "Runtime", "Failed to execute actor: {e}"),
+            Err(e) => {
+                error!(target: "Runtime", "Failed to execute actor: {e}");
+                Err(RuntimeError::JoinError(e))
+            }
             Ok(Ok(actor)) => {
                 self.running_actors.remove(&actor);
                 info!(target: "Runtime", "Actor has finished: {actor}");
                 self.send_event(RuntimeEvent::Stopped { task: actor }).await;
+                Ok(())
             }
             Ok(Err((actor, error))) => {
                 self.running_actors.remove(&actor);
                 error!(target: "Runtime", "Actor {actor} has finished unsuccessfully: {error:?}");
-                self.send_event(RuntimeEvent::Aborted { task: actor, error })
-                    .await;
+                self.send_event(RuntimeEvent::Aborted {
+                    task: actor.clone(),
+                    error: format!("{error}"),
+                })
+                .await;
+                Err(error)
             }
         }
     }
@@ -316,7 +340,15 @@ mod tests {
                         crate::Sender::send(&mut self.messages, EchoMessage::String(message))
                             .await?
                     }
-                    EchoMessage::RuntimeRequest(RuntimeRequest::Shutdown) => break,
+                    EchoMessage::RuntimeRequest(RuntimeRequest::Shutdown) => {
+                        dbg!("shutdown requested");
+                        crate::Sender::send(
+                            &mut self.messages,
+                            EchoMessage::String("Echo stopped".to_string()),
+                        )
+                        .await?;
+                        break;
+                    }
                 }
             }
 
@@ -485,8 +517,8 @@ mod tests {
     #[tokio::test]
     async fn shutdown() {
         let (mut actions_sender, mut events_receiver, ra) = init();
-        let (_, _, actor1) = create_actor(Echo::new);
-        let (_, _, actor2) = create_actor(Echo::new);
+        let (_, _sender1, actor1) = create_actor(Echo::new);
+        let (_, _sender2, actor2) = create_actor(Echo::new);
 
         actions_sender
             .send(RuntimeAction::Spawn(actor1))
@@ -537,26 +569,37 @@ mod tests {
 
         let wait_for_actor_to_panic = async {
             while let Some(event) = events_receiver.next().await {
-                if matches!(event, RuntimeEvent::Aborted { task, .. } if task == "Panic-0") {
-                    break;
+                match event {
+                    RuntimeEvent::Aborted { task, error } if task == "Panic-0" => {
+                        return Some(error);
+                    }
+                    _ => {}
                 }
             }
+            None
         };
 
         tokio::spawn(ra.run());
 
-        tokio::time::timeout(Duration::from_secs(1), wait_for_actor_to_panic)
+        // The panic is caught by the runtime and an event is sent
+        let error = tokio::time::timeout(Duration::from_secs(1), wait_for_actor_to_panic)
             .await
             .expect("Actor to panic in time");
+        assert_eq!(
+            error.map(|s| s.replace(char::is_numeric, "")), // ignore the task id
+            Some("task  panicked".to_string())
+        );
 
-        sender
+        // No more message can be sent to the actors: they have been shutdown
+        assert!(sender
             .send(EchoMessage::String("hello".into()))
             .await
-            .expect("Expected the echo actor to be running and to receive a message");
+            .is_err());
 
+        // The actors have been properly shutdown
         assert_eq!(
             receiver.next().await.unwrap(),
-            EchoMessage::String("hello".into())
+            EchoMessage::String("Echo stopped".into())
         );
     }
 }

@@ -188,7 +188,7 @@ zeroize = "1.5"
 codegen-units = 1
 lto = true
 opt-level = "z"
-panic = "abort"
+panic = "unwind"
 strip = "symbols"
 overflow-checks = true
 

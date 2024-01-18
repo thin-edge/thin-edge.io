@@ -22,6 +22,9 @@ pub enum SoftwareManagerError {
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::TEdgeConfigError),
 
+    #[error("Tedge-agent is not running the latest version")]
+    NotRunningLatestVersion,
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
