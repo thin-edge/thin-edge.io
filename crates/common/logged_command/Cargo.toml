@@ -11,6 +11,7 @@ repository = { workspace = true }
 [dependencies]
 log = { workspace = true }
 nix = { workspace = true }
+shell-words = { workspace = true }
 tokio = { workspace = true, features = [
     "fs",
     "io-util",
@@ -22,6 +23,7 @@ tokio = { workspace = true, features = [
 [dev-dependencies]
 anyhow = { workspace = true }
 tedge_test_utils = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 
 [lints]
 workspace = true
