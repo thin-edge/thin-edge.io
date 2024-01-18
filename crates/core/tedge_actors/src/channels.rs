@@ -3,6 +3,7 @@ use crate::ChannelError;
 use crate::Message;
 use async_trait::async_trait;
 use futures::channel::mpsc;
+use futures::channel::oneshot;
 use futures::SinkExt;
 
 /// A sender of messages of type `M`
@@ -70,13 +71,24 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
         Ok(SinkExt::send(&mut self, message.into()).await?)
     }
+}
 
-    fn sender_clone(&self) -> DynSender<N> {
-        Box::new(self.clone())
-    }
-
-    fn close_sender(&mut self) {
-        self.close_channel();
+/// An `oneshot::Sender<M>` is a `Sender<N>` provided `N` implements `Into<M>`
+///
+/// There is one caveat. The `oneshot::Sender::send()` method consumes the sender,
+/// hence the one shot sender is wrapped inside an `Option`.
+///
+/// Such a [Sender] can only be used once:
+/// - it cannot be cloned
+/// - any message sent after a first one will be silently ignored
+/// - a message sent while the receiver has been drop will also be silently ignored
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for Option<oneshot::Sender<M>> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        if let Some(sender) = self.take() {
+            let _ = sender.send(message.into());
+        }
+        Ok(())
     }
 }
 
