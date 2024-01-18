@@ -21,7 +21,7 @@ tedge-agent
 ## On a child-device
 
 To launch `tedge-agent` on a child device,
-one has to configure the [topic identifier](../mqtt-api.md/#group-identifier)
+one has to configure the [topic identifier](../mqtt-api.md#group-identifier)
 on this device to point to the appropriate topic identifier.
 
 ```sh title="running tedge-agent on the child device child-007"
@@ -37,7 +37,7 @@ tedge-agent --mqtt-device-topic-id device/child-007//
 
 ## Using a custom identifier schema
 
-If using a [custom identifier schema](/contribute/design/mqtt-topic-design.md/#using-custom-identifier-schemas),
+If using a [custom identifier schema](/contribute/design/mqtt-topic-design.md#using-custom-identifier-schemas),
 then the device topic identifier has to be configured even for the main device.
 
 ```sh title="running tedge-agent when using a custom identifier schema"

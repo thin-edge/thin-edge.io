@@ -23,13 +23,13 @@ Before you try to connect your device to AWS IoT, you need:
 
 You can now use [`tedge` command](../references/cli/index.md) to:
 
-* [create a certificate for your device](connect-aws.md#create-the-certificate),
-* [register the device on AWS IoT Hub](connect-aws.md#register-the-device-on-AWS),
-* [configure the device](connect-aws.md#configure-the-device),
-* [connect the device](connect-aws.md#connect-the-device), and
-* [send your first telemetry data](#sending-your-first-telemetry-data).
+* [create a certificate for your device](#create-certificate),
+* [register the device on AWS IoT Hub](#register),
+* [configure the device](#configure),
+* [connect the device](#connect), and
+* [send your first telemetry data](#send).
 
-## Create the certificate
+## Create the certificate {#create-certificate}
 
 The `tedge cert create` command creates a self-signed certificate which can be used for testing purpose.
 
@@ -64,7 +64,7 @@ This is a self-signed certificate.
 To use a certificate signed by your Certificate Authority,
 see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
 
-## Register the device on AWS IoT Hub
+## Register the device on AWS IoT Hub {#register}
 
 For a device to be trusted by AWS, one needs a device certificate and the `tedge cert create` command is the simplest way to get one.
 Also a policy needs to be attached to the device certificate in AWS IoT Core. AWS IoT Core policies determine what an
@@ -89,7 +89,7 @@ At ***Device certificate*** choose ***Use my certificate &rarr; CA is not regist
 
 The last step needed is to attach previously created policy to your certificate, **Attach policies to certificate -optional** &rarr; Select your created policy **&rarr; Create thing**.
 
-## Configure the device
+## Configure the device {#configure}
 
 To connect the device to the AWS IoT Hub, one needs to set the URL of the IoT Hub and the root certificate of the IoT
 Hub as below.
@@ -117,7 +117,7 @@ This will set the root certificate path of the AWS IoT Hub. In most of the Linux
 present in /etc/ssl/certs. If not found download it from
 [here](https://docs.aws.amazon.com/iot/latest/developerguide/server-authentication.html#server-authentication-certs).
 
-## Connect the device
+## Connect the device {#connect}
 
 Now, you are ready to get your device connected to AWS IoT Hub with `tedge connect aws`.
 This command configures the MQTT broker:
@@ -164,7 +164,7 @@ tedge-mapper-aws service successfully started and enabled!
 
 ```
 
-## Sending your first telemetry data
+## Sending your first telemetry data {#send}
 
 Using the AWS mapper, you can publish measurement telemetry data to AWS by publishing on the `te/device/main///m/` topic:
 

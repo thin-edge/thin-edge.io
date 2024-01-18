@@ -103,9 +103,9 @@ Where the groups are described as follows:
 
 | Group        | Description                                                                                                                                                                           |
 |--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| root         | The [topic root prefix](../mqtt-api.md/#group-root) for this installation of thin-edge.                                                                                               |
-| target       | The [topic identifier](../mqtt-api.md/#group-identifier) of the target device, possibly a [custom identifier](/contribute/design/mqtt-topic-design.md/#using-custom-identifier-schemas). |
-| `cmd`        | The [command channel](../mqtt-api.md/#channel-identifier) grouping all of the commands for this target.                                                                               |
+| root         | The [topic root prefix](../mqtt-api.md#group-root) for this installation of thin-edge.                                                                                               |
+| target       | The [topic identifier](../mqtt-api.md#group-identifier) of the target device, possibly a [custom identifier](/contribute/design/mqtt-topic-design.md#using-custom-identifier-schemas). |
+| `cmd`        | The [command channel](../mqtt-api.md#group-channel) grouping all of the commands for this target.                                                                               |
 | command_type | The type name of the operation.                                                                                                                                                       |
 
 A service that implements an operation for a device publishes on start, a capability message notifying

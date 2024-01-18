@@ -16,7 +16,7 @@ The `software_list` operation API follows the [generic thin-edge rules for opera
 - The `te/<device-topic-id>/cmd/software_list` topic is used to publish the type of software packages
   that can be managed on the device with the given topic identifier.
 - Each `te/<device-topic-id>/cmd/software_list/+` topic is dedicated to a software list command instance,
-- The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](references/agent/device-management-api.md/#operation-workflow).
+- The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](references/agent/device-management-api.md#operation-workflow).
 
 ### Operation registration
 
@@ -130,7 +130,7 @@ The `software_update` operation API follows the [generic thin-edge rules for ope
   that can be managed on the device with the given topic identifier.
 - Each `te/<device-topic-id>/cmd/software_update/+` topic is dedicated to a software update command instance,
   and is used to publish the subsequent states of the command execution.
-- The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](references/agent/device-management-api.md/#operation-workflow).
+- The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](references/agent/device-management-api.md#operation-workflow).
 
 ### Operation registration
 

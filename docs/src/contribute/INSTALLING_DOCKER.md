@@ -71,7 +71,7 @@ There are different ways to install the docker engine on MacOS, however this gui
 
 If you are using Windows, it is recommended to use WSL2 to run your a Ubuntu distribution where `docker-ce` is installed within it. Please do not bother with Docker Desktop or any other "Desktop" related product (e.g. `Rancher Desktop`). It will save you a lot of hassle by using the native `docker-ce` version inside the WSL2 distribution itself.
 
-Once you have a Ubuntu distribution running under WSL2, follow the instructions under the [Linux installation](./DEV_CONTAINER.md#Linux) section.
+Once you have a Ubuntu distribution running under WSL2, follow the instructions under the [Linux installation](#Linux) section.
 
 ### Linux
 
