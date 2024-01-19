@@ -1,12 +1,12 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityType;
 use tedge_api::messages::FirmwareInfo;
 use tedge_api::messages::FirmwareUpdateCmdPayload;
@@ -36,22 +36,20 @@ pub fn firmware_update_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
 }
 
 impl CumulocityConverter {
-    /// Convert c8y_Firmware SmartREST request to ThinEdge firmware_update command.
-    /// Command ID is generated here, but it should be replaced by c8y's operation ID in the future.
+    /// Convert c8y_Firmware JSON over MQTT operation to ThinEdge firmware_update command.
     pub fn convert_firmware_update_request(
         &self,
-        smartrest: &str,
+        device_xid: String,
+        cmd_id: String,
+        firmware_request: C8yFirmware,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let firmware_request = SmartRestFirmwareRequest::from_smartrest(smartrest)?;
+        let entity_xid: EntityExternalId = device_xid.into();
 
-        let target = self
-            .entity_store
-            .try_get_by_external_id(&firmware_request.device.clone().into())?;
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
 
-        let cmd_id = self.command_id.new_id();
         let channel = Channel::Command {
             operation: OperationType::FirmwareUpdate,
-            cmd_id: cmd_id.clone(),
+            cmd_id,
         };
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
 
@@ -178,7 +176,7 @@ impl CumulocityConverter {
 #[cfg(test)]
 mod tests {
     use crate::tests::*;
-    use c8y_api::smartrest::topic::C8yTopic;
+    use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
@@ -255,17 +253,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mapper_converts_smartrest_firmware_req_to_firmware_update_cmd_for_main_device() {
+    async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_main_device() {
         let cfg_dir = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
 
-        // Simulate c8y_Firmware SmartREST request
+        // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yTopic::downstream_topic(),
-            "515,test-device,myFirmware,1.0,http://www.my.url",
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_Firmware": {
+                    "name": "myFirmware",
+                    "version": "1.0",
+                    "url": "http://www.my.url"
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
         ))
         .await
         .expect("Send failed");
@@ -286,7 +296,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mapper_converts_smartrest_firmware_req_to_firmware_update_cmd_for_child_device() {
+    async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_child_device() {
         let cfg_dir = TempTedgeDir::new();
         let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -303,10 +313,22 @@ mod tests {
 
         mqtt.skip(3).await; // Skip entity registration, mapping and installed firmware messages
 
-        // Simulate c8y_Firmware SmartREST request
+        // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yTopic::downstream_topic(),
-            "515,test-device:device:child1,myFirmware,1.0,http://www.my.url",
+            &C8yDeviceControlTopic::topic(),
+            json!({
+                "id": "123456",
+                "c8y_Firmware": {
+                    "name": "myFirmware",
+                    "version": "1.0",
+                    "url": "http://www.my.url"
+                },
+                "externalSource": {
+                    "externalId": "test-device:device:child1",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
         ))
         .await
         .expect("Send failed");
@@ -314,7 +336,7 @@ mod tests {
         assert_received_includes_json(
             &mut mqtt,
             [(
-                "te/device/child1///cmd/firmware_update/+",
+                "te/device/child1///cmd/firmware_update/c8y-mapper-123456",
                 json!({
                     "status": "init",
                     "name": "myFirmware",
