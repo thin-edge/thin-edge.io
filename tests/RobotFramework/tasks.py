@@ -492,7 +492,7 @@ def test(
             # Support optional retry on failed (for tests with specific Tags, e.g. "test:retry(2)")
             "--listener",
             f"RetryFailed:{retries}",
-            "--timeout",
+            "--processtimeout",
             str(timeout),
         ]
 
