@@ -416,6 +416,7 @@ def test(
     processes=None,
     include="",
     exclude="test:on_demand OR theme:benchmarks",
+    timeout=1200,
 ):
     """Run tests
 
@@ -491,6 +492,8 @@ def test(
             # Support optional retry on failed (for tests with specific Tags, e.g. "test:retry(2)")
             "--listener",
             f"RetryFailed:{retries}",
+            "--timeout",
+            str(timeout),
         ]
 
     # include tags
