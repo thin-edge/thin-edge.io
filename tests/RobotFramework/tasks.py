@@ -486,7 +486,7 @@ def test(
             "-m",
             "pabot.pabot",
             "--processes",
-            "5", # Debug use less parallel processes
+            str(processes),
             "--processtimeout",
             str(timeout),
             "--outputdir",
