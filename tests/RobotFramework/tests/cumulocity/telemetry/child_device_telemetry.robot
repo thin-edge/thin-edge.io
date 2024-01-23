@@ -244,36 +244,39 @@ Nested child devices support sending event
  
 # Nested child device services 
 Nested child device service support sending simple measurements
-    ${nested_child}=    Get Random Name    
+    ${nested_child}=    Get Random Name
+    ${service_name}=    Get Random Name
     Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}//' '{"@type":"child-device","@parent":"device/${CHILD_SN}//","@id":"${nested_child}"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}/service/nested_ms_service' '{"@type":"service","@parent":"device/${nested_child}//","@id":"nested_ms_service"}'
-    Execute Command    tedge mqtt pub te/device/${nested_child}/service/nested_ms_service/m/m_type '{ "temperature": 30.1 }'
+    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}/service/${service_name}' '{"@type":"service","@parent":"device/${nested_child}//","@id":"${service_name}"}'
+    Execute Command    tedge mqtt pub te/device/${nested_child}/service/${service_name}/m/m_type '{ "temperature": 30.1 }'
     Cumulocity.Device Should Exist    ${nested_child}
-    Cumulocity.Should Have Services    name=nested_ms_service    min_count=1    max_count=1  
-    Cumulocity.Device Should Exist   nested_ms_service
+    Cumulocity.Should Have Services    name=${service_name}    min_count=1    max_count=1  
+    Cumulocity.Device Should Exist   ${service_name}
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1
     Should Be Equal    ${measurements[0]["type"]}    m_type
     Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    30.1
     Log    ${measurements}
 
 Nested child device service support sending events
-    ${nested_child}=    Get Random Name    
+    ${nested_child}=    Get Random Name
+    ${service_name}=    Get Random Name
     Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}//' '{"@type":"child-device","@parent":"device/${CHILD_SN}//","@id":"${nested_child}"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}/service/nested_event_service' '{"@type":"service","@parent":"device/${nested_child}//","@id":"nested_event_service"}'
-    Execute Command    tedge mqtt pub te/device/${nested_child}/service/nested_event_service/e/e_type '{ "text": "nested device service started" }'
+    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}/service/${service_name}' '{"@type":"service","@parent":"device/${nested_child}//","@id":"${service_name}"}'
+    Execute Command    tedge mqtt pub te/device/${nested_child}/service/${service_name}/e/e_type '{ "text": "nested device service started" }'
     Cumulocity.Device Should Exist    ${nested_child}    
-    Cumulocity.Should Have Services    name=nested_event_service    min_count=1    max_count=1  
-    Cumulocity.Device Should Exist   nested_event_service
+    Cumulocity.Should Have Services    name=${service_name}    min_count=1    max_count=1  
+    Cumulocity.Device Should Exist   ${service_name}
     Device Should Have Event/s    expected_text=nested device service started    type=e_type    minimum=1    maximum=1
    
 Nested child device service support sending alarm
     ${nested_child}=    Get Random Name
+    ${service_name}=    Get Random Name
     Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}//' '{"@type":"child-device","@parent":"device/${CHILD_SN}//","@id":"${nested_child}"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}/service/nested_alarm_service' '{"@type":"service","@parent":"device/${nested_child}//","@id":"nested_alarm_service"}'
-    Execute Command    tedge mqtt pub te/device/${nested_child}/service/nested_alarm_service/a/test_alarm '{ "severity":"critical","text":"temperature alarm" }'
+    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}/service/${service_name}' '{"@type":"service","@parent":"device/${nested_child}//","@id":"${service_name}"}'
+    Execute Command    tedge mqtt pub te/device/${nested_child}/service/${service_name}/a/test_alarm '{ "severity":"critical","text":"temperature alarm" }'
     Cumulocity.Device Should Exist    ${nested_child}    
-    Cumulocity.Should Have Services    name=nested_alarm_service    min_count=1    max_count=1  
-    Cumulocity.Device Should Exist   nested_alarm_service
+    Cumulocity.Should Have Services    name=${service_name}    min_count=1    max_count=1  
+    Cumulocity.Device Should Exist   ${service_name}
     ${alarm}=    Device Should Have Alarm/s    type=test_alarm    expected_text=temperature alarm   severity=CRITICAL    minimum=1    maximum=1  
     Log    ${alarm}
 
