@@ -146,6 +146,7 @@ jobs:
           touch .env
           echo 'C8Y_BASEURL="${{ secrets.C8Y_BASEURL }}"' >> .env
           echo 'C8Y_USER="${{ secrets.C8Y_USER }}"' >> .env
+          echo 'C8Y_TENANT="${{ secrets.C8Y_TENANT }}"' >> .env
           echo 'C8Y_PASSWORD="${{ secrets.C8Y_PASSWORD }}"' >> .env
 
       - uses: actions/setup-python@v5
