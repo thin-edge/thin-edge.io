@@ -47,10 +47,8 @@ Custom Teardown
     Get Logs
 
 Bootstrap child device with firmware operation support
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
-    Sleep    3s
-    Execute Command    touch /etc/tedge/operations/c8y/${CHILD_SN}/c8y_Firmware
-    Sleep    3s
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}///cmd/firmware_update' ''
     Cumulocity.Device Should Exist    ${CHILD_SN}
 
 Upload firmware binary to Cumulocity

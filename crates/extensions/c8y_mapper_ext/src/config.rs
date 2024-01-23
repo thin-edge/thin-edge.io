@@ -27,6 +27,8 @@ use tracing::log::warn;
 
 pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 const STATE_DIR_NAME: &str = ".tedge-mapper-c8y";
+const C8Y_CLOUD: &str = "c8y";
+const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 
 pub struct C8yMapperConfig {
     pub config_dir: PathBuf,
@@ -71,7 +73,9 @@ impl C8yMapperConfig {
         mqtt_schema: MqttSchema,
         enable_auto_register: bool,
     ) -> Self {
-        let ops_dir = config_dir.join("operations").join("c8y");
+        let ops_dir = config_dir
+            .join(SUPPORTED_OPERATIONS_DIRECTORY)
+            .join(C8Y_CLOUD);
         let state_dir = config_dir.join(STATE_DIR_NAME);
 
         Self {
@@ -204,7 +208,11 @@ impl C8yMapperConfig {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        if let Ok(operations) = Operations::try_new(config_dir.join("operations").join("c8y")) {
+        if let Ok(operations) = Operations::try_new(
+            config_dir
+                .join(SUPPORTED_OPERATIONS_DIRECTORY)
+                .join(C8Y_CLOUD),
+        ) {
             for topic in operations.topics_for_operations() {
                 topic_filter.add(&topic)?;
             }

@@ -39,3 +39,26 @@ No unexpected child devices created without service autostart
 
     # Assert that there are no child devices present.
     Cumulocity.Device Should Not Have Any Child Devices
+
+Mapper restart does not alter device hierarchy
+    [Tags]    \#2409
+
+    ${DEVICE_SN}=    Setup
+    Device Should Exist    ${DEVICE_SN}
+
+    ${child_level1}=    Get Random Name
+    Execute Command    tedge mqtt pub --retain 'te/device/${child_level1}//' '{"@id":"${child_level1}","@type":"child-device","@parent":"device/main//","name":"${child_level1}"}'
+    ${child_level2}=    Get Random Name
+    Execute Command    tedge mqtt pub --retain 'te/device/${child_level2}//' '{"@id":"${child_level2}","@type":"child-device","@parent":"device/${child_level1}//","name":"${child_level2}"}'
+
+    Set Device    ${DEVICE_SN}
+    Device Should Have A Child Devices    ${child_level1}
+    Set Device    ${child_level1}
+    Device Should Have A Child Devices    ${child_level2}
+
+    Restart Service    tedge-mapper-c8y
+
+    Set Device    ${DEVICE_SN}
+    Device Should Have A Child Devices    ${child_level1}
+    Set Device    ${child_level1}
+    Device Should Have A Child Devices    ${child_level2}
