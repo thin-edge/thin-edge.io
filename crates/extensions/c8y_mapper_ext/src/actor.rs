@@ -201,7 +201,7 @@ impl C8yMapperActor {
             | FsWatchEvent::FileDeleted(path)
             | FsWatchEvent::Modified(path)
             | FsWatchEvent::DirectoryDeleted(path) => {
-                match process_inotify_events(&path, file_event) {
+                match process_inotify_events(&self.converter.ops_dir, &path, file_event) {
                     Ok(Some(discovered_ops)) => {
                         self.mqtt_publisher
                             .send(

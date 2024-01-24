@@ -28,6 +28,7 @@ pub enum DynamicDiscoverOpsError {
 }
 
 pub fn process_inotify_events(
+    c8y_operations_dir: &Path,
     path: &Path,
     mask: FsWatchEvent,
 ) -> Result<Option<DiscoverOp>, DynamicDiscoverOpsError> {
@@ -39,6 +40,11 @@ pub fn process_inotify_events(
     let parent_dir = path
         .parent()
         .ok_or_else(|| DynamicDiscoverOpsError::NotAnOperation(path.to_path_buf()))?;
+
+    // only files inside `/etc/tedge/operations/c8y` directory are valid c8y operations
+    if !parent_dir.starts_with(c8y_operations_dir) {
+        return Ok(None);
+    }
 
     if is_valid_operation_name(operation_name) {
         match mask {
