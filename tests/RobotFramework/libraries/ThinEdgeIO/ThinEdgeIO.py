@@ -69,6 +69,13 @@ class ThinEdgeIO(DeviceLibrary):
         # Configure retries
         retry.configure_retry_on_members(self, "^_assert_")
 
+    def should_delete_cert() -> bool:
+        # TODO: Don't delete the certificate when using a local ca
+        # How to reliably detect this
+        # TODO: Check by inspecting the public cert, and if there is more than
+        # one certificate, then a CA is being used
+        return os.getenv("PKI_METHOD", "") == "selfsigned"
+
     def end_suite(self, _data: Any, result: Any):
         """End suite hook which is called by Robot Framework
         when the test suite has finished
@@ -79,13 +86,14 @@ class ThinEdgeIO(DeviceLibrary):
         """
         log.info("Suite %s (%s) ending", result.name, result.message)
 
-        for device in self.devices.values():
-            try:
-                if isinstance(device, DeviceAdapter):
-                    if device.should_cleanup:
-                        self.remove_certificate_and_device(device)
-            except Exception as ex:
-                log.warning("Could not cleanup certificate/device. %s", ex)
+        if self.should_delete_cert():
+            for device in self.devices.values():
+                try:
+                    if isinstance(device, DeviceAdapter):
+                        if device.should_cleanup:
+                            self.remove_certificate_and_device(device)
+                except Exception as ex:
+                    log.warning("Could not cleanup certificate/device. %s", ex)
 
         super().end_suite(_data, result)
 
