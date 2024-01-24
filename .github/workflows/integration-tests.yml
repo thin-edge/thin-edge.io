@@ -148,6 +148,8 @@ jobs:
           echo 'C8Y_USER="${{ secrets.C8Y_USER }}"' >> .env
           echo 'C8Y_TENANT="${{ secrets.C8Y_TENANT }}"' >> .env
           echo 'C8Y_PASSWORD="${{ secrets.C8Y_PASSWORD }}"' >> .env
+          echo 'CA_KEY="${{ secrets.CA_KEY || '' }}"' >> .env
+          echo 'CA_PUB="${{ secrets.CA_PUB || '' }}"' >> .env
 
       - uses: actions/setup-python@v5
         with:
