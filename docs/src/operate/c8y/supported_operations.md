@@ -237,3 +237,25 @@ The command will be executed with tedge-mapper permission level so most of the s
 * `on_message` - The SmartRest template on which the operation will be executed.
 * `command` - The command to execute.
 * `result_format` - The expected command output format: `"text"` or `"csv"`, `"text"` being the default.
+
+:::info
+The `command` parameter accepts command arguments when provided as a one string, e.g.
+
+```toml title="file: /etc/tedge/operations/c8y/c8y_Command"
+[exec]
+  topic = "c8y/s/ds"
+  on_message = "511"
+  command = "python /etc/tedge/operations/command.py"
+  timeout = 10
+``` 
+
+Arguments will be parsed correctly as long as following features are not included in input: operators, variable assignments, tilde expansion, parameter expansion, command substitution, arithmetic expansion and pathname expansion. 
+
+In case those unsupported shell features are present, the syntax that introduce them is interpreted literally.
+
+Be aware that SmartREST payload is always added as the last argument. The command presented above will actually lead to following code execution
+
+```bash
+python /etc/tedge/operations/command.py $SMART_REST_PAYLOAD
+```
+:::
