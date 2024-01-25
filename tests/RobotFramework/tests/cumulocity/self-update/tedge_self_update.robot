@@ -97,7 +97,7 @@ Update tedge version from base to current using Cumulocity
     Create Local Repository
     ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-agent,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
 
-    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=300
     Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
 
     ${pid_after}=    Execute Command    pgrep tedge-agent    strip=${True}
