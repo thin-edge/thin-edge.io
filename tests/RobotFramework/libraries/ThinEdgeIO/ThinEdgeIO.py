@@ -177,15 +177,15 @@ class ThinEdgeIO(DeviceLibrary):
 
         device_sn = name or device.get_id()
         try:
-            # TODO: optionally check if the device was registered or not, if no, then skip this step
-            managed_object = c8y_lib.device_mgmt.identity.assert_exists(
-                device_sn, timeout=5
-            )
+            managed_object = c8y_lib.c8y.identity.get_object(device_sn, "c8y_Serial")
             log.info(
                 "Managed Object\n%s", json.dumps(managed_object.to_json(), indent=2)
             )
             self.log_operations(managed_object.id)
+        except KeyError:
+            log.info("Skip getting managed object as it has not been registered in Cumulocity")
         except Exception as ex:  # pylint: disable=broad-except
+            # Only log info as not all tests require creating an object in Cumulocity
             log.warning("Failed to get device managed object. %s", ex)
 
         # Log mqtt messages separately so it is easier to read/debug
@@ -303,9 +303,9 @@ class ThinEdgeIO(DeviceLibrary):
                     "Device serial number is empty, so nothing to delete from Cumulocity"
                 )
                 return
-    
-            c8y_lib.delete_managed_object(device_sn)
-        except KeyError as ex:
+            device_mo = c8y_lib.c8y.identity.get_object(device_sn, "c8y_Serial")
+            c8y_lib.device_mgmt.inventory.delete_device_and_user(device_mo)
+        except KeyError:
             log.info("Device does not exist in cloud, nothing to delete")
         except Exception as ex:
             log.warning(
