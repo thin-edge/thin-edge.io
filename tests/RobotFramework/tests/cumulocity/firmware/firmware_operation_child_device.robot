@@ -48,15 +48,17 @@ Prerequisite Child
 
 Child device firmware update
     Upload binary to Cumulocity
+    ${OPERATION_FILTER_DATE_FROM}=    ThinEdgeIO.Get Unix Timestamp
     Create c8y_Firmware operation
-    Validate firmware update request
+    Validate firmware update request    ${OPERATION_FILTER_DATE_FROM}
     Child device response on update request    #Child device is sending 'executing' and 'successful' MQTT responses
     Validate Cumulocity operation status and MO
 
 Child device firmware update with cache
     Get timestamp of cache
+    ${OPERATION_FILTER_DATE_FROM}=    ThinEdgeIO.Get Unix Timestamp
     Create c8y_Firmware operation
-    Validate firmware update request
+    Validate firmware update request    ${OPERATION_FILTER_DATE_FROM}
     Child device response on update request    #Child device is sending 'executing' and 'successful' MQTT responses
     Validate Cumulocity operation status and MO
     Validate if file is not newly downloaded
@@ -129,11 +131,14 @@ Validate if file is not newly downloaded
     Should Be Equal    ${file_creation_time}    ${file_creation_time_new}
 
 Validate firmware update request
+    [Arguments]    ${operation_filter_date_from}
     Set Device Context    ${PARENT_SN}
     ${listen}=    ThinEdgeIO.Should Have MQTT Messages
     ...    topic=tedge/${CHILD_SN}/commands/req/firmware_update
-    ...    date_from=-5s
-    ${message}=    JSONLibrary.Convert String To Json    ${listen[0]}
+    ...    date_from=${operation_filter_date_from}
+
+    # Use last match in case the previous operation is also included in the matching messages
+    ${message}=    JSONLibrary.Convert String To Json    ${listen[-1]}
 
     Should Not Be Empty    ${message["id"]}
     Should Be Equal    ${message["attempt"]}    ${1}
