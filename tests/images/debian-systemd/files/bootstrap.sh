@@ -756,7 +756,10 @@ sign_local_ca() {
     # Use a local-ca file (to minimize dependencies)
     CN="$1"
     LEAF_EXPIRE_DAYS="${2:-7}"
-    DEVICE_KEY_PATH=$(tedge config get device.key_path)
+    # Note: older thin-edge.io versions the device certificate key/path
+    # config names changed. Support the newer name but still fallback to the previous
+    # name as some tests use the older agent version
+    DEVICE_KEY_PATH=$(tedge config get device.key_path 2>/dev/null || tedge config get device.key.path)
 
     sudo openssl genrsa -out "$DEVICE_KEY_PATH" 2048
 
@@ -775,7 +778,7 @@ subjectAltName=DNS:${CN},DNS:localhost
 EOF
     )
 
-    DEVICE_CERT_PATH=$(tedge config get device.cert_path)
+    DEVICE_CERT_PATH=$(tedge config get device.cert_path 2>/dev/null || tedge config get device.cert.path)
     openssl x509 -req \
         -in <(echo "$DEVICE_CSR") \
         -out "$DEVICE_CERT_PATH" \
