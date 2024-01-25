@@ -24,6 +24,7 @@ FLAGS
     --device-id <name>                      Use a specific device-id. A prefix will be added to the device id
     --random                                Use a random device-id. This will override the --device-id flag value
     --prefix <prefix>                       Device id prefix to add to the device-id or random device id. Defaults to 'tedge_'
+    --cert-method <method>                  Specify certificate creation method, e.g. selfsigned or local-ca.
 
     INSTALLATION FLAGS
     --version <version>                     Thin-edge.io version to install. Only applies for apt/script installation methods
@@ -125,6 +126,7 @@ TEST_USER=${TEST_USER:-petertest}
 PREFIX=${PREFIX:-tedge_}
 REPO_CHANNEL=${REPO_CHANNEL:-main}
 C8Y_BASEURL=${C8Y_BASEURL:-}
+CERT_METHOD=${CERT_METHOD:-}
 
 
 get_debian_arch() {
@@ -258,7 +260,10 @@ do
             DEVICE_ID="$2"
             shift
             ;;
-
+        --cert-method)
+            CERT_METHOD="$2"
+            shift
+            ;;
         --prefix)
             PREFIX="$2"
             shift
@@ -395,6 +400,15 @@ fi
 
 if [ -z "$BOOTSTRAP" ]; then
     BOOTSTRAP=1
+fi
+
+if [ -z "$CERT_METHOD" ]; then
+    # Auto detect which certificate signing should be used
+    if [ -n "$CA_PUB" ] && [ -n "$CA_KEY" ]; then
+        CERT_METHOD="local-ca"
+    else
+        CERT_METHOD="selfsigned"
+    fi
 fi
 
 #
@@ -798,21 +812,17 @@ bootstrap_c8y() {
     fi
 
     SHOULD_UPLOAD_CERT=0
-    if [ -n "$CA_PUB" ] && [ -n "$CA_KEY" ]; then
-        CERT_METHOD="local-ca"
-    else
-        CERT_METHOD="selfsigned"
-    fi
 
     echo "Creating certificate: $DEVICE_ID (using $CERT_METHOD)"
 
     case "$CERT_METHOD" in
-        selfsigned)
-            sudo tedge cert create --device-id "$DEVICE_ID"
-            SHOULD_UPLOAD_CERT=1
-            ;;
         local-ca)
             sign_local_ca "$DEVICE_ID"
+            ;;
+        *)
+            # default: selfsigned
+            sudo tedge cert create --device-id "$DEVICE_ID"
+            SHOULD_UPLOAD_CERT=1
             ;;
     esac
 
