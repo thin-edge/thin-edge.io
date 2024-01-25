@@ -110,6 +110,10 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
 
 3. Follow the console instructions and edit the `.env` file which was created by the `./bin/setup.sh` script
 
+    **Note**
+
+    It is recommended to use a CA signing certificate for the tests as this avoids having to create self-signed certificates for each test case and uploading it to Cumulocity IoT. Following the [section about generating your own CA signing certificate](#generating-a-ca-signing-certificate-for-the-tests)
+
 4. Switch to the new python interpreter (the one with `.venv` in the name)
 
     **Note: VSCode users**
@@ -181,6 +185,63 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
     ```sh
     robot --outputdir output ./tests
     ```
+
+### Generating a CA signing certificate for the tests
+
+It is recommended to provide a local certificate authority (CA) signing certificate so that the system tests can utilize it to generate the device certificates. To use your own signing certificate you need to add the following keys which contain the base64 encoded contents of the CA key and public certificate.
+
+**Pre-requisites**
+
+The following dependencies are requires for the instructions:
+
+* openssl
+* Optional: [go-c8y-cli](https://goc8ycli.netlify.app/) to upload the CA certificate using the CLI
+
+**Procedure**
+
+1. Generate the CA certificate
+
+    ```sh
+    openssl req \
+        -new \
+        -x509 \
+        -days 999 \
+        -extensions v3_ca \
+        -nodes \
+        -subj "/O=thin-edge/CN=tedge-ca" \
+        -keyout ~/tedge-ca.key \
+        -out ~/tedge-ca.crt
+    ```
+
+2. Upload the CA certificate to Cumulocity IoT
+
+    You can upload the CA certificate to Cumulocity IoT via the Device Management Application under *Trusted Certificate*, and set the following properties:
+
+    * Enable the certificate
+    * Activate *Auto Registration*
+
+
+    Alternatively, if you are a [go-c8y-cli](https://goc8ycli.netlify.app/) user, then you can use the following command to upload the CA certificate to Cumulocity IoT.
+
+    ```sh
+    c8y devicemanagement certificates create \
+        --name "tedge-ca-myuser" \
+        --autoRegistrationEnabled "" \
+        --status ENABLED \
+        --file ~/tedge-ca.crt
+    ```
+
+3. Add the `CA_KEY` and `CA_PUB` environment variables to your `.env` file used by the tests.
+
+    ```sh
+    echo CA_KEY=\""$(cat ~/tedge-ca.key | base64)"\" >> .env
+    echo CA_PUB=\""$(cat ~/tedge-ca.crt | base64)"\" >> .env
+    ```
+
+    **Note**
+
+    The values of the environment variables are base64 encoded.
+
 
 ### Using externally built built packages in tests
 

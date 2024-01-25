@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 show_usage() {
@@ -24,6 +24,7 @@ FLAGS
     --device-id <name>                      Use a specific device-id. A prefix will be added to the device id
     --random                                Use a random device-id. This will override the --device-id flag value
     --prefix <prefix>                       Device id prefix to add to the device-id or random device id. Defaults to 'tedge_'
+    --cert-method <method>                  Specify certificate creation method, e.g. selfsigned or local-ca.
 
     INSTALLATION FLAGS
     --version <version>                     Thin-edge.io version to install. Only applies for apt/script installation methods
@@ -125,6 +126,7 @@ TEST_USER=${TEST_USER:-petertest}
 PREFIX=${PREFIX:-tedge_}
 REPO_CHANNEL=${REPO_CHANNEL:-main}
 C8Y_BASEURL=${C8Y_BASEURL:-}
+CERT_METHOD=${CERT_METHOD:-}
 
 
 get_debian_arch() {
@@ -258,7 +260,10 @@ do
             DEVICE_ID="$2"
             shift
             ;;
-
+        --cert-method)
+            CERT_METHOD="$2"
+            shift
+            ;;
         --prefix)
             PREFIX="$2"
             shift
@@ -395,6 +400,15 @@ fi
 
 if [ -z "$BOOTSTRAP" ]; then
     BOOTSTRAP=1
+fi
+
+if [ -z "$CERT_METHOD" ]; then
+    # Auto detect which certificate signing should be used
+    if [ -n "$CA_PUB" ] && [ -n "$CA_KEY" ]; then
+        CERT_METHOD="local-ca"
+    else
+        CERT_METHOD="selfsigned"
+    fi
 fi
 
 #
@@ -738,6 +752,53 @@ prompt_value() {
     echo "$value"
 }
 
+sign_local_ca() {
+    # Use a local-ca file (to minimize dependencies)
+    CN="$1"
+    LEAF_EXPIRE_DAYS="${2:-7}"
+    # Note: older thin-edge.io versions the device certificate key/path
+    # config names changed. Support the newer name but still fallback to the previous
+    # name as some tests use the older agent version
+    DEVICE_KEY_PATH=$(tedge config get device.key_path 2>/dev/null || tedge config get device.key.path)
+
+    sudo openssl genrsa -out "$DEVICE_KEY_PATH" 2048
+
+    DEVICE_CSR=$(sudo openssl req \
+        -key "$DEVICE_KEY_PATH" \
+        -new \
+        -subj "/O=thin-edge/OU=Test\ Device/CN=${CN}"
+    )
+
+    CERT_EXT=$(cat << EOF
+authorityKeyIdentifier=keyid
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, keyAgreement
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName=DNS:${CN},DNS:localhost
+EOF
+    )
+
+    DEVICE_CERT_PATH=$(tedge config get device.cert_path 2>/dev/null || tedge config get device.cert.path)
+    openssl x509 -req \
+        -in <(echo "$DEVICE_CSR") \
+        -out "$DEVICE_CERT_PATH" \
+        -CA <(echo "$CA_PUB" | base64 -d) \
+        -CAkey <(echo "$CA_KEY" | base64 -d) \
+        -extfile <(echo "$CERT_EXT") \
+        -days "$LEAF_EXPIRE_DAYS"
+
+    # Build certificate chain (from leaf cert to the signing cert)
+    # sudo sh -c "echo '$CA_PUB' | base64 -d >> '$DEVICE_CERT_PATH'"
+    echo "$CA_PUB" | base64 -d | sudo tee -a "$DEVICE_CERT_PATH"
+
+    # Set permissions
+    sudo chown mosquitto:root "$DEVICE_KEY_PATH"
+    sudo chmod 600 "$DEVICE_KEY_PATH"
+
+    sudo chown mosquitto:root "$DEVICE_CERT_PATH"
+    sudo chmod 644 "$DEVICE_CERT_PATH"
+}
+
 bootstrap_c8y() {
     # If bootstrapping is called, then it assumes the full bootstrapping
     # needs to be done.
@@ -753,8 +814,20 @@ bootstrap_c8y() {
         sudo tedge cert remove
     fi
 
-    echo "Creating certificate: $DEVICE_ID"
-    sudo tedge cert create --device-id "$DEVICE_ID"
+    SHOULD_UPLOAD_CERT=0
+
+    echo "Creating certificate: $DEVICE_ID (using $CERT_METHOD)"
+
+    case "$CERT_METHOD" in
+        local-ca)
+            sign_local_ca "$DEVICE_ID"
+            ;;
+        *)
+            # default: selfsigned
+            sudo tedge cert create --device-id "$DEVICE_ID"
+            SHOULD_UPLOAD_CERT=1
+            ;;
+    esac
 
     # Cumulocity URL
     C8Y_BASEURL=$(prompt_value "Enter the Cumulocity IoT url" "$C8Y_BASEURL")
@@ -767,24 +840,26 @@ bootstrap_c8y() {
     echo "Setting c8y.url to $C8Y_BASEURL"
     sudo tedge config set c8y.url "$C8Y_BASEURL"
 
-    C8Y_USER=$(prompt_value "Enter your Cumulocity user" "$C8Y_USER")
+    if [ "$SHOULD_UPLOAD_CERT" = 1 ]; then
+        C8Y_USER=$(prompt_value "Enter your Cumulocity user" "$C8Y_USER")
 
-    if [ -n "$C8Y_USER" ]; then
-        echo "Uploading certificate to Cumulocity using tedge"
-        if [ -n "$C8Y_PASSWORD" ]; then
-            C8YPASS="$C8Y_PASSWORD" tedge cert upload c8y --user "$C8Y_USER"
+        if [ -n "$C8Y_USER" ]; then
+            echo "Uploading certificate to Cumulocity using tedge"
+            if [ -n "$C8Y_PASSWORD" ]; then
+                C8YPASS="$C8Y_PASSWORD" tedge cert upload c8y --user "$C8Y_USER"
+            else
+                echo ""
+                tedge cert upload c8y --user "$C8Y_USER"
+            fi
         else
-            echo ""
-            tedge cert upload c8y --user "$C8Y_USER"
+            fail "When manually bootstrapping you have to upload the certificate again as the device certificate is recreated"
         fi
-    else
-        fail "When manually bootstrapping you have to upload the certificate again as the device certificate is recreated"
-    fi
 
-    # Grace period for the server to process the certificate
-    # but it is not critical for the connection, as the connection
-    # supports automatic retries, but it can improve the first connection success rate
-    sleep "$UPLOAD_CERT_WAIT"
+        # Grace period for the server to process the certificate
+        # but it is not critical for the connection, as the connection
+        # supports automatic retries, but it can improve the first connection success rate
+        sleep "$UPLOAD_CERT_WAIT"
+    fi
 }
 
 connect_mappers() {
@@ -816,7 +891,7 @@ display_banner_c8y() {
     echo ""
     echo "tedge.version:   $(tedge --version 2>/dev/null | tail -1 | cut -d' ' -f2)"
     echo "device.id:       ${DEVICE_ID}"
-    DEVICE_SEARCH=$(echo "$DEVICE_ID" | sed 's/-/*/g')
+    DEVICE_SEARCH="${DEVICE_ID//-/*}"
     echo "Cumulocity IoT:  https://${C8Y_BASEURL}/apps/devicemanagement/index.html#/assetsearch?filter=*${DEVICE_SEARCH}*"
     echo ""
     echo "----------------------------------------------------------"    

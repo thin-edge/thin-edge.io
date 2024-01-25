@@ -69,6 +69,37 @@ class ThinEdgeIO(DeviceLibrary):
         # Configure retries
         retry.configure_retry_on_members(self, "^_assert_")
 
+    def should_delete_device_certificate(self) -> bool:
+        """Check if the certificate should be deleted or not
+        """
+        # Only delete the certificate if it is a self signed certificate
+
+        # Parse the certificate details via tedge cert show
+        lines = []
+        try:
+            lines = self.execute_command("tedge cert show", ignore_exit_code=True).splitlines()
+        except Exception as ex:
+            # Ignore any errors
+            log.info("Could not read certificate information. %s", ex)
+
+        # Prase output and decode the certificate information
+        # Use simple parser to avoid having to decode the certificate
+        certificate = {}
+        for line in lines:
+            key, _, value = line.partition(":")
+            if key and value:
+                certificate[key.lower().strip()] = value.strip()
+
+        issuer = certificate.get("issuer", None)
+        subject = certificate.get("subject", None)
+
+        if issuer is None or subject is None:
+            return False
+
+        # Self signed certificates generally have the same issue information as the subject
+        is_self_signed = subject == issuer
+        return is_self_signed
+
     def end_suite(self, _data: Any, result: Any):
         """End suite hook which is called by Robot Framework
         when the test suite has finished
@@ -83,7 +114,9 @@ class ThinEdgeIO(DeviceLibrary):
             try:
                 if isinstance(device, DeviceAdapter):
                     if device.should_cleanup:
-                        self.remove_certificate_and_device(device)
+                        if self.should_delete_device_certificate():
+                            self.remove_certificate(device)
+                        self.remove_device(device)
             except Exception as ex:
                 log.warning("Could not cleanup certificate/device. %s", ex)
 
@@ -144,15 +177,15 @@ class ThinEdgeIO(DeviceLibrary):
 
         device_sn = name or device.get_id()
         try:
-            # TODO: optionally check if the device was registered or not, if no, then skip this step
-            managed_object = c8y_lib.device_mgmt.identity.assert_exists(
-                device_sn, timeout=5
-            )
+            managed_object = c8y_lib.c8y.identity.get_object(device_sn, "c8y_Serial")
             log.info(
                 "Managed Object\n%s", json.dumps(managed_object.to_json(), indent=2)
             )
             self.log_operations(managed_object.id)
+        except KeyError:
+            log.info("Skip getting managed object as it has not been registered in Cumulocity")
         except Exception as ex:  # pylint: disable=broad-except
+            # Only log info as not all tests require creating an object in Cumulocity
             log.warning("Failed to get device managed object. %s", ex)
 
         # Log mqtt messages separately so it is easier to read/debug
@@ -229,7 +262,7 @@ class ThinEdgeIO(DeviceLibrary):
         else:
             log.info("No operations found")
 
-    def remove_certificate_and_device(self, device: DeviceAdapter = None):
+    def remove_certificate(self, device: DeviceAdapter = None):
         """Remove trusted certificate"""
         if device is None:
             device = self.current
@@ -249,18 +282,35 @@ class ThinEdgeIO(DeviceLibrary):
         if fingerprint:
             try:
                 c8y_lib.trusted_certificate_delete(fingerprint)
-
-                device_sn = device.get_id()
-                if device_sn:
-                    c8y_lib.delete_managed_object(device_sn)
-                else:
-                    log.info(
-                        "Device serial number is empty, so nothing to delete from Cumulocity"
-                    )
             except Exception as ex:
                 log.warning(
-                    "Could not remove device certificate and/or device. error=%s", ex
+                    "Could not remove device certificate. error=%s", ex
                 )
+
+    def remove_device(self, device: DeviceAdapter = None):
+        """Remove device from the cloud"""
+        if device is None:
+            device = self.current
+
+        if not device:
+            log.info(f"No device to remove as device context is not set")
+            return
+
+        try:
+            device_sn = device.get_id()
+            if not device_sn:
+                log.info(
+                    "Device serial number is empty, so nothing to delete from Cumulocity"
+                )
+                return
+            device_mo = c8y_lib.c8y.identity.get_object(device_sn, "c8y_Serial")
+            c8y_lib.device_mgmt.inventory.delete_device_and_user(device_mo)
+        except KeyError:
+            log.info("Device does not exist in cloud, nothing to delete")
+        except Exception as ex:
+            log.warning(
+                "Could not remove device. error=%s", ex
+            )
 
     @keyword("Download From GitHub")
     def download_from_github(self, *run_id: str, arch: str = "aarch64"):

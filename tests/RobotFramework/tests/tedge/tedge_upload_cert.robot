@@ -6,11 +6,11 @@ Resource    ../../resources/common.resource
 Library    ThinEdgeIO
 
 Test Tags    theme:cli    theme:mqtt    theme:c8y
-Suite Setup    Custom Setup
-Suite Teardown         Get Logs
+Test Teardown         Get Logs
 
 *** Test Cases ***
-Create the certificate    
+Create the certificate
+    [Setup]    Setup With Self-Signed Certificate
     #You can then check the content of that certificate.
     ${output}=    Execute Command    sudo tedge cert show    #You can then check the content of that certificate.
     Should Contain    ${output}    Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
@@ -21,6 +21,7 @@ Create the certificate
     Should Contain    ${output}    Thumbprint:
 
 Renew the certificate
+    [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y 
     ${output}=    Execute Command    sudo tedge cert renew    stderr=${True}    stdout=${False}    ignore_exit_code=${True}    
     Should Contain    ${output}    Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud
@@ -30,19 +31,29 @@ Renew the certificate
 
 
 Renew certificate fails
+    [Setup]    Setup Without Certificate
     Execute Command    sudo tedge cert remove    
     ${output}=    Execute Command    sudo tedge cert renew    stderr=${True}    stdout=${False}    ignore_exit_code=${True}    
     Should Contain    ${output}    Missing file: "/etc/tedge/device-certs/tedge-certificate.pem"
     # Restore the certificate
-    Execute Command    sudo tedge cert create --device-id test-user    
+    Execute Command    sudo tedge cert create --device-id test-user
 
 tedge cert upload c8y command fails
+    [Setup]    Setup Without Certificate
+    Execute Command    sudo tedge cert create --device-id test-user
+    Execute Command    sudo tedge config set c8y.url example.c8y.com
     Execute Command    tedge config set c8y.root_cert_path /etc/ssl/certs_test    
     ${output}=    Execute Command    sudo env C8YPASS\='password' tedge cert upload c8y --user testuser    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
     Execute Command    tedge config unset c8y.root_cert_path
     Should Contain    ${output}    Root certificate path /etc/ssl/certs_test does not exist
 
 *** Keywords ***
-Custom Setup
-    ${DEVICE_SN}=                    Setup
-    Set Suite Variable               $DEVICE_SN
+Setup With Self-Signed Certificate
+    ${DEVICE_SN}=                    Setup    skip_bootstrap=${True}
+    Set Test Variable               $DEVICE_SN
+    Execute Command           test -f ./bootstrap.sh && ./bootstrap.sh --cert-method selfsigned
+
+Setup Without Certificate
+    ${DEVICE_SN}=                    Setup    skip_bootstrap=${True}
+    Set Test Variable               $DEVICE_SN
+    Execute Command           test -f ./bootstrap.sh && ./bootstrap.sh --install --no-bootstrap --no-connect
