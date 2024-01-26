@@ -455,7 +455,7 @@ def test(
         # which causes multiple networks with the same name to be created.
         log.info("Creating a container network")
         c.run(
-            f"command -v {container_cli} &>/dev/null && ({container_cli} network create {network_name} --driver bridge || true) || true"
+            f"command -v {container_cli} &>/dev/null && ({container_cli} network create {network_name} --driver bridge 2>/dev/null || true) || true"
         )
 
         # Required because of docker race condition which leads to duplicate networks
