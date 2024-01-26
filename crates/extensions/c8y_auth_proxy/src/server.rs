@@ -1,12 +1,13 @@
 use crate::tokens::*;
 use anyhow::Context;
 use axum::body::Body;
-use axum::body::BoxBody;
 use axum::body::Full;
 use axum::body::StreamBody;
+use axum::extract::ws::WebSocket;
 use axum::extract::FromRef;
 use axum::extract::Path;
 use axum::extract::State;
+use axum::extract::WebSocketUpgrade;
 use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -18,16 +19,27 @@ use axum_tls::config::TrustStoreLoader;
 use axum_tls::start_tls_server;
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::Sink;
+use futures::SinkExt;
+use futures::Stream;
+use futures::StreamExt;
 use hyper::HeaderMap;
 use reqwest::Method;
 use reqwest::StatusCode;
-use std::fmt;
+use std::error::Error;
 use std::future::Future;
 use std::io;
 use std::net::IpAddr;
 use std::net::TcpListener;
 use std::sync::Arc;
 use tedge_config_macros::OptionalConfig;
+use tokio::net::TcpStream;
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite;
+use tokio_tungstenite::tungstenite::http::Request;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::WebSocketStream;
 use tracing::error;
 use tracing::info;
 
@@ -37,7 +49,7 @@ pub struct Server {
 
 impl Server {
     pub(crate) fn try_init(
-        state: AppState,
+        state: AppData,
         address: IpAddr,
         port: u16,
         cert_path: OptionalConfig<impl PemReader>,
@@ -79,7 +91,7 @@ impl IntoResponse for ProxyError {
     }
 }
 
-fn create_app(state: AppState) -> Router<(), hyper::Body> {
+fn create_app(state: AppData) -> Router<(), hyper::Body> {
     let handle = get(respond_to)
         .post(respond_to)
         .put(respond_to)
@@ -90,7 +102,7 @@ fn create_app(state: AppState) -> Router<(), hyper::Body> {
         .route("/c8y", handle.clone())
         .route("/c8y/", handle.clone())
         .route("/c8y/*path", handle)
-        .with_state(state)
+        .with_state(AppState::from(state))
 }
 
 fn try_bind_insecure(
@@ -116,15 +128,39 @@ fn try_bind_with_tls(
     Ok(start_tls_server(listener, server_config, app))
 }
 
-#[derive(Clone)]
-pub(crate) struct AppState {
-    pub target_host: Arc<str>,
+pub(crate) struct AppData {
+    pub is_https: bool,
+    pub host: String,
     pub token_manager: SharedTokenManager,
+}
+
+#[derive(Clone)]
+struct AppState {
+    target_host: TargetHost,
+    token_manager: SharedTokenManager,
+}
+
+impl From<AppData> for AppState {
+    fn from(value: AppData) -> Self {
+        let (http, ws) = if value.is_https {
+            ("https", "wss")
+        } else {
+            ("http", "ws")
+        };
+        let host = value.host;
+        AppState {
+            target_host: TargetHost {
+                http: format!("{http}://{host}").into(),
+                ws: format!("{ws}://{host}").into(),
+            },
+            token_manager: value.token_manager,
+        }
+    }
 }
 
 impl FromRef<AppState> for TargetHost {
     fn from_ref(input: &AppState) -> Self {
-        Self(input.target_host.clone())
+        input.target_host.clone()
     }
 }
 
@@ -135,23 +171,210 @@ impl FromRef<AppState> for SharedTokenManager {
 }
 
 #[derive(Clone)]
-struct TargetHost(Arc<str>);
+struct TargetHost {
+    http: Arc<str>,
+    ws: Arc<str>,
+}
 
-impl fmt::Display for TargetHost {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+fn axum_to_tungstenite(message: axum::extract::ws::Message) -> tungstenite::Message {
+    use axum::extract::ws::CloseFrame as InCf;
+    use axum::extract::ws::Message as In;
+    use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame as OutCf;
+    use tokio_tungstenite::tungstenite::Message as Out;
+    match message {
+        In::Text(t) => Out::Text(t),
+        In::Binary(t) => Out::Binary(t),
+        In::Ping(t) => Out::Ping(t),
+        In::Pong(t) => Out::Pong(t),
+        In::Close(Some(InCf { code, reason })) => Out::Close(Some(OutCf {
+            code: code.into(),
+            reason,
+        })),
+        In::Close(None) => Out::Close(None),
     }
 }
 
+fn tungstenite_to_axum(message: tungstenite::Message) -> axum::extract::ws::Message {
+    use axum::extract::ws::CloseFrame as OutCf;
+    use axum::extract::ws::Message as Out;
+    use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame as InCf;
+    use tokio_tungstenite::tungstenite::Message as In;
+    match message {
+        In::Text(t) => Out::Text(t),
+        In::Binary(t) => Out::Binary(t),
+        In::Ping(t) => Out::Ping(t),
+        In::Pong(t) => Out::Pong(t),
+        In::Close(Some(InCf { code, reason })) => Out::Close(Some(OutCf {
+            code: code.into(),
+            reason,
+        })),
+        In::Close(None) => Out::Close(None),
+        In::Frame(_) => unreachable!("This function is only called when reading a message"),
+    }
+}
+
+async fn connect_to_websocket(
+    token: &str,
+    headers: &HeaderMap<HeaderValue>,
+    uri: &str,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Error> {
+    let mut req = Request::builder();
+    for (name, value) in headers {
+        req = req.header(name.as_str(), value);
+    }
+    req = req.header("Authorization", format!("Bearer {token}"));
+    let req = req
+        .uri(uri)
+        .body(())
+        .expect("Builder should always work as the headers are copied from a previous request, so must be valid");
+    tokio_tungstenite::connect_async(req)
+        .await
+        .map(|(c8y, _)| c8y)
+}
+
+async fn proxy_ws(
+    mut ws: WebSocket,
+    host: TargetHost,
+    retrieve_token: State<SharedTokenManager>,
+    headers: HeaderMap<HeaderValue>,
+    path: String,
+) {
+    use axum::extract::ws::CloseFrame;
+    use tungstenite::error::Error;
+    let uri = format!("{}/{path}", host.ws);
+    let mut token = retrieve_token.not_matching(None).await;
+    let c8y = match connect_to_websocket(&token, &headers, &uri).await {
+        Ok(c8y) => Ok(c8y),
+        Err(Error::Http(res)) if res.status() == StatusCode::UNAUTHORIZED => {
+            token = retrieve_token.not_matching(Some(&token)).await;
+            match connect_to_websocket(&token, &headers, &uri).await {
+                Ok(c8y) => Ok(c8y),
+                Err(e) => {
+                    Err(anyhow::Error::from(e).context("Failed to connect to proxied websocket"))
+                }
+            }
+        }
+        Err(e) => Err(anyhow::Error::from(e)),
+    }
+    .context("Error connecting to proxied websocket");
+    let c8y = match c8y {
+        Err(e) => {
+            let _ = ws
+                .send(axum::extract::ws::Message::Close(Some(CloseFrame {
+                    code: 1014,
+                    reason: "Failed to connect to Cumulocity".into(),
+                })))
+                .await;
+            error!("{e:?}");
+            return;
+        }
+        Ok(c8y) => c8y,
+    };
+    let (mut to_c8y, mut from_c8y) = c8y.split();
+    let (mut to_client, mut from_client) = ws.split();
+
+    let (tx_c_to_c8y, mut rx_c_to_c8y) = mpsc::channel::<()>(1);
+    let mut client_to_c8y = tokio::spawn(async move {
+        use tungstenite::protocol::frame::CloseFrame;
+        use tungstenite::Message;
+        let extract_close_frame = |msg| match msg {
+            Message::Close(cf) => Ok(cf),
+            msg => Err(msg),
+        };
+
+        let mut res = tokio::select! {
+            res = copy_messages_from(&mut from_client, &mut to_c8y, axum_to_tungstenite, extract_close_frame) => res,
+            _ = rx_c_to_c8y.recv() => Ok(None),
+        };
+
+        let close_frame = match &mut res {
+            Ok(close_frame) => close_frame.take(),
+            Err(_) => Some(CloseFrame {
+                code: CloseCode::Bad(1014),
+                reason: "Error communicating with Cumulocity".into(),
+            }),
+        };
+        let _ = to_c8y.send(Message::Close(close_frame)).await;
+        info!("Closed websocket proxy from client to Cumulocity");
+        res
+    });
+
+    let (tx_c8y_to_c, mut rx_c8y_to_c) = mpsc::channel::<()>(1);
+    let mut c8y_to_client = tokio::spawn(async move {
+        use axum::extract::ws::Message;
+        let extract_close_frame = |msg| match msg {
+            Message::Close(cf) => Ok(cf),
+            msg => Err(msg),
+        };
+
+        let mut res = tokio::select! {
+            res = copy_messages_from(&mut from_c8y, &mut to_client, tungstenite_to_axum, extract_close_frame) => res,
+            _ = rx_c8y_to_c.recv() => Ok(None),
+        };
+
+        let close_frame = match &mut res {
+            Ok(close_frame) => close_frame.take(),
+            Err(_) => Some(CloseFrame {
+                code: 1014,
+                reason: "Error communicating with Cumulocity".into(),
+            }),
+        };
+        let _ = to_client.send(Message::Close(close_frame)).await;
+        info!("Closed websocket proxy from Cumulocity to client");
+        res
+    });
+
+    tokio::select! {
+        res = (&mut client_to_c8y) => {
+            if let Err(e) = res.unwrap() {
+                error!("Websocket error proxying messages from the client to Cumulocity: {e:?}");
+            }
+            let _ = tx_c8y_to_c.send(()).await;
+        }
+        res = (&mut c8y_to_client) => {
+            if let Err(e) = res.unwrap() {
+                error!("Websocket error proxying messages from Cumulocity to the client: {e:?}");
+            }
+            let _ = tx_c_to_c8y.send(()).await;
+        }
+    }
+}
+
+async fn copy_messages_from<T, TErr, CloseFrame, U, UErr>(
+    input: &mut (impl Stream<Item = Result<T, TErr>> + Unpin),
+    output: &mut (impl Sink<U, Error = UErr> + Unpin),
+    convert_message: fn(T) -> U,
+    extract_close_frame: fn(U) -> Result<Option<CloseFrame>, U>,
+) -> anyhow::Result<Option<CloseFrame>>
+where
+    TErr: Error + Sync + Send + 'static,
+    UErr: Error + Sync + Send + 'static,
+    U: std::fmt::Debug,
+{
+    while let Some(msg) = input.next().await {
+        match msg.map(convert_message).map(extract_close_frame) {
+            Ok(Ok(close_frame)) => return Ok(close_frame),
+            Ok(Err(msg)) => output
+                .send(msg)
+                .await
+                .context("Error sending websocket message")?,
+            Err(err) => Err(err).context("Error receiving websocket message")?,
+        }
+    }
+    Ok(None)
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn respond_to(
-    State(TargetHost(host)): State<TargetHost>,
+    State(host): State<TargetHost>,
     retrieve_token: State<SharedTokenManager>,
     path: Option<Path<String>>,
     uri: hyper::Uri,
     method: Method,
     headers: HeaderMap<HeaderValue>,
+    ws: Option<WebSocketUpgrade>,
     small_body: crate::body::PossiblySmallBody,
-) -> Result<(StatusCode, Option<HeaderMap>, BoxBody), ProxyError> {
+) -> Result<Response, ProxyError> {
     let path = match &path {
         Some(Path(p)) => p.as_str(),
         None => "",
@@ -166,9 +389,9 @@ async fn respond_to(
     // Cumulocity revokes the device token if we access parts of the frontend UI,
     // so deny requests to these proactively
     if path.ends_with(".js") || path.starts_with("apps/") {
-        return Ok((StatusCode::FORBIDDEN, None, <_>::default()));
+        return Ok(StatusCode::FORBIDDEN.into_response());
     }
-    let mut destination = format!("{host}/{path}");
+    let mut destination = format!("{}/{path}", host.http);
     if let Some(query) = uri.query() {
         destination += "?";
         destination += query;
@@ -176,10 +399,14 @@ async fn respond_to(
 
     let mut token = retrieve_token.not_matching(None).await;
 
+    if let Some(ws) = ws {
+        let path = path.to_owned();
+        return Ok(ws.on_upgrade(|socket| proxy_ws(socket, host, retrieve_token, headers, path)));
+    }
     let client = reqwest::Client::new();
     let (body, body_clone) = small_body.try_clone();
     if body_clone.is_none() {
-        let destination = format!("{host}/tenant/currentTenant");
+        let destination = format!("{}/tenant/currentTenant", host.http);
         let response = client
             .head(&destination)
             .bearer_auth(&token)
@@ -227,27 +454,275 @@ async fn respond_to(
         ))
     };
 
-    Ok((status, Some(headers), body))
+    Ok((status, headers, body).into_response())
 }
 
 #[cfg(test)]
 mod tests {
     use axum::async_trait;
     use axum::body::Bytes;
+    use axum::headers::authorization::Bearer;
+    use axum::headers::Authorization;
+    use axum::http::Request;
+    use axum::middleware::Next;
+    use axum::TypedHeader;
     use c8y_http_proxy::credentials::JwtRequest;
     use c8y_http_proxy::credentials::JwtResult;
     use c8y_http_proxy::credentials::JwtRetriever;
     use camino::Utf8PathBuf;
+    use futures::channel::mpsc;
     use futures::future::ready;
     use futures::stream::once;
+    use futures::Stream;
+    use hyper::server::conn::AddrIncoming;
+    use rustls::client::ServerCertVerified;
     use std::borrow::Cow;
     use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+    use std::time::Duration;
+    use std::time::SystemTime;
     use tedge_actors::Sequential;
     use tedge_actors::Server;
     use tedge_actors::ServerActorBuilder;
     use tedge_actors::ServerConfig;
+    use tokio::net::TcpStream;
+    use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+    use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+    use tokio_tungstenite::tungstenite::Message;
+    use tokio_tungstenite::tungstenite::Message::Close;
+    use tokio_tungstenite::Connector;
+    use tokio_tungstenite::MaybeTlsStream;
+    use tokio_tungstenite::WebSocketStream;
 
     use super::*;
+
+    struct ConnectionClosed;
+
+    fn websocket_app<Fut>(
+        callback: fn(WebSocket) -> Fut,
+    ) -> (
+        Router,
+        impl Future<Output = Result<Option<ConnectionClosed>, anyhow::Error>>,
+    )
+    where
+        Fut: Future + Send + 'static,
+    {
+        let (mut tx, mut rx) = mpsc::channel(1);
+        let test_app = Router::new().route(
+            "/my/ws/endpoint",
+            get(move |ws: WebSocketUpgrade| async move {
+                ws.on_upgrade(move |ws| async move {
+                    callback(ws).await;
+                    tx.send(ConnectionClosed).await.unwrap();
+                })
+            }),
+        );
+        (
+            test_app,
+            tokio::time::timeout(Duration::from_secs(5), async move { rx.next().await })
+                .map(|e| e.context("Waiting for ConnectionClosed from server")),
+        )
+    }
+
+    async fn receive_all_messages(mut ws: impl Stream + Unpin) {
+        while ws.next().await.is_some() {}
+    }
+
+    async fn drop_connection(_ws: WebSocket) {}
+
+    async fn close_connection(ws: WebSocket) {
+        ws.close().await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn forwards_websockets() {
+        let (server, port) = axum_server();
+        let (test_app, _) = websocket_app(receive_all_messages);
+        tokio::spawn(server.serve(test_app.into_make_service()));
+        let proxy_port = start_server_port(port, vec!["unused token"]);
+
+        let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
+        ws.send(Message::Ping("test".as_bytes().to_vec()))
+            .await
+            .expect("Error sending to websocket");
+
+        assert_eq!(
+            ws.next()
+                .await
+                .unwrap()
+                .expect("Error receiving from websocket"),
+            Message::Pong("test".as_bytes().to_vec())
+        );
+    }
+
+    #[tokio::test]
+    async fn closes_remote_connection_when_local_client_disconnects_unexpectedly() {
+        let (server, port) = axum_server();
+        let (test_app, connection_closed) = websocket_app(receive_all_messages);
+        tokio::spawn(server.serve(test_app.into_make_service()));
+        let proxy_port = start_server_port(port, vec!["unused token"]);
+
+        let (ws, _) = connect_to_websocket_port(proxy_port).await;
+        drop(ws);
+
+        connection_closed.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn closes_remote_connection_when_local_client_disconnects_gracefully() {
+        let (server, port) = axum_server();
+        let (test_app, connection_closed) = websocket_app(receive_all_messages);
+        tokio::spawn(server.serve(test_app.into_make_service()));
+        let proxy_port = start_server_port(port, vec!["unused token"]);
+        let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
+        ws.close(None).await.unwrap();
+
+        connection_closed.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn closes_local_connection_when_remote_client_disconnects_gracefully() {
+        let (server, port) = axum_server();
+        let (test_app, connection_closed) = websocket_app(close_connection);
+        tokio::spawn(server.serve(test_app.into_make_service()));
+        let proxy_port = start_server_port(port, vec!["unused token"]);
+        let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
+
+        connection_closed.await.unwrap();
+        assert_eq!(timeout(ws.next()).await.unwrap().unwrap(), Close(None));
+    }
+
+    #[tokio::test]
+    async fn closes_local_connection_gracefully_when_remote_does_not_respond() {
+        let proxy_port = start_server_port(0, vec!["unused token"]);
+        let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
+
+        assert_eq!(
+            timeout(ws.next()).await.unwrap().unwrap(),
+            Close(Some(CloseFrame {
+                code: CloseCode::Protocol,
+                reason: "Protocol violation".into(),
+            }))
+        );
+    }
+
+    #[tokio::test]
+    async fn closes_local_connection_when_remote_client_disconnects_forcefully() {
+        let (test_app, _connection_closed) = websocket_app(drop_connection);
+        let (server, port) = axum_server();
+        tokio::spawn(server.serve(test_app.into_make_service()));
+        let proxy_port = start_server_port(port, vec!["unused token"]);
+        let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
+
+        assert_eq!(
+            timeout(ws.next()).await.unwrap().unwrap(),
+            Close(Some(CloseFrame {
+                code: CloseCode::Protocol,
+                reason: "Protocol violation".into(),
+            }))
+        );
+    }
+
+    async fn timeout<Fut: Future>(fut: Fut) -> Fut::Output {
+        tokio::time::timeout(Duration::from_secs(5), fut)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn updates_outdated_jwts_for_websocket_connection() {
+        let test_app = Router::new()
+            .route(
+                "/my/ws/endpoint",
+                get(|ws: WebSocketUpgrade| async { ws.on_upgrade(|_ws| ready(())) }),
+            )
+            .layer(axum::middleware::from_fn(auth(|token| {
+                token == "correct token"
+            })));
+        let (server, port) = axum_server();
+        tokio::spawn(server.serve(test_app.into_make_service()));
+        let proxy_port = start_server_port(port, vec!["outdated token", "correct token"]);
+        let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
+        ws.send(Message::Ping("test".as_bytes().to_vec()))
+            .await
+            .expect("Error sending to websocket");
+        assert_eq!(
+            ws.next()
+                .await
+                .unwrap()
+                .expect("Error receiving from websocket"),
+            Message::Pong("test".as_bytes().to_vec())
+        );
+    }
+
+    fn axum_server() -> (hyper::server::Builder<AddrIncoming>, u16) {
+        for port in 3200..3300 {
+            let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+            if let Ok(server) = axum::Server::try_bind(&addr) {
+                return (server, port);
+            }
+        }
+        panic!("No free port found")
+    }
+
+    fn auth<'a, B: Send + 'a>(
+        token_is_valid: fn(&str) -> bool,
+    ) -> impl Fn(
+        TypedHeader<Authorization<Bearer>>,
+        Request<B>,
+        Next<B>,
+    ) -> BoxFuture<'a, Result<Response, StatusCode>>
+           + Clone {
+        move |TypedHeader(auth), request, next| {
+            Box::pin(async move {
+                if token_is_valid(auth.token()) {
+                    let response = next.run(request).await;
+                    Ok(response)
+                } else {
+                    Err(StatusCode::UNAUTHORIZED)
+                }
+            })
+        }
+    }
+
+    async fn connect_to_websocket_port(
+        port: u16,
+    ) -> (
+        WebSocketStream<MaybeTlsStream<TcpStream>>,
+        Response<Option<Vec<u8>>>,
+    ) {
+        use rustls::*;
+        struct CertificateIgnorer;
+        impl client::ServerCertVerifier for CertificateIgnorer {
+            fn verify_server_cert(
+                &self,
+                _end_entity: &Certificate,
+                _intermediates: &[Certificate],
+                _server_name: &ServerName,
+                _scts: &mut dyn Iterator<Item = &[u8]>,
+                _ocsp_response: &[u8],
+                _now: SystemTime,
+            ) -> Result<ServerCertVerified, Error> {
+                Ok(ServerCertVerified::assertion())
+            }
+        }
+
+        let mut config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(Arc::new(RootCertStore::empty()))
+            .with_no_client_auth();
+        config
+            .dangerous()
+            .set_certificate_verifier(Arc::new(CertificateIgnorer));
+        tokio_tungstenite::connect_async_tls_with_config(
+            format!("wss://127.0.0.1:{port}/c8y/my/ws/endpoint"),
+            None,
+            false,
+            Some(Connector::Rustls(Arc::new(config))),
+        )
+        .await
+        .unwrap()
+    }
 
     #[tokio::test]
     async fn forwards_successful_responses() {
@@ -516,13 +991,24 @@ mod tests {
         )
     }
 
+    fn start_server_port(port: u16, tokens: Vec<impl Into<Cow<'static, str>>>) -> u16 {
+        start_proxy_to_url(
+            &format!("127.0.0.1:{port}"),
+            tokens,
+            rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap(),
+            None,
+        )
+    }
+
     fn start_server_with_certificate(
         target_host: &mockito::Server,
         tokens: Vec<impl Into<Cow<'static, str>>>,
         certificate: rcgen::Certificate,
         ca_dir: Option<Utf8PathBuf>,
     ) -> u16 {
-        start_proxy_to_url(&target_host.url(), tokens, certificate, ca_dir)
+        let url = target_host.url();
+        let (_scheme, host) = url.split_once("://").unwrap();
+        start_proxy_to_url(host, tokens, certificate, ca_dir)
     }
 
     fn start_proxy_to_url(
@@ -534,8 +1020,9 @@ mod tests {
         let mut retriever = IterJwtRetriever::builder(tokens);
         let mut last_error = None;
         for port in 3000..3100 {
-            let state = AppState {
-                target_host: target_host.into(),
+            let state = AppData {
+                is_https: false,
+                host: target_host.into(),
                 token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
                     .shared(),
             };

@@ -166,6 +166,7 @@ thiserror = "1.0"
 time = "0.3"
 tokio = { version = "1.23", default-features = false }
 tokio-rustls = "0.24.1"
+tokio-tungstenite = { version = "0.20.0" }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.7"
 tower = "0.4"
