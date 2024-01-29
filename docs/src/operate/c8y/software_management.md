@@ -1,10 +1,7 @@
 ---
-title: Enable Software Management Support
+title: Software Management
 tags: [Operate, Installation, Software Management]
-sidebar_position: 4
 ---
-
-# Install and enable the software management feature
 
 :::note
 As of now, this feature is supported only on devices with **debian** based
