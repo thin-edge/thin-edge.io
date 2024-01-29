@@ -1,17 +1,15 @@
 ---
 title: Health Monitoring
 tags: [Operate, Cumulocity, Monitoring]
-sidebar_position: 8
+#sidebar_position: 8
 ---
-
-# How to monitor health of service from Cumulocity IoT
 
 The health of a `thin-edge.io` service or any other `service` that is running on the `thin-edge.io` device
 or on the `child` device can be monitored from the **Cumulocity IoT** by sending the `health-status` message to **Cumulocity IoT**.
 
-## Send the health status of a service to health topic.
+## Publish health status
 
-A health status message can be published for any service on a `status/health` channel. The health message has to contain
+A health status message can be published for any service on a `status/health` channel. The health message should at least contain The health message should contain
 at least the `status` of the service.
 
 :::note
@@ -26,7 +24,7 @@ tedge mqtt pub te/device/my-device/service/my-test-service/status/health '{"stat
 ```
 
 :::note
-The health status message has to be sent as a `retain` message.
+The health status message has to be sent as a *retain* message.
 :::
 
 When an empty health status message is sent, e.g. `{}` or `''`, the `status` will be replaced with `unknown`.
