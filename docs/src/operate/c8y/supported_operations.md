@@ -1,10 +1,7 @@
 ---
 title: Supported Operations
 tags: [Operate, Cumulocity, Operation]
-sidebar_position: 1
 ---
-
-# Supported Operations
 
 ## Concepts
 
