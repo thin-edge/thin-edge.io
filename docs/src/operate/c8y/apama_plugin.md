@@ -1,10 +1,7 @@
 ---
 title: Apama Plugin
 tags: [Operate, Cumulocity, Software Management]
-sidebar_position: 10
 ---
-
-# Apama Software Management Plugin
 
 The Apama plugin, part of the Apama thin-edge support package, can be used to install Apama projects using the Cumulocity software management feature.
 
