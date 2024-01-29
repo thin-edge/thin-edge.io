@@ -1,17 +1,14 @@
 ---
 title: Configuration Management
 tags: [Operate, Cumulocity, Configuration]
-sidebar_position: 5
 ---
-
-# How to manage configuration files with Cumulocity
 
 With `thin-edge.io`, you can manage config files on a device by using the [Cumulocity configuration management feature](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) as a part of Device Management.
 
 If you are new to the Cumulocity **Configuration Management** feature,
 we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) along with this how-to guide.
 
-The configuration management functionality is provided by the **tedge-agent** service which is installed by default. If it is not installed then please install the components again following the [install guide](../../install/index.md).
+The configuration management functionality is provided by the **tedge-agent** service which is installed by default.
 
 ## Getting started
 
