@@ -1,6 +1,6 @@
 ---
 title: Device Restart
-tags: [Operate, Operation]
+tags: [Operate, Operation, Cumulocity]
 sidebar_position: 1
 ---
 
