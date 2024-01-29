@@ -39,7 +39,7 @@ jobs:
 
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
-        uses: SebRollen/toml-action@v1.0.2
+        uses: SebRollen/toml-action@v1.2.0
         with:
           file: Cargo.toml
           field: "workspace.package.rust-version"
