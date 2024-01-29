@@ -2,7 +2,6 @@ use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::KeyPair;
-use rcgen::RcgenError;
 use sha1::Digest;
 use sha1::Sha1;
 use std::path::Path;
@@ -191,7 +190,7 @@ pub enum CertificateError {
     IoError(#[from] std::io::Error),
 
     #[error("Cryptography related error")]
-    CryptographyError(#[from] RcgenError),
+    CryptographyError(#[from] rcgen::Error),
 
     #[error("PEM file format error")]
     PemError(#[from] x509_parser::error::PEMError),
