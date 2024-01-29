@@ -4,6 +4,7 @@ use serde::Serialize;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_mqtt_ext::Message;
+use tracing::error;
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct HealthStatus {
@@ -25,13 +26,11 @@ pub fn convert_health_status_message(
         return vec![];
     }
 
-    let mut mqtt_messages: Vec<Message> = Vec::new();
-
     // If not Bridge health status
     // FIXME: can also match "device/bridge//" or "/device/main/service/my_custom_bridge"
     // should match ONLY the single mapper bridge
     if entity.topic_id.as_str().contains("bridge") {
-        return mqtt_messages;
+        return vec![];
     }
 
     let HealthStatus {
@@ -42,16 +41,27 @@ pub fn convert_health_status_message(
         health_status = "unknown".into();
     }
 
-    // FIXME: `ancestors_external_ids` gives external ids starting from the parent, but for health
-    // we need XID of current device as well
-    let mut external_ids = vec![entity.external_id.as_ref().to_string()];
-    external_ids.extend_from_slice(ancestors_external_ids);
-    let status_message =
-        smartrest::inventory::service_status_update_message(&external_ids, &health_status);
+    let display_name = entity
+        .other
+        .get("name")
+        .and_then(|v| v.as_str())
+        .or(entity.topic_id.default_service_name())
+        .unwrap_or(entity.external_id.as_ref());
 
-    mqtt_messages.push(status_message);
+    let display_type = entity
+        .other
+        .get("type")
+        .and_then(|v| v.as_str())
+        .expect("display type should be inserted for every service in the converter");
 
-    mqtt_messages
+    let Ok(status_message) =
+        // smartrest::inventory::service_status_update_message(&external_ids, &health_status);
+        smartrest::inventory::service_creation_message(entity.external_id.as_ref(), display_name, display_type, &health_status, ancestors_external_ids) else {
+            error!("Can't create 102 for service status update");
+            return vec![];
+        };
+
+    vec![status_message]
 }
 
 #[cfg(test)]
@@ -66,57 +76,57 @@ mod tests {
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"pid":"1234","status":"up"}"#,
-        "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,up"#;
-        "service monitoring thin-edge device"
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,up"#;
+        "service-monitoring-thin-edge-device"
     )]
     #[test_case(
         "test_device",
         "te/device/child/service/tedge-mapper-c8y/status/health",
         r#"{"pid":"1234","status":"up"}"#,
-        "c8y/s/us/test_device:device:child/test_device:device:child:service:tedge-mapper-c8y",
-        r#"104,up"#;
-        "service monitoring thin-edge child device"
+        "c8y/s/us/test_device:device:child",
+        r#"102,test_device:device:child:service:tedge-mapper-c8y,service,tedge-mapper-c8y,up"#;
+        "service-monitoring-thin-edge-child-device"
     )]
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"pid":"123456"}"#,
-        "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,unknown"#;
-        "service monitoring thin-edge no status"
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,unknown"#;
+        "service-monitoring-thin-edge-no-status"
     )]
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"status":""}"#,
-        "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,unknown"#;
-        "service monitoring empty status"
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,unknown"#;
+        "service-monitoring-empty-status"
     )]
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         "{}",
-        "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,unknown"#;
-        "service monitoring empty health message"
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,unknown"#;
+        "service-monitoring-empty-health-message"
     )]
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"status":"up,down"}"#,
-        "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,"up,down""#;
-        "service monitoring type with comma health message"
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,"up,down""#;
+        "service-monitoring-type-with-comma-health-message"
     )]
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"status":"up\"down"}"#,
-        "c8y/s/us/test_device:device:main:service:tedge-mapper-c8y",
-        r#"104,"up""down""#;
-        "service monitoring double quotes health message"
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,"up""down""#;
+        "service-monitoring-double-quotes-health-message"
     )]
     fn translate_health_status_to_c8y_service_monitoring_message(
         device_name: &str,

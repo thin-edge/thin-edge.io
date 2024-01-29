@@ -714,13 +714,19 @@ pub enum EntityType {
     Service,
 }
 
+impl EntityType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            EntityType::MainDevice => "device",
+            EntityType::ChildDevice => "child-device",
+            EntityType::Service => "service",
+        }
+    }
+}
+
 impl Display for EntityType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EntityType::MainDevice => write!(f, "device"),
-            EntityType::ChildDevice => write!(f, "child-device"),
-            EntityType::Service => write!(f, "service"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
