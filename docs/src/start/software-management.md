@@ -57,12 +57,15 @@ Find more information about [managing the device software](https://cumulocity.co
       a description and its version.
     * to add a new version, select the software for which you want to add a new version from the dropdown list in the Software
       field and enter a version of the package. The version is optional and can be set to "latest" or to an empty space (' '), both meaning the latest version will be used.
+    * [10.14 or later] to add a new software type, enter a name of the software type (and confirm it by clicking Add new in the resulting window).
+      The software type name that is provided here is used to pick the appropriate plugin among those installed in /etc/tedge/sm-plugins.
+      If the software type is not given, a `default` plugin will be used if defined or if only a single plugin is installed.
 
     :::note
-    * The version field format is `package_version::plugin_type_name`.The plugin type name that is provided here is used to pick
-      the appropriate plugin among those installed in /etc/tedge/sm-plugins.
+    If your Cumulocity version is 10.13 or older,
+    * The version field format must be `package_version::software_type`.
 
-    * If the postfix `::plugin_type_name` is left empty, a `default` plugin will be used if defined or if only a single plugin is installed.
+    * If the postfix `::software_type` is left empty, a `default` plugin will be used if defined or if only a single plugin is installed.
     :::
 
 3. Optionally, you can define the device type filter when adding a new software.
@@ -76,7 +79,7 @@ Find more information about [managing the device software](https://cumulocity.co
        width="30%"
     />
 
-    If you would like to use other sources (eg. file uploaded to your cloud or an external source), provide the full url to the file.
+    If you would like to use other sources (e.g. file uploaded to your cloud or an external source), provide the full url to the file.
 
     <img
        src={require('./images/add-new-software-to-repo-binary.png').default}

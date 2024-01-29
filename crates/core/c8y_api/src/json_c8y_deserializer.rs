@@ -204,7 +204,7 @@ pub struct C8ySoftwareUpdateModule {
     pub version: String,
     // None if the action is "delete"
     pub url: Option<String>,
-    // None if c8y's version is old. See issue #1352
+    // None if c8y's version is older than 10.14. See issue #1352
     pub software_type: Option<String>,
     // C8y's object ID of the software to be installed. We don't use this info
     pub id: Option<String>,
@@ -276,30 +276,29 @@ impl C8ySoftwareUpdate {
 
 impl C8ySoftwareUpdateModule {
     fn get_module_version_and_type(&self) -> (Option<String>, Option<String>) {
-        if self.version.is_empty() {
+        let trimmed_version = self.version.trim();
+
+        // For C8Y version >= 10.4, refer to the issue #1352
+        match &self.software_type {
+            Some(module_type) if !module_type.trim().is_empty() => {
+                let version = (!trimmed_version.is_empty()).then(|| trimmed_version.to_string());
+                return (version, Some(module_type.into()));
+            }
+            _ => {}
+        }
+
+        // For C8Y version < 10.4, version field is supposed to be <version>::<sw_type>
+        if trimmed_version.is_empty() {
             (None, None) // (empty)
         } else {
-            let split = if self.version.matches("::").count() > 1 {
-                self.version.rsplit_once("::")
-            } else {
-                self.version.split_once("::")
-            };
-
-            match split {
+            match trimmed_version.rsplit_once("::") {
+                None => (Some(trimmed_version.into()), None), // 1.0
                 Some((v, t)) => {
-                    if v.is_empty() {
-                        (None, Some(t.into())) // ::debian
-                    } else if !t.is_empty() {
-                        (Some(v.into()), Some(t.into())) // 1.0::debian
-                    } else {
-                        (Some(v.into()), None)
-                    }
-                }
-                None => {
-                    if self.version == " " {
-                        (None, None) // as long as c8y UI forces version input
-                    } else {
-                        (Some(self.version.clone()), None) // 1.0
+                    match (v.is_empty(), t.is_empty()) {
+                        (true, true) => (None, None),                       // ::
+                        (true, false) => (None, Some(t.into())),            // ::debian
+                        (false, true) => (Some(v.into()), None),            // 1.0::
+                        (false, false) => (Some(v.into()), Some(t.into())), // 1.0::debian
                     }
                 }
             }
@@ -468,6 +467,12 @@ mod tests {
         module.version = " ".into(); // " " (space)
         assert_eq!(module.get_module_version_and_type(), (None, None));
 
+        module.version = "   ".into(); // "   " (more spaces)
+        assert_eq!(module.get_module_version_and_type(), (None, None));
+
+        module.version = "::".into();
+        assert_eq!(module.get_module_version_and_type(), (None, None));
+
         module.version = "::debian".into();
         assert_eq!(
             module.get_module_version_and_type(),
@@ -496,6 +501,55 @@ mod tests {
         assert_eq!(
             module.get_module_version_and_type(),
             (Some("1.0.0".to_string()), None)
+        );
+    }
+
+    #[test]
+    fn verify_get_module_version_and_type_with_type_support_1352() {
+        let mut module = C8ySoftwareUpdateModule {
+            name: "software1".into(),
+            version: "".into(),
+            url: None,
+            software_type: Some("rpm".into()),
+            action: "install".into(),
+            id: None,
+        }; // ""
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (None, Some("rpm".to_string()))
+        );
+
+        module.version = " ".into(); // " " (space)
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (None, Some("rpm".to_string()))
+        );
+
+        module.version = "   ".into(); // "   " (more spaces)
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (None, Some("rpm".to_string()))
+        );
+
+        module.version = "1.0.0".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0".to_string()), Some("rpm".to_string()))
+        );
+
+        // If software_type has valid value, don't use "::" logic.
+        module.version = "1.0.0::debian".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0::debian".to_string()), Some("rpm".to_string()))
+        );
+
+        // If software_type has invalid value, fall back to "::" logic.
+        module.software_type = Some("  ".into());
+        module.version = "1.0.0::debian".into();
+        assert_eq!(
+            module.get_module_version_and_type(),
+            (Some("1.0.0".to_string()), Some("debian".to_string()))
         );
     }
 
@@ -534,7 +588,6 @@ mod tests {
             "description": "test operation",
             "c8y_SoftwareUpdate": [
                 {
-                    "softwareType": "dummy",
                     "name": "software1",
                     "action": "install",
                     "id": "123456",
@@ -542,7 +595,14 @@ mod tests {
                     "url": "url1"
                 },
                 {
+                    "softwareType": "rpm",
                     "name": "software2",
+                    "action": "delete",
+                    "version": "1.0"
+                },
+                {
+                    "softwareType": "",
+                    "name": "software3",
                     "action": "delete",
                     "version": ""
                 }
@@ -575,8 +635,15 @@ mod tests {
             file_path: None,
         }));
         expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
-            module_type: Some("".to_string()),
+            module_type: Some("rpm".to_string()),
             name: "software2".to_string(),
+            version: Some("1.0".to_string()),
+            url: None,
+            file_path: None,
+        }));
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+            module_type: None,
+            name: "software3".to_string(),
             version: None,
             url: None,
             file_path: None,
@@ -599,6 +666,12 @@ mod tests {
                 "action": "install",
                 "version": "5.7::debian",
                 "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2"
+            },
+            {
+                "softwareType": "debian",
+                "name": "nano",
+                "action": "delete",
+                "version": "2.3"
             },
             {
                 "name": "nginx",
@@ -637,6 +710,11 @@ mod tests {
                             "version": "5.7",
                             "url": "https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2",
                             "action": "install"
+                        },
+                        {
+                            "name": "nano",
+                            "version": "2.3",
+                            "action": "remove"
                         }
                     ]
                 },
@@ -667,6 +745,7 @@ mod tests {
     fn access_c8y_software_update_modules() {
         let data = json!([
             {
+                "softwareType": "debian",
                 "name": "software1",
                 "action": "install",
                 "version": "version1",
@@ -686,7 +765,7 @@ mod tests {
                 name: "software1".into(),
                 version: "version1".into(),
                 url: Some("url1".into()),
-                software_type: None,
+                software_type: Some("debian".into()),
                 action: "install".into(),
                 id: None,
             },

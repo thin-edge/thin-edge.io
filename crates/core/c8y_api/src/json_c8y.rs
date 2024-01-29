@@ -13,8 +13,6 @@ use tedge_api::messages::SoftwareListCommand;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareModule;
-use tedge_api::SoftwareType;
-use tedge_api::SoftwareVersion;
 use time::OffsetDateTime;
 
 const EMPTY_STRING: &str = "";
@@ -75,7 +73,10 @@ impl InternalIdResponse {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct C8ySoftwareModuleItem {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(rename = "type")]
+    pub software_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
     pub url: Option<DownloadInfo>,
@@ -93,10 +94,8 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
 
         Self {
             name: module.name,
-            version: Option::from(combine_version_and_type(
-                &module.version,
-                &module.module_type,
-            )),
+            version: module.version,
+            software_type: module.module_type.unwrap_or(SoftwareModule::default_type()),
             url,
         }
     }
@@ -165,37 +164,6 @@ impl From<ThinEdgeEvent> for C8yCreateEvent {
 }
 
 impl<'a> Jsonify<'a> for C8yCreateEvent {}
-
-fn combine_version_and_type(
-    version: &Option<SoftwareVersion>,
-    module_type: &Option<SoftwareType>,
-) -> String {
-    match module_type {
-        Some(m) => {
-            if m.is_empty() {
-                match version {
-                    Some(v) => v.into(),
-                    None => EMPTY_STRING.into(),
-                }
-            } else {
-                match version {
-                    Some(v) => format!("{}::{}", v, m),
-                    None => format!("::{}", m),
-                }
-            }
-        }
-        None => match version {
-            Some(v) => {
-                if v.contains("::") {
-                    format!("{}::", v)
-                } else {
-                    v.into()
-                }
-            }
-            None => EMPTY_STRING.into(),
-        },
-    }
-}
 
 fn update_the_external_source_event(extras: &mut HashMap<String, Value>, source: &str) {
     let mut value = serde_json::Map::new();
@@ -422,7 +390,8 @@ mod tests {
 
         let expected_c8y_item = C8ySoftwareModuleItem {
             name: "b".into(),
-            version: Some("c::a".into()),
+            version: Some("c".into()),
+            software_type: "a".to_string(),
             url: Some("".into()),
         };
 
@@ -460,33 +429,38 @@ mod tests {
             c8y_software_list: Some(vec![
                 C8ySoftwareModuleItem {
                     name: "a".into(),
-                    version: Some("::debian".into()),
+                    version: None,
+                    software_type: "debian".to_string(),
                     url: Some("".into()),
                 },
                 C8ySoftwareModuleItem {
                     name: "b".into(),
-                    version: Some("1.0::debian".into()),
+                    version: Some("1.0".into()),
+                    software_type: "debian".to_string(),
                     url: Some("".into()),
                 },
                 C8ySoftwareModuleItem {
                     name: "c".into(),
-                    version: Some("::debian".into()),
+                    version: None,
+                    software_type: "debian".to_string(),
                     url: Some("https://foobar.io/c.deb".into()),
                 },
                 C8ySoftwareModuleItem {
                     name: "d".into(),
-                    version: Some("beta::debian".into()),
+                    version: Some("beta".into()),
+                    software_type: "debian".to_string(),
                     url: Some("https://foobar.io/d.deb".into()),
                 },
                 C8ySoftwareModuleItem {
                     name: "m".into(),
-                    version: Some("::apama".into()),
+                    version: None,
+                    software_type: "apama".to_string(),
                     url: Some("https://foobar.io/m.epl".into()),
                 },
             ]),
         };
 
-        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","version":"::debian","url":""},{"name":"b","version":"1.0::debian","url":""},{"name":"c","version":"::debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta::debian","url":"https://foobar.io/d.deb"},{"name":"m","version":"::apama","url":"https://foobar.io/m.epl"}]}"#;
+        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","type":"debian","url":""},{"name":"b","version":"1.0","type":"debian","url":""},{"name":"c","type":"debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta","type":"debian","url":"https://foobar.io/d.deb"},{"name":"m","type":"apama","url":"https://foobar.io/m.epl"}]}"#;
 
         assert_eq!(c8y_software_list, expected_struct);
         assert_eq!(c8y_software_list.to_json(), expected_json);
@@ -526,40 +500,6 @@ mod tests {
         };
 
         assert_eq!(response.id(), "12345".to_string());
-    }
-
-    #[test]
-    fn verify_combine_version_and_type() {
-        let some_version: Option<SoftwareVersion> = Some("1.0".to_string());
-        let some_version_with_colon: Option<SoftwareVersion> = Some("1.0.0::1".to_string());
-        let none_version: Option<SoftwareVersion> = None;
-        let some_module_type: Option<SoftwareType> = Some("debian".to_string());
-        let none_module_type: Option<SoftwareType> = None;
-
-        assert_eq!(
-            combine_version_and_type(&some_version, &some_module_type),
-            "1.0::debian"
-        );
-        assert_eq!(
-            combine_version_and_type(&some_version, &none_module_type),
-            "1.0"
-        );
-        assert_eq!(
-            combine_version_and_type(&some_version_with_colon, &some_module_type),
-            "1.0.0::1::debian"
-        );
-        assert_eq!(
-            combine_version_and_type(&some_version_with_colon, &none_module_type),
-            "1.0.0::1::"
-        );
-        assert_eq!(
-            combine_version_and_type(&none_version, &some_module_type),
-            "::debian"
-        );
-        assert_eq!(
-            combine_version_and_type(&none_version, &none_module_type),
-            EMPTY_STRING
-        );
     }
 
     #[test_case(

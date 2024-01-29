@@ -26,6 +26,7 @@ Update tedge version from previous using Cumulocity
 
     Restart Service    tedge-mapper-c8y    # WORKAROUND: #1731 Restart service to avoid suspected race condition causing software list message to be lost
 
+    # Note: Software type is reported as a part of version in thin-edge 0.8.1
     Device Should Have Installed Software    tedge,${PREV_VERSION}::apt    tedge_mapper,${PREV_VERSION}::apt    tedge_agent,${PREV_VERSION}::apt    tedge_watchdog,${PREV_VERSION}::apt    c8y_configuration_plugin,${PREV_VERSION}::apt    c8y_log_plugin,${PREV_VERSION}::apt    tedge_apt_plugin,${PREV_VERSION}::apt
 
     # Install desired version
@@ -34,14 +35,25 @@ Update tedge version from previous using Cumulocity
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=180
 
     # Software list reported by the former agent, which is still running
-    Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
+    # but formatted with by the c8y-mapper, which has just been installed
+    Device Should Have Installed Software
+    ...    {"name": "tedge", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
     # Restart tedge-agent from Cumulocity
     ${operation}=    Cumulocity.Restart Device
     Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
     # Software list reported by the new agent
-    Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
+    Device Should Have Installed Software
+    ...    {"name": "tedge", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
     # Check if services are still stopped and disabled
     ${OUTPUT}    Execute Command    systemctl is-active tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
@@ -98,7 +110,12 @@ Update tedge version from base to current using Cumulocity
     ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-agent,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
 
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=300
-    Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
+    Device Should Have Installed Software
+    ...    {"name": "tedge", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
     ${pid_after}=    Execute Command    pgrep tedge-agent    strip=${True}
     Should Not Be Equal    ${pid_before}    ${pid_after}
@@ -120,7 +137,7 @@ Create Local Repository
     Execute Command    mkdir -p /opt/repository/local && find ${packages_dir} -type f -name "*.deb" -exec cp {} /opt/repository/local \\;
     ${NEW_VERSION}=    Execute Command    find ${packages_dir} -type f -name "tedge-mapper_*.deb" | sort -Vr | head -n1 | cut -d'_' -f 2    strip=True
     Set Suite Variable    $NEW_VERSION
-    ${NEW_VERSION_ESCAPED}=    Regexp Escape      ${NEW_VERSION}
+    ${NEW_VERSION_ESCAPED}=    Escape Pattern    ${NEW_VERSION}    is_json=${True}
     Set Suite Variable    $NEW_VERSION_ESCAPED
     Execute Command    cd /opt/repository/local && dpkg-scanpackages -m . > Packages
     Execute Command    cmd=echo 'deb [trusted=yes] file:/opt/repository/local /' > /etc/apt/sources.list.d/tedge-local.list

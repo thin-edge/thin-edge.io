@@ -22,21 +22,35 @@ Limit number of packages
     Execute Command    sudo tedge config set software.plugin.max_packages 5
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
-    ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy1-0002,1.0.0::dummy1    dummy1-0003,1.0.0::dummy1    dummy1-0004,1.0.0::dummy1    dummy1-0005,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2    dummy2-0002,1.0.0::dummy2    dummy2-0003,1.0.0::dummy2    dummy2-0004,1.0.0::dummy2    dummy2-0005,1.0.0::dummy2
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy1-0002", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy1-0003", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy1-0004", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy1-0005", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy2-0002", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy2-0003", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy2-0004", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy2-0005", "version": "1.0.0", "type": "dummy2"}
     Length Should Be    ${software}    10
 
 Limit number of packages to 1
     Execute Command    sudo tedge config set software.plugin.max_packages 1
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
-    ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
     Length Should Be    ${software}    2
 
 Don't limit number of packages
     Execute Command    sudo tedge config set software.plugin.max_packages 0
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
-    ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
     Length Should Be    ${software}    3000
 
 sm-plugins should work without sudo installed and running as root
@@ -44,7 +58,9 @@ sm-plugins should work without sudo installed and running as root
     Set Service User    tedge-agent    root
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
-    ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
     Length Should Be    ${software}    2
 
 sm-plugins download files from Cumulocity

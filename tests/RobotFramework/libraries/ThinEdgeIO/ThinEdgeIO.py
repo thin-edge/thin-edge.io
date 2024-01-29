@@ -716,6 +716,23 @@ class ThinEdgeIO(DeviceLibrary):
             command = f"sed -i -e '/reboot_timeout_seconds/d' -e '/reboot =/a reboot_timeout_seconds = {value}' /etc/tedge/system.toml",
         self.execute_command(command, **kwargs,)
 
+    @keyword("Escape Pattern")
+    def regexp_escape(self, pattern: str, is_json: bool = False):
+        """Escape a string for use in a regular expression with
+        optional escaping for a json string (as json needs also needs
+        to have back slashes escaped)
+
+        Examples:
+        | ${escaped} = | Escape Pattern | ${original} |
+        | ${escaped} = | Escape Pattern | ${original} | is_json=${True} |
+        """
+        value = re.escape(pattern)
+
+        if is_json:
+            return value.replace("\\", "\\\\")
+
+        return value
+
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
         return value

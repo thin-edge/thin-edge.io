@@ -31,8 +31,8 @@ tedge-agent should terminate on SIGINT while downloading file
 
 Software list should only show currently installed software and not candidates
     ${EXPECTED_VERSION}=    Execute Command    dpkg -s tedge | grep "^Version: " | cut -d' ' -f2    strip=True
-    ${VERSION}=    Regexp Escape    ${EXPECTED_VERSION}
-    Device Should Have Installed Software    tedge,^${VERSION}::apt$        timeout=120
+    ${VERSION}=    Escape Pattern    ${EXPECTED_VERSION}    is_json=${True}
+    Device Should Have Installed Software    {"name": "tedge", "type": "apt", "version": "${VERSION}"}    timeout=120
 
 Manual software_list operation request
     # Note: There isn't a Cumulocity IoT operation related to getting the software list, so no need to check for operation transitions
