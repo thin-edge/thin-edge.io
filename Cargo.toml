@@ -114,13 +114,13 @@ proc-macro2 = "1"
 proptest = "1.0"
 quote = "1"
 rand = "0.8"
-rcgen = { version = "0.9", features = ["pem", "zeroize"] }
+rcgen = { version = "0.12", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.11", default-features = false }
 rpassword = "5.0"
 rstest = "0.16.0"
-rumqttc = "0.22"
-rumqttd = "0.17"
+rumqttc = "0.23"
+rumqttd = "0.18"
 rustls = "0.21.6"
 rustls-pemfile = "1.0.1"
 serde = "1.0"
@@ -181,7 +181,7 @@ walkdir = "2"
 which = "4.2"
 whoami = "1.2.1"
 ws_stream_tungstenite = "0.11"
-x509-parser = "0.14"
+x509-parser = "0.15"
 yansi = "0.5"
 zeroize = "1.5"
 
@@ -195,3 +195,6 @@ overflow-checks = true
 
 [workspace.lints.clippy]
 get_first = "allow"
+
+[patch.crates-io]
+x509-parser = { git = 'https://github.com/thin-edge/x509-parser.git', branch = "ring-0.17" }
