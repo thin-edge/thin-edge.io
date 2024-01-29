@@ -1,10 +1,7 @@
 ---
-title: Log management
+title: Log Management
 tags: [Operate, Cumulocity, Log Files]
-sidebar_position: 3
 ---
-
-# How to retrieve logs with the log plugin
 
 The **tedge-agent** service provides out of the box support for requesting log files from a device directly from your Cumulocity UI.
 
