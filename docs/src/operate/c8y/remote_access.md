@@ -1,22 +1,21 @@
 ---
 title: Remote Access
 tags: [Operate, Cumulocity, Remote Access]
-sidebar_position: 8
 ---
 
-# Cumulocity Remote Access plugin
+# Remote Access
 
 To access a device remotely that runs thin-edge.io, a plugin of the operation plugin concept is used. The tedge-mapper is checking for cloud remote access operation and is triggering the particular plugin. You can use the remote access tab in device management to access the device via SSH or VNC.
 
-[View the Cumulocity documentation for the Remote Access feature](https://cumulocity.com/guides/cloud-remote-access/using-cloud-remote-access/)
+Background information on the remote access feature provided by Cumulocity IoT can be found in their [official documentation](https://cumulocity.com/guides/cloud-remote-access/using-cloud-remote-access/).
 
 ## Requirements
 
 - Working thin-edge.io installation
 
-- The Cloud Remote Access Feature is assigned to your Tenant. If not ask your Administrator to get it assigned to your Tenant. Please note that the Version must be at least 1007.2.0+
+- The **Cloud Remote Access Feature** is assigned to your Tenant. If not ask your Administrator to get it assigned to your Tenant. Please note that the Version must be at least 1007.2.0+
 
-- The Cloud Remote Access Role must be assigned to the user who wants to use that Feature: <em>Administration &rarr; Role &rarr; &lt;any Role&gt; &rarr; check "Remote Access"</em>. Assign the role to the user used for the next steps.
+- The *Cloud Remote Access Role* must be assigned to the user who wants to use that Feature: <em>Administration &rarr; Role &rarr; &lt;any Role&gt; &rarr; check "Remote Access"</em>. Assign the role to the user used for the next steps.
 
 - A VNC or SSH server running on the device you wish to connect to.
 
