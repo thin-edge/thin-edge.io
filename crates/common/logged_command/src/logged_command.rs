@@ -148,23 +148,40 @@ impl std::fmt::Display for LoggedCommand {
 }
 
 impl LoggedCommand {
-    pub fn new(program: impl AsRef<OsStr>) -> LoggedCommand {
+    pub fn new(program: impl AsRef<OsStr>) -> Result<LoggedCommand, std::io::Error> {
         let command_line = match program.as_ref().to_str() {
             None => format!("{:?}", program.as_ref()),
             Some(cmd) => cmd.to_string(),
         };
 
-        let mut command = Command::new(program);
+        let mut args = shell_words::split(&command_line)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+
+        let mut command = match args.len() {
+            0 => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "command line is empty.",
+                ))
+            }
+            1 => Command::new(&args[0]),
+            _ => {
+                let mut command = Command::new(args.remove(0));
+                command.args(&args);
+                command
+            }
+        };
+
         command
             .current_dir("/tmp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        LoggedCommand {
+        Ok(LoggedCommand {
             command_line,
             command,
-        }
+        })
     }
 
     pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut LoggedCommand {
@@ -259,7 +276,7 @@ mod tests {
         let mut logger = BufWriter::new(log_file);
 
         // Prepare a command
-        let mut command = LoggedCommand::new("echo");
+        let mut command = LoggedCommand::new("echo").unwrap();
         command.arg("Hello").arg("World!");
 
         // Execute the command with logging
@@ -292,7 +309,7 @@ EOF
         let mut logger = BufWriter::new(log_file);
 
         // Prepare a command that triggers some content on stderr
-        let mut command = LoggedCommand::new("ls");
+        let mut command = LoggedCommand::new("ls").unwrap();
         command.arg("dummy-file");
 
         // Execute the command with logging
@@ -326,7 +343,7 @@ EOF
         let mut logger = BufWriter::new(log_file);
 
         // Prepare a command that cannot be executed
-        let command = LoggedCommand::new("dummy-command");
+        let command = LoggedCommand::new("dummy-command").unwrap();
 
         // Execute the command with logging
         let _ = command.execute(&mut logger).await;

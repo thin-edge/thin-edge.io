@@ -263,11 +263,14 @@ impl ExternalPluginCommand {
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<LoggedCommand, SoftwareError> {
         let mut command = if let Some(sudo) = &self.sudo {
-            let mut command = LoggedCommand::new(sudo);
+            // Safe unwrap
+            let mut command = LoggedCommand::new(sudo).unwrap();
             command.arg(&self.path);
             command
         } else {
-            LoggedCommand::new(&self.path)
+            LoggedCommand::new(&self.path).map_err(|err| SoftwareError::ParseError {
+                reason: err.to_string(),
+            })?
         };
         command.arg(action);
 

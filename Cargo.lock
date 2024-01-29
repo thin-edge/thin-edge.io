@@ -1972,6 +1972,7 @@ dependencies = [
  "anyhow",
  "log",
  "nix",
+ "shell-words",
  "tedge_test_utils",
  "tokio",
 ]

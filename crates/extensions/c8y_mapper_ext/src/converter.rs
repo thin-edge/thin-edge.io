@@ -793,7 +793,13 @@ impl CumulocityConverter {
         let command = command.to_owned();
         let payload = payload.to_string();
 
-        let mut logged = LoggedCommand::new(&command);
+        let mut logged =
+            LoggedCommand::new(&command).map_err(|e| CumulocityMapperError::ExecuteFailed {
+                error_message: e.to_string(),
+                command: command.to_string(),
+                operation_name: operation_name.to_string(),
+            })?;
+
         logged.arg(&payload);
 
         let maybe_child_process =
