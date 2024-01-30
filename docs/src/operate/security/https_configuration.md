@@ -6,7 +6,7 @@ sidebar_position: 6
 
 Thin-edge provides two services over HTTP:
 - The [File Transfer Service](../../references/file_transfer_service.md) is used by the mappers and the child devices to transfer files locally.
-- The [Cumulocity Proxy](../../references/tedge-cumulocity-proxy.md) acts as a local proxy to the Cumulocity IoT REST API.
+- The [Cumulocity Proxy](../../references/cumulocity_proxy.md) acts as a local proxy to the Cumulocity IoT REST API.
 
 Three levels of security are supported:
 

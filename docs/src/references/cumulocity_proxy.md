@@ -1,19 +1,17 @@
 ---
-title: Thin Edge Cumulocity HTTP Proxy
+title: Cumulocity Proxy
 tags: [ Reference, HTTP, Cumulocity ]
 sidebar_position: 12
 ---
 
-# Thin Edge Cumulocity Proxy
-
 The `tedge-mapper` (when running in `c8y` mode) hosts a proxy server to access the Cumulocity HTTP API from the
-thin-edge device.
+%%te%% device.
 It automatically handles authenticating with a JWT, avoiding the need for clients to support MQTT to retrieve this
 information.
 
 The Cumulocity HTTP API can be accessed at `http://{host}:{port}/c8y/{c8y-endpoint}`. Configuration settings
 `c8y.proxy.client.host` and `c8y.proxy.client.port` are used to configure `{host}` and `{port}` parts of the base URL
-which will be used by thin-edge components to make requests to the C8y Proxy. `c8y.proxy.bind.address` and
+which will be used by %%te%% components to make requests to the C8y Proxy. `c8y.proxy.bind.address` and
 `c8y.proxy.bind.port` are read by `tedge-mapper-c8y` and used as bind address and port for the Cumulocity HTTP proxy. In
 both `client` and `bind`, `127.0.0.1` and `8001` are used as defaults for the address and port, respectively.
 
