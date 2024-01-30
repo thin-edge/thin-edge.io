@@ -4,8 +4,6 @@ tags: [Contribute]
 sidebar_position: 2
 ---
 
-# VSCode Dev Containers
-
 VSCode Dev Containers are great for developing as they contain all of the project's dependencies and in the end you have a ready-to-use dockerFile which can also be used in your CI/CD pipeline.
 
 It provides a normalized experience to all VSCode users across MacOS, Windows and Linux. All you need to get going is a the open source docker engine (not Docker Desktop!) and docker-compose.
@@ -60,7 +58,7 @@ But in both methods it is recommended to fork the project first, then clone from
 
 1. Open a terminal
 
-2. Clone the forked thin-edge.io project
+2. Clone the forked {{te}} project
 
     **Example**
 
@@ -94,7 +92,7 @@ But in both methods it is recommended to fork the project first, then clone from
 
 2. Click on the `Remote Explorer` Icon on the left hand navigation menu (the icon looks like a computer monitor)
 
-3. From the `Dev Containers` section, right-click on the thin-edge.io dev container, and select `Open Folder in Container`
+3. From the `Dev Containers` section, right-click on the {{te}} dev container, and select `Open Folder in Container`
 
 
 ## Rebuilding the dev container
