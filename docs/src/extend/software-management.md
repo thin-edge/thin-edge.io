@@ -2,6 +2,7 @@
 title: Software Management
 tags: [Extend, Software Management]
 sidebar_position: 1
+description: How to create a custom software management plugin
 ---
 
 %%te%% Software Management natively supports APT (Debian) packages.
