@@ -91,6 +91,19 @@ impl MessageLogWriter {
         Ok(MessageLogWriter { writer })
     }
 
+    pub fn new_truncated<P>(log_dir: P) -> Result<MessageLogWriter, std::io::Error>
+    where
+        P: AsRef<Path>,
+    {
+        let _ = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(log_dir.as_ref().join(LOG_FILE_NAME))?;
+
+        MessageLogWriter::new(log_dir)
+    }
+
     /// Append the JSON representation of the given message to the log.
     /// Each message is appended on a new line.
     pub fn append_message(&mut self, message: &MqttMessage) -> Result<(), std::io::Error> {

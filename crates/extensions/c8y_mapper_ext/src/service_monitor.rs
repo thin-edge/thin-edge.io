@@ -157,6 +157,7 @@ mod tests {
             crate::converter::CumulocityConverter::validate_external_id,
             5,
             &temp_dir,
+            true,
         )
         .unwrap();
 

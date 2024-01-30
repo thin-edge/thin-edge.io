@@ -135,7 +135,8 @@ type ExternalIdValidatorFn =
 ///     |tid, xid| tid.to_string().into(),
 ///     |xid| Ok(xid.into()),
 ///     5,
-///     "/tmp"
+///     "/tmp",
+///     true
 /// );
 /// ```
 pub struct EntityStore {
@@ -153,6 +154,7 @@ pub struct EntityStore {
 }
 
 impl EntityStore {
+    #[allow(clippy::too_many_arguments)]
     pub fn with_main_device_and_default_service_type<MF, SF, P>(
         mqtt_schema: MqttSchema,
         main_device: EntityRegistrationMessage,
@@ -161,6 +163,7 @@ impl EntityStore {
         external_id_validator_fn: SF,
         telemetry_cache_size: usize,
         log_dir: P,
+        clean_start: bool,
     ) -> Result<Self, InitError>
     where
         MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
@@ -187,11 +190,19 @@ impl EntityStore {
             twin_data: Map::new(),
         };
 
-        let message_log = MessageLogWriter::new(log_dir.as_ref()).map_err(|err| {
-            InitError::Custom(format!(
-                "Loading the entity store log for writes failed with {err}",
-            ))
-        })?;
+        let message_log = if clean_start {
+            MessageLogWriter::new_truncated(log_dir.as_ref()).map_err(|err| {
+                InitError::Custom(format!(
+                    "Loading the entity store log for writes failed with {err}",
+                ))
+            })?
+        } else {
+            MessageLogWriter::new(log_dir.as_ref()).map_err(|err| {
+                InitError::Custom(format!(
+                    "Loading the entity store log for writes failed with {err}",
+                ))
+            })?
+        };
 
         let mut entity_store = EntityStore {
             mqtt_schema: mqtt_schema.clone(),
@@ -1072,7 +1083,7 @@ mod tests {
     #[test]
     fn registers_main_device() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let store = new_entity_store(&temp_dir);
+        let store = new_entity_store(&temp_dir, true);
 
         assert_eq!(store.main_device(), &EntityTopicId::default_main_device());
         assert!(store.get(&EntityTopicId::default_main_device()).is_some());
@@ -1081,7 +1092,7 @@ mod tests {
     #[test]
     fn lists_child_devices() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         // If the @parent info is not provided, it is assumed to be an immediate
         // child of the main device.
@@ -1119,7 +1130,7 @@ mod tests {
     #[test]
     fn lists_services() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         // Services are namespaced under devices, so `parent` is not necessary
         let updated_entities = store
@@ -1161,7 +1172,7 @@ mod tests {
     #[test]
     fn list_ancestors() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         // Assert no ancestors of main device
         assert!(store
@@ -1268,7 +1279,7 @@ mod tests {
     #[test]
     fn list_ancestors_external_ids() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         // Assert ancestor external ids of main device
         assert!(store
@@ -1379,7 +1390,7 @@ mod tests {
     #[test]
     fn auto_register_service() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let service_topic_id = EntityTopicId::default_child_service("child1", "service1").unwrap();
         let res = store.auto_register_entity(&service_topic_id).unwrap();
@@ -1410,7 +1421,7 @@ mod tests {
     #[test]
     fn auto_register_child_device() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let child_topic_id = EntityTopicId::default_child_device("child2").unwrap();
         let res = store.auto_register_entity(&child_topic_id).unwrap();
@@ -1430,7 +1441,7 @@ mod tests {
     #[test]
     fn auto_register_custom_topic_scheme_not_supported() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
         assert_matches!(
             store.auto_register_entity(&EntityTopicId::from_str("custom/child2//").unwrap()),
             Err(Error::NonDefaultTopicScheme(_))
@@ -1440,7 +1451,7 @@ mod tests {
     #[test]
     fn register_main_device_custom_scheme() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         // Register main device with custom topic scheme
         let main_topic_id = EntityTopicId::from_str("custom/main//").unwrap();
@@ -1508,7 +1519,7 @@ mod tests {
     #[test]
     fn external_id_validation() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
         let res = store.update(EntityRegistrationMessage {
@@ -1526,7 +1537,7 @@ mod tests {
     #[test]
     fn update_twin_data_new_fragment() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let topic_id = EntityTopicId::default_main_device();
         let updated = store
@@ -1551,7 +1562,7 @@ mod tests {
     #[test]
     fn update_twin_data_update_existing_fragment() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let topic_id = EntityTopicId::default_main_device();
         let _ = store
@@ -1584,7 +1595,7 @@ mod tests {
     #[test]
     fn update_twin_data_remove_fragment() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let topic_id = EntityTopicId::default_main_device();
 
@@ -1634,6 +1645,7 @@ mod tests {
             dummy_external_id_sanitizer,
             5,
             &temp_dir,
+            true,
         )
         .unwrap();
 
@@ -1681,7 +1693,7 @@ mod tests {
     #[test]
     fn duplicate_registration_message_ignored() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, false);
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
         let reg_message = EntityRegistrationMessage {
             topic_id: entity_topic_id.clone(),
@@ -1698,7 +1710,7 @@ mod tests {
         assert!(affected_entities.0.is_empty());
 
         // Duplicate registration ignore even after the entity store is restored from the disk
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, false);
         let affected_entities = store.update(reg_message).unwrap();
         assert!(affected_entities.0.is_empty());
     }
@@ -1706,7 +1718,7 @@ mod tests {
     #[test]
     fn duplicate_registration_message_ignored_after_twin_update() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, false);
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
         let reg_message = EntityRegistrationMessage {
             topic_id: entity_topic_id.clone(),
@@ -1733,7 +1745,7 @@ mod tests {
         assert!(affected_entities.0.is_empty());
 
         // Duplicate registration ignore even after the entity store is restored from the disk
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, false);
         let affected_entities = store.update(reg_message).unwrap();
         assert!(affected_entities.0.is_empty());
     }
@@ -1741,7 +1753,7 @@ mod tests {
     #[test]
     fn early_child_device_registrations_processed_only_after_parent_registration() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         let child0_topic_id = EntityTopicId::default_child_device("child0").unwrap();
         let child000_topic_id = EntityTopicId::default_child_device("child000").unwrap();
@@ -1777,7 +1789,7 @@ mod tests {
         assert!(affected_entities.0.is_empty());
 
         // Reload the entity store from the persistent log
-        let mut store = new_entity_store(&temp_dir);
+        let mut store = new_entity_store(&temp_dir, true);
 
         // Assert that duplicate registrations are still ignored
         let affected_entities = store.update(child000_reg_message).unwrap();
@@ -1795,7 +1807,7 @@ mod tests {
         let twin_fragment_value = json!("bar");
 
         {
-            let mut store = new_entity_store(&temp_dir);
+            let mut store = new_entity_store(&temp_dir, false);
             store
                 .update(
                     EntityRegistrationMessage::new_custom(
@@ -1826,7 +1838,7 @@ mod tests {
 
         {
             // Reload the entity store using the same persistent file
-            let store = new_entity_store(&temp_dir);
+            let store = new_entity_store(&temp_dir, false);
             let mut expected_entity_metadata =
                 EntityMetadata::child_device("child1".into()).unwrap();
             expected_entity_metadata
@@ -1847,7 +1859,7 @@ mod tests {
         }
     }
 
-    fn new_entity_store(temp_dir: &TempDir) -> EntityStore {
+    fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {
         EntityStore::with_main_device_and_default_service_type(
             MqttSchema::default(),
             EntityRegistrationMessage {
@@ -1862,6 +1874,7 @@ mod tests {
             dummy_external_id_sanitizer,
             5,
             temp_dir,
+            clean_start,
         )
         .unwrap()
     }
