@@ -66,10 +66,10 @@ files = [
 * `path` is the full path to the configuration file on the child device file system.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI
 
-The child device agent needs to upload this file to thin-edge [File Transfer Service](../references/tedge-file-transfer-service.md) with an HTTP PUT request
+The child device agent needs to upload this file to thin-edge [File Transfer Service](../references/file_transfer_service.md) with an HTTP PUT request
 to the URL: `http://{fts-address}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
 
-* `{fts-address}` is the address of the thin-edge.io device on which the [File Transfer Service](../references/tedge-file-transfer-service.md) is running
+* `{fts-address}` is the address of the thin-edge.io device on which the [File Transfer Service](../references/file_transfer_service.md) is running
 * `{child-id}` is the child-device-id
 
 Once the upload is complete, the agent should notify thin-edge about the upload by sending the following MQTT message:

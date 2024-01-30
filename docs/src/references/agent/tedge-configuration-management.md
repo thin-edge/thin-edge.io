@@ -12,7 +12,7 @@ Thin-edge implements an operation to manage device configuration files.
   and, combined with a cloud mapper, extends this capability to enable configuration management from the cloud.
 * This management is bi-directional:
   * A device can act as a reference,
-    with all the managed files being uploaded to the [tedge file transfer repository](../tedge-file-transfer-service.md)
+    with all the managed files being uploaded to the [tedge file transfer repository](../file_transfer_service.md)
     and stored there as a configuration snapshot.
   * A configuration update can be pushed from the tedge file transfer repository to any devices of the same type,
     i.e. supporting the same kind of configuration files.

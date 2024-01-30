@@ -4,11 +4,9 @@ tags: [Reference, HTTP]
 sidebar_position: 6
 ---
 
-# Thin Edge File Transfer Service
-
 The `tedge-agent` hosts a binary repository for child devices and other plugins/extensions to exchange binary files between them.
 This repository is meant to be used as a temporary storage for exchanging files, and not for storing items permanently,
-as the storage on thin-edge devices are typically very limited.
+as the storage on %%te%% devices are typically very limited.
 
 Files can be uploaded, downloaded and deleted from this repository via the following HTTP endpoints:
 
@@ -30,7 +28,7 @@ An existing file at a given path is replaced on subsequent uploads using the sam
 Unique paths must be used in the URL path to avoid such overwrites.
 
 All uploaded files are preserved until they are explicitly deleted with the DELETE API.
-To avoid exhaustion of storage space on the thin-edge device,
+To avoid exhaustion of storage space on the %%te%% device,
 users must be diligent to delete any stored files as soon as their purpose is served.
 
 ## HTTPS and authenticated access
