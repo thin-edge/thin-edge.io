@@ -1,7 +1,6 @@
 ---
 title: Health Monitoring
 tags: [Operate, Cumulocity, Monitoring]
-#sidebar_position: 8
 ---
 
 The health of a %%te%% service or any other `service` that is running on the %%te%% device
