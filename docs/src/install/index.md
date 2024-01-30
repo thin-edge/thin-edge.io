@@ -73,13 +73,13 @@ The following Linux Package Managers are supported out-of-the-box. For all other
 <div>
     <div class="row">
         <div class="column logo">
-            <img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/deb/large.30f93502b7b5.png" alt="Debian logo" />
+            <em><img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/deb/large.30f93502b7b5.png" alt="Debian logo" /></em>
         </div>
         <div class="column logo">
-            <img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/rpm/large.f677f5642875.png" alt="RedHat logo" />
+            <em><img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/rpm/large.f677f5642875.png" alt="RedHat logo" /></em>
         </div>
         <div class="column logo">
-            <img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/alpine/large.974a497e9765.png" alt="Alpine logo" />
+            <em><img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/alpine/large.974a497e9765.png" alt="Alpine logo" /></em>
         </div>
     </div>
 </div>
@@ -119,15 +119,15 @@ The instructions require you to have the following tools installed.
 You will need to have `sudo` also installed if you want to run these instructions.
 
 ```sh tab={"label":"Debian/Ubuntu"}
-curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo bash
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.deb.sh' | sudo bash
 ```
 
 ```sh tab={"label":"RHEL/Fedora/RockyLinux"}
-curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh' | sudo bash
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.rpm.sh' | sudo bash
 ```
 
 ```sh tab={"label":"Alpine"}
-curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh' | sudo bash
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.alpine.sh' | sudo bash
 ```
 
 **Running as root**
@@ -135,15 +135,15 @@ curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh'
 These commands must be run as the root user.
 
 ```sh tab={"label":"Debian/Ubuntu"}
-curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | bash
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.deb.sh' | bash
 ```
 
 ```sh tab={"label":"RHEL/Fedora/RockyLinux"}
-curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh' | bash
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.rpm.sh' | bash
 ```
 
 ```sh tab={"label":"Alpine"}
-curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh' | bash
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.alpine.sh' | bash
 ```
 
 
@@ -182,7 +182,7 @@ wget -O - https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 
 ## Package repository hosting
 
-[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=for-the-badge)](https://cloudsmith.com)
+[_![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=for-the-badge)_](https://cloudsmith.com)
 
 Package repository hosting is graciously provided by  [Cloudsmith](https://cloudsmith.com).
 Cloudsmith is the only fully hosted, cloud-native, universal package management solution, that
@@ -198,26 +198,26 @@ The packages can be viewed directly from the [Cloudsmith.io](https://cloudsmith.
 </tr>
 <tr>
     <td>
-        <img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/deb/small.bedd6f749317.png" alt="Debian logo" />
+        <em><img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/deb/small.bedd6f749317.png" alt="Debian logo" /></em>
     </td>
     <td>
-        <a href="https://cloudsmith.io/~thinedge/repos/tedge-main/packages/detail/deb/tedge-full/latest/a=all;d=any-distro%252Fany-version;t=binary/"><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-main/deb/tedge-full/latest/a=all;d=any-distro%252Fany-version;t=binary/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></a>
-    </td>
-</tr>
-<tr>
-    <td>
-        <img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/rpm/small.89bd26d9d17b.png" alt="RedHat logo" />
-    </td>
-    <td>
-        <a href="https://cloudsmith.io/~thinedge/repos/tedge-main/packages/detail/rpm/tedge-full/latest/a=noarch;d=any-distro%252Fany-version;t=binary/"><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-main/rpm/tedge-full/latest/a=noarch;d=any-distro%252Fany-version;t=binary/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></a>
+        <a href="https://cloudsmith.io/~thinedge/repos/tedge-release/packages/detail/deb/tedge-full/latest/a=all;d=any-distro%252Fany-version;t=binary/"><em><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-release/deb/tedge-full/latest/a=all;d=any-distro%252Fany-version;t=binary/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></em></a>
     </td>
 </tr>
 <tr>
     <td>
-        <img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/alpine/small.dff9b535ea47.png" alt="Alpine logo" />
+        <em><img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/rpm/small.89bd26d9d17b.png" alt="RedHat logo" /></em>
     </td>
     <td>
-        <a href="https://cloudsmith.io/~thinedge/repos/tedge-main/packages/detail/alpine/tedge-full/latest/a=noarch;d=alpine%252Fany-version/"><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-main/alpine/tedge-full/latest/a=noarch;d=alpine%252Fany-version/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></a>
+        <a href="https://cloudsmith.io/~thinedge/repos/tedge-release/packages/detail/rpm/tedge-full/latest/a=noarch;d=any-distro%252Fany-version;t=binary/"><em><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-release/rpm/tedge-full/latest/a=noarch;d=any-distro%252Fany-version;t=binary/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></em></a>
+    </td>
+</tr>
+<tr>
+    <td>
+        <em><img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/alpine/small.dff9b535ea47.png" alt="Alpine logo" /></em>
+    </td>
+    <td>
+        <a href="https://cloudsmith.io/~thinedge/repos/tedge-release/packages/detail/alpine/tedge-full/latest/a=noarch;d=alpine%252Fany-version/"><em><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-release/alpine/tedge-full/latest/a=noarch;d=alpine%252Fany-version/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></em></a>
     </td>
 </tr>
 </table>
