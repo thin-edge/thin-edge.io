@@ -54,7 +54,7 @@ This bootstrapping is a 3 step process:
 1. Notify thin-edge about the upload via MQTT
 
 The child device agent needs to capture the list of configuration files that needs be managed from the cloud
-in a `c8y-configuration-plugin.toml` file in the same format as specified in the [configuration management documentation](../operate/c8y/config_management.md) as follows:
+in a `c8y-configuration-plugin.toml` file in the same format as specified in the [configuration management documentation](../operate/c8y/configuration_management.md) as follows:
 
 ```toml title="file: c8y-configuration-plugin.toml"
 files = [
