@@ -140,7 +140,6 @@ The supported log levels are `info, warn, error, trace, debug`.
 [log]
 tedge-mapper = "trace"
 tedge-agent = "info"
-tedge-watchdog = "debug"
 ```
 
 :::note
