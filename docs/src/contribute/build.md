@@ -1,8 +1,10 @@
 ---
 title: Build
 tags: [Contribute, Build]
-sidebar_position: 1
+description: Build %%te%% from the source code
 ---
+
+This page details how to build %%te%% from the source code.
 
 ## Requirements
 
