@@ -178,6 +178,12 @@ impl<Input: Debug> LoggingReceiver<Input> {
     pub fn into_split(self) -> (mpsc::Receiver<Input>, mpsc::Receiver<RuntimeRequest>) {
         (self.receiver.input_receiver, self.receiver.signal_receiver)
     }
+
+    /// Close the input so no new messages can be sent to this receiver
+    pub fn close_input(&mut self) {
+        self.receiver.input_receiver.close();
+        self.receiver.signal_receiver.close();
+    }
 }
 
 #[async_trait]
