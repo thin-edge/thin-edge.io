@@ -457,7 +457,7 @@ To change the collectd metrics of the device, which are displayed in Cumulocity 
 6. Click on ``` Add configuration snapshot ``` (top right)
 7. Fill in the fields, make sure the device type is ``` thin-edge.io ``` and select the right Configuration type and add the (just edited) configuration file.) and click on  ```Add configuration ```
 8. Go back to the device and then to the configuration. In the Available supported configuration you will see the configuration file which was just created. When you click on it, you will see the content
-9. Then click on  ``` send configuration toe device ``` the configuration file is uploaded to the device.
+9. Then click on  ``` send configuration to the device ``` the configuration file is uploaded to the device.
 10. If you then click on get snapshot from device (select the right configuration file in device supported configurations), you will see the change of the configuration file.
 
 
