@@ -1,12 +1,7 @@
 ---
-title: Cloud Connection
+title: Connect
 tags: [Operate, Cloud]
-sidebar_position: 1
 ---
-
-# How to connect?
-
-## Connect to Cumulocity IoT
 
 To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
 
