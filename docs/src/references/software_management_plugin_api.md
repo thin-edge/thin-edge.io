@@ -4,14 +4,12 @@ tags: [Reference, Software Management, API]
 sidebar_position: 10
 ---
 
-# Software Management Plugin API
-
-Thin-edge uses plugins to delegate software management operations to the appropriate package manager/installer. The plugins are responsible for: installation of packages, uninstalls and queries.
+%%te%% uses plugins to delegate software management operations to the appropriate package manager/installer. The plugins are responsible for: installation of packages, uninstalls and queries.
 
 * A package manager plugin acts as a facade for a specific package manager.
 * A plugin is an executable that follows the [plugin API](#plugin-api).
 * On a device, several plugins can be installed to deal with different kinds of software modules.
-* The filename of a plugin is used by thin-edge to determine the appropriate plugin for a software module.
+* The filename of a plugin is used by %%te%% to determine the appropriate plugin for a software module.
 * All the actions on a software module are directed to the plugin bearing the name that matches the module type name.
 * The plugins are loaded and invoked by the sm-agent in a systematic order (in practice the alphanumerical order of their names in the file system).
 * The software modules to be installed/removed are also passed to the plugins in a consistent order.
@@ -23,7 +21,7 @@ Thin-edge uses plugins to delegate software management operations to the appropr
 
 ## Plugin repository
 
-* To be used by thin-edge, a plugin has to be stored in the directory `/etc/tedge/sm-plugins`.
+* To be used by %%te%%, a plugin has to be stored in the directory `/etc/tedge/sm-plugins`.
 * A plugin must be named after the software module type as specified in the cloud request.
   That is, a plugin named `apt` handles software modules that are defined with type `apt` in the cloud request.
   Consequently a plugin to handle software module defined for `docker` must be named `docker`.
@@ -42,7 +40,7 @@ On start-up, the sm-agent registers the plugins as follows:
 
 ## Plugin API
 
-* A plugin must implement all the commands used by the sm-agent of thin-edge,
+* A plugin must implement all the commands used by the sm-agent of %%te%%,
   and support all the options for these commands.
 * A plugin should not support extra commands or options.
 * A plugin might have a configuration file.
