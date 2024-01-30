@@ -134,12 +134,18 @@ impl FromPeers {
         &mut self,
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
     ) -> Result<(), RuntimeError> {
-        loop {
-            match self.try_recv().await {
-                Ok(Some(message)) => outgoing_mqtt.send(message).await.map_err(Box::new)?,
-                Ok(None) | Err(RuntimeRequest::Shutdown) => break Ok(()),
-            }
+        while let Ok(Some(message)) = self.try_recv().await {
+            outgoing_mqtt.send(message).await.map_err(Box::new)?;
         }
+
+        // On shutdown, first close input so no new messages can be pushed
+        self.input_receiver.close_input();
+
+        // Then, publish all the messages awaiting to be sent over MQTT
+        while let Some(message) = self.recv().await {
+            outgoing_mqtt.send(message).await.map_err(Box::new)?;
+        }
+        Ok(())
     }
 }
 
