@@ -16,7 +16,7 @@ Before VSCode Dev container can be used, you need to install a few things.
 
 1. Install `docker` and `docker-compose` if you do not already have these
 
-    Checkout the [INSTALLING_DOCKER](./INSTALLING_DOCKER.md) instructions to help guide you
+    Checkout the [INSTALLING_DOCKER](./setting_up_docker.md) instructions to help guide you
 
 1. Install VSCode and make sure it is up to date
 
