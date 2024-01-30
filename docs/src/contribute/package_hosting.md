@@ -1,7 +1,7 @@
 ---
-title: Debian Package Hosting
+title: Package Hosting
 tags: [Contribute, Packaging]
-sidebar_position: 3
+description: Package hosting of %%te%% components
 ---
 
 In additional to the %%te%% install script, the packages are also publicly hosted APT repository.
@@ -43,7 +43,7 @@ curl -1sLf \
 
 ## Pre releases
 
-The latest built packages from the `main` branch of the project. The packages go through the same automated testing process as the official releases, however they are not tagged in git, so the version numbers will look like `0.8.1-171-ga72e5432` (see the [Version syntax](./debian_package_hosting.md#version-syntax) for description about the version).
+The latest built packages from the `main` branch of the project. The packages go through the same automated testing process as the official releases, however they are not tagged in git, so the version numbers will look like `0.8.1-171-ga72e5432` (see the [Version syntax](#version-syntax) for description about the version).
 
 These repositories allow you to test new features as they get merged to `main`, rather than waiting for the official release. However it is still advised to only use these repositories for development and testing purposes as the official versions go through additional testing.
 
@@ -108,7 +108,7 @@ sudo rm -rf /var/lib/apt/lists/*
 sudo apt-get update
 ```
 
-## Version syntax
+## Version syntax {#version-syntax}
 
 The version is automatically generated from the source code management tool, git. The version is based on the commit used to build the packages and its distance from the last tag (e.g. the last official released version).
 
