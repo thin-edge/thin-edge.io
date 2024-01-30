@@ -1,10 +1,8 @@
 ---
-title: Build thin-edge
+title: Build
 tags: [Contribute, Build]
 sidebar_position: 1
 ---
-
-# Building thin-edge.io
 
 ## Requirements
 
