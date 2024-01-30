@@ -4,7 +4,7 @@ tags: [MQTT, Legacy]
 sidebar_position: 1
 ---
 
-The most visible breaking change introduced by thin-edge 1.0 is the [new topic structure](../references/mqtt-api.md),
+The most visible breaking change introduced by thin-edge 1.0 is the [new topic structure](../references/mqtt_api.md),
 which has been made more consistent and extensible with a better support for child devices and services.
 
 Porting an extension that publishes telemetry data on the legacy `tedge` topic, should not pose any difficulty:

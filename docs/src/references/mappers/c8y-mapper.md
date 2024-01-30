@@ -5,7 +5,7 @@ sidebar_position: 1
 ---
 
 The Cumulocity mapper, referred to as `c8y-mapper` in the rest of this document,
-maps data in [Thin Edge format](../mqtt-api.md) into their equivalent [Cumulocity format](https://cumulocity.com/guides/reference/smartrest-two/#smartrest-two).
+maps data in [Thin Edge format](../mqtt_api.md) into their equivalent [Cumulocity format](https://cumulocity.com/guides/reference/smartrest-two/#smartrest-two).
 
 
 ## Registration

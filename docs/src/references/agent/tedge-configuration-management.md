@@ -115,8 +115,8 @@ The behavior of the agent is also controlled by the configuration of thin-edge:
 
 * `tedge config get mqtt.bind.address`: the address of the local MQTT bus.
 * `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.
-* `tedge config get mqtt.topic_root`: the root of the [MQTT topic scheme](../mqtt-api.md) to publish and subscribe.
-* `tedge config get mqtt.device_topic_id`: the identifier of the [MQTT topic scheme](../mqtt-api.md) to publish and subscribe.
+* `tedge config get mqtt.topic_root`: the root of the [MQTT topic scheme](../mqtt_api.md) to publish and subscribe.
+* `tedge config get mqtt.device_topic_id`: the identifier of the [MQTT topic scheme](../mqtt_api.md) to publish and subscribe.
 
 ## Handling config snapshot commands
 
