@@ -12,7 +12,7 @@ cloud using the **software management** feature of thin-edge.io.
 :::note
 This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
 Other package managers can be supported by adding a plugin.
-Refer to [this](../extend/write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
+Refer to [this](../extend/software-management.md) document on how to write a plugin to support software management for any other software type.
 :::
 
 :::info

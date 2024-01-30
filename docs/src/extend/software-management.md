@@ -1,12 +1,10 @@
 ---
-title: Software Management Plugin
+title: Software Management
 tags: [Extend, Software Management]
 sidebar_position: 1
 ---
 
-# Write my software management plugin
-
-**thin-edge.io** Software Management natively supports APT (Debian) packages.
+%%te%% Software Management natively supports APT (Debian) packages.
 However, there are many package management systems in the world,
 and you may want to have a plugin that is suitable for your device.
 For such a demand, we provide the [**Package Manager Plugin API**](./../references/software_management_plugin_api.md)

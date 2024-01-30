@@ -378,7 +378,7 @@ When a different version of the already installed software needs to be installed
 
 Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
 
-How to [develop your own plugins](../extend/write-my-software-management-plugin.md) is described here.
+How to [develop your own plugins](../extend/software-management.md) is described here.
 
 ## Step 6 Manage configuration files
 

@@ -35,6 +35,6 @@ The **Software Management Plugin** is dedicated to defining the behaviour of sof
 ## Related documents
 1. [How to install and enable software management?](../operate/installation/install_and_enable_software_management.md)
 2. [Manage my device software](../start/software-management.md)
-3. [Write my software management plugin](../extend/write-my-software-management-plugin.md)
+3. [Write my software management plugin](../extend/software-management.md)
 4. [The Software Management Plugin API](../references/software_management_plugin_api.md)
 5. [Software Management Specification](https://github.com/thin-edge/thin-edge.io-specs/tree/main/src/software-management)
