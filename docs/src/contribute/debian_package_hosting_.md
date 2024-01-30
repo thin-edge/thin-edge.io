@@ -4,13 +4,11 @@ tags: [Contribute, Packaging]
 sidebar_position: 3
 ---
 
-# Debian Package Hosting
-
-In additional to the thin-edge.io install script, the packages are also publicly hosted APT repository.
+In additional to the %%te%% install script, the packages are also publicly hosted APT repository.
 
 ## Official releases
 
-The following APT repositories contain the official releases of thin-edge.io. The packages will have a nice `x.y.z` version number, and all of the packages go through our full suite of automated and manual testing.
+The following APT repositories contain the official releases of %%te%%. The packages will have a nice `x.y.z` version number, and all of the packages go through our full suite of automated and manual testing.
 
 The packages are the same ones which are uploaded to the [GitHub Releases](https://github.com/thin-edge/thin-edge.io/releases) page.
 
@@ -45,7 +43,7 @@ curl -1sLf \
 
 ## Pre releases
 
-The latest built packages from the `main` branch of the project. The packages go through the same automated testing process as the official releases, however they are not tagged in git, so the version numbers will look like `0.8.1-171-ga72e5432` (see the [Version syntax](./DEBIAN_PACKAGE_HOSTING.md#version-syntax) for description about the version).
+The latest built packages from the `main` branch of the project. The packages go through the same automated testing process as the official releases, however they are not tagged in git, so the version numbers will look like `0.8.1-171-ga72e5432` (see the [Version syntax](./debian_package_hosting.md#version-syntax) for description about the version).
 
 These repositories allow you to test new features as they get merged to `main`, rather than waiting for the official release. However it is still advised to only use these repositories for development and testing purposes as the official versions go through additional testing.
 
@@ -101,7 +99,7 @@ curl -1sLf \
 
 ## Removing the APT repositories
 
-All of the `thin-edge.io` apt repositories can be removed by the following command.
+All of the %%te%% apt repositories can be removed by the following command.
 
 ```sh
 sudo rm -f /etc/apt/sources.list.d/thinedge-tedge-*.list
