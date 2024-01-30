@@ -2,11 +2,10 @@
 title: Log File Management
 tags: [Reference, Log Files]
 sidebar_position: 5
+description: Details of the API to manage log files on a device
 ---
 
-# Log file management
-
-Thin-edge implements an operation to upload log files from the device to the cloud.
+%%te%% implements an operation to upload log files from the device to the cloud.
 
 * The log file management feature on the main or a child device is provided by the __tedge-agent__ running on that device.
 * The device owner can define the list of log files using the `tedge-log-plugin.toml` configuration file of the target device.

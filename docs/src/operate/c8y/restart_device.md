@@ -3,7 +3,7 @@ title: Restart Device
 tags: [Operate, Operation, Cumulocity]
 ---
 
-If your device is running thin-edge.io, you can restart it from the cloud.
+If your device is running %%te%%, you can restart it from the cloud.
 
 ### Cumulocity IoT
 

@@ -4,14 +4,14 @@ tags: [Operate, Security, Cloud]
 sidebar_position: 1
 ---
 
-Using a self-signed device certificate is the simplest way to connect a thin-edge device to the cloud.
+Using a self-signed device certificate is the simplest way to connect a %%te%% device to the cloud.
 This is a secure method even if more adapted for testing purposes.
 Indeed, the self-signed certificates must be trusted individually by the cloud tenant,
 raising managing issues when there are more than a few devices.
 
 ## Create self-signed certificate
 
-To create a new certificate you can use [`tedge cert create`](../../references/cli/tedge-cert.md) thin-edge.io command:
+To create a new certificate you can use [`tedge cert create`](../../references/cli/tedge-cert.md) %%te%% command:
 
 ```sh
 sudo tedge cert create --device-id alpha
@@ -63,7 +63,7 @@ tedge cert upload c8y --user <user-allowed-to-add-trusted-certificate>
 
 ## Renew self-signed certificate
 
-To renew the expired certificate you can use [`tedge cert renew`](../../references/cli/tedge-cert.md) thin-edge.io command:
+To renew the expired certificate you can use [`tedge cert renew`](../../references/cli/tedge-cert.md) %%te%% command:
 
 ```sh
 sudo tedge cert renew

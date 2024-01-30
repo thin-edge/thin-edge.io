@@ -26,7 +26,7 @@ A list of our test platforms can be found [here](../references/supported-platfor
 
 ## Get the code
 
-thin-edge.io code is in git repository on github to acquire the code use following command:
+%%te%% code is in git repository on github to acquire the code use following command:
 
 * via SSH:
 
@@ -71,13 +71,13 @@ For other shells, you'll want to find the appropriate place to set a configurati
 eg. zsh uses `~/.zshrc`. Check your shell's documentation to find what file it uses.
 :::
 
-thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
+%%te%% operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 
 Current MSRV is `1.65`.
 
 ### Cross compilation toolchain (optional)
 
-thin-edge.io can be compiled for target architecture on non-target device, this is called cross compilation.
+%%te%% can be compiled for target architecture on non-target device, this is called cross compilation.
 Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called [cargo cross](https://github.com/rust-embedded/cross).
 
 To install [cargo cross](https://github.com/rust-embedded/cross):
@@ -105,7 +105,7 @@ just release-linux-virtual
 
 ## Compiling
 
-To build thin-edge.io we are using `cargo`.
+To build %%te%% we are using `cargo`.
 
 As we are using  `cargo workspace` for all our crates. All compiled files are put in `./target/` directory with target's name eg: `./target/debug` or `./target/release` for native builds and for cross compiled targets `./target/<architecture>/debug` or `./target/<architecture>/release` dependent on the target of the build.
 
@@ -158,7 +158,7 @@ Binaries can be run eg: `./target/release/tedge`.
 
 ## Building deb package
 
-Currently thin-edge.io contains 2 binaries, `tedge` (cli) and `tedge-mapper` which are packaged as separate debian packages. To create following commands are to be issued:
+Currently %%te%% contains 2 binaries, `tedge` (cli) and `tedge-mapper` which are packaged as separate debian packages. To create following commands are to be issued:
 
 ```sh
 cargo deb -p tedge
@@ -204,7 +204,7 @@ cross build --target armv7-unknown-linux-gnueabihf --release
 
 ## Running tests
 
-When contributing to thin-edge.io we ask you to write tests for the code you have written. The tests will be run by build pipeline when you create pull request, but you can easily run all the tests when you are developing with following command:
+When contributing to %%te%% we ask you to write tests for the code you have written. The tests will be run by build pipeline when you create pull request, but you can easily run all the tests when you are developing with following command:
 
 ```sh
 cargo test

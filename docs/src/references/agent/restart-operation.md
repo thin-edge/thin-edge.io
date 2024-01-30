@@ -2,11 +2,12 @@
 title: Restart Operation
 tags: [Reference, Agent, Restart]
 sidebar_position: 4
+description: Restarting the device via an operation
 ---
 
 # Restart Operation
 
-Thin-edge defines a `restart` operation to restart a device, being the main device or a child device.
+%%te%% defines a `restart` operation to restart a device, being the main device or a child device.
 
 - A restart is typically triggered by a [mapper](../mappers/index.md) on behalf of a cloud operator.
 - A restart can also be triggered from another operation (as a software update)
@@ -16,7 +17,7 @@ Thin-edge defines a `restart` operation to restart a device, being the main devi
 
 ## MQTT API
 
-The `restart` operation API follows the [generic thin-edge rules for operations](./device-management-api.md):
+The `restart` operation API follows the [generic %%te%% rules for operations](./device-management-api.md):
 
 - The `te/<device-topic-id>/cmd/restart` topic is used to tell the device `<device-topic-id>` can be restarted.
 - Each `restart` request is given a `<command-id>` and a dedicated topic  `te/<device-topic-id>/cmd/restart/<command-id>`,

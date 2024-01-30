@@ -6,7 +6,7 @@ sidebar_position: 9
 
 # Child-Device Firmware Management using Cumulocity (legacy API)
 
-Thin-edge provides a legacy operation plugin to
+%%te%% provides a legacy operation plugin to
 [manage device firmware using Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#firmware-repo)
 on child devices.
 
@@ -16,14 +16,14 @@ on child devices.
 :::
 
 - The firmware update operations are defined and triggered from Cumulocity
-- Thin-edge acts as the proxy between Cumulocity and the child device
+- %%te%% acts as the proxy between Cumulocity and the child device
   facilitating the routing of firmware update requests as well as the transfer of firmware binary files from cloud to the device.
 - Updating the firmware of a device is done by some device specific firmware management software.
-  Since thin-edge can not directly interact with that piece of software over whatever third-party protocol it supports,
+  Since %%te%% can not directly interact with that piece of software over whatever third-party protocol it supports,
   an additional piece of software, referred to as `child-device-connector` in the rest of this doc,
-  must be developed by the child device admin to perform the actual installation itself, in coordination with thin-edge.
-- The `child-device-connector` may be installed directly on the child device or alongside thin-edge as well,
-  as long as it can  access the HTTP and MQTT APIs of thin-edge interact with the child device directly.
+  must be developed by the child device admin to perform the actual installation itself, in coordination with %%te%%.
+- The `child-device-connector` may be installed directly on the child device or alongside %%te%% as well,
+  as long as it can  access the HTTP and MQTT APIs of %%te%% interact with the child device directly.
   
 This document describes:
 - how to install, configure and use the `c8y-firmware-plugin`
@@ -91,7 +91,7 @@ Notifying the Cumulocity tenant of their progress (messages `501`, `502` and `50
 During a successful operation, `c8y-firmware-plugin` updates the installed firmware info in
 Cumulocity tenant with SmartREST message `115`.
 
-The thin-edge `CONFIG_DIR` is used to find where:
+The %%te%% `CONFIG_DIR` is used to find where:
   * to store temporary files on download: `tedge config get tmp.path`,
   * to log operation errors and progress: `tedge config get log.path`,
   * to connect the MQTT bus: `tedge config get mqtt.bind.port`,
@@ -108,9 +108,9 @@ sudo systemctl start c8y-firmware-plugin
 
 ## Firmware update protocol between thin-edge and the child-devices
 
-The plugin manages the download and delivery of firmware files for child-devices connected to the thin-edge device,
+The plugin manages the download and delivery of firmware files for child-devices connected to the %%te%% device,
 acting as a proxy between the cloud and the child-devices.
-The firmware updates are downloaded from the cloud on the thin-edge device then made available to the child-devices over HTTP.
+The firmware updates are downloaded from the cloud on the %%te%% device then made available to the child-devices over HTTP.
 The child devices are notified of incoming firmware update requests via MQTT.
 The `child-device-connector` has to subscribe to these MQTT messages, download the firmware files via HTTP,
 and notify the firmware plugin of the firmware update progress via MQTT.
@@ -133,14 +133,14 @@ and notify the firmware plugin of the firmware update progress via MQTT.
 
 ### Child device connector connecting to thin-edge device
 
-The `child-device-connector` is responsible for handling the firmware update requests sent by the thin-edge
+The `child-device-connector` is responsible for handling the firmware update requests sent by the %%te%%
 and translating it to the relevant 3rd-party device specific API to install the firmware on that device.
-The `child-device-connector` interacts with thin-edge over its MQTT and HTTP APIs.
-In cases where the child device connector is installed alongside thin-edge on the same device,
+The `child-device-connector` interacts with %%te%% over its MQTT and HTTP APIs.
+In cases where the child device connector is installed alongside %%te%% on the same device,
 these APIs can be accessed via a local IP or even `127.0.0.1`.
 The MQTT APIs are exposed via port 1883 and the HTTP APIs are exposed via port 8000, by default.
 When the child device connector is running directly on the external child device,
-the MQTT and HTTP APIs of thin-edge need to be accessed over the network using its IP address and ports,
+the MQTT and HTTP APIs of %%te%% need to be accessed over the network using its IP address and ports,
 which are configured using the tedge config settings `mqtt.client.host` or `mqtt.client.port` for MQTT
 and `http.address` and `http.port` for HTTP.
 
@@ -263,7 +263,7 @@ The following keywords are used in the following section for brevity:
    1. Validate the integrity of the downloaded binary by matching its SHA-256 hash value
       against the `sha256` checksum value received in the request.
    1. Apply the downloaded firmware file update on the device using whatever device specific protocol.
-1. After applying the update, send the final operation status update to thin-edge via MQTT:
+1. After applying the update, send the final operation status update to %%te%% via MQTT:
    1. Topic: `tedge/$CHILD_DEVICE_ID/commands/res/firmware_update`
    1. The payload must be a JSON record with the following fields:
       * `id`: The `id` of the request received

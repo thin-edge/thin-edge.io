@@ -4,7 +4,7 @@ tags: [Operate, Security]
 sidebar_position: 3
 ---
 
-When thin-edge connects a cloud, the cloud endpoint is authenticated using X.509 certificates.
+When %%te%% connects a cloud, the cloud endpoint is authenticated using X.509 certificates.
 For that to work, the signing certificate of the cloud certificate must be trusted by the device.
 Usually, these certificates are stored in `/etc/ssl/certs` and nothing specific has to done on the device.
 
@@ -12,7 +12,7 @@ A specific configuration will be required only for cloud endpoints which CA is n
 
 ## Configuration
 
-Several `tedge config` settings are used by thin-edge to locate the signing certificate of the cloud endpoint. 
+Several `tedge config` settings are used by %%te%% to locate the signing certificate of the cloud endpoint. 
 
 - `c8y.root_cert_path`  The path where Cumulocity IoT root certificate(s) are stored (MQTT)
 - `c8y.proxy.ca_path`  The path where Cumulocity IoT root certificate(s) are stored (HTTP)
@@ -25,7 +25,7 @@ Per default, all these paths are set to the system default:  `/etc/ssl/certs`.
 
 ## Adding a Root Certificate
 
-If the server you are trying to connect `thin-edge.io` to is presenting a certificate with a root that is not currently trusted,
+If the server you are trying to connect %%te%% to is presenting a certificate with a root that is not currently trusted,
 then you can add the server's root certificate to the list of trusted root certificates.
 For the most part the store will be filled with certificates from your TLS/SSL provider,
 but if this is not the case you may need to update your local certificate store.
@@ -50,7 +50,7 @@ If you do not have the `ca-certificates` package installed on your system, insta
 sudo apt install ca-certificates
 ```
 
-To add a self-signed certificate to the trusted certificate repository on thin-edge.io system:
+To add a self-signed certificate to the trusted certificate repository on %%te%% system:
 
 Create a `/usr/local/share/ca-certificates/` directory if it does not exist on your computer:
 

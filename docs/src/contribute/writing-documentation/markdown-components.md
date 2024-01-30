@@ -197,7 +197,7 @@ tedge disconnect aws
 
 ## MQTT Code block
 
-One of the main interfaces for thin-edge.io is MQTT, therefore a special plugin has been created to display how to publish/subscribe to messages on an MQTT broker.
+One of the main interfaces for %%te%% is MQTT, therefore a special plugin has been created to display how to publish/subscribe to messages on an MQTT broker.
 
 The code block only expects the writer to provide the `tedge mqtt ...` command, and the plugin will take care of the translation to the various formats. The decision was made to use the `tedge mqtt` command as the base format so that the code blocks would also still be useful when viewing the raw markdown documents.
 

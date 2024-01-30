@@ -2,11 +2,12 @@
 title: Device Management API
 tags: [Reference, Agent, API]
 sidebar_position: 2
+description: Details of the Device Management API
 ---
 
 # Device Management API
 
-The agent and the operation plugins enable device management on thin-edge,
+The agent and the operation plugins enable device management on %%te%%,
 giving the cloud operators a uniform interface to install software packages,
 update configuration files, inspect log files, restart devices ...
 
@@ -32,14 +33,14 @@ It can be to restart the device or to install some new software.
 From an implementation perspective, an operation is an API identified by a well-known name such as `restart` or `software_update`.
 This API rules the coordination among the software components that need to interact to advance the operation.
 
-Not all entities and components of a thin-edge device support all the operations,
+Not all entities and components of a %%te%% device support all the operations,
 and, even if they do, the implementations might be specific.
 Installing a software package on top of service makes no sense.
 Restarting the device is not the same as restarting one of its services.
 Each entity or component has to declare its *capabilities* i.e. the operations made available on this target.
 
 Strictly speaking, capabilities are not implemented nor declared by the devices and the services themselves.
-They are implemented by thin-edge services and plugins.
+They are implemented by %%te%% services and plugins.
 These are the components which actually implement the operations interacting with the operating system and other software.
 For instance, device restart and software updates are implemented by the `tedge-agent`.
 
@@ -70,7 +71,7 @@ and participate as per their role, when it is their turn.
 
 ## Topics
 
-Following [thin-edge MQTT topic conventions](../mqtt_api.md#commands),
+Following [%%te%% MQTT topic conventions](../mqtt_api.md#commands),
 each device is assigned a specific topic prefix,
 with a metadata sub-topic per command type
 and specific sub-topics for the requests. 
@@ -103,7 +104,7 @@ Where the groups are described as follows:
 
 | Group        | Description                                                                                                                                                                           |
 |--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| root         | The [topic root prefix](../mqtt_api.md#group-root) for this installation of thin-edge.                                                                                               |
+| root         | The [topic root prefix](../mqtt_api.md#group-root) for this installation of %%te%%.                                                                                               |
 | target       | The [topic identifier](../mqtt_api.md#group-identifier) of the target device, possibly a [custom identifier](/contribute/design/mqtt-topic-design.md#using-custom-identifier-schemas). |
 | `cmd`        | The [command channel](../mqtt_api.md#group-channel) grouping all of the commands for this target.                                                                               |
 | command_type | The type name of the operation.                                                                                                                                                       |
@@ -233,7 +234,7 @@ An operation workflow defines the possible sequences of actions for an operation
 from its initialization up to its success or failure. It specifies the actions to perform
 as well as any prerequisite checks, outcome validations and possible rollbacks.
 However, a workflow doesn't define how to perform these actions.
-These are delegated to thin-edge services, scripts, application-specific services or other devices.
+These are delegated to %%te%% services, scripts, application-specific services or other devices.
 More precisely, an operation workflow defines:
 - the *observable states* of an ongoing operation instance
   from initialization up to a final success or failure

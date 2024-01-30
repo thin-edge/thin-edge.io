@@ -11,7 +11,7 @@ To add a new log type, you need to edit the `tedge-log-plugin.toml` in `/etc/ted
 
 In this toml file you specify the log type and log path of the logs wished to
 be retrieved from Cumulocity UI.
-For example, if you wish to request thin-edge software logs and mosquitto logs
+For example, if you wish to request %%te%% software logs and mosquitto logs
 an example toml file would be:
 
 ```toml title="file: /etc/tedge/plugins/tedge-log-plugin.toml"

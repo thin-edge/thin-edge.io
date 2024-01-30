@@ -5,7 +5,7 @@ sidebar_position: 11
 ---
 
 :::tip
-thin-edge.io provides an alternative way to access the Cumulocity IoT REST API without having to request a token. The [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md) can be used which handles the authorization as required.
+%%te%% provides an alternative way to access the Cumulocity IoT REST API without having to request a token. The [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md) can be used which handles the authorization as required.
 
 It is recommended to use the [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md) where possible.
 :::

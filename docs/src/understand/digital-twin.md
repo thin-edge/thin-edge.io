@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Digital Twin
 
-Thin-edge provides the tools to build
+%%te%% provides the tools to build
 a remote *digital twin* representation of a piece equipment
 as well as a *local representation* of its architecture,
 both being used to direct operations to and collect data from
@@ -29,7 +29,7 @@ and these technical details are abstracted away by the digital twin.
 
 ## Building Blocks
 
-Thin-edge represents a piece of equipment as a hierarchy of devices and services,
+%%te%% represents a piece of equipment as a hierarchy of devices and services,
 with a main device, nested child-devices and the services running on these devices.
 
 ### Device
@@ -43,7 +43,7 @@ abstracting some parts or groups of parts of the equipment.
 ### Service
 
 A service represents a piece of software running on a device that is monitored from the cloud.
-It can be an application, an operating-system process, an industrial process or a thin-edge daemon.
+It can be an application, an operating-system process, an industrial process or a %%te%% daemon.
 
 From a digital twin perspective, a service is essentially a source of monitoring data;
 but could also be a target of maintenance operations such as configuration updates and restarts.
@@ -51,7 +51,7 @@ but could also be a target of maintenance operations such as configuration updat
 ### Main Device
 
 The main device represents the piece of equipment as a whole.
-This is usually, but not necessarily, the gateway device where thin-edge is running.
+This is usually, but not necessarily, the gateway device where %%te%% is running.
 
 ### Child Device
 
@@ -80,7 +80,7 @@ while a software package is usually downloaded from a repository.
 Telemetry data encompasses __measurements__, __events__ and __alarms__
 that are collected, generated or raised by sensors and processes.
 
-These data are propagated by thin-edge from the physical devices to their digital twins;
+These data are propagated by %%te%% from the physical devices to their digital twins;
 and made available to the cloud application, users and operators.
 
 :::note
@@ -90,7 +90,7 @@ represent metrics and monitoring data related to the operating system and runnin
 
 ### Operations
 
-Conversely, maintenance operations are triggered from the cloud and forwarded by thin-edge to the targeted devices.
+Conversely, maintenance operations are triggered from the cloud and forwarded by %%te%% to the targeted devices.
 
 It can be to restart a device, to update a configuration file, or to install software packages,
 using a precise workflow, checking prerequisites, coordinating participants and monitoring progress.
@@ -105,7 +105,7 @@ with the appropriate level of details from the application perspective:
 - details are abstracted away by the digital twin
 - the piece of equipment is represented by a hierarchy of nested devices
 - each device defines its own set of capabilities: what can be managed and monitored
-- capabilities are implemented by thin-edge or by device connectors
+- capabilities are implemented by %%te%% or by device connectors
 
 ### Hardware Abstraction
 
@@ -119,7 +119,7 @@ In fact, the device representation is actually just software acting as proxy for
 This software implements the abstraction, publishing telemetry data and handling operation requests.
 
 Similar to a device representation, a service is free to define what it should represent.
-It can be an operation process, an application, some thin-edge components, or some other custom entity.
+It can be an operation process, an application, some %%te%% components, or some other custom entity.
 From a digital twin perspective a service is a source of telemetry data that is running on a device.
 
 ### Nested Devices
@@ -130,7 +130,7 @@ This is done using a hierarchy of nested devices,
 from a main device to more and more specific child-devices,
 up to services running on those devices.
 
-To implement this nested view, thin-edge provides the tools to
+To implement this nested view, %%te%% provides the tools to
 - uniquely identify each device and service making up an asset
 - attach metadata on the type and role of each part
 - define how these devices are nested
@@ -146,18 +146,18 @@ Depending on the device and its software, the users will be able to:
 - update the firmware of the device
 - trigger application operations
 
-These capabilities are declared to thin-edge using a combination of convention and configuration.
+These capabilities are declared to %%te%% using a combination of convention and configuration.
 They are then reflected on the digital twin and made available to the local and remote end-users.
 
 ### Device Connectors
 
 The capabilities of a device are implemented by __device connectors__,
-i.e. software components that use the thin-edge API
+i.e. software components that use the %%te%% API
 to publish telemetry data on behalf of the device and to handle operation requests
 acting on the hardware, its profile and the services running under the hood.
 
-Thin-edge itself is a device connector.
-Installing thin-edge on a device enables the capabilities provided by thin-edge out-of-the-box, on that device.
+%%te%% itself is a device connector.
+Installing %%te%% on a device enables the capabilities provided by %%te%% out-of-the-box, on that device.
 
 A device connector is typically installed on the connected device itself. However, this is not a rule.
 A device connector can run on different hardware

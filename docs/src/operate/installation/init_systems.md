@@ -2,11 +2,12 @@
 title: Init Systems
 tags: [Installation, Unix, Init, Services]
 sidebar_position: 1
+description: Extended support for other init systems
 ---
 
 # Init systems
 
-thin-edge.io supports Systemd out of the box, however not all Linux distributions use Systemd. To use thin-edge.io on a Linux distribution without Systemd requires a few extra steps.
+%%te%% supports Systemd out of the box, however not all Linux distributions use Systemd. To use %%te%% on a Linux distribution without Systemd requires a few extra steps.
 
 Support for different init systems (service managers) is provided by a community repository, [tedge-services](https://github.com/thin-edge/tedge-services). The following service definitions are currently supported (though check the community repository if you don't see your preferred init system in the list).
 
@@ -16,7 +17,7 @@ Support for different init systems (service managers) is provided by a community
 * SysVinit
 * supervisord
 
-You are also free to use any service manager to run thin-edge how you want. Check out the [init system reference](../../references/init_system_configuration.md) guide to see how to create a configuration to interact with your preferred init system.
+You are also free to use any service manager to run %%te%% how you want. Check out the [init system reference](../../references/init_system_configuration.md) guide to see how to create a configuration to interact with your preferred init system.
 
 :::tip
 Contributions are welcome in the [tedge-services](https://github.com/thin-edge/tedge-services) repository to improve any of the services, or to add support for additional init systems.
@@ -171,7 +172,7 @@ sudo dnf install tedge-supervisord
 sudo apk add tedge-supervisord
 ```
 
-After installing the supervisord definitions, you will have to make sure the supervisord configuration pulls in the services definitions. Below shows an example `supervisord.conf` file which imports all thin-edge.io services definitions which were installed.
+After installing the supervisord definitions, you will have to make sure the supervisord configuration pulls in the services definitions. Below shows an example `supervisord.conf` file which imports all %%te%% services definitions which were installed.
 
 ```ini title="file: /etc/supervisord.conf"
 # ... other supervisord settings

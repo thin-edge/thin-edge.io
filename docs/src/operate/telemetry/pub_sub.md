@@ -2,11 +2,12 @@
 title: MQTT Tools
 tags: [Operate, MQTT]
 sidebar_position: 1
+description: Publishing and subscribing to MQTT messages
 ---
 
 # Publish and subscribe to MQTT messages on the command line
 
-thin-edge.io cli provides a convenient way to debug and aid development process.
+%%te%% cli provides a convenient way to debug and aid development process.
 
 ## Publish
 

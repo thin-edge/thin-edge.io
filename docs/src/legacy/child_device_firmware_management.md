@@ -11,7 +11,7 @@ sidebar_position: 7
 :::
 
 Firmware management can be enabled for child devices using the `c8y-firmware-plugin`.
-This thin-edge plugin coordinates the firmware update operation handling with Cumulocity,
+This %%te%% plugin coordinates the firmware update operation handling with Cumulocity,
 by establishing secure communication with the cloud,
 managing firmware file downloads, which are typically large files, even over flaky networks,
 caching the downloaded files for re-use across multiple child devices etc.
@@ -19,34 +19,34 @@ For more details on the inner workings of this plugin, refer to the [reference g
 
 In order to install the firmware itself on the child device,
 an additional piece of software must be developed by the child device owner as well,
-to coordinate firmware installation on the device with the `c8y-firmware-plugin` running on thin-edge.
+to coordinate firmware installation on the device with the `c8y-firmware-plugin` running on %%te%%.
 This software is referred to as `child-device-connector` in the rest of this document.
 
 The responsibilities of the child device connector are:
 
-* Receive firmware update requests from thin-edge
-* Download and apply the updated firmware from thin-edge
-* Send status updates on the progress of the firmware update operation to thin-edge
+* Receive firmware update requests from %%te%%
+* Download and apply the updated firmware from %%te%%
+* Send status updates on the progress of the firmware update operation to %%te%%
 
 Handling the above-mentioned responsibilities involves
-multiple interactions with thin-edge over its MQTT and HTTP APIs.
-In cases where the child device connector is installed alongside thin-edge on the same device,
+multiple interactions with %%te%% over its MQTT and HTTP APIs.
+In cases where the child device connector is installed alongside %%te%% on the same device,
 these APIs can be accessed via a local IP or even `127.0.0.1`.
 The MQTT APIs are exposed via port 1883 and the HTTP APIs are exposed via port 8000, by default.
 When the child device connector is running directly on the external child device,
-the MQTT and HTTP APIs of thin-edge need to be accessed over the network using its IP address and ports,
+the MQTT and HTTP APIs of %%te%% need to be accessed over the network using its IP address and ports,
 which are configured using the tedge config settings `mqtt.client.host` or `mqtt.client.port` for MQTT
 and `http.address` and `http.port` for HTTP.
 
-The `c8y-firmware-plugin` running on thin-edge, along with the `child-device-connector`
-running either on the thin-edge device itself or directly on the child device,
+The `c8y-firmware-plugin` running on %%te%%, along with the `child-device-connector`
+running either on the %%te%% device itself or directly on the child device,
 provides firmware management support for that device.
 
 ## Declare firmware management support of child device
 
 At first, the child device needs to declare that it supports firmware management from Cumulocity
-using the [supported operations API](../operate/c8y/supported_operations.md) of thin-edge
-by simply creating an empty operations file on the thin-edge device as follows:
+using the [supported operations API](../operate/c8y/supported_operations.md) of %%te%%
+by simply creating an empty operations file on the %%te%% device as follows:
 
 ```sh
 sudo touch /etc/tedge/operations/c8y/<child-device-id>/c8y_Firmware
@@ -55,7 +55,7 @@ sudo touch /etc/tedge/operations/c8y/<child-device-id>/c8y_Firmware
 This action will add `c8y_Firmware` as a new supported operation for the child device in Cumulocity.
 
 :::note
-This initial bootstrapping step needs to be performed on the thin-edge device directly
+This initial bootstrapping step needs to be performed on the %%te%% device directly
 and can not be done from the child device over the network.
 An over-the-network API for the same could be provided in future releases. 
 :::
@@ -63,9 +63,9 @@ An over-the-network API for the same could be provided in future releases.
 # Handle firmware update requests from thin-edge
 
 Once the firmware management operation is enabled for a child device,
-it is ready to serve firmware update requests received from Cumulocity via thin-edge.
+it is ready to serve firmware update requests received from Cumulocity via %%te%%.
 
-Handling firmware update requests from thin-edge is a 5-step process:
+Handling firmware update requests from %%te%% is a 5-step process:
 
 1. Subscribe to, and receive firmware update requests via MQTT
 1. Send an "executing" operation status update to acknowledge the receipt of the request via MQTT
@@ -78,7 +78,7 @@ The following sections cover these steps in detail.
 ### Subscribe to firmware update requests via MQTT
 
 The child device connector must subscribe to the `tedge/{CHILD_ID}/commands/req/firmware_update` MQTT topic
-to receive the firmware update requests from thin-edge.
+to receive the firmware update requests from %%te%%.
 
 **Example**
 
@@ -119,7 +119,7 @@ The fields in the request are describe below.
 |Property|Description|
 |--------|-----------|
 |id| A unique id for the request. All responses must be sent back with the same id.|
-|attempt| This `attempt` count can be used to differentiate between fresh requests and re-sent requests, as this `attempt` count will be higher than `1` if the same request is resent from thin-edge on rare occasions (e.g: thin-edge gets restarted while the child device is processing a firmware request).|
+|attempt| This `attempt` count can be used to differentiate between fresh requests and re-sent requests, as this `attempt` count will be higher than `1` if the same request is resent from %%te%% on rare occasions (e.g: %%te%% gets restarted while the child device is processing a firmware request).|
 |name| Name of the firmware package|
 |version| Version of the firmware package|
 |sha256| The SHA-256 checksum of the firmware binary served in the `url` which can be used to verify the integrity of the downloaded package post-download.|
@@ -210,10 +210,10 @@ mosquitto_pub -h {TEDGE_DEVICE_IP} -t "tedge/{CHILD_ID}/commands/res/firmware_up
 
 ## Cleanup
 
-To save bandwidth, thin-edge downloads a single firmware file only once and keeps it cached for reuse across multiple child devices,
+To save bandwidth, %%te%% downloads a single firmware file only once and keeps it cached for reuse across multiple child devices,
 as firmware updates could be applied to a fleet of devices together.
 The cached files are stored under the tedge data directory `/var/tedge/cache`, by default.
-Since thin-edge does not know how many devices it will be reused for and for how long, it can not clean them up on its own.
+Since %%te%% does not know how many devices it will be reused for and for how long, it can not clean them up on its own.
 So, the user must manually delete the cached firmware files once the update is complete on all child devices.
 
 ## References

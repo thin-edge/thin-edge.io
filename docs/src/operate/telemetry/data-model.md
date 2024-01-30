@@ -4,24 +4,22 @@ tags: [Concept, MQTT]
 sidebar_position: 9
 ---
 
-# thin-edge Data Model
-
-The **data model** identifies all data send or received from/to **thin-edge** and its components, to interact with those.
+The **data model** identifies all data send or received from/to %%te%% and its components, to interact with those.
 For all data it defines format and explains behaviour.
 
 ## Use of MQTT
 
-**thin-edge** expects the MQTT broker [mosquitto](https://mosquitto.org/) to be available on the device.
-**thin-edge** uses **mosquitto** to consume and provide telemetry data. All telemetry data are reflected with specific MQTT topics and payload in JSON format.
+%%te%% expects the MQTT broker [mosquitto](https://mosquitto.org/) to be available on the device.
+%%te%% uses **mosquitto** to consume and provide telemetry data. All telemetry data are reflected with specific MQTT topics and payload in JSON format.
 
-**thin-edge** assumes **mosquitto** is configured in a secure manner, to avoid any inappropriate access to **thin-edge** topics and payload.
-Any malicious access to the broker can hazard **thin-edge** and all connected devices. Mosquitto provides a wide range of authentication and access control options. For more details see _Authentication_ and _ACL_ (Access Control List) in [mosquitto documentation](https://mosquitto.org/man/mosquitto-conf-5.html).
+%%te%% assumes **mosquitto** is configured in a secure manner, to avoid any inappropriate access to %%te%% topics and payload.
+Any malicious access to the broker can hazard %%te%% and all connected devices. Mosquitto provides a wide range of authentication and access control options. For more details see _Authentication_ and _ACL_ (Access Control List) in [mosquitto documentation](https://mosquitto.org/man/mosquitto-conf-5.html).
 
 ### Telemetry Data on MQTT
 
 All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has its specific subtopic (e.g. `te/+/+/+/+/m/+`, `te/+/+/+/+/e/+`, `te/+/+/+/+/a/+` etc.).
 
-  * each provider of a **measurement**, **event** or **alarm** sends the occurring data to **thin-edge's** MQTT broker
+  * each provider of a **measurement**, **event** or **alarm** sends the occurring data to %%te%%'s MQTT broker
     * a provider can be the domain application, other SW components / 3rd parties
   * all processes (e.g. the domain application, other SW components / 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
   * the cloud mapper on the **main-device** picks-up _all_ telemetry data from the MQTT broker and transfers those to the cloud
@@ -32,7 +30,7 @@ The communication diagram below illustrates that behaviour.
 
 ### Telemetry Data for Child-Devices
 
-All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device**.
+All telemetry data provided to the MQTT bus are associated by %%te%% and all consumers with the %%te%% **main-device** or some **child-device**.
 
 MQTT topics for the **main-device**:
 
@@ -99,11 +97,11 @@ One MQTT message can contain a mixture of more than one single-value and multi-v
 | --------- | --------- |
 |`name`       |a string that identifies the measurement uniquely in context of the device|
 |`value`      |the value that was sampled; can be named (especially in context of a multi-value measurement) or unnamed; must be an integer or floating point number|
-|`timestamp`  |optional time that indicates when values were sampled; when not provided, thin-edge.io uses the current system time as the time of the sample; when provided must be conform to ISO 8601|
+|`timestamp`  |optional time that indicates when values were sampled; when not provided, %%te%% uses the current system time as the time of the sample; when provided must be conform to ISO 8601|
 
 #### Behaviour of measurements
-- thin-edge does not store any historical sampled values for measurements
-- there is no initialization value for measurements; i.e. a measurement is not visible on thin-edge before the 1st sample was sent to thin-edge
+- %%te%% does not store any historical sampled values for measurements
+- there is no initialization value for measurements; i.e. a measurement is not visible on %%te%% before the 1st sample was sent to %%te%%
 - a measurement should never be published as MQTT retain message;
   That is as a single retained measurement might be consumed and processed more than once by a consuming software
   component (e.g. when that software component restarts and subscribes again).
@@ -138,11 +136,11 @@ te/device/<child-id>///e/<event-type>
 | ------------------ | --------- |
 |`event-type`        |a string part of the MQTT topic, that identifies the event uniquely in context of the device|
 |`text`              |carries a human readable event-text; must be UTF-8 encoded|
-|`timestamp`         |optional time that indicates when the event has occurred; when not provided, thin-edge.io uses the current system time as the time of the event; when provided must be conform to ISO 8601|
+|`timestamp`         |optional time that indicates when the event has occurred; when not provided, %%te%% uses the current system time as the time of the event; when provided must be conform to ISO 8601|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|
 
 #### Behaviour of events
-- thin-edge does not store any historical occurrences for events
+- %%te%% does not store any historical occurrences for events
 - an event should never be published as MQTT retain message;
   That is as a single retained event might be consumed and processed more than once by a consuming software
   component (e.g. when that software component restarts and subscribes again).
@@ -180,11 +178,11 @@ te/device/<child-id>///a/<alarm-type>
 |`alarm-type`        |a string part of the MQTT topic, that identifies the alarm uniquely in context of the device|
 |`severity`          |a string part of the MQTT payload, that indicates the severity of the alarm; recommended to be `critical`, `major`, `minor` or `warning`|
 |`text`              |carries a human readable alarm-text; must be UTF-8 encoded|
-|`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, thin-edge.io uses the current system time as the time of the alarm; when provided must be conform to ISO 8601|
+|`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, %%te%% uses the current system time as the time of the alarm; when provided must be conform to ISO 8601|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|
 
 #### Behaviour of alarms
-- thin-edge does not store any historical occurrences for alarms
+- %%te%% does not store any historical occurrences for alarms
 - **alarms** are stateful; i.e. once raised, an **alarm** is active until it was explicitly cleared by the device's software or the cloud
 - all alarms shall be published as MQTT retain message to reflect the alarm's stateful behaviour in the broker; The retain messages is kept in
   the MQTT broker as long as the alarm is raised. When a raised alarm is gone again, an empty retain message shall be published to clear

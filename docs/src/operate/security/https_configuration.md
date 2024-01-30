@@ -4,7 +4,7 @@ tags: [Operate, Security, HTTP]
 sidebar_position: 6
 ---
 
-Thin-edge provides two services over HTTP:
+%%te%% provides two services over HTTP:
 - The [File Transfer Service](../../references/file_transfer_service.md) is used by the mappers and the child devices to transfer files locally.
 - The [Cumulocity Proxy](../../references/cumulocity_proxy.md) acts as a local proxy to the Cumulocity IoT REST API.
 
@@ -144,7 +144,7 @@ Hence, the signing certificate will have to be added to the list of trusted root
 
 ### Generating Certificates
 
-Thin-edge currently provides no specific tool to generate and deploy certificates over child devices.
+%%te%% currently provides no specific tool to generate and deploy certificates over child devices.
 
 You can use the following script to generate all the required certificates.
 

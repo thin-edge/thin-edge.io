@@ -3,13 +3,13 @@ title: Apama Plugin
 tags: [Operate, Cumulocity, Software Management]
 ---
 
-The Apama plugin, part of the Apama thin-edge support package, can be used to install Apama projects using the Cumulocity software management feature.
+The Apama plugin, part of the Apama %%te%% support package, can be used to install Apama projects using the Cumulocity software management feature.
 
 ## Prerequisites
 
-The Apama thin-edge support package must be installed before you can install Apama projects on thin-edge.
+The Apama %%te%% support package must be installed before you can install Apama projects on %%te%%.
 The recommended way of installing Apama support on Debian based distributions is with the apt package manager.
-Further details about this can be found in the thin-edge.io documentation at [Manage the software on your devices from Cumulocity cloud](../../start/software-management.md).
+Further details about this can be found in the %%te%% documentation at [Manage the software on your devices from Cumulocity cloud](../../start/software-management.md).
 
 #### Set up the Debian repository from which the Apama packages will be installed
 
@@ -25,7 +25,7 @@ Further details about this can be found in the thin-edge.io documentation at [Ma
 
 4. Click the **Add Software** button.
 5. Now select the **Devices** menu option and then select **All devices**.
-6. In the list of devices, select the thin-edge device installed previously.
+6. In the list of devices, select the %%te%% device installed previously.
 7. In the sub-menu for the device, select the **Software** option.
 8. Click the **Install software** button in the bottom left; the apama-repo should be listed.
 9. Click the drop-down arrow on the right and check the `2022::apt` radio button, then click **Install**.
@@ -43,13 +43,13 @@ Further details about this can be found in the thin-edge.io documentation at [Ma
     - **SOFTWARE FILE**: select the **Provide a file path** option and give an **empty space** (' ').
 4. Click the **Add Software** button.
 5. Now return to the **Devices** menu option and then select **All devices**.
-6. In the list of devices, select the thin-edge device installed previously.
+6. In the list of devices, select the %%te%% device installed previously.
 7. In the sub-menu for the device, select the **Software** option.
 8. Click the **Install software** button in the bottom left; the apama-thin-edge-support should be listed.
 9. Click the drop-down arrow on the right and check the `latest::apt` radio button, then click **Install**.
 10. Finally, click the **Apply changes** button in the lower right of the panel.
 
-After installation of the support for Apama onto the thin-edge device, the correlator will attempt to start, but will fail initially because there is not yet an Apama project installed. Instructions are given below for installing an Apama project on the device.
+After installation of the support for Apama onto the %%te%% device, the correlator will attempt to start, but will fail initially because there is not yet an Apama project installed. Instructions are given below for installing an Apama project on the device.
 
 ## Install Apama projects from Cumulocity
 

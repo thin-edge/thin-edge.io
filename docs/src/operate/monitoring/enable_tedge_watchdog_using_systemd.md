@@ -15,11 +15,11 @@ To detect if a service is healthy or not, systemd relies on periodic health noti
 If the service fails to send that notification within a time threshold,
 then systemd will assume that service to be unhealthy and restart it.
 
-This document describes how the systemd watchdog mechanism can be enabled for thin-edge services.
+This document describes how the systemd watchdog mechanism can be enabled for %%te%% services.
 
 ## Enabling the systemd watchdog feature for a tedge service
 
-Enabling systemd watchdog for a `thin-edge.io` service (tedge-agent, tedge-mapper-c8y/az/collectd) is a two-step process.
+Enabling systemd watchdog for a %%te%% service (tedge-agent, tedge-mapper-c8y/az/collectd) is a two-step process.
 
 ### Step 1: Enable the watchdog feature in the systemd service file
 
@@ -74,8 +74,8 @@ Once the health status response is received from a particular service, the `tedg
 monitored service.
 
 :::note
-If none of the `thin-edge` services are enabled with the watchdog feature, then the `tedge-watchdog` service will stop with an `inactive` state.
-To monitor any of the `thin-edge` services, one has to update the corresponding `systemd` service file with `WatchdogSec`
+If none of the %%te%% services are enabled with the watchdog feature, then the `tedge-watchdog` service will stop with an `inactive` state.
+To monitor any of the %%te%% services, one has to update the corresponding `systemd` service file with `WatchdogSec`
 and then restart the `tedge-watchdog` service.
 :::
 

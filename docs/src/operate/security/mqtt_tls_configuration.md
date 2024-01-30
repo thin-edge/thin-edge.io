@@ -4,7 +4,7 @@ tags: [Operate, Security, MQTT]
 sidebar_position: 5
 ---
 
-thin-edge.io supports certificate-based authentication when communicating with
+%%te%% supports certificate-based authentication when communicating with
 an MQTT broker. Three levels of security are supported:
 
 1. No authentication (default)
@@ -73,7 +73,7 @@ sudo tedge config set mqtt.external.ca_path /etc/ssl/certs
 
 ## Server authentication
 
-Enabling server authentication causes thin-edge.io MQTT clients to require a
+Enabling server authentication causes %%te%% MQTT clients to require a
 valid certificate from a broker when connecting. The broker certificate is valid
 when it is signed by a CA that the clients trust.
 
@@ -167,7 +167,7 @@ set.
 
 As with the server private key, set `tedge:tedge` as the owner of the
 certificate and the private key, so that the private key can be read by
-thin-edge components.
+%%te%% components.
 
 ### Step 3: Restart services
 

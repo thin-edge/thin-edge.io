@@ -56,12 +56,12 @@ You can find more information about Cumulocity topics
 
 ## Azure MQTT Topics
 
-MQTT clients on Thin Edge device must use the below topics to communicate with the Azure cloud.
+MQTT clients on %%te%% device must use the below topics to communicate with the Azure cloud.
 The Azure topics are prefixed by `az/`.
 
 * `az/messages/events/`  - Use this topic to send the messages from device to
  cloud. The messages are forwarded to the Azure topic named
- `devices/{device_id}/messages/events/` where device_id is the Thin Edge device
+ `devices/{device_id}/messages/events/` where device_id is the %%te%% device
  id.
 
 * `az/messages/devicebound/#` - Use this topic to subscribe for the messages that were sent from cloud to device.
@@ -70,11 +70,11 @@ The Azure topics are prefixed by `az/`.
 
 ## AWS MQTT Topics
 
-MQTT clients on Thin Edge device must use the below topics to communicate with the AWS cloud.
+MQTT clients on %%te%% device must use the below topics to communicate with the AWS cloud.
 The AWS topics are prefixed by `aws/`.
 
 * `aws/td/#` - Use this topic to send the messages from device to cloud. The messages are forwarded to the AWS topic
- named `thinedge/{device_id}/td` where `{device_id}` is the Thin Edge device id.
+ named `thinedge/{device_id}/td` where `{device_id}` is the %%te%% device id.
 
 * `aws/cmd/#` - Use this topic to subscribe for the messages that were sent from cloud to device. Any message published
  by AWS on one the subtopics of `thinedge/{device_id}/cmd/#` is republished here.
@@ -97,4 +97,4 @@ The `collectd-mapper` daemon process ingests these measurements and emits transl
 to the measurement topic.
 
 * This process groups the atomic measurements that have been received during the same time-window (currently 200 ms)
-* and produces a single thin-edge-json for the whole group of measurements.
+* and produces a single %%te%% JSON for the whole group of measurements.

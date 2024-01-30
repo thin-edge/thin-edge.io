@@ -4,9 +4,7 @@ tags: [Concept, MQTT]
 sidebar_position: 5
 ---
 
-# Thin-edge Agent
-
-Thin-edge agent is a set of services that implement the device management operations on a device.
+%%te%% agent is a set of services that implement the device management operations on a device.
 Examples of such device management functionality include:
 - software management, checking installed packages and updating these packages
 - configuration management, checking and updating configuration files
@@ -16,7 +14,7 @@ Examples of such device management functionality include:
 - log file management, retrieving excerpts from log files
 
 :::note
-In the current version of thin-edge, the agent features are not implemented by a single executable,
+In the current version of %%te%%, the agent features are not implemented by a single executable,
 but by a set of executables:
 
 - `tedge-agent`
@@ -27,7 +25,7 @@ The short-term plan is to re-organize these plugins to move the Cumulocity aspec
 and to group the management operations into a single executable. 
 :::
 
-Thin-edge agent acts as a device connector:
+%%te%% agent acts as a device connector:
 - listening to operation requests published on the MQTT bus
 - delegating the actual operations to the operating system or other components
 - reporting progress of the requests
@@ -68,7 +66,7 @@ Where the command segments are describe as follows:
 
 ### Command examples
 
-The following table details some example command types which are supported by thin-edge.
+The following table details some example command types which are supported by %%te%%.
 
 | Command Type    | Description | Example Topic                                  |
 |-----------------|-------------|------------------------------------------------|

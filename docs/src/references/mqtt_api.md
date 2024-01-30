@@ -6,8 +6,8 @@ sidebar_position: 1
 
 ## Topic Scheme
 
-The thin-edge MQTT topic structure adopts a flexible and descriptive semantics, whilst keeping it consistent and predictable
-to enable other clients/mappers to interact with the thin-edge components.
+The %%te%% MQTT topic structure adopts a flexible and descriptive semantics, whilst keeping it consistent and predictable
+to enable other clients/mappers to interact with the %%te%% components.
 
 Whilst the topic structure is flexible, the document will focus on the typical use case.
 Advanced use-cases can be viewed in the [advanced section](../contribute/design/mqtt-topic-design.md#using-custom-identifier-schemas),
@@ -52,7 +52,7 @@ The specifics of each group are detailed in the following sections.
 
 ### Root {#group-root}
 
-The root/base topic prefix is used to group all data related to one thin-edge instance.
+The root/base topic prefix is used to group all data related to one %%te%% instance.
 The root topic is used to avoid conflicts with other clients communicating on the same MQTT broker.
 
 The convention is to use a fixed value of `te` (short for "thin-edge").
@@ -101,8 +101,8 @@ For instance publishing telemetry data of a device involves setting both the "se
 
 To help better understand how the **identifier** is used in the topics, let's image the following setup.
 You have two devices; the main device and a single child device called "child01".
-Both the main device (where thin-edge is running), and the child device have a single service called "node_red".
-Thin-edge will build digital twins for the devices (main and child device),
+Both the main device (where %%te%% is running), and the child device have a single service called "node_red".
+%%te%% will build digital twins for the devices (main and child device),
 and the "node_red" services associated with each of the devices.
 
 The following diagram details the device hierarchy of the fictional setup.
@@ -113,7 +113,7 @@ The following diagram details the device hierarchy of the fictional setup.
 graph TD
   main --> child01
   
-  subgraph main["main device (running thin-edge)"]
+  subgraph main["main device (running thin-edge.io)"]
     nodedred01["node_red service"]
   end
 
@@ -125,7 +125,7 @@ graph TD
 
 </p>
 
-The diagram shows that there are two devices; the "main" device (the digital twin representation of thin-edge), and a child device called "child01".
+The diagram shows that there are two devices; the "main" device (the digital twin representation of %%te%%), and a child device called "child01".
 
 The following table shows how the identifier is used to represent the different combination of devices and services, e.g. main device, node_red service running on the main device, child device and the node_red service running on the child device.
 
@@ -250,13 +250,13 @@ The following is an overview of the channel categories which are available.
 
 ## Entity registration
 
-Since thin-edge doesn't enforce what each entity identification level means,
+Since %%te%% doesn't enforce what each entity identification level means,
 an explicit registration is required to register every entity that is going to send data or receive commands.
 For example, before a measurement can be sent from a service named `tedge-agent` from the device `rpi1001`,
 the entity named `rpi1001` must be registered as a `device`,
 and `tedge-agent` must be registered as a `service` linked to that device.
 
-An entity can be registered with thin-edge by publishing a retained message to the entity identification topic prefix
+An entity can be registered with %%te%% by publishing a retained message to the entity identification topic prefix
 with the entity type and other metadata that defines that entity.
 To model the example mentioned above, if an entity identification topic scheme like the following is used:
 
@@ -403,7 +403,7 @@ Users are highly encouraged to register the devices manually as it allows device
 
 ### Entity store
 
-All the entity registration messages retained with the MQTT broker helps thin-edge components to
+All the entity registration messages retained with the MQTT broker helps %%te%% components to
 maintain an entity store with all the registered devices and services along with their metadata.
 
 Components like mappers use such an entity store while processing data from various sources.
@@ -422,7 +422,7 @@ The MQTT broker is used as the persistence layer to store the registered entitie
 
 Telemetry and commands use the data type topic levels after the entity/component subtopics.
 Even for the data type levels, a user is free to define those as they wish.
-But thin-edge has some pre-defined `<data-type>` subtopics for well-known types like
+But %%te%% has some pre-defined `<data-type>` subtopics for well-known types like
 *measurements*, *alarms*, *events* and *commands*, on which it enforces some constraints,
 so that it can process them.
 
@@ -568,7 +568,7 @@ Where the command segments are describe as follows:
 
 ### Command examples
 
-The following table details some example command types which are supported by thin-edge.
+The following table details some example command types which are supported by %%te%%.
 
 | Command Type    | Example Topic                                  |
 |-----------------|------------------------------------------------|

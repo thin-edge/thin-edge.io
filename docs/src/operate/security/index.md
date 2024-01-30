@@ -6,7 +6,7 @@ sidebar_position: 1
 
 import DocCardList from '@theme/DocCardList';
 
-Thin-edge uses X.509 certificates as the key mechanism to authenticate peers.
+%%te%% uses X.509 certificates as the key mechanism to authenticate peers.
 - The MQTT connection between the gateway device and the cloud is established over TLS
   and uses certificates to authenticate the device on the cloud, as well as to authenticate the cloud on the device.
 - The local MQTT connections, from the miscellaneous services and child devices to the local MQTT broker,

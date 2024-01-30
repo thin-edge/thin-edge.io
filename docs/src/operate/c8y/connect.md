@@ -11,7 +11,7 @@ To create northbound connection a local bridge shall be established and this can
 
 ## Setting the cloud end-point
 
-Configure required parameters for thin-edge.io with [`tedge config set`](../../references/cli/tedge-config.md):
+Configure required parameters for %%te%% with [`tedge config set`](../../references/cli/tedge-config.md):
 
 ```sh
 sudo tedge config set c8y.url example.cumulocity.com

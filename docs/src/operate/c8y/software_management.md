@@ -8,13 +8,13 @@ As of now, this feature is supported only on devices with **debian** based
 distributions, which use the **apt** package manager(Ex: RaspberryPi OS , Ubuntu, Debian), from Cumulocity cloud.
 :::
 
-Below steps show how to download, install and enable thin-edge software management feature.
+Below steps show how to download, install and enable %%te%% software management feature.
 
 ## Download and install software management packages on the device
 
 As a prerequisite, install [tedge and tedge-mapper](../../install/index.md) if not installed already.
 
-The thin-edge software management packages are in repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
+The %%te%% software management packages are in repository on GitHub: [%%te%%](https://github.com/thin-edge/thin-edge.io/releases).
 
 To download the package from github repository use the following command (use desired version):
 
@@ -23,7 +23,7 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/<package>_
 ```
 
 Where:
-- `version` -> thin-edge.io software management components version in x.x.x format
+- `version` -> %%te%% software management components version in x.x.x format
 - `arch` -> architecture type (amd64, armhf)
 
 Download `tedge-apt-plugin` and `tedge-agent`
@@ -35,7 +35,7 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.9.0/tedg
 
 Once the packages are downloaded, proceed to installation.
 
-To install `tedge-apt-plugin` and `tedge-agent` on thin-edge device do:
+To install `tedge-apt-plugin` and `tedge-agent` on a %%te%% device do:
 
 ```sh
 sudo dpkg -i tedge-apt-plugin_<version>_<arch>.deb

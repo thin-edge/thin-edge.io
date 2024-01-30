@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # How to monitor health of tedge services
 
-The health of tedge services like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
+The health of %%te%% services like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
 These services expose MQTT health endpoints which you can query to check if the process is still active or not.
 
 To get the last known health status of a service you can subscribe to the following topic
@@ -69,7 +69,7 @@ All future tedge services will also follow the same topic naming scheme conventi
 
 ## Mosquitto bridge health endpoints
 
-The mosquitto bridge clients connecting thin-edge devices to the respective cloud platforms also report their health
+The mosquitto bridge clients connecting %%te%% devices to the respective cloud platforms also report their health
 status as retained messages to `te/device/main/service/<mosquitto-cloud-bridge>/status/health` topics. The health check
 messages published by these clients are just numeric values `1` or `0`, indicating active and dead bridge clients
 respectively.

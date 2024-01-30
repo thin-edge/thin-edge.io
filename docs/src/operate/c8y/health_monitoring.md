@@ -4,7 +4,7 @@ tags: [Operate, Cumulocity, Monitoring]
 #sidebar_position: 8
 ---
 
-The health of a `thin-edge.io` service or any other `service` that is running on the `thin-edge.io` device
+The health of a %%te%% service or any other `service` that is running on the %%te%% device
 or on the `child` device can be monitored from the **Cumulocity IoT** by sending the `health-status` message to **Cumulocity IoT**.
 
 ## Publish health status
@@ -38,12 +38,12 @@ auto-registration, it will be auto-registered as described [in the Auto Registra
 section](https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#auto-registration).
 
 For example, assuming a service `device/child1/service/service1`, running on a device `device/child1//`, which is a
-child device of thin-edge.io device `device/main//` with an ID of `TE_DEVICE`, the resulting topic mapping looks like
+child device of %%te%% device `device/main//` with an ID of `TE_DEVICE`, the resulting topic mapping looks like
 this:
 
 <div class="code-indent-left">
 
-**Thin-edge.io health status message**
+**%%te%% health status message**
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub te/device/child1/service/service1/status/health '{"status":"up"}' -q 2 -r

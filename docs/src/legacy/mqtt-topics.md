@@ -4,7 +4,7 @@ tags: [MQTT, Legacy]
 sidebar_position: 1
 ---
 
-The most visible breaking change introduced by thin-edge 1.0 is the [new topic structure](../references/mqtt_api.md),
+The most visible breaking change introduced by %%te%% 1.0 is the [new topic structure](../references/mqtt_api.md),
 which has been made more consistent and extensible with a better support for child devices and services.
 
 Porting an extension that publishes telemetry data on the legacy `tedge` topic, should not pose any difficulty:
@@ -17,7 +17,7 @@ Porting an extension that publishes telemetry data on the legacy `tedge` topic, 
 The **tedge-agent** running on the main device implements a compatibility layer
 and republishes on the new topics any message received on the legacy topics.
 
-Thanks to this compatibility mechanism a legacy extension works out of the box with thin-edge 1.0.
+Thanks to this compatibility mechanism a legacy extension works out of the box with %%te%% 1.0.
 
 However, this mechanism will be deprecated medium-term, and we encourage you to port any legacy extension to the new API. 
 

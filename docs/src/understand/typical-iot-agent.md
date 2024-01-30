@@ -36,7 +36,7 @@ which are virtual representations of the actual devices giving remote capabiliti
 
 ## Running thin-edge
 
-__The purpose of thin-edge is to support the development of such smart IoT agents__,
+__The purpose of %%te%% is to support the development of such smart IoT agents__,
 by providing the building blocks to:
 
 - provide a uniform way to monitor and control miscellaneous hardware and software
@@ -46,24 +46,24 @@ by providing the building blocks to:
   for firmware, software and configuration management on these devices
 - collect monitoring and telemetry data, forwarding these data to the cloud when appropriate
 
-![Typical thin-edge deployment](images/typical-iot-agent.svg)
+![Typical %%te%% deployment](images/typical-iot-agent.svg)
 
-Thin-edge offers a combination of ready-to-use software components supporting the core features,
+%%te%% offers a combination of ready-to-use software components supporting the core features,
 and extension points which allow users to develop small modular components
 to meet specific requirements for the piece of equipment, hardware or application.
 
 - An [__MQTT bus__](mqtt-bus.md) is used for all the interactions between these components.
-  Thin-edge defines a [__JSON over MQTT API__](thin-edge-json.md) for the major features:
+  %%te%% defines a [__JSON over MQTT API__](thin-edge-json.md) for the major features:
   telemetry data collection, service monitoring, remote operations
   as well as firmware, software and configuration management.
   To be precise, this API combines MQTT and HTTP,
   the latter being used for local file transfers and the former for asynchronous event processing.
-- Thin-edge components, the [__agent__](tedge-agent.md) and a set of __operation specific plugins__, supervise all the operations,
+- %%te%% components, the [__agent__](tedge-agent.md) and a set of __operation specific plugins__, supervise all the operations,
   coordinating remote requests with the local thin-edge-compatible software components.
 - Device-specific software components, the __child device connectors__, that interact with the hardware that make the piece of equipment.
   Note that the use of MQTT and HTTP APIs give the freedom to deploy these connectors directly on the associated hardware
   as well as on the main device acting as proxy, when, for some reasons,
-  the child device software cannot be updated to directly support the thin-edge protocol.
+  the child device software cannot be updated to directly support the %%te%% protocol.
 - A cloud specific [__mapper__](tedge-mapper.md) handles the communication with the cloud,
   translating and forwarding requests and responses to and from the local components.
   This bidirectional communication establishes the twin live representation of the asset

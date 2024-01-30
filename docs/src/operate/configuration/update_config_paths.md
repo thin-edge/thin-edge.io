@@ -26,10 +26,10 @@ The following daemons also need to be re-started after `data.path` is updated:
 
 ## Example: Set a custom temporary directory path
 
-The following shows how to change the temp directory used by thin-edge.io and its components.
+The following shows how to change the temp directory used by %%te%% and its components.
 
 
-1. Create a new directory which will be used by thin-edge.io
+1. Create a new directory which will be used by %%te%%
 
     ```sh
     # create a directory (with/without sudo)

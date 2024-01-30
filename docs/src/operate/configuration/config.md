@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # How-to configure thin-edge.io
 
-`thin-edge.io` can be configured in a few different ways:
+%%te%% can be configured in a few different ways:
 
 1. The `tedge config` command ([reference here](../../references/cli/tedge-config.md))
 2. The `tedge.toml` file
@@ -48,7 +48,7 @@ bind_address = "127.0.0.1"
 
 ## Environment variables
 
-To aid in configuring `thin-edge.io` in containerised environments, `thin-edge.io` supports passing in the configuration via environment variables. For instance, to configure the Cumulocity URL and MQTT bind address, you can run:
+To aid in configuring %%te%% in containerised environments, %%te%% supports passing in the configuration via environment variables. For instance, to configure the Cumulocity URL and MQTT bind address, you can run:
 
 ```sh
 env TEDGE_C8Y_URL=mytenant.cumulocity.com TEDGE_MQTT_BIND_ADDRESS=127.0.0.1 tedge connect c8y 

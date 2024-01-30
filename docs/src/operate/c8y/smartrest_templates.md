@@ -5,10 +5,10 @@ tags: [Operate, Cumulocity]
 
 [Custom SmartREST 2.0 Templates](https://cumulocity.com/guides/reference/smartrest-two) can be used to extend the functionality of a device to support more operations than what the [static SmartREST templates](https://cumulocity.com/guides/reference/smartrest-two/#mqtt-static-templates) offer.
 
-`thin-edge.io` supports subscription to custom templates as documented [here](https://cumulocity.com/guides/users-guide/device-management/#smartrest-templates).
+%%te%% supports subscription to custom templates as documented [here](https://cumulocity.com/guides/users-guide/device-management/#smartrest-templates).
 
 For every template that the device uses, it must publish all data to `s/uc/<template-name>` topic and subscribe to `s/dc/<template-name>` to receive data from the cloud, based on that template.
-When these templates are configured with `thin-edge.io`, subscriptions to all these relevant topics on Cumulocity cloud will be done by `thin-edge.io` internally.
+When these templates are configured with %%te%%, subscriptions to all these relevant topics on Cumulocity cloud will be done by %%te%% internally.
 Local processes on the device can access these templates on the local MQTT broker by simply publishing to `c8y/s/uc/<template-name>` and subscribing to `c8y/s/dc/<template-name>` topics (note the `c8y/` prefix in topics).
 
 A template named `$TEMPLATE_NAME` requires the following subscriptions to be added when connecting to Cumulocity:
@@ -28,13 +28,13 @@ tedge config get c8y.smartrest.templates
 
 ## Add new template to thin-edge configuration
 
-To add new template to `thin-edge.io` the `tedge config` cli tool can be used as following:
+To add new template to %%te%% the `tedge config` cli tool can be used as following:
 
 ```sh
 sudo tedge config set c8y.smartrest.templates template-1,template-2
 ```
 
-After adding or removing a template, you will need to run the following command before thin-edge.io will use the new settings:
+After adding or removing a template, you will need to run the following command before %%te%% will use the new settings:
 
 ```sh
 sudo tedge reconnect c8y
@@ -95,7 +95,7 @@ tedge config get c8y.smartrest.templates
 ["template-1"]
 ```
 
-After adding or removing a template, you will need to run the following command before thin-edge.io will use the new settings:
+After adding or removing a template, you will need to run the following command before %%te%% will use the new settings:
 
 ```sh
 sudo tedge reconnect c8y
@@ -105,9 +105,9 @@ sudo tedge reconnect c8y
 
 The following example shows how to create a new SmartREST template with a single custom operation which will be activated when an operation is created with the `set_wifi` fragment. The operation includes 3 parameters where the wifi `name`, `ssid` and `type` are included in the message which is sent to the device via MQTT.
 
-In this example, the operation handler on the thin-edge.io side only prints out the received message on the console, but it can be extended to execute any command that is required for your task.
+In this example, the operation handler on the %%te%% side only prints out the received message on the console, but it can be extended to execute any command that is required for your task.
 
-The operation response defined in the SmartREST template will convert the Cumulocity IoT Operation from json to an MQTT message in a Comma Separated Variables (CSV) format. The MQTT message is then received by thin-edge.io and a script is called passing the message as the message to it. The script is used to perform the desired actions using the parameters provided in the message.
+The operation response defined in the SmartREST template will convert the Cumulocity IoT Operation from json to an MQTT message in a Comma Separated Variables (CSV) format. The MQTT message is then received by %%te%% and a script is called passing the message as the message to it. The script is used to perform the desired actions using the parameters provided in the message.
 
 The snippets below are used to illustrate the message translation of the Cumulocity IoT operation to the message received by the device.
 
@@ -125,7 +125,7 @@ The snippets below are used to illustrate the message translation of the Cumuloc
 }
 ```
 
-**SmartREST (CSV) format received by thin-edge.io**
+**SmartREST (CSV) format received by %%te%%**
 
 The above Cumulocity IoT operation is transformed into CSV (using the formatting/rules defined in the SmartREST template) and sent to the device via MQTT. The example below shows the format of the message as received by the device:
 
@@ -224,7 +224,7 @@ Alternatively, you can import a SmartREST template from an existing file. This a
 
 On the device, perform the following steps:
 
-1. Set the custom SmartREST template to be used by thin-edge.io
+1. Set the custom SmartREST template to be used by %%te%%
  
     ```sh
     tedge config set c8y.smartrest.templates "custom_devmgmt"
@@ -239,7 +239,7 @@ On the device, perform the following steps:
     ```
 
     :::info
-    This step ensures that the new SmartREST template id is also added in the list of MQTT topics to subscribe to. Without this step, thin-edge.io will not be able to receive the custom operation.
+    This step ensures that the new SmartREST template id is also added in the list of MQTT topics to subscribe to. Without this step, %%te%% will not be able to receive the custom operation.
     :::
 
 :::tip
@@ -248,7 +248,7 @@ You don't need to re-run this step when you add a new message definition to an e
 
 ### Step 3: Creating the operation handler
 
-On your thin-edge.io device, run the following steps:
+On your %%te%% device, run the following steps:
 
 1. Create the following custom operation handler file
 
@@ -259,7 +259,7 @@ On your thin-edge.io device, run the following steps:
     on_message = "dm101"
     ```
 
-    The operation definition tells thin-edge.io what to do when receiving a specific message (with the message id) on the given topic. Specifically, the definition will execute the `/usr/bin/set_wifi` script when a `dm101` message is received on the `c8y/s/dc/custom_devmgmt` topic.
+    The operation definition tells %%te%% what to do when receiving a specific message (with the message id) on the given topic. Specifically, the definition will execute the `/usr/bin/set_wifi` script when a `dm101` message is received on the `c8y/s/dc/custom_devmgmt` topic.
 
 2. Create the script which is called when receiving the `dm101` message
 
@@ -336,7 +336,7 @@ On your thin-edge.io device, run the following steps:
 
     ![smartrest-custom-operation-control.png](./images/smartrest-custom-operation-control.png)
 
-3. On the thin-edge.io device, open a console, and check the log file which when processing the custom operation
+3. On the %%te%% device, open a console, and check the log file which when processing the custom operation
 
     The following command uses a simple bash one-liner to print the contents of the most recent file created matching the `set_wifi*` pattern under the `/var/log/tedge/agent/` folder.
 
@@ -365,7 +365,7 @@ If you encounter any problems whilst trying to create or use a custom operation 
 
 ### Check the incoming MQTT message
 
-You can observe the MQTT message which is received by the local MQTT broker by subscribing to the following topic on your thin-edge.io device:
+You can observe the MQTT message which is received by the local MQTT broker by subscribing to the following topic on your %%te%% device:
 
 ```sh
 tedge mqtt sub 'c8y/#'
@@ -379,7 +379,7 @@ When a new operation is received, the above mqtt sub command should print the fo
 
 If you don't receive a message, then check the following:
 * Check your SmartREST definition in Cumulocity IoT. The definition must be defined per Cumulocity IoT Tenant!
-* Check that the thin-edge.io config has been updated to subscribe to the related SmartREST topic. Maybe you forgot to run:
+* Check that the %%te%% config has been updated to subscribe to the related SmartREST topic. Maybe you forgot to run:
 
     ```
     sudo tedge reconnect c8y
@@ -389,7 +389,7 @@ If you don't receive a message, then check the following:
 
 If you know the expected format of the SmartREST message, then you can debug any potential scripting problems by manually calling your script with a simulated message.
 
-For instance, if the operation definition has `exec.command` set to call the `/usr/bin/set_wifi` script, then you can simulate how thin-edge.io would call the script by using the following command:
+For instance, if the operation definition has `exec.command` set to call the `/usr/bin/set_wifi` script, then you can simulate how %%te%% would call the script by using the following command:
 
 ```sh
 sudo -u tedge /usr/bin/set_wifi "dm101,$(tedge config get device.id),Factory Wifi,factory-onboarding-wifi,WPA3-Personal"

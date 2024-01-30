@@ -5,13 +5,13 @@ sidebar_position: 1
 ---
 
 The Cumulocity mapper, referred to as `c8y-mapper` in the rest of this document,
-maps data in [Thin Edge format](../mqtt_api.md) into their equivalent [Cumulocity format](https://cumulocity.com/guides/reference/smartrest-two/#smartrest-two).
+maps data in [%%te%% format](../mqtt_api.md) into their equivalent [Cumulocity format](https://cumulocity.com/guides/reference/smartrest-two/#smartrest-two).
 
 
 ## Registration
 
 Cumulocity keeps the record of all the registered devices and their associated metadata in its inventory.
-The `c8y-mapper` creates and maintains inventory entries for all the devices and services registered with thin-edge.
+The `c8y-mapper` creates and maintains inventory entries for all the devices and services registered with %%te%%.
 The mapper subscribes to the following topics to get a list of all registered devices and services:
 
 ```sh
@@ -24,7 +24,7 @@ The registration messages received for child devices and services are mapped as 
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/child01
@@ -61,7 +61,7 @@ with devices using the same name in other tedge deployments connected to the sam
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/child01
@@ -98,7 +98,7 @@ Where the provided `@id` is directly used as the external id.
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/nested_child01
@@ -134,7 +134,7 @@ c8y/s/us/<main-device-id>:device:child01
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main/service/nodered
@@ -169,7 +169,7 @@ c8y/s/us
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/child01/service/nodered
@@ -256,7 +256,7 @@ Telemetry data types like measurements, events and alarms are mapped to their re
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///m/environment
@@ -297,7 +297,7 @@ c8y/measurement/measurements/create
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///m/
@@ -338,7 +338,7 @@ c8y/measurement/measurements/create
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/child01///m/
@@ -395,7 +395,7 @@ Then subsequent messages will be mapped with the registered unit value as follow
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///m/environment
@@ -436,7 +436,7 @@ c8y/measurement/measurements/create
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///e/login_event
@@ -469,7 +469,7 @@ c8y/s/us
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///e/login_event
@@ -520,7 +520,7 @@ c8y/event/events/create
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///a/temperature_high
@@ -554,7 +554,7 @@ c8y/s/us
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main///a/pressure_alarm
@@ -607,7 +607,7 @@ c8y/alarm/alarms/create
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic"
 te/device/main/service/my-service/status/health
@@ -649,7 +649,7 @@ The type part of the topic is used to group the data so it is easier for compone
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic (retain=true)"
 te/device/main///twin/device_OS
@@ -688,7 +688,7 @@ c8y/inventory/managedObjects/update/<main-device-id>
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic (retain=true)"
 te/device/child01///twin/device_OS
@@ -726,7 +726,7 @@ c8y/inventory/managedObjects/update/<main-device-id>:device:child01
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic (retain=true)"
 te/device/main/service/tedge-agent/twin/runtime_stats
@@ -765,7 +765,7 @@ c8y/inventory/managedObjects/update/<main-device-id>:device:main:service:tedge-a
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic (retain=true)"
 te/device/child01/service/tedge-agent/twin/runtime_stats
@@ -808,7 +808,7 @@ JSON objects must be published to their typed topics directly.
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic (retain=true)"
 te/device/main///twin/subtype
@@ -850,7 +850,7 @@ as they are included in the entity registration message and can only be updated 
 
 <div class="code-indent-left">
 
-**Thin Edge (input)**
+**%%te%% (input)**
 
 ```text title="Topic (retain=true)"
 te/device/child01/service/tedge-agent/twin/runtime_stats
@@ -881,7 +881,7 @@ c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedg
 ### Base inventory model
 
 The contents of `{tedge_config_dir}/device/inventory.json` are used to populate the initial inventory fragments
-of the the main thin-edge device in Cumulocity.
+of the the main %%te%% device in Cumulocity.
 For example, if the `inventory.json` contains the following fragments:
 
 ```json title="inventory.json"
@@ -925,7 +925,7 @@ c8y/inventory/managedObjects/update
 }
 ```
 
-Where the `c8y_Agent` fragment is auto-generated by thin-edge and appended to the contents of the file before it is published.
+Where the `c8y_Agent` fragment is auto-generated by %%te%% and appended to the contents of the file before it is published.
 
 The fragments in this file are also published to the `te/device/main///twin/<fragment-key>` topics so that
 the local twin metadata on the broker is also up-to-date and other components can also consume it.
@@ -995,7 +995,7 @@ c8y/inventory/managedObjects/update
 
 ## Operations/Commands
 
-Operations from Cumulocity are mapped to their equivalent commands in Thin Edge format.
+Operations from Cumulocity are mapped to their equivalent commands in %%te%% format.
 
 ### Supported Operations/Capabilities
 
@@ -1051,7 +1051,7 @@ c8y/s/ds
 
 <div class="code-indent-right">
 
-**Thin Edge (output)**
+**%%te%% (output)**
 
 ```text title="Topic"
 te/device/main///cmd/restart/<cmd-id>
@@ -1072,8 +1072,8 @@ the mapper recognizes and maps only the following `status` values as follows:
 
 <table style={{width:'100%'}}>
 <tr>
-  <th>Thin Edge (input)</th>
-  <th>Cumulocity (output)</th>
+  <th>%%te%% (input)</th>
+  <th>Cumulocity IoT (output)</th>
 </tr>
 
 <tr>
@@ -1182,7 +1182,7 @@ c8y/s/ds
 
 <div class="code-indent-right">
 
-**Thin Edge (output)**
+**%%te%% (output)**
 
 ```text title="Topic"
 te/device/child01///cmd/restart
@@ -1212,7 +1212,7 @@ c8y/s/ds
 
 <div class="code-indent-right">
 
-**Thin Edge (output)**
+**%%te%% (output)**
 
 ```text title="Topic"
 te/device/main///cmd/software_update/<cmd_id>
@@ -1270,7 +1270,7 @@ c8y/s/ds
 
 <div class="code-indent-right">
 
-**Thin Edge (output)**
+**%%te%% (output)**
 
 ```text title="Topic"
 te/device/main///cmd/config_snapshot/<cmd_id>
@@ -1306,7 +1306,7 @@ c8y/s/ds
 
 <div class="code-indent-right">
 
-**Thin Edge (output)**
+**%%te%% (output)**
 
 ```text title="Topic"
 te/device/main///cmd/config_update/<cmd_id>
@@ -1343,7 +1343,7 @@ c8y/s/ds
 
 <div class="code-indent-right">
 
-**Thin Edge (output)**
+**%%te%% (output)**
 
 ```text title="Topic"
 te/device/main///cmd/log_upload/<cmd_id>

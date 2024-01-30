@@ -6,6 +6,6 @@ sidebar_position: 2
 
 import DocCardList from '@theme/DocCardList';
 
-How to configure thin-edge
+How to configure %%te%%
 
 <DocCardList />

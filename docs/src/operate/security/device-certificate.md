@@ -33,7 +33,7 @@ i.e. on the same box as the MQTT broker establishing the MQTT connection to the 
 
 Note that *only* the MQTT broker should be able to read or write the private key, while the certificate itself is public.
 
-Then thin-edge must be told where the certificate is stored.
+Then %%te%% must be told where the certificate is stored.
 Note that the device certificate file must contain not only the device certificate itself
 but also the signing certificate
 (so the cloud endpoint can check the chain, starting from the device certificate up to the trusted root).
@@ -43,7 +43,7 @@ but also the signing certificate
 cat demo-device-007.pem > demo-device-007.chain.pem
 cat signing-cert.pem >> demo-device-007.chain.pem
 
-# Configure the cert chain file as the main cert to be used by thin-edge.io
+# Configure the cert chain file as the main cert to be used by %%te%%
 tedge config set device.cert_path /etc/mosquitto/certs/demo-device-007.chain.pem
 tedge config set device.key_path /etc/mosquitto/certs/demo-device-007.key
 ```

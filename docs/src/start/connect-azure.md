@@ -2,11 +2,12 @@
 title: Connecting to Azure IoT
 tags: [Getting Started, Azure, Connection]
 sidebar_position: 3
+description: Connect %%te%% to Azure IoT and publish telemetry data
 ---
 
 # Connect your device to Azure IoT
 
-The very first step to enable **thin-edge.io** is to connect your device to the cloud.
+The very first step to enable %%te%% is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
 * This connection is secure (encrypted over TLS), and the two peers are identified by x509 certificates.
@@ -18,7 +19,7 @@ See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
 Before you try to connect your device to Azure IoT, you need:
 * Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
-* [Install `thin-edge.io` on your device](../install/index.md).
+* [Install %%te%% on your device](../install/index.md).
 
 You can now use [`tedge` command](../references/cli/index.md) to:
 * [create a certificate for your device](#create-certificate),
@@ -174,6 +175,6 @@ More info about sending telemetry to Azure can be found [here](https://docs.micr
 
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
-  using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
+  using the cloud-agnostic [%%te%% JSON data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from Azure](../references/mappers/mqtt-topics.md#azure-mqtt-topics)
   if you prefer to use directly Azure specific formats and protocols.

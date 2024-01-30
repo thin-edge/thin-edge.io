@@ -121,7 +121,7 @@ but only when such a capability message is received from a child device.
 
 ### Removing supported operations
 
-To remove a supported operation for a thin-edge device, the corresponding operation file must be removed from the `/etc/tedge/operations/c8y` directory. eg:
+To remove a supported operation for a %%te%% device, the corresponding operation file must be removed from the `/etc/tedge/operations/c8y` directory. eg:
 
 ```sh
 sudo rm /etc/tedge/operations/c8y/c8y_Restart

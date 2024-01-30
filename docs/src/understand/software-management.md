@@ -2,11 +2,10 @@
 title: Software Management
 tags: [Concept, Software Management]
 sidebar_position: 7
+description: Software Management with %%te%%
 ---
 
-# Software Management with thin-edge.io
-
-With thin-edge.io you can ease the burden of managing packages on your device.
+With %%te%% you can ease the burden of managing packages on your device.
 Software Management operates end to end from a cloud down to the OS of your device and reports statuses accordingly.
 
 ## Software management components

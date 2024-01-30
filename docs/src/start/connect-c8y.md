@@ -2,11 +2,12 @@
 title: Connecting to Cumulocity IoT
 tags: [Getting Started, Cumulocity, Connection]
 sidebar_position: 2
+description: Connect %%te%% to Cumulocity IoT and publish telemetry data
 ---
 
 # Connect your device to Cumulocity IoT
 
-The very first step to enable `thin-edge.io` is to connect your device to the cloud.
+The very first step to enable %%te%% is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
 * This connection is secure (encrypted over TLS), and the two peers are identified by x509 certificates.
@@ -23,7 +24,7 @@ Before you try to connect your device to Cumulocity IoT, you need:
     * None of these credentials will be stored on the device.
     * These are only required once, to register the device.
 
-If not done yet, [install `thin-edge.io` on your device](../install/index.md).
+If not done yet, [install %%te%% on your device](../install/index.md).
 
 You can now use the [`tedge` command](../references/cli/index.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),
@@ -149,7 +150,7 @@ Check the following items to help you diagnose the root cause of the problem:
 
 #### 403 - Forbidden
 
-The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the thin-edge.io's device certificate to the Cumulocity IoT's [Trusted certificates](https://cumulocity.com/guides/device-integration/mqtt/#device-certificates).
+The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity IoT's [Trusted certificates](https://cumulocity.com/guides/device-integration/mqtt/#device-certificates).
 
 Your Cumulocity IoT user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity IoT. Global roles can be assigned to users via the Cumulocity IoT **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
 
@@ -271,7 +272,7 @@ You should observe a "temperature measurement" graph with the new data point.
 
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
-  using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
+  using the cloud-agnostic [%%te%% JSON data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from Cumulocity](../references/mappers/mqtt-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
 * learn how to [add custom fragments to cumulocity](../operate/c8y/custom_fragments.md).
