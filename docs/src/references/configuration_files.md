@@ -4,9 +4,7 @@ tags: [Reference, Configuration]
 sidebar_position: 5
 ---
 
-# Thin-edge config files
-
-Thin-edge.io requires config files for its operation. The `tedge init` command is used to create
+%%te%% requires config files for its operation. The `tedge init` command is used to create
 the base directory and other directories inside the base directory with appropriate user and permissions.
 The `tedge-mapper` and `tedge-agent` will create the config
 directories/files inside the base directory that are required for their operation on startup.
