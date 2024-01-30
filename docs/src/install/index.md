@@ -5,14 +5,14 @@ sidebar_position: 1
 ---
 
 :::tip Announcement
-thin-edge.io ❤️ Linux so we now support installing thin-edge on any Linux distribution!
+%%te%% ❤️ Linux so we now support installing %%te%% on any Linux distribution!
 
-Systemd is still the default init system (aka. service manager), however if you don't have Systemd, then it won't be used. You are then free to configure your own service manager to run thin-edge how you want, or use one of the [community supported packages](#optional-linux-distributions-without-systemd).
+Systemd is still the default init system (aka. service manager), however if you don't have Systemd, then it won't be used. You are then free to configure your own service manager to run %%te%% how you want, or use one of the [community supported packages](#optional-linux-distributions-without-systemd).
 :::
 
 ## Install/update
 
-The easiest way to get started with thin-edge.io is to use the installation script which will auto detect the installation method appropriate for your Linux distribution. The script will configure the package manager and install thin-edge.io and its dependencies (e.g. mosquitto). If your distribution does not have one of the supported package managers, then the tarball will be used to install thin-edge.io.
+The easiest way to get started with %%te%% is to use the installation script which will auto detect the installation method appropriate for your Linux distribution. The script will configure the package manager and install %%te%% and its dependencies (e.g. mosquitto). If your distribution does not have one of the supported package managers, then the tarball will be used to install %%te%%.
 
 To install or update to the latest version, run the following command:
 
@@ -26,7 +26,7 @@ wget -O - https://thin-edge.io/install.sh | sh -s
 
 ### Update using a package manager
 
-thin-edge.io and its components can be updated by running the install.sh script again, or using the Linux package manager on your distribution.
+%%te%% and its components can be updated by running the install.sh script again, or using the Linux package manager on your distribution.
 
 ```sh tab={"label":"Debian/Ubuntu"}
 sudo apt-get update
@@ -48,7 +48,7 @@ If you have any trouble updating via the package manager, then run the install.s
 
 ### Optional: Linux distributions without Systemd
 
-thin-edge.io uses Systemd by default to run all of its components as background services. If your Linux distribution does not have Systemd installed, then you will also have to run one more additional step.
+%%te%% uses Systemd by default to run all of its components as background services. If your Linux distribution does not have Systemd installed, then you will also have to run one more additional step.
 
 Run the script below to automatically detect and install the relevant service definitions for the init system provided by your Linux distribution.
 
@@ -63,12 +63,12 @@ wget -O - https://thin-edge.io/install-services.sh | sh -s
 Check out the [init systems](../operate/installation/init_systems.md) for more information on the service definitions.
 
 :::info
-If the script detects that Systemd is installed, then it will not install anything as thin-edge.io comes with Systemd service definitions.
+If the script detects that Systemd is installed, then it will not install anything as %%te%% comes with Systemd service definitions.
 :::
 
 ## Supported Linux Package Managers
 
-The following Linux Package Managers are supported out-of-the-box. For all other Linux distributions, the tarball (.tar.gz binary) can be used to add the thin-edge.io executables/binaries.
+The following Linux Package Managers are supported out-of-the-box. For all other Linux distributions, the tarball (.tar.gz binary) can be used to add the %%te%% executables/binaries.
 
 <div>
     <div class="row">
@@ -149,7 +149,7 @@ curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh'
 
 #### Installing and updating using a package manager
 
-Once you have the repository setup, you can install the **tedge-full** virtual package which will automatically pull in all of the thin-edge.io packages. This makes it easier to install and update in the future, as you only have to type in one package name, `tedge-full`.
+Once you have the repository setup, you can install the **tedge-full** virtual package which will automatically pull in all of the %%te%% packages. This makes it easier to install and update in the future, as you only have to type in one package name, `tedge-full`.
 
 ```sh tab={"label":"Debian/Ubuntu"}
 sudo apt-get update
@@ -169,7 +169,7 @@ sudo apk add --no-cache tedge-full
 
 You can force the install.sh script to install via the tarball instead of via a package manager. The install script will also take care of the required post installation steps.
 
-To install the thin-edge.io via the tarball run the following command:
+To install the %%te%% via the tarball run the following command:
 
 
 ```sh tab={"label":"curl"}
