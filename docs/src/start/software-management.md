@@ -35,10 +35,6 @@ Three components are required on your devices to enable software management:
     You can find them in /etc/tedge/sm-plugins.
     As of now there is only one (apt) plugin is supported.
 
-## Enable software management feature
-
-Find more information about [how to install and enable software management.](../operate/installation/install_and_enable_software_management.md)
-
 ## Managing the device software **repository** on Cumulocity cloud
 
 Managing the software packages installed on the devices from your Cumulocity tenant is a two steps operation.
