@@ -4,8 +4,6 @@ tags: [Reference, Unix, Init, Services]
 sidebar_position: 6
 ---
 
-# Init System Configuration File
-
 To support multiple init systems and service managers, `tedge` requires the `/etc/tedge/system.toml` file.
 The file contains configurations about the init system and the supported actions.
 
@@ -61,4 +59,4 @@ will be interpreted as
 
 ## Default settings
 
-If the `system.toml` file does not exist, then thin-edge will assume that you are using Systemd, and use `/bin/systemctl` to control the services.
+If the `system.toml` file does not exist, then %%te%% will assume that you are using Systemd, and use `/bin/systemctl` to control the services.

@@ -16,7 +16,7 @@ Support for different init systems (service managers) is provided by a community
 * SysVinit
 * supervisord
 
-You are also free to use any service manager to run thin-edge how you want. Check out the [init system reference](../../references/init-system-config.md) guide to see how to create a configuration to interact with your preferred init system.
+You are also free to use any service manager to run thin-edge how you want. Check out the [init system reference](../../references/init_system_configuration.md) guide to see how to create a configuration to interact with your preferred init system.
 
 :::tip
 Contributions are welcome in the [tedge-services](https://github.com/thin-edge/tedge-services) repository to improve any of the services, or to add support for additional init systems.
