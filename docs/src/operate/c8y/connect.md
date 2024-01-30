@@ -6,7 +6,7 @@ tags: [Operate, Cloud]
 To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
 
 :::note
-`tedge connect` requires `sudo` privilege.
+`tedge connect` requires root privileges, so you need to run it using `sudo` or run the command as root.
 :::
 
 ## Setting the cloud end-point
