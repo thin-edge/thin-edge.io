@@ -6,6 +6,7 @@ use anyhow::Context;
 use clap::Subcommand;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory;
 use tedge_utils::file::PermissionEntry;
 
@@ -171,6 +172,23 @@ impl TEdgeInitCmd {
                 Some(0o775),
             ),
         )?;
+
+        create_directory(
+            config_dir.join(".tedge-mapper-c8y"),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o775),
+            ),
+        )?;
+
+        let entity_store_file = config_dir
+            .join(".tedge-mapper-c8y")
+            .join("entity_store.jsonl");
+
+        if entity_store_file.exists() {
+            change_user_and_group(entity_store_file.as_std_path(), &self.user, &self.group)?;
+        }
 
         Ok(())
     }

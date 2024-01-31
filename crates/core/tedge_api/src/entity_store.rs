@@ -187,7 +187,11 @@ impl EntityStore {
             twin_data: Map::new(),
         };
 
-        let message_log = MessageLogWriter::new(log_dir.as_ref())?;
+        let message_log = MessageLogWriter::new(log_dir.as_ref()).map_err(|err| {
+            InitError::Custom(format!(
+                "Loading the entity store log for writes failed with {err}",
+            ))
+        })?;
 
         let mut entity_store = EntityStore {
             mqtt_schema: mqtt_schema.clone(),
