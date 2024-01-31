@@ -286,8 +286,7 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Set Suite Variable    $CHILD_SN    ${DEVICE_SN}_child1
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
-    Restart Service    tedge-mapper-c8y
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}"}'
     Device Should Exist                      ${DEVICE_SN}
     Device Should Exist                      ${CHILD_SN}
 

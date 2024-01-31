@@ -18,8 +18,7 @@ Main device registration
 
 
 Child device registration
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
-    Restart Service    tedge-mapper-c8y
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}"}'
 
     # Check registration
     ${child_mo}=    Device Should Exist        ${CHILD_SN}

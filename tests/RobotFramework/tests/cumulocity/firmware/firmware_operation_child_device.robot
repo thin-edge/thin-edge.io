@@ -97,14 +97,11 @@ Child device delete firmware file
     Execute Command    sudo rm -f firmware1
 
 Create child device
-    [Documentation]    FIXME: Without the first sleep after "Set Device Context", the device didn't get created.
-    ...    The second sleep ensures that first 101 (creating child device object) is sent, then next 114 (declaring supported operation).
-    ...    If the order is opposite, the child device name will start with "MQTT Device".
     Set Device Context    ${PARENT_SN}
-    Sleep    3s
     Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
-    Sleep    3s
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Firmware    /etc/tedge/operations/c8y/${CHILD_SN}/
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}///cmd/firmware_update' ''
     Cumulocity.Device Should Exist    ${CHILD_SN}
 
 Validate child Name

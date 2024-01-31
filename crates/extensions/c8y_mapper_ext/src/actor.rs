@@ -11,7 +11,6 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
-use serde_json::json;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::adapt;
@@ -31,9 +30,6 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::entity_store::EntityRegistrationMessage;
-use tedge_api::entity_store::EntityType;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -136,86 +132,34 @@ impl C8yMapperActor {
         Ok(())
     }
 
-    /// Registers the entity under a given MQTT topic.
-    ///
-    /// If a given entity was registered previously, the function will do
-    /// nothing. Otherwise it will save registration data to memory, free to be
-    /// queried by other components.
-    // fn register_entity(&mut self, topic: String, payload: String) {
-    //     self.entity_store.entry(&topic).or_insert(payload);
-    // }
-
     async fn process_file_watch_event(
         &mut self,
         file_event: FsWatchEvent,
     ) -> Result<(), RuntimeError> {
         match file_event.clone() {
-            FsWatchEvent::DirectoryCreated(path) => {
-                if let Some(directory_name) = path.file_name() {
-                    let dir_name = directory_name.to_string_lossy().to_string();
-                    let child_external_id =
-                        match CumulocityConverter::validate_external_id(&dir_name) {
-                            Ok(name) => name,
-                            Err(err) => {
-                                error!(
-                                    "Child device directory: {} ignored due to {}",
-                                    &dir_name, err
-                                );
-                                return Ok(());
-                            }
-                        };
-
-                    let child_name = self
-                        .converter
-                        .default_device_name_from_external_id(&child_external_id);
-                    let child_topic_id = EntityTopicId::default_child_device(&child_name).unwrap();
-                    let child_device_reg_msg = EntityRegistrationMessage {
-                        topic_id: child_topic_id,
-                        external_id: Some(child_external_id),
-                        r#type: EntityType::ChildDevice,
-                        parent: None,
-                        other: json!({ "name": child_name })
-                            .as_object()
-                            .unwrap()
-                            .to_owned(),
-                    };
-                    match self
-                        .converter
-                        .register_and_convert_entity(&child_device_reg_msg)
-                    {
-                        Ok(messages) => {
-                            for message in messages {
-                                self.mqtt_publisher.send(message).await?;
-                            }
-                        }
-                        Err(err) => {
-                            error!(
-                                "Processing dynamic child device directory creation failed with {}",
-                                err
-                            );
-                        }
-                    }
-                }
-            }
             FsWatchEvent::FileCreated(path)
             | FsWatchEvent::FileDeleted(path)
-            | FsWatchEvent::Modified(path)
-            | FsWatchEvent::DirectoryDeleted(path) => {
-                match process_inotify_events(&self.converter.ops_dir, &path, file_event) {
-                    Ok(Some(discovered_ops)) => {
-                        self.mqtt_publisher
-                            .send(
-                                self.converter
-                                    .process_operation_update_message(discovered_ops),
-                            )
-                            .await?;
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        eprintln!("Processing inotify event failed due to {}", e);
+            | FsWatchEvent::Modified(path) => {
+                // Process inotify events only for the main device at the root operations directory
+                // directly under /etc/tedge/operations/c8y
+                if path.parent() == Some(&self.converter.ops_dir) {
+                    match process_inotify_events(&self.converter.ops_dir, &path, file_event) {
+                        Ok(Some(discovered_ops)) => {
+                            self.mqtt_publisher
+                                .send(
+                                    self.converter
+                                        .process_operation_update_message(discovered_ops),
+                                )
+                                .await?;
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            eprintln!("Processing inotify event failed due to {}", e);
+                        }
                     }
                 }
             }
+            FsWatchEvent::DirectoryCreated(_) | FsWatchEvent::DirectoryDeleted(_) => {}
         }
 
         Ok(())
