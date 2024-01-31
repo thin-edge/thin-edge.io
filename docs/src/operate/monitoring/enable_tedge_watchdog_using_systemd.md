@@ -2,6 +2,7 @@
 title: Systemd Watchdog
 tags: [Operate, Monitoring]
 sidebar_position: 1
+unlisted: true
 ---
 
 # Enabling systemd watchdog for thin-edge services
