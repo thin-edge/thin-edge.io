@@ -1,9 +1,8 @@
 ---
 title: Mapper Configuration
 tags: [Operate, Configuration, Cloud, MQTT]
+description: How to control which MQTT topics the mappers subscribe to
 ---
-
-# How to control which MQTT topics the mappers subscribe to
 
 The cloud-specific mappers subscribe to the reserved MQTT topics and convert incoming MQTT messages to cloud-specific messages.
 In an advanced use case, such as using more than one cloud mappers for the same device,

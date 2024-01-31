@@ -1,6 +1,7 @@
 ---
 title: Custom Fragments
 tags: [Operate, Cumulocity]
+description: Publishing custom fragments/properties to Cumulocity IoT
 ---
 
 %%te%% supports update custom fragments (also known as properties) on the device's digital twin representation in Cumulocity IoT.

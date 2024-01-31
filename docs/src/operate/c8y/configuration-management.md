@@ -1,6 +1,7 @@
 ---
 title: Configuration Management
 tags: [Operate, Cumulocity, Configuration]
+description: Managing configuration on devices
 ---
 
 With %%te%%, you can manage config files on a device by using the [Cumulocity configuration management feature](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) as a part of Device Management.

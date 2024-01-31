@@ -1,6 +1,7 @@
 ---
 title: Restart Device
 tags: [Operate, Operation, Cumulocity]
+description: Restarting a device from the cloud
 ---
 
 If your device is running %%te%%, you can restart it from the cloud.

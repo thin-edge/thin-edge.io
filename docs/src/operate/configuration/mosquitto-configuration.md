@@ -1,10 +1,10 @@
 ---
 title: Mosquitto Configuration
 tags: [Operate, Configuration, MQTT]
-sidebar_position: 2
+description: Mosquitto specific configuration guide
 ---
 
-# How to configure the local port and bind address in mosquitto?
+## Configuring mosquitto bind address and port {#mosquitto-bind-address}
 
 Configuring a mosquitto port and bind address in %%te%% is a three-step process.
 
@@ -12,7 +12,7 @@ Configuring a mosquitto port and bind address in %%te%% is a three-step process.
 The mqtt.bind.port and the mqtt.bind.address can be set/unset independently.
 :::
 
-## Step 1: Disconnect thin-edge.io edge device
+### Step 1: Disconnect thin-edge.io edge device
 
 The %%te%% device has to be disconnected from the cloud using the `tedge` command
 
@@ -20,7 +20,7 @@ The %%te%% device has to be disconnected from the cloud using the `tedge` comman
 tedge disconnect c8y/az
 ```
 
-## Step 2: Set the new mqtt port and bind address
+### Step 2: Set the new mqtt port and bind address
 
 Use the `tedge` command to set the mqtt.bind.port and mqtt.bind.address with a desired port and bind address as below.
 
@@ -40,7 +40,7 @@ For example, this can be get as `ifconfig | grep inet` or set it to `0.0.0.0`
 This will make sure that all the mqtt clients use the newer port and the bind address that
 has been set once the device is connected to the cloud as in step 3.
 
-## Step 3: Verify the port and the bind address configured/set
+### Step 3: Verify the port and the bind address configured/set
 
 Use the `tedge` command to print the mqtt port and bind address that has been set as below.
 
@@ -54,7 +54,7 @@ tedge config get mqtt.bind.address
 0.0.0.0
 ```
 
-## Step 4: Connect the thin edge device to cloud
+### Step 4: Connect the thin edge device to cloud
 
 Use the `tedge` command to connect to the desired cloud as below.
 
@@ -87,7 +87,7 @@ sudo tedge config unset mqtt.bind.address
 Once the port or the bind address is reverted to default, the [step 1](#Step-3:-Connect-the-thin-edge-device-to-cloud)
 and 3 has to be followed to use the default port or the default bind address.
 
-## Error case
+## Common Errors
 
 The below example shows that we cannot set a string value for the port number.
 

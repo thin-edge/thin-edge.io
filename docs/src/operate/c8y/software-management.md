@@ -1,6 +1,7 @@
 ---
 title: Software Management
 tags: [Operate, Installation, Software Management]
+description: Managing software on devices
 ---
 
 :::note

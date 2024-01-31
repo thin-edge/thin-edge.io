@@ -1,7 +1,6 @@
 ---
 title: MQTT Tools
 tags: [Operate, MQTT]
-sidebar_position: 1
 description: Publish and subscribe to MQTT messages on the command line
 ---
 

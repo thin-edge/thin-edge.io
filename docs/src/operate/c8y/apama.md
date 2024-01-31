@@ -1,6 +1,7 @@
 ---
 title: Apama
 tags: [Operate, Cumulocity, Software Management]
+description: Using the Apama plugin with %%te%%
 ---
 
 The Apama plugin, part of the Apama %%te%% support package, can be used to install Apama projects using the Cumulocity software management feature.

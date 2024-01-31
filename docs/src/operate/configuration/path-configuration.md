@@ -1,15 +1,13 @@
 ---
 title: Path Configuration
 tags: [Operate, Configuration, Unix]
-sidebar_position: 4
+description: Customize %%te%% file/folder paths
 ---
-
-# How to change default paths
 
 ## thin-edge.io directories
 
-The `tedge config set` command can be used to change various file system paths used by tedge components.
-The following table captures the paths that can be changed, with their default locations.
+The `tedge config set` command can be used to change various file system paths used by the %%te%% components.
+The following table captures the paths that can be changed along with their default locations.
 
 | Config Key | Description | Default Value |
 |------------|-------------|---------------|

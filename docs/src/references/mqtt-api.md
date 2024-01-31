@@ -2,6 +2,7 @@
 title: MQTT API
 tags: [Reference, MQTT]
 sidebar_position: 1
+description: MQTT API reference guide
 ---
 
 ## Topic Scheme

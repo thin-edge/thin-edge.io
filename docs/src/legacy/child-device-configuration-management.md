@@ -2,6 +2,7 @@
 title: Child Device Configuration Management
 tags: [Cumulocity, Configuration, Legacy]
 sidebar_position: 6
+description: Legacy configuration management for child devices using Cumulocity IoT
 ---
 
 # Enable configuration management on child devices

@@ -2,6 +2,7 @@
 title: Configuration files
 tags: [Reference, Configuration]
 sidebar_position: 5
+description: Using a custom configuration path
 ---
 
 %%te%% requires config files for its operation. The `tedge init` command is used to create

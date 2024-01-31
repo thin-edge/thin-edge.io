@@ -2,6 +2,7 @@
 title: MQTT topics
 tags: [MQTT, Legacy]
 sidebar_position: 1
+description: Legacy %%te%% MQTT topics and how to map to the new topics
 ---
 
 The most visible breaking change introduced by %%te%% 1.0 is the [new topic structure](../references/mqtt-api.md),

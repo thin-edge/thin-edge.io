@@ -1,7 +1,7 @@
 ---
 title: Data Model
 tags: [Concept, MQTT]
-sidebar_position: 9
+description: Overview of the %%te%% data model and how to interact with it
 ---
 
 The **data model** identifies all data send or received from/to %%te%% and its components, to interact with those.
@@ -13,7 +13,7 @@ For all data it defines format and explains behaviour.
 %%te%% uses **mosquitto** to consume and provide telemetry data. All telemetry data are reflected with specific MQTT topics and payload in JSON format.
 
 %%te%% assumes **mosquitto** is configured in a secure manner, to avoid any inappropriate access to %%te%% topics and payload.
-Any malicious access to the broker can hazard %%te%% and all connected devices. Mosquitto provides a wide range of authentication and access control options. For more details see _Authentication_ and _ACL_ (Access Control List) in [mosquitto documentation](https://mosquitto.org/man/mosquitto-conf-5.html).
+Any malicious access to the broker can hazard %%te%% and all connected devices. Mosquitto provides a wide range of authentication and access control options. For more details see _Authentication_ and _ACL_ (Access Control List) in the [mosquitto documentation](https://mosquitto.org/man/mosquitto-conf-5.html).
 
 ### Telemetry Data on MQTT
 

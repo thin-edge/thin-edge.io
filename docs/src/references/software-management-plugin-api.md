@@ -2,7 +2,7 @@
 title: Software Management Plugin API
 tags: [Reference, Software Management, API]
 sidebar_position: 10
-description: Software Management Plug API reference
+description: Software Management Plugin API reference
 ---
 
 %%te%% uses plugins to delegate software management operations to the appropriate package manager/installer. The plugins are responsible for: installation of packages, uninstalls and queries.

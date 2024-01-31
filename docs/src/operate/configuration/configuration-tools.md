@@ -1,16 +1,18 @@
 ---
 title: Configuration Tools
 tags: [Operate, Configuration]
-sidebar_position: 1
+description: Customizing %%te%% settings
 ---
 
-# How-to configure thin-edge.io
+## Overview
 
 %%te%% can be configured in a few different ways:
 
 1. The `tedge config` command ([reference here](../../references/cli/tedge-config.md))
 2. The `tedge.toml` file
 3. Environment variables
+
+The following sections detail each of the configuration methods.
 
 ## tedge config command
 

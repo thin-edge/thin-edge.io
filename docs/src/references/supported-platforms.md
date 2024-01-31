@@ -2,6 +2,7 @@
 title: Supported Platforms
 tags: [Reference, Installation]
 sidebar_position: 15
+description: List of supported platforms, CPU architectures and resource usage
 ---
 
 %%te%% can be run on any Linux based Operating System, such as; Debian/Ubuntu, Alpine, RHEL, Fedora, Pokey (Yocto) etc.

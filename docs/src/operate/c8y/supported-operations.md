@@ -1,6 +1,7 @@
 ---
 title: Supported Operations
 tags: [Operate, Cumulocity, Operation]
+description: Declaring and using custom operations
 ---
 
 ## Concepts

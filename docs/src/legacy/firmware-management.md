@@ -2,6 +2,7 @@
 title: Firmware Management
 tags: [Firmware, Legacy]
 sidebar_position: 9
+description: Legacy child device firmware management using Cumulocity IoT
 ---
 
 # Child-Device Firmware Management using Cumulocity (legacy API)

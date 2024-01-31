@@ -2,6 +2,7 @@
 title: File Transfer Service
 tags: [Reference, HTTP]
 sidebar_position: 6
+descrioption: Interacting with the %%te%% file transfer service
 ---
 
 The `tedge-agent` hosts a binary repository for child devices and other plugins/extensions to exchange binary files between them.

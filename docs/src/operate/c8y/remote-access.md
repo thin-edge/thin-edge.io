@@ -1,6 +1,7 @@
 ---
 title: Remote Access
 tags: [Operate, Cumulocity, Remote Access]
+description: Accessing devices remote using tcp based protocols (e.g. ssh, vnc etc.)
 ---
 
 # Remote Access
