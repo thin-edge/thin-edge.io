@@ -4061,6 +4061,7 @@ dependencies = [
  "tedge_utils",
  "thiserror",
  "tokio",
+ "toml 0.7.8",
 ]
 
 [[package]]
