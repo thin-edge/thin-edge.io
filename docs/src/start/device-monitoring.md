@@ -181,4 +181,4 @@ If your device is not connected yet one of the following guides:
 
 ## Troubleshooting
 
-See here for [how to trouble shoot device monitoring?](../operate/troubleshooting/device-monitoring.md)
+See here for [how to troubleshoot device monitoring?](../operate/troubleshooting/device-monitoring.md)
