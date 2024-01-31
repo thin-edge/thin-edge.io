@@ -2969,7 +2969,7 @@ pub(crate) mod tests {
         for i in 0..3 {
             let measurement_message = Message::new(
                 &Topic::new_unchecked("te/custom/child1///m/environment"),
-                json!({"temperature": i}).to_string(),
+                json!({ "temperature": i }).to_string(),
             );
             let mapped_messages = converter.convert(&measurement_message).await;
             assert!(
