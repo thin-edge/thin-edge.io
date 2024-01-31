@@ -1,5 +1,5 @@
 ---
-title: Contribute to thin-edge
+title: Contribute to thin-edge.io
 tags: [Contribute]
 sidebar_position: 5
 ---

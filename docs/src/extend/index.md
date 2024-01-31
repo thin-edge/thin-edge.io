@@ -1,5 +1,5 @@
 ---
-title: Extend thin-edge
+title: Extend thin-edge.io
 tags: [Extend]
 sidebar_position: 4
 ---
