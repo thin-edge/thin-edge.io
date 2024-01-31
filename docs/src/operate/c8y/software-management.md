@@ -56,9 +56,9 @@ sudo tedge connect c8y
 ### Using tedge connect c8y
 
 The `tedge connect c8y` will automatically start and enable the software management feature.
-Find more about [how to connect thin-edge device to cloud](../c8y/connect.md)
+Find more about [how to connect %%te%% device to cloud](../c8y/connect.md)
 
-Once the thin-edge device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
+Once the %%te%% device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
 the list of software that are installed on the device will be visible as shown in the figure below.
 
 <p align="center">
@@ -70,7 +70,7 @@ the list of software that are installed on the device will be visible as shown i
 </p>
 
 :::note
-Disconnecting thin-edge device from cloud with `tedge disconnect c8y` command will stop and disable the software management feature.
+Disconnecting %%te%% device from cloud with `tedge disconnect c8y` command will stop and disable the software management feature.
 :::
 
 ### Manually enabling and disabling software management feature
