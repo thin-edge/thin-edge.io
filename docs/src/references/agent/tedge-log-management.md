@@ -58,7 +58,7 @@ then a JSON message with an empty array for the `types` field is sent, indicatin
 
 ## Handling log upload commands
 
-The agent subscribes to log upload commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](../mqtt_api.md).
+The agent subscribes to log upload commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](../mqtt-api.md).
 For example, it subscribes to the following topic for the main device.
 
 ```sh te2mqtt formats=v1

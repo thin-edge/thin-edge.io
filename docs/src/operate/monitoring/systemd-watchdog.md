@@ -3,9 +3,8 @@ title: Systemd Watchdog
 tags: [Operate, Monitoring]
 sidebar_position: 1
 unlisted: true
+description: Enabling systemd watchdog for %%te%% services
 ---
-
-# Enabling systemd watchdog for thin-edge services
 
 ## Introduction
 
@@ -93,7 +92,7 @@ tedge mqtt sub 'te/+/+/+/+/status/health'
 tedge mqtt sub 'te/+/+/+/+/cmd/health/check'
 ```
 
-Check out the [Monitor tedge health](../troubleshooting/monitor_tedge_health.md) for more details about the health endpoint.
+Check out the [Monitor tedge health](../troubleshooting/monitoring-service-health.md) for more details about the health endpoint.
 
 :::note
 If the watchdog service does not send the notification to the systemd within `WatchdogSec` interval for a service,

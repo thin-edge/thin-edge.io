@@ -4,7 +4,7 @@ tags: [Documentation]
 sidebar_position: 2
 ---
 
-A detailed look into the MQTT topic design giving additional context which the reference page does not provide. It is assumed that you are familiar with the [MQTT Topic Schema](../../references/mqtt_api.md) page, if not, then please read it first before continuing.
+A detailed look into the MQTT topic design giving additional context which the reference page does not provide. It is assumed that you are familiar with the [MQTT Topic Schema](../../references/mqtt-api.md) page, if not, then please read it first before continuing.
 
 ## Main concepts
 

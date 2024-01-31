@@ -1,12 +1,11 @@
 ---
-title: Testing the cloud connection
+title: Testing cloud connection
 tags: [Operate, Cloud, Connection]
 sidebar_position: 1
+description: How to test the connection to the cloud
 ---
 
-# How to test the connection to cloud?
-
-We provide a way to test the connection from your device to a cloud provider.
+%%te%% provides a way to test the connection from your device to a cloud provider.
 You can call this connection check function by
 
 ```sh

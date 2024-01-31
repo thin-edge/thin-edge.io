@@ -1,10 +1,9 @@
 ---
-title: Troubleshooting Device Monitoring
+title: Device Monitoring
 tags: [Operate, Monitoring]
 sidebar_position: 1
+description: How to troubleshoot device monitoring
 ---
-
-# How to trouble shoot device monitoring
 
 To install and configure monitoring on your device,
 see the tutorial [Monitor your device with collectd](../../start/device-monitoring.md).

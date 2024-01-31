@@ -60,7 +60,7 @@ Where the command segments are describe as follows:
 
 |Segment|Description|
 |---|----|
-|&lt;identifier&gt;|The [identifier](../references/mqtt_api.md#group-identifier) (e.g. device/service) associated with the command.|
+|&lt;identifier&gt;|The [identifier](../references/mqtt-api.md#group-identifier) (e.g. device/service) associated with the command.|
 |&lt;cmd_type&gt;|Command type. Each command can define its own payload schema to allow commands to have parameters related to the command's function.|
 |&lt;cmd_id&gt;|Unique command id which is unique for the command instance. e.g. `123456`, `d511a86cab95be81` etc.|
 

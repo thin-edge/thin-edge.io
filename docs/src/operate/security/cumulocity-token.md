@@ -5,14 +5,14 @@ sidebar_position: 11
 ---
 
 :::tip
-%%te%% provides an alternative way to access the Cumulocity IoT REST API without having to request a token. The [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md) can be used which handles the authorization as required.
+%%te%% provides an alternative way to access the Cumulocity IoT REST API without having to request a token. The [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md) can be used which handles the authorization as required.
 
-It is recommended to use the [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md) where possible.
+It is recommended to use the [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md) where possible.
 :::
 
 ## Overview
 
-For instances where you cannot use the [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md), the following instructions detail how to manually request a token, and then how to use the token to make manual REST API calls to the Cumulocity IoT tenant.
+For instances where you cannot use the [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md), the following instructions detail how to manually request a token, and then how to use the token to make manual REST API calls to the Cumulocity IoT tenant.
 
 ## Retrieving the token
 
@@ -103,7 +103,7 @@ curl -s -H "Authorization: Bearer $C8Y_TOKEN" \
 ```
 
 :::tip
-The same functionality (as above) can be achieved by using the [Cumulocity IoT Proxy Service](../../references/cumulocity_proxy.md):
+The same functionality (as above) can be achieved by using the [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md):
 
 ```sh
 curl -s -H "Accept: application/json" \

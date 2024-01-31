@@ -124,4 +124,4 @@ Afterwards, try executing [`tedge cert create`](../../references/cli/tedge-cert.
 ## Next steps
 
 1. [How to connect?](../c8y/connect.md)
-2. [How to use mqtt pub/sub?](../telemetry/pub_sub.md)
+2. [How to use mqtt pub/sub?](../telemetry/mqtt-tools.md)

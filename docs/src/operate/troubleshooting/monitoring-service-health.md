@@ -2,9 +2,8 @@
 title: Monitoring Service Health
 tags: [Operate, Monitoring]
 sidebar_position: 1
+description: How to monitor health of tedge services
 ---
-
-# How to monitor health of tedge services
 
 The health of %%te%% services like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
 These services expose MQTT health endpoints which you can query to check if the process is still active or not.

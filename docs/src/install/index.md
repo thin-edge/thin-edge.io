@@ -60,7 +60,7 @@ curl -fsSL https://thin-edge.io/install-services.sh | sh -s
 wget -O - https://thin-edge.io/install-services.sh | sh -s
 ```
 
-Check out the [init systems](../operate/installation/init_systems.md) for more information on the service definitions.
+Check out the [init systems](../operate/installation/init-systems.md) for more information on the service definitions.
 
 :::info
 If the script detects that Systemd is installed, then it will not install anything as %%te%% comes with Systemd service definitions.

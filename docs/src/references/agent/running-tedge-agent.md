@@ -22,7 +22,7 @@ tedge-agent
 ## On a child-device
 
 To launch `tedge-agent` on a child device,
-one has to configure the [topic identifier](../mqtt_api.md#group-identifier)
+one has to configure the [topic identifier](../mqtt-api.md#group-identifier)
 on this device to point to the appropriate topic identifier.
 
 ```sh title="running tedge-agent on the child device child-007"

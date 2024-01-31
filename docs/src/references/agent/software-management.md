@@ -358,7 +358,7 @@ The `tedge-agent` service uses software management plugins to interact with the 
 
 For each type of software package supported on the device must be provided a specific software management plugin:
 
-- A plugin is an executable file implementing the [software plugin API](../software_management_plugin_api.md),
+- A plugin is an executable file implementing the [software plugin API](../software-management-plugin-api.md),
   to `list`, `install` and `remove` software packages of a specific type.
 - These plugins are looked up by `tedge-agent` in the plugin directory (`/etc/tedge/sm-plugins` if not specified otherwise).
 - `tedge-agent` uses the file name of a plugin executables as the software package type name.
@@ -373,7 +373,7 @@ For each type of software package supported on the device must be provided a spe
 ## Custom implementation
 
 %%te%% users can implement their own support for software management to address the specificities of their devices.
-- This can be done leveraging the `tedge-agent` and implementing a custom [software plugin](../software_management_plugin_api.md).
+- This can be done leveraging the `tedge-agent` and implementing a custom [software plugin](../software-management-plugin-api.md).
 - If for some reasons the `tedge-agent` cannot run on the target hardware,
   then a service must be implemented to support the `software_list` and `software_update` operation, as described below.
   In this case, the service is free to choose its own mechanisms to manage software packages

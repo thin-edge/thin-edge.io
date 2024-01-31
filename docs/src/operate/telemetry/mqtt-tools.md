@@ -2,10 +2,8 @@
 title: MQTT Tools
 tags: [Operate, MQTT]
 sidebar_position: 1
-description: Publishing and subscribing to MQTT messages
+description: Publish and subscribe to MQTT messages on the command line
 ---
-
-# Publish and subscribe to MQTT messages on the command line
 
 %%te%% cli provides a convenient way to debug and aid development process.
 

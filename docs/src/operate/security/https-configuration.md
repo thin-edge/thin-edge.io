@@ -5,8 +5,8 @@ sidebar_position: 6
 ---
 
 %%te%% provides two services over HTTP:
-- The [File Transfer Service](../../references/file_transfer_service.md) is used by the mappers and the child devices to transfer files locally.
-- The [Cumulocity Proxy](../../references/cumulocity_proxy.md) acts as a local proxy to the Cumulocity IoT REST API.
+- The [File Transfer Service](../../references/file-transfer-service.md) is used by the mappers and the child devices to transfer files locally.
+- The [Cumulocity Proxy](../../references/cumulocity-proxy.md) acts as a local proxy to the Cumulocity IoT REST API.
 
 Three levels of security are supported:
 
