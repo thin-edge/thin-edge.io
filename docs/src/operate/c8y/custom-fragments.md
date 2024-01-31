@@ -69,8 +69,6 @@ The example above will result in the following fragment being added to the devic
 
 The file based approach is intended for static information, e.g. build date, or a custom image type assigned to the device. The values are only published on startup of the **tedge-mapper-c8y** service.
 
-The file based approach
-
 If you wish to add more fragments to Cumulocity, you can do so by populating `/etc/tedge/device/inventory.json`.
 
 An example `inventory.json` looks something like this:
