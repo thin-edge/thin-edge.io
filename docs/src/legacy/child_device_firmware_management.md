@@ -45,7 +45,7 @@ provides firmware management support for that device.
 ## Declare firmware management support of child device
 
 At first, the child device needs to declare that it supports firmware management from Cumulocity
-using the [supported operations API](../operate/c8y/supported_operations.md) of %%te%%
+using the [supported operations API](../operate/c8y/supported-operations.md) of %%te%%
 by simply creating an empty operations file on the %%te%% device as follows:
 
 ```sh

@@ -1,5 +1,5 @@
 ---
-title: Apama Plugin
+title: Apama
 tags: [Operate, Cumulocity, Software Management]
 ---
 

@@ -275,4 +275,4 @@ You can now:
   using the cloud-agnostic [%%te%% JSON data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from Cumulocity](../references/mappers/mqtt-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
-* learn how to [add custom fragments to cumulocity](../operate/c8y/custom_fragments.md).
+* learn how to [add custom fragments to cumulocity](../operate/c8y/custom-fragments.md).
