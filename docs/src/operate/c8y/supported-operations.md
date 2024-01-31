@@ -164,7 +164,7 @@ When such a message is received, the operation plugin located at `/etc/tedge/ope
 The operation is configured to `timeout` after 10 seconds, to avoid it from running for too long/forever.
 
 :::note
-The operation file needs to be readable by `thin-edge.io` user - `tedge` - and should have permissions `644`.
+The operation file needs to be readable by %%te%% user - `tedge` - and should have permissions `644`.
 The filename **MUST** only use alphanumeric and underscore characters, e.g. `A-Z`, `a-z`, `0-9` and `_`.
 You cannot use a dash "-", or any other characters in the filename, otherwise the custom operation definition will be ignored.
 :::
