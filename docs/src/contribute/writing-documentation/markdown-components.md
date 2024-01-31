@@ -1,5 +1,5 @@
 ---
-title: Markdown components
+title: Markdown Components
 tags: [Documentation]
 sidebar_position: 1
 ---

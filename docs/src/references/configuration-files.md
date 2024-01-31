@@ -1,5 +1,5 @@
 ---
-title: Configuration files
+title: Configuration Files
 tags: [Reference, Configuration]
 sidebar_position: 5
 description: Using a custom configuration path

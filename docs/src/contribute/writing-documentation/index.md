@@ -1,5 +1,5 @@
 ---
-title: Writing documentation
+title: Writing Documentation
 tags: [Documentation]
 ---
 

@@ -1,5 +1,5 @@
 ---
-title: Testing cloud connection
+title: Testing Cloud Connection
 tags: [Operate, Cloud, Connection]
 sidebar_position: 1
 description: How to test the connection to the cloud

@@ -1,5 +1,5 @@
 ---
-title: Software management
+title: Software Management
 tags: [Reference, Agent, Software Management]
 sidebar_position: 3
 description: Details of the API to manage software on a device

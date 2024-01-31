@@ -1,5 +1,5 @@
 ---
-title: Markdown guidelines
+title: Markdown Guidelines
 tags: [Documentation]
 sidebar_position: 2
 ---
