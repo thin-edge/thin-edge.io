@@ -139,6 +139,22 @@ Config snapshot request not processed when operation is disabled for tedge-agent
     ...    expected_status=init
     ...    c8y_fragment=c8y_UploadConfigFile
 
+Default plugin conifiguration
+    Set Device Context    ${PARENT_SN}
+
+    # Remove the existing plugin configuration
+    Execute Command    rm /etc/tedge/plugins/tedge-configuration-plugin.toml
+
+    # Agent restart should recreate the default plugin configuration
+    Restart Service    tedge-agent
+    Service Should Be Running    tedge-agent
+
+    Cumulocity.Set Device    ${PARENT_SN}
+    Cumulocity.Should Support Configurations
+    ...    tedge-configuration-plugin
+    ...    tedge.toml
+    ...    tedge-log-plugin
+    
 
 *** Keywords ***
 Set Configuration from Device

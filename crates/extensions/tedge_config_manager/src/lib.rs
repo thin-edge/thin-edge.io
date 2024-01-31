@@ -27,6 +27,7 @@ use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
+use toml::toml;
 
 /// An instance of the config manager
 ///
@@ -112,15 +113,25 @@ impl ConfigManagerBuilder {
         }
 
         // create tedge-configuration-plugin.toml
-        let example_config = r#"# Add the configurations to be managed
-files = [
-#    { path = '/etc/tedge/tedge.toml' },
-#    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
-#    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
-#    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
-#    { path = '/etc/tedge/plugins/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 },
-]"#;
-        create_file_with_defaults(&config.plugin_config_path, Some(example_config))?;
+        let tedge_config_path = format!("{}/tedge.toml", config.config_dir.to_string_lossy());
+        let tedge_log_plugin_config_path = format!(
+            "{}/plugins/tedge-log-plugin.toml",
+            config.config_dir.to_string_lossy()
+        );
+        let example_config = toml! {
+            [[files]]
+            path = tedge_config_path
+            type = "tedge.toml"
+
+            [[files]]
+            path = tedge_log_plugin_config_path
+            type = "tedge-log-plugin"
+            user = "tedge"
+            group = "tedge"
+            mode = 444
+        }
+        .to_string();
+        create_file_with_defaults(&config.plugin_config_path, Some(&example_config))?;
 
         Ok(())
     }
