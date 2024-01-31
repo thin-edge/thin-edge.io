@@ -10,12 +10,12 @@ use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
+use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -31,7 +31,7 @@ use tedge_script_ext::Execute;
 pub struct TedgeOperationConverterBuilder {
     config: OperationConfig,
     workflows: WorkflowSupervisor,
-    input_receiver: LoggingReceiver<AgentInput>,
+    input_receiver: UnboundedLoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareCommand>,
     restart_sender: LoggingSender<RestartCommand>,
     command_sender: DynSender<GenericCommandState>,
@@ -49,10 +49,10 @@ impl TedgeOperationConverterBuilder {
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         script_runner: &mut impl ServiceProvider<Execute, std::io::Result<Output>, NoConfig>,
     ) -> Self {
-        let (input_sender, input_receiver) = mpsc::channel(10);
+        let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
 
-        let input_receiver = LoggingReceiver::new(
+        let input_receiver = UnboundedLoggingReceiver::new(
             "Mqtt-Request-Converter".into(),
             input_receiver,
             signal_receiver,

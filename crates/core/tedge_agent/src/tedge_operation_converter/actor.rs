@@ -10,11 +10,11 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
-use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
+use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::messages::RestartCommand;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
@@ -43,7 +43,7 @@ pub struct TedgeOperationConverterActor {
     pub(crate) workflows: WorkflowSupervisor,
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
-    pub(crate) input_receiver: LoggingReceiver<AgentInput>,
+    pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) software_sender: LoggingSender<SoftwareCommand>,
     pub(crate) restart_sender: LoggingSender<RestartCommand>,
     pub(crate) command_sender: DynSender<GenericCommandState>,
