@@ -1,7 +1,6 @@
 ---
 title: MQTT TLS Configuration
 tags: [Operate, Security, MQTT]
-sidebar_position: 5
 description: Setting up TLS for secure local MQTT communication
 ---
 

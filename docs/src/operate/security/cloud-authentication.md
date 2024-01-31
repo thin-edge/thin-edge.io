@@ -1,7 +1,6 @@
 ---
 title: Cloud Authentication
 tags: [Operate, Security]
-sidebar_position: 3
 description: Configuring certificates for your cloud connection
 ---
 

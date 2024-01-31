@@ -1,7 +1,6 @@
 ---
-title: Device Certificate Setting
+title: Device Certificate Settings
 tags: [Operate, Security, Cloud]
-sidebar_position: 2
 description: Controlling device certificate settings
 ---
 

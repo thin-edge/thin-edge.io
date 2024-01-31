@@ -1,7 +1,6 @@
 ---
 title: Self-signed Device Certificate
 tags: [Operate, Security, Cloud]
-sidebar_position: 1
 description: Using self-signed device certificates with %%te%%
 ---
 
