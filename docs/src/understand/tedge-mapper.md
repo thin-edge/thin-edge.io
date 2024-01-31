@@ -5,8 +5,6 @@ sidebar_position: 6
 description: Overview of the core component which interfaces with the cloud
 ---
 
-# Thin-edge Mapper
-
 The tedge-mapper is a key concept to support multiple cloud providers.
 The purpose is to translate
 messages written using the cloud-agnostic [%%te%% JSON format](thin-edge-json.md),

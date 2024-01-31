@@ -5,8 +5,6 @@ sidebar_position: 8
 description: Monitoring your device with collectd
 ---
 
-# Monitor your device with collectd
-
 With %%te%% device monitoring, you can collect metrics from your device
 and forward these device metrics to IoT platforms in the cloud.
 

@@ -5,8 +5,6 @@ sidebar_position: 9
 description: Manage the software on your devices from Cumulocity cloud
 ---
 
-# Manage the software on your devices from Cumulocity cloud
-
 This document describes how to manage the software modules that are installed on a %%te%% device from the
 cloud using the **software management** feature of %%te%%.
 

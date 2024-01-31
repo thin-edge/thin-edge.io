@@ -5,8 +5,6 @@ sidebar_position: 4
 description: Connect %%te%% to AWS IoT and publish telemetry data
 ---
 
-# Connect your device to AWS IoT
-
 The very first step to enable %%te%% is to connect your device to the cloud.
 
 * This is a 10 minutes operation to be done only once.

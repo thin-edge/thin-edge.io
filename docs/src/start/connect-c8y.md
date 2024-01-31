@@ -5,8 +5,6 @@ sidebar_position: 2
 description: Connect %%te%% to Cumulocity IoT and publish telemetry data
 ---
 
-# Connect your device to Cumulocity IoT
-
 The very first step to enable %%te%% is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
