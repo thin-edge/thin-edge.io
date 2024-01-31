@@ -2,9 +2,8 @@
 title: Typical IoT Agent
 tags: [Concept]
 sidebar_position: 1
+description: A typical IoT agent running %%te%%
 ---
-
-# A typical IoT agent running thin-edge
 
 ## IoT agent
 

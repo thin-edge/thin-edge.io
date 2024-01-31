@@ -2,6 +2,7 @@
 title: Device Certificate Setting
 tags: [Operate, Security, Cloud]
 sidebar_position: 2
+description: Controlling device certificate settings
 ---
 
 ## Obtaining a Device Certificate

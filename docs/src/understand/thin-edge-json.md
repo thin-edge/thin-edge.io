@@ -2,6 +2,7 @@
 title: Thin Edge JSON
 tags: [Concept, MQTT]
 sidebar_position: 4
+description: Overview of the %%te%% JSON basics
 ---
 
 %%te%% JSON is a lightweight format used in %%te%% to represent telemetry data:

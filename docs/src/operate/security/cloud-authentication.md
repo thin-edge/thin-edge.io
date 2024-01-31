@@ -2,6 +2,7 @@
 title: Cloud Authentication
 tags: [Operate, Security]
 sidebar_position: 3
+description: Configuring certificates for your cloud connection
 ---
 
 When %%te%% connects a cloud, the cloud endpoint is authenticated using X.509 certificates.

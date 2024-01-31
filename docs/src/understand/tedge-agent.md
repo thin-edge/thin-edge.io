@@ -2,6 +2,7 @@
 title: The Agent
 tags: [Concept, MQTT]
 sidebar_position: 5
+description: Overview of the fundamental components that make up the %%te%% agent
 ---
 
 %%te%% agent is a set of services that implement the device management operations on a device.

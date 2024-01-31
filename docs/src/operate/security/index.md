@@ -2,6 +2,7 @@
 title: Security and Access Control
 tags: [Operate, Security]
 sidebar_position: 1
+description: Configuring %%te%% for secure communication
 ---
 
 import DocCardList from '@theme/DocCardList';

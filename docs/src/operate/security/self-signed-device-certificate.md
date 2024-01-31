@@ -2,6 +2,7 @@
 title: Self-signed Device Certificate
 tags: [Operate, Security, Cloud]
 sidebar_position: 1
+description: Using self-signed device certificates with %%te%%
 ---
 
 Using a self-signed device certificate is the simplest way to connect a %%te%% device to the cloud.

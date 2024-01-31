@@ -2,6 +2,7 @@
 title: MQTT Bus
 tags: [Concept, MQTT]
 sidebar_position: 3
+description: Overview of the MQTT Bus
 ---
 
 %%te%% uses a combination of MQTT and HTTP to coordinate the interactions

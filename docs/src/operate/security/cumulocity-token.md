@@ -2,6 +2,7 @@
 title: Cumulocity IoT Token
 tags: [Operate, Security, Cumulocity, JWT]
 sidebar_position: 11
+description: Requesting a token for manual Cumulocity IoT API requests
 ---
 
 :::tip

@@ -2,6 +2,7 @@
 title: Architecture FAQ
 tags: [Concept]
 sidebar_position: 8
+description: Frequently Asked Questions about core architecture decisions
 ---
 
 # Architecture FAQ

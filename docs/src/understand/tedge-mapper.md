@@ -2,6 +2,7 @@
 title: The Mapper
 tags: [Concept, Cloud, MQTT]
 sidebar_position: 6
+description: Overview of the core component which interfaces with the cloud
 ---
 
 # Thin-edge Mapper

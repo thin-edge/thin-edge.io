@@ -2,6 +2,7 @@
 title: HTTPS Configuration
 tags: [Operate, Security, HTTP]
 sidebar_position: 6
+description: Setting up HTTPS for secure local communication
 ---
 
 %%te%% provides two services over HTTP:

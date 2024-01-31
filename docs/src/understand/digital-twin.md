@@ -2,6 +2,7 @@
 title: Digital Twin
 tags: [Concept]
 sidebar_position: 2
+description: Overview of what a digital twin is and how it is used
 ---
 
 # Digital Twin

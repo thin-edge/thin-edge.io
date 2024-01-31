@@ -2,6 +2,7 @@
 title: Overview
 tags: [Concept]
 sidebar_position: 1
+description: Overview of the how/what/why/who of %%te%%
 ---
 
 %%te%% is an open-source IoT development toolbox
