@@ -37,7 +37,7 @@ sudo tedge config set device.type edge_gateway
 
 Additional fragments can be added to the device by either publishing to a give MQTT topic, or via a file based method. Each section describes what data and when to use it.
 
-### MQTT
+### MQTT Dynamic Fragments {#dynamic-fragments}
 
 %%te%% offers an MQTT topic which can be used to publish data to custom fragments for a device, child devices or services.
 
@@ -65,7 +65,7 @@ The example above will result in the following fragment being added to the devic
 }
 ```
 
-### File based
+### File-based Static Fragments {#static-fragments}
 
 The file based approach is intended for static information, e.g. build date, or a custom image type assigned to the device. The values are only published on startup of the **tedge-mapper-c8y** service.
 
