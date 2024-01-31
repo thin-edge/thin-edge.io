@@ -36,7 +36,7 @@ You will learn to:
 - [install %%te%% on your specific hardware](install/index.md),
 - connect your device to your cloud, whether [Cumulocity IoT](start/connect-c8y.md),
   [Azure IoT](start/connect-azure.md) or [AWS IoT](start/connect-aws.md),
-- [send telemetry data](start//send-thin-edge-data.md), [alarms](start//raise-alarm.md) and [events](start//send-events.md),
+- [send telemetry data](start//send-measurements.md), [alarms](start//raise-alarm.md) and [events](start//send-events.md),
 - operate, configure, update, monitor your device.
 
 

@@ -271,7 +271,7 @@ You should observe a "temperature measurement" graph with the new data point.
 ## Next Steps
 
 You can now:
-* learn how to [send various kind of telemetry data](send-thin-edge-data.md)
+* learn how to [send various kind of telemetry data](send-measurements.md)
   using the cloud-agnostic [%%te%% JSON data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from Cumulocity](../references/mappers/mqtt-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
