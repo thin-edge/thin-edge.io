@@ -9,8 +9,7 @@ or on the `child` device can be monitored from the **Cumulocity IoT** by sending
 
 ## Publish health status
 
-A health status message can be published for any service on a `status/health` channel. The health message should at least contain The health message should contain
-at least the `status` of the service.
+A health status message can be published for any service on a `status/health` channel. The health message should at least contain the `status` of the service.
 
 :::note
 The `status` here can be `up or down` or any other string. For example, `unknown`.
