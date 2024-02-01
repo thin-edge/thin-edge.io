@@ -29,6 +29,7 @@ use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
+use toml::toml;
 
 /// This is an actor builder.
 pub struct LogManagerBuilder {
@@ -91,13 +92,14 @@ impl LogManagerBuilder {
         }
 
         // creating tedge-log-plugin.toml
-        let example_config = r#"# Add the list of log files that should be managed
-files = [
-#    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
-#    { type = "software-management", path = '/var/log/tedge/agent/software-*' },
-#    { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
-]"#;
-        create_file_with_defaults(&config.plugin_config_path, Some(example_config))?;
+        let agent_logs_path = format!("{}/agent/software-*", config.log_dir);
+        let example_config = toml! {
+            [[files]]
+            type = "software-management"
+            path = agent_logs_path
+        }
+        .to_string();
+        create_file_with_defaults(&config.plugin_config_path, Some(&example_config))?;
 
         Ok(())
     }

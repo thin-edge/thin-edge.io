@@ -127,6 +127,7 @@ async fn run_with(
     let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
         config_dir: cliopts.config_dir,
         tmp_dir,
+        log_dir: tedge_config.logs.path.clone(),
         mqtt_schema: MqttSchema::with_root(mqtt_topic_root.to_string()),
         mqtt_device_topic_id: mqtt_device_topic_id.to_string().parse()?,
     })?;

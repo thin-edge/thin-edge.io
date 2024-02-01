@@ -24,6 +24,7 @@ tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
+toml = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

@@ -118,10 +118,9 @@ Manual config_update operation request
     ...    c8y_fragment=c8y_DownloadConfigFile
 
 Config update request not processed when operation is disabled for tedge-agent
+    [Teardown]    Enable config update capability of tedge-agent
     Set Device Context    ${PARENT_SN}
-    Execute Command    tedge config set agent.enable.config_update false
-    ThinEdgeIO.Restart Service    tedge-agent
-    ThinEdgeIO.Service Should Be Running    tedge-agent
+    Disable config update capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","type":"tedge-configuration-plugin"}
@@ -129,16 +128,34 @@ Config update request not processed when operation is disabled for tedge-agent
     ...    c8y_fragment=c8y_DownloadConfigFile
 
 Config snapshot request not processed when operation is disabled for tedge-agent
+    [Teardown]    Enable config snapshot capability of tedge-agent
     Set Device Context    ${PARENT_SN}
-    Execute Command    tedge config set agent.enable.config_snapshot false
-    ThinEdgeIO.Restart Service    tedge-agent
-    ThinEdgeIO.Service Should Be Running    tedge-agent
+    Disable config snapshot capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_snapshot/local-1111
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_UploadConfigFile
 
+Default plugin configuration
+    Set Device Context    ${PARENT_SN}
+
+    # Remove the existing plugin configuration
+    Execute Command    rm /etc/tedge/plugins/tedge-configuration-plugin.toml
+
+    # Agent restart should recreate the default plugin configuration
+    Stop Service    tedge-agent
+    ${timestamp}=        Get Unix Timestamp
+    Start Service    tedge-agent
+    Service Should Be Running    tedge-agent
+    Should Have MQTT Messages    c8y/s/us    message_contains=119,    date_from=${timestamp}
+
+    Cumulocity.Set Device    ${PARENT_SN}
+    Cumulocity.Should Support Configurations
+    ...    tedge-configuration-plugin
+    ...    tedge.toml
+    ...    tedge-log-plugin
+    
 
 *** Keywords ***
 Set Configuration from Device
@@ -436,3 +453,27 @@ Publish and Verify Local Command
         ...    maximum=0
     END
     [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
+
+Disable config update capability of tedge-agent
+    [Arguments]    ${device_sn}=${PARENT_SN}
+    Execute Command    tedge config set agent.enable.config_update false
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
+
+Enable config update capability of tedge-agent
+    [Arguments]    ${device_sn}=${PARENT_SN}
+    Execute Command    tedge config set agent.enable.config_update true
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
+
+Disable config snapshot capability of tedge-agent
+    [Arguments]    ${device_sn}=${PARENT_SN}
+    Execute Command    tedge config set agent.enable.config_snapshot false
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
+
+Enable config snapshot capability of tedge-agent
+    [Arguments]    ${device_sn}=${PARENT_SN}
+    Execute Command    tedge config set agent.enable.config_snapshot true
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent

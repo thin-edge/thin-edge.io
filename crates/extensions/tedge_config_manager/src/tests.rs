@@ -1,4 +1,5 @@
 use camino::Utf8Path;
+use std::fs::read_to_string;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,6 +19,8 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
+use toml::from_str;
+use toml::Table;
 
 use crate::actor::ConfigDownloadRequest;
 use crate::actor::ConfigDownloadResult;
@@ -131,6 +134,35 @@ async fn spawn_config_manager_actor(
     let actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
     (mqtt, fs, downloader, uploader)
+}
+
+#[tokio::test]
+async fn default_plugin_config() {
+    let tempdir = TempTedgeDir::new();
+    let (_mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
+    let plugin_config_content =
+        read_to_string(tempdir.path().join("tedge-configuration-plugin.toml")).unwrap();
+    let plugin_config_toml: Table = from_str(&plugin_config_content).unwrap();
+
+    let tedge_config_path = format!("{}/tedge.toml", tempdir.path().to_string_lossy());
+    let tedge_log_plugin_config_path = format!(
+        "{}/plugins/tedge-log-plugin.toml",
+        tempdir.path().to_string_lossy()
+    );
+    let expected_config = toml::toml! {
+        [[files]]
+        path = tedge_config_path
+        type = "tedge.toml"
+
+        [[files]]
+        path = tedge_log_plugin_config_path
+        type = "tedge-log-plugin"
+        user = "tedge"
+        group = "tedge"
+        mode = 444
+    };
+
+    assert_eq!(plugin_config_toml, expected_config);
 }
 
 #[tokio::test]

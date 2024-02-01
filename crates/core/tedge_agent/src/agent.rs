@@ -73,6 +73,7 @@ pub(crate) struct AgentConfig {
     pub run_dir: Utf8PathBuf,
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
+    pub agent_log_dir: Utf8PathBuf,
     pub data_dir: DataDir,
     pub operations_dir: Utf8PathBuf,
     pub mqtt_device_topic_id: EntityTopicId,
@@ -142,7 +143,8 @@ impl AgentConfig {
         let use_lock = tedge_config.run.lock_files;
 
         // For agent specific
-        let log_dir = tedge_config.logs.path.join("agent");
+        let log_dir = tedge_config.logs.path.clone();
+        let agent_log_dir = log_dir.join("agent");
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
@@ -172,6 +174,7 @@ impl AgentConfig {
             use_lock,
             data_dir,
             log_dir,
+            agent_log_dir,
             operations_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
@@ -208,7 +211,7 @@ impl Agent {
     pub fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
         create_directory_with_defaults(agent_state_dir(self.config.config_dir.clone()))?;
-        create_directory_with_defaults(&self.config.log_dir)?;
+        create_directory_with_defaults(&self.config.agent_log_dir)?;
         create_directory_with_defaults(&self.config.data_dir)?;
         create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
         create_directory_with_defaults(self.config.data_dir.cache_dir())?;
@@ -309,7 +312,8 @@ impl Agent {
         let log_actor_builder = if self.config.capabilities.log_upload {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
-                tmp_dir: self.config.config_dir.into(),
+                tmp_dir: self.config.tmp_dir.to_path_buf().into(),
+                log_dir: self.config.log_dir,
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;

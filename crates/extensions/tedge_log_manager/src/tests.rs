@@ -5,6 +5,7 @@ use crate::LogUploadResult;
 use crate::Topic;
 use filetime::set_file_mtime;
 use filetime::FileTime;
+use std::fs::read_to_string;
 use std::path::Path;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -21,6 +22,9 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
+use toml::from_str;
+use toml::toml;
+use toml::Table;
 
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
 type UploaderMessageBox = TimedMessageBox<SimpleMessageBox<LogUploadRequest, LogUploadResult>>;
@@ -90,6 +94,7 @@ async fn new_log_manager_builder(
     let config = LogManagerConfig {
         config_dir: temp_dir.to_path_buf(),
         tmp_dir: temp_dir.to_path_buf(),
+        log_dir: temp_dir.to_path_buf().try_into().unwrap(),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
@@ -132,6 +137,24 @@ async fn spawn_log_manager_actor(
     let actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
     (mqtt, fs, uploader)
+}
+
+#[tokio::test]
+async fn default_plugin_config() {
+    let tempdir = TempTedgeDir::new();
+    let (_mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let plugin_config_content =
+        read_to_string(tempdir.path().join("tedge-log-plugin.toml")).unwrap();
+    let plugin_config_toml: Table = from_str(&plugin_config_content).unwrap();
+
+    let agent_logs_path = format!("{}/agent/software-*", tempdir.path().to_string_lossy());
+    let expected_config = toml! {
+        [[files]]
+        type = "software-management"
+        path = agent_logs_path
+    };
+
+    assert_eq!(plugin_config_toml, expected_config);
 }
 
 #[tokio::test]

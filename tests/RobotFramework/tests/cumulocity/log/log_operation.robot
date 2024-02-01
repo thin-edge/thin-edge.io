@@ -81,9 +81,8 @@ Log file request supports date/time filters and can search across multiple log f
     ...    filename: logfile.3.log\n${logfile3_contents}\nfilename: logfile.2.log\n${logfile2_contents}\n
 
 Log file request not processed if operation is disabled for tedge-agent
-    Execute Command    tedge config set agent.enable.log_upload false
-    ThinEdgeIO.Restart Service    tedge-agent
-    ThinEdgeIO.Service Should Be Running    tedge-agent
+    [Teardown]    Enable log upload capability of tedge-agent
+    Disable log upload capability of tedge-agent
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%SZ
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
     Publish and Verify Local Command
@@ -92,6 +91,21 @@ Log file request not processed if operation is disabled for tedge-agent
     ...    expected_status=init
     ...    c8y_fragment=c8y_LogfileRequest
 
+Default plugin configuration
+    Set Device Context    ${DEVICE_SN}
+
+    # Remove the existing plugin configuration
+    Execute Command    rm /etc/tedge/plugins/tedge-log-plugin.toml
+
+    # Agent restart should recreate the default plugin configuration
+    Stop Service    tedge-agent
+    ${timestamp}=        Get Unix Timestamp
+    Start Service    tedge-agent
+    Service Should Be Running    tedge-agent
+
+    Should Have MQTT Messages    c8y/s/us    message_contains=118,    date_from=${timestamp}
+    Cumulocity.Set Device    ${DEVICE_SN}
+    Cumulocity.Should Support Log File Types    software-management
 
 *** Keywords ***
 Setup LogFiles
@@ -146,3 +160,15 @@ Log File Contents Should Be Equal
     ...    expected_contents=${expected_contents}
     ...    encoding=${encoding}
     RETURN    ${contents}
+
+Disable log upload capability of tedge-agent
+    [Arguments]    ${device_sn}=${DEVICE_SN}
+    Execute Command    tedge config set agent.enable.log_upload false
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
+
+Enable log upload capability of tedge-agent
+    [Arguments]    ${device_sn}=${DEVICE_SN}
+    Execute Command    tedge config set agent.enable.log_upload true
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
