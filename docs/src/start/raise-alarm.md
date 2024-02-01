@@ -53,8 +53,7 @@ Here is a sample alarm raised for `temperature_high` alarm type with `critical` 
 tedge mqtt pub te/device/main///a/temperature_high '
 {
   "text": "Temperature is very high",
-  "severity": "critical",
-  "time": "2021-01-01T05:30:45+00:00"
+  "severity": "critical"
 }'
 ```
 
