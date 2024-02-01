@@ -208,8 +208,7 @@ A simple event can be represented in %%te%% JSON as follows:
 
 ```json
 {
-  "text": "A door was closed",
-  "time": "2022-06-10T05:30:45+00:00"
+  "text": "A door was closed"
 }
 ```
 
@@ -222,8 +221,13 @@ te/+/+/+/+/e/+
 So the door open event described above can be sent as follows:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/main///e/door '{"text": "A door was closed","time": "2022-06-10T05:30:45+00:00"}'
+tedge mqtt pub te/device/main///e/door '{"text": "A door was closed"}'
 ```
+
+:::info
+The command does not provide the `time` property, so the current timestamp will be injected by the mapper.
+However an explicit time can be given as a Unix timestamp, as in `"time": 1706794400`, or using RFC 3339, as in `"time":"2024-02-01T13:32:19+00:00"`.
+:::
 
 When you go to events (`Device management` &rarr; `your device` &rarr; `events`), you should see this:
 
