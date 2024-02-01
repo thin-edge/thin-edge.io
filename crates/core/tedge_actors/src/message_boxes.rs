@@ -256,6 +256,78 @@ pub fn log_message_sent<I: Debug>(target: &str, message: I) {
     debug!(target: target, "send {message:?}");
 }
 
+/// An unbounded receiver
+///
+/// At least one such receiver should be used when there is a loop of actors,
+/// say A sending data to B and B sending data to A.
+pub struct UnboundedLoggingReceiver<Input: Debug> {
+    name: String,
+    input_receiver: mpsc::UnboundedReceiver<Input>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
+}
+
+impl<Input: Debug> UnboundedLoggingReceiver<Input> {
+    pub fn new(
+        name: String,
+        input_receiver: mpsc::UnboundedReceiver<Input>,
+        signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    ) -> Self {
+        Self {
+            name,
+            input_receiver,
+            signal_receiver,
+        }
+    }
+
+    async fn next_message(&mut self) -> Option<WrappedInput<Input>> {
+        tokio::select! {
+            biased;
+
+            Some(runtime_request) = self.signal_receiver.next() => {
+                Some(WrappedInput::RuntimeRequest(runtime_request))
+            }
+            Some(message) = self.input_receiver.next() => {
+                Some(WrappedInput::Message(message))
+            }
+            else => None
+        }
+    }
+}
+
+#[async_trait]
+impl<Input: Send + Debug> MessageReceiver<Input> for UnboundedLoggingReceiver<Input> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+        let message = match self.next_message().await {
+            Some(WrappedInput::Message(message)) => Ok(Some(message)),
+            Some(WrappedInput::RuntimeRequest(runtime_request)) => Err(runtime_request),
+            None => Ok(None),
+        };
+        debug!(target: &self.name, "recv {:?}", message);
+        message
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
+        let message = self.next_message().await;
+        debug!(target: &self.name, "recv {:?}", message);
+        message
+    }
+
+    async fn recv(&mut self) -> Option<Input> {
+        let message = match self.next_message().await {
+            Some(WrappedInput::Message(message)) => Some(message),
+            _ => None,
+        };
+        debug!(target: &self.name, "recv {:?}", message);
+        message
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        let message = self.signal_receiver.next().await;
+        debug!(target: &self.name, "recv {:?}", message);
+        message
+    }
+}
+
 /// The basic message box to send and receive messages
 ///
 /// - Handle runtime messages along regular ones

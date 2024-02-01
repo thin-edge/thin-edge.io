@@ -84,7 +84,7 @@ impl MessageLogWriter {
         let mut writer = BufWriter::new(file);
 
         if file_is_empty {
-            let version_info = json!({"version": LOG_FORMAT_VERSION}).to_string();
+            let version_info = json!({ "version": LOG_FORMAT_VERSION }).to_string();
             writeln!(writer, "{}", version_info)?;
         }
 

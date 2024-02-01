@@ -52,6 +52,28 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
     }
 }
 
+/// An `mpsc::UnboundedSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
+impl<M: Message, N: Message + Into<M>> From<mpsc::UnboundedSender<M>> for DynSender<N> {
+    fn from(sender: mpsc::UnboundedSender<M>) -> Self {
+        Box::new(sender)
+    }
+}
+
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(SinkExt::send(&mut self, message.into()).await?)
+    }
+
+    fn sender_clone(&self) -> DynSender<N> {
+        Box::new(self.clone())
+    }
+
+    fn close_sender(&mut self) {
+        self.close_channel();
+    }
+}
+
 /// Make a `DynSender<N>` from a `DynSender<M>`
 ///
 /// This is a workaround to the fact the compiler rejects a From implementation:
