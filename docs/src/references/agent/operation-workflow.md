@@ -1,12 +1,9 @@
 ---
-title: 🚧 User-defined Operation Workflows
+title: User-defined Operation Workflows
 tags: [Reference, MQTT, Operations]
 sidebar_position: 7
+description: User-defined operation workflow reference guide
 ---
-
-import ProposalBanner from '@site/src/components/ProposalBanner'
-
-<ProposalBanner/>
 
 ## Overview
 
