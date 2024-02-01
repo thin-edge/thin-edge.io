@@ -25,7 +25,15 @@ Mapper recovers and processes output of ongoing software update request
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
     Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
     Device Should Have Installed Software    rolldice
- 
+
+Recovery from corrupt entity store file
+    Stop Service    tedge-mapper-c8y
+    Execute Command    chown root:root /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
+    Start Service    tedge-mapper-c8y
+    Service Should Be Running    tedge-mapper-c8y
+    ${owner}=    Execute Command    stat -c "%U" /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl    strip="true"
+    Should Be Equal    ${owner}    tedge
+
 *** Keywords ***
 
 Custom Setup
