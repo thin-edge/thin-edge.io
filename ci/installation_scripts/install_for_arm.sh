@@ -22,4 +22,3 @@ sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf
 
 # Change downloaded binaries to executable for testing
 chmod +x /home/pi/examples/sawtooth-publisher
-chmod +x /home/pi/tedge-dummy-plugin/tedge-dummy-plugin
