@@ -37,11 +37,11 @@ Update tedge version from previous using Cumulocity
     # Software list reported by the former agent, which is still running
     # but formatted with by the c8y-mapper, which has just been installed
     Device Should Have Installed Software
-    ...    {"name": "tedge", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-mapper", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-agent", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-watchdog", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-apt-plugin", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
     # Restart tedge-agent from Cumulocity
     ${operation}=    Cumulocity.Restart Device
@@ -49,11 +49,11 @@ Update tedge version from previous using Cumulocity
 
     # Software list reported by the new agent
     Device Should Have Installed Software
-    ...    {"name": "tedge", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-mapper", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-agent", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-watchdog", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-apt-plugin", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
     # Check if services are still stopped and disabled
     ${OUTPUT}    Execute Command    systemctl is-active tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
@@ -111,11 +111,11 @@ Update tedge version from base to current using Cumulocity
 
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=300
     Device Should Have Installed Software
-    ...    {"name": "tedge", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-mapper", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-agent", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-watchdog", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
-    ...    {"name": "tedge-apt-plugin", "type": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
     ${pid_after}=    Execute Command    pgrep tedge-agent    strip=${True}
     Should Not Be Equal    ${pid_before}    ${pid_after}

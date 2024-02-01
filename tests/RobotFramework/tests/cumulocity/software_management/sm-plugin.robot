@@ -23,16 +23,16 @@ Limit number of packages
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
     ${software}=    Device Should Have Installed Software
-    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy1-0002", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy1-0003", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy1-0004", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy1-0005", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
-    ...    {"name": "dummy2-0002", "version": "1.0.0", "type": "dummy2"}
-    ...    {"name": "dummy2-0003", "version": "1.0.0", "type": "dummy2"}
-    ...    {"name": "dummy2-0004", "version": "1.0.0", "type": "dummy2"}
-    ...    {"name": "dummy2-0005", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0002", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0003", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0004", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0005", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-0002", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-0003", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-0004", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-0005", "version": "1.0.0", "softwareType": "dummy2"}
     Length Should Be    ${software}    10
 
 Limit number of packages to 1
@@ -40,8 +40,8 @@ Limit number of packages to 1
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
     ${software}=    Device Should Have Installed Software
-    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
     Length Should Be    ${software}    2
 
 Don't limit number of packages
@@ -49,8 +49,8 @@ Don't limit number of packages
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
     ${software}=    Device Should Have Installed Software
-    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
     Length Should Be    ${software}    3000
 
 sm-plugins should work without sudo installed and running as root
@@ -59,8 +59,8 @@ sm-plugins should work without sudo installed and running as root
     Connect Mapper    c8y
     Device Should Exist    ${DEVICE_SN}
     ${software}=    Device Should Have Installed Software
-    ...    {"name": "dummy1-0001", "version": "1.0.0", "type": "dummy1"}
-    ...    {"name": "dummy2-0001", "version": "1.0.0", "type": "dummy2"}
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
     Length Should Be    ${software}    2
 
 sm-plugins download files from Cumulocity
