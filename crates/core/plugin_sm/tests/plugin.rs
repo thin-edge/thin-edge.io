@@ -3,49 +3,14 @@ mod tests {
 
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::ExternalPluginCommand;
-    use plugin_sm::plugin::Plugin;
     use serial_test::serial;
-    use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
     use std::str::FromStr;
     use tedge_api::SoftwareError;
     use tedge_api::SoftwareModule;
-    use tedge_api::SoftwareModuleUpdate;
     use tedge_config::TEdgeConfigLocation;
     use test_case::test_case;
-    use tokio::fs::File;
-    use tokio::io::BufWriter;
-
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_prepare() {
-        // Prepare dummy plugin.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-
-        // Call dummy plugin via plugin api.
-        let mut logger = dev_null().await;
-        let res = plugin.prepare(&mut logger).await;
-
-        // Expect to get Ok as plugin should exit with code 0.
-        assert_eq!(res, Ok(()));
-    }
-
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_finalize() {
-        // Prepare dummy plugin.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-
-        // Call dummy plugin via plugin api.
-        let mut logger = dev_null().await;
-        let res = plugin.finalize(&mut logger).await;
-
-        // Expect Ok as plugin should exit with code 0. If Ok, there is no more checks to be done.
-        assert_eq!(res, Ok(()));
-    }
 
     #[test_case("abc", Some("1.0")  ; "with version")]
     #[test_case("abc",None  ; "without version")]
@@ -82,146 +47,6 @@ mod tests {
 
         let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
         assert_eq!(expected_software_list, software_list);
-    }
-
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_list_with_version() {
-        // Prepare dummy plugin with .0 which will give specific exit code ==0.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-        let path = get_dummy_plugin_tmp_path();
-
-        let mut file = tempfile::Builder::new()
-            .suffix(".0")
-            .tempfile_in(path)
-            .unwrap();
-
-        // Add content of the expected stdout to the dummy plugin.
-        let content = "abc\t1.0";
-        file.write_all(content.as_bytes()).unwrap();
-
-        // Create expected response.
-        let module = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "abc".into(),
-            version: Some("1.0".into()),
-            url: None,
-            file_path: None,
-        };
-        let expected_response = vec![module];
-
-        // Call plugin via API.
-        let mut logger = dev_null().await;
-        let res = plugin.list(&mut logger).await;
-
-        // Expect Ok as plugin should exit with code 0.
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap(), expected_response);
-    }
-
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_list_without_version() {
-        // Prepare dummy plugin with .0 which will give specific exit code ==0.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-        let path = get_dummy_plugin_tmp_path();
-
-        let mut file = tempfile::Builder::new()
-            .suffix(".0")
-            .tempfile_in(path)
-            .unwrap();
-
-        // Add content of the expected stdout to the dummy plugin.
-        let content = "abc";
-        file.write_all(content.as_bytes()).unwrap();
-
-        // Create expected response.
-        let module = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "abc".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-        let expected_response = vec![module];
-
-        // Call plugin via API.
-        let mut logger = dev_null().await;
-        let res = plugin.list(&mut logger).await;
-
-        // Expect Ok as plugin should exit with code 0.
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap(), expected_response);
-    }
-
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_install() {
-        // Prepare dummy plugin with .0 which will give specific exit code ==0.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-        let path = get_dummy_plugin_tmp_path();
-
-        let mut file = tempfile::Builder::new()
-            .suffix(".0")
-            .tempfile_in(path)
-            .unwrap();
-
-        // Add content of the expected stdout to the dummy plugin.
-        let content = "abc\t1.0";
-        file.write_all(content.as_bytes()).unwrap();
-
-        // Create module to perform plugin install API call containing valid input.
-        let module = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "test".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-
-        // Call plugin install via API.
-        let mut logger = dev_null().await;
-        let res = plugin.install(&module, &mut logger).await;
-
-        // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
-        assert!(res.is_ok());
-    }
-
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_remove() {
-        // Prepare dummy plugin with .0 which will give specific exit code ==0.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-        let path = get_dummy_plugin_tmp_path();
-
-        let mut file = tempfile::Builder::new()
-            .suffix(".0")
-            .tempfile_in(path)
-            .unwrap();
-
-        // Add content of the expected stdout to the dummy plugin.
-        let content = "abc\t1.0";
-        file.write_all(content.as_bytes()).unwrap();
-
-        // Create module to perform plugin install API call containing valid input.
-        let module = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "test".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-
-        // Call plugin remove API .
-        let mut logger = dev_null().await;
-        let res = plugin.remove(&module, &mut logger).await;
-
-        // Expect Ok as plugin should exit with code 0. If Ok, no more output to be validated.
-        assert!(res.is_ok());
     }
 
     #[test]
@@ -322,87 +147,6 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_get_command_update_list() {
-        // Prepare dummy plugin with .0 which will give specific exit code ==0.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-
-        // Create list of modules to perform plugin update-list API call containing valid input.
-        let module1 = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "test1".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-        let module2 = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "test2".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-
-        let mut logger = dev_null().await;
-        // Call plugin update-list via API.
-        let res = plugin
-            .update_list(
-                &vec![
-                    SoftwareModuleUpdate::Install { module: module1 },
-                    SoftwareModuleUpdate::Remove { module: module2 },
-                ],
-                &mut logger,
-            )
-            .await;
-
-        // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
-        assert!(res.is_ok());
-    }
-
-    // Test validating if the plugin will fall back to `install` and `remove` options if the `update-list` option is not supported
-    #[ignore = "dependency on tedge-dummy-plugin"]
-    #[tokio::test]
-    #[serial]
-    async fn plugin_command_update_list_fallback() {
-        // Prepare dummy plugin with .0 which will give specific exit code ==0.
-        let (plugin, _plugin_path) = get_dummy_plugin("test");
-
-        // Create list of modules to perform plugin update-list API call containing valid input.
-        let module1 = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "test1".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-        let module2 = SoftwareModule {
-            module_type: Some("test".into()),
-            name: "test2".into(),
-            version: None,
-            url: None,
-            file_path: None,
-        };
-
-        let mut logger = dev_null().await;
-        let download = PathBuf::from("/tmp");
-        // Call plugin update-list via API.
-        let errors = plugin
-            .apply_all(
-                vec![
-                    SoftwareModuleUpdate::Install { module: module1 },
-                    SoftwareModuleUpdate::Remove { module: module2 },
-                ],
-                &mut logger,
-                &download,
-            )
-            .await;
-
-        // Expect Ok as plugin should exit with code 0. If Ok, there is no response to assert.
-        assert!(errors.is_empty());
-    }
-
     fn get_dummy_plugin_path() -> PathBuf {
         // Return a path to a dummy plugin in target directory.
         let package_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -422,20 +166,6 @@ mod tests {
         dummy_plugin_path
     }
 
-    fn get_dummy_plugin(name: &str) -> (ExternalPluginCommand, PathBuf) {
-        let dummy_plugin_path = get_dummy_plugin_path();
-        let plugin = ExternalPluginCommand::new(name, &dummy_plugin_path, None, 100, None);
-        (plugin, dummy_plugin_path)
-    }
-
-    fn get_dummy_plugin_tmp_path() -> PathBuf {
-        let path = PathBuf::from_str("/tmp/.tedge-dummy-plugin").unwrap();
-        if !&path.exists() {
-            fs::create_dir(&path).unwrap();
-        }
-        path
-    }
-
     fn make_config(max_packages: u32) -> Result<tempfile::TempDir, anyhow::Error> {
         let dir = tempfile::TempDir::new().unwrap();
         let toml_conf = &format!("[software]\nmax_packages = {max_packages}");
@@ -444,10 +174,5 @@ mod tests {
         let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
         file.write_all(toml_conf.as_bytes())?;
         Ok(dir)
-    }
-
-    async fn dev_null() -> BufWriter<File> {
-        let log_file = File::create("/dev/null").await.unwrap();
-        BufWriter::new(log_file)
     }
 }
