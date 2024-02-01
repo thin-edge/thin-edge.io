@@ -71,11 +71,11 @@ impl InternalIdResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct C8ySoftwareModuleItem {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
-    #[serde(rename = "type")]
     pub software_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
@@ -460,7 +460,7 @@ mod tests {
             ]),
         };
 
-        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","type":"debian","url":""},{"name":"b","version":"1.0","type":"debian","url":""},{"name":"c","type":"debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta","type":"debian","url":"https://foobar.io/d.deb"},{"name":"m","type":"apama","url":"https://foobar.io/m.epl"}]}"#;
+        let expected_json = r#"{"c8y_SoftwareList":[{"name":"a","softwareType":"debian","url":""},{"name":"b","version":"1.0","softwareType":"debian","url":""},{"name":"c","softwareType":"debian","url":"https://foobar.io/c.deb"},{"name":"d","version":"beta","softwareType":"debian","url":"https://foobar.io/d.deb"},{"name":"m","softwareType":"apama","url":"https://foobar.io/m.epl"}]}"#;
 
         assert_eq!(c8y_software_list, expected_struct);
         assert_eq!(c8y_software_list.to_json(), expected_json);
