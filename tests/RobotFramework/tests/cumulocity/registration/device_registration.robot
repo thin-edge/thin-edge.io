@@ -128,6 +128,7 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
 Early data messages cached and processed
     [Teardown]    Re-enable Auto-registration
     ${timestamp}=        Get Unix Timestamp
+    ${prefix}=    Get Random Name
     Execute Command    sudo tedge config set c8y.entity_store.auto_register false
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y
@@ -138,15 +139,15 @@ Early data messages cached and processed
         Execute Command    sudo tedge mqtt pub 'te/device/${child}///twin/maintenance_mode' 'true'
     END
 
-    Execute Command    tedge mqtt pub --retain 'te/device/child000//' '{"@type":"child-device","@id":"child000","@parent": "device/child00//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/child00000//' '{"@type":"child-device","@id":"child00000","@parent": "device/child0000//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/child0000//' '{"@type":"child-device","@id":"child0000","@parent": "device/child000//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/child01//' '{"@type":"child-device","@id":"child01","@parent": "device/child0//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/child00//' '{"@type":"child-device","@id":"child00","@parent": "device/child0//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/child0//' '{"@type":"child-device","@id":"child0"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child000//' '{"@type":"child-device","@id":"${prefix}child000","@parent": "device/child00//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child00000//' '{"@type":"child-device","@id":"${prefix}child00000","@parent": "device/child0000//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0000//' '{"@type":"child-device","@id":"${prefix}child0000","@parent": "device/child000//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child01//' '{"@type":"child-device","@id":"${prefix}child01","@parent": "device/child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child00//' '{"@type":"child-device","@id":"${prefix}child00","@parent": "device/child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0//' '{"@type":"child-device","@id":"${prefix}child0"}'
 
     FOR    ${child}    IN    @{children}
-        Cumulocity.Set Device    ${child}
+        Cumulocity.Set Device    ${prefix}${child}
         Device Should Have Measurements    type=environment    minimum=1    maximum=1
         Device Should Have Fragments    maintenance_mode
     END
@@ -156,21 +157,22 @@ Early data messages cached and processed
 
 
 Entities persisted and restored
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"plc1"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"plc2"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"plc1-sensor1","@parent":"factory/shop/plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor2' '{"@type":"child-device","@id":"plc1-sensor2","@parent":"factory/shop/plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/sensor1' '{"@type":"child-device","@id":"plc2-sensor1","@parent":"factory/shop/plc2/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"plc1-metrics","@parent":"factory/shop/plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"plc2-metrics","@parent":"factory/shop/plc2/"}'
+    ${prefix}=    Get Random Name
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor2' '{"@type":"child-device","@id":"${prefix}plc1-sensor2","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/sensor1' '{"@type":"child-device","@id":"${prefix}plc2-sensor1","@parent":"factory/shop/plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"${prefix}plc1-metrics","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"${prefix}plc2-metrics","@parent":"factory/shop/plc2/"}'
 
-    External Identity Should Exist    plc1
-    External Identity Should Exist    plc2
-    External Identity Should Exist    plc1-sensor1
-    External Identity Should Exist    plc1-sensor2
-    External Identity Should Exist    plc2-sensor1
-    External Identity Should Exist    plc1-metrics
-    External Identity Should Exist    plc2-metrics
+    External Identity Should Exist    ${prefix}plc1
+    External Identity Should Exist    ${prefix}plc2
+    External Identity Should Exist    ${prefix}plc1-sensor1
+    External Identity Should Exist    ${prefix}plc1-sensor2
+    External Identity Should Exist    ${prefix}plc2-sensor1
+    External Identity Should Exist    ${prefix}plc1-metrics
+    External Identity Should Exist    ${prefix}plc2-metrics
 
     Execute Command    cat /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
     ${original_last_modified_time}=    Execute Command    date -r /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
@@ -186,10 +188,10 @@ Entities persisted and restored
 
         # Assert that the restored entities are not converted again
         Should Have MQTT Messages    c8y/s/us    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
-        Should Have MQTT Messages    c8y/s/us/plc1    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
-        Should Have MQTT Messages    c8y/s/us/plc2    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
-        Should Have MQTT Messages    c8y/s/us/plc1    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
-        Should Have MQTT Messages    c8y/s/us/plc2    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=101    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
+        Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
     END
 
 
