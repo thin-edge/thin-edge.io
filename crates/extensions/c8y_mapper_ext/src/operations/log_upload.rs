@@ -14,7 +14,6 @@ use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use tedge_actors::Sender;
-use tedge_api::entity_store::EntityType;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::LogMetadata;
 use tedge_api::messages::LogUploadCmdPayload;
@@ -34,10 +33,9 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_uploader_ext::ContentType;
 use tedge_uploader_ext::UploadRequest;
-use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
 use time::OffsetDateTime;
 use tracing::debug;
+use tracing::log::error;
 use tracing::log::warn;
 
 pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
@@ -248,7 +246,7 @@ impl CumulocityConverter {
     /// - supported operation "c8y_LogfileRequest"
     /// - supported log types
     pub fn convert_log_metadata(
-        &self,
+        &mut self,
         topic_id: &EntityTopicId,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
@@ -257,34 +255,26 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let metadata = LogMetadata::from_json(message.payload_str()?)?;
-
-        // get the device metadata from its id
-        let target = self.entity_store.try_get(topic_id)?;
-
-        // Create a c8y_LogfileRequest operation file
-        let dir_path = match target.r#type {
-            EntityType::MainDevice => self.ops_dir.clone(),
-            EntityType::ChildDevice => {
-                let child_dir_name = target.external_id.as_ref();
-                self.ops_dir.clone().join(child_dir_name)
-            }
-            EntityType::Service => {
-                // No support for service log management
+        let mut messages = match self.register_operation(topic_id, "c8y_LogfileRequest") {
+            Err(err) => {
+                error!(
+                    "Failed to register `c8y_LogfileRequest` operation for {topic_id} due to: {err}"
+                );
                 return Ok(vec![]);
             }
+            Ok(messages) => messages,
         };
-        create_directory_with_defaults(&dir_path)?;
-        create_file_with_defaults(dir_path.join("c8y_LogfileRequest"), None)?;
 
         // To SmartREST supported log types
+        let metadata = LogMetadata::from_json(message.payload_str()?)?;
         let mut types = metadata.types;
         types.sort();
         let supported_log_types = types.join(",");
         let payload = format!("118,{supported_log_types}");
-
         let c8y_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        Ok(vec![MqttMessage::new(&c8y_topic, payload)])
+        messages.push(MqttMessage::new(&c8y_topic, payload));
+
+        Ok(messages)
     }
 }
 
@@ -369,7 +359,7 @@ mod tests {
         .await
         .expect("Send failed");
 
-        mqtt.skip(3).await; //Skip entity registration, mapping and supported log types messages
+        mqtt.skip(4).await; //Skip entity registration, mapping, supported ops and supported log types messages
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
@@ -426,7 +416,14 @@ mod tests {
         .await
         .expect("Send failed");
 
-        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "118,typeA,typeB,typeC")]).await;
+        assert_received_contains_str(
+            &mut mqtt,
+            [
+                ("c8y/s/us", "114,c8y_LogfileRequest"),
+                ("c8y/s/us", "118,typeA,typeB,typeC"),
+            ],
+        )
+        .await;
 
         // Validate if the supported operation file is created
         assert!(ttd
@@ -463,18 +460,20 @@ mod tests {
 
         assert_received_contains_str(
             &mut mqtt,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            )],
-        )
-        .await;
-        assert_received_contains_str(
-            &mut mqtt,
-            [(
-                "c8y/s/us/test-device:device:child1",
-                "118,typeA,typeB,typeC",
-            )],
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child",
+                ),
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "114,c8y_LogfileRequest",
+                ),
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "118,typeA,typeB,typeC",
+                ),
+            ],
         )
         .await;
 
@@ -483,6 +482,24 @@ mod tests {
             .path()
             .join("operations/c8y/test-device:device:child1/c8y_LogfileRequest")
             .exists());
+
+        // Sending an updated list of log types
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/log_upload"),
+            r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+        ))
+        .await
+        .expect("Send failed");
+
+        // Assert that the updated log type list does not trigger a duplicate supported ops message
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "c8y/s/us/test-device:device:child1",
+                "118,typeB,typeC,typeD",
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]

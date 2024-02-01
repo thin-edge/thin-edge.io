@@ -15,12 +15,12 @@
 
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
-use tedge_api::entity_store::EntityType;
 use tedge_api::messages::ConfigMetadata;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
+use tracing::error;
 
 pub mod config_snapshot;
 pub mod config_update;
@@ -62,38 +62,23 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let metadata = ConfigMetadata::from_json(message.payload_str()?)?;
 
-        // get the device metadata from its id
-        let target = self.entity_store.try_get(topic_id)?;
-
-        // Create a c8y operation file
-        let dir_path = match target.r#type {
-            EntityType::MainDevice => self.ops_dir.clone(),
-            EntityType::ChildDevice => {
-                match &target.parent {
-                    Some(parent) if parent.is_default_main_device() => {
-                        // Support only first level child devices due to the limitation of our file system supported operations scheme.
-                        self.ops_dir.join(target.external_id.as_ref())
-                    }
-                    _ => {
-                        return Ok(vec![]);
-                    }
-                }
-            }
-            EntityType::Service => {
+        let mut messages = match self.register_operation(topic_id, c8y_op_name) {
+            Err(err) => {
+                error!("Failed to register {c8y_op_name} operation for {topic_id} due to: {err}");
                 return Ok(vec![]);
             }
+            Ok(messages) => messages,
         };
-        tedge_utils::file::create_directory_with_defaults(&dir_path)?;
-        tedge_utils::file::create_file_with_defaults(dir_path.join(c8y_op_name), None)?;
 
         // To SmartREST supported config types
         let mut types = metadata.types;
         types.sort();
         let supported_config_types = types.join(",");
         let payload = format!("119,{supported_config_types}");
-
         let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        Ok(vec![MqttMessage::new(&sm_topic, payload)])
+        messages.push(MqttMessage::new(&sm_topic, payload));
+
+        Ok(messages)
     }
 }
 
@@ -128,7 +113,14 @@ mod tests {
         .expect("Send failed");
 
         // Validate SmartREST message is published
-        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "119,typeA,typeB,typeC")]).await;
+        assert_received_contains_str(
+            &mut mqtt,
+            [
+                ("c8y/s/us", "114,c8y_UploadConfigFile"),
+                ("c8y/s/us", "119,typeA,typeB,typeC"),
+            ],
+        )
+        .await;
 
         // Validate if the supported operation file is created
         assert!(ttd
@@ -145,7 +137,17 @@ mod tests {
         .expect("Send failed");
 
         // Validate SmartREST message is published
-        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "119,typeD,typeE,typeF")]).await;
+        assert_received_contains_str(
+            &mut mqtt,
+            [
+                (
+                    "c8y/s/us",
+                    "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
+                ),
+                ("c8y/s/us", "119,typeD,typeE,typeF"),
+            ],
+        )
+        .await;
 
         // Validate if the supported operation file is created
         assert!(ttd
@@ -175,10 +177,16 @@ mod tests {
         // Validate SmartREST message is published
         assert_received_contains_str(
             &mut mqtt,
-            [(
-                "c8y/s/us/test-device:device:child1",
-                "119,typeA,typeB,typeC",
-            )],
+            [
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "114,c8y_UploadConfigFile",
+                ),
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "119,typeA,typeB,typeC",
+                ),
+            ],
         )
         .await;
 
@@ -187,6 +195,24 @@ mod tests {
             .path()
             .join("operations/c8y/test-device:device:child1/c8y_UploadConfigFile")
             .exists());
+
+        // Sending an updated list of config types
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+            r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+        ))
+        .await
+        .expect("Send failed");
+
+        // Assert that the updated config type list does not trigger a duplicate supported ops message
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "c8y/s/us/test-device:device:child1",
+                "119,typeB,typeC,typeD",
+            )],
+        )
+        .await;
 
         // Simulate config_update cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -199,10 +225,16 @@ mod tests {
         // Validate SmartREST message is published
         assert_received_contains_str(
             &mut mqtt,
-            [(
-                "c8y/s/us/test-device:device:child1",
-                "119,typeD,typeE,typeF",
-            )],
+            [
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
+                ),
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "119,typeD,typeE,typeF",
+                ),
+            ],
         )
         .await;
 
@@ -211,5 +243,23 @@ mod tests {
             .path()
             .join("operations/c8y/test-device:device:child1/c8y_DownloadConfigFile")
             .exists());
+
+        // Sending an updated list of config types
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+            r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+        ))
+        .await
+        .expect("Send failed");
+
+        // Assert that the updated config type list does not trigger a duplicate supported ops message
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "c8y/s/us/test-device:device:child1",
+                "119,typeB,typeC,typeD",
+            )],
+        )
+        .await;
     }
 }
