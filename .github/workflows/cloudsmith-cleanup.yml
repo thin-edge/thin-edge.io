@@ -1,0 +1,25 @@
+name: cloudsmith-cleanup
+# Only run on the main repo (not a fork), and run weekly to reduce size of Cloudsmith repository (to keep under limits)
+on:
+  # trigger manually
+  workflow_dispatch:
+  # run automatically every Monday at 01:00 UTC
+  schedule:
+  - cron: "0 1 * * 1"
+jobs:
+  cleanup:
+    name: Cleanup
+    if: github.repository == 'thin-edge/thin-edge.io'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+      - name: Delete old packages
+        run: |
+          ./ci/admin/cloudsmith_admin.sh cleanup
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
