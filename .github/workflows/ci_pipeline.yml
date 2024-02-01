@@ -131,13 +131,6 @@ jobs:
           name: sawtooth-publisher_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sawtooth-publisher
 
-      - name: Upload dummy-plugin as zip
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tedge-dummy-plugin_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/tedge-dummy-plugin
-
 #################################################################################
 
   clean-up-rpi-matrix:
@@ -191,13 +184,6 @@ jobs:
         with:
           name: sawtooth-publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
-
-      - name: Download tedge-dummy-plugin
-        uses: actions/download-artifact@v4
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: tedge-dummy-plugin_armv7-unknown-linux-gnueabihf
-          path: /home/pi/tedge-dummy-plugin
 
       - name: Install all
         run: ./ci/installation_scripts/install_for_arm.sh package_unpack
