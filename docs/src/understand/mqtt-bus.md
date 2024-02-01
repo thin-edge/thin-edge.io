@@ -2,14 +2,13 @@
 title: MQTT Bus
 tags: [Concept, MQTT]
 sidebar_position: 3
+description: Overview of the MQTT Bus
 ---
 
-# Thin Edge MQTT bus
-
-Thin-edge uses a combination of MQTT and HTTP to coordinate the interactions
+%%te%% uses a combination of MQTT and HTTP to coordinate the interactions
 between the miscellaneous hardware and software components that make up a piece of equipment.
 
-- A local MQTT broker is deployed along each thin-edge enabled piece of equipment.
+- A local MQTT broker is deployed along each %%te%% enabled piece of equipment.
 - Each device and service is given dedicated MQTT topics to publish their measurements, events and alarms
   as well as to receive targeted operation requests.
 - Similarly, a local HTTP server is used to transfer files to and from child devices,
@@ -42,7 +41,7 @@ as well as to trigger operations on devices and services.
 However, it's more pertinent to use HTTP to transfer files from one device to another.
 And this is not only because of payload size constraints, but also for *pull* versus *push* constraints.
 
-By combining MQTT with HTTP, a thin-edge service can *notify* a child-device that a file is *available* for local transfer
+By combining MQTT with HTTP, a %%te%% service can *notify* a child-device that a file is *available* for local transfer
 and then let the child-device *download* the file when *ready*.
 
 A notable use is to install a new version of firmware, software package or configuration file on a child-device.

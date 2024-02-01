@@ -1,10 +1,11 @@
 ---
-title: Software management
+title: Software Management
 tags: [Reference, Agent, Software Management]
 sidebar_position: 3
+description: Details of the API to manage software on a device
 ---
 
-Thin-edge software management is implemented by two operations
+%%te%% software management is implemented by two operations
 which give the ability to manage software packages of different types on the same device.
 
 - `software_list` is used to fetch a pertinent subset of the software packages installed on a device.
@@ -12,7 +13,7 @@ which give the ability to manage software packages of different types on the sam
 
 ## software_list MQTT API
 
-The `software_list` operation API follows the [generic thin-edge rules for operations](device-management-api.md):
+The `software_list` operation API follows the [generic %%te%% rules for operations](device-management-api.md):
 - The `te/<device-topic-id>/cmd/software_list` topic is used to publish the type of software packages
   that can be managed on the device with the given topic identifier.
 - Each `te/<device-topic-id>/cmd/software_list/+` topic is dedicated to a software list command instance,
@@ -125,7 +126,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T1
 
 ## software_update MQTT API
 
-The `software_update` operation API follows the [generic thin-edge rules for operations](device-management-api.md):
+The `software_update` operation API follows the [generic %%te%% rules for operations](device-management-api.md):
 - The `te/<device-topic-id>/cmd/software_update` topic is used to publish the type of software packages
   that can be managed on the device with the given topic identifier.
 - Each `te/<device-topic-id>/cmd/software_update/+` topic is dedicated to a software update command instance,
@@ -357,7 +358,7 @@ The `tedge-agent` service uses software management plugins to interact with the 
 
 For each type of software package supported on the device must be provided a specific software management plugin:
 
-- A plugin is an executable file implementing the [software plugin API](../plugin-api.md),
+- A plugin is an executable file implementing the [software plugin API](../software-management-plugin-api.md),
   to `list`, `install` and `remove` software packages of a specific type.
 - These plugins are looked up by `tedge-agent` in the plugin directory (`/etc/tedge/sm-plugins` if not specified otherwise).
 - `tedge-agent` uses the file name of a plugin executables as the software package type name.
@@ -371,8 +372,8 @@ For each type of software package supported on the device must be provided a spe
 
 ## Custom implementation
 
-Thin-edge users can implement their own support for software management to address the specificities of their devices.
-- This can be done leveraging the `tedge-agent` and implementing a custom [software plugin](../plugin-api.md).
+%%te%% users can implement their own support for software management to address the specificities of their devices.
+- This can be done leveraging the `tedge-agent` and implementing a custom [software plugin](../software-management-plugin-api.md).
 - If for some reasons the `tedge-agent` cannot run on the target hardware,
   then a service must be implemented to support the `software_list` and `software_update` operation, as described below.
   In this case, the service is free to choose its own mechanisms to manage software packages

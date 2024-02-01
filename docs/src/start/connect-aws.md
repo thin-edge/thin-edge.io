@@ -2,11 +2,10 @@
 title: Connecting to AWS IoT
 tags: [Getting Started, AWS, Connection]
 sidebar_position: 4
+description: Connect %%te%% to AWS IoT and publish telemetry data
 ---
 
-# Connect your device to AWS IoT
-
-The very first step to enable **thin-edge.io** is to connect your device to the cloud.
+The very first step to enable %%te%% is to connect your device to the cloud.
 
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
@@ -19,7 +18,7 @@ See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 
 Before you try to connect your device to AWS IoT, you need:
 
-* [Install `thin-edge.io` on your device](../install/index.md).
+* [Install %%te%% on your device](../install/index.md).
 
 You can now use [`tedge` command](../references/cli/index.md) to:
 
@@ -185,7 +184,7 @@ To view the messages that were sent from the device to the cloud, follow this
 
 You can now:
 
-* learn how to [send various kind of telemetry data](send-thin-edge-data.md)
-  using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
+* learn how to [send various kind of telemetry data](send-measurements.md)
+  using the cloud-agnostic [%%te%% JSON data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from AWS](../references/mappers/mqtt-topics.md#aws-mqtt-topics)
   if you prefer to use directly AWS specific formats and protocols.

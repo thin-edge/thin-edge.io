@@ -36,7 +36,7 @@ You will learn to:
 - [install %%te%% on your specific hardware](install/index.md),
 - connect your device to your cloud, whether [Cumulocity IoT](start/connect-c8y.md),
   [Azure IoT](start/connect-azure.md) or [AWS IoT](start/connect-aws.md),
-- [send telemetry data](start//send-thin-edge-data.md), [alarms](start//raise-alarm.md) and [events](start//send-events.md),
+- [send telemetry data](start//send-measurements.md), [alarms](start//raise-alarm.md) and [events](start//send-events.md),
 - operate, configure, update, monitor your device.
 
 
@@ -55,7 +55,7 @@ Better understand how %%te%% works by reviewing the core [Concepts](understand/i
 
 One of the core feature of %%te%% is to be extensible.
 
-- [Write a software-management plugin](extend/write-my-software-management-plugin.md)
+- [Write a software-management plugin](extend/software-management.md)
 - [Build Operating System images with %%te%% setup to perform Over-the-Air (OTA) updates](extend/firmware-management/index.md)
 
 ## How to contribute {#contribute}

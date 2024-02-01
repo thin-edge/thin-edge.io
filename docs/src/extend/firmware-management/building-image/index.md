@@ -6,6 +6,6 @@ sidebar_position: 1
 
 import DocCardList from '@theme/DocCardList';
 
-Instructions on how to build different Operation System images with thin-edge.io setup to perform Over-the-Air (OTA) updates of the operating system.
+Instructions on how to build different Operation System images with %%te%% setup to perform Over-the-Air (OTA) updates of the operating system.
 
 <DocCardList />

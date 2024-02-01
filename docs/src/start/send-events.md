@@ -2,22 +2,23 @@
 title: Sending Events
 tags: [Getting Started, Telemetry]
 sidebar_position: 6
+description: How to send events with %%te%%
 ---
 
 # Sending Events
 
-Events on thin-edge.io can be used to trigger signals when some event happens in the system.
+Events on %%te%% can be used to trigger signals when some event happens in the system.
 For example, a person entering a room or someone logging into a machine/website can all be represented as events.
 Events are stateless and hence are processed as and when they occur.
 They don't represent state but can be used to represent state changes.
 An event can't be updated/cleared once its triggered, unlike alarms that are cleared explicitly after processing.
 
 Every event is uniquely identified by its type.
-If multiple events are raised for a given type, thin-edge.io will process them all separately in the order in which they were raised.
+If multiple events are raised for a given type, %%te%% will process them all separately in the order in which they were raised.
 
 ## Sending an event
 
-An event can be triggered on thin-edge.io by sending an MQTT message in Thin Edge JSON format to certain MQTT topics.
+An event can be triggered on %%te%% by sending an MQTT message in %%te%% JSON format to certain MQTT topics.
 
 The scheme of the topic to publish the event data is as follows:
 
@@ -49,7 +50,7 @@ Both the `text` field and the `time` field are optional.
 :::
 
 When the `text` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
-When the `time` field is not provided, thin-edge.io will use the current system time as the `time` of the event.
+When the `time` field is not provided, %%te%% will use the current system time as the `time` of the event.
 When you want to skip both fields, use an empty payload to indicate the same.
 There are no such restrictions on the `<event-type>` value.
 
@@ -61,9 +62,9 @@ The event payload structure is the same, as described in the previous section.
 
 ## Cloud data mapping
 
-If the device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
-The mapping of thin-edge events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
-For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the thin-edge event JSON data to its equivalent Cumulocity SmartREST representation.
+If the device is connected to some supported IoT cloud platform, an event that is triggered locally on %%te%% will be forwarded to the connected cloud platform as well.
+The mapping of %%te%% events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
+For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the %%te%% event JSON data to its equivalent Cumulocity SmartREST representation.
 
 :::caution
 As of now, event data mapping is supported only on Cumulocity IoT cloud platform.
@@ -71,7 +72,7 @@ As of now, event data mapping is supported only on Cumulocity IoT cloud platform
 
 ### Cumulocity cloud data mapping
 
-The Cumulocity mapper will convert Thin Edge JSON events into its Cumulocity SmartREST equivalent if the payload only contains either a `text` field or `time` field.
+The Cumulocity mapper will convert %%te%% JSON events into its Cumulocity SmartREST equivalent if the payload only contains either a `text` field or `time` field.
 
 For example the `login_event` described in the earlier sections will be converted to the following Cumulocity SmartREST message:
 
@@ -98,14 +99,14 @@ The Cumulocity JSON mapping of the same event would be as follows:
 ```
 
 :::note
-Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
+Mapped events will be sent to Cumulocity via MQTT if the incoming %%te%% JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
 :::
 
 Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
 
 ## Sending an event for a child/external device to the cloud
 
-An event for a child/external device can be triggered on thin-edge.io by sending an MQTT message in Thin Edge JSON format to certain MQTT topics.
+An event for a child/external device can be triggered on %%te%% by sending an MQTT message in %%te%% JSON format to certain MQTT topics.
 
 The scheme of the topic to publish the event data is as follows:
 
@@ -135,12 +136,12 @@ tedge mqtt pub te/device/external_sensor///e/login_event '{
 
 ### Mapping of events to cloud-specific data format
 
-If the child/external device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
-The mapping of thin-edge events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
+If the child/external device is connected to some supported IoT cloud platform, an event that is triggered locally on %%te%% will be forwarded to the connected cloud platform as well.
+The mapping of %%te%% events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
 
 #### Cumulocity cloud data mapping
 
-The Cumulocity mapper will convert Thin Edge JSON events into its Cumulocity JSON equivalent and sends them to the Cumulocity cloud.
+The Cumulocity mapper will convert %%te%% JSON events into its Cumulocity JSON equivalent and sends them to the Cumulocity cloud.
 
 The translated payload will be in the below format.
 

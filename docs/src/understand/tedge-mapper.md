@@ -2,13 +2,12 @@
 title: The Mapper
 tags: [Concept, Cloud, MQTT]
 sidebar_position: 6
+description: Overview of the core component which interfaces with the cloud
 ---
-
-# Thin-edge Mapper
 
 The tedge-mapper is a key concept to support multiple cloud providers.
 The purpose is to translate
-messages written using the cloud-agnostic [Thin Edge JSON format](thin-edge-json.md),
+messages written using the cloud-agnostic [%%te%% JSON format](thin-edge-json.md),
 into cloud-specific messages.
 
 The tedge-mapper is composed of multiple cloud-specific mappers, such as Cumulocity mapper and Azure mapper.
@@ -18,7 +17,7 @@ For instance, `tedge connect c8y` establishes a bridge to Cumulocity and launche
 that translates the messages in the background.
 
 A mapper subscribes to the reserved MQTT topic `te/+/+/+/+/m/+` with the QoS level 1 (at least once).
-The messages that arrive in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format.
+The messages that arrive in the mapper should be formed in the [%%te%% JSON](thin-edge-json.md) format.
 The mapper verifies whether the arrived messages are correctly formatted,
 in case the verification fails, the mapper publishes a corresponded error message
 on the topic `te/errors` with the QoS level 1 (at least once).
@@ -28,11 +27,11 @@ the message will be translated into a cloud-specific format.
 
 ## Cumulocity mapper
 
-The Cumulocity mapper translates [Thin Edge JSON](thin-edge-json.md) into Cumulocity's [JSON via MQTT](https://cumulocity.com/guides/device-sdk/mqtt/#json).
+The Cumulocity mapper translates [%%te%% JSON](thin-edge-json.md) into Cumulocity's [JSON via MQTT](https://cumulocity.com/guides/device-sdk/mqtt/#json).
 The translated messages are published on the topic `c8y/measurement/measurements/create` from where they are forwarded to Cumulocity.
 This mapper is launched by the `tedge connect c8y` command, and stopped by the `tedge disconnect c8y` command.
 
-Example in Thin Edge JSON:
+Example in %%te%% JSON:
 
 ```json
 {
@@ -64,8 +63,8 @@ String `temperature` is used as fragment and series.
 (1) The `type` is a mandatory field in the Cumulocity's JSON via MQTT manner,
 therefore, the Cumulocity mapper uses the user provided type from the topic, and if it is empty then it uses a default value of `ThinEdgeMeasurement`.
 
-(2) `time` will be added by the mapper **only when it is not specified in a received Thin Edge JSON message**.
-In this case, the mapper uses the device's local timezone. If you want another timezone, specify the time filed in Thin Edge JSON.
+(2) `time` will be added by the mapper **only when it is not specified in a received %%te%% JSON message**.
+In this case, the mapper uses the device's local timezone. If you want another timezone, specify the time filed in %%te%% JSON.
 
 (3) The mapper uses a measurement name ("temperature" in this example)
 as both a fragment type and a fragment series in [Cumulocity's measurements](https://cumulocity.com/guides/reference/measurements/#examples).
@@ -76,18 +75,18 @@ the message will be transferred to the topic `measurement/measurements/create` b
 ### For child devices
 
 The Cumulocity mapper collects measurements not only from the main device but also from child devices.
-These measurements are collected under the `te/device/<child-id>///m/+` topics and forwarded to Cumulocity to corresponding child devices created under the `thin-edge.io` parent device.
+These measurements are collected under the `te/device/<child-id>///m/+` topics and forwarded to Cumulocity to corresponding child devices created under the %%te%% parent device.
 (`<child-id>` is your desired child device ID.)
 
 The mapper works in the following steps.
 
-1. When the mapper receives a Thin Edge JSON message on the `te/device/<child-id>///m/+` topic,
-   the mapper sends a request to create a child device under the `thin-edge.io` parent device.
+1. When the mapper receives a %%te%% JSON message on the `te/device/<child-id>///m/+` topic,
+   the mapper sends a request to create a child device under the %%te%% parent device.
    The child device is named after the `<child-id>` topic name, and the type is `thin-edge.io-child`.
 2. Publish corresponded Cumulocity JSON measurements messages over MQTT.
 3. The child device is created on receipt of the very first measurement for that child device.
 
-If the incoming Thin Edge JSON message (published on `te/device/child1///m/`) is as follows,
+If the incoming %%te%% JSON message (published on `te/device/child1///m/`) is as follows,
 
 ```json
 {
@@ -115,14 +114,14 @@ it gets translated into JSON via MQTT by the Cumulocity mapper.
 
 ## Azure IoT Hub mapper
 
-The Azure IoT Hub mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
-It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
+The Azure IoT Hub mapper takes messages formatted in the [%%te%% JSON](thin-edge-json.md) as input.
+It validates if the incoming message is correctly formatted %%te%% JSON, then outputs the message.
 The validated messages are published on the topic `az/messages/events/` from where they are forwarded to Azure IoT Hub.
 This mapper is launched by the `tedge connect az` command, and stopped by the `tedge disconnect az` command.
 
 The Azure IoT Hub Mapper processes a message in the following ways.
 
-1. Validates if it is a correct Thin Edge JSON message or not.
+1. Validates if it is a correct %%te%% JSON message or not.
 2. Validates the incoming message size is below 255 KB.
 [The size of all device-to-cloud messages must be up to 256 KB](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-d2c-guidance).
 The mapper keeps 1 KB as a buffer for the strings added by Azure.
@@ -168,8 +167,8 @@ to the specified format.
 
 ## AWS mapper
 
-The AWS mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
-It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
+The AWS mapper takes messages formatted in the [%%te%% JSON](thin-edge-json.md) as input.
+It validates if the incoming message is correctly formatted %%te%% JSON, then outputs the message.
 The validated messages are published on the topic `aws/td/#` from where they are forwarded to AWS.
 This mapper is launched by the `tedge connect aws` command, and stopped by the `tedge disconnect aws` command.
 
@@ -178,7 +177,7 @@ This mapper is launched by the `tedge connect aws` command, and stopped by the `
 When some error occurs in a mapper process, the mapper publishes a corresponded error message
 on the topic `te/errors` with the QoS level 1 (at least once).
 
-Here is an example if you publish invalid Thin Edge JSON messages on `te/+/+/+/+/m/+`:
+Here is an example if you publish invalid %%te%% JSON messages on `te/+/+/+/+/m/+`:
 
 ```sh
 tedge mqtt pub te/device/main///m/ '{"temperature": 23,"pressure": 220'

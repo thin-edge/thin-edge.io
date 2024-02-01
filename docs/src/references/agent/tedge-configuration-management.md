@@ -2,17 +2,18 @@
 title: Configuration Management
 tags: [Reference, Configuration]
 sidebar_position: 6
+description: Details of the API to manage configuration on a device
 ---
 
 # Configuration Management
 
-Thin-edge implements an operation to manage device configuration files.
+%%te%% implements an operation to manage device configuration files.
 
 * The __tedge-agent__ enables configuration management on its running device
   and, combined with a cloud mapper, extends this capability to enable configuration management from the cloud.
 * This management is bi-directional:
   * A device can act as a reference,
-    with all the managed files being uploaded to the [tedge file transfer repository](../tedge-file-transfer-service.md)
+    with all the managed files being uploaded to the [tedge file transfer repository](../file-transfer-service.md)
     and stored there as a configuration snapshot.
   * A configuration update can be pushed from the tedge file transfer repository to any devices of the same type,
     i.e. supporting the same kind of configuration files.
@@ -28,7 +29,7 @@ Thin-edge implements an operation to manage device configuration files.
   They are atomically renamed, only after a fully successful download to avoid breaking the system with half-downloaded files.
 * When a downloaded file is copied to its target, the Unix user, group and mode are preserved.
 * Once an update has been downloaded from the tedge file transfer repository to the target device,
-  __the agent publishes an operation status update message on the local thin-edge MQTT bus__.
+  __the agent publishes an operation status update message on the local %%te%% MQTT bus__.
   The device software must subscribe to these messages if any action is required,
   such as checking the content of the file, to pre-processing it, or restarting a daemon.
 
@@ -47,7 +48,7 @@ By contrast, the agent is not responsible for:
 
 A user-specific component installed on the device
   can implement more sophisticated configuration use-cases by:
-  * listening for configuration updates on the local thin-edge MQTT bus,
+  * listening for configuration updates on the local %%te%% MQTT bus,
   * restarting the appropriate processes when needed,
   * declaring intermediate files as the managed files,
     to have the opportunity to check or update their content
@@ -85,7 +86,7 @@ the supported config types declaration message with a retained flag
 to the `config_snapshot` and `config_update` command topics
 with the set of `type`s listed in that configuration file
 (implicitly adding the `tedge-configuration-plugin` type also to that set).
-The message can be observed over the MQTT bus of the thin-edge device.
+The message can be observed over the MQTT bus of the %%te%% device.
 
 Given that `mqtt.topic_root` and `mqtt.device_topic_id` are set to `te` and `device/main//` for the main device,
 the message to declare the supported configuration types is as follows.
@@ -111,7 +112,7 @@ tedge mqtt pub -r 'te/device/main///cmd/config_update' '{
   then only `tedge-configuration-plugin.toml` is declared as a supported configuration type.
 :::
   
-The behavior of the agent is also controlled by the configuration of thin-edge:
+The behavior of the agent is also controlled by the configuration of %%te%%:
 
 * `tedge config get mqtt.bind.address`: the address of the local MQTT bus.
 * `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.

@@ -12,7 +12,7 @@ import ProposalBanner from '@site/src/components/ProposalBanner'
 
 An agent developer can define application specific [operation workflows](./device-management-api.md#mqtt-driven-workflows)
 to control how an operation is performed on a device.
-Thin-edge **tedge-agent** provides the tools to:
+%%te%% **tedge-agent** provides the tools to:
 
 - override existing workflows
 - define new states and actions such as pre-requisite or post-execution checks 
@@ -100,7 +100,7 @@ This API should be based on the principles of MQTT-driven workflow and defines:
   - the well-known name such as **download** or **downloaded**
   - the schema of the state payload and the required parameters to process a command at this stage
   - developer documentation on the role of each parameter and the expected checks and actions
-- the schema for the capability message sent when the operation is enabled on some thin-edge entity or component
+- the schema for the capability message sent when the operation is enabled on some %%te%% entity or component
   - developer documentation on the role of each field of the capability message
 
 A workflow implementation is free to define the states a command can go through
@@ -137,14 +137,14 @@ However, there are some rules and best practices.
   - This is important as we want to *extend* the workflow of an operation.
     A software component added by the user might need these *extra* fields the plugin is not aware of.
 - A workflow implementation must not react on *no-op* states nor terminal states.
-  - The transition from a *no-op* state must be handled either by thin-edge as direct transition
+  - The transition from a *no-op* state must be handled either by %%te%% as direct transition
     or overridden by the user with domain-specific checks and actions.
   - The terminal states, a.k.a **successful** and **failed**, are owned by the process which created the **init** state (in practice, the mapper).
     Only this process should clear the retained message state for an operation instance by sending an empty payload on command's topic.
 
 ## User-defined Operation Workflow
 
-Thin-edge provides a mechanism to define, extend and combine workflows.
+%%te%% provides a mechanism to define, extend and combine workflows.
 
 This mechanism is provided by the **tedge-agent** which gathers a set of user-defined workflows
 and combined them with the builtin workflows implemented by the agent itself.
@@ -199,7 +199,7 @@ on_error = "failed"
   action = "cleanup"
 ```
 
-Thin-edge combines all these workflows to determine what has to be done
+%%te%% combines all these workflows to determine what has to be done
 when a state message is published for a command on a topic matching the global topic filter for commands,
 i.e. `te/+/+/+/+/cmd/+/+`.
 - Each running instance of the __tedge_agent__ reacts only on commands targeting its own device.

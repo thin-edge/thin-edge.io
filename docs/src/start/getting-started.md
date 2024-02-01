@@ -1,17 +1,15 @@
 ---
-title: A tour of thin-edge
+title: A tour of thin-edge.io
 tags: [Getting Started, Cumulocity]
 sidebar_position: 1
 ---
 
-# Getting started with thin-edge.io on a Raspberry Pi
-
-After following this tutorial you will have an overview of the installation and configuration of thin-edge.io. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity IoT and performing some additional device management tasks.
+After following this tutorial you will have an overview of the installation and configuration of %%te%%. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity IoT and performing some additional device management tasks.
 
 
 ## Introduction
 
-thin-edge.io is an open-source project to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT cloud platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
+%%te%% is an open-source project to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT cloud platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
 
 The Raspberry PI is a relatively simple and cheap device but powerful. Therefore it is ideal for testing and try-outs and some production use cases.
 
@@ -21,17 +19,18 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 To follow this guide, you only need the following:
 - A [Cumulocity IoT](https://www.softwareag.cloud/site/product/cumulocity-iot.html) Trial tenant.
 
-- A Raspberry Pi (3 or 4) with Raspbian installed, for other boards and OS'es have a look [here](../references/supported-platforms.md)
-- Updated device:
-`
-sudo apt-get update && sudo apt-get upgrade
-`
+- A Raspberry Pi (any model is fine) with RaspberryPi OS installed, for other boards and OS'es have a look [here](../references/supported-platforms.md)
+- Updated device
+
+    ```
+    sudo apt-get update && sudo apt-get upgrade
+    ```
 
 ## Steps
 
-This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity IoT. The last three are optional but needed to get a good overview of the capabilities of thin-edge.io.
+This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity IoT. The last three are optional but needed to get a good overview of the capabilities of %%te%%.
 
-- [Step 1 Install thin-edge.io](#step-1-install-thin-edgeio)
+- [Step 1 Install %%te%%](#step-1-install-thin-edgeio)
 - [Step 2 Configure and Connect to Cumulocity IoT](#step-2-configure-and-connect-to-cumulocity-iot)
 - [Step 3 Sending Device Data](#step-3-sending-device-data)
 - [Step 4 Monitor the device](#step-4-monitor-the-device)
@@ -40,7 +39,7 @@ This tutorial is divided into small steps. The first three steps are needed to i
 - [Step 7 Manage Log Files](#step-7-manage-log-files)
 
 
-## Step 1 Install thin-edge.io
+## Step 1 Install %%te%% {#step-1-install-thin-edgeio}
 
 The easiest way is to use the installation script with this command:
 
@@ -52,7 +51,7 @@ curl -fsSL https://thin-edge.io/install.sh | sh -s
 wget -O - https://thin-edge.io/install.sh | sh -s
 ```
 
-After a successful installation, it is possible to use thin-edge.io via the CLI and use the tedge commands.
+After a successful installation, it is possible to use %%te%% via the CLI and use the tedge commands.
 
 :::info
 For more information about the installation, please have a look [here](../install/index.md) for more information.
@@ -100,7 +99,7 @@ SUBCOMMANDS:
 
 Here is an [overview of the commands for the CLI tool](../references/cli/index.md).
 
-The CLI will be used to configure the thin-edge.io installation on the device in the next steps.
+The CLI will be used to configure the %%te%% installation on the device in the next steps.
 
 ## Step 2 Configure and Connect to Cumulocity IoT
 
@@ -118,7 +117,7 @@ sudo tedge config set c8y.url "mycompany.cumulocity.com"
 
 ### Certificate
 
-thin-edge.io connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity IoT. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
+%%te%% connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity IoT. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
 
 First, we need to create the device certificate locally (If the device certificate is already uploaded, directly via the UI to Cumulocity IoT this step can be skipped).
 
@@ -177,13 +176,13 @@ Below shows some examples on how to publish an MQTT message via the command line
 tedge mqtt pub '{{TOPIC}}' '{{PAYLOAD}}'
 ```
 
-thin-edge.io comes with a tedge-mapper daemon. This process collects the data from the `te/#` topics and translates them to the tedge payloads on the `c8y/#` topics which are mapped directly to Cumulocity IoT. The mapper translates simple JSON to the desired target payload for Cumulocity IoT.
+%%te%% comes with a tedge-mapper daemon. This process collects the data from the `te/#` topics and translates them to the tedge payloads on the `c8y/#` topics which are mapped directly to Cumulocity IoT. The mapper translates simple JSON to the desired target payload for Cumulocity IoT.
 
 ### Sending measurements
 
 Measurements within Cumulocity IoT represent regularly acquired readings and statistics from sensors.
 
-A simple single-valued measurement like a temperature measurement can be represented in Thin Edge JSON as follows:
+A simple single-valued measurement like a temperature measurement can be represented in %%te%% JSON as follows:
 
 ```json
 {"temperature": 25}
@@ -205,7 +204,7 @@ tedge mqtt pub te/device/main///m/ '{"temperature": 25}'
 
 Events are used to pass real-time information, which is not just plain sensor values, through Cumulocity IoT.
 
-A simple event can be represented in Thin Edge JSON as follows:
+A simple event can be represented in %%te%% JSON as follows:
 
 ```json
 {
@@ -232,19 +231,19 @@ When you go to events (`Device management` &rarr; `your device` &rarr; `events`)
 
 ## Step 4 Monitor the device
 
-With thin-edge.io device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity IoT.
+With %%te%% device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity IoT.
 
-thin-edge.io uses the open source component `collectd` to collect the metrics from the device. thin-edge.io translates the `collected` metrics from their native format to the thin-edge.io JSON format and then into the cloud-vendor-specific format.
+%%te%% uses the open source component `collectd` to collect the metrics from the device. %%te%% translates the `collected` metrics from their native format to the %%te%% JSON format and then into the cloud-vendor-specific format.
 
 Enabling monitoring on your device is a 3-steps process:
 
 - Install collectd
 - Configure collectd
-- Enable thin-edge.io monitoring
+- Enable %%te%% monitoring
 
 ### Install collectd
 
-Because thin-edge.io uses the MQTT plugin of collectd, installation of the Mosquitto client library (either mosquitto-clients or libmosquitto1) is required.
+Because %%te%% uses the MQTT plugin of collectd, installation of the Mosquitto client library (either mosquitto-clients or libmosquitto1) is required.
 
 ```sh title="Option 1: (Recommended)"
 sudo apt-get install --no-install-recommends collectd-core mosquitto-clients
@@ -256,7 +255,7 @@ sudo apt-get install --no-install-recommends collectd-core libmosquitto1
 
 ### Configure collectd
 
-thin-edge.io provides a basic collectd configuration that can be used to collect CPU, memory and disk metrics.
+%%te%% provides a basic collectd configuration that can be used to collect CPU, memory and disk metrics.
 
 Simply copy the file to the main collectd configuration file and restart the daemon.
 
@@ -319,7 +318,7 @@ To change the monitored data, it is needed to change the collectd.conf. This can
 
 ## Step 5 Add software management
 
-Software management takes care of allowing installation and management of any type of software from Cumulocity IoT. Since the type is generic, any type of software can be managed. In thin-edge.io this can be extended with plugins. For every software type, a particular plugin is needed.
+Software management takes care of allowing installation and management of any type of software from Cumulocity IoT. Since the type is generic, any type of software can be managed. In %%te%% this can be extended with plugins. For every software type, a particular plugin is needed.
 
 The following plugins do exist:
 
@@ -351,7 +350,7 @@ sudo tedge connect c8y
 
 3. In the dialog box, enter a name for the software and confirm it by clicking `Add new`, a description and its version.
 
-4. thin-edge.io contains a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
+4. %%te%% contains a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
     If you prefer to use packages from an `apt` repository, select the `Provide a file path` option and give an empty space (' ').
 
     ![Add new software](./images/AddSoftware.png)
@@ -378,11 +377,11 @@ When a different version of the already installed software needs to be installed
 
 Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
 
-How to [develop your own plugins](../extend/write-my-software-management-plugin.md) is described here.
+How to [develop your own plugins](../extend/software-management.md) is described here.
 
 ## Step 6 Manage configuration files
 
-With thin-edge.io it is possible to manage config files on a device by using the Cumulocity IoT configuration management feature as a part of Device Management.
+With %%te%% it is possible to manage config files on a device by using the Cumulocity IoT configuration management feature as a part of Device Management.
 
 This functionality is directly installed with the initial script. However, it is needed to configure its configuration file to add the entries for the configuration files which need to be managed.
 
@@ -418,17 +417,12 @@ In this tutorial the last option is explained, there are some steps to be taken:
 
 
 1. Save the configuration file to the repository (`Device management` &rarr; `configuration`. In the list of configuration files  pick  a file to change and click on `Save to repository`).
-
 2. Go to `Management` &rarr; `configuration` snapshots repository.
 3. Download the configuration file which needs to be changed (the one you saved to the repository in step 1).
 4. Edit this file as needed.
 5. Click on `Add configuration snapshot` (top right).
-6. Fill the fields, make sure the device type is `thin-edge.io`, select the right Configuration type and add the (just edited) configuration file and click on  `Add configuration`.
+6. Fill the fields, make sure the device type is %%te%%, select the right Configuration type and add the (just edited) configuration file and click on  `Add configuration`.
 7. Go back to the device and then to the configuration. In the Available supported configuration you will see the configuration file which was just created. When you click on it, you will see the content.
-
-8. Then click on  ``` send configuration to device ``` the configuration file is uploaded to the device.
-9. If you then click on ``` get snapshot from device ``` (select the right configuration file in device supported configurations), you will see the change of the configuration file.
-
 8. Then click on  `send configuration to device` the configuration file is uploaded to the device.
 9. If you then click on `get snapshot from device` (select the right configuration file in device-supported configurations), you will see the change of the configuration file.
 
@@ -454,16 +448,16 @@ To change the collectd metrics of the device, which are displayed in Cumulocity 
 3. Go to `Management` &rarr; `configuration` snapshots repository
 4. Download the configuration file which needs to be changed
 5. Edit this file as needed
-6. Click on ``` Add configuration snapshot ``` (top right)
-7. Fill in the fields, make sure the device type is ``` thin-edge.io ``` and select the right Configuration type and add the (just edited) configuration file.) and click on  ```Add configuration ```
+6. Click on `Add configuration snapshot` (top right)
+7. Fill in the fields, make sure the device type is %%te%% and select the right Configuration type and add the (just edited) configuration file then click on `Add configuration`
 8. Go back to the device and then to the configuration. In the Available supported configuration you will see the configuration file which was just created. When you click on it, you will see the content
-9. Then click on  ``` send configuration to the device ``` the configuration file is uploaded to the device.
+9. Then click on `send configuration to the device` the configuration file is uploaded to the device.
 10. If you then click on get snapshot from device (select the right configuration file in device supported configurations), you will see the change of the configuration file.
 
 
 ## Step 7 Manage Log Files
 
-With thin-edge.io it is possible to request log files from a device by using the Cumulocity IoT log request feature as a part of Device Management.
+With %%te%% it is possible to request log files from a device by using the Cumulocity IoT log request feature as a part of Device Management.
 
 This functionality is also installed by default but some configuration is needed to indicate which log files the plugin should manage.
 
@@ -502,6 +496,6 @@ However, keep in mind that the daemon has to be restarted every time the `/etc/t
 
 ### Final remarks and summary
 
-With this getting started tutorial you gained some insights on how to install and configure thin-edge.io on a Raspberry Pi.
+With this getting started tutorial you gained some insights on how to install and configure %%te%% on a Raspberry Pi.
 
-If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight into the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found [here](../operate/index.md).
+If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight into the device management capabilities of %%te%%. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found [here](../operate/index.md).

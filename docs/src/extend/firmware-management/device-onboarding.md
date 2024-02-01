@@ -2,9 +2,10 @@
 title: Onboarding a Device
 tags: [Extend, Build]
 sidebar_position: 5
+description: Connecting devices to the cloud for the first time
 ---
 
-Onboarding a new devices involves configuring thin-edge.io to connect to a cloud for the first time. This generally involves the following steps:
+Onboarding a new devices involves configuring %%te%% to connect to a cloud for the first time. This generally involves the following steps:
 
 1. Configure the cloud url to connect to
 2. Generate the device certificate (if it does not already exist)

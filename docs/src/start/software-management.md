@@ -2,17 +2,16 @@
 title: Updating Software
 tags: [Getting Started, Software Management]
 sidebar_position: 9
+description: Manage the software on your devices from Cumulocity cloud
 ---
 
-# Manage the software on your devices from Cumulocity cloud
-
-This document describes how to manage the software modules that are installed on a thin-edge device from the
-cloud using the **software management** feature of thin-edge.io.
+This document describes how to manage the software modules that are installed on a %%te%% device from the
+cloud using the **software management** feature of %%te%%.
 
 :::note
 This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
 Other package managers can be supported by adding a plugin.
-Refer to [this](../extend/write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
+Refer to [this](../extend/software-management.md) document on how to write a plugin to support software management for any other software type.
 :::
 
 :::info
@@ -22,22 +21,18 @@ As of now, software management feature is supported only from Cumulocity cloud, 
 Three components are required on your devices to enable software management:
 
 1. Software management mapper for Cumulocity cloud acts as a proxy between the cloud and the device.
-    This translates the cloud specific message type into device specific type and vice-versa.(Example: Cumulocity smart-rest to/from thin-edge json)
+    This translates the cloud specific message type into device specific type and vice-versa.(Example: Cumulocity smart-rest to/from %%te%% json)
     The messages from cloud will be translated and forwarded to the `tedge-agent` and messages from `tedge-agent` will be translated and sent to cumulocity cloud.
     You can find this process with the name `tedge-mapper c8y` in `ps` once it starts.
 
 2. Software management agent
-    The thin-edge software management agent is the one that calls the plugins.
+    The %%te%% software management agent is the one that calls the plugins.
     You can find this process with the name `tedge-agent` in `ps` once it starts.
 
 3. Software management plugin
     Plugins are the interfaces that call the package manager (example: apt/apt-get) to do the software management operations (Install, Remove or update)
     You can find them in /etc/tedge/sm-plugins.
     As of now there is only one (apt) plugin is supported.
-
-## Enable software management feature
-
-Find more information about [how to install and enable software management.](../operate/installation/install_and_enable_software_management.md)
 
 ## Managing the device software **repository** on Cumulocity cloud
 
@@ -70,7 +65,7 @@ Find more information about [managing the device software](https://cumulocity.co
 
 3. Optionally, you can define the device type filter when adding a new software.
 
-4. thin-edge.io ships a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
+4. %%te%% ships a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
     If you prefer to use packages from an `apt` repository, select the **Provide a file path** option and give an **empty space** (' ').
 
     <img
@@ -117,7 +112,7 @@ From the Cumulocity cloud `Software` tab of a device, software can be
 * [removed](https://cumulocity.com/guides/users-guide/device-management/#to-delete-software-from-a-device)
 
 :::note
-* Thin-edge treats install and update same
+* %%te%% treats install and update same
 * Once the above mentioned operation is selected, one should click on **Apply changes** to confirm operation.
 :::
 
@@ -133,7 +128,7 @@ In Cumulocity, one can then simply provide the package to update without having 
 
 ### Configuring the default plugin
 
-Default plugin can be configured using the thin-edge cli command `tedge`.
+Default plugin can be configured using the %%te%% cli command `tedge`.
 
 For example set `apt` plugin as a `default plugin`
 

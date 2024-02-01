@@ -1,12 +1,11 @@
 ---
-title: Running the agent
+title: Running the Agent
 tags: [Reference, Agent]
 sidebar_position: 1
+description: Running the agent for device management on main and child devices
 ---
 
-# Running the agent
-
-In order to enable thin-edge device management features on a device,
+In order to enable %%te%% device management features on a device,
 being the main device or a child device,
 one has to install and run the `tedge-agent` service on this device.
 

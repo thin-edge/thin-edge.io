@@ -48,8 +48,8 @@ The project uses different Yocto layers to build an image which contains:
 |Item|Description|
 |--|--|
 |Yocto Linux Distribution|Base operating system|
-|thin-edge.io|thin-edge.io and all of its components|
-|thin-edge.io mender workflow|A workflow definition to perform Operation System A/B updates, e.g. mender commit or rollback|
+|thin-edge.io|%%te%% and all of its components|
+|%%te%% mender workflow|A workflow definition to perform Operation System A/B updates, e.g. mender commit or rollback|
 |mender|mender binary configured in standalone mode|
 
 ### Cloning the project

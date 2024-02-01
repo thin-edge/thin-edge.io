@@ -1,12 +1,11 @@
 ---
-title: Supported Platform
+title: Supported Platforms
 tags: [Reference, Installation]
 sidebar_position: 15
+description: List of supported platforms, CPU architectures and resource usage
 ---
 
-# thin-edge.io platform support
-
-thin-edge.io can be run on any Linux based Operating System, such as; Debian/Ubuntu, Alpine, RHEL, Fedora, Pokey (Yocto) etc.
+%%te%% can be run on any Linux based Operating System, such as; Debian/Ubuntu, Alpine, RHEL, Fedora, Pokey (Yocto) etc.
 
 In addition to a Linux based Operation system, the following requirements must also be fulfilled:
 
@@ -23,7 +22,7 @@ mosquitto will be installed via the installation script, however it needs to be 
 
 ## Recommended mosquitto version
 
-Whilst thin-edge.io will work with any mosquitto version, it is recommended to use mosquitto version &gt;=2.0.18 as it includes some important fixes regarding the MQTT bridge functionality.
+Whilst %%te%% will work with any mosquitto version, it is recommended to use mosquitto version &gt;=2.0.18 as it includes some important fixes regarding the MQTT bridge functionality.
 
 If you can't use the recommended version, then be aware of the following issues which affect various mosquitto versions in some corner cases:
 
@@ -34,7 +33,7 @@ If you can't use the recommended version, then be aware of the following issues 
 
 ## Supported CPU Architectures
 
-thin-edge.io is developed in Rust which is a compiled language and each executable is specific for different CPU Architectures (e.g. x86_64/amd64, aarch64/arm64, armv7, armv6 etc.).  
+%%te%% is developed in Rust which is a compiled language and each executable is specific for different CPU Architectures (e.g. x86_64/amd64, aarch64/arm64, armv7, armv6 etc.).  
 
 
 The following sections give detailed information about which CPU Architectures which are currently supported.
@@ -54,13 +53,13 @@ Generally the newer ARM processors should be supported, as they are mostly based
 
 ## Memory Usage
 
-The exact memory usage of thin-edge.io and the MQTT broker depends on a many factors; such factors are listed below:
+The exact memory usage of %%te%% and the MQTT broker depends on a many factors; such factors are listed below:
 
-* Which thin-edge.io components are running?
+* Which components are running?
 * How many messages are being sent to the MQTT broker?
 * How long should mosquitto buffer messages during connectivity outages?
 
-Despite the above factors which influence the memory usage, a guideline of the typical memory usage for each thin-edge.io components is shown below, where the memory usage refers to the typical [Resident Set Size (RSS)](https://en.wikipedia.org/wiki/Resident_set_size).
+Despite the above factors which influence the memory usage, a guideline of the typical memory usage for each %%te%% components is shown below, where the memory usage refers to the typical [Resident Set Size (RSS)](https://en.wikipedia.org/wiki/Resident_set_size).
 
 |Name|Typical Memory Usage (MiB)|
 |--|--|
@@ -74,9 +73,9 @@ To provide a better insight into the actual memory usage, the following sections
 
 #### Scenario: Gateway device
 
-A typical gateway device setup is a device where the MQTT broker and thin-edge.io are running on the single device to provide management of the gateway itself and provide cloud connectivity to other devices in the local network.
+A typical gateway device setup is a device where the MQTT broker and %%te%% are running on the single device to provide management of the gateway itself and provide cloud connectivity to other devices in the local network.
 
-In this scenario, all of the thin-edge.io components are running on the gateway device. The breakdown of the typical memory usage is shown in the table below:
+In this scenario, all of the %%te%% components are running on the gateway device. The breakdown of the typical memory usage is shown in the table below:
 
 |Name|Typical Memory Usage (MiB)|
 |--|--|
@@ -88,7 +87,7 @@ In this scenario, all of the thin-edge.io components are running on the gateway 
 
 #### Scenario: Child device (connected to a local gateway)
 
-The thin-edge.io component, **tedge-agent**, can also be run on a child device where it connects to an MQTT broker running on a gateway device within the same local network. In this scenario the memory requirements are considerable less as only the **tedge-agent** needs to run on the device, as the cloud connection is managed on the gateway device.
+The %%te%% component, **tedge-agent**, can also be run on a child device where it connects to an MQTT broker running on a gateway device within the same local network. In this scenario the memory requirements are considerable less as only the **tedge-agent** needs to run on the device, as the cloud connection is managed on the gateway device.
 
 Below shows the typical memory usage breakdown in this scenario:
 

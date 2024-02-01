@@ -63,7 +63,7 @@ The above topic schema uses fixed positions to indicate the entity type, e.g. to
 A service represents an entity that has dependence on a device. For example a service is running on device, and therefore can not exist on its own. The lifecycle of the service is linked to the device it is running on, so when the device is removed, then the service is also removed.
 :::
 
-The `<device_id>` can be either set to `main`, which represents the thin-edge device, or to a id/name used to represent a child device. Telemetry data targeted to the main or child devices, require the `service` and `<service_id>` segments to be set to an empty string.
+The `<device_id>` can be either set to `main`, which represents the %%te%% device, or to a id/name used to represent a child device. Telemetry data targeted to the main or child devices, require the `service` and `<service_id>` segments to be set to an empty string.
 
 The following table shows some examples showing the relationship between the topic and the entity/component.
 

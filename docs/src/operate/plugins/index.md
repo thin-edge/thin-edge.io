@@ -25,7 +25,7 @@ New plugins can be added by following these [instructions](https://github.com/th
 In addition, a list of [Github plugins](https://github.com/topics/thin-edge) are visible directly from Github. If your plugin is hosted on Github as a public repository, then you can make your plugin discoverable by adding the `thin-edge` tag to the repository, afterwards the plugin will appear in the list.
 
 <figure>
-    ![Github thin-edge.io plugins](github_plugins_list.png)
+    ![Github %%te%% plugins](github_plugins_list.png)
     <figcaption style={{textAlign:'center'}}>
         <a href="https://github.com/topics/thin-edge" target="_blank">Github plugins</a>
     </figcaption>
