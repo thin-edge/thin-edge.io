@@ -1302,7 +1302,7 @@ fn is_child_operation_path(path: &Path) -> bool {
 
 impl CumulocityConverter {
     /// Register on C8y an operation capability for a device.
-    fn register_operation(
+    pub fn register_operation(
         &mut self,
         target: &EntityTopicId,
         c8y_operation_name: &str,

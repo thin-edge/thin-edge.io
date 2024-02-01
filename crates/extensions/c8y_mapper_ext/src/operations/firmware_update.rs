@@ -7,7 +7,6 @@ use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::entity_store::EntityExternalId;
-use tedge_api::entity_store::EntityType;
 use tedge_api::messages::FirmwareInfo;
 use tedge_api::messages::FirmwareUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
@@ -22,8 +21,7 @@ use tedge_api::Jsonify;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
+use tracing::error;
 use tracing::warn;
 
 pub fn firmware_update_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
@@ -150,26 +148,13 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        // Get the device metadata from its id
-        let target = self.entity_store.try_get(topic_id)?;
-
-        // Create a c8y_Firmware operation file
-        let dir_path = match target.r#type {
-            EntityType::MainDevice => self.ops_dir.clone(),
-            EntityType::ChildDevice => {
-                let child_dir_name = target.external_id.as_ref();
-                self.ops_dir.clone().join(child_dir_name)
+        match self.register_operation(topic_id, "c8y_Firmware") {
+            Err(err) => {
+                error!("Failed to register `c8y_Firmware` operation for {topic_id} due to: {err}");
+                Ok(vec![])
             }
-            EntityType::Service => {
-                warn!("firmware_update feature is not supported for services");
-                return Ok(vec![]);
-            }
-        };
-
-        create_directory_with_defaults(&dir_path)?;
-        create_file_with_defaults(dir_path.join("c8y_Firmware"), None)?;
-
-        Ok(vec![])
+            Ok(messages) => Ok(messages),
+        }
     }
 }
 
@@ -180,6 +165,7 @@ mod tests {
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
+    use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -204,7 +190,7 @@ mod tests {
         .await
         .expect("Send failed");
 
-        mqtt.skip(1).await;
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_Firmware")]).await;
 
         // Validate if the supported operation file is created
         assert!(ttd.path().join("operations/c8y/c8y_Firmware").exists());
@@ -238,10 +224,13 @@ mod tests {
 
         assert_received_contains_str(
             &mut mqtt,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            )],
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child",
+                ),
+                ("c8y/s/us/test-device:device:child1", "114,c8y_Firmware"),
+            ],
         )
         .await;
 
@@ -250,6 +239,17 @@ mod tests {
             .path()
             .join("operations/c8y/test-device:device:child1/c8y_Firmware")
             .exists());
+
+        // Duplicate firmware_update cmd metadata message
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/firmware_update"),
+            "{}",
+        ))
+        .await
+        .expect("Send failed");
+
+        // Assert that the supported ops message is not duplicated
+        assert_eq!(mqtt.recv().await, None);
     }
 
     #[tokio::test]
