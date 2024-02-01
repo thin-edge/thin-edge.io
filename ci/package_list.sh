@@ -22,7 +22,6 @@ export DEPRECATED_PACKAGES
 
 TEST_PACKAGES=(
     sawtooth-publisher
-    tedge-dummy-plugin
 )
 export TEST_PACKAGES
 

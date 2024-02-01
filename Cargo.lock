@@ -3748,14 +3748,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge-dummy-plugin"
-version = "1.0.0-rc.1"
-dependencies = [
- "clap",
- "thiserror",
-]
-
-[[package]]
 name = "tedge-log-plugin"
 version = "1.0.0-rc.1"
 dependencies = [

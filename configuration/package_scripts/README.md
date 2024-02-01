@@ -123,7 +123,6 @@ Below shows the general workflow to editing an existing maintainer script for th
     -rw-r--r--@ 1 developer  staff   1163398 Aug  8 11:47 tedge-apt-plugin-0.11.1~340+g1441e71d.aarch64.rpm
     -rw-r--r--@ 1 developer  staff   1162657 Aug  8 11:47 tedge-apt-plugin_0.11.1~340+g1441e71d_aarch64.apk
     -rw-r--r--@ 1 developer  staff    912366 Aug  8 11:47 tedge-apt-plugin_0.11.1~340+g1441e71d_arm64.deb
-    -rw-r--r--@ 1 developer  staff   1372836 Aug  8 11:47 tedge-dummy-plugin_0.11.1~340+g1441e71d_arm64.deb
     -rw-r--r--@ 1 developer  staff   3016043 Aug  8 11:47 tedge-mapper-0.11.1~340+g1441e71d.aarch64.rpm
     -rw-r--r--@ 1 developer  staff   2975789 Aug  8 11:47 tedge-mapper_0.11.1~340+g1441e71d_aarch64.apk
     -rw-r--r--@ 1 developer  staff   2394964 Aug  8 11:47 tedge-mapper_0.11.1~340+g1441e71d_arm64.deb
