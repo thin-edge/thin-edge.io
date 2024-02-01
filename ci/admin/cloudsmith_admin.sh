@@ -98,7 +98,7 @@ delete_by_version() {
 
 list_old_versions() {
     # Only use the "tedge" package to determine the versions
-    # Version filter: Only included versions with "g" in it, as it identifies non-official versions e.g. 1.0.0~rc.2~51+g2149ba7
+    # Version filter: Only included versions with "g" in it, as it identifies non-official versions e.g. 1.0.0~rc.2~51+g1234abc
     # Uploaded filter: Only filter for packages uploaded that are older than x days ago
     cloudsmith ls pkg thinedge/tedge-main -q "format:deb AND name:^tedge$ AND version:g AND architecture:arm64 AND uploaded:<'60 days ago'" -l 500 -F json \
     | jq -r '.data[] | .version'
