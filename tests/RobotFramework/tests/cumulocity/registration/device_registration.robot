@@ -157,7 +157,13 @@ Early data messages cached and processed
 
 
 Entities persisted and restored
+    [Teardown]    Enable clean start
+    Execute Command    sudo tedge config set c8y.entity_store.clean_start false
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+    
     ${prefix}=    Get Random Name
+    
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
     Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/plc1/"}'
@@ -194,11 +200,46 @@ Entities persisted and restored
         Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=102    date_from=${timestamp}    minimum=0    maximum=0
     END
 
+Entities send to cloud on restart
+    ${prefix}=    Get Random Name
+
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor2' '{"@type":"child-device","@id":"${prefix}plc1-sensor2","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/sensor1' '{"@type":"child-device","@id":"${prefix}plc2-sensor1","@parent":"factory/shop/plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"${prefix}plc1-metrics","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"${prefix}plc2-metrics","@parent":"factory/shop/plc2/"}'
+
+    External Identity Should Exist    ${prefix}plc1
+    External Identity Should Exist    ${prefix}plc2
+    External Identity Should Exist    ${prefix}plc1-sensor1
+    External Identity Should Exist    ${prefix}plc1-sensor2
+    External Identity Should Exist    ${prefix}plc2-sensor1
+    External Identity Should Exist    ${prefix}plc1-metrics
+    External Identity Should Exist    ${prefix}plc2-metrics
+
+    ${timestamp}=    Get Unix Timestamp
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+        
+    # Assert that entities are sent to cloud again
+    Should Have MQTT Messages    c8y/s/us    message_contains=101,${prefix}plc1    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us    message_contains=101,${prefix}plc2    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=101,${prefix}plc1-sensor1    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=101,${prefix}plc1-sensor2    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=101,${prefix}plc2-sensor1    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=102,${prefix}plc1-metrics    date_from=${timestamp}    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=102,${prefix}plc2-metrics    date_from=${timestamp}    minimum=1    maximum=1
 
 *** Keywords ***
 
 Re-enable Auto-registration
     Execute Command    sudo tedge config unset c8y.entity_store.auto_register
+    Restart Service    tedge-mapper-c8y
+
+Enable clean start
+    Execute Command    sudo tedge config set c8y.entity_store.clean_start true
     Restart Service    tedge-mapper-c8y
 
 Check Child Device

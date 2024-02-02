@@ -719,6 +719,7 @@ mod tests {
             dummy_external_id_validator,
             5,
             &temp_dir,
+            true,
         )
         .unwrap();
 
@@ -756,6 +757,7 @@ mod tests {
             dummy_external_id_validator,
             5,
             &temp_dir,
+            true,
         )
         .unwrap();
 

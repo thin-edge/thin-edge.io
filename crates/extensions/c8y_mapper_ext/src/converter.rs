@@ -262,6 +262,7 @@ impl CumulocityConverter {
             Self::validate_external_id,
             EARLY_MESSAGE_BUFFER_SIZE,
             config.state_dir.clone(),
+            config.clean_start,
         )
         .unwrap();
 
@@ -3161,6 +3162,7 @@ pub(crate) mod tests {
             auth_proxy_port,
             auth_proxy_protocol,
             MqttSchema::default(),
+            true,
             true,
         )
     }

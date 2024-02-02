@@ -450,6 +450,10 @@ define_tedge_config! {
             /// Enable auto registration feature
             #[tedge_config(example = "true", default(value = true))]
             auto_register: bool,
+
+            /// On a clean start, the whole state of the device, services and child-devices is resent to the cloud
+            #[tedge_config(example = "true", default(value = true))]
+            clean_start: bool,
         },
     },
 
