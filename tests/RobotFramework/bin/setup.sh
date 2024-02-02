@@ -19,10 +19,10 @@ if ! git lfs env >/dev/null 2>&1; then
     if command -V apt-get >/dev/null 2>&1; then
         curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
         sudo apt-get install -y --no-install-recommends git-lfs
-    elif command -V yum 2>/dev/null 2>&1; then
+    elif command -V yum >/dev/null 2>&1; then
         curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.rpm.sh | sudo bash
         sudo yum install -y git-lfs
-    elif command -V dnf 2>/dev/null 2>&1; then
+    elif command -V dnf >/dev/null 2>&1; then
         curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.rpm.sh | sudo bash
         sudo dnf install -y git-lfs
     elif  command -V brew >/dev/null 2>&1; then
