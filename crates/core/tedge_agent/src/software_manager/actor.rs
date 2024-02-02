@@ -107,7 +107,7 @@ impl Actor for SoftwareManagerActor {
             tokio::select! {
                 _ = self.handle_request(request, &mut plugins, &operation_logs) => {
                     if let Err(SoftwareManagerError::NotRunningLatestVersion) = Self::detect_self_update() {
-                        error!("Tedge-agent is no more running the latest-version => a restart is required");
+                        warn!("Tedge-agent is no more running the latest-version => a restart is required");
                         // Make sure the operation status is properly reported before the restart
                         tokio::time::sleep(Duration::from_secs(5)).await;
                         return Err(RuntimeError::ActorError(Box::new(SoftwareManagerError::NotRunningLatestVersion)));

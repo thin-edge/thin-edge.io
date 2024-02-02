@@ -1,7 +1,7 @@
 use crate::state_repository::error::StateError;
 use camino::Utf8PathBuf;
-use log::error;
 use log::info;
+use log::warn;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs::File;
@@ -36,7 +36,7 @@ impl<T: DeserializeOwned + Serialize> AgentStateRepository<T> {
                     state_dir
                 }
                 Err(err) => {
-                    error!("Cannot use {state_dir:?} to store tedge-agent state: {err}");
+                    warn!("Cannot use {state_dir:?} to store tedge-agent state: {err}");
                     agent_state_dir(tedge_root)
                 }
             };
