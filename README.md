@@ -1,6 +1,5 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 [![Discord Shield](https://discord.com/api/guilds/832211156520796171/widget.png?style=shield)](https://discord.gg/SvqWp6nrsK)
-[![Twitter Badge](https://img.shields.io/twitter/follow/thin_edge_io?style=social)](https://twitter.com/thin_edge_io)
 [![Build and Deploy to Github Pages](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml)
 [![integration-tests](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-tests.yml/badge.svg?event=merge_group)](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-tests.yml)
 [![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
@@ -89,7 +88,7 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE.txt) for more in
 
 Discord - [Join the thin-edge.io community now!](https://discord.gg/BXkVCbZk4a)
 
-Twitter - [@thin_edge_io](https://twitter.com/thin_edge_io)
+LinkedIn - [@thin_edge_io](https://www.linkedin.com/company/thin-edge/)
 
 Email - [info@thin-edge.io](mailto:info@thin-edge.io)
 
