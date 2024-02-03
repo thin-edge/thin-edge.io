@@ -4,6 +4,9 @@ hda = "hda"
 tegde = "tedge"
 OT = "OT"
 Robocorp = "Robocorp"
+Packagecloud = "Packagecloud"
+Gemfury = "Gemfury"
+JFrog = "JFrog"
 
 [files]
 extend-exclude = [
