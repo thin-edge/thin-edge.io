@@ -103,7 +103,7 @@ Update tedge version from base to current using Cumulocity
     Install Packages    /setup/base-version
     Execute Command    cd /setup && test -f ./bootstrap.sh && ./bootstrap.sh --no-install --no-secure
     Device Should Exist                      ${DEVICE_SN}
-    ${pid_before}=    Execute Command    pgrep tedge-agent    strip=${True}
+    ${pid_before}=    Service Should Be Running    tedge-agent
 
     # Upgrade to current version
     Create Local Repository
@@ -117,7 +117,7 @@ Update tedge version from base to current using Cumulocity
     ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
     ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
 
-    ${pid_after}=    Execute Command    pgrep tedge-agent    strip=${True}
+    ${pid_after}=    Service Should Be Running    tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}
 
 *** Keywords ***

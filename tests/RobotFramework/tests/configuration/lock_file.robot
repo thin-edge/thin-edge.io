@@ -18,8 +18,8 @@ Check lock file existence in default folder
 
 Check PID number in lock file
     [Documentation]    Include the pid inside the existing lock files under /run/lock/
-    ${pid_agent1}=    Execute Command    pgrep -f '^/usr/bin/tedge-agent'    strip=${True}
-    ${pid_mapper1}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'   strip=${True}
+    ${pid_agent1}=    Service Should Be Running    tedge-agent
+    ${pid_mapper1}=    Service Should Be Running    tedge-mapper-c8y
     ${pid_agent_lock1}=    Execute Command    cat /run/lock/tedge-agent.lock
     ${pid_mapper_lock1}=    Execute Command    cat /run/lock/tedge-mapper-c8y.lock
     Should Be Equal    ${pid_agent1}    ${pid_agent_lock1}
@@ -30,8 +30,8 @@ Check PID number in lock file after restarting the services
     ...  inside the existing lock files under /run/lock/
     Stop/Start Service    tedge-agent
     Stop/Start Service    tedge-mapper-c8y
-    ${pid_agent2}=    Execute Command    pgrep -f '^/usr/bin/tedge-agent'    strip=True
-    ${pid_mapper2}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+    ${pid_agent2}=    Service Should Be Running    tedge-agent
+    ${pid_mapper2}=    Service Should Be Running    tedge-mapper-c8y
     ${pid_agent_lock2}=    Execute Command    cat /run/lock/tedge-agent.lock
     ${pid_mapper_lock2}=    Execute Command    cat /run/lock/tedge-mapper-c8y.lock
     Should Be Equal    ${pid_agent2}    ${pid_agent_lock2}

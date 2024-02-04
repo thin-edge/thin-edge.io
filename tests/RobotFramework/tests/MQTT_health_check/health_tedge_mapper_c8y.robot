@@ -28,14 +28,14 @@ Start watchdog service
 
     Sleep    10s
 Check PID of tedge-mapper
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+    ${pid}=    Service Should Be Running    tedge-mapper-c8y
     Set Suite Variable    ${pid}
 
 Kill the PID
     Kill Process    ${pid}
 
 Recheck PID of tedge-mapper
-    ${pid1}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+    ${pid1}=    Service Should Be Running    tedge-mapper-c8y
     Set Suite Variable    ${pid1}
 
 Compare PID change
@@ -56,10 +56,10 @@ Watchdog does not kill mapper if it responds
     Execute Command    sudo systemctl start tedge-mapper-c8y.service
     Execute Command    sudo systemctl start tedge-watchdog.service
 
-    ${pid_before_healthcheck}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+    ${pid_before_healthcheck}=    Service Should Be Running    tedge-mapper-c8y
     # The watchdog should send a health check command while we wait
     Sleep    10s
-    ${pid_after_healthcheck}=     Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+    ${pid_after_healthcheck}=    Service Should Be Running    tedge-mapper-c8y
 
     Should Have MQTT Messages     topic=te/device/main/service/tedge-mapper-c8y/cmd/health/check    minimum=1
     Should Be Equal               ${pid_before_healthcheck}    ${pid_after_healthcheck}

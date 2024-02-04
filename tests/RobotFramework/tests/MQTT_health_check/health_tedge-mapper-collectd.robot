@@ -28,14 +28,14 @@ Start watchdog service
     Sleep    10s
 
 Check PID of tedge-mapper-collectd
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper collectd'    strip=${True}
+    ${pid}=    Service Should Be Running    tedge-mapper-collectd
     Set Suite Variable    ${pid}
 
 Kill the PID
     Kill Process    ${pid}
 
 Recheck PID of tedge-mapper-collectd
-    ${pid1}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper collectd'    strip=${True}
+    ${pid1}=    Service Should Be Running    tedge-mapper-collectd
     Set Suite Variable    ${pid1}
 
 Compare PID change
@@ -52,7 +52,7 @@ tedge-collectd-mapper health status
     Execute Command    sudo systemctl start tedge-mapper-collectd.service
 
     Sleep    5s     reason=It fails without this! It needs a better way of queuing requests
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper collectd'    strip=${True}
+    ${pid}=    Service Should Be Running    tedge-mapper-collectd
     Execute Command    sudo tedge mqtt pub 'te/device/main/service/tedge-mapper-collectd/cmd/health/check' ''
     ${messages}=    Should Have MQTT Messages    te/device/main/service/tedge-mapper-collectd/status/health    minimum=1    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}

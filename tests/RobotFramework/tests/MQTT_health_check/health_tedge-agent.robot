@@ -28,14 +28,14 @@ Start watchdog service
     Sleep    10s
 
 Check PID of tedge-mapper
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-agent'    strip=${True}
+    ${pid}=    Service Should Be Running    tedge-agent
     Set Suite Variable    ${pid}
 
 Kill the PID
     Kill Process    ${pid}
 
 Recheck PID of tedge-agent
-    ${pid1}=    Execute Command    pgrep -f '^/usr/bin/tedge-agent'    strip=${True}
+    ${pid1}=    Service Should Be Running    tedge-agent
     Set Suite Variable    ${pid1}
 
 Compare PID change
