@@ -41,4 +41,9 @@ If the connection check receives a message containing `200` (status success), th
 
 The connection test sends the empty string only once.
 
+### For AWS IoT
 
+The test subscribes to the topic `aws/connection-success`.
+It publishes an empty string to the topic `aws/test-connection`.
+
+If the connection check receives an empty message on the `aws/connection-success` topic, then the test is marked successful.
