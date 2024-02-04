@@ -371,7 +371,8 @@ sudo tedge connect c8y
 1. Go to Cumulocity IoT
 2. Click `All devices` in the Devices menu, select the desired device from the device list and open its Software tab.
 
-  The Software tab shows a list of all available software installed on the device. If a given software has a type, it will be displayed next to its name. It is possible to search for a particular software by its name or filter the list by software type.
+    The Software tab shows a list of all available software installed on the device. If a given software has a type, it will be displayed next to its name. It is possible to search for a particular software by its name or filter the list by software type.
+
 3. Click on `Install software`, on the bottom of the page
 4. Find/select the software which was added to the repository in the previous step.
 5. Select the right version and click on `install`
