@@ -22,8 +22,8 @@ Check PID number in lock file
     ${pid_mapper1}=    Service Should Be Running    tedge-mapper-c8y
     ${pid_agent_lock1}=    Execute Command    cat /run/lock/tedge-agent.lock
     ${pid_mapper_lock1}=    Execute Command    cat /run/lock/tedge-mapper-c8y.lock
-    Should Be Equal    ${pid_agent1}    ${pid_agent_lock1}
-    Should Be Equal    ${pid_mapper1}    ${pid_mapper_lock1}
+    Should Be Equal As Integers    ${pid_agent1}    ${pid_agent_lock1}
+    Should Be Equal As Integers    ${pid_mapper1}    ${pid_mapper_lock1}
 
 Check PID number in lock file after restarting the services
     [Documentation]    Include the new pid generated after service restart 
@@ -34,8 +34,8 @@ Check PID number in lock file after restarting the services
     ${pid_mapper2}=    Service Should Be Running    tedge-mapper-c8y
     ${pid_agent_lock2}=    Execute Command    cat /run/lock/tedge-agent.lock
     ${pid_mapper_lock2}=    Execute Command    cat /run/lock/tedge-mapper-c8y.lock
-    Should Be Equal    ${pid_agent2}    ${pid_agent_lock2}
-    Should Be Equal    ${pid_mapper2}    ${pid_mapper_lock2}
+    Should Be Equal As Integers    ${pid_agent2}    ${pid_agent_lock2}
+    Should Be Equal As Integers    ${pid_mapper2}    ${pid_mapper_lock2}
 
 Check starting same service twice
     [Documentation]    This step is checking if same service can be started twice, 
