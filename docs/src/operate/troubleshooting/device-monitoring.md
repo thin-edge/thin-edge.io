@@ -26,7 +26,7 @@ sudo systemctl start collectd
 tedge mqtt sub 'collectd/#'
 ```
 
-If no metrics are collected, please check the [MQTT configuration](../../start/device-monitoring.md#collectdconf)
+If no metrics are collected, please check the [MQTT configuration](../../start/device-monitoring.md#collectd-configuration)
 
 :::note
 The `collectd.conf` file included with %%te%% is configured for conservative interval times, e.g. 10 mins to 1 hour depending on the metric. This is done so that the metrics don't consume unnecessary IoT resources both on the device and in the cloud. If you want to push the metrics more frequently then you will have to adjust the `Interval` settings either globally or on the individual plugins. Make sure you restart the collectd service after making any changes to the configuration.
