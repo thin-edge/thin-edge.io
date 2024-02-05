@@ -94,9 +94,9 @@ For other installation possibilities check out the [just documentation](https://
     This step is critical as it will enable you to connect via SSH to your device to perform tasks such as onboarding! If you don't set your ssh public key in the authorized keys, you then need to connect your device to a monitor/display and keyboard in order to perform the onboarding.
     :::
 
-4. Optional: Add Wifi ssid/password - only required for the initial flashing of the device
+4. Optional: Add Wifi ssid/password
 
-    If your device does not have an ethernet adapter, or you the device to connect to a Wifi network for onboarding, then you will have to add the Wifi credentials to the `.env` file.
+    If your device does not have an ethernet adapter, or if you want to connect the device to a Wifi network for onboarding, then you will have to add the Wifi credentials to the `.env` file.
 
     Below shows the environment variables that should be added to the `.env` file.
 
