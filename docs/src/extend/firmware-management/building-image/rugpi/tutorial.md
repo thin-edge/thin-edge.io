@@ -214,17 +214,6 @@ INFO[0000] mountType: virtiofs
 INFO[0000] socket: unix:///Users/johnsmith/.colima/default/docker.sock
 ```
 
-
-### Permission denied error caused by xz
-
-Try running the command with sudo. On some systems sudo is required to properly create the compressed xz file.
-
-For example, the `build-all` task can be called with sudo:
-
-```sh
-sudo just IMAGE_ARCH=arm64 PROFILE=default VARIANT=pi45 build-all
-```
-
 ### Raspberry Pi 4 image selection
 
 Raspberry Pi 4 devices need to have their (EEPROM) firmware updated before the OTA updates can be issued. This is because the initial Raspberry Pi 4's were released without the [tryboot feature](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#fail-safe-os-updates-tryboot). The tryboot feature is used by Rugpi to provide the reliable partition switching between the A/B partitions. Raspberry Pi 5's have support for tryboot out of the box, so they do not require a EEPROM upgrade.
