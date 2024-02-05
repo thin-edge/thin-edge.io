@@ -126,7 +126,7 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
     Should Have MQTT Messages    te/device/offlinechild1///cmd/restart/+
 
 Early data messages cached and processed
-    [Teardown]    Re-enable Auto-registration
+    [Teardown]    Re-enable auto-registration and collect logs
     ${timestamp}=        Get Unix Timestamp
     ${prefix}=    Get Random Name
     Execute Command    sudo tedge config set c8y.entity_store.auto_register false
@@ -157,7 +157,7 @@ Early data messages cached and processed
 
 
 Entities persisted and restored
-    [Teardown]    Enable clean start
+    [Teardown]    Enable clean start and collect logs
     Execute Command    sudo tedge config set c8y.entity_store.clean_start false
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y
@@ -234,13 +234,17 @@ Entities send to cloud on restart
 
 *** Keywords ***
 
-Re-enable Auto-registration
+Re-enable auto-registration and collect logs
+    [Teardown]    Get Logs    ${DEVICE_SN}
     Execute Command    sudo tedge config unset c8y.entity_store.auto_register
     Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
 
-Enable clean start
+Enable clean start and collect logs
+    [Teardown]    Get Logs    ${DEVICE_SN}
     Execute Command    sudo tedge config set c8y.entity_store.clean_start true
     Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
 
 Check Child Device
     [Arguments]    ${parent_sn}    ${child_sn}    ${child_name}    ${child_type}
