@@ -13,7 +13,7 @@ and can proactively initiate actions in case the device seems to malfunction.
 Additionally, the metrics can be used to help the customer troubleshoot when problems with the device are reported.
 
 %%te%% uses the open source component [collectd](https://collectd.org/) to collect the metrics from the device.
-%%te%% translates the collectd metrics from their native format to the [%%te%% JSON](../understand/thin-edge-json.md) format
+%%te%% translates the `collectd` metrics from their native format to the [%%te%% JSON](../understand/thin-edge-json.md) format
 and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
 ![device monitoring with collectd](images/collectd-metrics.png)
@@ -55,7 +55,7 @@ Details about collectd plugins and their configuration can be viewed directly fr
 However keep in mind the following points when editing the file:
 
 1. __MQTT must be enabled__.
-   * %%te%% expects the collectd metrics to be published on the local MQTT bus.
+   * %%te%% expects the `collectd` metrics to be published on the local MQTT bus.
      Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.5.shtml#plugin_mqtt).
    * The MQTT plugin is available on most distribution of `collectd`, but this is not the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
@@ -113,7 +113,7 @@ However keep in mind the following points when editing the file:
 The `tedge-mapper-collectd` service subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
 and emits the translated measurements in %%te%% JSON format to the **measurements** topic.
 
-The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name. You can inspect the collectd messages using the following commands:
+The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name. You can inspect the `collectd` messages using the following commands:
 
 ```sh te2mqtt formats=v1
 tedge mqtt sub 'collectd/#'
@@ -127,7 +127,7 @@ tedge mqtt sub 'collectd/#'
 [collectd/raspberrypi/memory/percent-used] 1623076680.159:1.10760866126707
 ```
 
-The `tedge-mapper-collectd` translates these collectd measurements into the [%%te%% JSON](../understand/thin-edge-json.md) format,
+The `tedge-mapper-collectd` translates these `collectd` metrics into the [%%te%% JSON](../understand/thin-edge-json.md) format,
 [grouping the measurements](../references/mappers/mqtt-topics.md#collectd-topics) emitted by each plugin:
 
 ```sh te2mqtt formats=v1
