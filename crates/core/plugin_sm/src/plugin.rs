@@ -554,5 +554,17 @@ fn sm_path(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Pat
         filename.push_str(version.as_str());
     }
 
-    target_dir_path.as_ref().join(filename)
+    target_dir_path.as_ref().join(sanitize_filename(&filename))
+}
+
+fn sanitize_filename(filename: &str) -> String {
+    let mut result = String::new();
+    filename.chars().for_each(|c| {
+        if matches!(c as u8, b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' |  b'-' | b'.' | b'_' | b'~') {
+            result.push(c)
+        } else {
+            result.push_str(&format!("%{:x?}", c as u8))
+        }
+    });
+    result
 }
