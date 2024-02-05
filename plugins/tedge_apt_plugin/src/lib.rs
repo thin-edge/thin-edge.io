@@ -290,6 +290,7 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
     let args: Vec<&str> = args.split_whitespace().collect();
     let status = Command::new(cmd)
         .args(args)
+        .env("DEBIAN_FRONTEND", "noninteractive")
         .stdin(Stdio::null())
         .status()
         .map_err(|err| InternalError::exec_error(cmd, err))?;
