@@ -105,11 +105,11 @@ For other installation possibilities check out the [just documentation](https://
     SECRETS_WIFI_PASSWORD=yoursecurepassword
     ```
 
-    **Note**
-
+    :::tip
     The Wifi credentials only need to be included in the image that is flashed to the SD card. Subsequent images don't need to included the Wifi credentials, as the network connection configuration files are persisted across images.
 
     If an image has Wifi credentials baked in, then you should not make this image public, as it would expose your credentials! 
+    :::
 
     
 
