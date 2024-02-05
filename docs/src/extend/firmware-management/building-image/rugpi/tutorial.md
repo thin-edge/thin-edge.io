@@ -80,14 +80,12 @@ For other installation possibilities check out the [just documentation](https://
 
 3. Add your public ssh key to the `.env` file
 
-    Adding public SSH keys to the project will allow you to access after the image is flashed to the device (which is critical for the onboarding process). The SSH keys are provided in the form of environment variables where the variable names start with `SSH_KEY_<description>`.
+    Adding public SSH keys to the project will allow you to access after the image is flashed to the device (which is critical for the onboarding process). The SSH keys are provided in the form of environment variables where the variable names start with `SSH_KEY_<description>` and are added to the authorized keys for the root user, e.g. `/root/.ssh/authorized_keys`.
 
     For example:
 
     ```
     SSH_KEYS_bootstrap="ssh-rsa xxxxxxx"
-    SSH_KEYS_user2="ssh-rsa xxxxxxx"
-    SSH_KEYS_user3="ssh-rsa xxxxxxx"
     ```
 
     :::tip
