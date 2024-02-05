@@ -1,51 +1,20 @@
 ---
-title: Configuration Tools
+title: Configuration Overriding
 tags: [Operate, Configuration]
 description: Customizing %%te%% settings
 ---
 
-## Overview
+## Configuration Path
 
-%%te%% can be configured in a few different ways:
+`/etc/tedge/tedge.toml` is the default location for %%te%% configuration.
 
-1. The `tedge config` command ([reference here](../../references/cli/tedge-config.md))
-2. The `tedge.toml` file
-3. Environment variables
+This can be changed by passing an explicit `--config-dir` to all the %%te%% command invocations.
 
-The following sections detail each of the configuration methods.
-
-## tedge config command
-
-To set a value in `tedge.toml` using the `tedge` CLI, you can run:
+For instance, the following uses `/tmp/tedge.toml` to set the `c8y.url` and launch the Cumulocity mapper.
 
 ```sh
-sudo tedge config set c8y.url mytenant.cumulocity.com
-```
-
-The command will set the Cumulocity tenant URL (`c8y.url`) to `mytenant.cumulocity.com` and write the result to [`/etc/tedge/tedge.toml`](#tedgetoml).
-
-To read the value, run:
-
-```sh
-tedge config get c8y.url
-```
-
-```text title="Output"
-mytenant.cumulocity.com
-```
-
-## tedge.toml
-
-`/etc/tedge/tedge.toml` is the file `tedge config` writes to when making a configuration change. As the name suggests, this should be in the [toml format](https://toml.io/).
-
-The Cumulocity tenant URL and MQTT bind address can be set by the following configuration:
-
-```toml title="file: /etc/tedge/tedge.toml"
-[c8y]
-url = "mytenant.cumulocity.com"
-
-[mqtt]
-bind_address = "127.0.0.1"
+tedge --config-dir /tmp config set c8y.url mytenant.cumulocity.com
+tedge-mapper --config-dir /tmp c8y
 ```
 
 ## Environment variables
@@ -92,9 +61,12 @@ env TEDGE_C8Y_URL=example.com tedge config get
 example.com
 ```
 
-## Unrecognised configurations
+## User-specific Configurations
 
-When tedge commands (`tedge`, `tedge-agent`, `tedge-mapper`) detect a configuration setting they don't recognise, they will emit a warning log message[^1]:
+The `/etc/tedge/tedge.toml` file can include extra settings used by user-specific plugins.
+
+When the %%te%% commands (`tedge`, `tedge-agent`, `tedge-mapper`) detect a configuration setting they don't recognise,
+they will emit a warning log message:
 
 ```sh
 env TEDGE_C8Y_UNKNOWN_CONFIGURATION=test tedge config get c8y.url
@@ -104,5 +76,3 @@ env TEDGE_C8Y_UNKNOWN_CONFIGURATION=test tedge config get c8y.url
 2023-03-22 WARN tedge_config: Unknown configuration field "c8y.unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
 mytenant.cumulocity.com
 ```
-
-[^1]: The log preamble has been abbreviated to aid readability here
