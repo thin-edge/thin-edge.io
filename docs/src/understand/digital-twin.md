@@ -58,7 +58,7 @@ This is usually, but not necessarily, the gateway device where %%te%% is running
 
 A child device is a device that is attached to the equipment.
 A child device can have further nested child devices as well,
-forming a hierarchy, with the main device as root and the services as leafs,
+forming a hierarchy, with the main device as root and the services as leaves,
 zooming in from the piece of equipment into its parts.
 
 ### Device Profile
