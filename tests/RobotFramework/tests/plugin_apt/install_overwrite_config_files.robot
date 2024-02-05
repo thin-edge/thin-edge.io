@@ -3,21 +3,26 @@ Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
 
-Suite Setup         Custom Setup
-Test Teardown       Custom Teardown
+Test Setup         Custom Setup
+Test Teardown       Get Logs
 
 Test Tags           theme:software    theme:plugins
+
 
 *** Test Cases ***
 Install packages without overwriting config files
     Execute Command    tedge config set apt.dpk.options.config keepold
     # install package v1
-    Execute Command   /etc/tedge/sm-plugins/apt install sampledeb --file /setup/sampledeb_1.0.0_all.deb
+    ${OPERATION}=    Install Software    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}
+    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+
     # Modify the config file
     Execute Command    echo "Updated the config" | sudo tee -a /etc/sampledeb.cfg
 
     # install package v2
-    Execute Command   /etc/tedge/sm-plugins/apt install sampledeb --file /setup/sampledeb_2.0.0_all.deb
+    ${OPERATION}=    Install Software    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}
+    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+
     # Assert to make sure installation of newer version did not update the config file
     ${output}=    Execute Command    cat /etc/sampledeb.cfg
     Should Contain    ${output}    conf 1.0
@@ -26,23 +31,28 @@ Install packages without overwriting config files
 Install packages overwrite config files
     Execute Command    tedge config set apt.dpk.options.config keepnew
     # install package v1
-    Execute Command   /etc/tedge/sm-plugins/apt install sampledeb --file /setup/sampledeb_1.0.0_all.deb
+    ${OPERATION}=    Install Software    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}
+    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+
     # Modify the config file
     Execute Command    echo "Updated the config" | sudo tee -a /etc/sampledeb.cfg
 
     # install package v2
-    Execute Command   /etc/tedge/sm-plugins/apt install sampledeb --file /setup/sampledeb_2.0.0_all.deb
+    ${OPERATION}=    Install Software    {"name": "sampledeb", "version": "2.0.0", "softwareType": "apt", "url": "${FILE_URL_2}"}
+    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+
     # Assert to make sure installation of newer version did not update the config file
     ${output}=    Execute Command    cat /etc/sampledeb.cfg
     Should Contain    ${output}    conf 2.0
 
+
 *** Keywords ***
 Custom Setup
-    Setup
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/sampledeb_1.0.0_all.deb     /setup/sampledeb_1.0.0_all.deb
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/sampledeb_2.0.0_all.deb     /setup/sampledeb_2.0.0_all.deb
+    ${DEVICE_SN}=    Setup
+    Device Should Exist    ${DEVICE_SN}
 
-Custom Teardown
-    Get Logs
-    ThinEdgeIO.Remove Package Using APT    sampledeb
-    Execute Command   rm /etc/sampledeb.cfg
+    ${FILE_URL_1}=    Cumulocity.Create Inventory Binary    sampledeb    package    file=${CURDIR}/sampledeb_1.0.0_all.deb
+    Set Test Variable    $FILE_URL_1
+
+    ${FILE_URL_2}=    Cumulocity.Create Inventory Binary    sampledeb    package    file=${CURDIR}/sampledeb_2.0.0_all.deb
+    Set Test Variable    $FILE_URL_2

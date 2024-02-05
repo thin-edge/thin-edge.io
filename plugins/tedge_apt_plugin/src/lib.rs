@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use tedge_config::AptConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
@@ -138,36 +139,16 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             let (installer, _metadata) = get_installer(module, version, file_path)?;
-
-            if let Some(config) = get_config(apt.config_dir) {
-                match config.apt.dpk.options.config {
-                    tedge_config::AptConfig::KeepOld => run_cmd(
-                        "apt-get",
-                        &format!(" --quiet --yes -o DPkg::Options::=--force-confold  install --allow-downgrades {}", installer),
-                    )?,
-                    tedge_config::AptConfig::KeepNew => run_cmd(
-                        "apt-get",
-                        &format!(" --quiet --yes -o DPkg::Options::=--force-confnew install --allow-downgrades {}", installer),
-                    )?,
-                }
-            } else {
-                run_cmd(
-                    "apt-get",
-                    &format!("install -o DPkg::Options::=\"--force-confnew\" --quiet --yes --allow-downgrades {}", installer),
-                )?
-            }
+            let dpk_option = get_dpk_option(apt.config_dir);
+            AptGetCmd::Install(dpk_option, vec![installer]).run()?
         }
 
         PluginOp::Remove { module, version } => {
-            if let Some(version) = version {
-                // check the version mentioned present or not
-                run_cmd(
-                    "apt-get",
-                    &format!("remove --quiet --yes {}={}", module, version),
-                )?
-            } else {
-                run_cmd("apt-get", &format!("remove --quiet --yes {}", module))?
-            }
+            let package = match version {
+                None => module,
+                Some(version) => format!("{}={}", module, version),
+            };
+            AptGetCmd::Remove(package).run()?
         }
 
         PluginOp::UpdateList => {
@@ -183,7 +164,9 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
             // Maintaining this metadata list to keep the debian package symlinks until the installation is complete,
             // which will get cleaned up once it goes out of scope after this block
             let mut metadata_vec = Vec::new();
-            let mut args: Vec<String> = vec!["install".into(), "--quiet".into(), "--yes".into()];
+            let mut args: Vec<String> = Vec::new();
+            let dpk_option = get_dpk_option(apt.config_dir);
+
             for update_module in updates {
                 match update_module.action {
                     UpdateAction::Install => {
@@ -206,20 +189,12 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
                     }
                 };
             }
-
-            println!("apt-get install args: {:?}", args);
-            let status = Command::new("apt-get")
-                .args(args)
-                .stdin(Stdio::null())
-                .status()
-                .map_err(|err| InternalError::exec_error("apt-get", err))?;
-
-            return Ok(status);
+            AptGetCmd::Install(dpk_option, args).run()?
         }
 
-        PluginOp::Prepare => run_cmd("apt-get", "update --quiet --yes")?,
+        PluginOp::Prepare => AptGetCmd::Update.run()?,
 
-        PluginOp::Finalize => run_cmd("apt-get", "auto-remove --quiet --yes")?,
+        PluginOp::Finalize => AptGetCmd::AutoRemove.run()?,
     };
 
     Ok(status)
@@ -286,15 +261,61 @@ fn validate_version(module_name: &str, module_version: &str) -> Result<(), Inter
     Ok(())
 }
 
-fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
-    let args: Vec<&str> = args.split_whitespace().collect();
-    let status = Command::new(cmd)
-        .args(args)
-        .env("DEBIAN_FRONTEND", "noninteractive")
-        .stdin(Stdio::null())
-        .status()
-        .map_err(|err| InternalError::exec_error(cmd, err))?;
-    Ok(status)
+enum AptGetCmd {
+    Install(AptConfig, Vec<String>),
+    Remove(String),
+    Update,
+    AutoRemove,
+}
+
+impl AptGetCmd {
+    fn run(&self) -> Result<ExitStatus, InternalError> {
+        let mut cmd = Command::new("apt-get");
+        // Keep all common options here
+        cmd.args(["--quiet", "--yes"]);
+
+        match self {
+            AptGetCmd::Install(dpk_option, packages) => {
+                let config_option = match dpk_option {
+                    AptConfig::KeepOld => "DPkg::Options::=--force-confold",
+                    AptConfig::KeepNew => "DPkg::Options::=--force-confnew",
+                };
+                cmd.args([
+                    "-o",
+                    config_option,
+                    "install",
+                    "--allow-downgrades",
+                    "--no-install-recommends",
+                ])
+                .args(packages);
+            }
+            AptGetCmd::Remove(package) => {
+                cmd.args(["remove", package]);
+            }
+            AptGetCmd::Update => {
+                cmd.arg("update");
+            }
+            AptGetCmd::AutoRemove => {
+                cmd.arg("autoremove");
+            }
+        }
+
+        println!("Executing command: {cmd:?}");
+        let status = cmd
+            .env("DEBIAN_FRONTEND", "noninteractive")
+            .stdin(Stdio::null())
+            .status()
+            .map_err(|err| InternalError::exec_error(format!("{cmd:?}"), err))?;
+
+        Ok(status)
+    }
+}
+
+fn get_dpk_option(config_dir: PathBuf) -> AptConfig {
+    match get_config(config_dir) {
+        None => AptConfig::KeepNew,
+        Some(config) => config.apt.dpk.options.config.clone(),
+    }
 }
 
 fn get_name_and_version(line: &str) -> (&str, &str) {
