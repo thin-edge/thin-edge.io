@@ -237,35 +237,18 @@ When you go to events (`Device management` &rarr; `your device` &rarr; `events`)
 
 With %%te%% device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity IoT.
 
-%%te%% uses the open source component `collectd` to collect the metrics from the device. %%te%% translates the `collected` metrics from their native format to the %%te%% JSON format and then into the cloud-vendor-specific format.
+Device monitoring can be enabled by installing a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
 
-Enabling monitoring on your device is a 3-steps process:
-
-- Install collectd
-- Configure collectd
-- Enable %%te%% monitoring
-
-### Install collectd
-
-Because %%te%% uses the MQTT plugin of collectd, installation of the Mosquitto client library (either mosquitto-clients or libmosquitto1) is required.
-
-```sh title="Option 1: (Recommended)"
-sudo apt-get install --no-install-recommends collectd-core mosquitto-clients
+```sh tab={"label":"Debian/Ubuntu"}
+sudo apt-get install tedge-collectd-setup
 ```
 
-```sh title="Option 2"
-sudo apt-get install --no-install-recommends collectd-core libmosquitto1
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+sudo dnf install tedge-collectd-setup
 ```
 
-### Configure collectd
-
-%%te%% provides a basic collectd configuration that can be used to collect CPU, memory and disk metrics.
-
-Simply copy the file to the main collectd configuration file and restart the daemon.
-
-```sh
-sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
-sudo systemctl restart collectd
+```sh tab={"label":"Alpine"}
+sudo apk add tedge-collectd-setup
 ```
 
 What you should see by now is that data arrives on the `collectd/#` topics. You can check that via:
@@ -283,16 +266,13 @@ INFO: Connected
 [collectd/raspberrypi/cpu/percent-active] 1667205184.398:1.52284263959391
 ```
 
-### Enable Collectd
+:::note
+The default collectd settings, `/etc/collectd/collectd.conf`, use conservative interval times, e.g. 10 mins to 1 hour depending on the metric. This is done so that the metrics don't consume unnecessary IoT resources both on the device and in the cloud. If you want to push the metrics more frequently then you will have to adjust the `Interval` settings either globally or on the individual plugins. Make sure you restart the collectd service after making any changes to the configuration.
+:::
 
-To enable monitoring on your device, you have to launch the `tedge-mapper-collectd daemon` process. This process collects the data from the `collectd/#` topics and translates them to the tedge payloads on the `c8y/#` topics.
+The `tedge-mapper-collectd` service subscribes to the `collectd/#` topics and translates them to the tedge payloads, then the respective cloud mappers will translate the %%te%% messages to the format dictated by each cloud.
 
-```sh
-sudo systemctl enable tedge-mapper-collectd
-sudo systemctl start tedge-mapper-collectd
-```
-
-You can inspect the collected and translated metrics, by subscribing to these topics:
+As an example, you can inspect the Cumulocity IoT translated metrics using the following command:
 
 ```sh te2mqtt formats=v1
 tedge mqtt sub 'c8y/#'
@@ -307,7 +287,6 @@ INFO: Connected
 [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:46.398000001Z","memory":{"percent-used":{"value":4.87024847292786}},"cpu":{"percent-active":{"value":0.759493670886076}}}
 [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:47.398000001Z","memory":{"percent-used":{"value":4.87024847292786}},"cpu":{"percent-active":{"value":2.01005025125628}}}
 [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:48.398000001Z","memory":{"percent-used":{"value":4.87004496506279}},"cpu":{"percent-active":{"value":0.254452926208651}}}
-
 ```
 
 The monitoring data will appear in Cumulocity IoT on the device in the measurement section.
@@ -316,8 +295,7 @@ The monitoring data will appear in Cumulocity IoT on the device in the measureme
 
 ### Edit Collectd
 
-
-To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity IoT. In Step 6 is explained how to do that.
+To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity IoT, and [step 6](#change-collectd-configuration) explains how to do it.
 
 
 ## Step 5 Add software management
@@ -435,7 +413,7 @@ In this tutorial the last option is explained, there are some steps to be taken:
 
 ![Change Configuration](./images/ChangeConfiguration.png)
 
-### Change collectd configuration file via Cumulocity IoT.
+### Change collectd configuration file via Cumulocity IoT {#change-collectd-configuration}
 
 To change the collectd metrics of the device, which are displayed in Cumulocity IoT, the next steps are needed. These are similar to the steps in the previous paragraphs.
 

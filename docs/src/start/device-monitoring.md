@@ -12,65 +12,50 @@ Using these metrics, you can monitor the health of devices
 and can proactively initiate actions in case the device seems to malfunction.
 Additionally, the metrics can be used to help the customer troubleshoot when problems with the device are reported.
 
-%%te%% uses the open source component [`collectd`](https://collectd.org/) to collect the metrics from the device.
-%%te%% translates the collected metrics from their native format to the [%%te%% JSON](../understand/thin-edge-json.md) format
+%%te%% uses the open source component [collectd](https://collectd.org/) to collect the metrics from the device.
+%%te%% translates the `collectd` metrics from their native format to the [%%te%% JSON](../understand/thin-edge-json.md) format
 and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
-Enabling monitoring on your device is a 3-steps process:
-1. [Install `collectd`](#install-collectd),
-2. [Configure `collectd`](#configure-collectd),
-3. [Enable %%te%% monitoring](#enable-thin-edge-monitoring).
+![device monitoring with collectd](images/collectd-metrics.png)
 
-## Install collectd
+## Install
 
-Device monitoring is not enabled by default when you install %%te%%.
-You will have to install and configure [`collectd`](https://collectd.org/) first.
+Device monitoring is not enabled by default, however it can be enabled using a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
 
-To install collectd, follow the [collectd installation process](https://collectd.org/download.shtml)
-that is specific to your device. On a Debian or Ubuntu linux:
-
-```sh title="Option 1: (Recommended)"
-sudo apt-get install --no-install-recommends collectd-core mosquitto-clients
+```sh tab={"label":"Debian/Ubuntu"}
+sudo apt-get install tedge-collectd-setup
 ```
 
-```sh title="Option 2"
-sudo apt-get install --no-install-recommends collectd-core libmosquitto1
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+sudo dnf install tedge-collectd-setup
+```
+
+```sh tab={"label":"Alpine"}
+sudo apk add tedge-collectd-setup
 ```
 
 :::note
-Either `mosquitto-clients` or `libmosquitto1` package is required as %%te%% makes use of the MQTT plugin of `collectd` which enables collectd to publish its metrics via the local MQTT broker where %%te%% is able to process the messages.
+The default collectd settings, `/etc/collectd/collectd.conf`, use conservative interval times, e.g. 10 mins to 1 hour depending on the metric. This is done so that the metrics don't consume unnecessary IoT resources both on the device and in the cloud. If you want to push the metrics more frequently then you will have to adjust the `Interval` settings either globally or on the individual plugins. Make sure you restart the collectd service after making any changes to the configuration.
 :::
 
-## Configure collectd
+## Background
 
-### TLDR; Just want it running
+The following sections provide information about further customizing the collectd settings and give some background about how the collectd messages are processed by the **tedge-mapper-collectd** service.
 
-%%te%% provides a [basic `collectd` configuration](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/contrib/collectd/collectd.conf)
-that can be used to collect cpu, memory and disk metrics.
+### collectd configuration {#collectd-configuration}
 
-Simply copy that file to the main collectd configuration file and restart the daemon
-(it might be good to keep a copy of the original configuration).
+You can further customize the default collectd configuration by editing the following file:
 
 ```sh
-sudo cp /etc/collectd/collectd.conf /etc/collectd/collectd.conf.backup
-sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
-sudo systemctl restart collectd
+/etc/collectd/collectd.conf
 ```
 
-:::note
-The `collectd.conf` file included with %%te%% is configured for conservative interval times, e.g. 10 mins to 1 hour depending on the metric. This is done so that the metrics don't consume unnecessary IoT resources both on the device and in the cloud. If you want to push the metrics more frequently then you will have to adjust the `Interval` settings either globally or on the individual plugins. Make sure you restart the collectd service after making any changes to the configuration.
-:::
+Details about collectd plugins and their configuration can be viewed directly from the [collectd documentation](https://collectd.org/documentation/manpages/collectd.conf.5.shtml).
 
-### Collectd.conf
+However keep in mind the following points when editing the file:
 
-Unless you opted for the [minimal test configuration provided with %%te%%](#tldr-just-want-it-running),
-you will have to update the
-[`collectd.conf` configuration file](https://collectd.org/documentation/manpages/collectd.conf.5.shtml)
-(usually located at `/etc/collectd/collectd.conf`)
-
-__Important notes__ You can enable or disable the collectd plugins of your choice, but with some notable exceptions:
 1. __MQTT must be enabled__.
-   * %%te%% expects the collectd metrics to be published on the local MQTT bus.
+   * %%te%% expects the `collectd` metrics to be published on the local MQTT bus.
      Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.5.shtml#plugin_mqtt).
    * The MQTT plugin is available on most distribution of `collectd`, but this is not the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
@@ -123,20 +108,12 @@ __Important notes__ You can enable or disable the collectd plugins of your choic
       </Chain>
       ```
 
-## Enable %%te%% monitoring {#enable}
+### tedge-mapper-collectd
 
-To enable monitoring on your device, you have to launch the `tedge-mapper-collectd` daemon process.
-
-```sh
-sudo systemctl enable tedge-mapper-collectd
-sudo systemctl start tedge-mapper-collectd
-```
-
-This process subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
+The `tedge-mapper-collectd` service subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
 and emits the translated measurements in %%te%% JSON format to the **measurements** topic.
-You can inspect the collected and translated metrics, by subscribing to these topics:
 
-The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name:
+The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name. You can inspect the `collectd` messages using the following commands:
 
 ```sh te2mqtt formats=v1
 tedge mqtt sub 'collectd/#'
@@ -150,7 +127,7 @@ tedge mqtt sub 'collectd/#'
 [collectd/raspberrypi/memory/percent-used] 1623076680.159:1.10760866126707
 ```
 
-The `tedge-mapper-collectd` translates these collectd measurements into the [%%te%% JSON](../understand/thin-edge-json.md) format,
+The `tedge-mapper-collectd` translates these `collectd` metrics into the [%%te%% JSON](../understand/thin-edge-json.md) format,
 [grouping the measurements](../references/mappers/mqtt-topics.md#collectd-topics) emitted by each plugin:
 
 ```sh te2mqtt formats=v1
@@ -174,11 +151,6 @@ tedge mqtt sub 'c8y/#'
 [c8y/measurement/measurements/create] {"type": "ThinEdgeMeasurement","time":"2021-06-07T15:40:31.154898577+01:00","cpu":{"percent-active": {"value": 0.5}},"memory":{"percent-used": {"value": 1.16608109197519}}}
 ```
 
-If your device is not connected yet one of the following guides:
-* [Connect my device to Cumulocity IoT](./connect-c8y.md)
-* [Connect my device to Azure IoT](./connect-azure.md)
-* [Connect my device to AWS IoT](./connect-aws.md)
-
 ## Troubleshooting
 
-See here for [how to troubleshoot device monitoring?](../operate/troubleshooting/device-monitoring.md)
+For troubleshooting tips, check out the [device monitoring](../operate/troubleshooting/device-monitoring.md) section.
