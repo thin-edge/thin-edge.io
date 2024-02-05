@@ -12,7 +12,7 @@ Suite Teardown    Get Logs
 *** Test Cases ***
 
 tedge-agent health status
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-agent'    strip=${True}
+    ${pid}=    Service Should Be Running    tedge-agent
     Execute Command    sudo tedge mqtt pub 'te/device/main/service/tedge-agent/cmd/health/check' ''
     ${messages}=    Should Have MQTT Messages    te/device/main/service/tedge-agent/status/health    minimum=1    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}

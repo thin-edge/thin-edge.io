@@ -18,10 +18,10 @@ Watchdog does not kill mapper if it responds
     Execute Command    sudo systemctl start tedge-mapper-aws.service
     Execute Command    sudo systemctl start tedge-watchdog.service
 
-    ${pid_before_healthcheck}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper aws'    strip=${True}
+    ${pid_before_healthcheck}=    Service Should Be Running    tedge-mapper-aws
     # The watchdog should send a health check command while we wait
     Sleep    10s
-    ${pid_after_healthcheck}=     Execute Command    pgrep -f '^/usr/bin/tedge-mapper aws'    strip=${True}
+    ${pid_after_healthcheck}=    Service Should Be Running    tedge-mapper-aws
 
     Should Have MQTT Messages     topic=te/device/main/service/tedge-mapper-aws/cmd/health/check    minimum=1
     Should Be Equal               ${pid_before_healthcheck}    ${pid_after_healthcheck}
