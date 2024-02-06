@@ -2,9 +2,11 @@
 mod tests {
 
     use plugin_sm::plugin::deserialize_module_info;
+    use plugin_sm::plugin::sm_path;
     use plugin_sm::plugin::ExternalPluginCommand;
     use serial_test::serial;
     use std::io::Write;
+    use std::path::Path;
     use std::path::PathBuf;
     use std::str::FromStr;
     use tedge_api::SoftwareError;
@@ -145,6 +147,18 @@ mod tests {
 
         // A software module without an explicit type can be handled by any plugin, which in practice is the default plugin.
         assert_eq!(res, Ok(()));
+    }
+
+    #[test_case("abc", &Some("1:2.3.4567-8~1234".to_string()), "/tmp", PathBuf::from("/tmp/abc_1%3a2.3.4567-8~1234") ; "with special character")]
+    fn handle_special_characters_in_module_version(
+        name: &str,
+        version: &Option<String>,
+        target_dir_path: impl AsRef<Path>,
+        expected_path: PathBuf,
+    ) {
+        let res = sm_path(name, version, target_dir_path);
+
+        assert_eq!(res, expected_path);
     }
 
     fn get_dummy_plugin_path() -> PathBuf {

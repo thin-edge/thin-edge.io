@@ -11,7 +11,7 @@ Test Tags           theme:software    theme:plugins
 *** Test Cases ***
 Apply name filter
     ${packages_list}=    Execute Command
-    ...    sudo /etc/tedge/sm-plugins/apt list --name tedge
+    ...    sudo /etc/tedge/sm-plugins/apt list --name tedge --maintainer ""
     ...    exp_exit_code=0
     Should Match Regexp    ${packages_list}    ^tedge\\s+${VERSION}
 

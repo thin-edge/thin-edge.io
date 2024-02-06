@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: package-with-epoch
+arch: all
+platform: linux
+version: 1.2.3
+section: default
+priority: optional
+maintainer: thin-edge.io <thin-edge@thin-edge.io>
+description: Example package which uses the epoch field
+homepage: https://thin-edge.io/
+license: MIT
+epoch: "2"
+
+contents:
+  # reuse an existing file for convenience
+  - src: ./sampledeb_1.cfg
+    dst: /etc/package-with-epoch/
+    type: config
