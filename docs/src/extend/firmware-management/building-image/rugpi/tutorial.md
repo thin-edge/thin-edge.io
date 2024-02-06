@@ -104,17 +104,15 @@ For other installation possibilities check out the [just documentation](https://
     ```
 
     :::tip
-    The Wifi credentials only need to be included in the image that is flashed to the SD card. Subsequent images don't need to included the Wifi credentials, as the network connection configuration files are persisted across images.
+    The Wifi credentials only need to be included in the image that is flashed to the SD card. Subsequent images don't need to include the Wifi credentials, as the network connection configuration files are persisted across images.
 
     If an image has Wifi credentials baked in, then you should not make this image public, as it would expose your credentials! 
     :::
 
-    
-
 
 ### Building an image
 
-Building an image will produce a `.xz` file which can either by flashed to an SD card (or device). Afterwards your device will be enable to apply the same type of image via OTA updates.
+Building an image will produce a `.xz` file which can be flashed to an SD card (or device). Afterwards your device will be able to apply the same type of image via OTA updates.
 
 Images can be built in MacOS or Linux environments (including WSL 2), however if you have problems building the image, then you can build the images using the Github workflow after forking the project.
 
