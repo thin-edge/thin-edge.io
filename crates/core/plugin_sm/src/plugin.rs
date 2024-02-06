@@ -547,7 +547,7 @@ pub fn deserialize_module_info(
     Ok(software_list)
 }
 
-fn sm_path(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> PathBuf {
+pub fn sm_path(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> PathBuf {
     let mut filename = name.to_string();
     if let Some(version) = version {
         filename.push('_');

@@ -45,7 +45,6 @@ Install packages overwrite config files
     ${output}=    Execute Command    cat /etc/sampledeb.cfg
     Should Contain    ${output}    conf 2.0
 
-
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup

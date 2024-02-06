@@ -4,7 +4,7 @@ platform: linux
 version: 2.0.0
 section: default
 priority: optional
-maintainer: Your Name <your.email@example.com>
+maintainer: thin-edge.io <thin-edge@thin-edge.io>
 description: My Sample App Debian Package
 homepage: https://example.com/myapp
 license: MIT
