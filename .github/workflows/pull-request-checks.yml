@@ -93,8 +93,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # TODO: remove nightly pin when we can update ahash (#2686)
       - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2024-02-03
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
