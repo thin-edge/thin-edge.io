@@ -60,13 +60,3 @@ The following command shows how to restart the Cumulocity IoT mapper on a device
 ```sh
 sudo systemctl restart tedge-mapper-c8y
 ```
-
-## Change back to the default topics
-
-If you want a mapper to subscribe back to the default MQTT topics, run:
-
-```sh
-sudo tedge config unset c8y.topics
-```
-
-Then restart the corresponding mapper.
