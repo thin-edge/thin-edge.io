@@ -17,7 +17,13 @@ The mqtt.bind.port and the mqtt.bind.address can be set/unset independently.
 The %%te%% device has to be disconnected from the cloud using the `tedge` command
 
 ```sh
-tedge disconnect c8y/az
+tedge disconnect c8y
+
+#or
+tedge disconnect az
+
+#or
+tedge disconnect aws
 ```
 
 ### Step 2: Set the new mqtt port and bind address
@@ -40,21 +46,7 @@ For example, this can be get as `ifconfig | grep inet` or set it to `0.0.0.0`
 This will make sure that all the mqtt clients use the newer port and the bind address that
 has been set once the device is connected to the cloud as in step 3.
 
-### Step 3: Verify the port and the bind address configured/set
-
-Use the `tedge` command to print the mqtt port and bind address that has been set as below.
-
-```sh
-tedge config get mqtt.bind.port
-tedge config get mqtt.bind.address
-```
-
-```text title="Output"
-1883
-0.0.0.0
-```
-
-### Step 4: Connect the thin edge device to cloud
+### Step 3: Connect the device to cloud
 
 Use the `tedge` command to connect to the desired cloud as below.
 
@@ -69,23 +61,7 @@ tedge connect aws
 ```
 
 This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service,
-  tedge-mapper-aws.service, tedge-agent.service) to use the newly set port and the bind address.
-
-:::note
-The step 1 and 2 can be followed in any order.
-:::
-
-## Revert to use default port and bind address
-
-Use the `tedge` command to set the default port (1883) and default bind address (localhost) as below.
-
-```sh
-sudo tedge config unset mqtt.bind.port
-sudo tedge config unset mqtt.bind.address
-```
-
-Once the port or the bind address is reverted to default, the [step 1](#Step-3:-Connect-the-thin-edge-device-to-cloud)
-and 3 has to be followed to use the default port or the default bind address.
+tedge-mapper-aws.service, tedge-agent.service) to use the newly set port and the bind address.
 
 ## Common Errors
 
