@@ -48,7 +48,7 @@ On your machine you will need on of the following:
     ```
 
     :::info
-    If you are using an image built using **Rugpi**, the authorized ssh key/s should have been included in the image. If you can't ssh into your device please review the [build instructions](../building-image/rugpi/tutorial/#customizing-your-own-image) again to make sure the correct ssh key/s was added during build time.
+    If you are using an image built using **Rugpi**, the authorized ssh key/s should have been included in the image. If you can't ssh into your device please review the [build instructions](../building-image/rugpi/tutorial/#clone-project) again to make sure the correct ssh key/s was added during build time.
     :::
 
 3. [go-c8y-cli](https://goc8ycli.netlify.app/docs/installation/shell-installation/)
