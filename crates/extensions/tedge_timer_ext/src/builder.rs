@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::Message;
 use tedge_actors::NoConfig;
@@ -75,7 +76,7 @@ struct TimeoutSender<T: Message> {
 impl<T: Message> Clone for TimeoutSender<T> {
     fn clone(&self) -> Self {
         TimeoutSender {
-            inner: self.inner.clone(),
+            inner: self.inner.sender_clone(),
         }
     }
 }
@@ -94,9 +95,16 @@ impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
 ///
 /// This sender receives `SetTimeout<T>` requests from some actor,
 /// and translates then forwards these messages to the timer actor expecting`Timeout<AnyPayload>`
-#[derive(Clone)]
 struct SetTimeoutSender {
     inner: DynSender<SetTimeout<AnyPayload>>,
+}
+
+impl Clone for SetTimeoutSender {
+    fn clone(&self) -> Self {
+        SetTimeoutSender {
+            inner: self.inner.sender_clone(),
+        }
+    }
 }
 
 #[async_trait]

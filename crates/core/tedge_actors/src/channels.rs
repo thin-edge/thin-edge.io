@@ -39,19 +39,39 @@ impl<M, S: Clone + Sender<M>> CloneSender<M> for S {
     }
 }
 
-impl<M: 'static> Clone for DynSender<M> {
-    fn clone(&self) -> Self {
-        self.sender_clone()
-    }
-}
-
-/// An `mpsc::Sender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
-impl<M: Message, N: Message + Into<M>> From<mpsc::Sender<M>> for DynSender<N> {
-    fn from(sender: mpsc::Sender<M>) -> Self {
+impl<M, S: Clone + Sender<M>> From<S> for DynSender<M> {
+    fn from(sender: S) -> Self {
         Box::new(sender)
     }
 }
 
+/// A `DynSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for DynSender<M> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(self.as_mut().send(message.into()).await?)
+    }
+}
+
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for Box<dyn Sender<M>> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(self.as_mut().send(message.into()).await?)
+    }
+}
+
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> CloneSender<N> for DynSender<M> {
+    fn sender_clone(&self) -> DynSender<N> {
+        Box::new(self.as_ref().sender_clone())
+    }
+
+    fn sender(&self) -> Box<dyn Sender<N>> {
+        Box::new(self.as_ref().sender())
+    }
+}
+
+/// An `mpsc::Sender<M>` is a `DynSender<M>`
 #[async_trait]
 impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
@@ -60,12 +80,6 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
 }
 
 /// An `mpsc::UnboundedSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
-impl<M: Message, N: Message + Into<M>> From<mpsc::UnboundedSender<M>> for DynSender<N> {
-    fn from(sender: mpsc::UnboundedSender<M>) -> Self {
-        Box::new(sender)
-    }
-}
-
 #[async_trait]
 impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
@@ -73,7 +87,7 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
     }
 }
 
-/// An `oneshot::Sender<M>` is a `Sender<N>` provided `N` implements `Into<M>`
+/// A `oneshot::Sender<M>` is a `Sender<N>` provided `N` implements `Into<M>`
 ///
 /// There is one caveat. The `oneshot::Sender::send()` method consumes the sender,
 /// hence the one shot sender is wrapped inside an `Option`.
@@ -92,29 +106,6 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Option<oneshot::Sender<M>> 
     }
 }
 
-/// Make a `DynSender<N>` from a `DynSender<M>`
-///
-/// This is a workaround to the fact the compiler rejects a From implementation:
-///
-/// ```shell
-///
-///  impl<M: Message, N: Message + Into<M>> From<DynSender<M>> for DynSender<N> {
-///     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-///     |
-///     = note: conflicting implementation in crate `core`:
-///             - impl<T> From<T> for T;
-/// ```
-pub fn adapt<M: Message, N: Message + Into<M>>(sender: &DynSender<M>) -> DynSender<N> {
-    Box::new(sender.clone())
-}
-
-#[async_trait]
-impl<M: Message, N: Message + Into<M>> Sender<N> for DynSender<M> {
-    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
-        Ok(self.as_mut().send(message.into()).await?)
-    }
-}
-
 /// A sender that discards messages instead of sending them
 #[derive(Clone)]
 pub struct NullSender;
@@ -123,12 +114,6 @@ pub struct NullSender;
 impl<M: Message> Sender<M> for NullSender {
     async fn send(&mut self, _message: M) -> Result<(), ChannelError> {
         Ok(())
-    }
-}
-
-impl<M: Message> From<NullSender> for DynSender<M> {
-    fn from(sender: NullSender) -> Self {
-        Box::new(sender)
     }
 }
 
@@ -141,7 +126,7 @@ pub struct MappingSender<F, M> {
 impl<F, M: 'static> Clone for MappingSender<F, M> {
     fn clone(&self) -> Self {
         MappingSender {
-            inner: self.inner.clone(),
+            inner: self.inner.sender_clone(),
             cast: self.cast.clone(),
         }
     }
@@ -170,19 +155,6 @@ where
             self.inner.send(out_message).await?
         }
         Ok(())
-    }
-}
-
-impl<M, N, NS, F> From<MappingSender<F, N>> for DynSender<M>
-where
-    M: Message,
-    N: Message,
-    NS: Iterator<Item = N> + Send,
-    F: Fn(M) -> NS,
-    F: 'static + Sync + Send,
-{
-    fn from(value: MappingSender<F, N>) -> Self {
-        Box::new(value)
     }
 }
 
@@ -236,8 +208,8 @@ mod tests {
     impl From<DynSender<Msg>> for Peers {
         fn from(recipient: DynSender<Msg>) -> Self {
             Peers {
-                peer_1: adapt(&recipient),
-                peer_2: adapt(&recipient),
+                peer_1: recipient.sender_clone(),
+                peer_2: recipient.sender_clone(),
             }
         }
     }

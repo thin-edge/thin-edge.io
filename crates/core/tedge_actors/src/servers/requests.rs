@@ -49,10 +49,18 @@ impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
 
 /// A [Sender] used by a client to send requests to a server,
 /// redirecting the responses to another recipient.
-#[derive(Clone)]
 pub struct RequestSender<Request: 'static, Response: 'static> {
     sender: DynSender<RequestEnvelope<Request, Response>>,
     reply_to: DynSender<Response>,
+}
+
+impl<Request, Response> Clone for RequestSender<Request, Response> {
+    fn clone(&self) -> Self {
+        RequestSender {
+            sender: self.sender.sender_clone(),
+            reply_to: self.reply_to.sender_clone(),
+        }
+    }
 }
 
 #[async_trait]
@@ -64,13 +72,6 @@ impl<Request: Message, Response: Message> Sender<Request> for RequestSender<Requ
             .await
     }
 }
-
-/* Adding this prevents to derive Clone for RequestSender! Why?
-impl<Request: Message, Response: Message> From<RequestSender<Request,Response>> for DynSender<Request> {
-    fn from(sender: RequestSender<Request,Response>) -> Self {
-        Box::new(sender)
-    }
-}*/
 
 /// An actor that wraps a request-response server
 ///

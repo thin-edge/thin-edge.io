@@ -120,7 +120,7 @@ pub mod tests {
         let actor_task = spawn(async move { actor.run().await });
 
         spawn(async move {
-            let mut sender: DynSender<&str> = adapt(&input_sender);
+            let mut sender: DynSender<&str> = input_sender.sender_clone();
             sender.send("Do this").await.expect("sent");
             sender.send("Do nothing").await.expect("sent");
             sender.send("Do that and this").await.expect("sent");
@@ -190,8 +190,8 @@ pub mod tests {
     impl SpecificMessageBox {
         fn new_box(capacity: usize, output: DynSender<DoMsg>) -> (DynSender<String>, Self) {
             let (sender, input) = mpsc::channel(capacity);
-            let peer_1 = adapt(&output);
-            let peer_2 = adapt(&output);
+            let peer_1 = output.sender_clone();
+            let peer_2 = output.sender_clone();
             let message_box = SpecificMessageBox {
                 input,
                 peer_1,

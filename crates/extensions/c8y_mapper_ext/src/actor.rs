@@ -15,10 +15,10 @@ use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_actors::adapt;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -306,14 +306,21 @@ impl C8yMapperBuilder {
 
         let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
-        let mqtt_publisher =
-            mqtt.connect_consumer(config.topics.clone(), adapt(&box_builder.get_sender()));
+        let mqtt_publisher = mqtt.connect_consumer(
+            config.topics.clone(),
+            box_builder.get_sender().sender_clone(),
+        );
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
-        let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
-        let upload_sender = uploader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+        let timer_sender =
+            timer.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
+        let upload_sender =
+            uploader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
         let download_sender =
-            downloader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
-        fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
+            downloader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
+        fs_watcher.register_peer(
+            config.ops_dir.clone(),
+            box_builder.get_sender().sender_clone(),
+        );
         let auth_proxy = ProxyUrlGenerator::new(
             config.auth_proxy_addr.clone(),
             config.auth_proxy_port,

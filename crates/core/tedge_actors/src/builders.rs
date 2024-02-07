@@ -130,7 +130,7 @@ pub trait MessageSink<M: Message, Config> {
         N: Message,
         M: From<N>,
     {
-        source.register_peer(self.get_config(), crate::adapt(&self.get_sender()))
+        source.register_peer(self.get_config(), self.get_sender().sender_clone())
     }
 
     /// Add a source of messages to the actor under construction, the messages being translated on the fly.

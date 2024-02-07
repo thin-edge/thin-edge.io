@@ -41,7 +41,7 @@ pub struct SenderVec<M> {
 impl<M: 'static> Clone for SenderVec<M> {
     fn clone(&self) -> Self {
         SenderVec {
-            senders: self.senders.clone(),
+            senders: self.senders.iter().map(|s| s.sender_clone()).collect(),
         }
     }
 }
