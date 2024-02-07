@@ -66,10 +66,10 @@ impl C8yEndPoint {
         url_update_swlist
     }
 
-    pub fn get_url_for_internal_id(&self, device_id: String) -> String {
+    pub fn get_url_for_internal_id(&self, device_id: &str) -> String {
         let mut url_get_id = self.get_base_url();
         url_get_id.push_str("/identity/externalIds/c8y_Serial/");
-        url_get_id.push_str(device_id.as_str());
+        url_get_id.push_str(device_id);
 
         url_get_id
     }
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
         let c8y = C8yEndPoint::new("test_host", "test_device");
-        let res = c8y.get_url_for_internal_id("test_device".into());
+        let res = c8y.get_url_for_internal_id("test_device");
 
         assert_eq!(
             res,

@@ -29,7 +29,6 @@ use http::status::StatusCode;
 use log::debug;
 use log::error;
 use log::info;
-use reqwest::Identity;
 use std::collections::HashMap;
 use std::future::ready;
 use std::future::Future;
@@ -46,13 +45,14 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
 use tedge_http_ext::HttpResult;
+use tokio::time::sleep;
 
 const RETRY_TIMEOUT_SECS: u64 = 20;
 
 pub struct C8YHttpProxyActor {
+    config: C8YHttpConfig,
     pub(crate) end_point: C8yEndPoint,
     peers: C8YHttpProxyMessageBox,
-    identity: Option<Identity>,
 }
 
 pub struct C8YHttpProxyMessageBox {
@@ -132,9 +132,9 @@ impl C8YHttpProxyActor {
     pub fn new(config: C8YHttpConfig, message_box: C8YHttpProxyMessageBox) -> Self {
         let end_point = C8yEndPoint::new(&config.c8y_host, &config.device_id);
         C8YHttpProxyActor {
+            config,
             end_point,
             peers: message_box,
-            identity: config.identity,
         }
     }
 
@@ -192,37 +192,58 @@ impl C8YHttpProxyActor {
         &mut self,
         device_id: String,
     ) -> Result<String, C8YRestError> {
-        let url_get_id: String = self.end_point.get_url_for_internal_id(device_id);
+        let url_get_id: String = self.end_point.get_url_for_internal_id(&device_id);
         if self.end_point.token.is_none() {
             self.get_fresh_token().await?;
         }
-        let request = HttpRequestBuilder::get(&url_get_id)
-            .bearer_auth(self.end_point.token.clone().unwrap_or_default())
-            .build()?;
 
-        let res = match self.peers.http.await_response(request).await? {
-            Ok(response) => match response.status() {
-                StatusCode::OK => Ok(Ok(response)),
-                StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                    self.get_fresh_token().await?;
-                    let request = HttpRequestBuilder::get(&url_get_id)
-                        .bearer_auth(self.end_point.token.clone().unwrap_or_default())
-                        .build()?;
-                    Ok(self.peers.http.await_response(request).await?)
+        let mut attempt = 0;
+        let mut token_refreshed = false;
+        loop {
+            attempt += 1;
+            let request = HttpRequestBuilder::get(&url_get_id)
+                .bearer_auth(self.end_point.token.clone().unwrap_or_default())
+                .build()?;
+
+            match self.peers.http.await_response(request).await? {
+                Ok(response) => {
+                    match response.status() {
+                        StatusCode::OK => {
+                            let internal_id_response: InternalIdResponse = response.json().await?;
+                            let internal_id = internal_id_response.id();
+
+                            return Ok(internal_id);
+                        }
+                        StatusCode::NOT_FOUND => {
+                            if attempt > 3 {
+                                error!("Failed to fetch internal id for {device_id} even after multiple attempts");
+                                response.error_for_status()?;
+                            }
+                            info!("Re-fetching internal id for {device_id}, attempt: {attempt}");
+                            sleep(self.config.retry_interval).await;
+                            continue;
+                        }
+                        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                            if token_refreshed {
+                                error!("Failed to fetch internal id for {device_id} even with fresh token");
+                                response.error_for_status()?;
+                            }
+                            info!("Re-fetching internal id for {device_id} with fresh token");
+                            self.get_fresh_token().await?;
+                            token_refreshed = true;
+                            continue;
+                        }
+                        code => {
+                            return Err(C8YRestError::FromHttpError(
+                                tedge_http_ext::HttpError::HttpStatusError(code),
+                            ))
+                        }
+                    }
                 }
-                code => Err(C8YRestError::FromHttpError(
-                    tedge_http_ext::HttpError::HttpStatusError(code),
-                )),
-            },
 
-            Err(e) => Err(C8YRestError::FromHttpError(e)),
-        };
-        let res = res?.error_for_status()?;
-
-        let internal_id_response: InternalIdResponse = res.json().await?;
-        let internal_id = internal_id_response.id();
-
-        Ok(internal_id)
+                Err(e) => return Err(C8YRestError::FromHttpError(e)),
+            }
+        }
     }
 
     async fn execute<Fut: Future<Output = Result<HttpRequestBuilder, C8YRestError>>>(
@@ -476,7 +497,7 @@ impl C8YHttpProxyActor {
         let downloader: Downloader = Downloader::with_permission(
             request.file_path,
             request.file_permissions,
-            self.identity.clone(),
+            self.config.identity.clone(),
         );
         downloader.download(&download_info).await?;
 
