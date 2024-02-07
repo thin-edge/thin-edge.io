@@ -61,7 +61,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash
 
 For other installation possibilities check out the [just documentation](https://just.systems/man/en/chapter_4.html).
 
-### Cloning the project
+### Cloning the project {#clone-project}
 
 1. Clone the project and change directory to the locally checked out folder
 
