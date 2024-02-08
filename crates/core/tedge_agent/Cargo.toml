@@ -16,6 +16,7 @@ axum = { workspace = true }
 axum-server = { workspace = true }
 axum_tls = { workspace = true }
 camino = { workspace = true }
+cap = { workspace = true }
 clap = { workspace = true }
 flockfile = { workspace = true }
 futures = { workspace = true }

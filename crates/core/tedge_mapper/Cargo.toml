@@ -19,6 +19,7 @@ c8y_api = { workspace = true }
 c8y_auth_proxy = { workspace = true }
 c8y_http_proxy = { workspace = true }
 c8y_mapper_ext = { workspace = true }
+cap = { workspace = true }
 clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
