@@ -2,15 +2,22 @@
 #![deny(clippy::mem_forget)]
 
 use anyhow::Context;
+use cap::Cap;
 use clap::Parser;
+use std::alloc;
 use std::future::Future;
 use std::path::PathBuf;
+use std::time::Duration;
 use tedge::command::BuildCommand;
 use tedge::command::BuildContext;
 use tedge::Component;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
 use tedge_config::system_services::set_log_level;
+use tracing::log;
+
+#[global_allocator]
+static ALLOCATOR: Cap<alloc::System> = Cap::new(alloc::System, usize::MAX);
 
 fn main() -> anyhow::Result<()> {
     let executable_name = executable_name();
@@ -22,10 +29,20 @@ fn main() -> anyhow::Result<()> {
 
     let opt = parse_multicall_if_known(&executable_name);
     match opt {
-        TEdgeOptMulticall::Component(Component::TedgeMapper(mapper_opt)) => {
-            block_on(tedge_mapper::run(mapper_opt))
+        TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
+            let tedge_config = tedge_config::load_tedge_config(&opt.config_dir)?;
+            block_on_with(
+                tedge_config.run.log_memory_interval.duration(),
+                tedge_mapper::run(opt),
+            )
         }
-        TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => block_on(tedge_agent::run(opt)),
+        TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => {
+            let tedge_config = tedge_config::load_tedge_config(&opt.config_dir)?;
+            block_on_with(
+                tedge_config.run.log_memory_interval.duration(),
+                tedge_agent::run(opt),
+            )
+        }
         TEdgeOptMulticall::Component(Component::C8yFirmwarePlugin(fp_opt)) => {
             block_on(c8y_firmware_plugin::run(fp_opt))
         }
@@ -61,6 +78,23 @@ fn main() -> anyhow::Result<()> {
 
 fn block_on<T>(future: impl Future<Output = T>) -> T {
     tokio::runtime::Runtime::new().unwrap().block_on(future)
+}
+
+fn block_on_with<T>(log_memory_interval: Duration, future: impl Future<Output = T>) -> T {
+    if log_memory_interval.is_zero() {
+        block_on(future)
+    } else {
+        block_on(async move {
+            tokio::spawn(async move {
+                loop {
+                    log::info!("Allocated memory: {} Bytes", ALLOCATOR.allocated());
+                    tokio::time::sleep(log_memory_interval).await;
+                }
+            });
+
+            future.await
+        })
+    }
 }
 
 fn executable_name() -> Option<String> {

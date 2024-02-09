@@ -19,3 +19,9 @@ pub fn get_new_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
     let tedge_config_location = TEdgeConfigLocation::default();
     TEdgeConfigRepository::new(tedge_config_location).load()
 }
+
+/// loads the tedge config from a config directory
+pub fn load_tedge_config(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
+    let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
+    TEdgeConfigRepository::new(tedge_config_location).load()
+}

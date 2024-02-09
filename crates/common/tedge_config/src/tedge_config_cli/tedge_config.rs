@@ -719,6 +719,10 @@ define_tedge_config! {
         /// Whether to create a lock file or not
         #[tedge_config(example = "true", default(value = true))]
         lock_files: bool,
+
+        /// Interval at which the memory usage is logged (in seconds)
+        #[tedge_config(example = "60", default(value = 300_u64))]
+        log_memory_interval: Seconds,
     },
 
     logs: {

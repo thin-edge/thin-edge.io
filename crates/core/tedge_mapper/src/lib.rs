@@ -6,9 +6,9 @@ use crate::core::component::TEdgeComponent;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::fmt;
-use std::path::PathBuf;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
+use tedge_config::PathBuf;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tracing::log::warn;
 
@@ -111,6 +111,8 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
         warn!("This --clear option has been deprecated and will be removed in a future release");
         Ok(())
     } else {
-        component.start(config, &mapper_opt.config_dir).await
+        component
+            .start(config, mapper_opt.config_dir.as_ref())
+            .await
     }
 }
