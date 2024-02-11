@@ -80,6 +80,7 @@ ARCH=
 TARGET=()
 BUILD_OPTIONS=()
 BUILD=1
+INCLUDE_TEST_PACKAGES=1
 
 REST_ARGS=()
 while [ $# -gt 0 ]
@@ -87,6 +88,10 @@ do
     case "$1" in
         --skip-build)
             BUILD=0
+            ;;
+
+        --skip-test-packages)
+            INCLUDE_TEST_PACKAGES=0
             ;;
 
         -h|--help)
@@ -195,13 +200,15 @@ fi
 PACKAGES=( "${RELEASE_PACKAGES[@]}" "${DEPRECATED_PACKAGES[@]}" )
 ./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
 
-if [ "$BUILD" = 1 ]; then
-    # Strip and build for test artifacts
-    for PACKAGE in "${TEST_PACKAGES[@]}"
-    do
-        cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
-    done
-fi
+if [ "$INCLUDE_TEST_PACKAGES" = 1 ]; then
+    if [ "$BUILD" = 1 ]; then
+        # Strip and build for test artifacts
+        for PACKAGE in "${TEST_PACKAGES[@]}"
+        do
+            cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
+        done
+    fi
 
-# Package test binaries (deb only)
-./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --version "$GIT_SEMVER" --types deb --output "$OUTPUT_DIR" --no-clean
+    # Package test binaries (deb only)
+    ./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --version "$GIT_SEMVER" --types deb --output "$OUTPUT_DIR" --no-clean
+fi
