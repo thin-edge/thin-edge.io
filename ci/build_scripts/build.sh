@@ -81,6 +81,7 @@ TARGET=()
 BUILD_OPTIONS=()
 BUILD=1
 INCLUDE_TEST_PACKAGES=1
+INCLUDE_DEPRECATED_PACKAGES=1
 
 REST_ARGS=()
 while [ $# -gt 0 ]
@@ -92,6 +93,10 @@ do
 
         --skip-test-packages)
             INCLUDE_TEST_PACKAGES=0
+            ;;
+
+        --skip-deprecated-packages)
+            INCLUDE_DEPRECATED_PACKAGES=0
             ;;
 
         -h|--help)
@@ -196,8 +201,13 @@ if [ -d "target/$ARCH/debian" ]; then
     rm -rf "target/$ARCH/debian"
 fi
 
-# build/package both the release and deprecated packages
-PACKAGES=( "${RELEASE_PACKAGES[@]}" "${DEPRECATED_PACKAGES[@]}" )
+PACKAGES=( "${RELEASE_PACKAGES[@]}" )
+if [ "$INCLUDE_DEPRECATED_PACKAGES" = "1" ]; then
+    PACKAGES+=(
+        "${DEPRECATED_PACKAGES[@]}"
+    )
+fi
+
 ./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
 
 if [ "$INCLUDE_TEST_PACKAGES" = 1 ]; then
