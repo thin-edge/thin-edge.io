@@ -116,19 +116,6 @@ fi
 # shellcheck disable=SC1091
 . ./ci/build_scripts/version.sh
 
-# Use zig to build as it is provides better cross compiling support
-cargo +stable install cargo-zigbuild --version ">=0.17.3"
-
-# Allow users to install zig by other package managers
-if ! zig --help &>/dev/null; then
-    if ! python3 -m ziglang --help &>/dev/null; then
-        PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
-    fi
-fi
-
-# Display zig version to help with debugging
-echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
-
 if [ -z "$ARCH" ]; then
     # If no target has been given, choose the target triple based on the
     # host's architecture, however use the musl builds by default!
@@ -152,24 +139,6 @@ if [ -z "$ARCH" ]; then
     esac
 fi
 
-if [ -n "$ARCH" ]; then
-    echo "Using target: $ARCH"
-    TARGET+=("--target=$ARCH")
-    rustup target add "$ARCH"
-else
-    # Note: This will build the artifacts under target/release and not target/<triple>/release !
-    HOST_TARGET=$(rustc --version --verbose | grep host: | cut -d' ' -f2)
-    echo "Using host target: $HOST_TARGET"
-fi
-
-# Custom options for different targets
-case "$ARCH" in
-    *)
-        BUILD_OPTIONS+=(
-            --release
-        )
-        ;;
-esac
 
 # Load the release package list as $RELEASE_PACKAGES, $DEPRECATED_PACKAGES and $TEST_PACKAGES
 # shellcheck disable=SC1091
@@ -178,6 +147,38 @@ source ./ci/package_list.sh
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
 if [ "$BUILD" = 1 ]; then
+    # Use zig to build as it is provides better cross compiling support
+    cargo +stable install cargo-zigbuild --version ">=0.17.3"
+
+    # Allow users to install zig by other package managers
+    if ! zig --help &>/dev/null; then
+        if ! python3 -m ziglang --help &>/dev/null; then
+            PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
+        fi
+    fi
+
+    # Display zig version to help with debugging
+    echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
+
+    if [ -n "$ARCH" ]; then
+        echo "Using target: $ARCH"
+        TARGET+=("--target=$ARCH")
+        rustup target add "$ARCH"
+    else
+        # Note: This will build the artifacts under target/release and not target/<triple>/release !
+        HOST_TARGET=$(rustc --version --verbose | grep host: | cut -d' ' -f2)
+        echo "Using host target: $HOST_TARGET"
+    fi
+
+    # Custom options for different targets
+    case "$ARCH" in
+        *)
+            BUILD_OPTIONS+=(
+                --release
+            )
+            ;;
+    esac
+
     cargo zigbuild "${TARGET[@]}" "${BUILD_OPTIONS[@]}"
 fi
 
