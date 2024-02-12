@@ -80,6 +80,8 @@ ARCH=
 TARGET=()
 BUILD_OPTIONS=()
 BUILD=1
+INCLUDE_TEST_PACKAGES=1
+INCLUDE_DEPRECATED_PACKAGES=1
 
 REST_ARGS=()
 while [ $# -gt 0 ]
@@ -87,6 +89,14 @@ do
     case "$1" in
         --skip-build)
             BUILD=0
+            ;;
+
+        --skip-test-packages)
+            INCLUDE_TEST_PACKAGES=0
+            ;;
+
+        --skip-deprecated-packages)
+            INCLUDE_DEPRECATED_PACKAGES=0
             ;;
 
         -h|--help)
@@ -116,19 +126,6 @@ fi
 # shellcheck disable=SC1091
 . ./ci/build_scripts/version.sh
 
-# Use zig to build as it is provides better cross compiling support
-cargo +stable install cargo-zigbuild --version ">=0.17.3"
-
-# Allow users to install zig by other package managers
-if ! zig --help &>/dev/null; then
-    if ! python3 -m ziglang --help &>/dev/null; then
-        PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
-    fi
-fi
-
-# Display zig version to help with debugging
-echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
-
 if [ -z "$ARCH" ]; then
     # If no target has been given, choose the target triple based on the
     # host's architecture, however use the musl builds by default!
@@ -152,24 +149,6 @@ if [ -z "$ARCH" ]; then
     esac
 fi
 
-if [ -n "$ARCH" ]; then
-    echo "Using target: $ARCH"
-    TARGET+=("--target=$ARCH")
-    rustup target add "$ARCH"
-else
-    # Note: This will build the artifacts under target/release and not target/<triple>/release !
-    HOST_TARGET=$(rustc --version --verbose | grep host: | cut -d' ' -f2)
-    echo "Using host target: $HOST_TARGET"
-fi
-
-# Custom options for different targets
-case "$ARCH" in
-    *)
-        BUILD_OPTIONS+=(
-            --release
-        )
-        ;;
-esac
 
 # Load the release package list as $RELEASE_PACKAGES, $DEPRECATED_PACKAGES and $TEST_PACKAGES
 # shellcheck disable=SC1091
@@ -178,6 +157,38 @@ source ./ci/package_list.sh
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
 if [ "$BUILD" = 1 ]; then
+    # Use zig to build as it is provides better cross compiling support
+    cargo +stable install cargo-zigbuild --version ">=0.17.3"
+
+    # Allow users to install zig by other package managers
+    if ! zig --help &>/dev/null; then
+        if ! python3 -m ziglang --help &>/dev/null; then
+            PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
+        fi
+    fi
+
+    # Display zig version to help with debugging
+    echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
+
+    if [ -n "$ARCH" ]; then
+        echo "Using target: $ARCH"
+        TARGET+=("--target=$ARCH")
+        rustup target add "$ARCH"
+    else
+        # Note: This will build the artifacts under target/release and not target/<triple>/release !
+        HOST_TARGET=$(rustc --version --verbose | grep host: | cut -d' ' -f2)
+        echo "Using host target: $HOST_TARGET"
+    fi
+
+    # Custom options for different targets
+    case "$ARCH" in
+        *)
+            BUILD_OPTIONS+=(
+                --release
+            )
+            ;;
+    esac
+
     cargo zigbuild "${TARGET[@]}" "${BUILD_OPTIONS[@]}"
 fi
 
@@ -190,17 +201,24 @@ if [ -d "target/$ARCH/debian" ]; then
     rm -rf "target/$ARCH/debian"
 fi
 
-# build/package both the release and deprecated packages
-PACKAGES=( "${RELEASE_PACKAGES[@]}" "${DEPRECATED_PACKAGES[@]}" )
-./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
-
-if [ "$BUILD" = 1 ]; then
-    # Strip and build for test artifacts
-    for PACKAGE in "${TEST_PACKAGES[@]}"
-    do
-        cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
-    done
+PACKAGES=( "${RELEASE_PACKAGES[@]}" )
+if [ "$INCLUDE_DEPRECATED_PACKAGES" = "1" ]; then
+    PACKAGES+=(
+        "${DEPRECATED_PACKAGES[@]}"
+    )
 fi
 
-# Package test binaries (deb only)
-./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --version "$GIT_SEMVER" --types deb --output "$OUTPUT_DIR" --no-clean
+./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
+
+if [ "$INCLUDE_TEST_PACKAGES" = 1 ]; then
+    if [ "$BUILD" = 1 ]; then
+        # Strip and build for test artifacts
+        for PACKAGE in "${TEST_PACKAGES[@]}"
+        do
+            cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
+        done
+    fi
+
+    # Package test binaries (deb only)
+    ./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --version "$GIT_SEMVER" --types deb --output "$OUTPUT_DIR" --no-clean
+fi
