@@ -62,5 +62,4 @@ jobs:
           delete-branch: true
           title: ${{ inputs.bump }} version bump
           body: ${{ inputs.bump }} version bump
-          reviewers: rina23q
           token: ${{ secrets.ACTIONS_PAT }}
