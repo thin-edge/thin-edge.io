@@ -105,6 +105,8 @@ jobs:
 
   test:
     name: Test ${{ matrix.job.name }}
+    # Don't tests on tagging as it has already run in the merge queue
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     needs: [approve, build]
     environment:
       name: Test Auto
