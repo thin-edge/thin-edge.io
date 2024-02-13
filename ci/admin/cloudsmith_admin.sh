@@ -17,6 +17,8 @@ ACTION
 
     cleanup     Remove old versions from the tedge-main and tedge-main-armv6 repositories which
                 where uploaded longer than x days ago.
+    
+    promote     Promote already published packages from the dev repo to the release repo
 
 Env:
     PUBLISH_TOKEN       Cloudsmith API token used for authorize the delete commands
@@ -56,6 +58,7 @@ if [ $# -lt 1 ]; then
 fi
 
 COMMAND="$1"
+shift
 
 COMMON_ARGS=()
 
@@ -117,12 +120,68 @@ delete_old_versions() {
     done < <(list_old_versions)
 }
 
+promote_version() {
+    #
+    # Promote version from the main repo to the official release repo
+    #
+
+    # Get the versions
+    # shellcheck disable=SC1091
+    . ./ci/build_scripts/version.sh all --version "$1"
+
+    if [ -z "$APK_VERSION" ]; then
+        echo "APK_VERSION variable is empty" >&2
+        return 1
+    fi
+    if [ -z "$RPM_VERSION" ]; then
+        echo "RPM_VERSION variable is empty" >&2
+        return 1
+    fi
+    if [ -z "$DEB_VERSION" ]; then
+        echo "DEB_VERSION variable is empty" >&2
+        return 1
+    fi
+    if [ -z "$TARBALL_VERSION" ]; then
+        echo "TARBALL_VERSION variable is empty" >&2
+        return 1
+    fi
+
+    # Build cloudsmith query using the different package version variants
+    APK_VERSION_QUERY="(version:^${APK_VERSION}-r0\$ AND format:alpine)"
+    RPM_VERSION_QUERY="(version:^${RPM_VERSION}-1\$ AND format:rpm)"
+    DEB_VERSION_QUERY="(version:^${DEB_VERSION}\$ AND format:deb)"
+    TARBALL_VERSION_QUERY="(version:^${TARBALL_VERSION}\$ AND format:raw)"
+    query="$APK_VERSION_QUERY OR $RPM_VERSION_QUERY OR $DEB_VERSION_QUERY OR $TARBALL_VERSION_QUERY"
+
+    if [ -z "$query" ]; then
+        echo "Unknown package query"
+        exit 1
+    fi
+
+    printf "Cloudsmith package selection query:\n    %s\n\n" "$query" >&2
+
+    cloudsmith ls pkg thinedge/tedge-main -q "$query" -F json -l 500 \
+    | jq '.data[] | .namespace + "/" + .repository + "/" + .slug' -r \
+    | xargs -Ipackage cloudsmith cp package thin-edge/tedge-release --yes "${COMMON_ARGS[@]}"
+
+    cloudsmith ls pkg thinedge/tedge-main-armv6 -q "$query" -F json -l 500 \
+    | jq '.data[] | .namespace + "/" + .repository + "/" + .slug' -r \
+    | xargs -Ipackage cloudsmith cp package thin-edge/tedge-release-armv6 --yes "${COMMON_ARGS[@]}"
+}
+
 #
 # Main
 #
 case "$COMMAND" in
     cleanup)
         delete_old_versions
+        ;;
+    promote)
+        if [ $# -lt 1 ]; then
+            echo "Missing version. Please provide the version as the first positional argument" >&2
+            exit 1
+        fi
+        promote_version "$1"
         ;;
     *)
         echo "Unknown action" >&2
