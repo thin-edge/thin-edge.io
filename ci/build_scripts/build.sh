@@ -80,8 +80,8 @@ ARCH=
 TARGET=()
 BUILD_OPTIONS=()
 BUILD=1
-INCLUDE_TEST_PACKAGES=1
-INCLUDE_DEPRECATED_PACKAGES=1
+INCLUDE_TEST_PACKAGES=0
+INCLUDE_DEPRECATED_PACKAGES=0
 
 REST_ARGS=()
 while [ $# -gt 0 ]
@@ -91,10 +91,16 @@ do
             BUILD=0
             ;;
 
+        --include-test-packages)
+            INCLUDE_TEST_PACKAGES=1
+            ;;
         --skip-test-packages)
             INCLUDE_TEST_PACKAGES=0
             ;;
 
+        --include-deprecated-packages)
+            INCLUDE_DEPRECATED_PACKAGES=1
+            ;;
         --skip-deprecated-packages)
             INCLUDE_DEPRECATED_PACKAGES=0
             ;;
