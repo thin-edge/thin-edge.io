@@ -109,9 +109,6 @@ Below shows the general workflow to editing an existing maintainer script for th
     -rw-r--r--@ 1 developer  staff   2506444 Aug  8 11:47 c8y-firmware-plugin-0.11.1~340+g1441e71d.aarch64.rpm
     -rw-r--r--@ 1 developer  staff   2490272 Aug  8 11:47 c8y-firmware-plugin_0.11.1~340+g1441e71d_aarch64.apk
     -rw-r--r--@ 1 developer  staff   2018558 Aug  8 11:47 c8y-firmware-plugin_0.11.1~340+g1441e71d_arm64.deb
-    -rw-r--r--@ 1 developer  staff   2794275 Aug  8 11:47 c8y-log-plugin-0.11.1~340+g1441e71d.aarch64.rpm
-    -rw-r--r--@ 1 developer  staff   2789684 Aug  8 11:47 c8y-log-plugin_0.11.1~340+g1441e71d_aarch64.apk
-    -rw-r--r--@ 1 developer  staff   2223752 Aug  8 11:47 c8y-log-plugin_0.11.1~340+g1441e71d_arm64.deb
     -rw-r--r--@ 1 developer  staff   1735095 Aug  8 11:47 c8y-remote-access-plugin-0.11.1~340+g1441e71d.aarch64.rpm
     -rw-r--r--@ 1 developer  staff   1737980 Aug  8 11:47 c8y-remote-access-plugin_0.11.1~340+g1441e71d_aarch64.apk
     -rw-r--r--@ 1 developer  staff   1413456 Aug  8 11:47 c8y-remote-access-plugin_0.11.1~340+g1441e71d_arm64.deb

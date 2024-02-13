@@ -602,27 +602,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "c8y-log-plugin"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "c8y_http_proxy",
- "c8y_log_manager",
- "clap",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_file_system_ext",
- "tedge_health_ext",
- "tedge_http_ext",
- "tedge_mqtt_ext",
- "tedge_signal_ext",
- "tedge_utils",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "c8y-remote-access-plugin"
 version = "1.0.0"
 dependencies = [
@@ -774,30 +753,6 @@ dependencies = [
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",
- "tedge_utils",
- "thiserror",
- "time",
- "tokio",
-]
-
-[[package]]
-name = "c8y_log_manager"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "c8y_api",
- "c8y_http_proxy",
- "filetime",
- "log",
- "log_manager",
- "serde",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_file_system_ext",
- "tedge_mqtt_ext",
- "tedge_test_utils",
  "tedge_utils",
  "thiserror",
  "time",

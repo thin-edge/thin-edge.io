@@ -6,7 +6,6 @@ members = [
     "crates/tests/*",
     "plugins/c8y_configuration_plugin",
     "plugins/c8y_firmware_plugin",
-    "plugins/c8y_log_plugin",
     "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_configuration_plugin",
@@ -53,7 +52,6 @@ c8y_auth_proxy = { path = "crates/extensions/c8y_auth_proxy" }
 c8y_config_manager = { path = "crates/extensions/c8y_config_manager" }
 c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
 c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
-c8y_log_manager = { path = "crates/extensions/c8y_log_manager" }
 c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 camino = "1.1"
 cap = "0.1"
