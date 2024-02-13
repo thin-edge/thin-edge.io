@@ -52,6 +52,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
 
       - name: Retrieve MSRV from workspace Cargo.toml
@@ -116,10 +117,10 @@ jobs:
           - { name: x86_64, target: x86_64-unknown-linux-musl, output: target/packages }
     steps:
       # Checkout either the PR or the branch
-      - name: Checkout PR
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR. Only after the manual approval process
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
 
       - name: Download release artifacts
