@@ -1,7 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 [![Discord Shield](https://discord.com/api/guilds/832211156520796171/widget.png?style=shield)](https://discord.gg/SvqWp6nrsK)
 [![Build and Deploy to Github Pages](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml)
-[![integration-tests](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-tests.yml/badge.svg?event=merge_group)](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-tests.yml)
 [![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
 <!--- [![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)  --->
 
