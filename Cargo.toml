@@ -7,7 +7,6 @@ members = [
     "plugins/c8y_firmware_plugin",
     "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
-    "plugins/tedge_configuration_plugin",
 ]
 resolver = "2"
 

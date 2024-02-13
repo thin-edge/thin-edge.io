@@ -3577,26 +3577,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge-configuration-plugin"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_config_manager",
- "tedge_downloader_ext",
- "tedge_file_system_ext",
- "tedge_health_ext",
- "tedge_mqtt_ext",
- "tedge_signal_ext",
- "tedge_uploader_ext",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "tedge-mapper"
 version = "1.0.0"
 dependencies = [
