@@ -208,7 +208,7 @@ if [ "$INCLUDE_DEPRECATED_PACKAGES" = "1" ]; then
     )
 fi
 
-./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
+./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --output "$OUTPUT_DIR"
 
 if [ "$INCLUDE_TEST_PACKAGES" = 1 ]; then
     if [ "$BUILD" = 1 ]; then
@@ -220,5 +220,5 @@ if [ "$INCLUDE_TEST_PACKAGES" = 1 ]; then
     fi
 
     # Package test binaries (deb only)
-    ./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --version "$GIT_SEMVER" --types deb --output "$OUTPUT_DIR" --no-clean
+    ./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --types deb --output "$OUTPUT_DIR" --no-clean
 fi
