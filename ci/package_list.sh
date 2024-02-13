@@ -17,23 +17,3 @@ export RELEASE_PACKAGES
 # it is only reserved for packages with a more public facing API
 DEPRECATED_PACKAGES=()
 export DEPRECATED_PACKAGES
-
-TEST_PACKAGES=()
-export TEST_PACKAGES
-
-EXTERNAL_ARM_PACKAGES=(
-    mosquitto-clients
-    mosquitto
-    libmosquitto1
-    collectd-core
-    collectd
-)
-export EXTERNAL_ARM_PACKAGES
-
-EXTERNAL_AMD64_PACKAGES=(
-    mosquitto
-    libmosquitto1
-    collectd-core
-)
-export EXTERNAL_AMD64_PACKAGES
-
