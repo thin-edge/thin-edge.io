@@ -176,7 +176,7 @@ jobs:
 
       - name: Send report to commit
         uses: joonvena/robotframework-reporter-action@v2.3
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request_target'
         with:
           gh_access_token: ${{ secrets.GITHUB_TOKEN }}
           report_path: 'tests/RobotFramework/output'
@@ -285,7 +285,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: containers/tedge
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request_target' }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
