@@ -560,28 +560,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "c8y-configuration-plugin"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "c8y_config_manager",
- "c8y_http_proxy",
- "clap",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_file_system_ext",
- "tedge_health_ext",
- "tedge_http_ext",
- "tedge_mqtt_ext",
- "tedge_signal_ext",
- "tedge_timer_ext",
- "tedge_utils",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "c8y-firmware-plugin"
 version = "1.0.0"
 dependencies = [
@@ -681,29 +659,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "c8y_config_manager"
-version = "1.0.0"
-dependencies = [
- "async-trait",
- "c8y_api",
- "c8y_http_proxy",
- "log",
- "serde",
- "serde_json",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_file_system_ext",
- "tedge_mqtt_ext",
- "tedge_test_utils",
- "tedge_timer_ext",
- "tedge_utils",
- "thiserror",
- "tokio",
- "toml 0.7.8",
 ]
 
 [[package]]

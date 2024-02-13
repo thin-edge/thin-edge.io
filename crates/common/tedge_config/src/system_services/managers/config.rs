@@ -159,7 +159,6 @@ mod tests {
             tedge_mapper = "Debug"
             tedge_agent = "Info"
             tedge_watchdog = "Warn"
-            c8y_config_plugin = "Debug"
         "#,
         )
         .unwrap();
@@ -185,7 +184,6 @@ mod tests {
         assert_eq!(config.log.get("tedge_mapper").unwrap(), "Debug");
         assert_eq!(config.log.get("tedge_agent").unwrap(), "Info");
         assert_eq!(config.log.get("tedge_watchdog").unwrap(), "Warn");
-        assert_eq!(config.log.get("c8y_config_plugin").unwrap(), "Debug");
     }
 
     #[test]
@@ -214,7 +212,6 @@ mod tests {
         tedge_mapper = "Debug"
         tedge_agent = "Info"
         tedge_watchdog = "Warn"
-        c8y_config_plugin = "Debug"
     "#;
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
         let (_dir, config_root_path) = create_temp_system_config(toml_conf)?;

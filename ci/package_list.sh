@@ -15,9 +15,7 @@ export RELEASE_PACKAGES
 # Deprecated packages are still built but not explicitly tested
 # This allows users to still access the packages if needed, however
 # it is only reserved for packages with a more public facing API
-DEPRECATED_PACKAGES=(
-    c8y-configuration-plugin
-)
+DEPRECATED_PACKAGES=()
 export DEPRECATED_PACKAGES
 
 TEST_PACKAGES=(
