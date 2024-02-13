@@ -94,6 +94,7 @@ set_version_variables() {
         GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 2>/dev/null || true)
     fi
 
+    echo "Using GIT_DESCRIBE_RAW=$GIT_DESCRIBE_RAW" >&2
     if [[ "$GIT_DESCRIBE_RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         # Tagged release
         BASE_VERSION="$GIT_DESCRIBE_RAW"
