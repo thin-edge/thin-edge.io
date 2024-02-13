@@ -14,32 +14,28 @@ The following environment variables are set:
 * CONTAINER_VERSION
 * TARBALL_VERSION
 
-NOTES
-
-If you have previously sourced the script into your current shell environment then you will need to unset the GIT_SEMVER variable otherwise the previously created GIT_SEMVER value will be used.
-Alternatively, you can limit to calling the script only from other scripts to avoid leakage of the environment variables between script calls.
-
-Example:
-    unset GIT_SEMVER
-    . $0
-
 USAGE
-    $0 [apk|deb|rpm|container|tarball|all]
+    $0 [apk|deb|rpm|container|tarball|all] [--version <version>]
     # Print out a version
 
     # importing values via a script
     . $0 [--version <version>]
+
+FLAGS
+    --version <version>             Input version to use to generate the package version values
 
 EXAMPLES
 
 . $0
 # Export env variables for use in packaging
 
-unset GIT_SEMVER
 . $0
 # Export env variables for use in package but ignore any previously set value
 
 . $0 --version 1.2.3
+# Export env variables but use an explicit value
+
+. $0 --version 1.0.1-100-gabcdef all
 # Export env variables but use an explicit value
 
 EOT
@@ -91,43 +87,36 @@ set_version_variables() {
     BASE_VERSION=
     BUMP_VERSION=0
 
-    if [ -z "$GIT_SEMVER" ]; then
-        GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 2>/dev/null || true)
-
-        if [[ "$GIT_DESCRIBE_RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            # Tagged release
-            BASE_VERSION="$GIT_DESCRIBE_RAW"
-        elif [[ "$GIT_DESCRIBE_RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            # Pre-release tagged release, e.g. 1.0.0-rc.1
-            BASE_VERSION="$GIT_DESCRIBE_RAW"
-        elif [[ "$GIT_DESCRIBE_RAW" =~ ^[a-z0-9]+$ ]]; then
-            # Note: Sometimes git describe only prints out the git hash when run on a PR branch
-            # from someone else. In such instances this causes the version to be incompatible with
-            # linux package types. For instance, debian versions must start with a digit.
-            # When this situation is detected, git describe is run on the main branch however the
-            # git hash is replaced with the current git hash of the current branch.
-            echo "Using git describe from origin/main" >&2
-            BUILD_COMMIT_HASH="g$GIT_DESCRIBE_RAW"
-            GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 origin/main 2>/dev/null || true)
-            BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f1)
-            BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f2)
-        else
-            BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | sed -E 's|-[0-9]+-g[a-f0-9]+$||g')
-            BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | rev | cut -d- -f2 | rev)
-            BUILD_COMMIT_HASH=$(echo "$GIT_DESCRIBE_RAW" | rev | cut -d- -f1 | rev)
-        fi
-        BUMP_VERSION=1
+    # Allow overriding the GIT_DESCRIBE_RAW value to simulate git describe values
+    if [ -n "$GIT_DESCRIBE_RAW" ]; then
+        echo "Using (raw) version set by user: $GIT_DESCRIBE_RAW" >&2
     else
-        echo "Using version set by user: $GIT_SEMVER" >&2
-        if echo "$GIT_SEMVER" | grep -Eq '.+~.+\+.+'; then
-            BASE_VERSION=$(echo "$GIT_SEMVER" | cut -d'~' -f1)
-            VERSION_META=$(echo "$GIT_SEMVER" | cut -d'~' -f2)
-            BUILD_COMMITS_SINCE=$(echo "$VERSION_META" | cut -d'+' -f1)
-            BUILD_COMMIT_HASH=$(echo "$VERSION_META" | cut -d'+' -f2)
-        else
-            BASE_VERSION="$GIT_SEMVER"
-        fi
+        GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 2>/dev/null || true)
     fi
+
+    if [[ "$GIT_DESCRIBE_RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Tagged release
+        BASE_VERSION="$GIT_DESCRIBE_RAW"
+    elif [[ "$GIT_DESCRIBE_RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+        # Pre-release tagged release, e.g. 1.0.0-rc.1
+        BASE_VERSION="$GIT_DESCRIBE_RAW"
+    elif [[ "$GIT_DESCRIBE_RAW" =~ ^[a-z0-9]+$ ]]; then
+        # Note: Sometimes git describe only prints out the git hash when run on a PR branch
+        # from someone else. In such instances this causes the version to be incompatible with
+        # linux package types. For instance, debian versions must start with a digit.
+        # When this situation is detected, git describe is run on the main branch however the
+        # git hash is replaced with the current git hash of the current branch.
+        echo "Using git describe from origin/main" >&2
+        BUILD_COMMIT_HASH="g$GIT_DESCRIBE_RAW"
+        GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 origin/main 2>/dev/null || true)
+        BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f1)
+        BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f2)
+    else
+        BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | sed -E 's|-[0-9]+-g[a-f0-9]+$||g')
+        BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | rev | cut -d- -f2 | rev)
+        BUILD_COMMIT_HASH=$(echo "$GIT_DESCRIBE_RAW" | rev | cut -d- -f1 | rev)
+    fi
+    BUMP_VERSION=1
 
     if [ -n "$BUILD_COMMITS_SINCE" ]; then
         # If there is build info, it means we are building an unofficial version (e.g. it does not have a git tag)
@@ -232,7 +221,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --version)
             if [ -n "$2" ]; then
-                GIT_SEMVER="$2"
+                GIT_DESCRIBE_RAW="$2"
             fi
             shift
             ;;
