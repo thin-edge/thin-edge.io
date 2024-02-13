@@ -2,7 +2,6 @@ name: build-workflow
 
 on:
   push:
-    branches: [ main ]
     tags:
       - "*"
 
@@ -185,6 +184,7 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.job.target }}
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-20.04
     needs: [test]
     strategy:
@@ -228,6 +228,7 @@ jobs:
   # before publishing the virtual packages (which are architecture agnostic)
   publish-containers:
     name: Publish Containers
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-20.04
     needs: [test]
     env:
@@ -297,6 +298,7 @@ jobs:
   # before publishing the virtual packages (which are architecture agnostic)
   publish-virtual-packages:
     name: Publish Virtual Packages
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-20.04
     needs: [publish]
     steps:
