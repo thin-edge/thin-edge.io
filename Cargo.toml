@@ -8,7 +8,6 @@ members = [
     "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_configuration_plugin",
-    "plugins/tedge_log_plugin",
 ]
 resolver = "2"
 
@@ -132,8 +131,6 @@ strum_macros = "0.24"
 syn = { version = "2", features = ["full", "extra-traits"] }
 tedge-agent = { path = "crates/core/tedge_agent" }
 tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
-tedge-configuration-plugin = { path = "plugins/tedge_configuration_plugin" }
-tedge-log-plugin = { path = "plugins/tedge_log_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tedge-write = { path = "crates/core/tedge_write" }
