@@ -71,14 +71,26 @@ fi
 # Install tooling if missing
 if ! [ -x "$(command -v cloudsmith)" ]; then
     echo 'Install cloudsmith cli' >&2
+    PIP_BIN=""
     if command -v pip3 &>/dev/null; then
-        pip3 install --upgrade cloudsmith-cli
+        PIP_BIN=pip3
     elif command -v pip &>/dev/null; then
-        pip install --upgrade cloudsmith-cli
+        PIP_BIN=pip
     else
         echo "Could not install cloudsmith cli. Reason: pip3/pip is not installed"
         exit 2
     fi
+
+    # Install cloudsmith-cli but control cloudsmith-api version
+    # due to https://github.com/cloudsmith-io/cloudsmith-cli/issues/155
+    # Afterwards revert back to:
+    #   "$PIP_BIN" install cloudsmith-cli
+    "$PIP_BIN" install -r <(
+        cat << EOT
+cloudsmith-cli==1.1.1
+cloudsmith-api==2.0.7
+EOT
+    )
 fi
 
 #
