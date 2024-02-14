@@ -720,7 +720,7 @@ define_tedge_config! {
         #[tedge_config(example = "true", default(value = true))]
         lock_files: bool,
 
-        /// Interval at which the memory usage is logged (in seconds)
+        /// Interval at which the memory usage is logged (in seconds). Logging is disabled if set to 0
         #[tedge_config(example = "60", default(value = 0_u64))]
         log_memory_interval: Seconds,
     },
