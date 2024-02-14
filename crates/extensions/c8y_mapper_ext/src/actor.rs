@@ -7,6 +7,8 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
+use c8y_api::utils::bridge::is_c8y_bridge_established;
+use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -65,6 +67,7 @@ pub struct C8yMapperActor {
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<SyncStart>,
+    bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
 }
 
 #[async_trait]
@@ -74,6 +77,13 @@ impl Actor for C8yMapperActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        // Wait till the c8y bridge is established
+        while let Some(message) = self.bridge_status_messages.recv().await {
+            if is_c8y_bridge_established(&message) {
+                break;
+            }
+        }
+
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             self.mqtt_publisher.send(init_message).await?;
@@ -113,12 +123,14 @@ impl C8yMapperActor {
         messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
         mqtt_publisher: LoggingSender<MqttMessage>,
         timer_sender: LoggingSender<SyncStart>,
+        bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     ) -> Self {
         Self {
             converter,
             messages,
             mqtt_publisher,
             timer_sender,
+            bridge_status_messages,
         }
     }
 
@@ -275,9 +287,11 @@ pub struct C8yMapperBuilder {
     upload_sender: DynSender<IdUploadRequest>,
     download_sender: DynSender<IdDownloadRequest>,
     auth_proxy: ProxyUrlGenerator,
+    bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
 
 impl C8yMapperBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         config: C8yMapperConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
@@ -286,6 +300,7 @@ impl C8yMapperBuilder {
         uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
         downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        service_monitor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
 
@@ -305,6 +320,13 @@ impl C8yMapperBuilder {
             config.auth_proxy_protocol,
         );
 
+        let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+            SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
+        service_monitor.connect_consumer(
+            C8Y_BRIDGE_HEALTH_TOPIC.try_into().unwrap(),
+            bridge_monitor_builder.get_sender(),
+        );
+
         Ok(Self {
             config,
             box_builder,
@@ -314,6 +336,7 @@ impl C8yMapperBuilder {
             upload_sender,
             download_sender,
             auth_proxy,
+            bridge_monitor_builder,
         })
     }
 
@@ -356,12 +379,14 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
         let message_box = self.box_builder.build();
+        let bridge_monitor_box = self.bridge_monitor_builder.build();
 
         Ok(C8yMapperActor::new(
             converter,
             message_box,
             mqtt_publisher,
             timer_sender,
+            bridge_monitor_box,
         ))
     }
 }
