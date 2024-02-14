@@ -1,4 +1,4 @@
-name: hosted-post-merge_version_update
+name: release
 
 on:
   workflow_dispatch:
@@ -21,7 +21,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  versioning:
+  version:
+    name: Increment version
     runs-on: ubuntu-20.04
     permissions:
       contents: write
