@@ -4,13 +4,9 @@ members = [
     "crates/core/*",
     "crates/extensions/*",
     "crates/tests/*",
-    "plugins/c8y_configuration_plugin",
     "plugins/c8y_firmware_plugin",
-    "plugins/c8y_log_plugin",
     "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
-    "plugins/tedge_configuration_plugin",
-    "plugins/tedge_log_plugin",
 ]
 resolver = "2"
 
@@ -45,15 +41,12 @@ backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 batcher = { path = "crates/common/batcher" }
 bytes = "1.4"
-c8y-configuration-plugin = { path = "plugins/c8y_configuration_plugin" }
 c8y-firmware-plugin = { path = "plugins/c8y_firmware_plugin" }
 c8y-remote-access-plugin = { path = "plugins/c8y_remote_access_plugin" }
 c8y_api = { path = "crates/core/c8y_api" }
 c8y_auth_proxy = { path = "crates/extensions/c8y_auth_proxy" }
-c8y_config_manager = { path = "crates/extensions/c8y_config_manager" }
 c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
 c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
-c8y_log_manager = { path = "crates/extensions/c8y_log_manager" }
 c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 camino = "1.1"
 cap = "0.1"
@@ -137,8 +130,6 @@ strum_macros = "0.24"
 syn = { version = "2", features = ["full", "extra-traits"] }
 tedge-agent = { path = "crates/core/tedge_agent" }
 tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
-tedge-configuration-plugin = { path = "plugins/tedge_configuration_plugin" }
-tedge-log-plugin = { path = "plugins/tedge_log_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tedge-write = { path = "crates/core/tedge_write" }

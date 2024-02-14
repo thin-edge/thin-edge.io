@@ -80,8 +80,7 @@ ARCH=
 TARGET=()
 BUILD_OPTIONS=()
 BUILD=1
-INCLUDE_TEST_PACKAGES=1
-INCLUDE_DEPRECATED_PACKAGES=1
+INCLUDE_DEPRECATED_PACKAGES=0
 
 REST_ARGS=()
 while [ $# -gt 0 ]
@@ -91,10 +90,9 @@ do
             BUILD=0
             ;;
 
-        --skip-test-packages)
-            INCLUDE_TEST_PACKAGES=0
+        --include-deprecated-packages)
+            INCLUDE_DEPRECATED_PACKAGES=1
             ;;
-
         --skip-deprecated-packages)
             INCLUDE_DEPRECATED_PACKAGES=0
             ;;
@@ -150,7 +148,7 @@ if [ -z "$ARCH" ]; then
 fi
 
 
-# Load the release package list as $RELEASE_PACKAGES, $DEPRECATED_PACKAGES and $TEST_PACKAGES
+# Load the release package list as $RELEASE_PACKAGES, $DEPRECATED_PACKAGES
 # shellcheck disable=SC1091
 source ./ci/package_list.sh
 
@@ -209,16 +207,3 @@ if [ "$INCLUDE_DEPRECATED_PACKAGES" = "1" ]; then
 fi
 
 ./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --output "$OUTPUT_DIR"
-
-if [ "$INCLUDE_TEST_PACKAGES" = 1 ]; then
-    if [ "$BUILD" = 1 ]; then
-        # Strip and build for test artifacts
-        for PACKAGE in "${TEST_PACKAGES[@]}"
-        do
-            cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
-        done
-    fi
-
-    # Package test binaries (deb only)
-    ./ci/build_scripts/package.sh build "$ARCH" "${TEST_PACKAGES[@]}" --types deb --output "$OUTPUT_DIR" --no-clean
-fi
