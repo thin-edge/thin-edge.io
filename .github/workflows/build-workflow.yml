@@ -80,7 +80,7 @@ jobs:
           cache: false
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - name: Build for ${{ matrix.job.target }}
         run: just release ${{ matrix.job.target }}
 
@@ -215,7 +215,7 @@ jobs:
           name: packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/packages/
 
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - name: Publish packages
         env:
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
@@ -242,7 +242,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - id: tedge
         name: Get Version
         run: |
@@ -318,7 +318,7 @@ jobs:
           go-version: 'stable'
           cache: false
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - name: Build virtual packages
         run: just release-linux-virtual
       - name: Publish packages

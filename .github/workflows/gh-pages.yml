@@ -57,7 +57,7 @@ jobs:
           cache: yarn
           cache-dependency-path: tedge-docs/yarn.lock
 
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
 
       - name: Setup project
         working-directory: tedge-docs
