@@ -26,6 +26,8 @@ jobs:
             echo "Skipping as tag already exists"
             exit 0
           fi
+          git config --global user.email "info@thin-edge.io"
+          git config --global user.name "Versioneer"
           echo "Creating tag: $VERSION"
           git tag -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
