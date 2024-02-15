@@ -17,6 +17,7 @@ use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
@@ -36,6 +37,7 @@ impl TEdgeComponent for CumulocityMapper {
             start_basic_actors(self.session_name(), &tedge_config).await?;
 
         let mqtt_config = tedge_config.mqtt_config()?;
+        let bridge_actor = MqttBridgeActorBuilder::new(&tedge_config).await;
         let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
         let mut http_actor = HttpActor::new().builder();
         let c8y_http_config = (&tedge_config).try_into()?;
@@ -84,6 +86,7 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
         runtime.spawn(old_to_new_agent_adapter).await?;
+        runtime.spawn(bridge_actor).await?;
         runtime.run_to_completion().await?;
 
         Ok(())

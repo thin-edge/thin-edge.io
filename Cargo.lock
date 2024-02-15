@@ -3792,6 +3792,7 @@ dependencies = [
  "tedge_file_system_ext",
  "tedge_health_ext",
  "tedge_http_ext",
+ "tedge_mqtt_bridge",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
  "tedge_timer_ext",
@@ -4054,6 +4055,25 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml 0.7.8",
+]
+
+[[package]]
+name = "tedge_mqtt_bridge"
+version = "1.0.0"
+dependencies = [
+ "assert-json-diff",
+ "async-trait",
+ "certificate",
+ "futures",
+ "mqtt_channel",
+ "mqtt_tests",
+ "rumqttc",
+ "serde_json",
+ "tedge_actors",
+ "tedge_config",
+ "tedge_utils",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
