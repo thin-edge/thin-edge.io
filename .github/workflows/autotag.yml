@@ -22,7 +22,7 @@ jobs:
             echo "Could not detect workspace package version (.workspace.package.version) from Cargo.toml"
             exit 1
           fi
-          if [ -n $(git tag -l "$VERSION") ]; then
+          if [ -n "$(git tag -l "$VERSION")" ]; then
             echo "Skipping as tag already exists"
             exit 0
           fi
