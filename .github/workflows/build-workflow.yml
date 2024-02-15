@@ -232,7 +232,10 @@ jobs:
   # before publishing the virtual packages (which are architecture agnostic)
   publish-containers:
     name: Publish Containers
-    if: github.event_name != 'pull_request_target'
+    if: |
+      always() &&
+      github.event_name != 'pull_request_target' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
     needs: [test]
     env:
@@ -302,7 +305,10 @@ jobs:
   # before publishing the virtual packages (which are architecture agnostic)
   publish-virtual-packages:
     name: Publish Virtual Packages
-    if: github.event_name != 'pull_request_target'
+    if: |
+      always() &&
+      github.event_name != 'pull_request_target' &&
+      needs.publish.result == 'success'
     runs-on: ubuntu-20.04
     needs: [publish]
     steps:
