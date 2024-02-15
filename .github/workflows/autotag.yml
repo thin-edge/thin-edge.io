@@ -9,13 +9,14 @@ on:
 jobs:
   create_tag:
     runs-on: ubuntu-latest
+    if: github.repository_owner == 'thin-edge'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{secrets.ACTIONS_PAT}}
       - name: Create tag if changed
-        if: github.repository_owner == 'thin-edge'
         run: |
           VERSION=$(yq '.workspace.package.version' Cargo.toml)
           if [ -z "$VERSION" ]; then
