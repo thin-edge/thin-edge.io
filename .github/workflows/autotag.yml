@@ -17,8 +17,8 @@ jobs:
       - name: Create tag if changed
         if: github.repository_owner == 'thin-edge'
         run: |
-          VERISON=$(yq '.workspace.package.version' Cargo.toml)
-          if [ -z "$VERISON" ]; then
+          VERSION=$(yq '.workspace.package.version' Cargo.toml)
+          if [ -z "$VERSION" ]; then
             echo "Could not detect workspace package version (.workspace.package.version) from Cargo.toml"
             exit 1
           fi
