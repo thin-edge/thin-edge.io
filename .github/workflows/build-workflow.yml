@@ -186,6 +186,7 @@ jobs:
   publish:
     name: Publish ${{ matrix.job.target }}
     if: |
+      always() &&
       github.event_name != 'pull_request_target' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
