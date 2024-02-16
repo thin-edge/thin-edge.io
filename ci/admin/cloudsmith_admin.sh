@@ -162,11 +162,11 @@ promote_version() {
 
     cloudsmith ls pkg thinedge/tedge-main -q "$query" -F json -l 500 \
     | jq '.data[] | .namespace + "/" + .repository + "/" + .slug' -r \
-    | xargs -Ipackage cloudsmith cp package thin-edge/tedge-release "${COMMON_ARGS[@]}"
+    | xargs -Ipackage cloudsmith cp "${COMMON_ARGS[@]}" --no-wait-for-sync "package" tedge-release
 
     cloudsmith ls pkg thinedge/tedge-main-armv6 -q "$query" -F json -l 500 \
     | jq '.data[] | .namespace + "/" + .repository + "/" + .slug' -r \
-    | xargs -Ipackage cloudsmith cp package thin-edge/tedge-release-armv6 "${COMMON_ARGS[@]}"
+    | xargs -Ipackage cloudsmith cp "${COMMON_ARGS[@]}" --no-wait-for-sync "package" tedge-release-armv6
 }
 
 #
