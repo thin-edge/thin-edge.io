@@ -1,72 +1,63 @@
-use crate::Builder;
 use crate::ChannelError;
+use crate::CloneSender;
+use crate::DynSender;
+use crate::LoggingReceiver;
 use crate::Message;
 use crate::MessageReceiver;
+use crate::MessageSink;
 use crate::NoConfig;
+use crate::RequestEnvelope;
 use crate::RuntimeRequest;
 use crate::Sender;
-use crate::ServiceConsumer;
-use crate::ServiceProvider;
-use crate::SimpleMessageBox;
-use crate::SimpleMessageBoxBuilder;
+use async_trait::async_trait;
+use futures::channel::oneshot;
 use futures::StreamExt;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
-use tokio::select;
 
 /// A message box for a request-response server
-pub type ServerMessageBox<Request, Response> =
-    SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
-
-/// Internal id assigned to a client actor of a server actor
-pub type ClientId = usize;
+pub type ServerMessageBox<Request, Response> = LoggingReceiver<RequestEnvelope<Request, Response>>;
 
 /// A message box for services that handles requests concurrently
-pub struct ConcurrentServerMessageBox<Request: Debug, Response: Debug> {
+pub struct ConcurrentServerMessageBox<Request: Debug, Response> {
     /// Max concurrent requests
     max_concurrency: usize,
 
     /// Message box to interact with clients of this service
-    clients: ServerMessageBox<Request, Response>,
+    requests: ServerMessageBox<Request, Response>,
 
     /// Pending responses
-    pending_responses: futures::stream::FuturesUnordered<PendingResult<(usize, Response)>>,
+    running_request_handlers: futures::stream::FuturesUnordered<RequestHandler>,
 }
 
-type PendingResult<R> = tokio::task::JoinHandle<R>;
+type RequestHandler = tokio::task::JoinHandle<()>;
 
 impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Response> {
     pub(crate) fn new(
         max_concurrency: usize,
-        clients: ServerMessageBox<Request, Response>,
+        requests: ServerMessageBox<Request, Response>,
     ) -> Self {
         ConcurrentServerMessageBox {
             max_concurrency,
-            clients,
-            pending_responses: futures::stream::FuturesUnordered::new(),
+            requests,
+            running_request_handlers: futures::stream::FuturesUnordered::new(),
         }
     }
 
-    pub async fn recv(&mut self) -> Option<(ClientId, Request)> {
-        self.next_request().await
-    }
-
-    pub async fn send(&mut self, message: (ClientId, Response)) -> Result<(), ChannelError> {
-        self.clients.send(message).await
-    }
-
-    async fn next_request(&mut self) -> Option<(usize, Request)> {
+    pub async fn next_request(&mut self) -> Option<RequestEnvelope<Request, Response>> {
         if self.await_idle_processor().await.is_break() {
             return None;
         }
 
         loop {
             tokio::select! {
-                Some(request) = self.clients.recv() => {
+                Some(request) = self.requests.recv() => {
                     return Some(request);
                 }
-                Some(result) = self.pending_responses.next() => {
-                    self.send_result(result).await;
+                Some(result) = self.running_request_handlers.next() => {
+                    if let Err(err) = result {
+                        log::error!("Fail to run a request to completion: {err}");
+                    }
                 }
                 else => {
                     return None
@@ -76,13 +67,15 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
     }
 
     async fn await_idle_processor(&mut self) -> ControlFlow<(), ()> {
-        if self.pending_responses.len() < self.max_concurrency {
+        if self.running_request_handlers.len() < self.max_concurrency {
             return ControlFlow::Continue(());
         }
 
-        select! {
-            Some(result) = self.pending_responses.next() => {
-                self.send_result(result).await;
+        tokio::select! {
+            Some(result) = self.running_request_handlers.next() => {
+                if let Err(err) = result {
+                    log::error!("Fail to run a request to completion: {err}");
+                }
                 ControlFlow::Continue(())
             },
             // recv consumes the message from the channel, so we can't just use
@@ -90,59 +83,69 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
             //
             // a better approach would be to do select on top-level entry point,
             // then we'd be sure we're able to cancel when anything happens, not
-            // just when waiting for pending_responses, e.g. if send_result
-            // stalls
-            Some(RuntimeRequest::Shutdown) = self.clients.recv_signal() => {
+            // just when waiting for pending_responses.
+            Some(RuntimeRequest::Shutdown) = self.requests.recv_signal() => {
                 ControlFlow::Break(())
             }
             else => ControlFlow::Break(())
         }
     }
 
-    pub fn send_response_once_done(&mut self, pending_result: PendingResult<(ClientId, Response)>) {
-        self.pending_responses.push(pending_result);
-    }
-
-    async fn send_result(&mut self, result: Result<(usize, Response), tokio::task::JoinError>) {
-        if let Ok(response) = result {
-            let _ = self.clients.send(response).await;
-        }
-        // TODO handle error cases:
-        // - cancelled task
-        // - task panics
-        // - send fails
+    pub fn register_request_handler(&mut self, pending_result: RequestHandler) {
+        self.running_request_handlers.push(pending_result);
     }
 }
 
-/// Client side handler of requests/responses sent to an actor
-/// Client side handler that allows you to send requests to an actor
-/// and synchronously wait for its response using the `await_response` function.
-///
-/// Note that this message box sends requests and receive responses.
-pub struct ClientMessageBox<Request: Message, Response: Message + Debug> {
-    messages: SimpleMessageBox<Response, Request>,
+/// A message box used by a client to request a server and await the responses.
+pub struct ClientMessageBox<Request, Response> {
+    sender: DynSender<RequestEnvelope<Request, Response>>,
 }
 
 impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
-    /// Create a new `ClientMessageBox` connected to the service.
+    /// Create a [ClientMessageBox] connected to a given [Server]
     pub fn new(
-        client_name: &str,
-        service: &mut impl ServiceProvider<Request, Response, NoConfig>,
+        server: &mut impl MessageSink<RequestEnvelope<Request, Response>, NoConfig>,
     ) -> Self {
-        let capacity = 1; // At most one response is ever expected
-        let messages = SimpleMessageBoxBuilder::new(client_name, capacity)
-            .with_connection(service)
-            .build();
-        ClientMessageBox { messages }
+        ClientMessageBox {
+            sender: server.get_sender(),
+        }
     }
 
     /// Send the request and await for a response
     pub async fn await_response(&mut self, request: Request) -> Result<Response, ChannelError> {
-        self.messages.send(request).await?;
-        self.messages
-            .recv()
+        let (sender, receiver) = oneshot::channel::<Response>();
+        let reply_to = Box::new(Some(sender));
+        self.sender
+            .send(RequestEnvelope { request, reply_to })
+            .await?;
+        let response = receiver.await;
+        response.map_err(|_| ChannelError::ReceiveError())
+    }
+}
+
+/// A [Sender] used by a client to send requests to a server,
+/// redirecting the responses to another recipient.
+pub(crate) struct RequestSender<Request: 'static, Response: 'static> {
+    pub(crate) sender: DynSender<RequestEnvelope<Request, Response>>,
+    pub(crate) reply_to: DynSender<Response>,
+}
+
+impl<Request, Response> Clone for RequestSender<Request, Response> {
+    fn clone(&self) -> Self {
+        RequestSender {
+            sender: self.sender.sender_clone(),
+            reply_to: self.reply_to.sender_clone(),
+        }
+    }
+}
+
+#[async_trait]
+impl<Request: Message, Response: Message> Sender<Request> for RequestSender<Request, Response> {
+    async fn send(&mut self, request: Request) -> Result<(), ChannelError> {
+        let reply_to = self.reply_to.sender();
+        self.sender
+            .send(RequestEnvelope { request, reply_to })
             .await
-            .ok_or(ChannelError::ReceiveError())
     }
 }
 
@@ -151,15 +154,17 @@ impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
 mod tests {
     use super::*;
 
-    use crate::test_helpers::MessageReceiverExt;
     use crate::test_helpers::ServiceProviderExt;
+    use crate::Builder;
     use crate::ConcurrentServerActor;
     use crate::DynSender;
+    use crate::NoConfig;
     use crate::Runtime;
     use crate::RuntimeRequest;
     use crate::RuntimeRequestSink;
     use crate::Server;
     use crate::ServerMessageBoxBuilder;
+    use crate::SimpleMessageBox;
     use async_trait::async_trait;
     use std::time::Duration;
     use tokio::sync::mpsc::error::TryRecvError;
@@ -167,7 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn only_processes_messages_up_to_max_concurrency() {
-        let mut builder = SimpleMessageBoxBuilder::new("ConcurrentServerMessageBoxTest", 16);
+        let mut builder = ServerMessageBoxBuilder::new("ConcurrentServerMessageBoxTest", 16);
         let mut test_box = builder.new_client_box(NoConfig);
         let message_box: ServerMessageBox<i32, i32> = builder.build();
         let mut concurrent_box = ConcurrentServerMessageBox::new(4, message_box);
@@ -181,47 +186,44 @@ mod tests {
 
         // send all messages to the concurrent message box
         for i in 0..5 {
-            test_box.send((i as usize, i)).await.unwrap();
+            test_box.send(i).await.unwrap();
         }
 
         // spawn 1st request that we're going to pause/resume
         tokio::spawn(async move {
-            let request = concurrent_box.recv().await.unwrap();
-            concurrent_box.send_response_once_done(tokio::spawn(async move {
+            let request = concurrent_box.next_request().await.unwrap();
+            concurrent_box.register_request_handler(tokio::spawn(async move {
                 resume_rx.await.unwrap();
-                request
             }));
             // After a call to `send_response_once_done` finishes, we
             // consider the task to have started executing
             tx.send(request).unwrap();
 
             loop {
-                let request = concurrent_box.recv().await.unwrap();
-                concurrent_box.send_response_once_done(tokio::spawn(async move {
+                let request = concurrent_box.next_request().await.unwrap();
+                concurrent_box.register_request_handler(tokio::spawn(async move {
                     // keep other requests executing
-                    std::future::pending::<()>().await;
-                    request
+                    std::future::pending::<()>().await
                 }));
                 tx.send(request).unwrap();
             }
         });
 
         // Expect first 4 tasks to be in-progress
-        assert_eq!(rx.recv().await, Some((0usize, 0)));
-        assert_eq!(rx.recv().await, Some((1usize, 1)));
-        assert_eq!(rx.recv().await, Some((2usize, 2)));
-        assert_eq!(rx.recv().await, Some((3usize, 3)));
+        assert_eq!(rx.recv().await.map(|r| r.request), Some(0));
+        assert_eq!(rx.recv().await.map(|r| r.request), Some(1));
+        assert_eq!(rx.recv().await.map(|r| r.request), Some(2));
+        assert_eq!(rx.recv().await.map(|r| r.request), Some(3));
 
         // Expect at this point in time that 5th task hasn't started executing
         // yet
-        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+        assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         // finish 1st task
         resume_tx.send(()).unwrap();
 
         // expect 5th task started executing only after 1st completed
-        test_box.assert_received([(0usize, 0)]).await;
-        assert_eq!(rx.recv().await, Some((4usize, 4)));
+        assert_eq!(rx.recv().await.map(|r| r.request), Some(4));
     }
 
     // The purpose of the test is to check that the server which uses a

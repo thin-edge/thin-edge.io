@@ -235,7 +235,7 @@ impl<Output> LoggingSender<Output> {
 }
 
 #[async_trait]
-impl<Output: Message + Debug> Sender<Output> for LoggingSender<Output> {
+impl<Output: Message> Sender<Output> for LoggingSender<Output> {
     async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
         log_message_sent(&self.name, &message);
         self.sender.send(message).await

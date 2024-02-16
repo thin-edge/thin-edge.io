@@ -11,10 +11,13 @@ use std::time::Duration;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
+use tedge_actors::MessageSink;
 use tedge_actors::NoConfig;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
@@ -94,12 +97,12 @@ pub struct C8YHttpProxyBuilder {
 impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
-        http: &mut impl ServiceProvider<HttpRequest, HttpResult, NoConfig>,
-        jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
+        http: &mut impl Service<HttpRequest, HttpResult>,
+        jwt: &mut impl Service<(), JwtResult>,
     ) -> Self {
         let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
-        let http = ClientMessageBox::new("C8Y-REST => HTTP", http);
-        let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt);
+        let http = ClientMessageBox::new(http);
+        let jwt = JwtRetriever::new(jwt);
         C8YHttpProxyBuilder {
             config,
             clients,
@@ -134,6 +137,16 @@ impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBu
         response_sender: DynSender<C8YRestResult>,
     ) -> DynSender<C8YRestRequest> {
         self.clients.connect_consumer(config, response_sender)
+    }
+}
+
+impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>, NoConfig> for C8YHttpProxyBuilder {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn get_sender(&self) -> DynSender<RequestEnvelope<C8YRestRequest, C8YRestResult>> {
+        self.clients.get_sender()
     }
 }
 

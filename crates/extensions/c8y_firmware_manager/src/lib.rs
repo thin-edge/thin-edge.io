@@ -14,7 +14,6 @@ use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
 use actor::FirmwareManagerMessageBox;
-use c8y_http_proxy::credentials::JwtRequest;
 use c8y_http_proxy::credentials::JwtResult;
 use c8y_http_proxy::credentials::JwtRetriever;
 pub use config::*;
@@ -26,6 +25,7 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_api::path::DataDir;
 use tedge_mqtt_ext::MqttMessage;
@@ -48,7 +48,7 @@ impl FirmwareManagerBuilder {
     pub fn try_new(
         config: FirmwareManagerConfig,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        jwt_actor: &mut impl ServiceProvider<JwtRequest, JwtResult, NoConfig>,
+        jwt_actor: &mut impl Service<(), JwtResult>,
         timer_actor: &mut impl ServiceProvider<OperationSetTimeout, OperationTimeout, NoConfig>,
         downloader_actor: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
     ) -> Result<FirmwareManagerBuilder, FileError> {
@@ -64,7 +64,7 @@ impl FirmwareManagerBuilder {
 
         let mqtt_publisher =
             mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.clone().into());
-        let jwt_retriever = JwtRetriever::new("Firmware => JWT", jwt_actor);
+        let jwt_retriever = JwtRetriever::new(jwt_actor);
         let timer_sender = timer_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let download_sender = downloader_actor.connect_consumer(NoConfig, input_sender.into());
         Ok(Self {

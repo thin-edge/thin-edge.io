@@ -29,6 +29,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -295,7 +296,7 @@ impl C8yMapperBuilder {
     pub fn try_new(
         config: C8yMapperConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
+        http: &mut impl Service<C8YRestRequest, C8YRestResult>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
         uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
         downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
@@ -310,7 +311,7 @@ impl C8yMapperBuilder {
             config.topics.clone(),
             box_builder.get_sender().sender_clone(),
         );
-        let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
+        let http_proxy = C8YHttpProxy::new(http);
         let timer_sender =
             timer.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
         let upload_sender =

@@ -14,15 +14,19 @@ use mockito::Matcher;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::MessageReceiver;
+use tedge_actors::Sender;
 use tedge_actors::Server;
 use tedge_actors::ServerActor;
 use tedge_actors::ServerMessageBoxBuilder;
-use tedge_http_ext::test_helpers::FakeHttpServerBox;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
+use tedge_http_ext::HttpResult;
 use time::macros::datetime;
 
 #[tokio::test]
@@ -44,7 +48,7 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     .bearer_auth(token)
     .build()
     .unwrap();
-    c8y.assert_recv(Some(init_request)).await;
+    assert_recv(&mut c8y, Some(init_request)).await;
 
     // Cumulocity returns the internal device id
     let c8y_response = HttpResponseBuilder::new()
@@ -65,14 +69,17 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     });
 
     // then the upload request received by c8y is related to the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-            .bearer_auth(token)
-            .header("content-type", "application/json")
-            .header("accept", "application/json")
-            .build()
-            .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
+                .bearer_auth(token)
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .build()
+                .unwrap(),
+        ),
+    )
     .await;
 }
 
@@ -95,19 +102,22 @@ async fn retry_internal_id_on_expired_jwt() {
     .bearer_auth(token)
     .build()
     .unwrap();
-    c8y.assert_recv(Some(init_request)).await;
+    assert_recv(&mut c8y, Some(init_request)).await;
 
     // Cumulocity returns unauthorized error (401), because the jwt token has expired
     let c8y_response = HttpResponseBuilder::new().status(401).build().unwrap();
     c8y.send(Ok(c8y_response)).await.unwrap();
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::get(format!(
-            "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
-        ))
-        .bearer_auth(token)
-        .build()
-        .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::get(format!(
+                "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+            ))
+            .bearer_auth(token)
+            .build()
+            .unwrap(),
+        ),
+    )
     .await;
     // Mapper retries to get the internal device id, after getting a fresh jwt token
     let c8y_response = HttpResponseBuilder::new()
@@ -128,14 +138,17 @@ async fn retry_internal_id_on_expired_jwt() {
     });
 
     // then the upload request received by c8y is related to the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-            .bearer_auth(token)
-            .header("content-type", "application/json")
-            .header("accept", "application/json")
-            .build()
-            .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
+                .bearer_auth(token)
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .build()
+                .unwrap(),
+        ),
+    )
     .await;
 }
 
@@ -164,7 +177,7 @@ async fn retry_get_internal_id_when_not_found() {
             .bearer_auth(token)
             .build()
             .unwrap();
-        c8y.assert_recv(Some(init_request)).await;
+        assert_recv(&mut c8y, Some(init_request)).await;
         let c8y_response = HttpResponseBuilder::new()
             .status(200)
             .json(&InternalIdResponse::new("100", main_device_id))
@@ -177,12 +190,15 @@ async fn retry_get_internal_id_when_not_found() {
 
         // Fail the first 2 internal id lookups for the child device
         for _ in 0..2 {
-            c8y.assert_recv(Some(
-                HttpRequestBuilder::get(&get_internal_id_url)
-                    .bearer_auth(token)
-                    .build()
-                    .unwrap(),
-            ))
+            assert_recv(
+                &mut c8y,
+                Some(
+                    HttpRequestBuilder::get(&get_internal_id_url)
+                        .bearer_auth(token)
+                        .build()
+                        .unwrap(),
+                ),
+            )
             .await;
             let c8y_response = HttpResponseBuilder::new()
                 .status(StatusCode::NOT_FOUND)
@@ -192,12 +208,15 @@ async fn retry_get_internal_id_when_not_found() {
         }
 
         // Let the next get_id request succeed
-        c8y.assert_recv(Some(
-            HttpRequestBuilder::get(&get_internal_id_url)
-                .bearer_auth(token)
-                .build()
-                .unwrap(),
-        ))
+        assert_recv(
+            &mut c8y,
+            Some(
+                HttpRequestBuilder::get(&get_internal_id_url)
+                    .bearer_auth(token)
+                    .build()
+                    .unwrap(),
+            ),
+        )
         .await;
         let c8y_response = HttpResponseBuilder::new()
             .status(200)
@@ -208,15 +227,18 @@ async fn retry_get_internal_id_when_not_found() {
 
         // Then let the software_list update succeed
         let c8y_software_list = C8yUpdateSoftwareListResponse::default();
-        c8y.assert_recv(Some(
-            HttpRequestBuilder::put(format!("https://{c8y_host}/inventory/managedObjects/200"))
-                .header("content-type", "application/json")
-                .header("accept", "application/json")
-                .bearer_auth(token)
-                .json(&c8y_software_list)
-                .build()
-                .unwrap(),
-        ))
+        assert_recv(
+            &mut c8y,
+            Some(
+                HttpRequestBuilder::put(format!("https://{c8y_host}/inventory/managedObjects/200"))
+                    .header("content-type", "application/json")
+                    .header("accept", "application/json")
+                    .bearer_auth(token)
+                    .json(&c8y_software_list)
+                    .build()
+                    .unwrap(),
+            ),
+        )
         .await;
         let c8y_response = HttpResponseBuilder::new().status(200).build().unwrap();
         c8y.send(Ok(c8y_response)).await.unwrap();
@@ -256,7 +278,7 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
             .bearer_auth(token)
             .build()
             .unwrap();
-        c8y.assert_recv(Some(init_request)).await;
+        assert_recv(&mut c8y, Some(init_request)).await;
         // ...respond with its internal id
         let c8y_response = HttpResponseBuilder::new()
             .status(200)
@@ -269,12 +291,15 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
         loop {
             let get_internal_id_url =
                 format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{child_device_id}");
-            c8y.assert_recv(Some(
-                HttpRequestBuilder::get(&get_internal_id_url)
-                    .bearer_auth(token)
-                    .build()
-                    .unwrap(),
-            ))
+            assert_recv(
+                &mut c8y,
+                Some(
+                    HttpRequestBuilder::get(&get_internal_id_url)
+                        .bearer_auth(token)
+                        .build()
+                        .unwrap(),
+                ),
+            )
             .await;
             let c8y_response = HttpResponseBuilder::new()
                 .status(StatusCode::NOT_FOUND)
@@ -459,17 +484,20 @@ async fn retry_software_list_once_with_fresh_internal_id() {
 
     let c8y_software_list = C8yUpdateSoftwareListResponse::default();
     // then the upload request received by c8y is related to the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::put(format!(
-            "https://{c8y_host}/inventory/managedObjects/{device_id}"
-        ))
-        .header("content-type", "application/json")
-        .header("accept", "application/json")
-        .bearer_auth(token)
-        .json(&c8y_software_list)
-        .build()
-        .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::put(format!(
+                "https://{c8y_host}/inventory/managedObjects/{device_id}"
+            ))
+            .header("content-type", "application/json")
+            .header("accept", "application/json")
+            .bearer_auth(token)
+            .json(&c8y_software_list)
+            .build()
+            .unwrap(),
+        ),
+    )
     .await;
 
     // The software list upload fails because the device identified with internal id not found
@@ -481,14 +509,17 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     c8y.send(Ok(c8y_response)).await.unwrap();
 
     // Now the mapper gets a new internal id for the specific device id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::get(format!(
-            "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
-        ))
-        .bearer_auth(token)
-        .build()
-        .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::get(format!(
+                "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+            ))
+            .bearer_auth(token)
+            .build()
+            .unwrap(),
+        ),
+    )
     .await;
 
     // Cumulocity returns the internal device id, after retrying with the fresh jwt token
@@ -501,17 +532,20 @@ async fn retry_software_list_once_with_fresh_internal_id() {
 
     let c8y_software_list = C8yUpdateSoftwareListResponse::default();
     // then the upload request received by c8y is related to the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::put(format!(
-            "https://{c8y_host}/inventory/managedObjects/{device_id}"
-        ))
-        .bearer_auth(token)
-        .header("content-type", "application/json")
-        .header("accept", "application/json")
-        .json(&c8y_software_list)
-        .build()
-        .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::put(format!(
+                "https://{c8y_host}/inventory/managedObjects/{device_id}"
+            ))
+            .bearer_auth(token)
+            .header("content-type", "application/json")
+            .header("accept", "application/json")
+            .json(&c8y_software_list)
+            .build()
+            .unwrap(),
+        ),
+    )
     .await;
 }
 
@@ -534,7 +568,7 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
     .bearer_auth(token)
     .build()
     .unwrap();
-    c8y.assert_recv(Some(init_request)).await;
+    assert_recv(&mut c8y, Some(init_request)).await;
     // Cumulocity returns the internal device id
     let c8y_response = HttpResponseBuilder::new()
         .status(200)
@@ -552,14 +586,17 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
             .unwrap();
     });
     // then the upload request received by c8y is related to the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-            .bearer_auth(token)
-            .header("content-type", "application/json")
-            .header("accept", "application/json")
-            .build()
-            .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
+                .bearer_auth(token)
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .build()
+                .unwrap(),
+        ),
+    )
     .await;
 
     // Creating the event over http failed due to the device is NOT_FOUND
@@ -570,7 +607,20 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
         .unwrap();
     c8y.send(Ok(c8y_response)).await.unwrap();
 
-    // Mapper retries the call with internal id
+    // Mapper retries the call with a request to get the internal id
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::get(format!(
+                "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+            ))
+            .bearer_auth(token)
+            .build()
+            .unwrap(),
+        ),
+    )
+    .await;
+
     let c8y_response = HttpResponseBuilder::new()
         .status(200)
         .json(&InternalIdResponse::new(device_id, external_id))
@@ -578,26 +628,18 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
         .unwrap();
     c8y.send(Ok(c8y_response)).await.unwrap();
 
-    // Now there is a request to get the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::get(format!(
-            "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
-        ))
-        .bearer_auth(token)
-        .build()
-        .unwrap(),
-    ))
-    .await;
-
     // then the upload request received by c8y is related to the internal id
-    c8y.assert_recv(Some(
-        HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-            .bearer_auth(token)
-            .header("content-type", "application/json")
-            .header("accept", "application/json")
-            .build()
-            .unwrap(),
-    ))
+    assert_recv(
+        &mut c8y,
+        Some(
+            HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
+                .bearer_auth(token)
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .build()
+                .unwrap(),
+        ),
+    )
     .await;
 }
 
@@ -613,10 +655,10 @@ async fn spawn_c8y_http_proxy(
     device_id: String,
     tmp_dir: PathBuf,
     token: &str,
-) -> (C8YHttpProxy, FakeHttpServerBox) {
+) -> (C8YHttpProxy, FakeServerBox<HttpRequest, HttpResult>) {
     let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
 
-    let mut http = FakeHttpServerBox::builder();
+    let mut http = FakeServerBox::builder();
 
     let config = C8YHttpConfig {
         c8y_host,
@@ -626,7 +668,7 @@ async fn spawn_c8y_http_proxy(
         retry_interval: Duration::from_millis(10),
     };
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
-    let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);
+    let proxy = C8YHttpProxy::new(&mut c8y_proxy_actor);
 
     let jwt_actor = ServerActor::new(
         ConstJwtRetriever {
@@ -665,4 +707,12 @@ impl Server for DynamicJwtRetriever {
             Ok("Fresh JWT token".into())
         }
     }
+}
+
+async fn assert_recv(
+    from: &mut FakeServerBox<HttpRequest, HttpResult>,
+    expected: Option<HttpRequest>,
+) {
+    let actual = from.recv().await;
+    tedge_http_ext::test_helpers::assert_request_eq(actual, expected)
 }

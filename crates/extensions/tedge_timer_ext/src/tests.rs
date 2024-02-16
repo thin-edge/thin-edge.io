@@ -8,17 +8,19 @@ use tedge_actors::DynSender;
 use tedge_actors::Message;
 use tedge_actors::MessageReceiver;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tokio::task::JoinHandle;
 
 #[tokio::test]
 async fn timeout_requests_lead_to_chronological_timeout_responses() {
     let mut client_box_builder = SimpleMessageBoxBuilder::new("Test timers", 16);
-    let _signal_handler = spawn_timer_actor(&mut client_box_builder).await;
+    let (_actor_handle, _signal_handler) = spawn_timer_actor(&mut client_box_builder).await;
     let mut client_box = client_box_builder.build();
 
     client_box
@@ -68,7 +70,7 @@ async fn timeout_requests_lead_to_chronological_timeout_responses() {
 #[tokio::test]
 async fn should_shutdown_even_if_there_are_pending_timers() {
     let mut client_box_builder = SimpleMessageBoxBuilder::new("Test timers", 16);
-    let mut signal_handler = spawn_timer_actor(&mut client_box_builder).await;
+    let (actor_handle, mut signal_handler) = spawn_timer_actor(&mut client_box_builder).await;
     let mut client_box = client_box_builder.build();
 
     // Send a long running timer.
@@ -99,17 +101,17 @@ async fn should_shutdown_even_if_there_are_pending_timers() {
     signal_handler.send(RuntimeRequest::Shutdown).await.unwrap();
 
     // The actor timer is expected to shutdown immediately
-    assert_eq!(
-        Ok(None),
-        tokio::time::timeout(Duration::from_millis(100), client_box.recv()).await
-    );
+    tokio::time::timeout(Duration::from_millis(100), actor_handle)
+        .await
+        .expect("actor failed to shutdown immediately")
+        .expect("spawn failed")
+        .expect("actor failed")
 }
 
 #[tokio::test]
 async fn should_process_all_pending_timers_on_end_of_inputs() {
     let mut client_box_builder = SimpleMessageBoxBuilder::new("Test timers", 16);
-    let mut runtime_box = client_box_builder.get_signal_sender();
-    let _ = spawn_timer_actor(&mut client_box_builder).await;
+    let (_actor_handle, _signal_handler) = spawn_timer_actor(&mut client_box_builder).await;
     let mut client_box = client_box_builder.build();
 
     // Send some timeout requests
@@ -130,10 +132,7 @@ async fn should_process_all_pending_timers_on_end_of_inputs() {
         .unwrap();
 
     // Then close the stream of requests
-    runtime_box
-        .send(RuntimeRequest::Shutdown)
-        .await
-        .expect("fail to shutdown");
+    let (_, mut client_box) = client_box.into_split();
 
     // The actor timer is expected to shutdown,
     // but *only* after all the pending requests have been processed.
@@ -147,15 +146,15 @@ async fn should_process_all_pending_timers_on_end_of_inputs() {
 
 async fn spawn_timer_actor<T: Message>(
     peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
-) -> DynSender<RuntimeRequest> {
-    let mut builder = TimerActor::builder();
-    builder.add_peer(peer);
-    let signal_sender = builder.get_signal_sender();
+) -> (
+    JoinHandle<Result<(), RuntimeError>>,
+    DynSender<RuntimeRequest>,
+) {
+    let mut actor = TimerActor::builder();
+    actor.add_peer(peer);
+    let signal_sender = actor.get_signal_sender();
 
-    tokio::spawn(async move {
-        let actor = builder.build();
-        let _ = actor.run().await;
-    });
+    let handle = tokio::spawn(actor.build().run());
 
-    signal_sender
+    (handle, signal_sender)
 }

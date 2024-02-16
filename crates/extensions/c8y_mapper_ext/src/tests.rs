@@ -22,6 +22,8 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 use std::time::SystemTime;
+use tedge_actors::test_helpers::FakeServerBox;
+use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -2366,7 +2368,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     init: bool,
 ) -> (
     SimpleMessageBox<MqttMessage, MqttMessage>,
-    SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+    FakeServerBox<C8YRestRequest, C8YRestResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     SimpleMessageBox<SyncStart, SyncComplete>,
     SimpleMessageBox<IdUploadRequest, IdUploadResult>,
@@ -2419,8 +2421,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
-    let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
-        SimpleMessageBoxBuilder::new("C8Y", 1);
+    let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+        FakeServerBox::builder();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
     let mut uploader_builder: SimpleMessageBoxBuilder<IdUploadRequest, IdUploadResult> =
@@ -2482,9 +2484,7 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
     .await;
 }
 
-pub(crate) fn spawn_dummy_c8y_http_proxy(
-    mut http: SimpleMessageBox<C8YRestRequest, C8YRestResult>,
-) {
+pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<C8YRestRequest, C8YRestResult>) {
     tokio::spawn(async move {
         loop {
             match http.recv().await {

@@ -1023,8 +1023,7 @@ mod tests {
             let state = AppData {
                 is_https: false,
                 host: target_host.into(),
-                token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
-                    .shared(),
+                token_manager: TokenManager::new(JwtRetriever::new(&mut retriever)).shared(),
             };
             let trust_store = ca_dir
                 .as_ref()

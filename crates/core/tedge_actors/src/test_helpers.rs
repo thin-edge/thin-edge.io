@@ -8,7 +8,9 @@ use crate::MessageReceiver;
 use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
+use crate::NoMessage;
 use crate::NullSender;
+use crate::RequestEnvelope;
 use crate::RuntimeRequest;
 use crate::Sender;
 use crate::ServiceConsumer;
@@ -21,6 +23,8 @@ use core::future::Future;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
+use std::collections::VecDeque;
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -591,7 +595,7 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
     ///
     /// // Build the actor message boxes
     /// let mut server_box_builder : ServerMessageBoxBuilder<Operation, Update> = ServerMessageBoxBuilder::new("Calculator", 16);
-    /// let mut client_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
+    /// let mut client_box_builder : SimpleMessageBoxBuilder<Update, Operation> = SimpleMessageBoxBuilder::new("Player 1", 1);
     ///
     /// // Connect the two actor message boxes interposing a probe.
     /// let mut probe = Probe::new();
@@ -713,5 +717,109 @@ where
 {
     fn with_timeout(self, duration: Duration) -> Timeout<F> {
         timeout(duration, self)
+    }
+}
+
+/// A message box to mimic the behavior of an actor server.
+///
+/// This fake server panics on error.
+pub struct FakeServerBox<Request: Debug, Response> {
+    /// The received messages are the requests sent by the client under test
+    /// and the published messages are the responses given by the test driver.
+    messages: SimpleMessageBox<RequestEnvelope<Request, Response>, NoMessage>,
+
+    /// Where to send the response for the current request, if any
+    reply_to: VecDeque<Box<dyn Sender<Response>>>,
+}
+
+impl<Request: Message, Response: Message> FakeServerBox<Request, Response> {
+    /// Return a fake message box builder
+    pub fn builder() -> FakeServerBoxBuilder<Request, Response> {
+        FakeServerBoxBuilder {
+            messages: SimpleMessageBoxBuilder::new("Fake Server", 16),
+        }
+    }
+}
+
+#[async_trait]
+impl<Request: Message, Response: Message> MessageReceiver<Request>
+    for FakeServerBox<Request, Response>
+{
+    async fn try_recv(&mut self) -> Result<Option<Request>, RuntimeRequest> {
+        match self.messages.try_recv().await {
+            Ok(None) => Ok(None),
+            Ok(Some(RequestEnvelope { request, reply_to })) => {
+                self.reply_to.push_back(reply_to);
+                Ok(Some(request))
+            }
+            Err(signal) => Err(signal),
+        }
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<Request>> {
+        match self.messages.recv_message().await {
+            None => None,
+            Some(WrappedInput::Message(RequestEnvelope { request, reply_to })) => {
+                self.reply_to.push_back(reply_to);
+                Some(WrappedInput::Message(request))
+            }
+            Some(WrappedInput::RuntimeRequest(signal)) => {
+                Some(WrappedInput::RuntimeRequest(signal))
+            }
+        }
+    }
+
+    async fn recv(&mut self) -> Option<Request> {
+        match self.messages.recv().await {
+            None => None,
+            Some(RequestEnvelope { request, reply_to }) => {
+                self.reply_to.push_back(reply_to);
+                Some(request)
+            }
+        }
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.messages.recv_signal().await
+    }
+}
+
+#[async_trait]
+impl<Request: Message, Response: Message> Sender<Response> for FakeServerBox<Request, Response> {
+    async fn send(&mut self, response: Response) -> Result<(), ChannelError> {
+        let mut reply_to = self
+            .reply_to
+            .pop_front()
+            .expect("Nobody is expecting a response");
+        reply_to.send(response).await
+    }
+}
+
+pub struct FakeServerBoxBuilder<Request: Debug, Response> {
+    messages: SimpleMessageBoxBuilder<RequestEnvelope<Request, Response>, NoMessage>,
+}
+
+impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+    for FakeServerBoxBuilder<Request, Response>
+{
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn get_sender(&self) -> DynSender<RequestEnvelope<Request, Response>> {
+        self.messages.get_sender()
+    }
+}
+
+impl<Request: Message, Response: Message> Builder<FakeServerBox<Request, Response>>
+    for FakeServerBoxBuilder<Request, Response>
+{
+    type Error = Infallible;
+
+    fn try_build(self) -> Result<FakeServerBox<Request, Response>, Infallible> {
+        Ok(FakeServerBox {
+            messages: self.messages.build(),
+            reply_to: VecDeque::new(),
+        })
     }
 }

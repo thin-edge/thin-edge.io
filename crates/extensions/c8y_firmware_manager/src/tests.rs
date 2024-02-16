@@ -8,6 +8,8 @@ use serde_json::json;
 use sha256::digest;
 use std::io;
 use std::time::Duration;
+use tedge_actors::test_helpers::FakeServerBox;
+use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
@@ -695,7 +697,7 @@ async fn spawn_firmware_manager(
     (
         JoinHandle<Result<(), RuntimeError>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
-        TimedMessageBox<SimpleMessageBox<JwtRequest, JwtResult>>,
+        TimedMessageBox<FakeServerBox<JwtRequest, JwtResult>>,
         SimpleMessageBox<OperationSetTimeout, OperationTimeout>,
         TimedMessageBox<SimpleMessageBox<IdDownloadRequest, IdDownloadResult>>,
     ),
@@ -721,8 +723,7 @@ async fn spawn_firmware_manager(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
-    let mut jwt_builder: SimpleMessageBoxBuilder<JwtRequest, JwtResult> =
-        SimpleMessageBoxBuilder::new("JWT", 1);
+    let mut jwt_builder: FakeServerBoxBuilder<JwtRequest, JwtResult> = FakeServerBox::builder();
     let mut timer_builder: SimpleMessageBoxBuilder<OperationSetTimeout, OperationTimeout> =
         SimpleMessageBoxBuilder::new("Timer", 5);
     let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
