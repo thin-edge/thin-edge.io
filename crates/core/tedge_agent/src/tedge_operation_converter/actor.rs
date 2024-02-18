@@ -16,6 +16,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::messages::RestartCommand;
+use tedge_api::messages::SoftwareCommandMetadata;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
@@ -27,7 +28,10 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
+use tedge_api::Jsonify;
+use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
 use time::format_description;
 use time::OffsetDateTime;
@@ -75,6 +79,10 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::SoftwareCommand(SoftwareCommand::SoftwareUpdateCommand(res)) => {
                     self.process_software_update_response(res).await?;
                 }
+                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareCommandMetadata(payload)) => {
+                    self.publish_software_operation_capabilities(payload)
+                        .await?;
+                }
                 AgentInput::RestartCommand(cmd) => {
                     self.process_restart_response(cmd).await?;
                 }
@@ -91,6 +99,22 @@ impl TedgeOperationConverterActor {
             .capability_messages(&self.mqtt_schema, &self.device_topic_id)
         {
             self.mqtt_publisher.send(capability).await?
+        }
+        Ok(())
+    }
+
+    async fn publish_software_operation_capabilities(
+        &mut self,
+        payload: SoftwareCommandMetadata,
+    ) -> Result<(), RuntimeError> {
+        for operation in [OperationType::SoftwareList, OperationType::SoftwareUpdate] {
+            let meta_topic = self
+                .mqtt_schema
+                .capability_topic_for(&self.device_topic_id, operation);
+            let message = Message::new(&meta_topic, payload.to_json())
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce);
+            self.mqtt_publisher.send(message).await?;
         }
         Ok(())
     }

@@ -45,6 +45,8 @@ pub trait Plugins {
     }
 
     fn update_default(&mut self, new_default: &Option<SoftwareType>) -> Result<(), SoftwareError>;
+
+    fn get_all_software_types(&self) -> Vec<SoftwareType>;
 }
 
 #[derive(Debug)]
@@ -89,6 +91,12 @@ impl Plugins for ExternalPlugins {
         } else {
             self.default()
         }
+    }
+
+    fn get_all_software_types(&self) -> Vec<SoftwareType> {
+        let mut software_types: Vec<SoftwareType> = self.plugin_map.keys().cloned().collect();
+        software_types.sort();
+        software_types
     }
 }
 
