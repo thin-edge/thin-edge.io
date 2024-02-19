@@ -17,7 +17,6 @@ use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
-use rumqttc::StateError;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -308,9 +307,7 @@ impl Connection {
     pub(crate) fn pause_on_error(err: &ConnectionError) -> bool {
         matches!(
             err,
-            rumqttc::ConnectionError::Io(_)
-                | rumqttc::ConnectionError::MqttState(StateError::Io(_))
-                | rumqttc::ConnectionError::MqttState(_)
+            ConnectionError::Io(_) | ConnectionError::MqttState(_) | ConnectionError::Tls(_)
         )
     }
 
