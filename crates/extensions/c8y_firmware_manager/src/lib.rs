@@ -19,6 +19,7 @@ use c8y_http_proxy::credentials::JwtRetriever;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
@@ -40,7 +41,7 @@ pub struct FirmwareManagerBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     jwt_retriever: JwtRetriever,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
-    download_sender: DynSender<IdDownloadRequest>,
+    download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -50,7 +51,11 @@ impl FirmwareManagerBuilder {
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         jwt_actor: &mut impl Service<(), JwtResult>,
         timer_actor: &mut impl ServiceProvider<OperationSetTimeout, OperationTimeout, NoConfig>,
-        downloader_actor: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
+        downloader_actor: &mut impl ServiceProvider<
+            RequestEnvelope<IdDownloadRequest, IdDownloadResult>,
+            NoMessage,
+            ReplyToRequester,
+        >,
     ) -> Result<FirmwareManagerBuilder, FileError> {
         Self::init(&config.data_dir)?;
 
@@ -66,7 +71,7 @@ impl FirmwareManagerBuilder {
             mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.clone().into());
         let jwt_retriever = JwtRetriever::new(jwt_actor);
         let timer_sender = timer_actor.connect_consumer(NoConfig, input_sender.clone().into());
-        let download_sender = downloader_actor.connect_consumer(NoConfig, input_sender.into());
+        let download_sender = ClientMessageBox::new(downloader_actor);
         Ok(Self {
             config,
             input_receiver,

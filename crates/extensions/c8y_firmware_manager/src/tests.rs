@@ -699,7 +699,7 @@ async fn spawn_firmware_manager(
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
         TimedMessageBox<FakeServerBox<JwtRequest, JwtResult>>,
         SimpleMessageBox<OperationSetTimeout, OperationTimeout>,
-        TimedMessageBox<SimpleMessageBox<IdDownloadRequest, IdDownloadResult>>,
+        TimedMessageBox<FakeServerBox<IdDownloadRequest, IdDownloadResult>>,
     ),
     DynError,
 > {
@@ -726,8 +726,8 @@ async fn spawn_firmware_manager(
     let mut jwt_builder: FakeServerBoxBuilder<JwtRequest, JwtResult> = FakeServerBox::builder();
     let mut timer_builder: SimpleMessageBoxBuilder<OperationSetTimeout, OperationTimeout> =
         SimpleMessageBoxBuilder::new("Timer", 5);
-    let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
-        SimpleMessageBoxBuilder::new("Downloader", 5);
+    let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+        FakeServerBox::builder();
 
     let firmware_manager_builder = FirmwareManagerBuilder::try_new(
         config,

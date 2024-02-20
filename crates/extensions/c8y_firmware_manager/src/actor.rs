@@ -19,6 +19,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
@@ -54,13 +55,11 @@ pub type OperationTimeout = Timeout<OperationKey>;
 pub type IdDownloadResult = (String, DownloadResult);
 pub type IdDownloadRequest = (String, DownloadRequest);
 
-fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout, IdDownloadResult] : Debug);
-fan_in_message_type!(FirmwareOutput[MqttMessage, OperationSetTimeout, IdDownloadRequest] : Debug);
+fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout] : Debug);
 
 pub struct FirmwareManagerActor {
     config: FirmwareManagerConfig,
     active_child_ops: HashMap<OperationKey, ActiveOperationState>,
-    reqs_pending_download: HashMap<String, SmartRestFirmwareRequest>,
     message_box: FirmwareManagerMessageBox,
 }
 
@@ -90,9 +89,6 @@ impl Actor for FirmwareManagerActor {
                 FirmwareInput::OperationTimeout(timeout) => {
                     self.process_operation_timeout(timeout).await?;
                 }
-                FirmwareInput::IdDownloadResult((id, result)) => {
-                    self.process_downloaded_firmware(&id, result).await?
-                }
             }
         }
         Ok(())
@@ -104,7 +100,6 @@ impl FirmwareManagerActor {
         Self {
             config,
             active_child_ops: HashMap::new(),
-            reqs_pending_download: HashMap::new(),
             message_box,
         }
     }
@@ -262,12 +257,13 @@ impl FirmwareManagerActor {
                 DownloadRequest::new(firmware_url, cache_file_path.as_std_path())
             };
 
-            self.message_box
+            let (_, download_result) = self
+                .message_box
                 .download_sender
-                .send((operation_id.to_string(), download_request))
+                .await_response((operation_id.to_string(), download_request))
                 .await?;
-            self.reqs_pending_download
-                .insert(operation_id.to_string(), smartrest_request);
+            self.process_downloaded_firmware(operation_id, smartrest_request, download_result)
+                .await?;
         }
         Ok(())
     }
@@ -278,39 +274,32 @@ impl FirmwareManagerActor {
     async fn process_downloaded_firmware(
         &mut self,
         operation_id: &str,
+        smartrest_request: SmartRestFirmwareRequest,
         download_result: DownloadResult,
     ) -> Result<(), FirmwareManagementError> {
-        if let Some(smartrest_request) = self.reqs_pending_download.remove(operation_id) {
-            let child_id = smartrest_request.device.clone();
-            match download_result {
-                Ok(response) => {
-                    if let Err(err) =
-                        // Publish a firmware update request to child device.
-                        self
-                            .handle_firmware_update_request_with_downloaded_file(
-                                smartrest_request,
-                                operation_id,
-                                &response.file_path,
-                            )
-                            .await
-                    {
-                        self.fail_operation_in_cloud(
-                            &child_id,
-                            Some(operation_id),
-                            &err.to_string(),
+        let child_id = smartrest_request.device.clone();
+        match download_result {
+            Ok(response) => {
+                if let Err(err) =
+                    // Publish a firmware update request to child device.
+                    self
+                        .handle_firmware_update_request_with_downloaded_file(
+                            smartrest_request,
+                            operation_id,
+                            &response.file_path,
                         )
-                        .await?;
-                    }
-                }
-                Err(err) => {
-                    let firmware_url = smartrest_request.url;
-                    let failure_reason = format!("Download from {firmware_url} failed with {err}");
-                    self.fail_operation_in_cloud(&child_id, Some(operation_id), &failure_reason)
+                        .await
+                {
+                    self.fail_operation_in_cloud(&child_id, Some(operation_id), &err.to_string())
                         .await?;
                 }
             }
-        } else {
-            error!("Unexpected: Download completed for unknown operation: {operation_id}");
+            Err(err) => {
+                let firmware_url = smartrest_request.url;
+                let failure_reason = format!("Download from {firmware_url} failed with {err}");
+                self.fail_operation_in_cloud(&child_id, Some(operation_id), &failure_reason)
+                    .await?;
+            }
         }
         Ok(())
     }
@@ -743,7 +732,7 @@ pub struct FirmwareManagerMessageBox {
     mqtt_publisher: DynSender<MqttMessage>,
     jwt_retriever: JwtRetriever,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
-    download_sender: DynSender<IdDownloadRequest>,
+    download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
 }
 
 impl FirmwareManagerMessageBox {
@@ -752,7 +741,7 @@ impl FirmwareManagerMessageBox {
         mqtt_publisher: DynSender<MqttMessage>,
         jwt_retriever: JwtRetriever,
         timer_sender: DynSender<SetTimeout<OperationKey>>,
-        download_sender: DynSender<IdDownloadRequest>,
+        download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     ) -> Self {
         Self {
             input_receiver,
