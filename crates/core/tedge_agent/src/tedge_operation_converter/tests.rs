@@ -2,6 +2,7 @@ use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_operation_converter::config::OperationConfig;
 use camino::Utf8Path;
+use serde_json::json;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -15,6 +16,7 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommandPayload;
+use tedge_api::messages::SoftwareCommandMetadata;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
@@ -131,6 +133,15 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
     let (mut software_box, _restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/main//").await?;
 
+    // Declare supported software types from software actor
+    software_box
+        .send(SoftwareCommand::SoftwareCommandMetadata(
+            SoftwareCommandMetadata {
+                types: vec!["apt".into(), "docker".into()],
+            },
+        ))
+        .await?;
+
     skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
     // Simulate SoftwareList response message received.
@@ -155,7 +166,7 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
 #[tokio::test]
 async fn publish_capabilities_on_start() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
-    let (_software_box, _restart_box, mut mqtt_box) =
+    let (mut software_box, _restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/child//").await?;
 
     mqtt_box
@@ -166,10 +177,19 @@ async fn publish_capabilities_on_start() -> Result<(), DynError> {
         .with_retain()])
         .await;
 
+    // Declare supported software types from software actor
+    software_box
+        .send(SoftwareCommand::SoftwareCommandMetadata(
+            SoftwareCommandMetadata {
+                types: vec!["apt".into(), "docker".into()],
+            },
+        ))
+        .await?;
+
     mqtt_box
         .assert_received([MqttMessage::new(
             &Topic::new_unchecked("te/device/child///cmd/software_list"),
-            "{}",
+            json!({"types": ["apt", "docker"]}).to_string(),
         )
         .with_retain()])
         .await;
@@ -177,7 +197,7 @@ async fn publish_capabilities_on_start() -> Result<(), DynError> {
     mqtt_box
         .assert_received([MqttMessage::new(
             &Topic::new_unchecked("te/device/child///cmd/software_update"),
-            "{}",
+            json!({"types": ["apt", "docker"]}).to_string(),
         )
         .with_retain()])
         .await;
@@ -190,6 +210,15 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
     let (mut software_box, _restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/main//").await?;
+
+    // Declare supported software types from software actor
+    software_box
+        .send(SoftwareCommand::SoftwareCommandMetadata(
+            SoftwareCommandMetadata {
+                types: vec!["apt".into(), "docker".into()],
+            },
+        ))
+        .await?;
 
     skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
@@ -213,8 +242,17 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
 #[tokio::test]
 async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
-    let (_software_box, mut restart_box, mut mqtt_box) =
+    let (mut software_box, mut restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/main//").await?;
+
+    // Declare supported software types from software actor
+    software_box
+        .send(SoftwareCommand::SoftwareCommandMetadata(
+            SoftwareCommandMetadata {
+                types: vec!["apt".into(), "docker".into()],
+            },
+        ))
+        .await?;
 
     skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
@@ -292,8 +330,14 @@ async fn skip_capability_messages(mqtt: &mut impl MessageReceiver<MqttMessage>, 
         mqtt,
         [
             (format!("te/{}/cmd/restart", device).as_ref(), "{}"),
-            (format!("te/{}/cmd/software_list", device).as_ref(), "{}"),
-            (format!("te/{}/cmd/software_update", device).as_ref(), "{}"),
+            (
+                format!("te/{}/cmd/software_list", device).as_ref(),
+                &json!({"types": ["apt", "docker"]}).to_string(),
+            ),
+            (
+                format!("te/{}/cmd/software_update", device).as_ref(),
+                &json!({"types": ["apt", "docker"]}).to_string(),
+            ),
         ],
     )
     .await;

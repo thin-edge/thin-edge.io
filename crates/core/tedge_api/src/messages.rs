@@ -498,6 +498,16 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
     }
 }
 
+/// Payload of SoftwareList and SoftwareUpdate commands metadata
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SoftwareCommandMetadata {
+    #[serde(default)]
+    pub types: Vec<SoftwareType>,
+}
+
+impl<'a> Jsonify<'a> for SoftwareCommandMetadata {}
+
 /// Command to restart a device
 pub type RestartCommand = Command<RestartCommandPayload>;
 

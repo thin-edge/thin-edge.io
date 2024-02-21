@@ -14,6 +14,7 @@ use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SoftwareCommandMetadata;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
@@ -61,8 +62,17 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
 async fn test_new_software_update_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
     temp_dir.dir(".agent");
+    temp_dir.file("apt");
+    temp_dir.file("docker");
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
+
+    // software cmd metadata internal message
+    converter_box
+        .assert_received([SoftwareCommandMetadata {
+            types: vec!["apt".into(), "docker".into()],
+        }])
+        .await;
 
     let debian_module1 = SoftwareModuleItem {
         name: "debian1".into(),
@@ -94,6 +104,9 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
         }
         SoftwareCommand::SoftwareListCommand(_) => {
             panic!("Received SoftwareListCommand")
+        }
+        SoftwareCommand::SoftwareCommandMetadata(_) => {
+            panic!("Received SoftwareCommandMetadata")
         }
     }
 
@@ -143,10 +156,12 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
             .with_status(CommandStatus::Scheduled);
     converter_box.send(command.clone().into()).await?;
 
+    let software_metadata = SoftwareCommandMetadata { types: vec![] };
     let executing_response = command.clone().with_status(CommandStatus::Executing);
     let mut successful_response = command.clone().with_status(CommandStatus::Successful);
     successful_response.add_modules("".to_string(), vec![]);
 
+    converter_box.assert_received([software_metadata]).await;
     converter_box
         .assert_received([executing_response, successful_response])
         .await;
