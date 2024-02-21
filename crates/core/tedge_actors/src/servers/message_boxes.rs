@@ -101,6 +101,14 @@ pub struct ClientMessageBox<Request, Response> {
     sender: DynSender<RequestEnvelope<Request, Response>>,
 }
 
+impl<Request: Message, Response: Message> Clone for ClientMessageBox<Request, Response> {
+    fn clone(&self) -> Self {
+        ClientMessageBox {
+            sender: self.sender.sender_clone(),
+        }
+    }
+}
+
 impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
     /// Create a [ClientMessageBox] connected to a given [Server]
     pub fn new(

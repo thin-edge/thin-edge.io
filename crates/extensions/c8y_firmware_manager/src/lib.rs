@@ -13,7 +13,6 @@ use crate::actor::OperationTimeout;
 use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
-use actor::FirmwareManagerMessageBox;
 use c8y_http_proxy::credentials::JwtResult;
 use c8y_http_proxy::credentials::JwtRetriever;
 pub use config::*;
@@ -51,11 +50,7 @@ impl FirmwareManagerBuilder {
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         jwt_actor: &mut impl Service<(), JwtResult>,
         timer_actor: &mut impl ServiceProvider<OperationSetTimeout, OperationTimeout, NoConfig>,
-        downloader_actor: &mut impl ServiceProvider<
-            RequestEnvelope<IdDownloadRequest, IdDownloadResult>,
-            NoMessage,
-            ReplyToRequester,
-        >,
+        downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<FirmwareManagerBuilder, FileError> {
         Self::init(&config.data_dir)?;
 
@@ -107,14 +102,13 @@ impl Builder<FirmwareManagerActor> for FirmwareManagerBuilder {
     type Error = LinkError;
 
     fn try_build(self) -> Result<FirmwareManagerActor, Self::Error> {
-        let peers = FirmwareManagerMessageBox::new(
+        Ok(FirmwareManagerActor::new(
+            self.config,
             self.input_receiver,
             self.mqtt_publisher,
             self.jwt_retriever,
             self.timer_sender,
             self.download_sender,
-        );
-
-        Ok(FirmwareManagerActor::new(self.config, peers))
+        ))
     }
 }
