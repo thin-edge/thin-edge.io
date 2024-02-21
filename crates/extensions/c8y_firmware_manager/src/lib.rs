@@ -10,6 +10,7 @@ use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::actor::OperationSetTimeout;
 use crate::actor::OperationTimeout;
+use crate::actor::RequestForwardOutcome;
 use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
@@ -41,6 +42,7 @@ pub struct FirmwareManagerBuilder {
     jwt_retriever: JwtRetriever,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
     download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+    progress_sender: DynSender<RequestForwardOutcome>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -67,6 +69,7 @@ impl FirmwareManagerBuilder {
         let jwt_retriever = JwtRetriever::new(jwt_actor);
         let timer_sender = timer_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let download_sender = ClientMessageBox::new(downloader_actor);
+        let progress_sender = input_sender.into();
         Ok(Self {
             config,
             input_receiver,
@@ -74,6 +77,7 @@ impl FirmwareManagerBuilder {
             jwt_retriever,
             timer_sender,
             download_sender,
+            progress_sender,
             signal_sender,
         })
     }
@@ -109,6 +113,7 @@ impl Builder<FirmwareManagerActor> for FirmwareManagerBuilder {
             self.jwt_retriever,
             self.timer_sender,
             self.download_sender,
+            self.progress_sender,
         ))
     }
 }

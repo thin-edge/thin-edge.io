@@ -55,7 +55,14 @@ pub type OperationTimeout = Timeout<OperationKey>;
 pub type IdDownloadResult = (String, DownloadResult);
 pub type IdDownloadRequest = (String, DownloadRequest);
 
-fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout] : Debug);
+#[derive(Debug)]
+pub struct RequestForwardOutcome {
+    child_id: String,
+    operation_id: String,
+    result: Result<(), FirmwareManagementError>,
+}
+
+fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout, RequestForwardOutcome] : Debug);
 
 pub struct FirmwareManagerActor {
     input_receiver: LoggingReceiver<FirmwareInput>,
@@ -69,11 +76,11 @@ impl Actor for FirmwareManagerActor {
         "FirmwareManager"
     }
 
-    // This actor handles 2 kinds of messages from its peer actors:
+    // This actor handles 3 kinds of messages from its peer actors:
     //
     // 1. MQTT messages from the MqttActor for firmware update requests from the cloud and firmware update responses from the child devices
     // 2. Operation timeouts from the TimerActor for requests for which the child devices don't respond within the timeout window
-
+    // 3. RequestForwardOutcome sent back by the background workers once the firmware request has been forwarded to the child device
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.resend_operations_to_child_device().await?;
         // TODO: We need a dedicated actor to publish 500 later.
@@ -87,6 +94,18 @@ impl Actor for FirmwareManagerActor {
                 }
                 FirmwareInput::OperationTimeout(timeout) => {
                     self.process_operation_timeout(timeout).await?;
+                }
+                FirmwareInput::RequestForwardOutcome(outcome) => {
+                    if let Err(err) = outcome.result {
+                        self.fail_operation_in_cloud(
+                            &outcome.child_id,
+                            Some(&outcome.operation_id),
+                            &err.to_string(),
+                        )
+                        .await?;
+                    }
+                    // The firmware has been downloaded and the request forwarded to the child device.
+                    // Simply waits for a response from the child device (over MQTT) or a timeout.
                 }
             }
         }
@@ -102,6 +121,7 @@ impl FirmwareManagerActor {
         jwt_retriever: JwtRetriever,
         timer_sender: DynSender<SetTimeout<OperationKey>>,
         download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+        progress_sender: DynSender<RequestForwardOutcome>,
     ) -> Self {
         Self {
             input_receiver,
@@ -111,6 +131,7 @@ impl FirmwareManagerActor {
                 jwt_retriever,
                 download_sender,
                 timer_sender,
+                progress_sender,
             },
             active_child_ops: HashMap::new(),
         }
@@ -187,7 +208,7 @@ impl FirmwareManagerActor {
             return Ok(());
         }
 
-        let child_id = smartrest_request.device.as_str();
+        let child_id = smartrest_request.device.clone();
 
         if let Err(err) = self
             .validate_same_request_in_progress(smartrest_request.clone())
@@ -199,7 +220,7 @@ impl FirmwareManagerActor {
                     Ok(())
                 }
                 _ => {
-                    self.fail_operation_in_cloud(child_id, None, &err.to_string())
+                    self.fail_operation_in_cloud(&child_id, None, &err.to_string())
                         .await?;
                     Err(err)
                 }
@@ -208,19 +229,29 @@ impl FirmwareManagerActor {
 
         // Addressing the new firmware operation to further step.
         let op_id = nanoid!();
-        if let Err(err) = self
-            .worker
-            .handle_firmware_download_request_child_device(
-                smartrest_request.clone(),
-                op_id.as_str(),
-            )
-            .await
-        {
-            self.fail_operation_in_cloud(child_id, Some(&op_id), &err.to_string())
-                .await?;
-        }
+        let operation_key = OperationKey::new(&child_id, &op_id);
 
-        let operation_key = OperationKey::new(child_id, &op_id);
+        let mut worker = self.worker.clone();
+        tokio::spawn(async move {
+            let result = worker
+                .handle_firmware_download_request_child_device(
+                    smartrest_request.clone(),
+                    op_id.as_str(),
+                )
+                .await;
+            if let Err(err) = worker
+                .progress_sender
+                .send(RequestForwardOutcome {
+                    child_id,
+                    operation_id: op_id,
+                    result,
+                })
+                .await
+            {
+                error!("Fail to forward operation progress due to: {err}");
+            }
+        });
+
         self.active_child_ops
             .insert(operation_key, ActiveOperationState::Pending);
 
@@ -231,8 +262,10 @@ impl FirmwareManagerActor {
 impl FirmwareManagerWorker {
     // Check if the firmware file is already in cache.
     // If yes, publish a firmware request to child device with that firmware in the cache.
-    // Otherwise, send a download request to the DownloaderActor and return immediately without waiting for the download to complete so that other requests/responses can be processed while the download is in progress.
-    // The download will be performed by the DownloaderActor asynchronously and the response will be processed by this actor later on, in the `run` method.
+    // Otherwise, send a download request to the DownloaderActor awaiting for the download to complete.
+    //
+    // This method has to be spawn in a task
+    // so other requests/responses can be processed while the download is in progress.
     async fn handle_firmware_download_request_child_device(
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
@@ -290,7 +323,7 @@ impl FirmwareManagerWorker {
         Ok(())
     }
 
-    // This function is called on receiving a DownloadResult from the DownloaderActor or when the firmware file is already available in the cache.
+    // This function is called on receiving a DownloadResult from the DownloaderActor.
     // If the download is successful, publish a firmware request to child device with it
     // Otherwise, fail the operation in the cloud
     async fn process_downloaded_firmware(
@@ -772,6 +805,7 @@ struct FirmwareManagerWorker {
     jwt_retriever: JwtRetriever,
     download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
+    progress_sender: DynSender<RequestForwardOutcome>,
 }
 
 impl Clone for FirmwareManagerWorker {
@@ -782,6 +816,7 @@ impl Clone for FirmwareManagerWorker {
             jwt_retriever: self.jwt_retriever.clone(),
             download_sender: self.download_sender.clone(),
             timer_sender: self.timer_sender.sender_clone(),
+            progress_sender: self.progress_sender.sender_clone(),
         }
     }
 }
