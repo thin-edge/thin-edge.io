@@ -69,16 +69,15 @@ impl Actor for FirmwareManagerActor {
         "FirmwareManager"
     }
 
-    // This actor handles 3 kinds of messages from its peer actors:
+    // This actor handles 2 kinds of messages from its peer actors:
     //
     // 1. MQTT messages from the MqttActor for firmware update requests from the cloud and firmware update responses from the child devices
     // 2. Operation timeouts from the TimerActor for requests for which the child devices don't respond within the timeout window
-    // 3. Download results from the DownloaderActor for firmware download requests
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.resend_operations_to_child_device().await?;
         // TODO: We need a dedicated actor to publish 500 later.
-        self.get_pending_operations_from_cloud().await?;
+        self.worker.get_pending_operations_from_cloud().await?;
 
         info!("Ready to serve firmware requests.");
         while let Some(event) = self.input_receiver.recv().await {
@@ -207,23 +206,29 @@ impl FirmwareManagerActor {
             };
         }
 
+        // Addressing the new firmware operation to further step.
         let op_id = nanoid!();
-        if let Err(err) =
-            // Addressing the new firmware operation to further step.
-            self
-                .handle_firmware_download_request_child_device(
-                    smartrest_request.clone(),
-                    op_id.as_str(),
-                )
-                .await
+        if let Err(err) = self
+            .worker
+            .handle_firmware_download_request_child_device(
+                smartrest_request.clone(),
+                op_id.as_str(),
+            )
+            .await
         {
             self.fail_operation_in_cloud(child_id, Some(&op_id), &err.to_string())
                 .await?;
         }
 
+        let operation_key = OperationKey::new(child_id, &op_id);
+        self.active_child_ops
+            .insert(operation_key, ActiveOperationState::Pending);
+
         Ok(())
     }
+}
 
+impl FirmwareManagerWorker {
     // Check if the firmware file is already in cache.
     // If yes, publish a firmware request to child device with that firmware in the cache.
     // Otherwise, send a download request to the DownloaderActor and return immediately without waiting for the download to complete so that other requests/responses can be processed while the download is in progress.
@@ -236,7 +241,6 @@ impl FirmwareManagerActor {
         let firmware_url = smartrest_request.url.as_str();
         let file_cache_key = digest(firmware_url);
         let cache_file_path = self
-            .worker
             .config
             .validate_and_get_cache_dir_path()?
             .join(&file_cache_key);
@@ -261,13 +265,12 @@ impl FirmwareManagerActor {
 
             // Send a request to the Downloader to download the file asynchronously.
             let download_request = if self
-                .worker
                 .config
                 .c8y_end_point
                 .maybe_tenant_url(firmware_url)
                 .is_some()
             {
-                if let Ok(token) = self.worker.jwt_retriever.await_response(()).await? {
+                if let Ok(token) = self.jwt_retriever.await_response(()).await? {
                     DownloadRequest::new(firmware_url, cache_file_path.as_std_path())
                         .with_auth(Auth::new_bearer(&token))
                 } else {
@@ -278,7 +281,6 @@ impl FirmwareManagerActor {
             };
 
             let (_, download_result) = self
-                .worker
                 .download_sender
                 .await_response((operation_id.to_string(), download_request))
                 .await?;
@@ -297,28 +299,21 @@ impl FirmwareManagerActor {
         smartrest_request: SmartRestFirmwareRequest,
         download_result: DownloadResult,
     ) -> Result<(), FirmwareManagementError> {
-        let child_id = smartrest_request.device.clone();
         match download_result {
             Ok(response) => {
-                if let Err(err) =
-                    // Publish a firmware update request to child device.
-                    self
-                        .handle_firmware_update_request_with_downloaded_file(
-                            smartrest_request,
-                            operation_id,
-                            &response.file_path,
-                        )
-                        .await
-                {
-                    self.fail_operation_in_cloud(&child_id, Some(operation_id), &err.to_string())
-                        .await?;
-                }
+                // Publish a firmware update request to child device.
+                self.handle_firmware_update_request_with_downloaded_file(
+                    smartrest_request,
+                    operation_id,
+                    &response.file_path,
+                )
+                .await?
             }
             Err(err) => {
-                let firmware_url = smartrest_request.url;
-                let failure_reason = format!("Download from {firmware_url} failed with {err}");
-                self.fail_operation_in_cloud(&child_id, Some(operation_id), &failure_reason)
-                    .await?;
+                return Err(FirmwareManagementError::FromDownloadError {
+                    firmware_url: smartrest_request.url,
+                    err,
+                });
             }
         }
         Ok(())
@@ -335,7 +330,7 @@ impl FirmwareManagerActor {
         let child_id = smartrest_request.device.as_str();
         let firmware_url = smartrest_request.url.as_str();
         let file_cache_key = digest(firmware_url);
-        let cache_dir_path = self.worker.config.validate_and_get_cache_dir_path()?;
+        let cache_dir_path = self.config.validate_and_get_cache_dir_path()?;
         let cache_file_path = cache_dir_path.join(&file_cache_key);
 
         // If the downloaded firmware is not already in the cache, move it there
@@ -353,7 +348,7 @@ impl FirmwareManagerActor {
             self.create_file_transfer_symlink(child_id, &file_cache_key, &cache_file_path)?;
         let file_transfer_url = format!(
             "http://{}/tedge/file-transfer/{child_id}/firmware_update/{file_cache_key}",
-            &self.worker.config.local_http_host
+            &self.config.local_http_host
         );
         let file_sha256 = try_digest(symlink_path.as_path())?;
 
@@ -368,27 +363,23 @@ impl FirmwareManagerActor {
             attempt: 1,
         };
 
-        operation_entry.create_status_file(self.worker.config.data_dir.firmware_dir())?;
+        operation_entry.create_status_file(self.config.data_dir.firmware_dir())?;
 
         self.publish_firmware_update_request(operation_entry)
             .await?;
 
         let operation_key = OperationKey::new(child_id, operation_id);
-        self.active_child_ops
-            .insert(operation_key.clone(), ActiveOperationState::Pending);
 
         // Start timer
-        self.worker
-            .timer_sender
-            .send(SetTimeout::new(
-                self.worker.config.timeout_sec,
-                operation_key,
-            ))
+        self.timer_sender
+            .send(SetTimeout::new(self.config.timeout_sec, operation_key))
             .await?;
 
         Ok(())
     }
+}
 
+impl FirmwareManagerActor {
     // This is the start point function when receiving a firmware response from child device.
     async fn handle_child_device_firmware_operation_response(
         &mut self,
@@ -441,7 +432,7 @@ impl FirmwareManagerActor {
         match current_operation_state {
             Some(&ActiveOperationState::Executing) => {}
             Some(&ActiveOperationState::Pending) => {
-                self.publish_c8y_executing_message(&child_id).await?;
+                self.worker.publish_c8y_executing_message(&child_id).await?;
                 self.active_child_ops
                     .insert(operation_key.clone(), ActiveOperationState::Executing);
             }
@@ -462,20 +453,24 @@ impl FirmwareManagerActor {
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(status_file_path.as_path())?;
 
-                self.publish_c8y_installed_firmware_message(&operation_entry)
+                self.worker
+                    .publish_c8y_installed_firmware_message(&operation_entry)
                     .await?;
-                self.publish_c8y_successful_message(&child_id).await?;
+                self.worker
+                    .publish_c8y_successful_message(&child_id)
+                    .await?;
 
-                self.remove_status_file(operation_id)?;
+                self.worker.remove_status_file(operation_id)?;
                 self.remove_entry_from_active_operations(&operation_key);
             }
             OperationStatus::Failed => {
-                self.publish_c8y_failed_message(
-                    &child_id,
-                    "No failure reason provided by child device.",
-                )
-                .await?;
-                self.remove_status_file(operation_id)?;
+                self.worker
+                    .publish_c8y_failed_message(
+                        &child_id,
+                        "No failure reason provided by child device.",
+                    )
+                    .await?;
+                self.worker.remove_status_file(operation_id)?;
                 self.remove_entry_from_active_operations(&operation_key);
             }
             OperationStatus::Executing => {
@@ -542,7 +537,8 @@ impl FirmwareManagerActor {
                             );
 
                             new_operation_entry.overwrite_file(&firmware_dir_path)?;
-                            self.publish_firmware_update_request(new_operation_entry)
+                            self.worker
+                                .publish_firmware_update_request(new_operation_entry)
                                 .await?;
                             // Add operation to hashmap
                             self.active_child_ops
@@ -585,16 +581,17 @@ impl FirmwareManagerActor {
     ) -> Result<(), FirmwareManagementError> {
         error!("{}", failure_reason);
         let op_state = if let Some(operation_id) = op_id {
-            self.remove_status_file(operation_id)?;
+            self.worker.remove_status_file(operation_id)?;
             self.remove_entry_from_active_operations(&OperationKey::new(child_id, operation_id))
         } else {
             ActiveOperationState::Pending
         };
 
         if op_state == ActiveOperationState::Pending {
-            self.publish_c8y_executing_message(child_id).await?;
+            self.worker.publish_c8y_executing_message(child_id).await?;
         }
-        self.publish_c8y_failed_message(child_id, failure_reason)
+        self.worker
+            .publish_c8y_failed_message(child_id, failure_reason)
             .await?;
 
         Ok(())
@@ -616,7 +613,8 @@ impl FirmwareManagerActor {
                     OperationKey::new(&operation_entry.child_id, &operation_entry.operation_id);
 
                 operation_entry.overwrite_file(&firmware_dir_path)?;
-                self.publish_firmware_update_request(operation_entry)
+                self.worker
+                    .publish_firmware_update_request(operation_entry)
                     .await?;
                 // Add operation to hashmap
                 self.active_child_ops
@@ -633,10 +631,11 @@ impl FirmwareManagerActor {
         }
         Ok(())
     }
+}
 
+impl FirmwareManagerWorker {
     fn remove_status_file(&mut self, operation_id: &str) -> Result<(), FirmwareManagementError> {
         let status_file_path = self
-            .worker
             .config
             .validate_and_get_firmware_dir_path()?
             .join(operation_id);
@@ -652,7 +651,7 @@ impl FirmwareManagerActor {
     ) -> Result<(), FirmwareManagementError> {
         let mqtt_message: MqttMessage =
             FirmwareOperationRequest::from(operation_entry.clone()).try_into()?;
-        self.worker.mqtt_publisher.send(mqtt_message).await?;
+        self.mqtt_publisher.send(mqtt_message).await?;
         info!(
             "Firmware update request is sent. operation_id={}, child={}",
             operation_entry.operation_id, operation_entry.child_id
@@ -671,7 +670,7 @@ impl FirmwareManagerActor {
             &c8y_child_topic,
             DownloadFirmwareStatusMessage::status_executing(),
         );
-        self.worker.mqtt_publisher.send(executing_msg).await?;
+        self.mqtt_publisher.send(executing_msg).await?;
         Ok(())
     }
 
@@ -686,7 +685,7 @@ impl FirmwareManagerActor {
             &c8y_child_topic,
             DownloadFirmwareStatusMessage::status_successful(None),
         );
-        self.worker.mqtt_publisher.send(successful_msg).await?;
+        self.mqtt_publisher.send(successful_msg).await?;
         Ok(())
     }
 
@@ -702,7 +701,7 @@ impl FirmwareManagerActor {
             &c8y_child_topic,
             DownloadFirmwareStatusMessage::status_failed(failure_reason),
         );
-        self.worker.mqtt_publisher.send(failed_msg).await?;
+        self.mqtt_publisher.send(failed_msg).await?;
         Ok(())
     }
 
@@ -719,13 +718,12 @@ impl FirmwareManagerActor {
         );
         let installed_firmware_message =
             MqttMessage::new(&c8y_child_topic, installed_firmware_payload);
-        self.worker
-            .mqtt_publisher
-            .send(installed_firmware_message)
-            .await?;
+        self.mqtt_publisher.send(installed_firmware_message).await?;
         Ok(())
     }
+}
 
+impl FirmwareManagerActor {
     fn remove_entry_from_active_operations(
         &mut self,
         operation_key: &OperationKey,
@@ -736,7 +734,9 @@ impl FirmwareManagerActor {
             ActiveOperationState::Pending
         }
     }
+}
 
+impl FirmwareManagerWorker {
     // The symlink path should be <tedge-data-dir>/file-transfer/<child-id>/firmware_update/<file_cache_key>
     fn create_file_transfer_symlink(
         &self,
@@ -744,10 +744,7 @@ impl FirmwareManagerActor {
         file_cache_key: &str,
         original_file_path: impl AsRef<Path>,
     ) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        let file_transfer_dir_path = self
-            .worker
-            .config
-            .validate_and_get_file_transfer_dir_path()?;
+        let file_transfer_dir_path = self.config.validate_and_get_file_transfer_dir_path()?;
 
         let symlink_dir_path = file_transfer_dir_path
             .join(child_id)
@@ -764,7 +761,7 @@ impl FirmwareManagerActor {
     // Candidate to be removed since another actor should be in charge of this.
     async fn get_pending_operations_from_cloud(&mut self) -> Result<(), FirmwareManagementError> {
         let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
-        self.worker.mqtt_publisher.send(message).await?;
+        self.mqtt_publisher.send(message).await?;
         Ok(())
     }
 }

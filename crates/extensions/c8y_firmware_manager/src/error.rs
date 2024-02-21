@@ -1,4 +1,5 @@
 use tedge_actors::RuntimeError;
+use tedge_api::DownloadError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FirmwareManagementError {
@@ -42,6 +43,12 @@ pub enum FirmwareManagementError {
 
     #[error(transparent)]
     FromMqttError(#[from] tedge_mqtt_ext::MqttError),
+
+    #[error("Download from {firmware_url} failed with {err}")]
+    FromDownloadError {
+        firmware_url: String,
+        err: DownloadError,
+    },
 }
 
 impl From<FirmwareManagementError> for RuntimeError {
