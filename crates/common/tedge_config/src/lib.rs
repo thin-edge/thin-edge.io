@@ -14,14 +14,13 @@ pub use certificate::CertificateError;
 pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
-/// loads the new tedge config from system default
-pub fn get_new_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
-    let tedge_config_location = TEdgeConfigLocation::default();
-    TEdgeConfigRepository::new(tedge_config_location).load()
-}
+impl TEdgeConfig {
+    pub fn new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+        TEdgeConfigRepository::new(config_location).load()
+    }
 
-/// loads the tedge config from a config directory
-pub fn load_tedge_config(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
-    let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-    TEdgeConfigRepository::new(tedge_config_location).load()
+    pub fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
+        let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
+        TEdgeConfig::new(config_location)
+    }
 }

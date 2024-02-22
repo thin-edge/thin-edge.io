@@ -6,8 +6,9 @@ use reqwest::StatusCode;
 use reqwest::Url;
 use std::io::prelude::*;
 use std::path::Path;
-use tedge_config::get_new_tedge_config;
 use tedge_config::HostPort;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 use tedge_config::HTTPS_PORT;
 
 #[derive(Debug, serde::Deserialize)]
@@ -50,7 +51,7 @@ impl UploadCertCmd {
             Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
         };
 
-        let config = get_new_tedge_config()?;
+        let config = TEdgeConfig::new(TEdgeConfigLocation::default())?;
         let root_cert = &config.c8y.root_cert_path;
         let client_builder = reqwest::blocking::Client::builder();
         let res = match std::fs::metadata(root_cert) {

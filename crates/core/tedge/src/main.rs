@@ -30,14 +30,14 @@ fn main() -> anyhow::Result<()> {
     let opt = parse_multicall_if_known(&executable_name);
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
-            let tedge_config = tedge_config::load_tedge_config(&opt.config_dir)?;
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.config_dir)?;
             block_on_with(
                 tedge_config.run.log_memory_interval.duration(),
                 tedge_mapper::run(opt),
             )
         }
         TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => {
-            let tedge_config = tedge_config::load_tedge_config(&opt.config_dir)?;
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.config_dir)?;
             block_on_with(
                 tedge_config.run.log_memory_interval.duration(),
                 tedge_agent::run(opt),
