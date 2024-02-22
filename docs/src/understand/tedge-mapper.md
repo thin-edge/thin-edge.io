@@ -194,13 +194,3 @@ tedge mqtt sub te/errors
 [te/errors] Invalid JSON: Unexpected end of JSON: {"temperature":23,"pressure":220
 [te/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
 ```
-
-## Topics used by tedge-mapper
-
-- Incoming topics
-  - `te/+/+/+/+/m/+`
-
-- Outgoing topics
-  - `te/errors` (for errors)
-  - `c8y/measurement/measurements/create` (for Cumulocity)
-  - `az/messages/events/` (for Azure IoT Hub)
