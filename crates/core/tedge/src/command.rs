@@ -128,12 +128,12 @@ pub trait Command {
 ///     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
 ///         let cmd = match self {
 ///             ConfigCmd::Set { key, value } => SetConfigCommand {
-///                 config_repository: context.config_repository,
+///                 config_location: context.config_location,
 ///                 key,
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config: context.config_repository.load()?,
+///                 config: context.load_config()?,
 ///                 key,
 ///             }.into_boxed(),
 ///         };
@@ -149,17 +149,13 @@ pub trait BuildCommand {
 ///
 #[derive(Debug)]
 pub struct BuildContext {
-    pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,
 }
 
 impl BuildContext {
     pub fn new(config_dir: impl AsRef<Path>) -> Self {
         let config_location = tedge_config::TEdgeConfigLocation::from_custom_root(config_dir);
-        BuildContext {
-            config_repository: tedge_config::TEdgeConfigRepository::new(config_location.clone()),
-            config_location,
-        }
+        BuildContext { config_location }
     }
 
     pub fn load_config(&self) -> Result<tedge_config::TEdgeConfig, tedge_config::TEdgeConfigError> {

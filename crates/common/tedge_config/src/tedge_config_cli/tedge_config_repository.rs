@@ -10,13 +10,8 @@ use super::figment::FileAndEnvironment;
 use super::figment::FileOnly;
 use super::figment::UnusedValueWarnings;
 
-/// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
-#[derive(Debug, Clone)]
-pub struct TEdgeConfigRepository {
-    config_location: TEdgeConfigLocation,
-}
-
-impl TEdgeConfigRepository {
+/// TEdgeConfigLocation is responsible for loading and storing TEdgeConfig entities.
+impl TEdgeConfigLocation {
     pub fn update_toml(
         &self,
         update: &impl Fn(&mut TEdgeConfigDto) -> ConfigSettingResult<()>,
@@ -28,20 +23,16 @@ impl TEdgeConfigRepository {
     }
 
     fn toml_path(&self) -> &Utf8Path {
-        self.config_location.tedge_config_file_path()
-    }
-
-    pub fn new(config_location: TEdgeConfigLocation) -> Self {
-        Self { config_location }
+        self.tedge_config_file_path()
     }
 
     pub fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
         debug!(
             "Loading configuration from {:?}",
-            self.config_location.tedge_config_file_path
+            self.tedge_config_file_path
         );
-        Ok(TEdgeConfig::from_dto(&dto, &self.config_location))
+        Ok(TEdgeConfig::from_dto(&dto, self))
     }
 
     fn load_dto<Sources: ConfigSources>(
@@ -59,8 +50,8 @@ impl TEdgeConfigRepository {
     /// A test only method designed for injecting configuration into tests
     ///
     /// ```
-    /// use tedge_config::TEdgeConfigRepository;
-    /// let config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+    /// use tedge_config::TEdgeConfigLocation;
+    /// let config = TEdgeConfigLocation::load_toml_str("service.ty = \"service\"");
     ///
     /// assert_eq!(&config.service.ty, "service");
     /// // Defaults are preserved
@@ -101,17 +92,13 @@ impl TEdgeConfigRepository {
         Ok((dto, warnings))
     }
 
-    pub fn get_config_location(&self) -> &TEdgeConfigLocation {
-        &self.config_location
-    }
-
     // TODO: Explicitly set the file permissions in this function and file ownership!
     fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
-        if !self.config_location.tedge_config_root_path.exists() {
-            fs::create_dir(self.config_location.tedge_config_root_path())?;
+        if !self.tedge_config_root_path.exists() {
+            fs::create_dir(self.tedge_config_root_path())?;
         }
 
         atomically_write_file_sync(self.toml_path(), toml.as_bytes())?;
@@ -196,7 +183,7 @@ child_update_timeout = 3429
 type = "a-service-type""#;
         let (_tempdir, config_location) = create_temp_tedge_config(toml).unwrap();
         let toml_path = config_location.tedge_config_file_path();
-        let (dto, warnings) = TEdgeConfigRepository::new(config_location.clone())
+        let (dto, warnings) = config_location
             .load_dto_with_warnings::<FileOnly>(toml_path)
             .unwrap();
 
