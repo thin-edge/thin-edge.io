@@ -36,7 +36,7 @@ pub enum TEdgeCertCli {
 
 impl BuildCommand for TEdgeCertCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.config_repository.load()?;
+        let config = context.load_config()?;
 
         let cmd = match self {
             TEdgeCertCli::Create { id } => {

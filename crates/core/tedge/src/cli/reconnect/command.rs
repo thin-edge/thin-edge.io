@@ -1,19 +1,17 @@
 use std::sync::Arc;
 
-use tedge_config::system_services::SystemServiceManager;
-use tedge_config::TEdgeConfigLocation;
-use tedge_config::TEdgeConfigRepository;
-
 use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
+use tedge_config::system_services::SystemServiceManager;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
-#[derive(Debug)]
 pub struct ReconnectBridgeCommand {
     pub config_location: TEdgeConfigLocation,
-    pub config_repository: TEdgeConfigRepository,
+    pub config: TEdgeConfig,
     pub config_file: String,
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
@@ -55,7 +53,7 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         ConnectCommand {
             config_location: reconnect_cmd.config_location.clone(),
-            config_repository: reconnect_cmd.config_repository.clone(),
+            config: reconnect_cmd.config.clone(),
             cloud: reconnect_cmd.cloud,
             is_test_connection: false,
             service_manager: reconnect_cmd.service_manager.clone(),

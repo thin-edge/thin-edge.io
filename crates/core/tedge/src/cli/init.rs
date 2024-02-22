@@ -153,7 +153,7 @@ impl TEdgeInitCmd {
             PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o775)),
         )?;
 
-        let config = self.context.config_repository.load()?;
+        let config = self.context.load_config()?;
 
         create_directory(
             config.logs.path.clone(),

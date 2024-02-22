@@ -79,11 +79,10 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
 }
 
 async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
-    // let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(&config_dir);
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir.clone());
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-    let tedge_config = config_repository.load().expect("Could not load config");
+        tedge_config::TEdgeConfigLocation::from_custom_root(&tedge_config_dir);
+    let tedge_config = tedge_config::TEdgeConfig::new(tedge_config_location.clone())
+        .expect("Could not load config");
 
     let mqtt_topic_root = tedge_config.mqtt.topic_root.clone();
     let mqtt_schema = MqttSchema::with_root(mqtt_topic_root);
@@ -157,8 +156,7 @@ async fn monitor_tedge_service(
     res_topic: Topic,
     interval: u64,
 ) -> Result<(), WatchdogError> {
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
-    let tedge_config = config_repository.load()?;
+    let tedge_config = tedge_config::TEdgeConfig::new(tedge_config_location)?;
 
     let mqtt_device_topic_id: EntityTopicId = tedge_config
         .mqtt

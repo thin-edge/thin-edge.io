@@ -57,15 +57,7 @@ fn main() -> anyhow::Result<()> {
         TEdgeOptMulticall::Tedge { cmd, config_dir } => {
             set_log_level(tracing::Level::WARN);
 
-            let tedge_config_location =
-                tedge_config::TEdgeConfigLocation::from_custom_root(config_dir);
-            let config_repository =
-                tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-
-            let build_context = BuildContext {
-                config_repository,
-                config_location: tedge_config_location,
-            };
+            let build_context = BuildContext::new(config_dir);
             let cmd = cmd
                 .build_command(build_context)
                 .with_context(|| "missing configuration parameter")?;

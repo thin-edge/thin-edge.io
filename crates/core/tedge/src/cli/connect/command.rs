@@ -38,7 +38,7 @@ const MQTT_TLS_PORT: u16 = 8883;
 
 pub struct ConnectCommand {
     pub config_location: TEdgeConfigLocation,
-    pub config_repository: TEdgeConfigRepository,
+    pub config: TEdgeConfig,
     pub cloud: Cloud,
     pub is_test_connection: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
@@ -59,13 +59,13 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let config = self.config_repository.load()?;
-        let bridge_config = bridge_config(&config, self.cloud)?;
-        let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&config);
+        let config = &self.config;
+        let bridge_config = bridge_config(config, self.cloud)?;
+        let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
 
         if self.is_test_connection {
             if self.check_if_bridge_exists(&bridge_config) {
-                return match self.check_connection(&config) {
+                return match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
                         println!("Connection check to {} cloud is successful.\n", cloud);
@@ -98,7 +98,7 @@ impl Command for ConnectCommand {
             Err(err) => return Err(err.into()),
         }
 
-        match self.check_connection(&config) {
+        match self.check_connection(config) {
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Connection check is successful.\n");
             }
@@ -124,7 +124,7 @@ impl Command for ConnectCommand {
 
         if let Cloud::C8y = self.cloud {
             check_connected_c8y_tenant_as_configured(
-                &config,
+                config,
                 &config
                     .c8y
                     .mqtt

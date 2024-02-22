@@ -12,7 +12,6 @@ use miette::miette;
 use miette::Context;
 use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigRepository;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tokio::io::AsyncBufReadExt;
@@ -32,8 +31,7 @@ mod proxy;
 pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let config_dir = opt.get_config_location();
 
-    let tedge_config = TEdgeConfigRepository::new(config_dir.clone())
-        .load()
+    let tedge_config = TEdgeConfig::new(config_dir.clone())
         .into_diagnostic()
         .context("Reading tedge config")?;
 

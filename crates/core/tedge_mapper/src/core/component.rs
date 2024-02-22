@@ -8,9 +8,8 @@ pub trait TEdgeComponent: Sync + Send {
     async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), anyhow::Error>;
 
     fn mqtt_config(&self) -> Result<mqtt_channel::Config, anyhow::Error> {
-        let config_repository =
-            tedge_config::TEdgeConfigRepository::new(tedge_config::TEdgeConfigLocation::default());
-        let tedge_config = config_repository.load()?;
+        let tedge_config =
+            tedge_config::TEdgeConfig::new(tedge_config::TEdgeConfigLocation::default())?;
 
         let mqtt_config = tedge_config
             .mqtt_config()?

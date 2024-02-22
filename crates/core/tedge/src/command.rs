@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// A trait to be implemented by all tedge sub-commands.
 ///
 /// A command encapsulates all the required parameters and provides an `execute()` method
@@ -149,4 +151,18 @@ pub trait BuildCommand {
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,
+}
+
+impl BuildContext {
+    pub fn new(config_dir: impl AsRef<Path>) -> Self {
+        let config_location = tedge_config::TEdgeConfigLocation::from_custom_root(config_dir);
+        BuildContext {
+            config_repository: tedge_config::TEdgeConfigRepository::new(config_location.clone()),
+            config_location,
+        }
+    }
+
+    pub fn load_config(&self) -> Result<tedge_config::TEdgeConfig, tedge_config::TEdgeConfigError> {
+        tedge_config::TEdgeConfig::new(self.config_location.clone())
+    }
 }

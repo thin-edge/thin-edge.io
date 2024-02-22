@@ -85,7 +85,7 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
-    let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
+    let config = tedge_config::TEdgeConfig::new(tedge_config_location.clone())?;
 
     let log_level = if mapper_opt.debug {
         tracing::Level::DEBUG
