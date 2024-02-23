@@ -66,12 +66,6 @@ impl OperationKey {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum ActiveOperationState {
-    Pending,
-    Executing,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

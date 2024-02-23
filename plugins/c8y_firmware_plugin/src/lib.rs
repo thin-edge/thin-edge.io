@@ -16,7 +16,6 @@ use tedge_downloader_ext::DownloaderActor;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
-use tedge_timer_ext::TimerActor;
 use tracing::log::warn;
 
 const PLUGIN_NAME: &str = "c8y-firmware-plugin";
@@ -83,7 +82,6 @@ async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
-    let mut timer_actor = TimerActor::builder();
     let identity = tedge_config.http.client.auth.identity()?;
     let mut downloader_actor = DownloaderActor::new(identity).builder();
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
@@ -121,7 +119,6 @@ async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         firmware_manager_config,
         &mut mqtt_actor,
         &mut jwt_actor,
-        &mut timer_actor,
         &mut downloader_actor,
     )?;
 
@@ -134,7 +131,6 @@ async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     runtime.spawn(jwt_actor).await?;
     runtime.spawn(downloader_actor).await?;
     runtime.spawn(firmware_actor).await?;
-    runtime.spawn(timer_actor).await?;
     runtime.spawn(health_actor).await?;
 
     runtime.run_to_completion().await?;

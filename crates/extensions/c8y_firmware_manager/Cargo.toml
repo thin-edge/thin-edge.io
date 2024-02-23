@@ -24,7 +24,6 @@ tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_downloader_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
-tedge_timer_ext = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

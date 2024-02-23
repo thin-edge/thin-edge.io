@@ -1,6 +1,4 @@
 use super::*;
-use crate::actor::OperationSetTimeout;
-use crate::actor::OperationTimeout;
 use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::credentials::JwtRequest;
@@ -24,7 +22,6 @@ use tedge_api::DownloadError;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_mqtt_ext::Topic;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_timer_ext::Timeout;
 use tokio::fs::remove_dir_all;
 use tokio::task::JoinHandle;
 
@@ -45,13 +42,8 @@ const DEFAULT_REQUEST_TIMEOUT_SEC: Duration = Duration::from_secs(3600);
 async fn handle_request_child_device_without_new_download() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // Publish firmware update operation to child device.
     publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
@@ -104,13 +96,8 @@ async fn handle_request_child_device_without_new_download() -> Result<(), DynErr
 async fn resend_firmware_update_request_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // Publish firmware update operation to child device.
     publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
@@ -181,13 +168,8 @@ async fn resend_firmware_update_request_child_device() -> Result<(), DynError> {
 async fn handle_request_child_device_with_new_download() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
 
     // Publish firmware update operation to child device.
     publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
@@ -245,13 +227,8 @@ async fn handle_request_child_device_with_new_download() -> Result<(), DynError>
 async fn handle_request_child_device_with_failed_download() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
 
     // Publish firmware update operation to child device.
     publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
@@ -274,6 +251,7 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
     // Assert EXECUTING SmartREST MQTT message and FAILED SmartREST MQTT message due to missing 'cache' directory.
     mqtt_message_box
         .assert_received([
+            // FIXME: executing status is no more sent when download fails
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
                 "501,c8y_Firmware",
@@ -292,13 +270,8 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
 async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut jwt_message_box,
-        mut _timer_message_box,
-        mut downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
+    let (_handle, mut mqtt_message_box, mut jwt_message_box, mut downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
 
     let c8y_download_url = format!("http://{C8Y_HOST}/file/end/point");
     let token = "token";
@@ -336,13 +309,8 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
 async fn handle_response_successful_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // On startup, SmartREST 500 should be sent by firmware manager.
     mqtt_message_box.skip(1).await;
@@ -381,13 +349,8 @@ async fn handle_response_successful_child_device() -> Result<(), DynError> {
 #[tokio::test]
 async fn handle_response_executing_and_failed_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // On startup, SmartREST 500 should be sent by firmware manager.
     mqtt_message_box.skip(1).await;
@@ -428,13 +391,8 @@ async fn handle_response_executing_and_failed_child_device() -> Result<(), DynEr
 #[tokio::test]
 async fn ignore_response_with_invalid_status_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // On startup, SmartREST 500 should be sent by firmware manager.
     mqtt_message_box.skip(1).await;
@@ -459,13 +417,8 @@ async fn ignore_response_with_invalid_status_child_device() -> Result<(), DynErr
 #[tokio::test]
 async fn handle_response_with_invalid_operation_id_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // Publish firmware update operation to child device.
     publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
@@ -487,13 +440,8 @@ async fn handle_response_with_invalid_operation_id_child_device() -> Result<(), 
 #[tokio::test]
 async fn handle_request_timeout_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, Duration::from_secs(1), true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, Duration::from_secs(1), true).await?;
 
     // On startup, SmartREST 500 should be sent by firmware manager.
     mqtt_message_box.skip(1).await;
@@ -504,20 +452,6 @@ async fn handle_request_timeout_child_device() -> Result<(), DynError> {
     // The first MQTT message after the c8y operation published should be firmware update request.
     let firmware_update_request = mqtt_message_box.recv().await.unwrap();
     let operation_id = get_operation_id_from_firmware_update_request(firmware_update_request);
-
-    // Assert the message to start the timer is sent.
-    let set_timeout_message = timer_message_box.recv().await.unwrap();
-    assert_eq!(
-        set_timeout_message.event,
-        OperationKey::new(CHILD_DEVICE_ID, &operation_id)
-    );
-
-    // Send timeout message.
-    timer_message_box
-        .send(Timeout {
-            event: set_timeout_message.event,
-        })
-        .await?;
 
     // Assert EXECUTING SmartREST message, FAILED SmartREST message
     let expected_failure_text =
@@ -541,13 +475,8 @@ async fn handle_request_timeout_child_device() -> Result<(), DynError> {
 async fn handle_child_response_while_busy_downloading() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true).await?;
 
     // Ignore SmartREST 500.
     mqtt_message_box.skip(1).await;
@@ -595,13 +524,8 @@ async fn required_init_state_recreated_on_startup() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
     //Start the mapper without pre-creating the required directories like {data.path}/cache, {data.path}/firmware etc
-    let (
-        handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
+    let (handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
 
     // Assert that the startup succeeds and the plugin requests for pending operations
     mqtt_message_box
@@ -622,13 +546,8 @@ async fn required_init_state_recreated_on_startup() -> Result<(), DynError> {
     handle.abort();
 
     // Start the mapper again
-    let (
-        _handle,
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
+    let (_handle, mut mqtt_message_box, mut _jwt_message_box, mut _downloader_message_box) =
+        spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
 
     // Assert that the startup succeeds again and the mapper requests for pending operations
     mqtt_message_box
@@ -698,7 +617,6 @@ async fn spawn_firmware_manager(
         JoinHandle<Result<(), RuntimeError>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
         TimedMessageBox<FakeServerBox<JwtRequest, JwtResult>>,
-        SimpleMessageBox<OperationSetTimeout, OperationTimeout>,
         TimedMessageBox<FakeServerBox<IdDownloadRequest, IdDownloadResult>>,
     ),
     DynError,
@@ -724,8 +642,6 @@ async fn spawn_firmware_manager(
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut jwt_builder: FakeServerBoxBuilder<JwtRequest, JwtResult> = FakeServerBox::builder();
-    let mut timer_builder: SimpleMessageBoxBuilder<OperationSetTimeout, OperationTimeout> =
-        SimpleMessageBoxBuilder::new("Timer", 5);
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBox::builder();
 
@@ -733,7 +649,6 @@ async fn spawn_firmware_manager(
         config,
         &mut mqtt_builder,
         &mut jwt_builder,
-        &mut timer_builder,
         &mut downloader_builder,
     )
     .unwrap();
@@ -741,7 +656,6 @@ async fn spawn_firmware_manager(
     let mqtt_message_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let jwt_message_box = jwt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     // Cannot change the timer box to TimedMessageBox as SetTimeout doesn't have std::cmp:Eq implementation
-    let timer_message_box = timer_builder.build();
     let downloader_message_box = downloader_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     let firmware_manager_actor = firmware_manager_builder.build();
@@ -751,7 +665,6 @@ async fn spawn_firmware_manager(
         handle,
         mqtt_message_box,
         jwt_message_box,
-        timer_message_box,
         downloader_message_box,
     ))
 }
