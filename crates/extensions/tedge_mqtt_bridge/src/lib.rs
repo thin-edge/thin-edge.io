@@ -40,13 +40,13 @@ pub struct MqttBridgeActorBuilder {
 }
 
 impl MqttBridgeActorBuilder {
-    pub async fn new(tedge_config: &TEdgeConfig) -> Self {
+    pub async fn new(tedge_config: &TEdgeConfig, cloud_topics: &[impl AsRef<str>]) -> Self {
         let tls_config = create_tls_config(
             tedge_config.c8y.root_cert_path.clone().into(),
             tedge_config.device.key_path.clone().into(),
             tedge_config.device.cert_path.clone().into(),
         )
-        .unwrap();
+            .unwrap();
         let (signal_sender, _signal_receiver) = mpsc::channel(10);
 
         let prefix = "c8y";
@@ -80,30 +80,12 @@ impl MqttBridgeActorBuilder {
             .subscribe(format!("{topic_prefix}#"), QoS::AtLeastOnce)
             .await
             .unwrap();
-        cloud_client
-            .subscribe("s/dt", QoS::AtLeastOnce)
-            .await
-            .unwrap();
-        cloud_client
-            .subscribe("s/dat", QoS::AtLeastOnce)
-            .await
-            .unwrap();
-        cloud_client
-            .subscribe("s/ds", QoS::AtLeastOnce)
-            .await
-            .unwrap();
-        cloud_client
-            .subscribe("s/e", QoS::AtLeastOnce)
-            .await
-            .unwrap();
-        cloud_client
-            .subscribe("s/dc/#", QoS::AtLeastOnce)
-            .await
-            .unwrap();
-        cloud_client
-            .subscribe("error", QoS::AtLeastOnce)
-            .await
-            .unwrap();
+        for topic in cloud_topics {
+            cloud_client
+                .subscribe(topic.as_ref(), QoS::AtLeastOnce)
+                .await
+                .unwrap();
+        }
 
         let (tx_pubs_from_cloud, rx_pubs_from_cloud) = mpsc::channel(10);
         let (tx_pubs_from_local, rx_pubs_from_local) = mpsc::channel(10);
