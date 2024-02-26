@@ -2,6 +2,7 @@ use camino::Utf8Path;
 
 use crate::system_services::SystemConfig;
 use crate::system_services::SystemServiceError;
+use std::io::IsTerminal;
 use std::str::FromStr;
 
 pub fn get_log_level(
@@ -27,6 +28,7 @@ pub fn get_log_level(
 pub fn set_log_level(log_level: tracing::Level) {
     let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
 
     if std::env::var("RUST_LOG").is_ok() {
