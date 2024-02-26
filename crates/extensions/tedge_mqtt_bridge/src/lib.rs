@@ -49,7 +49,8 @@ impl MqttBridgeActorBuilder {
             .unwrap();
         let (signal_sender, _signal_receiver) = mpsc::channel(10);
 
-        let prefix = "c8y";
+        // TODO move this somewhere sensible, and make sure we validate it
+        let prefix = std::env::var("TEDGE_BRIDGE_PREFIX").unwrap_or_else(|_| "c8y".to_owned());
         let mut local_config = MqttOptions::new(
             format!("tedge-mapper-bridge-{prefix}"),
             &tedge_config.mqtt.client.host,
