@@ -76,7 +76,6 @@ impl MqttBridgeActorBuilder {
         let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, 10);
 
-        // TODO support non c8y clouds
         local_client
             .subscribe(format!("{topic_prefix}#"), QoS::AtLeastOnce)
             .await
@@ -121,11 +120,16 @@ async fn one_way_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     mut rx_pubs: mpsc::Receiver<Publish>,
 ) {
     let mut forward_pkid_to_received_msg = HashMap::new();
+    let mut last_err = None;
     loop {
         let notification = match recv_event_loop.poll().await {
             Ok(notification) => notification,
             Err(err) => {
-                error!("MQTT bridge connection error: {err}");
+                let err = err.to_string();
+                if last_err.as_ref() != Some(&err) {
+                    error!("MQTT bridge connection error: {err}");
+                    last_err = Some(err);
+                }
                 continue;
             }
         };
