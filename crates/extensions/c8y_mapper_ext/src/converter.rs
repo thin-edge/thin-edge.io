@@ -44,7 +44,6 @@ use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
@@ -84,6 +83,7 @@ use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_config::TEdgeConfigError;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -248,8 +248,9 @@ impl CumulocityConverter {
 
         let mqtt_schema = config.mqtt_schema.clone();
 
+        let prefix = &config.c8y_prefix;
         let mapper_config = MapperConfig {
-            out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
+            out_topic: Topic::new_unchecked(&format!("{prefix}/measurement/measurements/create")),
             errors_topic: mqtt_schema.error_topic(),
         };
 
@@ -325,6 +326,7 @@ impl CumulocityConverter {
                     display_name,
                     display_type,
                     &ancestors_external_ids,
+                    &self.config.c8y_prefix,
                 )
                 .context("Could not create device creation message")?;
                 Ok(vec![child_creation_message])
@@ -343,6 +345,7 @@ impl CumulocityConverter {
                     display_type.unwrap_or(&self.service_type),
                     "up",
                     &ancestors_external_ids,
+                    &self.config.c8y_prefix,
                 )
                 .context("Could not create service creation message")?;
                 Ok(vec![service_creation_message])
@@ -361,7 +364,10 @@ impl CumulocityConverter {
         let mut ancestors_external_ids =
             self.entity_store.ancestors_external_ids(entity_topic_id)?;
         ancestors_external_ids.insert(0, entity.external_id.as_ref().into());
-        Ok(publish_topic_from_ancestors(&ancestors_external_ids))
+        Ok(publish_topic_from_ancestors(
+            &ancestors_external_ids,
+            &self.config.c8y_prefix,
+        ))
     }
 
     /// Generates external ID of the given entity.
@@ -488,7 +494,7 @@ impl CumulocityConverter {
             // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
             let message = if c8y_event.extras.is_empty() {
                 let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
-                let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+                let smartrest_topic = C8yTopic::upstream_topic(&self.config.c8y_prefix);
                 Message::new(&smartrest_topic, smartrest_event)
             } else {
                 // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
@@ -529,6 +535,7 @@ impl CumulocityConverter {
             input,
             alarm_type,
             &self.entity_store,
+            &self.config.c8y_prefix,
         )?;
 
         Ok(mqtt_messages)
@@ -549,6 +556,7 @@ impl CumulocityConverter {
             entity_metadata,
             &ancestors_external_ids,
             message,
+            &self.config.c8y_prefix,
         ))
     }
 
@@ -660,7 +668,9 @@ impl CumulocityConverter {
                     ..
                 },
             ) => {
-                let topic = C8yTopic::SmartRestResponse.to_topic().unwrap();
+                let topic = C8yTopic::SmartRestResponse
+                    .to_topic(&self.config.c8y_prefix)
+                    .unwrap();
                 let msg1 = Message::new(&topic, set_operation_executing(operation));
                 let msg2 = Message::new(&topic, fail_operation(operation, &err.to_string()));
                 error!("{err}");
@@ -809,13 +819,14 @@ impl CumulocityConverter {
             Ok(child_process) => {
                 let op_name = operation_name.to_owned();
                 let mut mqtt_publisher = self.mqtt_publisher.clone();
+                let c8y_prefix = self.config.c8y_prefix.clone();
 
                 tokio::spawn(async move {
                     let op_name = op_name.as_str();
                     let logger = log_file.buffer();
 
                     // mqtt client publishes executing
-                    let topic = C8yTopic::SmartRestResponse.to_topic().unwrap();
+                    let topic = C8yTopic::SmartRestResponse.to_topic(&c8y_prefix).unwrap();
                     let executing_str = set_operation_executing(op_name);
                     mqtt_publisher
                         .send(Message::new(&topic, executing_str.as_str()))
@@ -1200,10 +1211,12 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic if C8yDeviceControlTopic::accept(topic) => {
+            topic if C8yDeviceControlTopic::accept(topic, &self.config.c8y_prefix) => {
                 self.parse_c8y_devicecontrol_topic(message).await
             }
-            topic if C8yTopic::accept(topic) => self.parse_c8y_smartrest_topics(message).await,
+            topic if topic.name.starts_with(self.config.c8y_prefix.as_str()) => {
+                self.parse_c8y_smartrest_topics(message).await
+            }
             _ => {
                 error!("Unsupported topic: {}", message.topic.name);
                 Ok(vec![])
@@ -1216,11 +1229,13 @@ impl CumulocityConverter {
     fn try_init_messages(&mut self) -> Result<Vec<Message>, ConversionError> {
         let mut messages = self.parse_base_inventory_file()?;
 
-        let supported_operations_message = self.create_supported_operations(&self.ops_dir)?;
+        let supported_operations_message =
+            self.create_supported_operations(&self.ops_dir, &self.config.c8y_prefix)?;
 
         let device_data_message = self.inventory_device_type_update_message()?;
 
-        let pending_operations_message = create_get_pending_operations_message()?;
+        let pending_operations_message =
+            create_get_pending_operations_message(&self.config.c8y_prefix)?;
 
         messages.append(&mut vec![
             supported_operations_message,
@@ -1230,14 +1245,18 @@ impl CumulocityConverter {
         Ok(messages)
     }
 
-    fn create_supported_operations(&self, path: &Path) -> Result<Message, ConversionError> {
+    fn create_supported_operations(
+        &self,
+        path: &Path,
+        prefix: &TopicPrefix,
+    ) -> Result<Message, ConversionError> {
         let topic = if is_child_operation_path(path) {
             let child_id = get_child_external_id(path)?;
             let child_external_id = Self::validate_external_id(&child_id)?;
 
-            C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic()?
+            C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic(prefix)?
         } else {
-            Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC)
+            C8yTopic::upstream_topic(prefix)
         };
 
         Ok(Message::new(
@@ -1259,7 +1278,10 @@ impl CumulocityConverter {
         let needs_cloud_update = self.update_operations(&message.ops_dir)?;
 
         if needs_cloud_update {
-            Ok(Some(self.create_supported_operations(&message.ops_dir)?))
+            Ok(Some(self.create_supported_operations(
+                &message.ops_dir,
+                &self.config.c8y_prefix,
+            )?))
         } else {
             Ok(None)
         }
@@ -1282,8 +1304,8 @@ fn get_child_external_id(dir_path: &Path) -> Result<String, ConversionError> {
     }
 }
 
-fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+fn create_get_pending_operations_message(prefix: &TopicPrefix) -> Result<Message, ConversionError> {
+    let topic = C8yTopic::SmartRestResponse.to_topic(prefix)?;
     Ok(Message::new(&topic, request_pending_operations()))
 }
 
@@ -1328,7 +1350,8 @@ impl CumulocityConverter {
         let need_cloud_update = self.update_operations(&ops_dir)?;
 
         if need_cloud_update {
-            let device_operations = self.create_supported_operations(&ops_dir)?;
+            let device_operations =
+                self.create_supported_operations(&ops_dir, &self.config.c8y_prefix)?;
             return Ok(vec![device_operations]);
         }
 
@@ -1391,7 +1414,7 @@ impl CumulocityConverter {
         let topic = self
             .entity_store
             .get(target)
-            .and_then(C8yTopic::smartrest_response_topic)
+            .and_then(|entity| C8yTopic::smartrest_response_topic(entity, &self.config.c8y_prefix))
             .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
 
         match command.status() {
@@ -1486,7 +1509,7 @@ impl CumulocityConverter {
         let topic = self
             .entity_store
             .get(target)
-            .and_then(C8yTopic::smartrest_response_topic)
+            .and_then(|entity| C8yTopic::smartrest_response_topic(entity, &self.config.c8y_prefix))
             .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
 
         match response.status() {
@@ -1603,7 +1626,7 @@ pub(crate) mod tests {
     use assert_matches::assert_matches;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use c8y_api::smartrest::operations::ResultFormat;
-    use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+    use c8y_api::smartrest::topic::C8yTopic;
     use c8y_auth_proxy::url::Protocol;
     use c8y_auth_proxy::url::ProxyUrlGenerator;
     use c8y_http_proxy::handle::C8YHttpProxy;
@@ -1990,7 +2013,7 @@ pub(crate) mod tests {
                 expected_smart_rest_message_child,
                 expected_service_create_msg,
                 expected_smart_rest_message_service,
-                expected_c8y_json_message.clone()
+                expected_c8y_json_message.clone(),
             ]
         );
 
@@ -2045,7 +2068,7 @@ pub(crate) mod tests {
             vec![
                 expected_create_service_msg,
                 expected_smart_rest_message_service,
-                expected_c8y_json_message.clone()
+                expected_c8y_json_message.clone(),
             ]
         );
 
@@ -2121,7 +2144,7 @@ pub(crate) mod tests {
             out_first_messages,
             vec![
                 expected_first_smart_rest_message,
-                expected_first_c8y_json_message
+                expected_first_c8y_json_message,
             ]
         );
 
@@ -2146,7 +2169,7 @@ pub(crate) mod tests {
             out_second_messages,
             vec![
                 expected_second_smart_rest_message,
-                expected_second_c8y_json_message
+                expected_second_c8y_json_message,
             ]
         );
     }
@@ -2229,7 +2252,7 @@ pub(crate) mod tests {
             out_messages,
             vec![
                 expected_smart_rest_message,
-                expected_c8y_json_message.clone()
+                expected_c8y_json_message.clone(),
             ]
         );
     }
@@ -2263,7 +2286,7 @@ pub(crate) mod tests {
             out_first_messages,
             vec![
                 expected_smart_rest_message,
-                expected_c8y_json_message.clone()
+                expected_c8y_json_message.clone(),
             ]
         );
     }
@@ -2460,8 +2483,8 @@ pub(crate) mod tests {
 
         let payload = result[0].payload_str().unwrap();
         assert!(payload.starts_with(
-        r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/main///m/ after translation is"#
-    ));
+            r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/main///m/ after translation is"#
+        ));
         assert!(payload.ends_with("greater than the threshold size of 16184."));
     }
 
@@ -2505,8 +2528,8 @@ pub(crate) mod tests {
 
         let payload = result[0].payload_str().unwrap();
         assert!(payload.starts_with(
-        r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/child1///m/ after translation is"#
-    ));
+            r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/child1///m/ after translation is"#
+        ));
         assert!(payload.ends_with("greater than the threshold size of 16184."));
     }
 
@@ -2532,9 +2555,9 @@ pub(crate) mod tests {
         let payload2 = &result[1].payload_str().unwrap();
 
         assert!(payload1.contains("101,test-device:device:child1,child1,thin-edge.io-child"));
-        assert!(payload2 .contains(
-        r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
-    ));
+        assert!(payload2.contains(
+            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
+        ));
         assert!(payload2.contains(r#""type":"ThinEdgeMeasurement""#));
     }
 
@@ -2680,7 +2703,7 @@ pub(crate) mod tests {
             registration,
             Message::new(
                 &Topic::new_unchecked("te/device/childId//"),
-                r#"{"@id":"test-device:device:childId","@type":"child-device","name":"childId"}"#
+                r#"{"@id":"test-device:device:childId","@type":"child-device","name":"childId"}"#,
             )
             .with_retain()
         );
@@ -2694,7 +2717,7 @@ pub(crate) mod tests {
             ChannelFilter::Command(OperationType::SoftwareUpdate),
         );
         let mqtt_message = MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_SoftwareUpdate": [
@@ -2767,7 +2790,7 @@ pub(crate) mod tests {
             CumulocityConverter::validate_external_id(input_id),
             Err(InvalidExternalIdError {
                 external_id: input_id.into(),
-                invalid_char
+                invalid_char,
             })
         );
     }
@@ -2838,7 +2861,7 @@ pub(crate) mod tests {
         let output = converter.convert(&service_health_message).await;
         let service_creation_message = output
             .into_iter()
-            .find(|m| m.topic.name == SMARTREST_PUBLISH_TOPIC)
+            .find(|m| m.topic == C8yTopic::upstream_topic(&"c8y".into()))
             .expect("service creation message should be present");
 
         let mut smartrest_fields = service_creation_message.payload_str().unwrap().split(',');
@@ -2963,6 +2986,7 @@ pub(crate) mod tests {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
+        config.c8y_prefix = "custom-c8y-prefix".into();
 
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
@@ -3001,16 +3025,19 @@ pub(crate) mod tests {
         assert_messages_matching(
             &messages,
             [
-                ("c8y/s/us", "101,child1,child1,thin-edge.io-child".into()),
                 (
-                    "c8y/inventory/managedObjects/update/child1",
+                    "custom-c8y-prefix/s/us",
+                    "101,child1,child1,thin-edge.io-child".into(),
+                ),
+                (
+                    "custom-c8y-prefix/inventory/managedObjects/update/child1",
                     json!({
                         "foo": 5.6789
                     })
                     .into(),
                 ),
                 (
-                    "c8y/measurement/measurements/create",
+                    "custom-c8y-prefix/measurement/measurements/create",
                     json!({
                         "temperature":{
                             "temperature":{
@@ -3021,7 +3048,7 @@ pub(crate) mod tests {
                     .into(),
                 ),
                 (
-                    "c8y/measurement/measurements/create",
+                    "custom-c8y-prefix/measurement/measurements/create",
                     json!({
                         "temperature":{
                             "temperature":{
@@ -3032,7 +3059,7 @@ pub(crate) mod tests {
                     .into(),
                 ),
                 (
-                    "c8y/measurement/measurements/create",
+                    "custom-c8y-prefix/measurement/measurements/create",
                     json!({
                         "temperature":{
                             "temperature":{
@@ -3143,7 +3170,8 @@ pub(crate) mod tests {
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
         let topics =
-            C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
+            C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf(), &"c8y".into())
+                .unwrap();
 
         C8yMapperConfig::new(
             tmp_dir.to_path_buf(),
@@ -3164,8 +3192,10 @@ pub(crate) mod tests {
             MqttSchema::default(),
             true,
             true,
+            "c8y".into(),
         )
     }
+
     fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
     ) -> (

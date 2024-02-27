@@ -51,7 +51,7 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerConfig {
     pub fn subscriptions(&self) -> TopicFilter {
         vec![
-            "c8y/s/ds",
+            &format!("{}/s/ds", self.c8y_prefix),
             "tedge/+/commands/res/config_snapshot",
             "tedge/+/commands/res/config_update",
         ]

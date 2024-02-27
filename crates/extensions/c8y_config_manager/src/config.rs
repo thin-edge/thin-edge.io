@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tedge_api::path::DataDir;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::TopicFilter;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
@@ -29,6 +30,7 @@ pub struct ConfigManagerConfig {
     pub c8y_request_topics: TopicFilter,
     pub config_snapshot_response_topics: TopicFilter,
     pub config_update_response_topics: TopicFilter,
+    pub c8y_prefix: TopicPrefix,
 }
 
 impl ConfigManagerConfig {
@@ -42,6 +44,7 @@ impl ConfigManagerConfig {
         mqtt_port: u16,
         tedge_http_host: Arc<str>,
         tedge_http_port: u16,
+        c8y_prefix: TopicPrefix,
     ) -> Self {
         let tedge_http_host = format!("{}:{}", tedge_http_host, tedge_http_port).into();
 
@@ -51,7 +54,8 @@ impl ConfigManagerConfig {
 
         let file_transfer_dir = data_dir.file_transfer_dir().into();
 
-        let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
+        let c8y_request_topics: TopicFilter =
+            C8yTopic::SmartRestRequest.to_topic_filter(&c8y_prefix);
         let config_snapshot_response_topics: TopicFilter =
             ConfigOperationResponseTopic::SnapshotResponse.into();
         let config_update_response_topics: TopicFilter =
@@ -71,6 +75,7 @@ impl ConfigManagerConfig {
             c8y_request_topics,
             config_snapshot_response_topics,
             config_update_response_topics,
+            c8y_prefix,
         }
     }
 
@@ -86,6 +91,7 @@ impl ConfigManagerConfig {
         let mqtt_port = tedge_config.mqtt.client.port.get();
         let tedge_http_host = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
+        let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
         let config = ConfigManagerConfig::new(
             config_dir,
@@ -96,6 +102,7 @@ impl ConfigManagerConfig {
             mqtt_port,
             tedge_http_host,
             tedge_http_port,
+            c8y_prefix,
         );
         Ok(config)
     }

@@ -12,6 +12,7 @@
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::topic::publish_topic_from_ancestors;
 use mqtt_channel::Message;
+use tedge_config::TopicPrefix;
 
 use super::message::sanitize_for_smartrest;
 
@@ -23,6 +24,7 @@ pub fn child_device_creation_message(
     device_name: Option<&str>,
     device_type: Option<&str>,
     ancestors: &[String],
+    prefix: &TopicPrefix,
 ) -> Result<Message, InvalidValueError> {
     if child_id.is_empty() {
         return Err(InvalidValueError {
@@ -44,7 +46,7 @@ pub fn child_device_creation_message(
     }
 
     Ok(Message::new(
-        &publish_topic_from_ancestors(ancestors),
+        &publish_topic_from_ancestors(ancestors, prefix),
         // XXX: if any arguments contain commas, output will be wrong
         format!(
             "101,{},{},{}",
@@ -64,6 +66,7 @@ pub fn service_creation_message(
     service_type: &str,
     service_status: &str,
     ancestors: &[String],
+    prefix: &TopicPrefix,
 ) -> Result<Message, InvalidValueError> {
     // TODO: most of this noise can be eliminated by implementing `Serialize`/`Deserialize` for smartrest format
     if service_id.is_empty() {
@@ -92,7 +95,7 @@ pub fn service_creation_message(
     }
 
     Ok(Message::new(
-        &publish_topic_from_ancestors(ancestors),
+        &publish_topic_from_ancestors(ancestors, prefix),
         fields_to_csv_string(&[
             "102",
             service_id,
@@ -116,8 +119,9 @@ pub fn service_creation_message(
 pub fn service_status_update_message(
     external_ids: &[impl AsRef<str>],
     service_status: &str,
+    prefix: &TopicPrefix,
 ) -> Message {
-    let topic = publish_topic_from_ancestors(external_ids);
+    let topic = publish_topic_from_ancestors(external_ids, prefix);
 
     let service_status =
         sanitize_for_smartrest(service_status, super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);

@@ -215,8 +215,9 @@ pub fn bridge_config(
 // Check the connection by using the jwt token retrieval over the mqtt.
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
-    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
+    let prefix = &tedge_config.c8y.bridge.topic_prefix;
+    let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
+    let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
 
     let mut mqtt_options = tedge_config
@@ -234,14 +235,14 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
 
-    client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;
+    client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
                 client.publish(
-                    C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM,
+                    &c8y_topic_builtin_jwt_token_upstream,
                     rumqttc::QoS::AtMostOnce,
                     false,
                     "",

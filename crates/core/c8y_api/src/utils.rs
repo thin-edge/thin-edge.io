@@ -1,5 +1,4 @@
 pub mod bridge {
-
     use mqtt_channel::Message;
 
     // FIXME: doesn't account for custom topic root, use MQTT scheme API here
@@ -18,13 +17,13 @@ pub mod bridge {
 }
 
 pub mod child_device {
-    use crate::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+    use crate::smartrest::topic::C8yTopic;
     use mqtt_channel::Message;
-    use mqtt_channel::Topic;
+    use tedge_config::TopicPrefix;
 
-    pub fn new_child_device_message(child_id: &str) -> Message {
+    pub fn new_child_device_message(child_id: &str, prefix: &TopicPrefix) -> Message {
         Message::new(
-            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+            &C8yTopic::upstream_topic(prefix),
             format!("101,{child_id},{child_id},thin-edge.io-child"),
         )
     }

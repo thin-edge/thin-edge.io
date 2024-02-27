@@ -7,6 +7,7 @@ use serde::ser::SerializeSeq;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
+use tedge_config::TopicPrefix;
 use tracing::warn;
 
 pub type SmartRest = String;
@@ -204,20 +205,20 @@ where
 
 /// Helper to generate a SmartREST operation status message
 pub trait OperationStatusMessage {
-    fn executing() -> Message {
-        Self::create_message(Self::status_executing())
+    fn executing(prefix: &TopicPrefix) -> Message {
+        Self::create_message(Self::status_executing(), prefix)
     }
 
-    fn successful(parameter: Option<&str>) -> Message {
-        Self::create_message(Self::status_successful(parameter))
+    fn successful(parameter: Option<&str>, prefix: &TopicPrefix) -> Message {
+        Self::create_message(Self::status_successful(parameter), prefix)
     }
 
-    fn failed(failure_reason: &str) -> Message {
-        Self::create_message(Self::status_failed(failure_reason))
+    fn failed(failure_reason: &str, prefix: &TopicPrefix) -> Message {
+        Self::create_message(Self::status_failed(failure_reason), prefix)
     }
 
-    fn create_message(payload: SmartRest) -> Message {
-        let topic = C8yTopic::SmartRestResponse.to_topic().unwrap(); // never fail
+    fn create_message(payload: SmartRest, prefix: &TopicPrefix) -> Message {
+        let topic = C8yTopic::SmartRestResponse.to_topic(prefix).unwrap(); // never fail
         Message::new(&topic, payload)
     }
 

@@ -28,6 +28,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_api::path::DataDir;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
@@ -62,8 +63,10 @@ impl FirmwareManagerBuilder {
             signal_receiver,
         );
 
-        let mqtt_publisher =
-            mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.clone().into());
+        let mqtt_publisher = mqtt_actor.connect_consumer(
+            Self::subscriptions(&config.c8y_prefix),
+            input_sender.clone().into(),
+        );
         let jwt_retriever = JwtRetriever::new("Firmware => JWT", jwt_actor);
         let timer_sender = timer_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let download_sender = downloader_actor.connect_consumer(NoConfig, input_sender.into());
@@ -85,10 +88,13 @@ impl FirmwareManagerBuilder {
         Ok(())
     }
 
-    pub fn subscriptions() -> TopicFilter {
-        vec!["c8y/s/ds", "tedge/+/commands/res/firmware_update"]
-            .try_into()
-            .expect("Infallible")
+    fn subscriptions(prefix: &TopicPrefix) -> TopicFilter {
+        vec![
+            &format!("{prefix}/s/ds"),
+            "tedge/+/commands/res/firmware_update",
+        ]
+        .try_into()
+        .expect("Infallible")
     }
 }
 

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tedge_api::path::DataDir;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::TopicFilter;
 
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
@@ -24,9 +25,11 @@ pub struct FirmwareManagerConfig {
     pub firmware_update_response_topics: TopicFilter,
     pub timeout_sec: Duration,
     pub c8y_end_point: C8yEndPoint,
+    pub c8y_prefix: TopicPrefix,
 }
 
 impl FirmwareManagerConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         tedge_device_id: String,
         local_http_host: Arc<str>,
@@ -35,10 +38,11 @@ impl FirmwareManagerConfig {
         data_dir: DataDir,
         timeout_sec: Duration,
         c8y_url: String,
+        c8y_prefix: TopicPrefix,
     ) -> Self {
         let local_http_host = format!("{}:{}", local_http_host, local_http_port).into();
 
-        let c8y_request_topics = C8yTopic::SmartRestRequest.into();
+        let c8y_request_topics = C8yTopic::SmartRestRequest.to_topic_filter(&c8y_prefix);
         let firmware_update_response_topics =
             TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS);
 
@@ -53,6 +57,7 @@ impl FirmwareManagerConfig {
             firmware_update_response_topics,
             timeout_sec,
             c8y_end_point,
+            c8y_prefix,
         }
     }
 
@@ -67,6 +72,7 @@ impl FirmwareManagerConfig {
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
         let c8y_url = tedge_config.c8y.http.or_config_not_set()?.to_string();
+        let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
         Ok(Self::new(
             tedge_device_id,
@@ -76,6 +82,7 @@ impl FirmwareManagerConfig {
             data_dir,
             timeout_sec,
             c8y_url,
+            c8y_prefix,
         ))
     }
 

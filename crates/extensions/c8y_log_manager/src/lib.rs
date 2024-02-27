@@ -23,11 +23,13 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_config::TopicPrefix;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
+
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
@@ -50,7 +52,7 @@ impl LogManagerBuilder {
         let box_builder = SimpleMessageBoxBuilder::new("C8Y Log Manager", 16);
         let http_proxy = C8YHttpProxy::new("LogManager => C8Y", http);
         let mqtt_publisher = mqtt.connect_consumer(
-            LogManagerBuilder::subscriptions(),
+            LogManagerBuilder::subscriptions(&config.c8y_prefix),
             adapt(&box_builder.get_sender()),
         );
         fs_notify.register_peer(
@@ -88,10 +90,10 @@ impl LogManagerBuilder {
     }
 
     /// List of MQTT topic filters the log actor has to subscribe to
-    fn subscriptions() -> TopicFilter {
+    fn subscriptions(prefix: &TopicPrefix) -> TopicFilter {
         vec![
             // subscribing to c8y smartrest requests
-            C8yTopic::SmartRestRequest.to_string().as_ref(),
+            &C8yTopic::SmartRestRequest.with_prefix(prefix),
             // subscribing also to c8y bridge health topic to know when the bridge is up
             C8Y_BRIDGE_HEALTH_TOPIC,
         ]

@@ -46,11 +46,10 @@ impl MqttBridgeActorBuilder {
             tedge_config.device.key_path.clone().into(),
             tedge_config.device.cert_path.clone().into(),
         )
-            .unwrap();
+        .unwrap();
         let (signal_sender, _signal_receiver) = mpsc::channel(10);
 
-        // TODO move this somewhere sensible, and make sure we validate it
-        let prefix = std::env::var("TEDGE_BRIDGE_PREFIX").unwrap_or_else(|_| "c8y".to_owned());
+        let prefix = tedge_config.c8y.bridge.topic_prefix.clone();
         let mut local_config = MqttOptions::new(
             format!("tedge-mapper-bridge-{prefix}"),
             &tedge_config.mqtt.client.host,
@@ -123,10 +122,12 @@ async fn one_way_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     let mut last_err = None;
     loop {
         let notification = match recv_event_loop.poll().await {
+            // TODO notify if this is us recovering from an error
             Ok(notification) => notification,
             Err(err) => {
                 let err = err.to_string();
                 if last_err.as_ref() != Some(&err) {
+                    // TODO clarify whether this is cloud/local
                     error!("MQTT bridge connection error: {err}");
                     last_err = Some(err);
                 }

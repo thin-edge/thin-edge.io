@@ -29,6 +29,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
+use tedge_config::TopicPrefix;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -118,6 +119,7 @@ impl ConfigManagerActor {
                                 ActiveOperationState::Pending,
                                 &format!("Failed due to {err}"),
                                 &mut self.messages,
+                                &self.config.c8y_prefix,
                             )
                             .await?;
                         }
@@ -144,6 +146,7 @@ impl ConfigManagerActor {
                                 ActiveOperationState::Pending,
                                 &format!("Failed due to {err}"),
                                 &mut self.messages,
+                                &self.config.c8y_prefix,
                             )
                             .await?;
                         }
@@ -207,6 +210,7 @@ impl ConfigManagerActor {
                     ActiveOperationState::Pending,
                     &err.to_string(),
                     &mut self.messages,
+                    &self.config.c8y_prefix,
                 )
                 .await
             }
@@ -241,6 +245,7 @@ impl ConfigManagerActor {
                     let plugin_config = PluginConfig::new(&path);
                     let message = plugin_config.to_supported_config_types_message_for_child(
                         &parent_dir_name.to_string_lossy(),
+                        &self.config.c8y_prefix,
                     )?;
                     self.messages.send(message.into()).await?;
                 }
@@ -270,14 +275,19 @@ impl ConfigManagerActor {
 
     async fn publish_supported_config_types(&mut self) -> Result<(), ConfigManagementError> {
         self.plugin_config = PluginConfig::new(self.config.plugin_config_path.as_path());
-        let message = self.plugin_config.to_supported_config_types_message()?;
+        let message = self
+            .plugin_config
+            .to_supported_config_types_message(&self.config.c8y_prefix)?;
         self.messages.send(message.into()).await?;
         Ok(())
     }
 
     async fn get_pending_operations_from_cloud(&mut self) -> Result<(), ConfigManagementError> {
         // Get pending operations
-        let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        let message = MqttMessage::new(
+            &C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?,
+            "500",
+        );
         self.messages.send(message.into()).await?;
         Ok(())
     }
@@ -288,14 +298,16 @@ impl ConfigManagerActor {
         op_state: ActiveOperationState,
         failure_reason: &str,
         message_box: &mut ConfigManagerMessageBox,
+        prefix: &TopicPrefix,
     ) -> Result<(), ConfigManagementError> {
         // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
         let executing_msg;
         let failed_msg;
 
         if let Some(child_id) = child_id {
-            let c8y_child_topic =
-                Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
+            let c8y_child_topic = Topic::new_unchecked(
+                &C8yTopic::ChildSmartRestResponse(child_id).with_prefix(prefix),
+            );
 
             match config_operation {
                 ConfigOperation::Snapshot => {
@@ -322,12 +334,12 @@ impl ConfigManagerActor {
         } else {
             match config_operation {
                 ConfigOperation::Snapshot => {
-                    executing_msg = UploadConfigFileStatusMessage::executing();
-                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason);
+                    executing_msg = UploadConfigFileStatusMessage::executing(prefix);
+                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason, prefix);
                 }
                 ConfigOperation::Update => {
-                    executing_msg = DownloadConfigFileStatusMessage::executing();
-                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason);
+                    executing_msg = DownloadConfigFileStatusMessage::executing(prefix);
+                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason, prefix);
                 }
             };
         }

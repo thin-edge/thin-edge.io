@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::OperationStatus;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
@@ -88,13 +89,13 @@ impl ConfigOperationResponse {
         }
     }
 
-    pub fn get_child_topic(&self) -> String {
+    pub fn get_child_topic(&self, prefix: &TopicPrefix) -> String {
         match self {
             ConfigOperationResponse::Update { child_id, .. } => {
-                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).to_string()
+                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).with_prefix(prefix)
             }
             ConfigOperationResponse::Snapshot { child_id, .. } => {
-                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).to_string()
+                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).with_prefix(prefix)
             }
         }
     }

@@ -186,8 +186,8 @@ impl CumulocityConverter {
             Err(err) => {
                 let smartrest_error =
                     fail_operation(
-                    CumulocitySupportedOperations::C8yUploadConfigFile,
-                    &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
+                        CumulocitySupportedOperations::C8yUploadConfigFile,
+                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
                     );
 
                 let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
@@ -288,7 +288,7 @@ mod tests {
 
         // Simulate c8y_UploadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_UploadConfigFile": {
@@ -338,7 +338,7 @@ mod tests {
 
         // Simulate c8y_UploadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_UploadConfigFile": {
@@ -537,7 +537,7 @@ mod tests {
             &mut mqtt,
             [("c8y/s/us", "503,c8y_UploadConfigFile,https://test.c8y.io/event/events/dummy-event-id-1234/binaries")],
         )
-        .await;
+            .await;
     }
 
     #[tokio::test]
@@ -616,6 +616,6 @@ mod tests {
                 "503,c8y_UploadConfigFile,https://test.c8y.io/event/events/dummy-event-id-1234/binaries",
             )],
         )
-        .await;
+            .await;
     }
 }

@@ -112,7 +112,7 @@ impl LogManagerActor {
         &mut self,
         smartrest_request: &SmartRestLogRequest,
     ) -> Result<(), anyhow::Error> {
-        let executing = LogfileRequest::executing();
+        let executing = LogfileRequest::executing(&self.config.c8y_prefix);
         self.mqtt_publisher.send(executing).await?;
 
         let log_path = log_manager::new_read_logs(
@@ -135,7 +135,8 @@ impl LogManagerActor {
             )
             .await?;
 
-        let successful = LogfileRequest::successful(Some(&upload_event_url));
+        let successful =
+            LogfileRequest::successful(Some(&upload_event_url), &self.config.c8y_prefix);
         self.mqtt_publisher.send(successful).await?;
 
         std::fs::remove_file(log_path)?;
@@ -154,7 +155,7 @@ impl LogManagerActor {
             Ok(()) => Ok(()),
             Err(error) => {
                 let error_message = format!("Handling of operation failed with {}", error);
-                let failed_msg = LogfileRequest::failed(&error_message);
+                let failed_msg = LogfileRequest::failed(&error_message, &self.config.c8y_prefix);
                 self.mqtt_publisher.send(failed_msg).await?;
                 error!(
                     "Handling of operation for log type {} failed with: {}",
@@ -198,7 +199,7 @@ impl LogManagerActor {
     /// updates the log types on Cumulocity
     /// sends 118,typeA,typeB,... on mqtt
     pub async fn publish_supported_log_types(&mut self) -> Result<(), anyhow::Error> {
-        let topic = C8yTopic::SmartRestResponse.to_topic()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?;
         let mut config_types = self.plugin_config.get_all_file_types();
         config_types.sort();
         let supported_config_types = config_types.join(",");
@@ -209,7 +210,10 @@ impl LogManagerActor {
 
     async fn get_pending_operations_from_cloud(&mut self) -> Result<(), anyhow::Error> {
         // Get pending operations
-        let msg = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        let msg = MqttMessage::new(
+            &C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?,
+            "500",
+        );
         self.mqtt_publisher.send(msg).await?;
         Ok(())
     }
@@ -356,6 +360,7 @@ mod tests {
             ops_dir: temp_dir.to_path_buf(),
             plugin_config_dir: temp_dir.to_path_buf(),
             plugin_config_path: temp_dir.join("c8y-log-plugin.toml"),
+            c8y_prefix: "c8y".into(),
         };
 
         let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
@@ -459,7 +464,7 @@ mod tests {
             Some(C8YRestRequest::UploadLogBinary(UploadLogBinary {
                 log_type: "type_two".to_string(),
                 log_content: "filename: file_c\nSome content\n".to_string(),
-                device_id: "SUT".into()
+                device_id: "SUT".into(),
             }))
         );
 

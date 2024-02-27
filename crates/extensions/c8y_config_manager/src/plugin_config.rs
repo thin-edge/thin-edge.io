@@ -9,6 +9,7 @@ use std::fs;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::Path;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttError;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -147,16 +148,20 @@ impl PluginConfig {
         self
     }
 
-    pub fn to_supported_config_types_message(&self) -> Result<MqttMessage, MqttError> {
-        let topic = C8yTopic::SmartRestResponse.to_topic()?;
+    pub fn to_supported_config_types_message(
+        &self,
+        prefix: &TopicPrefix,
+    ) -> Result<MqttMessage, MqttError> {
+        let topic = C8yTopic::SmartRestResponse.to_topic(prefix)?;
         Ok(MqttMessage::new(&topic, self.to_smartrest_payload()))
     }
 
     pub fn to_supported_config_types_message_for_child(
         &self,
         child_id: &str,
+        prefix: &TopicPrefix,
     ) -> Result<MqttMessage, MqttError> {
-        let topic_str = &format!("c8y/s/us/{child_id}");
+        let topic_str = &format!("{prefix}/s/us/{child_id}");
         let topic = Topic::new(topic_str)?;
         Ok(MqttMessage::new(&topic, self.to_smartrest_payload()))
     }

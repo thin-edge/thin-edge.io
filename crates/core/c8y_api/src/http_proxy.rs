@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tracing::error;
 use tracing::info;
 
@@ -112,33 +113,41 @@ impl C8yEndPoint {
 
 pub struct C8yMqttJwtTokenRetriever {
     mqtt_config: mqtt_channel::Config,
+    topic_prefix: TopicPrefix,
 }
 
 impl C8yMqttJwtTokenRetriever {
     pub fn from_tedge_config(tedge_config: &TEdgeConfig) -> Result<Self, MqttConfigBuildError> {
         let mqtt_config = tedge_config.mqtt_config()?;
 
-        Ok(Self::new(mqtt_config))
+        Ok(Self::new(
+            mqtt_config,
+            tedge_config.c8y.bridge.topic_prefix.clone(),
+        ))
     }
 
-    pub fn new(mqtt_config: mqtt_channel::Config) -> Self {
-        let topic = TopicFilter::new_unchecked("c8y/s/dat");
+    pub fn new(mqtt_config: mqtt_channel::Config, topic_prefix: TopicPrefix) -> Self {
+        let topic = TopicFilter::new_unchecked(&format!("{topic_prefix}/s/dat"));
         let mqtt_config = mqtt_config
             .with_no_session() // Ignore any already published tokens, possibly stale.
             .with_subscriptions(topic);
 
-        C8yMqttJwtTokenRetriever { mqtt_config }
+        C8yMqttJwtTokenRetriever {
+            mqtt_config,
+            topic_prefix,
+        }
     }
 
     pub async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, JwtError> {
         let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
+        let pub_topic = format!("{}/s/uat", self.topic_prefix);
 
         tokio::time::sleep(Duration::from_millis(20)).await;
         for _ in 0..3 {
             mqtt_con
                 .published
                 .publish(
-                    mqtt_channel::Message::new(&Topic::new_unchecked("c8y/s/uat"), "".to_string())
+                    mqtt_channel::Message::new(&Topic::new_unchecked(&pub_topic), "".to_string())
                         .with_qos(mqtt_channel::QoS::AtMostOnce),
                 )
                 .await?;
@@ -184,7 +193,6 @@ pub enum JwtError {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use test_case::test_case;
 

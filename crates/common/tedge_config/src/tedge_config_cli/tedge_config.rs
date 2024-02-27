@@ -14,13 +14,20 @@ use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
 use doku::Document;
+use doku::Type;
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 use std::borrow::Cow;
+use std::convert::Infallible;
+use std::fmt;
+use std::fmt::Formatter;
 use std::io::Read;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
+use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tedge_config_macros::all_or_nothing;
 use tedge_config_macros::define_tedge_config;
@@ -444,7 +451,11 @@ define_tedge_config! {
                 #[tedge_config(note = "If set to 'auto', this cleans the local session accordingly the detected version of mosquitto.")]
                 #[tedge_config(example = "auto", default(variable = "AutoFlag::Auto"))]
                 local_cleansession: AutoFlag,
-            }
+            },
+
+            // TODO validation
+            #[tedge_config(example = "c8y", default(value = "c8y"))]
+            topic_prefix: TopicPrefix,
         },
 
         entity_store: {
@@ -794,6 +805,64 @@ define_tedge_config! {
 
 }
 
+// TODO doc comment
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]
+#[serde(from = "String", into = "Arc<str>")]
+pub struct TopicPrefix(Arc<str>);
+
+impl Document for TopicPrefix {
+    fn ty() -> Type {
+        String::ty()
+    }
+}
+
+// TODO actual validation
+// TODO make sure we don't allow c8y-internal either, or az, or aws as those are all used
+impl From<String> for TopicPrefix {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&str> for TopicPrefix {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl FromStr for TopicPrefix {
+    type Err = Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.into())
+    }
+}
+
+impl From<TopicPrefix> for Arc<str> {
+    fn from(value: TopicPrefix) -> Self {
+        value.0
+    }
+}
+
+// TODO is deref actually right here
+impl Deref for TopicPrefix {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl TopicPrefix {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for TopicPrefix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
     let external_address = dto.mqtt.external.bind.address;
     external_address
@@ -813,7 +882,8 @@ fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
 fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ReadError {
     match &err {
         CertificateError::IoError(io_err) => match io_err.kind() {
-            std::io::ErrorKind::NotFound => ReadError::ReadOnlyNotFound { key,
+            std::io::ErrorKind::NotFound => ReadError::ReadOnlyNotFound {
+                key,
                 message: concat!(
                     "The device id is read from the device certificate.\n",
                     "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",

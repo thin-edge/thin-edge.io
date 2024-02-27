@@ -172,6 +172,7 @@ mod tests {
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
+
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[tokio::test]
@@ -262,7 +263,7 @@ mod tests {
 
         // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_Firmware": {
@@ -315,7 +316,7 @@ mod tests {
 
         // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_Firmware": {
@@ -503,7 +504,7 @@ mod tests {
 
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/firmware_update/c8y-mapper-1234"), 
+            &Topic::new_unchecked("te/device/child1///cmd/firmware_update/c8y-mapper-1234"),
             json!({
                 "status": "successful",
                 "name": "myFirmware",

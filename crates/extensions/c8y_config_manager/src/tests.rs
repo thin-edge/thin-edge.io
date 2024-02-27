@@ -54,10 +54,10 @@ async fn test_config_plugin_init() -> Result<(), DynError> {
     mqtt_message_box
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::SmartRestResponse.to_topic()?,
+                &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
                 format!("119,c8y-configuration-plugin,{test_config_type}"), // Supported config types
             ),
-            MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic().unwrap(), "500"), // Get pending operations
+            MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic(&"c8y".into()).unwrap(), "500"), // Get pending operations
         ])
         .await;
     Ok(())
@@ -95,7 +95,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
     // Assert EXECUTING SmartREST MQTT message
     mqtt_message_box
         .assert_received([MqttMessage::new(
-            &C8yTopic::SmartRestResponse.to_topic()?,
+            &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
             "501,c8y_UploadConfigFile",
         )])
         .await;
@@ -117,7 +117,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
     // Assert SUCCESSFUL SmartREST MQTT message
     mqtt_message_box
         .assert_received([MqttMessage::new(
-            &C8yTopic::SmartRestResponse.to_topic()?,
+            &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
             "503,c8y_UploadConfigFile,test-url",
         )])
         .await;
@@ -151,7 +151,7 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
     let download_url = "http://test.domain.com";
     mqtt_message_box
         .send(MqttMessage::new(
-            &C8yTopic::SmartRestRequest.to_topic().unwrap(),
+            &C8yTopic::SmartRestRequest.to_topic(&"c8y".into()).unwrap(),
             format!("524,{device_id},{download_url},{test_config_type}"),
         ))
         .await?;
@@ -159,7 +159,7 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
     // Assert EXECUTING SmartREST MQTT message
     mqtt_message_box
         .assert_received([MqttMessage::new(
-            &C8yTopic::SmartRestResponse.to_topic()?,
+            &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
             "501,c8y_DownloadConfigFile",
         )])
         .await;
@@ -181,7 +181,7 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
     // Assert SUCCESSFUL SmartREST MQTT message
     mqtt_message_box
         .assert_received([MqttMessage::new(
-            &C8yTopic::SmartRestResponse.to_topic()?,
+            &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
             "503,c8y_DownloadConfigFile",
         )])
         .await;
@@ -282,7 +282,7 @@ async fn test_child_device_config_upload_executing_response_mapping() -> Result<
     mqtt_message_box
         .with_timeout(TEST_TIMEOUT)
         .assert_received([MqttMessage::new(
-            &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+            &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
             "501,c8y_UploadConfigFile",
         )])
         .await;
@@ -333,11 +333,11 @@ async fn test_child_device_config_upload_failed_response_mapping() -> Result<(),
         .with_timeout(TEST_TIMEOUT)
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "502,c8y_UploadConfigFile,upload failed",
             ),
         ])
@@ -385,11 +385,11 @@ async fn test_invalid_config_snapshot_response_child_device() -> Result<(), DynE
         .assert_received(
         [
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "502,c8y_UploadConfigFile,Failed to parse response from child device with: expected value at line 1 column 1",
             ),
         ],
@@ -450,11 +450,11 @@ async fn test_timeout_on_no_config_snapshot_response_child_device() -> Result<()
     mqtt_message_box
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "502,c8y_UploadConfigFile,Timeout due to lack of response from child device: child-aa for config type: file_a",
             ),
         ],
@@ -524,11 +524,11 @@ async fn test_child_device_successful_config_snapshot_response_mapping() -> Resu
         .with_timeout(TEST_TIMEOUT)
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "503,c8y_UploadConfigFile,test-url",
             ),
         ])
@@ -598,11 +598,11 @@ async fn test_child_config_snapshot_successful_response_without_uploaded_file_ma
         .with_timeout(TEST_TIMEOUT)
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "502,c8y_UploadConfigFile,Failed with file not found",
             ),
         ])
@@ -638,7 +638,7 @@ async fn test_child_device_config_download_request_mapping() -> Result<(), DynEr
 
     let download_url = "http://test.domain.com";
     let c8y_config_download_msg = MqttMessage::new(
-        &C8yTopic::SmartRestRequest.to_topic().unwrap(),
+        &C8yTopic::SmartRestRequest.to_topic(&"c8y".into()).unwrap(),
         format!("524,{child_device_id},{download_url},{test_config_type}"),
     );
     mqtt_message_box.send(c8y_config_download_msg).await?;
@@ -721,7 +721,7 @@ async fn test_child_device_config_update_executing_response_mapping() -> Result<
     mqtt_message_box
         .with_timeout(TEST_TIMEOUT)
         .assert_received([MqttMessage::new(
-            &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+            &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
             "501,c8y_DownloadConfigFile",
         )])
         .await;
@@ -771,11 +771,11 @@ async fn test_child_device_config_update_successful_response_mapping() -> Result
         .with_timeout(TEST_TIMEOUT)
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_DownloadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "503,c8y_DownloadConfigFile",
             ),
         ])
@@ -827,11 +827,11 @@ async fn test_child_device_config_update_failed_response_mapping() -> Result<(),
         .with_timeout(TEST_TIMEOUT)
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_DownloadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "502,c8y_DownloadConfigFile,download failed",
             ),
         ])
@@ -867,7 +867,7 @@ async fn test_child_device_config_download_fail_with_broken_url() -> Result<(), 
 
     let download_url = "bad-url";
     let c8y_config_download_msg = MqttMessage::new(
-        &C8yTopic::SmartRestRequest.to_topic().unwrap(),
+        &C8yTopic::SmartRestRequest.to_topic(&"c8y".into()).unwrap(),
         format!("524,{child_device_id},{download_url},{test_config_type}"),
     );
     mqtt_message_box.send(c8y_config_download_msg).await?;
@@ -894,11 +894,11 @@ async fn test_child_device_config_download_fail_with_broken_url() -> Result<(), 
     mqtt_message_box
         .with_timeout(TEST_TIMEOUT)
         .assert_received([MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "501,c8y_DownloadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
+                &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic(&"c8y".into())?,
                 "502,c8y_DownloadConfigFile,Downloading the config file update from bad-url failed with Failed with file not found",
             ),
         ],
@@ -953,11 +953,11 @@ async fn test_multiline_smartrest_requests() -> Result<(), DynError> {
     mqtt_message_box
         .assert_received([
             MqttMessage::new(
-                &C8yTopic::SmartRestResponse.to_topic()?,
+                &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
                 "501,c8y_UploadConfigFile",
             ),
             MqttMessage::new(
-                &C8yTopic::SmartRestResponse.to_topic()?,
+                &C8yTopic::SmartRestResponse.to_topic(&"c8y".into())?,
                 "503,c8y_UploadConfigFile,test-url",
             ),
         ])
@@ -990,6 +990,7 @@ async fn spawn_config_manager(
         mqtt_port,
         tedge_host.into(),
         tedge_http_port,
+        "c8y".into(),
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

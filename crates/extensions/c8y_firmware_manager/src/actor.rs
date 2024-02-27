@@ -637,7 +637,8 @@ impl FirmwareManagerActor {
         child_id: &str,
     ) -> Result<(), FirmwareManagementError> {
         let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string(),
+            &C8yTopic::ChildSmartRestResponse(child_id.to_string())
+                .with_prefix(&self.config.c8y_prefix),
         );
         let executing_msg = MqttMessage::new(
             &c8y_child_topic,
@@ -652,7 +653,8 @@ impl FirmwareManagerActor {
         child_id: &str,
     ) -> Result<(), FirmwareManagementError> {
         let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string(),
+            &C8yTopic::ChildSmartRestResponse(child_id.to_string())
+                .with_prefix(&self.config.c8y_prefix),
         );
         let successful_msg = MqttMessage::new(
             &c8y_child_topic,
@@ -668,7 +670,8 @@ impl FirmwareManagerActor {
         failure_reason: &str,
     ) -> Result<(), FirmwareManagementError> {
         let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string(),
+            &C8yTopic::ChildSmartRestResponse(child_id.to_string())
+                .with_prefix(&self.config.c8y_prefix),
         );
         let failed_msg = MqttMessage::new(
             &c8y_child_topic,
@@ -683,7 +686,8 @@ impl FirmwareManagerActor {
         operation_entry: &FirmwareOperationEntry,
     ) -> Result<(), FirmwareManagementError> {
         let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(operation_entry.child_id.clone()).to_string(),
+            &C8yTopic::ChildSmartRestResponse(operation_entry.child_id.clone())
+                .with_prefix(&self.config.c8y_prefix),
         );
         let installed_firmware_payload = format!(
             "115,{},{},{}",
@@ -732,7 +736,10 @@ impl FirmwareManagerActor {
 
     // Candidate to be removed since another actor should be in charge of this.
     async fn get_pending_operations_from_cloud(&mut self) -> Result<(), FirmwareManagementError> {
-        let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        let message = MqttMessage::new(
+            &C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?,
+            "500",
+        );
         self.message_box.mqtt_publisher.send(message).await?;
         Ok(())
     }

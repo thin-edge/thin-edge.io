@@ -603,7 +603,7 @@ async fn required_init_state_recreated_on_startup() -> Result<(), DynError> {
 
     // Assert that the startup succeeds and the plugin requests for pending operations
     mqtt_message_box
-        .assert_received([MqttMessage::new(&C8yTopic::upstream_topic(), "500")])
+        .assert_received([MqttMessage::new(&C8yTopic::upstream_topic(&"c8y".into()), "500")])
         .await;
 
     for dir in ["cache", "firmware", "file-transfer"] {
@@ -630,7 +630,7 @@ async fn required_init_state_recreated_on_startup() -> Result<(), DynError> {
 
     // Assert that the startup succeeds again and the mapper requests for pending operations
     mqtt_message_box
-        .assert_received([MqttMessage::new(&C8yTopic::upstream_topic(), "500")])
+        .assert_received([MqttMessage::new(&C8yTopic::upstream_topic(&"c8y".into()), "500")])
         .await;
 
     // Assert that all the required directories are recreated
@@ -717,6 +717,7 @@ async fn spawn_firmware_manager(
         tmp_dir.utf8_path_buf().into(),
         timeout_sec,
         C8Y_HOST.into(),
+        "c8y".into(),
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
 pub const DEFAULT_PLUGIN_CONFIG_DIR_NAME: &str = "c8y/";
@@ -21,6 +22,7 @@ pub struct LogManagerConfig {
     pub ops_dir: PathBuf,
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
+    pub c8y_prefix: TopicPrefix,
 }
 
 impl LogManagerConfig {
@@ -34,6 +36,7 @@ impl LogManagerConfig {
         let log_dir = tedge_config.logs.path.as_std_path().to_path_buf();
         let mqtt_host = tedge_config.mqtt.client.host.clone();
         let mqtt_port = u16::from(tedge_config.mqtt.client.port);
+        let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
         let tedge_http_host = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
@@ -56,6 +59,7 @@ impl LogManagerConfig {
             ops_dir,
             plugin_config_dir,
             plugin_config_path,
+            c8y_prefix,
         })
     }
 }

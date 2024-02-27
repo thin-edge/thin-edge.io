@@ -76,7 +76,7 @@ impl ConfigUploadManager {
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         // set config upload request to executing
-        let msg = UploadConfigFileStatusMessage::executing();
+        let msg = UploadConfigFileStatusMessage::executing(&self.config.c8y_prefix);
         message_box.mqtt_publisher.send(msg).await?;
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
@@ -102,14 +102,19 @@ impl ConfigUploadManager {
             Ok(upload_event_url) => {
                 info!("The configuration upload for '{target_config_type}' is successful.");
 
-                let successful_message =
-                    UploadConfigFileStatusMessage::successful(Some(&upload_event_url));
+                let successful_message = UploadConfigFileStatusMessage::successful(
+                    Some(&upload_event_url),
+                    &self.config.c8y_prefix,
+                );
                 message_box.mqtt_publisher.send(successful_message).await?;
             }
             Err(err) => {
                 error!("The configuration upload for '{target_config_type}' failed.",);
 
-                let failed_message = UploadConfigFileStatusMessage::failed(&err.to_string());
+                let failed_message = UploadConfigFileStatusMessage::failed(
+                    &err.to_string(),
+                    &self.config.c8y_prefix,
+                );
                 message_box.mqtt_publisher.send(failed_message).await?;
             }
         }
@@ -177,7 +182,8 @@ impl ConfigUploadManager {
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<Vec<MqttMessage>, ConfigManagementError> {
         let payload = config_response.get_payload();
-        let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
+        let c8y_child_topic =
+            Topic::new_unchecked(&config_response.get_child_topic(&self.config.c8y_prefix));
         let config_dir = self.config.config_dir.display();
         let child_id = config_response.get_child_id();
         let config_type = config_response.get_config_type();
@@ -310,8 +316,10 @@ impl ConfigUploadManager {
             )));
 
             // Publish supported configuration types for child devices
-            let message = child_plugin_config
-                .to_supported_config_types_message_for_child(&config_response.get_child_id())?;
+            let message = child_plugin_config.to_supported_config_types_message_for_child(
+                &config_response.get_child_id(),
+                &self.config.c8y_prefix,
+            )?;
             Ok(vec![message])
         }
     }
@@ -321,7 +329,8 @@ impl ConfigUploadManager {
         config_response: &ConfigOperationResponse,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<MqttMessage, ConfigManagementError> {
-        let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
+        let c8y_child_topic =
+            Topic::new_unchecked(&config_response.get_child_topic(&self.config.c8y_prefix));
 
         let uploaded_config_file_path = config_response
             .file_transfer_repository_full_path(self.config.file_transfer_dir.clone());
@@ -383,6 +392,7 @@ impl ConfigUploadManager {
                 operation_state,
                 &format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
                 message_box,
+                &self.config.c8y_prefix,
             ).await
         } else {
             // Ignore the timeout as the operation has already completed.

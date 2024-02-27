@@ -77,7 +77,7 @@ impl ConfigDownloadManager {
         smartrest_request: SmartRestConfigDownloadRequest,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
-        let executing_message = DownloadConfigFileStatusMessage::executing();
+        let executing_message = DownloadConfigFileStatusMessage::executing(&self.config.c8y_prefix);
         message_box.mqtt_publisher.send(executing_message).await?;
 
         let target_config_type = smartrest_request.config_type.clone();
@@ -102,7 +102,8 @@ impl ConfigDownloadManager {
             Ok(_) => {
                 info!("The configuration download for '{target_config_type}' is successful.");
 
-                let successful_message = DownloadConfigFileStatusMessage::successful(None);
+                let successful_message =
+                    DownloadConfigFileStatusMessage::successful(None, &self.config.c8y_prefix);
                 message_box.mqtt_publisher.send(successful_message).await?;
 
                 let notification_message = get_file_change_notification_message(
@@ -118,7 +119,10 @@ impl ConfigDownloadManager {
             Err(err) => {
                 error!("The configuration download for '{target_config_type}' failed.",);
 
-                let failed_message = DownloadConfigFileStatusMessage::failed(&err.to_string());
+                let failed_message = DownloadConfigFileStatusMessage::failed(
+                    &err.to_string(),
+                    &self.config.c8y_prefix,
+                );
                 message_box.mqtt_publisher.send(failed_message).await?;
                 Err(err)
             }
@@ -196,6 +200,7 @@ impl ConfigDownloadManager {
                         ActiveOperationState::Pending,
                         &failure_reason,
                         message_box,
+                        &self.config.c8y_prefix,
                     )
                     .await?;
                 } else {
@@ -231,7 +236,8 @@ impl ConfigDownloadManager {
         config_response: &ConfigOperationResponse,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<Vec<MqttMessage>, ConfigManagementError> {
-        let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
+        let c8y_child_topic =
+            Topic::new_unchecked(&config_response.get_child_topic(&self.config.c8y_prefix));
         let child_device_payload = config_response.get_payload();
         let child_id = config_response.get_child_id();
         let config_type = config_response.get_config_type();
@@ -325,6 +331,7 @@ impl ConfigDownloadManager {
                 operation_state,
                 &format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
                 message_box,
+                &self.config.c8y_prefix,
             ).await
         } else {
             // Ignore the timeout as the operation has already completed.

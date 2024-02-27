@@ -9,8 +9,9 @@ use rumqttc::QoS::AtLeastOnce;
 use tedge_config::TEdgeConfig;
 
 pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String, ConnectError> {
-    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
-    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
+    let prefix = &tedge_config.c8y.bridge.topic_prefix;
+    let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
+    let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     const CLIENT_ID: &str = "get_jwt_token_c8y";
 
     let mut mqtt_options = tedge_config
@@ -27,14 +28,14 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
 
-    client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;
+    client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
                 client.publish(
-                    C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM,
+                    &c8y_topic_builtin_jwt_token_upstream,
                     rumqttc::QoS::AtMostOnce,
                     false,
                     "",

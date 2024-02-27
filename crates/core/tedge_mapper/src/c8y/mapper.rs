@@ -53,12 +53,15 @@ impl TEdgeComponent for CumulocityMapper {
             "devicecontrol/notifications",
             "error",
         ]
-            .into_iter()
-            .map(<_>::to_owned)
-            .chain(custom_topics)
-            .collect();
+        .into_iter()
+        .map(<_>::to_owned)
+        .chain(custom_topics)
+        .collect();
         let bridge_actor = MqttBridgeActorBuilder::new(&tedge_config, &smartrest_topics).await;
-        let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
+        let mut jwt_actor = C8YJwtRetriever::builder(
+            mqtt_config.clone(),
+            tedge_config.c8y.bridge.topic_prefix.clone(),
+        );
         let mut http_actor = HttpActor::new().builder();
         let c8y_http_config = (&tedge_config).try_into()?;
         let mut c8y_http_proxy_actor =
@@ -146,6 +149,7 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
         service_type.as_str(),
         "down",
         &[],
+        &tedge_config.c8y.bridge.topic_prefix,
     )?;
 
     let mqtt_config = tedge_config

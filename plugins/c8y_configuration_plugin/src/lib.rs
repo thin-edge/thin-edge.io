@@ -91,7 +91,8 @@ async fn run_with(
 
     // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
-    let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
+    let mut jwt_actor =
+        C8YJwtRetriever::builder(mqtt_config.clone(), tedge_config.c8y.bridge.topic_prefix.clone());
     let mut http_actor = HttpActor::new().builder();
     let c8y_http_config = (&tedge_config).try_into()?;
     let mut c8y_http_proxy_actor =

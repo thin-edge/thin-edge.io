@@ -128,7 +128,10 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
         &tedge_config.service,
     );
 
-    let mut jwt_actor = C8YJwtRetriever::builder(base_mqtt_config);
+    let mut jwt_actor = C8YJwtRetriever::builder(
+        base_mqtt_config,
+        tedge_config.c8y.bridge.topic_prefix.clone(),
+    );
     let mut http_actor = HttpActor::new().builder();
     let mut c8y_http_proxy_actor =
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
