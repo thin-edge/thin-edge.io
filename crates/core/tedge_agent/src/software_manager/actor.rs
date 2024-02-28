@@ -25,6 +25,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SoftwareCommandMetadata;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::SoftwareType;
@@ -39,7 +40,7 @@ const SUDO: &str = "sudo";
 #[cfg(test)]
 const SUDO: &str = "echo";
 
-fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand] : Debug, Eq, PartialEq, Deserialize, Serialize);
+fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand, SoftwareCommandMetadata] : Debug, Eq, PartialEq, Deserialize, Serialize);
 
 /// Actor which performs software operations.
 ///
@@ -102,6 +103,14 @@ impl Actor for SoftwareManagerActor {
         let mut input_receiver = self.input_receiver.take().ok_or(RuntimeError::ActorError(
             anyhow::anyhow!("actor can't be run more than once").into(),
         ))?;
+
+        self.output_sender
+            .send(SoftwareCommand::SoftwareCommandMetadata(
+                SoftwareCommandMetadata {
+                    types: plugins.get_all_software_types(),
+                },
+            ))
+            .await?;
 
         while let Some(request) = input_receiver.recv().await {
             tokio::select! {
@@ -174,6 +183,7 @@ impl SoftwareManagerActor {
                     error!("{:?}", err);
                 }
             }
+            SoftwareCommand::SoftwareCommandMetadata(_) => {} // Not used as input
         }
         Ok(())
     }
@@ -192,6 +202,7 @@ impl SoftwareManagerActor {
                 );
                 self.output_sender.send(response.into()).await?;
             }
+            Ok(Some(SoftwareCommand::SoftwareCommandMetadata(_))) => (), // not used in state repository
             Err(StateError::LoadingFromFileFailed { source, .. })
                 if source.kind() == std::io::ErrorKind::NotFound =>
             {

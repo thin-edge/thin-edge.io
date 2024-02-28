@@ -2,10 +2,10 @@ name: build-workflow
 
 on:
   push:
-    branches: [ main ]
     tags:
       - "*"
 
+  merge_group:
   workflow_dispatch:
     inputs:
       disable_cache:
@@ -13,6 +13,23 @@ on:
         type: boolean
         required: false
         default: false
+      include:
+        description: Only run tests matching tests with the given tags
+        type: string
+        required: false
+        default: ""
+      processes:
+        description: Number of processes to run tests
+        type: string
+        required: false
+        default: "10"
+  # Use a manual approval process before PR's are given access to
+  # the secrets which are required to run the integration tests.
+  # The PR code should be manually approved to see if it can be trusted.
+  # When in doubt, do not approve the test run.
+  # Reference: https://dev.to/petrsvihlik/using-environment-protection-rules-to-secure-secrets-when-building-external-forks-with-pullrequesttarget-hci
+  pull_request_target:
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,6 +52,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
 
       - name: Retrieve MSRV from workspace Cargo.toml
@@ -62,7 +80,7 @@ jobs:
           cache: false
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - name: Build for ${{ matrix.job.target }}
         run: just release ${{ matrix.job.target }}
 
@@ -70,14 +88,109 @@ jobs:
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v4
         with:
-          name: packages-${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/packages/*.*
+            name: packages-${{ matrix.job.target }}
+            path: target/${{ matrix.job.target }}/packages/*.*
 
+  approve:
+    # Note: Use approval as a job so that the downstream jobs are only prompted once (if more than 1 matrix job is defined)
+    name: Approve
+    environment:
+      # For security reasons, all pull requests need to be approved first before granting access to secrets
+      # So the environment should be set to have a reviewer/s inspect it before approving it
+      name: ${{ github.event_name == 'pull_request_target' && 'Test Pull Request' || 'Test Auto'  }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Wait for approval
+        run: echo "Approved"
+
+  test:
+    name: Test ${{ matrix.job.name }}
+    # Don't tests on tagging as it has already run in the merge queue
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: [approve, build]
+    environment:
+      name: Test Auto
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        job:
+          - { name: x86_64, target: x86_64-unknown-linux-musl, output: target/packages }
+    steps:
+      # Checkout either the PR or the branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
+          fetch-depth: 0
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-${{ matrix.job.target }}
+          path: tests/images/debian-systemd/files/packages/
+
+      - name: create .env file
+        working-directory: tests/RobotFramework
+        run: |
+          touch .env
+          echo 'C8Y_BASEURL="${{ secrets.C8Y_BASEURL }}"' >> .env
+          echo 'C8Y_USER="${{ secrets.C8Y_USER }}"' >> .env
+          echo 'C8Y_TENANT="${{ secrets.C8Y_TENANT }}"' >> .env
+          echo 'C8Y_PASSWORD="${{ secrets.C8Y_PASSWORD }}"' >> .env
+          echo 'CA_KEY="${{ secrets.CA_KEY || '' }}"' >> .env
+          echo 'CA_PUB="${{ secrets.CA_PUB || '' }}"' >> .env
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements/requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          ./bin/setup.sh
+        working-directory: tests/RobotFramework
+
+      - name: Build images
+        working-directory: tests/RobotFramework
+        run: |
+          source .venv/bin/activate
+          invoke build
+
+      - name: Run tests
+        working-directory: tests/RobotFramework
+        run: |
+          source .venv/bin/activate
+          invoke test \
+            --processes "${{ inputs.processes || '' }}" \
+            --include "${{ inputs.include || '' }}" \
+            --exclude "test:on_demand OR theme:benchmarks" \
+            --outputdir output
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-${{ matrix.job.target }}
+          path: tests/RobotFramework/output
+
+      - name: Send report to commit
+        uses: joonvena/robotframework-reporter-action@v2.3
+        if: always() && github.event_name == 'pull_request_target'
+        with:
+          gh_access_token: ${{ secrets.GITHUB_TOKEN }}
+          report_path: 'tests/RobotFramework/output'
+          show_passed_tests: 'false'
 
   publish:
     name: Publish ${{ matrix.job.target }}
+    if: |
+      always() &&
+      github.event_name != 'pull_request_target' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
-    needs: [build]
+    needs: [test]
     strategy:
       fail-fast: false
       matrix:
@@ -105,7 +218,7 @@ jobs:
           name: packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/packages/
 
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - name: Publish packages
         env:
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
@@ -119,8 +232,12 @@ jobs:
   # before publishing the virtual packages (which are architecture agnostic)
   publish-containers:
     name: Publish Containers
+    if: |
+      always() &&
+      github.event_name != 'pull_request_target' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
-    needs: [build]
+    needs: [test]
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: 1
     permissions:
@@ -131,7 +248,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - id: tedge
         name: Get Version
         run: |
@@ -175,7 +292,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: containers/tedge
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request_target' }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -188,6 +305,10 @@ jobs:
   # before publishing the virtual packages (which are architecture agnostic)
   publish-virtual-packages:
     name: Publish Virtual Packages
+    if: |
+      always() &&
+      github.event_name != 'pull_request_target' &&
+      needs.publish.result == 'success'
     runs-on: ubuntu-20.04
     needs: [publish]
     steps:
@@ -206,7 +327,7 @@ jobs:
           go-version: 'stable'
           cache: false
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-      - uses: extractions/setup-just@v1
+      - uses: taiki-e/install-action@just
       - name: Build virtual packages
         run: just release-linux-virtual
       - name: Publish packages
@@ -216,3 +337,39 @@ jobs:
         run: |
           just publish-linux-virtual --repo tedge-main
           just publish-linux-virtual --repo tedge-main-armv6
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [publish-virtual-packages, publish-containers]
+    if: |
+      always() &&
+      startsWith(github.ref, 'refs/tags/') &&
+      needs.publish-virtual-packages.result == 'success' &&
+      needs.publish-containers.result == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          generate_release_notes: true
+          draft: true
+
+      - name: Create tedge-docs snapshot
+        run: |
+          gh workflow run snapshot.yml -R thin-edge/tedge-docs -f version=${{github.ref_name}}
+        env:
+          # Triggering another workflow requires more additional credentials
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
+
+      - name: Promote cloudsmith packages
+        env:
+          VERSION: ${{ github.ref_name }}
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: |
+          ./ci/admin/cloudsmith_admin.sh promote "$VERSION"

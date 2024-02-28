@@ -14,7 +14,7 @@ Test Teardown    Get Logs
 
 *** Variables ***
 ${DPKG_INSTALL_SCRIPT}   cd /setup \
-...                      && dpkg -i tedge_0*.deb \
+...                      && dpkg -i tedge_*.deb \
 ...                      && dpkg -i tedge*mapper*.deb \
 ...                      && dpkg -i tedge*agent*.deb \
 ...                      && dpkg -i tedge*watchdog*.deb \

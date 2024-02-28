@@ -8,6 +8,12 @@ Test Setup       Custom Setup
 Test Teardown    Custom Teardown
 
 *** Test Cases ***
+Supported software types should be declared during startup
+    [Documentation]    #2654 This test will be updated once advanced software management support is implemented
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+    Should Have MQTT Messages    topic=te/device/${CHILD_SN}///cmd/software_list    minimum=1    maximum=1    message_contains="types":["apt"]
+    Should Have MQTT Messages    topic=te/device/${CHILD_SN}///cmd/software_update    minimum=1    maximum=1    message_contains="types":["apt"]
+
 Software list should be populated during startup
     Cumulocity.Should Contain Supported Operations    c8y_SoftwareUpdate
     Device Should Have Installed Software    tedge    timeout=120

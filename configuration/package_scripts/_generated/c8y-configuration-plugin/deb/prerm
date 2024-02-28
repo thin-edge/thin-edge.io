@@ -1,7 +1,0 @@
-#!/bin/sh
-set -e
-# Automatically added by thin-edge.io
-if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
-	deb-systemd-invoke stop c8y-configuration-plugin.service >/dev/null || true
-fi
-# End automatically added section

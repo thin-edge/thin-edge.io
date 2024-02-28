@@ -1,8 +1,0 @@
-#!/bin/sh
-set -e
-# Automatically added by thin-edge.io
-if [ $1 -eq 0 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
-    # Package removal, not upgrade
-    /usr/lib/systemd/systemd-update-helper remove-system-units c8y-configuration-plugin.service || :
-fi
-# End automatically added section

@@ -189,11 +189,21 @@ build_virtual_package() {
 }
 
 get_package_arch() {
+    # Return package architecture as per the 
+    # nfpm architectures defined here: https://nfpm.goreleaser.com/goarch-to-pkg/
+    # which uses the GOARCH to abstract across the different
+    # arch names used in different linux packages (e.g. deb != rpm != apk)
     case "$1" in
         x86_64-unknown-linux-*) pkg_arch=amd64 ;;
+        i686-unknown-linux-*) pkg_arch=386 ;;
         aarch64-unknown-linux-*) pkg_arch=arm64 ;;
         armv7-unknown-linux-*eabihf) pkg_arch=arm7 ;;
         arm-unknown-linux-*eabihf) pkg_arch=arm6 ;;
+        arm-unknown-linux-*eabi) pkg_arch=arm5 ;;
+        armv5te-unknown-linux-*eabi) pkg_arch=arm5 ;;
+        riscv64gc-unknown-linux-*) pkg_arch=riscv64 ;;
+        mips64el-unknown-linux-*abi64) pkg_arch=mips64le ;;
+        mipsel-unknown-linux-*) pkg_arch=mipsle ;;
         *)
             echo "Unknown package architecture. value=$1"
             exit 1

@@ -9,9 +9,11 @@ use async_trait::async_trait;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
+use http::StatusCode;
 use mockito::Matcher;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::Server;
@@ -138,6 +140,161 @@ async fn retry_internal_id_on_expired_jwt() {
 }
 
 #[tokio::test]
+async fn retry_get_internal_id_when_not_found() {
+    let c8y_host = "c8y.tenant.io";
+    let main_device_id = "device-001";
+    let token = "JWT token";
+    let tmp_dir = "/tmp";
+    let child_device_id = "child-101";
+
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(
+        c8y_host.into(),
+        main_device_id.into(),
+        tmp_dir.into(),
+        token,
+    )
+    .await;
+
+    // Mock server definition
+    tokio::spawn(async move {
+        // Respond to the initial get_id request for the main device
+        let get_internal_id_url =
+            format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{main_device_id}");
+        let init_request = HttpRequestBuilder::get(get_internal_id_url)
+            .bearer_auth(token)
+            .build()
+            .unwrap();
+        c8y.assert_recv(Some(init_request)).await;
+        let c8y_response = HttpResponseBuilder::new()
+            .status(200)
+            .json(&InternalIdResponse::new("100", main_device_id))
+            .build()
+            .unwrap();
+        c8y.send(Ok(c8y_response)).await.unwrap();
+
+        let get_internal_id_url =
+            format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{child_device_id}");
+
+        // Fail the first 2 internal id lookups for the child device
+        for _ in 0..2 {
+            c8y.assert_recv(Some(
+                HttpRequestBuilder::get(&get_internal_id_url)
+                    .bearer_auth(token)
+                    .build()
+                    .unwrap(),
+            ))
+            .await;
+            let c8y_response = HttpResponseBuilder::new()
+                .status(StatusCode::NOT_FOUND)
+                .build()
+                .unwrap();
+            c8y.send(Ok(c8y_response)).await.unwrap();
+        }
+
+        // Let the next get_id request succeed
+        c8y.assert_recv(Some(
+            HttpRequestBuilder::get(&get_internal_id_url)
+                .bearer_auth(token)
+                .build()
+                .unwrap(),
+        ))
+        .await;
+        let c8y_response = HttpResponseBuilder::new()
+            .status(200)
+            .json(&InternalIdResponse::new("200", child_device_id))
+            .build()
+            .unwrap();
+        c8y.send(Ok(c8y_response)).await.unwrap();
+
+        // Then let the software_list update succeed
+        let c8y_software_list = C8yUpdateSoftwareListResponse::default();
+        c8y.assert_recv(Some(
+            HttpRequestBuilder::put(format!("https://{c8y_host}/inventory/managedObjects/200"))
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .bearer_auth(token)
+                .json(&c8y_software_list)
+                .build()
+                .unwrap(),
+        ))
+        .await;
+        let c8y_response = HttpResponseBuilder::new().status(200).build().unwrap();
+        c8y.send(Ok(c8y_response)).await.unwrap();
+    });
+
+    let res = proxy
+        .send_software_list_http(
+            C8yUpdateSoftwareListResponse::default(),
+            child_device_id.into(),
+        )
+        .await;
+    assert!(res.is_ok(), "Expected software list request to succeed");
+}
+
+#[tokio::test]
+async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
+    let c8y_host = "c8y.tenant.io";
+    let main_device_id = "device-001";
+    let token = "JWT token";
+    let tmp_dir = "/tmp";
+    let child_device_id = "child-101";
+
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(
+        c8y_host.into(),
+        main_device_id.into(),
+        tmp_dir.into(),
+        token,
+    )
+    .await;
+
+    // Mock server definition
+    tokio::spawn(async move {
+        // On receipt of the initial get_id request for the main device...
+        let get_internal_id_url =
+            format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{main_device_id}");
+        let init_request = HttpRequestBuilder::get(get_internal_id_url)
+            .bearer_auth(token)
+            .build()
+            .unwrap();
+        c8y.assert_recv(Some(init_request)).await;
+        // ...respond with its internal id
+        let c8y_response = HttpResponseBuilder::new()
+            .status(200)
+            .json(&InternalIdResponse::new("100", main_device_id))
+            .build()
+            .unwrap();
+        c8y.send(Ok(c8y_response)).await.unwrap();
+
+        // Always fail the internal id lookup for the child device
+        loop {
+            let get_internal_id_url =
+                format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{child_device_id}");
+            c8y.assert_recv(Some(
+                HttpRequestBuilder::get(&get_internal_id_url)
+                    .bearer_auth(token)
+                    .build()
+                    .unwrap(),
+            ))
+            .await;
+            let c8y_response = HttpResponseBuilder::new()
+                .status(StatusCode::NOT_FOUND)
+                .build()
+                .unwrap();
+            c8y.send(Ok(c8y_response)).await.unwrap();
+        }
+    });
+
+    // Fetch the software list so that it internally invokes get_internal_id
+    let res = proxy
+        .send_software_list_http(
+            C8yUpdateSoftwareListResponse::default(),
+            child_device_id.into(),
+        )
+        .await;
+    assert!(res.is_err(), "Expected software list request to succeed");
+}
+
+#[tokio::test]
 async fn retry_internal_id_on_expired_jwt_with_mock() {
     let external_id = "device-001";
     let tmp_dir = "/tmp";
@@ -176,6 +333,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         identity: None,
+        retry_interval: Duration::from_millis(100),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
     let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, jwt.build());
@@ -239,6 +397,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         identity: None,
+        retry_interval: Duration::from_millis(100),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
     let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
@@ -464,6 +623,7 @@ async fn spawn_c8y_http_proxy(
         device_id,
         tmp_dir,
         identity: None,
+        retry_interval: Duration::from_millis(10),
     };
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
     let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);

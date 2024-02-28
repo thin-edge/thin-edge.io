@@ -76,6 +76,13 @@ impl TEdgeComponent for CumulocityMapper {
         let mut uploader_actor = UploaderActor::new(identity.clone()).builder();
         let mut downloader_actor = DownloaderActor::new(identity).builder();
 
+        // MQTT client dedicated to monitor the c8y-bridge client status and also
+        // set service down status on shutdown, using a last-will message.
+        // A separate MQTT actor/client is required as the last will message of the main MQTT actor
+        // is used to send down status to health topic.
+        let mut service_monitor_actor =
+            MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
+
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
         let c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
@@ -85,17 +92,12 @@ impl TEdgeComponent for CumulocityMapper {
             &mut uploader_actor,
             &mut downloader_actor,
             &mut fs_watch_actor,
+            &mut service_monitor_actor,
         )?;
 
         // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
         let old_to_new_agent_adapter = OldAgentAdapter::builder(&mut mqtt_actor);
-
-        // MQTT client dedicated to set service down status on shutdown, using a last-will message
-        // A separate MQTT actor/client is required as the last will message of the main MQTT actor
-        // is used to send down status to health topic
-        let service_monitor_actor =
-            MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
 
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(jwt_actor).await?;

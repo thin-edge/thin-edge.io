@@ -1,0 +1,34 @@
+name: autotag
+#
+# Create a git tag based on the Cargo workflow packages version if one does not already exist
+# The tag will trigger the release process (as it is triggered via tagging)
+#
+on:
+  push:
+    branches: [main]
+jobs:
+  create_tag:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'thin-edge'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{secrets.ACTIONS_PAT}}
+      - name: Create tag if changed
+        run: |
+          VERSION=$(yq '.workspace.package.version' Cargo.toml)
+          if [ -z "$VERSION" ]; then
+            echo "Could not detect workspace package version (.workspace.package.version) from Cargo.toml"
+            exit 1
+          fi
+          if [ -n "$(git tag -l "$VERSION")" ]; then
+            echo "Skipping as tag already exists"
+            exit 0
+          fi
+          git config --global user.email "info@thin-edge.io"
+          git config --global user.name "Versioneer"
+          echo "Creating tag: $VERSION"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"

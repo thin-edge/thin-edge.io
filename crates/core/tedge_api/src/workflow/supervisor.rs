@@ -63,7 +63,7 @@ impl WorkflowSupervisor {
         operations.sort_by(|&a, &b| a.operation.to_string().cmp(&b.operation.to_string()));
         operations
             .iter()
-            .map(|workflow| workflow.capability_message(schema, target))
+            .filter_map(|workflow| workflow.capability_message(schema, target))
             .collect()
     }
 

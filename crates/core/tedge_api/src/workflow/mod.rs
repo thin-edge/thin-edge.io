@@ -188,12 +188,24 @@ impl OperationWorkflow {
     }
 
     /// Return the MQTT message to register support for the operation described by this workflow
-    pub fn capability_message(&self, schema: &MqttSchema, target: &EntityTopicId) -> Message {
-        let meta_topic = schema.capability_topic_for(target, self.operation.clone());
-        let payload = "{}";
-        Message::new(&meta_topic, payload)
-            .with_retain()
-            .with_qos(QoS::AtLeastOnce)
+    pub fn capability_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+    ) -> Option<Message> {
+        match self.operation {
+            // Need to treat SoftwareList and SoftwareUpdate as exceptions as they require software types in the payload
+            OperationType::SoftwareList | OperationType::SoftwareUpdate => None,
+            _ => {
+                let meta_topic = schema.capability_topic_for(target, self.operation.clone());
+                let payload = "{}".to_string();
+                Some(
+                    Message::new(&meta_topic, payload)
+                        .with_retain()
+                        .with_qos(QoS::AtLeastOnce),
+                )
+            }
+        }
     }
 
     /// Extract the current action to be performed on a command request

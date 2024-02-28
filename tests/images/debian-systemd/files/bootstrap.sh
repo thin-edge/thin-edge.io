@@ -14,11 +14,11 @@ FLAGS
     WORKFLOW FLAGS
     --clean/--no-clean                      Clean the device of any existing tedge installations before installing/connecting. Default False
     --install/--no-install                  Install thin-edge.io. Default True
+    --bootstrap/--no-bootstrap              Bootstrap tedge by setting c8y.url and creating and uploading the device certificate. Default True
+    --secure/--no-secure                    Configure certificate-based broker and client authentication. Default True.
     --connect/--no-connect                  Connect the mapper. Provide the type of mapper via '--mapper <name>'. Default True
     --mapper <name>                         Name of the mapper to use when connecting (if user has specified the --connect option).
                                             Defaults to 'c8y'. Currently only c8y works.
-    --bootstrap                             Force bootstrapping/re-bootstrapping of the device
-    --secure/--no-secure                    Configure certificate-based broker and client authentication. Default True.
 
     DEVICE FLAGS
     --device-id <name>                      Use a specific device-id. A prefix will be added to the device id

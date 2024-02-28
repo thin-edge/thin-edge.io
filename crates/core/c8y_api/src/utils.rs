@@ -4,12 +4,23 @@ pub mod bridge {
     // FIXME: doesn't account for custom topic root, use MQTT scheme API here
     pub const C8Y_BRIDGE_HEALTH_TOPIC: &str =
         "te/device/main/service/mosquitto-c8y-bridge/status/health";
-    const C8Y_BRIDGE_UP_PAYLOAD: &str = "1";
+    pub const C8Y_BRIDGE_UP_PAYLOAD: &str = "1";
+    const C8Y_BRIDGE_DOWN_PAYLOAD: &str = "0";
 
     pub fn is_c8y_bridge_up(message: &Message) -> bool {
         match message.payload_str() {
             Ok(payload) => {
                 message.topic.name == C8Y_BRIDGE_HEALTH_TOPIC && payload == C8Y_BRIDGE_UP_PAYLOAD
+            }
+            Err(_err) => false,
+        }
+    }
+
+    pub fn is_c8y_bridge_established(message: &Message) -> bool {
+        match message.payload_str() {
+            Ok(payload) => {
+                message.topic.name == C8Y_BRIDGE_HEALTH_TOPIC
+                    && (payload == C8Y_BRIDGE_UP_PAYLOAD || payload == C8Y_BRIDGE_DOWN_PAYLOAD)
             }
             Err(_err) => false,
         }
@@ -35,6 +46,7 @@ mod tests {
     use mqtt_channel::Topic;
     use test_case::test_case;
 
+    use crate::utils::bridge::is_c8y_bridge_established;
     use crate::utils::bridge::is_c8y_bridge_up;
     use crate::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
 
@@ -47,6 +59,19 @@ mod tests {
         let message = Message::new(&topic, payload);
 
         let actual = is_c8y_bridge_up(&message);
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "1", true)]
+    #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "0", true)]
+    #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "bad payload", false)]
+    #[test_case("tedge/not/health/topic", "1", false)]
+    #[test_case("tedge/not/health/topic", "0", false)]
+    fn test_bridge_is_established(topic: &str, payload: &str, expected: bool) {
+        let topic = Topic::new(topic).unwrap();
+        let message = Message::new(&topic, payload);
+
+        let actual = is_c8y_bridge_established(&message);
         assert_eq!(actual, expected);
     }
 }

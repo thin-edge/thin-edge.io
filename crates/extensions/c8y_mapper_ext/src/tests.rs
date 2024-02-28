@@ -10,6 +10,8 @@ use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
+use c8y_api::utils::bridge::C8Y_BRIDGE_UP_PAYLOAD;
 use c8y_auth_proxy::url::Protocol;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
@@ -2432,6 +2434,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         SimpleMessageBoxBuilder::new("Downloader", 5);
     let mut timer_builder: SimpleMessageBoxBuilder<SyncStart, SyncComplete> =
         SimpleMessageBoxBuilder::new("Timer", 5);
+    let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+        SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
     let c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
@@ -2441,11 +2445,19 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         &mut uploader_builder,
         &mut downloader_builder,
         &mut fs_watcher_builder,
+        &mut service_monitor_builder,
     )
     .unwrap();
 
     let actor = c8y_mapper_builder.build();
     tokio::spawn(async move { actor.run().await });
+
+    let mut service_monitor_box = service_monitor_builder.build();
+    let bridge_status_msg = MqttMessage::new(
+        &Topic::new_unchecked(C8Y_BRIDGE_HEALTH_TOPIC),
+        C8Y_BRIDGE_UP_PAYLOAD,
+    );
+    service_monitor_box.send(bridge_status_msg).await.unwrap();
 
     (
         mqtt_builder.build(),

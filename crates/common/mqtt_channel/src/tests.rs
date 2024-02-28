@@ -532,3 +532,62 @@ async fn ensure_that_last_will_message_is_delivered() -> Result<(), anyhow::Erro
     .await;
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn test_retain_message_delivery() -> Result<(), anyhow::Error> {
+    // Given an MQTT broker
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = Config::default().with_port(broker.port);
+
+    let topic = "retained/topic";
+    let mqtt_config = mqtt_config.with_subscriptions(topic.try_into()?);
+
+    // A client that subsribes to a topic.
+    let mut first_subscriber = Connection::new(&mqtt_config).await?;
+
+    //Raise retained alarm message
+    broker
+        .publish_with_opts(
+            "retained/topic",
+            "a retained message",
+            QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    //Expect the non-empty retained message to be delivered to first_subscriber
+    assert_eq!(
+        MaybeMessage::Next(message(topic, "a retained message")),
+        next_message(&mut first_subscriber.received).await
+    );
+
+    //Clear the last raised retained message
+    broker
+        .publish_with_opts(
+            "retained/topic",
+            "", //Empty message indicates clear
+            QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Connect to the broker with the same session id
+    let mut second_subscriber = Connection::new(&mqtt_config).await?;
+
+    //Expect no messages to be delivered to this second_subscriber as the retained message is already cleared
+    assert_eq!(
+        MaybeMessage::Timeout,
+        next_message(&mut second_subscriber.received).await
+    );
+
+    //Expect the empty retained message to be delivered to first_subscriber
+    assert_eq!(
+        MaybeMessage::Next(message(topic, "")),
+        next_message(&mut first_subscriber.received).await
+    );
+
+    Ok(())
+}

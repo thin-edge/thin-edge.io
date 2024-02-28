@@ -39,7 +39,6 @@ Create the certificate
     Should Contain    ${output}    Thumbprint:
 
 tedge cert upload c8y command
-    Execute Command    sudo tedge cert create --device-id ${DEVICE_SN}
     Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
     Sleep    3s    # Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
 

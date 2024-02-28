@@ -1,4 +1,4 @@
-name: hosted-post-merge_version_update
+name: release
 
 on:
   workflow_dispatch:
@@ -21,12 +21,18 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  versioning:
+  version:
+    name: Increment version
     runs-on: ubuntu-20.04
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - run: |
           git config --global user.email "info@thin-edge.io"
           git config --global user.name "Versioneer"
@@ -57,4 +63,4 @@ jobs:
           delete-branch: true
           title: ${{ inputs.bump }} version bump
           body: ${{ inputs.bump }} version bump
-          reviewers: rina23q
+          token: ${{ secrets.ACTIONS_PAT }}
