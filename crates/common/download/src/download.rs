@@ -18,6 +18,7 @@ use std::fs::File;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
+#[cfg(target_os = "linux")]
 use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
