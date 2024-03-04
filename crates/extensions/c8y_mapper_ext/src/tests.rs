@@ -1746,8 +1746,8 @@ async fn custom_operation_without_timeout_successful() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), None, None);
     //create command
-    let content = r#"#!/usr/bin/env bash
-    for i in {1..2}
+    let content = r#"#!/bin/sh
+    for i in $(seq 1 2)
     do
         sleep 1
     done
@@ -1808,8 +1808,8 @@ async fn custom_operation_with_timeout_successful() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(4), Some(2));
     //create command
-    let content = r#"#!/usr/bin/env bash
-    for i in {1..2}
+    let content = r#"#!/bin/sh
+    for i in $(seq 1 2)
     do
         sleep 1
     done
@@ -1868,9 +1868,9 @@ async fn custom_operation_timeout_sigterm() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
-    let content = r#"#!/usr/bin/env bash
-    trap 'echo received SIGTERM; exit 124' SIGTERM
-    for i in {1..10}
+    let content = r#"#!/bin/sh
+    trap 'echo received SIGTERM; exit 124' TERM
+    for i in $(seq 1 10)
     do
         echo "main $i"
         sleep 2
@@ -1933,9 +1933,9 @@ async fn custom_operation_timeout_sigkill() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
-    let content = r#"#!/usr/bin/env bash
-    trap 'echo ignore SIGTERM' SIGTERM
-    for i in {1..50}
+    let content = r#"#!/bin/sh
+    trap 'echo ignore SIGTERM' TERM
+    for i in $(seq 1 50)
     do
         echo "main $i"
         sleep 2
