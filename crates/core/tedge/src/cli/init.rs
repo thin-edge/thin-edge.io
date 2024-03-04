@@ -148,11 +148,19 @@ impl TEdgeInitCmd {
         )?;
         create_directory(
             config_dir.join("sm-plugins"),
-            PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o755)),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o755),
+            ),
         )?;
         create_directory(
             config_dir.join("device-certs"),
-            PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o775)),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o775),
+            ),
         )?;
 
         let config = self.context.config_repository.load()?;
