@@ -81,8 +81,10 @@ impl TEdgeInitCmd {
                         format!("creating symlink for {component} to {}", tedge.display())
                     })?;
 
+                    // Use -h over --no-dereference as the former is supported in more environments,
+                    // busybox, bsd etc.
                     let res = std::process::Command::new("chown")
-                        .arg("--no-dereference")
+                        .arg("-h")
                         .arg(&format!("{}:{}", stat.uid(), stat.gid()))
                         .arg(&link)
                         .output()
