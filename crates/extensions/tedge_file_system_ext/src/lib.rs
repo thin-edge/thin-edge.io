@@ -47,7 +47,16 @@ impl FsWatchMessageBox {
         log_message_sent("Inotify", &message);
 
         for (watch_path, sender) in self.watch_dirs.iter_mut() {
-            if path.starts_with(watch_path) {
+            // Try to use canonical paths to avoid false negatives when dealing with symlinks
+            if path
+                .canonicalize()
+                .unwrap_or_else(|_| path.to_path_buf())
+                .starts_with(
+                    watch_path
+                        .canonicalize()
+                        .unwrap_or_else(|_| watch_path.to_path_buf()),
+                )
+            {
                 sender.send(message.clone()).await?;
             }
         }
@@ -174,6 +183,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fs_events() -> Result<(), DynError> {
         let ttd = TempTedgeDir::new();
+        let ttd_full = ttd.to_path_buf().canonicalize().unwrap().to_path_buf();
         let mut fs_actor_builder = FsWatchActorBuilder::new();
         let client_builder: SimpleMessageBoxBuilder<FsWatchEvent, NoMessage> =
             SimpleMessageBoxBuilder::new("FS Client", 5);
@@ -195,9 +205,9 @@ mod tests {
         client_box
             .with_timeout(TEST_TIMEOUT)
             .assert_received_unordered([
-                FsWatchEvent::Modified(ttd.to_path_buf().join("file_a")),
-                FsWatchEvent::DirectoryCreated(ttd.to_path_buf().join("dir_b")),
-                FsWatchEvent::Modified(ttd.to_path_buf().join("dir_b").join("file_b")),
+                FsWatchEvent::Modified(ttd_full.join("file_a")),
+                FsWatchEvent::DirectoryCreated(ttd_full.join("dir_b")),
+                FsWatchEvent::Modified(ttd_full.join("dir_b").join("file_b")),
             ])
             .await;
 
