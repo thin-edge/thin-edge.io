@@ -51,7 +51,7 @@ impl UploadCertCmd {
             Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
         };
 
-        let config = TEdgeConfig::new(TEdgeConfigLocation::default())?;
+        let config = TEdgeConfig::try_new(TEdgeConfigLocation::default())?;
         let root_cert = &config.c8y.root_cert_path;
         let client_builder = reqwest::blocking::Client::builder();
         let res = match std::fs::metadata(root_cert) {

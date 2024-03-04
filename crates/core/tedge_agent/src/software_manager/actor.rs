@@ -325,7 +325,7 @@ impl SoftwareManagerActor {
 fn get_default_plugin(
     config_location: &tedge_config::TEdgeConfigLocation,
 ) -> Result<Option<SoftwareType>, TEdgeConfigError> {
-    let tedge_config = tedge_config::TEdgeConfig::new(config_location.clone())?;
+    let tedge_config = tedge_config::TEdgeConfig::try_new(config_location.clone())?;
 
     Ok(tedge_config
         .software

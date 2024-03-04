@@ -66,7 +66,7 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
 
     set_log_level(log_level);
 
-    let tedge_config = tedge_config::TEdgeConfig::new(tedge_config_location)?;
+    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
 
     if firmware_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");

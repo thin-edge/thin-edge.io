@@ -16,7 +16,7 @@ impl OperationConfig {
         device_topic_id: &EntityTopicId,
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
     ) -> Result<OperationConfig, tedge_config::TEdgeConfigError> {
-        let tedge_config = tedge_config::TEdgeConfig::new(tedge_config_location.clone())?;
+        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
 
         Ok(OperationConfig {
             mqtt_schema: MqttSchema::with_root(tedge_config.mqtt.topic_root.clone()),

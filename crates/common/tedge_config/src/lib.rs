@@ -14,13 +14,13 @@ pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
 impl TEdgeConfig {
-    pub fn new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+    pub fn try_new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
         config_location.load()
     }
 
     pub fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
         let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-        TEdgeConfig::new(config_location)
+        TEdgeConfig::try_new(config_location)
     }
 
     #[cfg(feature = "test")]

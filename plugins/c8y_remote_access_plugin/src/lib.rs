@@ -31,7 +31,7 @@ mod proxy;
 pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let config_dir = opt.get_config_location();
 
-    let tedge_config = TEdgeConfig::new(config_dir.clone())
+    let tedge_config = TEdgeConfig::try_new(config_dir.clone())
         .into_diagnostic()
         .context("Reading tedge config")?;
 

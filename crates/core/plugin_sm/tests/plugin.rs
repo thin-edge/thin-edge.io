@@ -59,7 +59,7 @@ mod tests {
         let tmpfile = make_config(100)?;
         let config_location =
             TEdgeConfigLocation::from_custom_root(tmpfile.path().to_str().unwrap());
-        let config = tedge_config::TEdgeConfig::new(config_location)?;
+        let config = tedge_config::TEdgeConfig::try_new(config_location)?;
 
         let plugin = ExternalPluginCommand::new(
             "test",

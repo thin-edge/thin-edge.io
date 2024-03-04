@@ -9,7 +9,7 @@ pub trait TEdgeComponent: Sync + Send {
 
     fn mqtt_config(&self) -> Result<mqtt_channel::Config, anyhow::Error> {
         let tedge_config =
-            tedge_config::TEdgeConfig::new(tedge_config::TEdgeConfigLocation::default())?;
+            tedge_config::TEdgeConfig::try_new(tedge_config::TEdgeConfigLocation::default())?;
 
         let mqtt_config = tedge_config
             .mqtt_config()?
