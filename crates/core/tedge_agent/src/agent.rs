@@ -90,9 +90,7 @@ impl AgentConfig {
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
-        let config_repository =
-            tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-        let tedge_config = config_repository.load()?;
+        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());

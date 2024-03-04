@@ -163,7 +163,7 @@ impl TEdgeInitCmd {
             ),
         )?;
 
-        let config = self.context.config_repository.load()?;
+        let config = self.context.load_config()?;
 
         create_directory(
             config.logs.path.clone(),

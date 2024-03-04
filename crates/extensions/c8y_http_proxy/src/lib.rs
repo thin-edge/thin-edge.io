@@ -18,7 +18,7 @@ use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
-use tedge_config::TEdgeConfig as NewTEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 
@@ -40,10 +40,10 @@ pub struct C8YHttpConfig {
     retry_interval: Duration,
 }
 
-impl TryFrom<&NewTEdgeConfig> for C8YHttpConfig {
+impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     type Error = C8yHttpConfigBuildError;
 
-    fn try_from(tedge_config: &NewTEdgeConfig) -> Result<Self, Self::Error> {
+    fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
         let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();

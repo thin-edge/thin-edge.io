@@ -42,6 +42,7 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct TEdgeConfig(TEdgeConfigReader);
 
 impl std::ops::Deref for TEdgeConfig {

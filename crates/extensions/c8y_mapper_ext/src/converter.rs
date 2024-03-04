@@ -1627,7 +1627,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::SoftwareUpdateCommand;
-    use tedge_config::TEdgeConfigRepository;
+    use tedge_config::TEdgeConfig;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
@@ -2825,7 +2825,7 @@ pub(crate) mod tests {
     async fn handles_empty_service_type_2383() {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
-        let tedge_config = TEdgeConfigRepository::load_toml_str("service.ty = \"\"");
+        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
 
         let (mut converter, _) = create_c8y_converter_from_config(config);
@@ -3136,7 +3136,7 @@ pub(crate) mod tests {
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
         let device_type = "test-device-type".into();
-        let tedge_config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
         let auth_proxy_addr = "127.0.0.1".into();

@@ -41,29 +41,29 @@ pub enum ConfigCmd {
 
 impl BuildCommand for ConfigCmd {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config_repository = context.config_repository;
+        let config_location = context.config_location;
 
         match self {
             ConfigCmd::Get { key } => Ok(GetConfigCommand {
                 key,
-                config: config_repository.load()?,
+                config: config_location.load()?,
             }
             .into_boxed()),
             ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
                 key,
                 value,
-                config_repository,
+                config_location,
             }
             .into_boxed()),
             ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
                 key,
-                config_repository,
+                config_location,
             }
             .into_boxed()),
             ConfigCmd::List { is_all, is_doc } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
-                config: config_repository.load()?,
+                config: config_location.load()?,
             }
             .into_boxed()),
         }

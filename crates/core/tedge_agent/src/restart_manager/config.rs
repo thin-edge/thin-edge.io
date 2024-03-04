@@ -14,9 +14,7 @@ impl RestartManagerConfig {
         device_topic_id: &EntityTopicId,
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
     ) -> Result<RestartManagerConfig, tedge_config::TEdgeConfigError> {
-        let config_repository =
-            tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-        let tedge_config = config_repository.load()?;
+        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
 
         Ok(RestartManagerConfig {
             device_topic_id: device_topic_id.clone(),

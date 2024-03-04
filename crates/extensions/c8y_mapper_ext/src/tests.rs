@@ -35,7 +35,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
-use tedge_config::TEdgeConfigRepository;
+use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -2382,7 +2382,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let device_name = "test-device".into();
     let device_topic_id = EntityTopicId::default_main_device();
     let device_type = "test-device-type".into();
-    let config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+    let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
     let c8y_host = "test.c8y.io".into();
     let tedge_http_host = "localhost:8888".into();
     let mqtt_schema = MqttSchema::default();
