@@ -1,17 +1,11 @@
-use time::error::Parse;
-
 use mqtt_channel::MqttError;
-
 use tedge_config::CertificateError;
 use tedge_config::ConfigSettingError;
 use tedge_config::TEdgeConfigError;
+use time::error::Parse;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchdogError {
-    #[cfg(not(target_os = "linux"))]
-    #[error("The watchdog is not available on this platform")]
-    WatchdogNotAvailable,
-
     #[error("MQTT receiver closed")]
     ChannelClosed,
 

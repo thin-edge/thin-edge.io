@@ -2,13 +2,13 @@ use std::path::PathBuf;
 use tedge_config::system_services::*;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
-mod error;
-
 // on linux, we use systemd
 #[cfg(target_os = "linux")]
 mod systemd_watchdog;
 #[cfg(target_os = "linux")]
 use systemd_watchdog as watchdog;
+#[cfg(target_os = "linux")]
+mod error;
 
 // on non-linux, we do nothing for now
 #[cfg(not(target_os = "linux"))]
