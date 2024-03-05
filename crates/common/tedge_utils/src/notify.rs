@@ -144,9 +144,11 @@ impl NotifyStream {
 
     /// Will return an error if you try to watch a file/directory which doesn't exist
     pub fn add_watcher(&mut self, dir_path: &Path) -> Result<(), NotifyStreamError> {
+        // Try to use canonical paths to avoid false negatives when dealing with symlinks
+        let dir_path = dir_path.canonicalize()?;
         self.debouncer
             .watcher()
-            .watch(dir_path, RecursiveMode::Recursive)?;
+            .watch(&dir_path, RecursiveMode::Recursive)?;
 
         Ok(())
     }
