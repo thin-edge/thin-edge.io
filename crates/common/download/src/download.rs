@@ -488,7 +488,6 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
 #[allow(deprecated)]
 mod tests {
     use super::*;
-    use nix::sys::statvfs;
     use std::io::Write;
     use tempfile::tempdir;
     use tempfile::NamedTempFile;
@@ -558,6 +557,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "Overriding Content-Length doesn't work in mockito"]
     async fn downloader_download_with_content_length_larger_than_usable_disk_space() {
+        use nix::sys::statvfs;
         let tmpstats = statvfs::statvfs("/tmp").unwrap();
         let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
 
