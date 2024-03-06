@@ -93,14 +93,8 @@ Refreshes mosquitto bridge configuration
     Execute Command    cmd=sh -c '[ $(journalctl -u mosquitto | grep -c "Loading config file /etc/tedge/mosquitto-conf/c8y-bridge.conf") = 2 ]'
 
 Update tedge version from base to current using Cumulocity
-    ${arch}=    Get Debian Architecture
-    Execute Command    mkdir -p /setup/base-version
-    # These base-version packages are built using the ci/build_scripts/build.sh script for all 4 supported architectures
-    # by overriding the version to a lower number using the GIT_SEMVER env variable
-    Transfer To Device    ${CURDIR}/base-version/*${arch}.deb    /setup/base-version/
-
-    # Install base version with self-update capability
-    Install Packages    /setup/base-version
+    # Install base version (the latest official release) with self-update capability
+    Execute Command    wget -O - thin-edge.io/install.sh | sh -s
     Execute Command    cd /setup && test -f ./bootstrap.sh && ./bootstrap.sh --no-install --no-secure
     Device Should Exist                      ${DEVICE_SN}
     ${pid_before}=    Service Should Be Running    tedge-agent
@@ -141,9 +135,3 @@ Create Local Repository
     Set Suite Variable    $NEW_VERSION_ESCAPED
     Execute Command    cd /opt/repository/local && dpkg-scanpackages -m . > Packages
     Execute Command    cmd=echo 'deb [trusted=yes] file:/opt/repository/local /' > /etc/apt/sources.list.d/tedge-local.list
-
-Install Packages
-    [Arguments]    ${packages_dir}=/setup/packages
-
-    Execute Command    apt-get update && apt-get install -y --no-install-recommends mosquitto
-    Execute Command    cd ${packages_dir} && dpkg -i tedge_*.deb && dpkg -i tedge*mapper*.deb && dpkg -i tedge*agent*.deb && dpkg -i tedge*watchdog*.deb && dpkg -i tedge*apt*plugin*.deb
