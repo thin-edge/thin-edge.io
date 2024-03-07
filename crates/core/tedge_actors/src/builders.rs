@@ -77,6 +77,7 @@
 //!   using an `impl From<SourceMessage> for SinkMessage`. This flexibility allows an actor to receive
 //!   messages from several independent sources (see the [fan_in_message_type](crate::fan_in_message_type) macro).
 use crate::mpsc;
+use crate::CloneSender;
 use crate::DynSender;
 use crate::LoggingReceiver;
 use crate::LoggingSender;
@@ -84,7 +85,6 @@ use crate::MappingSender;
 use crate::Message;
 use crate::NullSender;
 use crate::RuntimeRequest;
-use crate::Sender;
 use crate::SimpleMessageBox;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -130,7 +130,7 @@ pub trait MessageSink<M: Message, Config> {
         N: Message,
         M: From<N>,
     {
-        source.register_peer(self.get_config(), crate::adapt(&self.get_sender()))
+        source.register_peer(self.get_config(), self.get_sender().sender_clone())
     }
 
     /// Add a source of messages to the actor under construction, the messages being translated on the fly.

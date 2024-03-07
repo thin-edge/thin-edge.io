@@ -227,7 +227,7 @@ mod tests {
 
     fn spawn_script_actor() -> ClientMessageBox<Execute, std::io::Result<Output>> {
         let mut actor = ScriptActor::builder();
-        let handle = ClientMessageBox::new("Tester", &mut actor);
+        let handle = ClientMessageBox::new(&mut actor);
         tokio::spawn(actor.run());
         handle
     }

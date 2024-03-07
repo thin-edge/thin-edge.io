@@ -1,4 +1,5 @@
 use tedge_actors::RuntimeError;
+use tedge_api::DownloadError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FirmwareManagementError {
@@ -42,6 +43,19 @@ pub enum FirmwareManagementError {
 
     #[error(transparent)]
     FromMqttError(#[from] tedge_mqtt_ext::MqttError),
+
+    #[error("Download from {firmware_url} failed with {err}")]
+    FromDownloadError {
+        firmware_url: String,
+        err: DownloadError,
+    },
+
+    #[error("Child device {child_id} did not respond within the timeout interval of {time_limit_sec}sec. Operation ID={operation_id}")]
+    ExceedTimeLimit {
+        child_id: String,
+        time_limit_sec: u64,
+        operation_id: String,
+    },
 }
 
 impl From<FirmwareManagementError> for RuntimeError {

@@ -50,7 +50,7 @@
 //! To be used as an actor, a `Server` is wrapped into a [ServerActor](crate::ServerActor)
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, Sender, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, Sender, ServerActorBuilder, ServerConfig, Sequential};
 //! # use crate::tedge_actors::examples::calculator_server::*;
 //! #
 //! #[cfg(feature = "test-helpers")]
@@ -58,44 +58,52 @@
 //! # async fn main_test() {
 //! # use tedge_actors::test_helpers::ServiceProviderExt;
 //! #
-//! // As for any actor, one needs a bidirectional channel to the message box of the server.
-//! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
-//! let mut client_box = actor_box_builder.new_client_box(NoConfig);
-//! let server_box = actor_box_builder.build();
+//! // As for any actor, one needs a handle to the message box of the server.
+//! // The simpler is to use a builder.
+//! let config = ServerConfig {
+//!             capacity: 16,
+//!             max_concurrency: 4,
+//! };
+//! let actor = ServerActorBuilder::new(Calculator::default(), &config, Sequential);
+//! let mut handle = actor.request_sender();
 //!
-//! // Create an actor to handle the requests to a server
-//! let server = Calculator::default();
-//! let mut actor = ServerActor::new(server, server_box);
+//! // This handle can then be used to connect client message boxes
+//! let mut client_1 = handle.new_client_box(NoConfig);
+//! let mut client_2 = handle.new_client_box(NoConfig);
 //!
-//! // The actor is then spawn in the background with its message box.
+//! // The actor is then spawn in the background.
 //! tokio::spawn(async move { actor.run().await } );
 //!
 //! // One can then interact with the actor
-//! // Note that now each request is prefixed by a number: the id of the requester
-//! client_box.send((1,Operation::Add(4))).await.expect("message sent");
-//! client_box.send((2,Operation::Multiply(10))).await.expect("message sent");
-//! client_box.send((1,Operation::Add(2))).await.expect("message sent");
+//! client_1.send(Operation::Add(4)).await.expect("message sent");
+//! client_2.send(Operation::Multiply(10)).await.expect("message sent");
+//! client_1.send(Operation::Add(2)).await.expect("message sent");
 //!
 //! // Observing the server behavior,
-//! // note that the responses come back associated to the id of the requester.
-//! assert_eq!(client_box.recv().await, Some((1, Update{from:0,to:4})));
-//! assert_eq!(client_box.recv().await, Some((2, Update{from:4,to:40})));
-//! assert_eq!(client_box.recv().await, Some((1, Update{from:40,to:42})));
+//! // each client receiving the responses to its requests
+//! // which are processed in turn.
+//! assert_eq!(client_1.recv().await, Some(Update{from:0,to:4}));
+//! assert_eq!(client_2.recv().await, Some(Update{from:4,to:40}));
+//! assert_eq!(client_1.recv().await, Some(Update{from:40,to:42}));
 //!
 //! # }
 //! ```
 //!
 mod actors;
 mod builders;
-mod keyed_messages;
 mod message_boxes;
 
 pub use actors::*;
 pub use builders::*;
-pub use keyed_messages::*;
 pub use message_boxes::*;
+use std::fmt::Debug;
 
+use crate::DynSender;
 use crate::Message;
+use crate::MessageSink;
+use crate::NoConfig;
+use crate::Sender;
+use crate::ServiceProvider;
 use async_trait::async_trait;
 
 /// Define how a server process a request
@@ -114,4 +122,47 @@ pub trait Server: 'static + Sized + Send + Sync {
     ///
     /// For such a server to return errors, the response type must be a `Result`.
     async fn handle(&mut self, request: Self::Request) -> Self::Response;
+}
+
+/// Wrap a request with a [Sender] to send the response to
+///
+/// Requests are sent to server actors using such envelopes telling where to send the responses.
+pub struct RequestEnvelope<Request, Response> {
+    pub request: Request,
+    pub reply_to: Box<dyn Sender<Response>>,
+}
+
+impl<Request: Debug, Response> Debug for RequestEnvelope<Request, Response> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.request.fmt(f)
+    }
+}
+
+/// A request sender to some [Server]
+pub type DynRequestSender<Request, Response> = DynSender<RequestEnvelope<Request, Response>>;
+
+impl<Request: Message, Response: Message> ServiceProvider<Request, Response, NoConfig>
+    for DynRequestSender<Request, Response>
+{
+    fn connect_consumer(
+        &mut self,
+        _config: NoConfig,
+        reply_to: DynSender<Response>,
+    ) -> DynSender<Request> {
+        Box::new(RequestSender {
+            sender: self.sender_clone(),
+            reply_to,
+        })
+    }
+}
+
+/// A connector to a [Server] expecting Request and returning Response.
+pub trait Service<Request: Message, Response: Message>:
+    MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+{
+}
+
+impl<T, Request: Message, Response: Message> Service<Request, Response> for T where
+    T: MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+{
 }

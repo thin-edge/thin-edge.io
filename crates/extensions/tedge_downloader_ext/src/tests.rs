@@ -110,7 +110,7 @@ async fn download_with_permission() {
 async fn spawn_downloader_actor(
 ) -> ClientMessageBox<(String, DownloadRequest), (String, DownloadResult)> {
     let mut downloader_actor_builder = DownloaderActor::new(None).builder();
-    let requester = ClientMessageBox::new("DownloadRequester", &mut downloader_actor_builder);
+    let requester = ClientMessageBox::new(&mut downloader_actor_builder);
 
     tokio::spawn(downloader_actor_builder.run());
 
@@ -160,7 +160,7 @@ struct TestDownloadKey {
 async fn spawn_downloader_actor_with_struct(
 ) -> ClientMessageBox<(TestDownloadKey, DownloadRequest), (TestDownloadKey, DownloadResult)> {
     let mut downloader_actor_builder = DownloaderActor::new(None).builder();
-    let requester = ClientMessageBox::new("DownloadRequester2", &mut downloader_actor_builder);
+    let requester = ClientMessageBox::new(&mut downloader_actor_builder);
 
     tokio::spawn(downloader_actor_builder.run());
 

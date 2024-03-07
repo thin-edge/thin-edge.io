@@ -69,13 +69,13 @@ impl TryInto<MqttMessage> for FirmwareOperationRequest {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FirmwareOperationResponse {
     child_id: String,
     payload: ResponsePayload,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ResponsePayload {
     #[serde(rename = "id")]
     pub operation_id: String,

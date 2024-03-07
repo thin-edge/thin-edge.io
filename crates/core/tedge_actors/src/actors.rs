@@ -78,6 +78,7 @@ pub mod tests {
     async fn running_an_actor_without_a_runtime() {
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
         let mut client_message_box = box_builder.new_client_box(NoConfig);
+        let mut runtime_box = box_builder.get_signal_sender();
         let actor_message_box = box_builder.build();
         let actor = Echo {
             messages: actor_message_box,
@@ -93,7 +94,10 @@ pub mod tests {
         assert_eq!(client_message_box.recv().await, Some("World".to_string()));
 
         // When there is no more input message senders
-        client_message_box.close_sender();
+        runtime_box
+            .send(RuntimeRequest::Shutdown)
+            .await
+            .expect("fail to shutdown");
 
         // The actor stops
         actor_task
@@ -116,7 +120,7 @@ pub mod tests {
         let actor_task = spawn(async move { actor.run().await });
 
         spawn(async move {
-            let mut sender: DynSender<&str> = adapt(&input_sender);
+            let mut sender: DynSender<&str> = input_sender.sender_clone();
             sender.send("Do this").await.expect("sent");
             sender.send("Do nothing").await.expect("sent");
             sender.send("Do that and this").await.expect("sent");
@@ -186,8 +190,8 @@ pub mod tests {
     impl SpecificMessageBox {
         fn new_box(capacity: usize, output: DynSender<DoMsg>) -> (DynSender<String>, Self) {
             let (sender, input) = mpsc::channel(capacity);
-            let peer_1 = adapt(&output);
-            let peer_2 = adapt(&output);
+            let peer_1 = output.sender_clone();
+            let peer_2 = output.sender_clone();
             let message_box = SpecificMessageBox {
                 input,
                 peer_1,

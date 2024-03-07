@@ -15,10 +15,10 @@ use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_actors::adapt;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -29,6 +29,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -295,7 +296,7 @@ impl C8yMapperBuilder {
     pub fn try_new(
         config: C8yMapperConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
+        http: &mut impl Service<C8YRestRequest, C8YRestResult>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
         uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
         downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
@@ -306,14 +307,21 @@ impl C8yMapperBuilder {
 
         let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
-        let mqtt_publisher =
-            mqtt.connect_consumer(config.topics.clone(), adapt(&box_builder.get_sender()));
-        let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
-        let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
-        let upload_sender = uploader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+        let mqtt_publisher = mqtt.connect_consumer(
+            config.topics.clone(),
+            box_builder.get_sender().sender_clone(),
+        );
+        let http_proxy = C8YHttpProxy::new(http);
+        let timer_sender =
+            timer.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
+        let upload_sender =
+            uploader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
         let download_sender =
-            downloader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
-        fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
+            downloader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
+        fs_watcher.register_peer(
+            config.ops_dir.clone(),
+            box_builder.get_sender().sender_clone(),
+        );
         let auth_proxy = ProxyUrlGenerator::new(
             config.auth_proxy_addr.clone(),
             config.auth_proxy_port,

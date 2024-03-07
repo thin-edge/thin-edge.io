@@ -552,7 +552,6 @@ dependencies = [
  "tedge_health_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
- "tedge_timer_ext",
  "tokio",
  "tracing",
 ]
@@ -661,7 +660,6 @@ dependencies = [
  "tedge_downloader_ext",
  "tedge_mqtt_ext",
  "tedge_test_utils",
- "tedge_timer_ext",
  "tedge_utils",
  "thiserror",
  "tokio",

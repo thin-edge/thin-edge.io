@@ -44,7 +44,7 @@ impl C8yAuthProxyBuilder {
         let app_data = AppData {
             is_https: true,
             host: config.c8y.http.or_config_not_set()?.to_string(),
-            token_manager: TokenManager::new(JwtRetriever::new("C8Y-PROXY => JWT", jwt)).shared(),
+            token_manager: TokenManager::new(JwtRetriever::new(jwt)).shared(),
         };
         let bind = &config.c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);

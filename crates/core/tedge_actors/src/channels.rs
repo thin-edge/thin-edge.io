@@ -3,109 +3,111 @@ use crate::ChannelError;
 use crate::Message;
 use async_trait::async_trait;
 use futures::channel::mpsc;
+use futures::channel::oneshot;
 use futures::SinkExt;
 
 /// A sender of messages of type `M`
 ///
-/// Actors don't access directly the `mpsc::Sender` of their peers,
+/// Actors don't get direct access to the `mpsc::Sender` of their peers,
 /// but use intermediate senders that adapt the messages when sent.
-pub type DynSender<M> = Box<dyn Sender<M>>;
+pub type DynSender<M> = Box<dyn CloneSender<M>>;
 
 #[async_trait]
 pub trait Sender<M>: 'static + Send + Sync {
     /// Send a message to the receiver behind this sender,
     /// returning an error if the receiver is no more expecting messages
     async fn send(&mut self, message: M) -> Result<(), ChannelError>;
+}
 
+pub trait CloneSender<M>: Sender<M> {
     /// Clone this sender in order to send messages to the same receiver from another actor
     fn sender_clone(&self) -> DynSender<M>;
 
-    /// Closes this channel from the sender side, preventing any new messages.
-    fn close_sender(&mut self);
+    /// Clone a cast of this sender into a `Box<dyn Sender<M>>`
+    ///
+    /// This is a workaround for https://github.com/rust-lang/rust/issues/65991
+    fn sender(&self) -> Box<dyn Sender<M>>;
 }
 
-impl<M: Message> Clone for DynSender<M> {
-    fn clone(&self) -> Self {
-        self.sender_clone()
+impl<M, S: Clone + Sender<M>> CloneSender<M> for S {
+    fn sender_clone(&self) -> DynSender<M> {
+        Box::new(self.clone())
+    }
+
+    fn sender(&self) -> Box<dyn Sender<M>> {
+        Box::new(self.clone())
     }
 }
 
-/// An `mpsc::Sender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
-impl<M: Message, N: Message + Into<M>> From<mpsc::Sender<M>> for DynSender<N> {
-    fn from(sender: mpsc::Sender<M>) -> Self {
+impl<M, S: Clone + Sender<M>> From<S> for DynSender<M> {
+    fn from(sender: S) -> Self {
         Box::new(sender)
     }
 }
 
-#[async_trait]
-impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
-    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
-        Ok(SinkExt::send(&mut self, message.into()).await?)
-    }
-
-    fn sender_clone(&self) -> DynSender<N> {
-        Box::new(self.clone())
-    }
-
-    fn close_sender(&mut self) {
-        self.close_channel();
-    }
-}
-
-/// An `mpsc::UnboundedSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
-impl<M: Message, N: Message + Into<M>> From<mpsc::UnboundedSender<M>> for DynSender<N> {
-    fn from(sender: mpsc::UnboundedSender<M>) -> Self {
-        Box::new(sender)
-    }
-}
-
-#[async_trait]
-impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
-    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
-        Ok(SinkExt::send(&mut self, message.into()).await?)
-    }
-
-    fn sender_clone(&self) -> DynSender<N> {
-        Box::new(self.clone())
-    }
-
-    fn close_sender(&mut self) {
-        self.close_channel();
-    }
-}
-
-/// Make a `DynSender<N>` from a `DynSender<M>`
-///
-/// This is a workaround to the fact the compiler rejects a From implementation:
-///
-/// ```shell
-///
-///  impl<M: Message, N: Message + Into<M>> From<DynSender<M>> for DynSender<N> {
-///     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-///     |
-///     = note: conflicting implementation in crate `core`:
-///             - impl<T> From<T> for T;
-/// ```
-pub fn adapt<M: Message, N: Message + Into<M>>(sender: &DynSender<M>) -> DynSender<N> {
-    Box::new(sender.clone())
-}
-
+/// A `DynSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
 #[async_trait]
 impl<M: Message, N: Message + Into<M>> Sender<N> for DynSender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
         Ok(self.as_mut().send(message.into()).await?)
     }
+}
 
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for Box<dyn Sender<M>> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(self.as_mut().send(message.into()).await?)
+    }
+}
+
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> CloneSender<N> for DynSender<M> {
     fn sender_clone(&self) -> DynSender<N> {
         Box::new(self.as_ref().sender_clone())
     }
 
-    fn close_sender(&mut self) {
-        self.as_mut().close_sender()
+    fn sender(&self) -> Box<dyn Sender<N>> {
+        Box::new(self.as_ref().sender())
+    }
+}
+
+/// An `mpsc::Sender<M>` is a `DynSender<M>`
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(SinkExt::send(&mut self, message.into()).await?)
+    }
+}
+
+/// An `mpsc::UnboundedSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(SinkExt::send(&mut self, message.into()).await?)
+    }
+}
+
+/// A `oneshot::Sender<M>` is a `Sender<N>` provided `N` implements `Into<M>`
+///
+/// There is one caveat. The `oneshot::Sender::send()` method consumes the sender,
+/// hence the one shot sender is wrapped inside an `Option`.
+///
+/// Such a [Sender] can only be used once:
+/// - it cannot be cloned
+/// - any message sent after a first one will be silently ignored
+/// - a message sent while the receiver has been drop will also be silently ignored
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for Option<oneshot::Sender<M>> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        if let Some(sender) = self.take() {
+            let _ = sender.send(message.into());
+        }
+        Ok(())
     }
 }
 
 /// A sender that discards messages instead of sending them
+#[derive(Clone)]
 pub struct NullSender;
 
 #[async_trait]
@@ -113,24 +115,21 @@ impl<M: Message> Sender<M> for NullSender {
     async fn send(&mut self, _message: M) -> Result<(), ChannelError> {
         Ok(())
     }
-
-    fn sender_clone(&self) -> DynSender<M> {
-        Box::new(NullSender)
-    }
-
-    fn close_sender(&mut self) {}
-}
-
-impl<M: Message> From<NullSender> for DynSender<M> {
-    fn from(sender: NullSender) -> Self {
-        Box::new(sender)
-    }
 }
 
 /// A sender that transforms the messages on the fly
 pub struct MappingSender<F, M> {
     inner: DynSender<M>,
     cast: std::sync::Arc<F>,
+}
+
+impl<F, M: 'static> Clone for MappingSender<F, M> {
+    fn clone(&self) -> Self {
+        MappingSender {
+            inner: self.inner.sender_clone(),
+            cast: self.cast.clone(),
+        }
+    }
 }
 
 impl<F, M> MappingSender<F, M> {
@@ -156,30 +155,6 @@ where
             self.inner.send(out_message).await?
         }
         Ok(())
-    }
-
-    fn sender_clone(&self) -> DynSender<M> {
-        Box::new(MappingSender {
-            inner: self.inner.sender_clone(),
-            cast: self.cast.clone(),
-        })
-    }
-
-    fn close_sender(&mut self) {
-        self.inner.as_mut().close_sender()
-    }
-}
-
-impl<M, N, NS, F> From<MappingSender<F, N>> for DynSender<M>
-where
-    M: Message,
-    N: Message,
-    NS: Iterator<Item = N> + Send,
-    F: Fn(M) -> NS,
-    F: 'static + Sync + Send,
-{
-    fn from(value: MappingSender<F, N>) -> Self {
-        Box::new(value)
     }
 }
 
@@ -233,8 +208,8 @@ mod tests {
     impl From<DynSender<Msg>> for Peers {
         fn from(recipient: DynSender<Msg>) -> Self {
             Peers {
-                peer_1: adapt(&recipient),
-                peer_2: adapt(&recipient),
+                peer_1: recipient.sender_clone(),
+                peer_2: recipient.sender_clone(),
             }
         }
     }

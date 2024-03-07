@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::Message;
 use tedge_actors::NoConfig;
@@ -72,6 +73,14 @@ struct TimeoutSender<T: Message> {
     inner: DynSender<Timeout<T>>,
 }
 
+impl<T: Message> Clone for TimeoutSender<T> {
+    fn clone(&self) -> Self {
+        TimeoutSender {
+            inner: self.inner.sender_clone(),
+        }
+    }
+}
+
 #[async_trait]
 impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
     async fn send(&mut self, message: Timeout<AnyPayload>) -> Result<(), ChannelError> {
@@ -79,16 +88,6 @@ impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
             self.inner.send(Timeout { event: *event }).await?;
         }
         Ok(())
-    }
-
-    fn sender_clone(&self) -> DynSender<Timeout<AnyPayload>> {
-        Box::new(TimeoutSender {
-            inner: self.inner.sender_clone(),
-        })
-    }
-
-    fn close_sender(&mut self) {
-        self.inner.as_mut().close_sender()
     }
 }
 
@@ -100,21 +99,19 @@ struct SetTimeoutSender {
     inner: DynSender<SetTimeout<AnyPayload>>,
 }
 
+impl Clone for SetTimeoutSender {
+    fn clone(&self) -> Self {
+        SetTimeoutSender {
+            inner: self.inner.sender_clone(),
+        }
+    }
+}
+
 #[async_trait]
 impl<T: Message> Sender<SetTimeout<T>> for SetTimeoutSender {
     async fn send(&mut self, request: SetTimeout<T>) -> Result<(), ChannelError> {
         let duration = request.duration;
         let event: AnyPayload = Box::new(request.event);
         self.inner.send(SetTimeout { duration, event }).await
-    }
-
-    fn sender_clone(&self) -> DynSender<SetTimeout<T>> {
-        Box::new(SetTimeoutSender {
-            inner: self.inner.sender_clone(),
-        })
-    }
-
-    fn close_sender(&mut self) {
-        self.inner.as_mut().close_sender()
     }
 }

@@ -1,6 +1,7 @@
 use crate::Actor;
 use crate::ConcurrentServerMessageBox;
 use crate::MessageReceiver;
+use crate::RequestEnvelope;
 use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::Sender;
@@ -13,12 +14,12 @@ use async_trait::async_trait;
 /// Requests are processed in turn, leading either to a response or an error.
 pub struct ServerActor<S: Server> {
     server: S,
-    messages: ServerMessageBox<S::Request, S::Response>,
+    requests: ServerMessageBox<S::Request, S::Response>,
 }
 
 impl<S: Server> ServerActor<S> {
-    pub fn new(server: S, messages: ServerMessageBox<S::Request, S::Response>) -> Self {
-        ServerActor { server, messages }
+    pub fn new(server: S, requests: ServerMessageBox<S::Request, S::Response>) -> Self {
+        ServerActor { server, requests }
     }
 }
 
@@ -30,12 +31,17 @@ impl<S: Server> Actor for ServerActor<S> {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         let server = &mut self.server;
-        while let Some((client_id, request)) = self.messages.recv().await {
+        while let Some(RequestEnvelope {
+            request,
+            mut reply_to,
+        }) = self.requests.recv().await
+        {
             tokio::select! {
-                result = server.handle(request) => {
-                    self.messages.send((client_id, result)).await?
+                response = server.handle(request) => {
+                    // Ignore errors on send: the requester is simply no more expecting a response
+                    let _ = reply_to.send(response).await;
                 }
-                Some(RuntimeRequest::Shutdown) = self.messages.recv_signal() => {
+                Some(RuntimeRequest::Shutdown) = self.requests.recv_signal() => {
                     break;
                 }
             }
@@ -67,16 +73,21 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        while let Some((client_id, request)) = self.messages.recv().await {
+        while let Some(RequestEnvelope {
+            request,
+            mut reply_to,
+        }) = self.messages.next_request().await
+        {
             // Spawn the request
             let mut server = self.server.clone();
-            let pending_result = tokio::spawn(async move {
+            let request_handler = tokio::spawn(async move {
                 let result = server.handle(request).await;
-                (client_id, result)
+                // Ignore errors on send: the requester is simply no more expecting a response
+                let _ = reply_to.send(result).await;
             });
 
             // Send the response back to the client
-            self.messages.send_response_once_done(pending_result)
+            self.messages.register_request_handler(request_handler)
         }
 
         Ok(())

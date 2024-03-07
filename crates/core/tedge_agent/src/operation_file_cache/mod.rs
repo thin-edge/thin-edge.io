@@ -16,10 +16,10 @@ use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tedge_actors::adapt;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
@@ -295,11 +295,11 @@ impl FileCacheActorBuilder {
         let message_box = SimpleMessageBoxBuilder::new("RestartManager", 10);
 
         let download_sender =
-            downloader_actor.connect_consumer(NoConfig, adapt(&message_box.get_sender()));
+            downloader_actor.connect_consumer(NoConfig, message_box.get_sender().sender_clone());
 
         let mqtt_sender = mqtt_actor.connect_consumer(
             Self::subscriptions(&mqtt_schema),
-            adapt(&message_box.get_sender()),
+            message_box.get_sender().sender_clone(),
         );
 
         Self {
