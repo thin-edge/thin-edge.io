@@ -50,6 +50,7 @@ mod tests {
     use mqtt_channel::Topic;
     use test_case::test_case;
 
+    use crate::utils::bridge::is_c8y_bridge_established;
     use crate::utils::bridge::is_c8y_bridge_up;
 
     const C8Y_BRIDGE_HEALTH_TOPIC: &str =
@@ -76,7 +77,7 @@ mod tests {
         let topic = Topic::new(topic).unwrap();
         let message = Message::new(&topic, payload);
 
-        let actual = is_c8y_bridge_up(&message, "tedge-mapper-bridge-c8y");
+        let actual = is_c8y_bridge_established(&message, "tedge-mapper-bridge-c8y");
         assert_eq!(actual, expected);
     }
 }

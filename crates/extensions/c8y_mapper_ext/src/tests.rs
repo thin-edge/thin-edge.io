@@ -2420,6 +2420,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         true,
         true,
         "c8y".into(),
+        false,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

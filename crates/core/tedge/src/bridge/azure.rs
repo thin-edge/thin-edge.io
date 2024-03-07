@@ -126,6 +126,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         notifications_local_only: true,
         notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
+        bridge_location: BridgeLocation::Mosquitto,
     };
 
     assert_eq!(bridge, expected);

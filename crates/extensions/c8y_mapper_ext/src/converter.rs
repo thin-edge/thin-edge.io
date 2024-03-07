@@ -3193,6 +3193,7 @@ pub(crate) mod tests {
             true,
             true,
             "c8y".into(),
+            false,
         )
     }
 

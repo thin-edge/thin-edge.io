@@ -173,6 +173,7 @@ mod test {
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -238,6 +239,7 @@ bridge_attempt_unsubscribe false
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -305,6 +307,7 @@ bridge_attempt_unsubscribe false
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let mut buffer = Vec::new();
@@ -442,6 +445,7 @@ bridge_attempt_unsubscribe false
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![],
+            bridge_location: BridgeLocation::Mosquitto,
         }
     }
 }

@@ -454,7 +454,7 @@ define_tedge_config! {
             },
 
             #[tedge_config(default(value = false))]
-            #[doku(skip)]
+            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
             in_mapper: bool,
 
             // TODO validation
@@ -462,6 +462,7 @@ define_tedge_config! {
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
             /// forwarded by to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(value = "c8y"))]
+            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
             topic_prefix: TopicPrefix,
         },
 
@@ -817,9 +818,11 @@ define_tedge_config! {
 }
 
 impl ReadableKey {
+    // This is designed to be simple way of
     pub fn is_printable_value(self, value: &str) -> bool {
         match self {
             Self::C8yBridgeInMapper => value != "false",
+            Self::C8yBridgeTopicPrefix => value != "c8y",
             _ => true,
         }
     }

@@ -167,6 +167,7 @@ mod tests {
             bridge_keyfile: "./test-private-key.pem".into(),
             smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
             include_local_clean_session: AutoFlag::False,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -229,6 +230,7 @@ mod tests {
             notifications_local_only: true,
             notification_topic: C8Y_BRIDGE_HEALTH_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         assert_eq!(bridge, expected);
