@@ -3,12 +3,11 @@ mod config;
 mod error;
 mod message;
 mod operation;
+mod worker;
+
 #[cfg(test)]
 mod tests;
 
-use crate::actor::IdDownloadRequest;
-use crate::actor::IdDownloadResult;
-use crate::actor::OperationOutcome;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
 use c8y_http_proxy::credentials::JwtResult;
@@ -29,6 +28,9 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use worker::IdDownloadRequest;
+use worker::IdDownloadResult;
+use worker::OperationOutcome;
 
 pub struct FirmwareManagerBuilder {
     config: FirmwareManagerConfig,
