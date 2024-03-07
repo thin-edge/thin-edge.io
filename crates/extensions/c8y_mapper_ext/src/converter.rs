@@ -1030,9 +1030,8 @@ impl CumulocityConverter {
                 self.process_alarm_messages(&source, message, alarm_type)
             }
 
-            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
-                // The command has been fully processed
-                self.active_commands.remove(cmd_id);
+            Channel::CommandMetadata { .. } if message.payload_bytes().is_empty() => {
+                // Clearing command capabilities
                 Ok(vec![])
             }
 
@@ -1061,6 +1060,12 @@ impl CumulocityConverter {
                     }
                     _ => Ok(vec![]),
                 }
+            }
+
+            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
+                // The command has been fully processed
+                self.active_commands.remove(cmd_id);
+                Ok(vec![])
             }
 
             Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
@@ -3118,6 +3123,27 @@ pub(crate) mod tests {
                 ),
             ],
         );
+    }
+
+    #[test_case("restart")]
+    #[test_case("software_list")]
+    #[test_case("software_update")]
+    #[test_case("log_upload")]
+    #[test_case("config_snapshot")]
+    #[test_case("config_update")]
+    #[test_case("custom_op")]
+    #[tokio::test]
+    async fn clear_command_capabilities_2739(cmd: &str) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let res = converter
+            .convert(&Message::new(
+                &Topic::new_unchecked(&format!("te/device/main///cmd/{cmd}")),
+                "",
+            ))
+            .await;
+        assert!(res.is_empty());
     }
 
     pub(crate) async fn create_c8y_converter(
