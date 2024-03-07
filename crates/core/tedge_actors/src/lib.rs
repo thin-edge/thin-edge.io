@@ -133,7 +133,7 @@
 //! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
 //!
 //! // Create a test box ready then the actor box
-//! let mut test_box = actor_box_builder.new_client_box(NoConfig);
+//! let mut test_box = actor_box_builder.new_client_box();
 //! let actor_box = actor_box_builder.build();
 //!
 //! // The actor is then spawn in the background with its message box.

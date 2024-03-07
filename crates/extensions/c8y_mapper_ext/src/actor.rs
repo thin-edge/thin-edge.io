@@ -298,8 +298,8 @@ impl C8yMapperBuilder {
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         http: &mut impl Service<C8YRestRequest, C8YRestResult>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
-        uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
-        downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
+        uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
+        downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         service_monitor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Result<Self, FileError> {
@@ -314,10 +314,8 @@ impl C8yMapperBuilder {
         let http_proxy = C8YHttpProxy::new(http);
         let timer_sender =
             timer.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
-        let upload_sender =
-            uploader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
-        let download_sender =
-            downloader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
+        let upload_sender = uploader.add_requester(box_builder.get_sender().sender_clone());
+        let download_sender = downloader.add_requester(box_builder.get_sender().sender_clone());
         fs_watcher.register_peer(
             config.ops_dir.clone(),
             box_builder.get_sender().sender_clone(),

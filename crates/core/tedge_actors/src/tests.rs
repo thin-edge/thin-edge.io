@@ -50,7 +50,7 @@ async fn spawn_concurrent_sleep_service(max_concurrency: usize) -> DynRequestSen
 #[tokio::test]
 async fn requests_are_served_in_turn() {
     let mut service_handle = spawn_sleep_service().await;
-    let mut client = service_handle.new_client_box(NoConfig);
+    let mut client = service_handle.new_client_box();
 
     // The requests being sent in some order
     client.send(1).await.unwrap();
@@ -67,8 +67,8 @@ async fn requests_are_served_in_turn() {
 async fn clients_can_interleave_request() {
     let mut service_handle = spawn_sleep_service().await;
 
-    let mut client_1 = service_handle.new_client_box(NoConfig);
-    let mut client_2 = service_handle.new_client_box(NoConfig);
+    let mut client_1 = service_handle.new_client_box();
+    let mut client_2 = service_handle.new_client_box();
 
     // Two clients can independently send requests
     client_1.send(1).await.unwrap();
@@ -85,8 +85,8 @@ async fn clients_can_interleave_request() {
 async fn requests_can_be_sent_concurrently() {
     let mut service_handle = spawn_concurrent_sleep_service(2).await;
 
-    let mut client_1 = service_handle.new_client_box(NoConfig);
-    let mut client_2 = service_handle.new_client_box(NoConfig);
+    let mut client_1 = service_handle.new_client_box();
+    let mut client_2 = service_handle.new_client_box();
 
     // Despite a long running request from client_1
     client_1.send(1000).await.unwrap();

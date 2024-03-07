@@ -166,7 +166,6 @@ mod tests {
     use crate::Builder;
     use crate::ConcurrentServerActor;
     use crate::DynSender;
-    use crate::NoConfig;
     use crate::Runtime;
     use crate::RuntimeRequest;
     use crate::RuntimeRequestSink;
@@ -181,7 +180,7 @@ mod tests {
     #[tokio::test]
     async fn only_processes_messages_up_to_max_concurrency() {
         let mut builder = ServerMessageBoxBuilder::new("ConcurrentServerMessageBoxTest", 16);
-        let mut test_box = builder.new_client_box(NoConfig);
+        let mut test_box = builder.new_client_box();
         let message_box: ServerMessageBox<i32, i32> = builder.build();
         let mut concurrent_box = ConcurrentServerMessageBox::new(4, message_box);
 
@@ -285,7 +284,7 @@ mod tests {
             }
 
             fn client_box(&mut self) -> SimpleMessageBox<i32, i32> {
-                self.box_builder.new_client_box(NoConfig)
+                self.box_builder.new_client_box()
             }
         }
 

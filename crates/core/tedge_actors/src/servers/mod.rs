@@ -68,8 +68,8 @@
 //! let mut handle = actor.request_sender();
 //!
 //! // This handle can then be used to connect client message boxes
-//! let mut client_1 = handle.new_client_box(NoConfig);
-//! let mut client_2 = handle.new_client_box(NoConfig);
+//! let mut client_1 = handle.new_client_box();
+//! let mut client_2 = handle.new_client_box();
 //!
 //! // The actor is then spawn in the background.
 //! tokio::spawn(async move { actor.run().await } );
@@ -103,7 +103,6 @@ use crate::Message;
 use crate::MessageSink;
 use crate::NoConfig;
 use crate::Sender;
-use crate::ServiceProvider;
 use async_trait::async_trait;
 
 /// Define how a server process a request
@@ -141,28 +140,23 @@ impl<Request: Debug, Response> Debug for RequestEnvelope<Request, Response> {
 /// A request sender to some [Server]
 pub type DynRequestSender<Request, Response> = DynSender<RequestEnvelope<Request, Response>>;
 
-impl<Request: Message, Response: Message> ServiceProvider<Request, Response, NoConfig>
-    for DynRequestSender<Request, Response>
-{
-    fn connect_consumer(
-        &mut self,
-        _config: NoConfig,
-        reply_to: DynSender<Response>,
-    ) -> DynSender<Request> {
-        Box::new(RequestSender {
-            sender: self.sender_clone(),
-            reply_to,
-        })
-    }
-}
-
 /// A connector to a [Server] expecting Request and returning Response.
 pub trait Service<Request: Message, Response: Message>:
     MessageSink<RequestEnvelope<Request, Response>, NoConfig>
 {
+    /// Connect a request message box to the server box under construction
+    fn add_requester(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
 }
 
-impl<T, Request: Message, Response: Message> Service<Request, Response> for T where
-    T: MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+impl<T, Request: Message, Response: Message> Service<Request, Response> for T
+where
+    T: MessageSink<RequestEnvelope<Request, Response>, NoConfig>,
 {
+    fn add_requester(&mut self, reply_to: DynSender<Response>) -> DynSender<Request> {
+        let request_sender = RequestSender {
+            sender: self.get_sender(),
+            reply_to,
+        };
+        request_sender.into()
+    }
 }

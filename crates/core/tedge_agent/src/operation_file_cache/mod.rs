@@ -30,6 +30,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::ConfigUpdateCmdPayload;
@@ -289,13 +290,13 @@ impl FileCacheActorBuilder {
         mqtt_schema: MqttSchema,
         tedge_http_host: Arc<str>,
         data_dir: DataDir,
-        downloader_actor: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
+        downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Self {
         let message_box = SimpleMessageBoxBuilder::new("RestartManager", 10);
 
         let download_sender =
-            downloader_actor.connect_consumer(NoConfig, message_box.get_sender().sender_clone());
+            downloader_actor.add_requester(message_box.get_sender().sender_clone());
 
         let mqtt_sender = mqtt_actor.connect_consumer(
             Self::subscriptions(&mqtt_schema),

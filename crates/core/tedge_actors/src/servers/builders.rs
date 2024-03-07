@@ -201,16 +201,6 @@ impl<S: Server + Clone> Builder<ConcurrentServerActor<S>> for ServerActorBuilder
     }
 }
 
-impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for ServerActorBuilder<S, K> {
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<S::Response>,
-    ) -> DynSender<S::Request> {
-        self.box_builder.connect_consumer(config, response_sender)
-    }
-}
-
 impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>, NoConfig>
     for ServerActorBuilder<S, K>
 {

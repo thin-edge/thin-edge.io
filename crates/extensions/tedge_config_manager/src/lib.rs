@@ -15,9 +15,9 @@ use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
@@ -47,12 +47,8 @@ impl ConfigManagerBuilder {
         config: ConfigManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-        downloader_actor: &mut impl ServiceProvider<
-            ConfigDownloadRequest,
-            ConfigDownloadResult,
-            NoConfig,
-        >,
-        uploader_actor: &mut impl ServiceProvider<ConfigUploadRequest, ConfigUploadResult, NoConfig>,
+        downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
+        uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,
     ) -> Result<Self, FileError> {
         Self::init(&config).await?;
 
@@ -69,10 +65,9 @@ impl ConfigManagerBuilder {
         let mqtt_publisher =
             mqtt.connect_consumer(Self::subscriptions(&config), events_sender.clone().into());
 
-        let download_sender =
-            downloader_actor.connect_consumer(NoConfig, events_sender.clone().into());
+        let download_sender = downloader_actor.add_requester(events_sender.clone().into());
 
-        let upload_sender = uploader_actor.connect_consumer(NoConfig, events_sender.clone().into());
+        let upload_sender = uploader_actor.add_requester(events_sender.clone().into());
 
         fs_notify.register_peer(
             ConfigManagerBuilder::watched_directory(&config),

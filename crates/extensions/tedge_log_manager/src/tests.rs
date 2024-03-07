@@ -8,6 +8,8 @@ use filetime::FileTime;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::time::Duration;
+use tedge_actors::test_helpers::FakeServerBox;
+use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
@@ -27,7 +29,7 @@ use toml::toml;
 use toml::Table;
 
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
-type UploaderMessageBox = TimedMessageBox<SimpleMessageBox<LogUploadRequest, LogUploadResult>>;
+type UploaderMessageBox = TimedMessageBox<FakeServerBox<LogUploadRequest, LogUploadResult>>;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -105,8 +107,8 @@ async fn new_log_manager_builder(
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
-    let mut uploader_builder: SimpleMessageBoxBuilder<LogUploadRequest, LogUploadResult> =
-        SimpleMessageBoxBuilder::new("Uploader", 5);
+    let mut uploader_builder: FakeServerBoxBuilder<LogUploadRequest, LogUploadResult> =
+        FakeServerBoxBuilder::default();
 
     let log_builder = LogManagerBuilder::try_new(
         config,

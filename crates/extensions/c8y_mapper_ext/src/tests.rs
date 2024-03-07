@@ -2371,8 +2371,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     FakeServerBox<C8YRestRequest, C8YRestResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     SimpleMessageBox<SyncStart, SyncComplete>,
-    SimpleMessageBox<IdUploadRequest, IdUploadResult>,
-    SimpleMessageBox<IdDownloadRequest, IdDownloadResult>,
+    FakeServerBox<IdUploadRequest, IdUploadResult>,
+    FakeServerBox<IdDownloadRequest, IdDownloadResult>,
 ) {
     if init {
         config_dir.dir("operations").dir("c8y");
@@ -2422,13 +2422,13 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
     let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
-        FakeServerBox::builder();
+        FakeServerBoxBuilder::default();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
-    let mut uploader_builder: SimpleMessageBoxBuilder<IdUploadRequest, IdUploadResult> =
-        SimpleMessageBoxBuilder::new("Uploader", 5);
-    let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
-        SimpleMessageBoxBuilder::new("Downloader", 5);
+    let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
+        FakeServerBoxBuilder::default();
+    let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+        FakeServerBoxBuilder::default();
     let mut timer_builder: SimpleMessageBoxBuilder<SyncStart, SyncComplete> =
         SimpleMessageBoxBuilder::new("Timer", 5);
     let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

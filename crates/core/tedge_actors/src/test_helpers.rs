@@ -2,6 +2,8 @@
 use crate::mpsc;
 use crate::Builder;
 use crate::ChannelError;
+use crate::CloneSender;
+use crate::DynRequestSender;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageReceiver;
@@ -11,10 +13,11 @@ use crate::NoConfig;
 use crate::NoMessage;
 use crate::NullSender;
 use crate::RequestEnvelope;
+use crate::RequestSender;
 use crate::RuntimeRequest;
 use crate::Sender;
+use crate::ServerMessageBoxBuilder;
 use crate::ServiceConsumer;
-use crate::ServiceProvider;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
 use crate::WrappedInput;
@@ -651,56 +654,39 @@ impl<I: MessagePlus, O: MessagePlus> MessageSink<I, NoConfig> for Probe<I, O> {
     }
 }
 
-pub trait ServiceProviderExt<I: Message, O: Message, C> {
+pub trait ServiceProviderExt<I: Message, O: Message> {
     /// Create a simple message box connected to a box under construction.
-    fn new_client_box(&mut self, config: C) -> SimpleMessageBox<O, I>;
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I>;
 }
 
-impl<I, O, C, T> ServiceProviderExt<I, O, C> for T
-where
-    I: Message,
-    O: Message,
-    C: Clone,
-    T: ServiceProvider<I, O, C>,
-{
-    fn new_client_box(&mut self, config: C) -> SimpleMessageBox<O, I> {
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynRequestSender<I, O> {
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
         let name = "client-box";
         let capacity = 16;
-        let mut client_box = ConsumerBoxBuilder::new(name, capacity, config);
-        self.add_peer(&mut client_box);
+        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
+        let request_sender = RequestSender {
+            sender: self.sender_clone(),
+            reply_to: client_box.get_sender(),
+        };
+        client_box.set_request_sender(request_sender.into());
         client_box.build()
     }
 }
 
-struct ConsumerBoxBuilder<I, O: Debug, C> {
-    config: C,
-    box_builder: SimpleMessageBoxBuilder<O, I>,
-}
-
-impl<I: Message, O: Message, C> ConsumerBoxBuilder<I, O, C> {
-    fn new(name: &str, capacity: usize, config: C) -> Self {
-        ConsumerBoxBuilder {
-            config,
-            box_builder: SimpleMessageBoxBuilder::new(name, capacity),
-        }
-    }
-
-    fn build(self) -> SimpleMessageBox<O, I> {
-        self.box_builder.build()
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for ServerMessageBoxBuilder<I, O> {
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
+        self.request_sender().new_client_box()
     }
 }
 
-impl<I: Message, O: Message, C: Clone> ServiceConsumer<I, O, C> for ConsumerBoxBuilder<I, O, C> {
-    fn get_config(&self) -> C {
-        self.config.clone()
-    }
-
-    fn set_request_sender(&mut self, request_sender: DynSender<I>) {
-        self.box_builder.set_request_sender(request_sender)
-    }
-
-    fn get_response_sender(&self) -> DynSender<O> {
-        self.box_builder.get_response_sender()
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for SimpleMessageBoxBuilder<I, O> {
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
+        let name = "client-box";
+        let capacity = 16;
+        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
+        self.set_request_sender(client_box.get_sender());
+        client_box.set_request_sender(self.get_sender());
+        client_box.build()
     }
 }
 
@@ -735,9 +721,7 @@ pub struct FakeServerBox<Request: Debug, Response> {
 impl<Request: Message, Response: Message> FakeServerBox<Request, Response> {
     /// Return a fake message box builder
     pub fn builder() -> FakeServerBoxBuilder<Request, Response> {
-        FakeServerBoxBuilder {
-            messages: SimpleMessageBoxBuilder::new("Fake Server", 16),
-        }
+        FakeServerBoxBuilder::default()
     }
 }
 
@@ -797,6 +781,14 @@ impl<Request: Message, Response: Message> Sender<Response> for FakeServerBox<Req
 
 pub struct FakeServerBoxBuilder<Request: Debug, Response> {
     messages: SimpleMessageBoxBuilder<RequestEnvelope<Request, Response>, NoMessage>,
+}
+
+impl<Request: Message, Response: Message> Default for FakeServerBoxBuilder<Request, Response> {
+    fn default() -> Self {
+        FakeServerBoxBuilder {
+            messages: SimpleMessageBoxBuilder::new("Fake Server", 16),
+        }
+    }
 }
 
 impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>, NoConfig>
