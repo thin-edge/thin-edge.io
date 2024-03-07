@@ -17,8 +17,8 @@ test-helpers = ["dep:assert-json-diff"]
 [dependencies]
 assert-json-diff = { workspace = true, optional = true }
 async-trait = { workspace = true }
-certificate = { workspace = true }
 c8y_api = { workspace = true }
+certificate = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
 rumqttc = { workspace = true }
