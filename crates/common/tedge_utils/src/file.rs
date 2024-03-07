@@ -636,9 +636,18 @@ mod tests {
         assert!(err.to_string().contains("User not found"));
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn get_gid_of_groups() {
         assert_eq!(get_gid_by_name("root").unwrap(), 0);
+        let err = get_gid_by_name("nonexistent_group").unwrap_err();
+        assert!(err.to_string().contains("Group not found"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn get_gid_of_groups() {
+        assert_ne!(get_gid_by_name("staff").unwrap(), 0);
         let err = get_gid_by_name("nonexistent_group").unwrap_err();
         assert!(err.to_string().contains("Group not found"));
     }

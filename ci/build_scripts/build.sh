@@ -32,17 +32,21 @@ Args:
 
     Example ARCH (target) values:
 
-        MUSL variants
+        Linux MUSL variants
         * x86_64-unknown-linux-musl
         * aarch64-unknown-linux-musl
         * armv7-unknown-linux-musleabihf
         * arm-unknown-linux-musleabihf
 
-        GNU variants
+        Linux GNU variants
         * x86_64-unknown-linux-gnu
         * aarch64-unknown-linux-gnu
         * armv7-unknown-linux-gnueabihf
         * arm-unknown-linux-gnueabihf
+
+        Apple
+        * aarch64-apple-darwin
+        * x86_64-apple-darwin
 
 Flags:
     --help|-h   Show this help

@@ -380,6 +380,7 @@ pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[cfg(test)]
 mod tests {
     use super::*;

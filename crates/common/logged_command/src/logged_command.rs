@@ -317,6 +317,7 @@ EOF
 
         // On expect the errors to be logged
         let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
+        #[cfg(target_os = "linux")]
         assert_eq!(
             log_content,
             r#"----- $ ls "dummy-file"
@@ -327,6 +328,20 @@ EOF
 
 stderr <<EOF
 ls: cannot access 'dummy-file': No such file or directory
+EOF
+"#
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            log_content,
+            r#"----- $ ls "dummy-file"
+exit status: 1
+
+stdout <<EOF
+EOF
+
+stderr <<EOF
+ls: dummy-file: No such file or directory
 EOF
 "#
         );

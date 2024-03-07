@@ -222,6 +222,7 @@ mod tests {
         }
     }
 
+    #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn test_multiple_known_files_watched() {
         let ttd = Arc::new(TempTedgeDir::new());
@@ -247,6 +248,7 @@ mod tests {
         file_handler.await.unwrap();
     }
 
+    #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn it_works() {
         let ttd = Arc::new(TempTedgeDir::new());
@@ -280,6 +282,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn test_multiple_unknown_files_watched() {
         let ttd = Arc::new(TempTedgeDir::new());
@@ -308,6 +311,7 @@ mod tests {
         file_handler.await.unwrap();
     }
 
+    #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn test_multiple_directories_watched() {
         let ttd_a = Arc::new(TempTedgeDir::new());
@@ -352,6 +356,7 @@ mod tests {
     /// operation may result in other events, like `Rename`, `Delete`, etc. We want these operations to emit `Modify` as
     /// well, so that the consumers can only subscribe to single type of event and properly respond every time a file
     /// they're watching changes.
+    #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn modify_emitted_for_move_copy_create_delete() {
         // Arrange

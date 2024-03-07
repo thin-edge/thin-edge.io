@@ -196,12 +196,23 @@ mod tests {
         ttd.file("file_a");
         ttd.dir("dir_b").file("file_b");
 
+        #[cfg(target_os = "linux")]
         client_box
             .with_timeout(TEST_TIMEOUT)
             .assert_received_unordered([
                 FsWatchEvent::Modified(ttd_full.to_path_buf().join("file_a")),
                 FsWatchEvent::DirectoryCreated(ttd_full.to_path_buf().join("dir_b")),
                 FsWatchEvent::Modified(ttd_full.to_path_buf().join("dir_b").join("file_b")),
+            ])
+            .await;
+
+        #[cfg(target_os = "macos")]
+        client_box
+            .with_timeout(TEST_TIMEOUT)
+            .assert_received_unordered([
+                FsWatchEvent::FileCreated(ttd_full.to_path_buf().join("file_a")),
+                FsWatchEvent::DirectoryCreated(ttd_full.to_path_buf().join("dir_b")),
+                FsWatchEvent::FileCreated(ttd_full.to_path_buf().join("dir_b").join("file_b")),
             ])
             .await;
 
