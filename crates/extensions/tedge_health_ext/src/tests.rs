@@ -12,7 +12,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
-use tedge_config::TEdgeConfigRepository;
+use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -82,7 +82,7 @@ async fn spawn_a_health_check_actor(
     let mut health_mqtt_builder = MqttActorBuilder::new(mqtt_config);
 
     let mqtt_schema = MqttSchema::new();
-    let config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+    let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
     let service = Service {
         service_topic_id: EntityTopicId::default_main_service(service_to_be_monitored)
             .unwrap()

@@ -9,8 +9,8 @@ pub use actor::*;
 pub use config::*;
 use log_manager::LogPluginConfig;
 use std::path::PathBuf;
-use tedge_actors::adapt;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
@@ -53,15 +53,15 @@ impl LogManagerBuilder {
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
         let mqtt_publisher = mqtt.connect_consumer(
             Self::subscriptions(&config),
-            adapt(&box_builder.get_sender()),
+            box_builder.get_sender().sender_clone(),
         );
         fs_notify.register_peer(
             LogManagerBuilder::watched_directory(&config),
-            adapt(&box_builder.get_sender()),
+            box_builder.get_sender().sender_clone(),
         );
 
         let upload_sender =
-            uploader_actor.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+            uploader_actor.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
 
         Ok(Self {
             config,

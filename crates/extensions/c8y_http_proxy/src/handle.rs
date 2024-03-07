@@ -12,8 +12,7 @@ use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::NoConfig;
-use tedge_actors::ServiceProvider;
+use tedge_actors::Service;
 use tedge_utils::file::PermissionEntry;
 
 use super::messages::DownloadFile;
@@ -24,11 +23,8 @@ pub struct C8YHttpProxy {
 }
 
 impl C8YHttpProxy {
-    pub fn new(
-        client_name: &str,
-        proxy_builder: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
-    ) -> Self {
-        let c8y = ClientMessageBox::new(client_name, proxy_builder);
+    pub fn new(proxy_builder: &mut impl Service<C8YRestRequest, C8YRestResult>) -> Self {
+        let c8y = ClientMessageBox::new(proxy_builder);
         C8YHttpProxy { c8y }
     }
 

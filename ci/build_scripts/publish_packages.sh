@@ -183,6 +183,12 @@ get_user_friendly_arch() {
         *arm-unknown-linux-musleabihf*)
             easy_arch=armv6
             ;;
+        *aarch64-apple-darwin*)
+            easy_arch=macos-arm64
+            ;;
+        *x86_64-apple-darwin*)
+            easy_arch=macos-amd64
+            ;;
     esac
     echo "$easy_arch"
 }

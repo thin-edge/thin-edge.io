@@ -84,8 +84,9 @@ impl Default for FsWatchActorBuilder {
 }
 
 impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
-    fn register_peer(&mut self, config: PathBuf, sender: DynSender<FsWatchEvent>) {
-        self.watch_dirs.push((config, sender));
+    fn register_peer(&mut self, path: PathBuf, sender: DynSender<FsWatchEvent>) {
+        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        self.watch_dirs.push((path, sender));
     }
 }
 
@@ -173,12 +174,15 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_fs_events() -> Result<(), DynError> {
-        let ttd = TempTedgeDir::new();
+        let temp = TempTedgeDir::new();
+        let ttd = temp.dir("watched-dir");
+        let ttd_link = temp.link_dir(&ttd, "watched-symlink");
+        let ttd_full = ttd.to_path_buf().canonicalize().unwrap().to_path_buf();
         let mut fs_actor_builder = FsWatchActorBuilder::new();
         let client_builder: SimpleMessageBoxBuilder<FsWatchEvent, NoMessage> =
             SimpleMessageBoxBuilder::new("FS Client", 5);
 
-        fs_actor_builder.register_peer(ttd.to_path_buf(), client_builder.get_sender());
+        fs_actor_builder.register_peer(ttd_link.to_path_buf(), client_builder.get_sender());
 
         let actor = fs_actor_builder.build();
         let client_box = client_builder.build();
@@ -192,12 +196,23 @@ mod tests {
         ttd.file("file_a");
         ttd.dir("dir_b").file("file_b");
 
+        #[cfg(target_os = "linux")]
         client_box
             .with_timeout(TEST_TIMEOUT)
             .assert_received_unordered([
-                FsWatchEvent::Modified(ttd.to_path_buf().join("file_a")),
-                FsWatchEvent::DirectoryCreated(ttd.to_path_buf().join("dir_b")),
-                FsWatchEvent::Modified(ttd.to_path_buf().join("dir_b").join("file_b")),
+                FsWatchEvent::Modified(ttd_full.to_path_buf().join("file_a")),
+                FsWatchEvent::DirectoryCreated(ttd_full.to_path_buf().join("dir_b")),
+                FsWatchEvent::Modified(ttd_full.to_path_buf().join("dir_b").join("file_b")),
+            ])
+            .await;
+
+        #[cfg(target_os = "macos")]
+        client_box
+            .with_timeout(TEST_TIMEOUT)
+            .assert_received_unordered([
+                FsWatchEvent::FileCreated(ttd_full.to_path_buf().join("file_a")),
+                FsWatchEvent::DirectoryCreated(ttd_full.to_path_buf().join("dir_b")),
+                FsWatchEvent::FileCreated(ttd_full.to_path_buf().join("dir_b").join("file_b")),
             ])
             .await;
 

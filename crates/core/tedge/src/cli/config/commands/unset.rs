@@ -1,10 +1,10 @@
 use crate::command::Command;
-use tedge_config::TEdgeConfigRepository;
+use tedge_config::TEdgeConfigLocation;
 use tedge_config::WritableKey;
 
 pub struct UnsetConfigCommand {
     pub key: WritableKey,
-    pub config_repository: TEdgeConfigRepository,
+    pub config_location: TEdgeConfigLocation,
 }
 
 impl Command for UnsetConfigCommand {
@@ -13,7 +13,7 @@ impl Command for UnsetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        self.config_repository.update_toml(&|dto| {
+        self.config_location.update_toml(&|dto| {
             dto.unset_key(self.key);
             Ok(())
         })?;

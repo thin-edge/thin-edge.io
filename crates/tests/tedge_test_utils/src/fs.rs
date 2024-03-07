@@ -60,6 +60,22 @@ impl TempTedgeDir {
         TempTedgeFile { file_path: path }
     }
 
+    pub fn link_dir(&self, original: &TempTedgeDir, link_name: &str) -> TempTedgeDir {
+        let root = Utf8Path::from_path(self.temp_dir.path()).unwrap();
+        let path = root.join(&self.current_file_path).join(link_name);
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(original.path(), &path).unwrap();
+
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(original.path(), &path).unwrap();
+
+        TempTedgeDir {
+            temp_dir: self.temp_dir.clone(),
+            current_file_path: path,
+        }
+    }
+
     pub fn path(&self) -> &Path {
         self.current_file_path.as_std_path()
     }

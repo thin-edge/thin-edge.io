@@ -11,6 +11,8 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
 use tedge_actors::MessageReceiver;
+use tedge_actors::NoMessage;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -291,8 +293,10 @@ async fn spawn_mqtt_operation_converter(
         SimpleMessageBoxBuilder::new("Restart", 5);
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
-    let mut script_builder: SimpleMessageBoxBuilder<Execute, std::io::Result<Output>> =
-        SimpleMessageBoxBuilder::new("Script", 5);
+    let mut script_builder: SimpleMessageBoxBuilder<
+        RequestEnvelope<Execute, std::io::Result<Output>>,
+        NoMessage,
+    > = SimpleMessageBoxBuilder::new("Script", 5);
 
     let workflows = WorkflowSupervisor::default();
 

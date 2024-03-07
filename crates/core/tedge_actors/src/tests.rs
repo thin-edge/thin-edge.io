@@ -27,29 +27,20 @@ impl Server for SleepService {
     }
 }
 
-async fn spawn_sleep_service() -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
-    let service = SleepService;
-    let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
-    let handle = box_builder.new_client_box(NoConfig);
-    let messages = box_builder.build();
-    let actor = ServerActor::new(service, messages);
+async fn spawn_sleep_service() -> DynRequestSender<u64, u64> {
+    let config = ServerConfig::default();
+    let actor = ServerActorBuilder::new(SleepService, &config, Sequential);
+    let handle = actor.request_sender();
 
     tokio::spawn(async move { actor.run().await });
 
     handle
 }
 
-async fn spawn_concurrent_sleep_service(
-    max_concurrency: usize,
-) -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
-    let service = SleepService;
-    let mut box_builder = SimpleMessageBoxBuilder::new(service.name(), 16);
-    let mut handle_builder = SimpleMessageBoxBuilder::new("handle", 16);
-    box_builder.add_peer(&mut handle_builder);
-
-    let handle = handle_builder.build();
-    let messages = ConcurrentServerMessageBox::new(max_concurrency, box_builder.build());
-    let actor = ConcurrentServerActor::new(service, messages);
+async fn spawn_concurrent_sleep_service(max_concurrency: usize) -> DynRequestSender<u64, u64> {
+    let config = ServerConfig::default().with_max_concurrency(max_concurrency);
+    let actor = ServerActorBuilder::new(SleepService, &config, Concurrent);
+    let handle = actor.request_sender();
 
     tokio::spawn(async move { actor.run().await });
 
@@ -59,54 +50,53 @@ async fn spawn_concurrent_sleep_service(
 #[tokio::test]
 async fn requests_are_served_in_turn() {
     let mut service_handle = spawn_sleep_service().await;
-
-    let client = 1;
+    let mut client = service_handle.new_client_box(NoConfig);
 
     // The requests being sent in some order
-    service_handle.send((client, 1)).await.unwrap();
-    service_handle.send((client, 2)).await.unwrap();
-    service_handle.send((client, 3)).await.unwrap();
+    client.send(1).await.unwrap();
+    client.send(2).await.unwrap();
+    client.send(3).await.unwrap();
 
     // The responses are received in the same order
-    assert_eq!(service_handle.recv().await, Some((client, 1)));
-    assert_eq!(service_handle.recv().await, Some((client, 2)));
-    assert_eq!(service_handle.recv().await, Some((client, 3)));
+    assert_eq!(client.recv().await, Some(1));
+    assert_eq!(client.recv().await, Some(2));
+    assert_eq!(client.recv().await, Some(3));
 }
 
 #[tokio::test]
 async fn clients_can_interleave_request() {
     let mut service_handle = spawn_sleep_service().await;
 
-    let client_1 = 1;
-    let client_2 = 2;
+    let mut client_1 = service_handle.new_client_box(NoConfig);
+    let mut client_2 = service_handle.new_client_box(NoConfig);
 
     // Two clients can independently send requests
-    service_handle.send((client_1, 1)).await.unwrap();
-    service_handle.send((client_2, 2)).await.unwrap();
-    service_handle.send((client_1, 3)).await.unwrap();
+    client_1.send(1).await.unwrap();
+    client_2.send(2).await.unwrap();
+    client_1.send(3).await.unwrap();
 
     // The clients receive response to their requests
-    assert_eq!(service_handle.recv().await, Some((client_1, 1)));
-    assert_eq!(service_handle.recv().await, Some((client_2, 2)));
-    assert_eq!(service_handle.recv().await, Some((client_1, 3)));
+    assert_eq!(client_1.recv().await, Some(1));
+    assert_eq!(client_2.recv().await, Some(2));
+    assert_eq!(client_1.recv().await, Some(3));
 }
 
 #[tokio::test]
 async fn requests_can_be_sent_concurrently() {
     let mut service_handle = spawn_concurrent_sleep_service(2).await;
 
-    let client_1 = 1;
-    let client_2 = 2;
+    let mut client_1 = service_handle.new_client_box(NoConfig);
+    let mut client_2 = service_handle.new_client_box(NoConfig);
 
     // Despite a long running request from client_1
-    service_handle.send((client_1, 1000)).await.unwrap();
-    service_handle.send((client_2, 100)).await.unwrap();
-    service_handle.send((client_2, 101)).await.unwrap();
-    service_handle.send((client_2, 102)).await.unwrap();
+    client_1.send(1000).await.unwrap();
+    client_2.send(100).await.unwrap();
+    client_2.send(101).await.unwrap();
+    client_2.send(102).await.unwrap();
 
     // Client_2 can use the service
-    assert_eq!(service_handle.recv().await, Some((client_2, 100)));
-    assert_eq!(service_handle.recv().await, Some((client_2, 101)));
-    assert_eq!(service_handle.recv().await, Some((client_2, 102)));
-    assert_eq!(service_handle.recv().await, Some((client_1, 1000)));
+    assert_eq!(client_2.recv().await, Some(100));
+    assert_eq!(client_2.recv().await, Some(101));
+    assert_eq!(client_2.recv().await, Some(102));
+    assert_eq!(client_1.recv().await, Some(1000));
 }

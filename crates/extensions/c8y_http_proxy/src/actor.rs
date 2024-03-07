@@ -37,6 +37,7 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageReceiver;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
@@ -66,14 +67,10 @@ pub struct C8YHttpProxyMessageBox {
     pub(crate) jwt: JwtRetriever,
 }
 
-#[derive(Debug)]
-pub struct C8YRestRequestWithClientId(usize, C8YRestRequest);
+pub type C8YRestRequestEnvelope = RequestEnvelope<C8YRestRequest, C8YRestResult>;
 
-#[derive(Debug)]
-pub struct C8YRestResponseWithClientId(usize, C8YRestResult);
-
-fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestWithClientId, HttpResult, JwtResult] : Debug);
-fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponseWithClientId, HttpRequest, JwtRequest] : Debug);
+fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestEnvelope, HttpResult, JwtResult] : Debug);
+fan_in_message_type!(C8YHttpProxyOutput[HttpRequest, JwtRequest] : Debug);
 
 #[async_trait]
 impl Actor for C8YHttpProxyActor {
@@ -84,7 +81,11 @@ impl Actor for C8YHttpProxyActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.init().await.map_err(Box::new)?;
 
-        while let Some((client_id, request)) = self.peers.clients.recv().await {
+        while let Some(RequestEnvelope {
+            request,
+            mut reply_to,
+        }) = self.peers.clients.recv().await
+        {
             let result = match request {
                 C8YRestRequest::GetJwtToken(_) => self
                     .get_and_set_jwt_token()
@@ -122,7 +123,7 @@ impl Actor for C8YHttpProxyActor {
                     .await
                     .map(|response| response.into()),
             };
-            self.peers.clients.send((client_id, result)).await?;
+            reply_to.send(result).await?;
         }
         Ok(())
     }

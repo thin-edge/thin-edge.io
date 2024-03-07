@@ -53,7 +53,7 @@ impl Command for RefreshBridgesCmd {
 
 impl RefreshBridgesCmd {
     pub fn new(context: &BuildContext) -> Result<Self, crate::ConfigError> {
-        let config = context.config_repository.load()?;
+        let config = context.load_config()?;
         let config_location = context.config_location.clone();
         let service_manager = tedge_config::system_services::service_manager(
             &config_location.tedge_config_root_path,

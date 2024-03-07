@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::fmt::Debug;
 use std::pin::Pin;
 use tedge_actors::Actor;
-use tedge_actors::ClientId;
+use tedge_actors::ChannelError;
 use tedge_actors::MessageReceiver;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
@@ -43,7 +43,7 @@ impl TimerActor {
     ///
     /// Update the current timer if this request is for an earlier deadline.
     /// Simply store the request for later otherwise.
-    fn push(&mut self, timer_request: (ClientId, SetTimeout<AnyPayload>)) {
+    fn push(&mut self, timer_request: TimeoutRequest) {
         let new_timer = self.new_entry(timer_request);
 
         // Check if the new timer is more urgent
@@ -67,13 +67,13 @@ impl TimerActor {
     }
 
     /// Create a new timer entry to which a fresh id has been assigned.
-    fn new_entry(&mut self, timer_request: (ClientId, SetTimeout<AnyPayload>)) -> TimerEntry {
+    fn new_entry(&mut self, timeout: TimeoutRequest) -> TimerEntry {
         self.next_timer_id += 1;
 
-        let (client_id, timer) = timer_request;
-        let deadline = Instant::now() + timer.duration;
+        let deadline = Instant::now() + timeout.request.duration;
         let timer_id = self.next_timer_id;
-        let event_id = timer.event;
+        let event_id = timeout.request.event;
+        let client_id = timeout.reply_to;
 
         TimerEntry {
             deadline,
@@ -114,7 +114,9 @@ impl TimerActor {
     }
 }
 
-pub type TimerId = usize;
+type TimeoutRequest = RequestEnvelope<SetTimeout<AnyPayload>, Timeout<AnyPayload>>;
+type TimerId = usize;
+type ClientId = Box<dyn Sender<Timeout<AnyPayload>>>;
 
 /// Opaque type used by the timer actor to hold generic payloads provided by its peers
 ///
@@ -123,7 +125,6 @@ pub type TimerId = usize;
 /// are managed under the hood by the `TimerActor::builder()`.
 pub type AnyPayload = Box<dyn Any + Send + Sync + 'static>;
 
-#[derive(Debug)]
 struct TimerEntry {
     /// The deadline to raise this timer
     deadline: Instant,
@@ -163,14 +164,13 @@ impl PartialEq for TimerEntry {
     }
 }
 
-impl From<TimerEntry> for (ClientId, Timeout<AnyPayload>) {
-    fn from(request: TimerEntry) -> Self {
-        (
-            request.client_id,
-            Timeout {
-                event: request.event_id,
-            },
-        )
+impl TimerEntry {
+    async fn trigger(self) -> Result<(), ChannelError> {
+        let response = Timeout {
+            event: self.event_id,
+        };
+        let mut sender = self.client_id;
+        sender.send(response).await
     }
 }
 
@@ -204,7 +204,7 @@ impl Actor for TimerActor {
                 // Wait either for a new request or the current timer to elapse
                 tokio::select! {
                     () = time_elapsed => {
-                        self.messages.send(current_timer.into()).await?;
+                        current_timer.trigger().await?;
                         self.start_next_timer()
                     },
                     maybe_message = self.messages.try_recv() => {
@@ -246,7 +246,7 @@ impl Actor for TimerActor {
         // So simply await all the pending timers in turn
         while let Some(SleepHandle { sleep, timer }) = self.current_timer.take() {
             sleep.await;
-            self.messages.send(timer.into()).await?;
+            timer.trigger().await?;
             self.start_next_timer()
         }
 

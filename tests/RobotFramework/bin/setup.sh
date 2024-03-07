@@ -13,26 +13,6 @@ pushd "$SCRIPT_DIR/.." >/dev/null || exit 1
 # Required to prevent dbus errors on raspberry pi
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
-# Use git lfs for test artefacts
-if ! git lfs env >/dev/null 2>&1; then
-    # install git-lfs dependency, try proceeding anyway if a package manager is not found
-    if command -V apt-get >/dev/null 2>&1; then
-        curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-        sudo apt-get install -y --no-install-recommends git-lfs
-    elif command -V yum >/dev/null 2>&1; then
-        curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.rpm.sh | sudo bash
-        sudo yum install -y git-lfs
-    elif command -V dnf >/dev/null 2>&1; then
-        curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.rpm.sh | sudo bash
-        sudo dnf install -y git-lfs
-    elif  command -V brew >/dev/null 2>&1; then
-        brew install git-lfs
-    fi
-fi
-
-git lfs install
-git lfs pull
-
 #
 # Setup python virtual environment and install dependencies
 #

@@ -3,7 +3,7 @@ use nix::unistd::*;
 use std::fs;
 use std::io;
 use std::io::Write;
-use std::os::linux::fs::MetadataExt;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -355,7 +355,7 @@ pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(),
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
 
-    let uid = get_metadata(Path::new(file))?.st_uid();
+    let uid = get_metadata(Path::new(file))?.uid();
 
     let gd = get_group_by_name(group)
         .map(|g| g.gid())
@@ -363,7 +363,7 @@ pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(),
             group: group.into(),
         })?;
 
-    let gid = get_metadata(Path::new(file))?.st_gid();
+    let gid = get_metadata(Path::new(file))?.gid();
 
     // if user and group are same as existing, then do not change
     if (ud != uid) && (gd != gid) {
@@ -383,7 +383,7 @@ fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
 
-    let uid = get_metadata(Path::new(file))?.st_uid();
+    let uid = get_metadata(Path::new(file))?.uid();
 
     // if user is same as existing, then do not change
     if ud != uid {
@@ -403,7 +403,7 @@ fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
             group: group.into(),
         })?;
 
-    let gid = get_metadata(Path::new(file))?.st_gid();
+    let gid = get_metadata(Path::new(file))?.gid();
 
     // if group is same as existing, then do not change
     if gd != gid {
@@ -636,9 +636,18 @@ mod tests {
         assert!(err.to_string().contains("User not found"));
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn get_gid_of_groups() {
         assert_eq!(get_gid_by_name("root").unwrap(), 0);
+        let err = get_gid_by_name("nonexistent_group").unwrap_err();
+        assert!(err.to_string().contains("Group not found"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn get_gid_of_groups() {
+        assert_ne!(get_gid_by_name("staff").unwrap(), 0);
         let err = get_gid_by_name("nonexistent_group").unwrap_err();
         assert!(err.to_string().contains("Group not found"));
     }

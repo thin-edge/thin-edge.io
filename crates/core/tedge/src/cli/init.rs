@@ -81,8 +81,10 @@ impl TEdgeInitCmd {
                         format!("creating symlink for {component} to {}", tedge.display())
                     })?;
 
+                    // Use -h over --no-dereference as the former is supported in more environments,
+                    // busybox, bsd etc.
                     let res = std::process::Command::new("chown")
-                        .arg("--no-dereference")
+                        .arg("-h")
                         .arg(&format!("{}:{}", stat.uid(), stat.gid()))
                         .arg(&link)
                         .output()
@@ -146,14 +148,22 @@ impl TEdgeInitCmd {
         )?;
         create_directory(
             config_dir.join("sm-plugins"),
-            PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o755)),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o755),
+            ),
         )?;
         create_directory(
             config_dir.join("device-certs"),
-            PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o775)),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o775),
+            ),
         )?;
 
-        let config = self.context.config_repository.load()?;
+        let config = self.context.load_config()?;
 
         create_directory(
             config.logs.path.clone(),

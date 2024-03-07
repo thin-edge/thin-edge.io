@@ -14,7 +14,6 @@ use std::process::Stdio;
 use tedge_config::AptConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 #[derive(clap::Parser, Debug)]
@@ -329,7 +328,7 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
 fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
 
-    match TEdgeConfigRepository::new(tedge_config_location).load() {
+    match TEdgeConfig::try_new(tedge_config_location) {
         Ok(config) => Some(config),
         Err(err) => {
             warn!("Failed to load TEdgeConfig: {}", err);
@@ -381,6 +380,7 @@ pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[cfg(test)]
 mod tests {
     use super::*;

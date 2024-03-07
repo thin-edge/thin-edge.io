@@ -14,6 +14,7 @@ use tedge_actors::LoggingSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Service;
 use tedge_actors::ServiceProvider;
 use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
@@ -47,7 +48,7 @@ impl TedgeOperationConverterBuilder {
         software_actor: &mut impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        script_runner: &mut impl ServiceProvider<Execute, std::io::Result<Output>, NoConfig>,
+        script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -72,7 +73,7 @@ impl TedgeOperationConverterBuilder {
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
 
-        let script_runner = ClientMessageBox::new("Operation Script Runner", script_runner);
+        let script_runner = ClientMessageBox::new(script_runner);
 
         for capability in Self::capabilities() {
             let operation = capability.to_string();

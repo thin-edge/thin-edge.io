@@ -22,6 +22,8 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 use std::time::SystemTime;
+use tedge_actors::test_helpers::FakeServerBox;
+use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -35,7 +37,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
-use tedge_config::TEdgeConfigRepository;
+use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -1746,8 +1748,8 @@ async fn custom_operation_without_timeout_successful() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), None, None);
     //create command
-    let content = r#"#!/usr/bin/env bash
-    for i in {1..2}
+    let content = r#"#!/bin/sh
+    for i in $(seq 1 2)
     do
         sleep 1
     done
@@ -1808,8 +1810,8 @@ async fn custom_operation_with_timeout_successful() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(4), Some(2));
     //create command
-    let content = r#"#!/usr/bin/env bash
-    for i in {1..2}
+    let content = r#"#!/bin/sh
+    for i in $(seq 1 2)
     do
         sleep 1
     done
@@ -1868,9 +1870,9 @@ async fn custom_operation_timeout_sigterm() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
-    let content = r#"#!/usr/bin/env bash
-    trap 'echo received SIGTERM; exit 124' SIGTERM
-    for i in {1..10}
+    let content = r#"#!/bin/sh
+    trap 'echo received SIGTERM; exit 124' TERM
+    for i in $(seq 1 10)
     do
         echo "main $i"
         sleep 2
@@ -1933,9 +1935,9 @@ async fn custom_operation_timeout_sigkill() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
-    let content = r#"#!/usr/bin/env bash
-    trap 'echo ignore SIGTERM' SIGTERM
-    for i in {1..50}
+    let content = r#"#!/bin/sh
+    trap 'echo ignore SIGTERM' TERM
+    for i in $(seq 1 50)
     do
         echo "main $i"
         sleep 2
@@ -2009,8 +2011,6 @@ async fn inventory_registers_unknown_entity_once() {
     for _ in 0..5 {
         mqtt.send(measurement_message.clone()).await.unwrap();
     }
-
-    mqtt.close_sender();
 
     let mut messages = vec![];
     while let Some(WrappedInput::Message(msg)) = mqtt.recv_message().await {
@@ -2369,7 +2369,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     init: bool,
 ) -> (
     SimpleMessageBox<MqttMessage, MqttMessage>,
-    SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+    FakeServerBox<C8YRestRequest, C8YRestResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     SimpleMessageBox<SyncStart, SyncComplete>,
     SimpleMessageBox<IdUploadRequest, IdUploadResult>,
@@ -2383,7 +2383,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let device_name = "test-device".into();
     let device_topic_id = EntityTopicId::default_main_device();
     let device_type = "test-device-type".into();
-    let config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+    let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
     let c8y_host = "test.c8y.io".into();
     let tedge_http_host = "localhost:8888".into();
     let mqtt_schema = MqttSchema::default();
@@ -2425,8 +2425,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
-    let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
-        SimpleMessageBoxBuilder::new("C8Y", 1);
+    let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+        FakeServerBox::builder();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
     let mut uploader_builder: SimpleMessageBoxBuilder<IdUploadRequest, IdUploadResult> =
@@ -2488,9 +2488,7 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
     .await;
 }
 
-pub(crate) fn spawn_dummy_c8y_http_proxy(
-    mut http: SimpleMessageBox<C8YRestRequest, C8YRestResult>,
-) {
+pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<C8YRestRequest, C8YRestResult>) {
     tokio::spawn(async move {
         loop {
             match http.recv().await {

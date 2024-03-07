@@ -21,7 +21,6 @@ tedge_downloader_ext = { workspace = true }
 tedge_health_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
-tedge_timer_ext = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 tracing = { workspace = true }
 

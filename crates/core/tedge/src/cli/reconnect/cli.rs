@@ -22,14 +22,14 @@ pub enum TEdgeReconnectCli {
 impl BuildCommand for TEdgeReconnectCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         let config_location = context.config_location.clone();
-        let config_repository = context.config_repository;
+        let config = context.load_config()?;
         let service_manager = service_manager(&context.config_location.tedge_config_root_path)?;
         let common_mosquitto_config = CommonMosquittoConfig::default();
 
         let cmd = match self {
             TEdgeReconnectCli::C8y => ReconnectBridgeCommand {
                 config_location,
-                config_repository,
+                config,
                 service_manager,
                 common_mosquitto_config,
                 config_file: C8Y_CONFIG_FILENAME.into(),
@@ -39,7 +39,7 @@ impl BuildCommand for TEdgeReconnectCli {
             },
             TEdgeReconnectCli::Az => ReconnectBridgeCommand {
                 config_location,
-                config_repository,
+                config,
                 service_manager,
                 common_mosquitto_config,
                 config_file: AZURE_CONFIG_FILENAME.into(),
@@ -49,7 +49,7 @@ impl BuildCommand for TEdgeReconnectCli {
             },
             TEdgeReconnectCli::Aws => ReconnectBridgeCommand {
                 config_location,
-                config_repository,
+                config,
                 service_manager,
                 common_mosquitto_config,
                 config_file: AWS_CONFIG_FILENAME.into(),

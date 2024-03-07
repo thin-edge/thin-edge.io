@@ -15,7 +15,7 @@ use tedge_mqtt_ext::TopicFilter;
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
 
 /// Configuration of the Firmware Manager
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FirmwareManagerConfig {
     pub tedge_device_id: String,
     pub local_http_host: Arc<str>,

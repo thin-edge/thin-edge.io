@@ -68,7 +68,7 @@ VERSION=
 CLEAN=1
 PACKAGES=()
 COMMAND=
-PACKAGE_TYPES="deb,apk,rpm,tarball"
+PACKAGE_TYPES=
 
 while [ $# -gt 0 ]
 do
@@ -115,6 +115,14 @@ pushd "$SCRIPT_DIR/../.." >/dev/null || exit 1
 
 if [ -z "$TARGET" ]; then
     TARGET=$(./ci/build_scripts/detect_target.sh)
+fi
+
+if [ -z "$PACKAGE_TYPES" ]; then
+    case "$TARGET" in
+        *linux*) PACKAGE_TYPES="deb,apk,rpm,tarball" ;;
+        *apple*) PACKAGE_TYPES="tarball" ;;
+        *) PACKAGE_TYPES="tarball" ;;
+    esac
 fi
 
 # Normalize output dir
@@ -204,6 +212,8 @@ get_package_arch() {
         riscv64gc-unknown-linux-*) pkg_arch=riscv64 ;;
         mips64el-unknown-linux-*abi64) pkg_arch=mips64le ;;
         mipsel-unknown-linux-*) pkg_arch=mipsle ;;
+        aarch64-apple-darwin) pkg_arch=arm64 ;;
+        x86_64-apple-darwin) pkg_arch=amd64 ;;
         *)
             echo "Unknown package architecture. value=$1"
             exit 1

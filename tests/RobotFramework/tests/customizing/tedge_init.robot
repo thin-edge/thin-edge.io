@@ -38,7 +38,7 @@ Check ownership of the folders
     Check Owner of Directory    /etc/tedge/mosquitto-conf    tedge:tedge
     Check Owner of Directory    /etc/tedge/operations    tedge:tedge
     Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
-    Check Owner of Directory    /etc/tedge/device-certs    root:root
+    Check Owner of Directory    /etc/tedge/device-certs    tedge:tedge
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
 
@@ -50,7 +50,7 @@ Change user/group and check the change
     Check Owner of Directory    /etc/tedge/mosquitto-conf    petertest:petertest
     Check Owner of Directory    /etc/tedge/operations    petertest:petertest
     Check Owner of Directory    /etc/tedge/plugins    petertest:petertest
-    Check Owner of Directory    /etc/tedge/device-certs    root:root
+    Check Owner of Directory    /etc/tedge/device-certs    petertest:petertest
     Check Owner of Directory    /var/tedge    petertest:petertest
     Check Owner of Directory    /var/log/tedge    petertest:petertest
 
@@ -62,7 +62,7 @@ Tedge init and check if default values are restored
     Check Owner of Directory    /etc/tedge/mosquitto-conf    tedge:tedge
     Check Owner of Directory    /etc/tedge/operations    tedge:tedge
     Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
-    Check Owner of Directory    /etc/tedge/device-certs    root:root
+    Check Owner of Directory    /etc/tedge/device-certs    tedge:tedge
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
 

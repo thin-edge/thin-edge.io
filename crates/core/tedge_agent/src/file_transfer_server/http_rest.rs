@@ -46,7 +46,7 @@ async fn upload_file(
 
         match stream_request_body_to_path(&path.full, request.body_mut()).await {
             Ok(()) => Ok(StatusCode::CREATED),
-            Err(err) if source_err_is_is_a_directory(&err) => {
+            Err(err) if source_err_is_is_a_directory(&err, &path.full) => {
                 Err(Error::CannotUploadDirectory { path: path.request })
             }
             Err(err) => Err(internal_error(err, path.request)),
@@ -59,10 +59,10 @@ async fn upload_file(
     }
 }
 
-fn source_err_is_is_a_directory(error: &anyhow::Error) -> bool {
+fn source_err_is_is_a_directory(error: &anyhow::Error, path: &Utf8Path) -> bool {
     error
         .downcast_ref()
-        .map(err_is_is_a_directory)
+        .map(|e| err_is_is_a_directory(e, path))
         .unwrap_or(false)
 }
 
@@ -70,7 +70,7 @@ async fn download_file(
     path: FileTransferPath,
 ) -> Result<StreamBody<ReaderStream<BufReader<File>>>, Error> {
     let reader: Result<_, io::Error> = async {
-        let mut buf_reader = BufReader::new(File::open(path.full).await?);
+        let mut buf_reader = BufReader::new(File::open(&path.full).await?);
         // Filling the buffer will ensure the file can actually be read from,
         // which isn't true if it's a directory, but `File::open` alone won't
         // catch that
@@ -82,7 +82,7 @@ async fn download_file(
     match reader {
         Ok(reader) => Ok(StreamBody::new(ReaderStream::new(reader))),
         Err(e) => {
-            if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e) {
+            if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e, &path.full) {
                 Err(Error::FileNotFound(path.request))
             } else {
                 Err(Error::FromIo(e))
@@ -92,18 +92,20 @@ async fn download_file(
 }
 
 // Not a typo, snake_case for: 'err is "is a directory"'
-fn err_is_is_a_directory(e: &io::Error) -> bool {
+fn err_is_is_a_directory(e: &io::Error, path: &Utf8Path) -> bool {
     // At the time of writing, `ErrorKind::IsADirectory` is feature-gated (https://github.com/rust-lang/rust/issues/86442)
     // Hence the string conversion rather than a direct comparison
     // If the error for reading a directory as a file changes, the unit tests should catch this
-    e.kind().to_string() == "is a directory"
+    // On some OS's like MacOS, an ambiguous "permission denied" error is returned
+    // when trying to delete a file which is actually directory.
+    e.kind().to_string() == "is a directory" || path.is_dir()
 }
 
 async fn delete_file(path: FileTransferPath) -> Result<StatusCode, Error> {
     match tokio::fs::remove_file(&path.full).await {
         Ok(()) => Ok(StatusCode::ACCEPTED),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(StatusCode::ACCEPTED),
-        Err(e) if err_is_is_a_directory(&e) => {
+        Err(e) if err_is_is_a_directory(&e, &path.full) => {
             Err(Error::CannotDeleteDirectory { path: path.request })
         }
         Err(err) => Err(Error::Delete {
@@ -229,9 +231,9 @@ mod tests {
 
         let mut dir_path = ttd.path().to_owned();
         dir_path.push("test-dir");
-
         assert!(err_is_is_a_directory(
-            &std::fs::read_to_string(&dir_path).unwrap_err()
+            &std::fs::read_to_string(&dir_path).unwrap_err(),
+            Utf8Path::from_path(dir_path.as_path()).unwrap()
         ))
     }
 
@@ -245,7 +247,8 @@ mod tests {
         unknown_path.push("not-a-real-file");
 
         assert!(!err_is_is_a_directory(
-            &std::fs::read_to_string(&unknown_path).unwrap_err()
+            &std::fs::read_to_string(&unknown_path).unwrap_err(),
+            Utf8Path::from_path(unknown_path.as_path()).unwrap()
         ))
     }
 

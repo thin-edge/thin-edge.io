@@ -1,36 +1,33 @@
 use crate::mpsc;
 use crate::Actor;
 use crate::Builder;
-use crate::ClientId;
+use crate::CloneSender;
 use crate::ConcurrentServerActor;
 use crate::ConcurrentServerMessageBox;
+use crate::DynRequestSender;
 use crate::DynSender;
-use crate::KeyedSender;
 use crate::LoggingReceiver;
-use crate::LoggingSender;
 use crate::Message;
+use crate::MessageSink;
 use crate::NoConfig;
+use crate::RequestEnvelope;
+use crate::RequestSender;
 use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
-use crate::Sender;
-use crate::SenderVec;
 use crate::Server;
 use crate::ServerActor;
 use crate::ServerMessageBox;
 use crate::ServiceProvider;
-use crate::SimpleMessageBox;
 use std::convert::Infallible;
 use std::fmt::Debug;
 
 /// A message box builder for request-response services
 pub struct ServerMessageBoxBuilder<Request: Debug, Response> {
-    service_name: String,
     max_concurrency: usize,
-    request_sender: mpsc::Sender<(ClientId, Request)>,
-    input_receiver: LoggingReceiver<(ClientId, Request)>,
+    request_sender: mpsc::Sender<RequestEnvelope<Request, Response>>,
+    request_receiver: LoggingReceiver<RequestEnvelope<Request, Response>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
-    clients: Vec<DynSender<Response>>,
 }
 
 impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Response> {
@@ -39,16 +36,14 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
         let max_concurrency = 1;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
-        let input_receiver =
+        let request_receiver =
             LoggingReceiver::new(server_name.to_string(), request_receiver, signal_receiver);
 
         ServerMessageBoxBuilder {
-            service_name: server_name.to_string(),
             max_concurrency,
             request_sender,
-            input_receiver,
+            request_receiver,
             signal_sender,
-            clients: vec![],
         }
     }
 
@@ -59,19 +54,19 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
         }
     }
 
+    /// Return a sender for the requests
+    pub fn request_sender(&self) -> DynRequestSender<Request, Response> {
+        self.request_sender.sender_clone()
+    }
+
     /// Build a message box ready to be used by the server actor
     fn build_server(self) -> ServerMessageBox<Request, Response> {
-        let response_sender = SenderVec::new_sender(self.clients);
-        let logging_sender = LoggingSender::new(self.service_name.clone(), response_sender);
-
-        SimpleMessageBox::new(self.input_receiver, logging_sender)
+        self.request_receiver
     }
 
     /// Build a message box aimed to concurrently serve requests
     fn build_concurrent(self) -> ConcurrentServerMessageBox<Request, Response> {
-        let max_concurrency = self.max_concurrency;
-        let clients = self.build_server();
-        ConcurrentServerMessageBox::new(max_concurrency, clients)
+        ConcurrentServerMessageBox::new(self.max_concurrency, self.request_receiver)
     }
 }
 
@@ -84,15 +79,23 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
 impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
     for ServerMessageBoxBuilder<Req, Res>
 {
-    fn connect_consumer(
-        &mut self,
-        _config: NoConfig,
-        response_sender: DynSender<Res>,
-    ) -> DynSender<Req> {
-        let client_id = self.clients.len();
-        let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
-        self.clients.push(response_sender);
-        request_sender
+    fn connect_consumer(&mut self, _config: NoConfig, reply_to: DynSender<Res>) -> DynSender<Req> {
+        Box::new(RequestSender {
+            sender: self.request_sender.sender_clone(),
+            reply_to,
+        })
+    }
+}
+
+impl<Req: Message, Res: Message> MessageSink<RequestEnvelope<Req, Res>, NoConfig>
+    for ServerMessageBoxBuilder<Req, Res>
+{
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn get_sender(&self) -> DynSender<RequestEnvelope<Req, Res>> {
+        self.request_sender().sender_clone()
     }
 }
 
@@ -138,8 +141,7 @@ pub struct ServerActorBuilder<S: Server, K> {
 
 impl<S: Server, K> ServerActorBuilder<S, K> {
     pub fn new(server: S, config: &ServerConfig, kind: K) -> Self {
-        let service_name = server.name().to_string();
-        let box_builder = ServerMessageBoxBuilder::new(&service_name, config.capacity)
+        let box_builder = ServerMessageBoxBuilder::new(server.name(), config.capacity)
             .with_max_concurrency(config.max_concurrency);
 
         ServerActorBuilder {
@@ -147,6 +149,11 @@ impl<S: Server, K> ServerActorBuilder<S, K> {
             server,
             box_builder,
         }
+    }
+
+    /// Return a sender for the requests
+    pub fn request_sender(&self) -> DynRequestSender<S::Request, S::Response> {
+        self.box_builder.request_sender()
     }
 }
 
@@ -201,6 +208,18 @@ impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for Server
         response_sender: DynSender<S::Response>,
     ) -> DynSender<S::Request> {
         self.box_builder.connect_consumer(config, response_sender)
+    }
+}
+
+impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>, NoConfig>
+    for ServerActorBuilder<S, K>
+{
+    fn get_config(&self) -> NoConfig {
+        self.box_builder.get_config()
+    }
+
+    fn get_sender(&self) -> DynSender<RequestEnvelope<S::Request, S::Response>> {
+        self.box_builder.get_sender()
     }
 }
 

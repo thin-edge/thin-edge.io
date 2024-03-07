@@ -44,7 +44,7 @@ pub enum TEdgeMqttCli {
 
 impl BuildCommand for TEdgeMqttCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
-        let config = context.config_repository.load()?;
+        let config = context.load_config()?;
         let auth_config = config.mqtt_client_auth_config();
 
         let cmd = {

@@ -1635,11 +1635,13 @@ pub(crate) mod tests {
     use serde_json::json;
     use serde_json::Value;
     use std::str::FromStr;
+    use tedge_actors::test_helpers::FakeServerBox;
+    use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
+    use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
-    use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::entity_store::EntityType;
@@ -1650,7 +1652,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::SoftwareUpdateCommand;
-    use tedge_config::TEdgeConfigRepository;
+    use tedge_config::TEdgeConfig;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
@@ -2848,7 +2850,7 @@ pub(crate) mod tests {
     async fn handles_empty_service_type_2383() {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
-        let tedge_config = TEdgeConfigRepository::load_toml_str("service.ty = \"\"");
+        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
 
         let (mut converter, _) = create_c8y_converter_from_config(config);
@@ -3149,7 +3151,7 @@ pub(crate) mod tests {
         tmp_dir: &TempTedgeDir,
     ) -> (
         CumulocityConverter,
-        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        FakeServerBox<C8YRestRequest, C8YRestResult>,
     ) {
         let config = c8y_converter_config(tmp_dir);
         create_c8y_converter_from_config(config)
@@ -3163,7 +3165,7 @@ pub(crate) mod tests {
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
         let device_type = "test-device-type".into();
-        let tedge_config = TEdgeConfigRepository::load_toml_str("service.ty = \"service\"");
+        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
         let auth_proxy_addr = "127.0.0.1".into();
@@ -3201,15 +3203,15 @@ pub(crate) mod tests {
         config: C8yMapperConfig,
     ) -> (
         CumulocityConverter,
-        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        FakeServerBox<C8YRestRequest, C8YRestResult>,
     ) {
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MQTT", 5);
         let mqtt_publisher = LoggingSender::new("MQTT".into(), mqtt_builder.build().sender_clone());
 
-        let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
-            SimpleMessageBoxBuilder::new("C8Y", 1);
-        let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
+        let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+            FakeServerBox::builder();
+        let http_proxy = C8YHttpProxy::new(&mut c8y_proxy_builder);
 
         let auth_proxy_addr = config.auth_proxy_addr.clone();
         let auth_proxy_port = config.auth_proxy_port;
