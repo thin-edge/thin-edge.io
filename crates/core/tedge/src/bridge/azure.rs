@@ -1,4 +1,5 @@
 use super::BridgeConfig;
+use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
 
@@ -72,6 +73,8 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 r##"twin/GET/# out 1 az/ $iothub/"##.into(),
                 r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
             ],
+            // TODO support configurability
+            bridge_location: BridgeLocation::Mosquitto,
         }
     }
 }

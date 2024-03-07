@@ -182,7 +182,12 @@ mod tests {
             .ancestors_external_ids(&entity_topic_id)
             .unwrap();
 
-        let msg = convert_health_status_message(entity, &ancestors_external_ids, &health_message, &"c8y".into());
+        let msg = convert_health_status_message(
+            entity,
+            &ancestors_external_ids,
+            &health_message,
+            &"c8y".into(),
+        );
         assert_eq!(msg[0], expected_message);
     }
 }

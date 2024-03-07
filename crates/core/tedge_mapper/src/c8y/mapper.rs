@@ -37,27 +37,36 @@ impl TEdgeComponent for CumulocityMapper {
             start_basic_actors(self.session_name(), &tedge_config).await?;
 
         let mqtt_config = tedge_config.mqtt_config()?;
-        let custom_topics = tedge_config
-            .c8y
-            .smartrest
-            .templates
-            .0
-            .iter()
-            .map(|id| format!("s/dc/{id}"));
-        let smartrest_topics: Vec<String> = [
-            "s/dt",
-            "s/dat",
-            "s/ds",
-            "s/e",
-            "s/dc/#",
-            "devicecontrol/notifications",
-            "error",
-        ]
-        .into_iter()
-        .map(<_>::to_owned)
-        .chain(custom_topics)
-        .collect();
-        let bridge_actor = MqttBridgeActorBuilder::new(&tedge_config, &smartrest_topics).await;
+        let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
+        if tedge_config.c8y.bridge.in_mapper {
+            let custom_topics = tedge_config
+                .c8y
+                .smartrest
+                .templates
+                .0
+                .iter()
+                .map(|id| format!("s/dc/{id}"));
+            let smartrest_topics: Vec<String> = [
+                "s/dt",
+                "s/dat",
+                "s/ds",
+                "s/e",
+                "s/dc/#",
+                "devicecontrol/notifications",
+                "error",
+            ]
+            .into_iter()
+            .map(<_>::to_owned)
+            .chain(custom_topics)
+            .collect();
+            let bridge_actor = MqttBridgeActorBuilder::new(
+                &tedge_config,
+                c8y_mapper_config.bridge_service_name(),
+                &smartrest_topics,
+            )
+            .await;
+            runtime.spawn(bridge_actor).await?;
+        }
         let mut jwt_actor = C8YJwtRetriever::builder(
             mqtt_config.clone(),
             tedge_config.c8y.bridge.topic_prefix.clone(),
@@ -83,7 +92,6 @@ impl TEdgeComponent for CumulocityMapper {
         let mut service_monitor_actor =
             MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
 
-        let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
         let c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
             &mut mqtt_actor,
@@ -111,7 +119,6 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
         runtime.spawn(old_to_new_agent_adapter).await?;
-        runtime.spawn(bridge_actor).await?;
         runtime.run_to_completion().await?;
 
         Ok(())

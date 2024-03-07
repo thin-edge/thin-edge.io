@@ -2,6 +2,7 @@ use crate::bridge::aws::BridgeConfigAwsParams;
 use crate::bridge::azure::BridgeConfigAzureParams;
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
+use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
 use crate::cli::connect::jwt_token::*;
@@ -196,6 +197,10 @@ pub fn bridge_config(
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
+            let bridge_location = match config.c8y.bridge.in_mapper {
+                true => BridgeLocation::Mapper,
+                false => BridgeLocation::Mosquitto,
+            };
             let params = BridgeConfigC8yParams {
                 mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
@@ -205,6 +210,7 @@ pub fn bridge_config(
                 bridge_keyfile: config.device.key_path.clone(),
                 smartrest_templates: config.c8y.smartrest.templates.clone(),
                 include_local_clean_session: config.c8y.bridge.include.local_cleansession.clone(),
+                bridge_location,
             };
 
             Ok(BridgeConfig::from(params))
@@ -434,6 +440,10 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
     device_type: &str,
 ) -> Result<(), ConnectError> {
+    if bridge_config.bridge_location == BridgeLocation::Mapper {
+        clean_up(config_location, bridge_config)?;
+        return Ok(());
+    }
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
 

@@ -453,7 +453,14 @@ define_tedge_config! {
                 local_cleansession: AutoFlag,
             },
 
+            #[tedge_config(default(value = false))]
+            #[doku(skip)]
+            in_mapper: bool,
+
             // TODO validation
+            /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
+            /// if this is set to "c8y", then messages published to `c8y/s/us` will be
+            /// forwarded by to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(value = "c8y"))]
             topic_prefix: TopicPrefix,
         },
@@ -807,6 +814,15 @@ define_tedge_config! {
         enable: bool,
     },
 
+}
+
+impl ReadableKey {
+    pub fn is_printable_value(self, value: &str) -> bool {
+        match self {
+            Self::C8yBridgeInMapper => value != "false",
+            _ => true,
+        }
+    }
 }
 
 // TODO doc comment

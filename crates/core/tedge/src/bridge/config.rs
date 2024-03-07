@@ -20,6 +20,7 @@ pub struct BridgeConfig {
     pub local_clientid: String,
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
+    pub bridge_location: BridgeLocation,
     pub use_mapper: bool,
     pub use_agent: bool,
     pub try_private: bool,
@@ -32,6 +33,12 @@ pub struct BridgeConfig {
     pub notification_topic: String,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum BridgeLocation {
+    Mosquitto,
+    Mapper,
 }
 
 impl BridgeConfig {

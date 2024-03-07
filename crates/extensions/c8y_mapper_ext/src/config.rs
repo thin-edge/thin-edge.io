@@ -53,6 +53,7 @@ pub struct C8yMapperConfig {
     pub enable_auto_register: bool,
     pub clean_start: bool,
     pub c8y_prefix: TopicPrefix,
+    pub bridge_in_mapper: bool,
 }
 
 impl C8yMapperConfig {
@@ -77,6 +78,7 @@ impl C8yMapperConfig {
         enable_auto_register: bool,
         clean_start: bool,
         c8y_prefix: TopicPrefix,
+        bridge_in_mapper: bool,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -105,6 +107,16 @@ impl C8yMapperConfig {
             enable_auto_register,
             clean_start,
             c8y_prefix,
+            bridge_in_mapper,
+        }
+    }
+
+    // TODO don't allocate string
+    pub fn bridge_service_name(&self) -> String {
+        if self.bridge_in_mapper {
+            format!("tedge-mapper-bridge-{}", self.c8y_prefix)
+        } else {
+            "mosquitto-c8y-bridge".into()
         }
     }
 
@@ -185,6 +197,8 @@ impl C8yMapperConfig {
             }
         }
 
+        let bridge_in_mapper = tedge_config.c8y.bridge.in_mapper;
+
         Ok(C8yMapperConfig::new(
             config_dir,
             logs_path,
@@ -205,6 +219,7 @@ impl C8yMapperConfig {
             enable_auto_register,
             clean_start,
             c8y_prefix,
+            bridge_in_mapper,
         ))
     }
 

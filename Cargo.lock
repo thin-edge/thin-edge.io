@@ -3873,6 +3873,7 @@ version = "1.0.1"
 dependencies = [
  "assert-json-diff",
  "async-trait",
+ "c8y_api",
  "certificate",
  "futures",
  "mqtt_channel",

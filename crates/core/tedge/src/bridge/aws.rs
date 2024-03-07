@@ -1,4 +1,5 @@
 use super::BridgeConfig;
+use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
 
@@ -74,6 +75,8 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
                 connection_check_pub_msg_topic,
                 connection_check_sub_msg_topic,
             ],
+            // TODO support configurability
+            bridge_location: BridgeLocation::Mosquitto,
         }
     }
 }

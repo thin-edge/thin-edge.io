@@ -8,7 +8,7 @@ use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
 use c8y_api::utils::bridge::is_c8y_bridge_established;
-use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
+use c8y_api::utils::bridge::main_device_health_topic;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -68,6 +68,7 @@ pub struct C8yMapperActor {
     mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+    c8y_bridge_service_name: String,
 }
 
 #[async_trait]
@@ -79,7 +80,7 @@ impl Actor for C8yMapperActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         // Wait till the c8y bridge is established
         while let Some(message) = self.bridge_status_messages.recv().await {
-            if is_c8y_bridge_established(&message) {
+            if is_c8y_bridge_established(&message, &self.c8y_bridge_service_name) {
                 break;
             }
         }
@@ -124,6 +125,7 @@ impl C8yMapperActor {
         mqtt_publisher: LoggingSender<MqttMessage>,
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+        c8y_bridge_service_name: String,
     ) -> Self {
         Self {
             converter,
@@ -131,6 +133,7 @@ impl C8yMapperActor {
             mqtt_publisher,
             timer_sender,
             bridge_status_messages,
+            c8y_bridge_service_name,
         }
     }
 
@@ -322,8 +325,9 @@ impl C8yMapperBuilder {
 
         let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
+        let bridge_health_topic = main_device_health_topic(&config.bridge_service_name());
         service_monitor.connect_consumer(
-            C8Y_BRIDGE_HEALTH_TOPIC.try_into().unwrap(),
+            bridge_health_topic.as_str().try_into().unwrap(),
             bridge_monitor_builder.get_sender(),
         );
 
@@ -367,6 +371,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             LoggingSender::new("C8yMapper => Uploader".into(), self.upload_sender);
         let downloader_sender =
             LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
+        let c8y_bridge_service_name = self.config.bridge_service_name();
 
         let converter = CumulocityConverter::new(
             self.config,
@@ -387,6 +392,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             mqtt_publisher,
             timer_sender,
             bridge_monitor_box,
+            c8y_bridge_service_name,
         ))
     }
 }

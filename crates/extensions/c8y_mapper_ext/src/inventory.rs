@@ -11,7 +11,6 @@ use std::path::Path;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::Topic;
 use tracing::info;
