@@ -14,7 +14,6 @@ pub enum C8yTopic {
     SmartRestRequest,
     SmartRestResponse,
     ChildSmartRestResponse(String),
-    // OperationTopic(String),
 }
 
 impl C8yTopic {
@@ -51,7 +50,7 @@ impl C8yTopic {
             Self::SmartRestResponse => format!("{prefix}/{SMARTREST_PUBLISH_TOPIC}"),
             Self::ChildSmartRestResponse(child_id) => {
                 format!("{prefix}/{SMARTREST_PUBLISH_TOPIC}/{child_id}")
-            } // Self::OperationTopic(name) => name.into(),
+            }
         }
     }
 

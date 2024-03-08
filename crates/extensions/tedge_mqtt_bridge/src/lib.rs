@@ -23,6 +23,7 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
+use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -40,9 +41,7 @@ pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 use tedge_config::TEdgeConfig;
 
-pub struct MqttBridgeActorBuilder {
-    signal_sender: mpsc::Sender<RuntimeRequest>,
-}
+pub struct MqttBridgeActorBuilder {}
 
 impl MqttBridgeActorBuilder {
     pub async fn new(
@@ -56,7 +55,6 @@ impl MqttBridgeActorBuilder {
             tedge_config.device.cert_path.clone().into(),
         )
         .unwrap();
-        let (signal_sender, _signal_receiver) = mpsc::channel(10);
 
         let prefix = tedge_config.c8y.bridge.topic_prefix.clone();
         let mut local_config = MqttOptions::new(
@@ -67,7 +65,6 @@ impl MqttBridgeActorBuilder {
         let health_topic = main_device_health_topic(&service_name);
         // TODO cope with secured mosquitto
         local_config.set_manual_acks(true);
-        // TODO const for payload
         local_config.set_last_will(LastWill::new(
             &health_topic,
             C8Y_BRIDGE_DOWN_PAYLOAD,
@@ -110,6 +107,7 @@ impl MqttBridgeActorBuilder {
             move |topic| topic.strip_prefix(&topic_prefix).unwrap().into(),
             msgs_local,
             None,
+            "local",
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
@@ -117,9 +115,10 @@ impl MqttBridgeActorBuilder {
             move |topic| format!("{prefix}/{topic}").into(),
             msgs_cloud,
             Some(health_topic),
+            "cloud",
         ));
 
-        Self { signal_sender }
+        Self {}
     }
 
     pub(crate) fn build_actor(self) -> MqttBridgeActor {
@@ -157,23 +156,53 @@ impl<'a, T> BidirectionalChannelHalf<T> {
     }
 }
 
+/// Forward messages received from `recv_event_loop` to `target`
+///
+/// The result of running this function constitutes half the MQTT bridge, hence the name.
+/// Each half has two main responsibilities, one is to take messages received on the event
+/// loop and forward them to the target client, the other is to communicate with the corresponding
+/// half of the bridge to ensure published messages get acknowledged only when they have been
+/// fully processed.
+///
+/// # Message flow
+/// Messages in the bridge go through a few states
+/// 1. Received from the sending broker
+/// 2. Forwarded to the receiving broker
+/// 3. The receiving broker sends an acknowledgement
+/// 4. The original forwarded message is acknowledged now we know it is fully processed
+///
+/// Since the function is processing one [EventLoop], messages can be sent to the receiving broker,
+/// but we cannot receive acknowledgements from that broker, therefore a communication link must
+/// be established between the bridge halves. This link is the argument `corresponding_bridge_half`,
+/// which can both send and receive messages from the other bridge loop.
+///
+/// When a message is forwarded, the [Publish] is forwarded from this loop to the corresponding loop.
+/// This allows the loop to store the message along with its packet ID when the forwarded message is
+/// published. When an acknowledgement is received for the forwarded message, the packet id is used
+/// to retrieve the original [Publish], which is then passed to [AsyncClient::ack] to complete the
+/// final step of the message flow.
+///
+/// The channel sends [Option<Publish>] rather than [Publish] to allow the bridge to send entirely
+/// novel messages, and not just forwarded ones, as attaching packet IDs relies on pairing every
+/// [Outgoing] publish notification with a message sent by the relevant client. This means the
+///
+/// # Health topics
 async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     mut recv_event_loop: EventLoop,
     target: AsyncClient,
     transform_topic: F,
     mut corresponding_bridge_half: BidirectionalChannelHalf<Option<Publish>>,
     health_topic: Option<String>,
+    name: &'static str,
 ) {
     let mut forward_pkid_to_received_msg = HashMap::new();
     let mut last_err = Some("dummy error".into());
 
     loop {
         let notification = match recv_event_loop.poll().await {
-            // TODO notify if this is us recovering from an error
             Ok(notification) => {
                 if last_err.as_ref().is_some() {
-                    // TODO clarify whether this is cloud/local
-                    info!("MQTT bridge connected");
+                    info!("MQTT bridge connected to {name} broker");
                     last_err = None;
                     if let Some(health_topic) = &health_topic {
                         target
@@ -188,8 +217,7 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
             Err(err) => {
                 let err = err.to_string();
                 if last_err.as_ref() != Some(&err) {
-                    // TODO clarify whether this is cloud/local
-                    error!("MQTT bridge connection error: {err}");
+                    error!("MQTT bridge failed to connect to {name} broker: {err}");
                     last_err = Some(err);
                     if let Some(health_topic) = &health_topic {
                         target
@@ -219,22 +247,24 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                     )
                     .await
                     .unwrap();
-                corresponding_bridge_half.send(Some(publish)).await.unwrap();
+                let publish = (publish.qos > QoS::AtMostOnce).then_some(publish);
+                corresponding_bridge_half.send(publish).await.unwrap();
             }
             // Forwarding acks from event loop to target
             Event::Incoming(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
-                if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid).unwrap() {
+                if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
                     target.ack(&msg).await.unwrap();
                 }
             }
             Event::Outgoing(Outgoing::Publish(pkid)) => {
                 match corresponding_bridge_half.recv().await {
-                    Some(optional_msg) => {
-                        forward_pkid_to_received_msg.insert(pkid, optional_msg);
+                    Some(Some(msg)) => {
+                        forward_pkid_to_received_msg.insert(pkid, msg);
                     }
+                    Some(None) => {}
                     None => break,
                 }
             }
@@ -257,7 +287,7 @@ impl Builder<MqttBridgeActor> for MqttBridgeActorBuilder {
 
 impl RuntimeRequestSink for MqttBridgeActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        Box::new(self.signal_sender.clone())
+        NullSender.into()
     }
 }
 
