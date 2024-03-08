@@ -3,10 +3,11 @@ use crate::restart_manager::config::RestartManagerConfig;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::RestartCommand;
 
@@ -26,13 +27,19 @@ impl RestartManagerBuilder {
     }
 }
 
-impl ServiceProvider<RestartCommand, RestartCommand, NoConfig> for RestartManagerBuilder {
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<RestartCommand>,
-    ) -> DynSender<RestartCommand> {
-        self.message_box.connect_consumer(config, response_sender)
+impl MessageSink<RestartCommand, NoConfig> for RestartManagerBuilder {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn get_sender(&self) -> DynSender<RestartCommand> {
+        self.message_box.get_sender()
+    }
+}
+
+impl MessageSource<RestartCommand, NoConfig> for RestartManagerBuilder {
+    fn register_peer(&mut self, config: NoConfig, sender: DynSender<RestartCommand>) {
+        self.message_box.register_peer(config, sender)
     }
 }
 

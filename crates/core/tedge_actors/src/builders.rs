@@ -22,12 +22,6 @@
 //! - [MessageSource]
 //!   declares that the actor under construction is a source of output messages,
 //!   and tells how to connect a [MessageSink] to which the messages will be directed.
-//! - [ServiceProvider]
-//!   declares that the actor under construction is a service provider,
-//!   that produces output messages as a reaction to input messages.
-//! - [ServiceConsumer]:
-//!   declares that the actor under construction depends on a service provider,
-//!   and tells how to connect such a [ServiceProvider] to interact with.
 //! - [RuntimeRequestSink]:
 //!   defines how the runtime can connect the actor under construction.
 //!
@@ -36,21 +30,11 @@
 //! - An actor builder has to implement at least the [Builder] and [RuntimeRequestSink] traits,
 //!   so the runtime can connect itself to the actor and run it,
 //!   using its [spawn](crate::Runtime::spawn) method.
-//! - An actor builder that *depends* on some service provided by a [ServiceProvider],
-//!   *must* implement the [ServiceConsumer] trait for the input, output and config types
-//!   defined by the provider.
-//! - Similarly, if an actor needs to connect a [MessageSource],
+//! - In order to define its input and output, an actor builder implements the [MessageSource] and [MessageSink] traits.
+//! - If an actor needs to connect a [MessageSource],
 //!   its builder must implement the [MessageSink] trait with the appropriate message and config types.
 //! - Vice versa, if an actor needs to send messages to some [MessageSink],
 //!   its builder must implement the [MessageSource] trait with the appropriate message and config types.
-//! - In order to define its input and output, an actor builder implements *either* the [ServiceProvider] trait
-//!   or the [MessageSource] and [MessageSink] traits.
-//! - An actor builder implements the [MessageSource] and [MessageSink] traits
-//!   when it makes sense for a peer to *only* send messages to or to *only* receive messages
-//!   from the actor under construction.
-//! - An actor builder implements the [ServiceProvider] trait
-//!   when there is a strong request-response relationship between the messages sent and received,
-//!   the responses being meaningful only for the actor sending the triggering requests.
 //!
 //! An actor builder can use a [SimpleMessageBoxBuilder] to ease all these implementations.
 //!
@@ -70,7 +54,7 @@
 //!   under construction needs to send messages to. This is the mirror of the previous responsibility:
 //!   each builder gives to the others clones of its senders and collects senders from others.
 //! - This is why all the actor building traits
-//!   ([MessageSource], [MessageSink], [ServiceProvider], [ServiceConsumer] and [RuntimeRequestSink])
+//!   ([MessageSource], [MessageSink] and [RuntimeRequestSink])
 //!   are related to exchanges of Sender. A sink gives to a source a sender attached to its receiver.
 //! - To be precise, the actor builders exchange [DynSender] and not [Sender]. The difference is that
 //!   a [DynSender] can transform the messages sent by the source to adapt them to the sink expectations,
@@ -213,82 +197,6 @@ pub trait RuntimeRequestSink {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest>;
 }
 
-/// A trait that defines that an actor provides a service
-/// by accepting `Request` messages and sending `Response` from/to its peers.
-///
-/// In order to connect to a to `ServiceProvider<Req, Res, Conf>` and avail its services,
-/// the peer must be a `ServiceConsumer<Req, Res, Conf>`.
-///
-/// The config parameter is typically used by the `ServiceConsumer`
-/// to register any message filtering criteria to the `ServiceProvider`.
-pub trait ServiceProvider<Request: Message, Response: Message, Config> {
-    /// Connect a peer message box to the message box under construction
-    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Request, Response, Config>) {
-        let config = peer.get_config();
-        let response_sender = peer.get_response_sender();
-        let request_sender = self.connect_consumer(config, response_sender);
-        peer.set_request_sender(request_sender);
-    }
-
-    /// Connect a consumer to the service provider under construction
-    /// returning to that service consumer a sender for its requests.
-    ///
-    /// The consumer provides:
-    /// - a config to filter the responses of interest,
-    /// - a sender where the responses will have to be sent by the service.
-    ///
-    /// The consumer is given back:
-    /// - a sender where its requests will have to be sent to the service.
-    fn connect_consumer(
-        &mut self,
-        config: Config,
-        response_sender: DynSender<Response>,
-    ) -> DynSender<Request>;
-}
-
-/// A trait that defines that the actor under-construction
-/// is a consumer of the service provided by another actor that is a `ServiceProvider`.
-///
-/// A `ServiceConsumer<Req, Res, Conf>` actor can be connected to another actor as its peer
-/// if that actor is a `ServiceProvider<Req, Res, Conf>`.
-pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
-    /// Return the config used by this actor to connect the service provider
-    fn get_config(&self) -> Config;
-
-    /// Set the sender to be used by this actor's box to send requests
-    fn set_request_sender(&mut self, request_sender: DynSender<Request>);
-
-    /// Return a sender where the responses to this actor's box have to be sent
-    fn get_response_sender(&self) -> DynSender<Response>;
-
-    /// Connect this client message box to the service message box
-    fn set_connection(
-        &mut self,
-        service: &mut impl ServiceProvider<Request, Response, Config>,
-    ) -> &mut Self
-    where
-        Self: Sized,
-    {
-        service.add_peer(self);
-        self
-    }
-
-    /// Connect this client message box to the service message box
-    ///
-    /// Return the updated client message box.
-    #[must_use]
-    fn with_connection(
-        mut self,
-        service: &mut impl ServiceProvider<Request, Response, Config>,
-    ) -> Self
-    where
-        Self: Sized,
-    {
-        service.add_peer(&mut self);
-        self
-    }
-}
-
 /// A [Builder] of [SimpleMessageBox]
 ///
 /// This builder can be used as a building block for actor builders
@@ -353,42 +261,13 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 /// }
 /// ```
 ///
-/// Similarly, as a `SimpleMessageBoxBuilder` is a [ServiceProvider], this can be used
-/// to implement the [ServiceProvider] trait for an actor using a [SimpleMessageBox] for its main input.
-///
-/// ```
-/// # use tedge_actors::{DynSender, NoConfig, ServiceConsumer, ServiceProvider, SimpleMessageBoxBuilder};
-/// # type MyActorConfig = i64;
-/// # type MyActorInput = i64;
-/// # type MyActorOutput = i64;
-/// struct MyActorBuilder {
-///    config: MyActorConfig,
-///    messages: SimpleMessageBoxBuilder<MyActorInput, MyActorOutput>,
-/// }
-///
-/// impl ServiceProvider<MyActorInput, MyActorOutput, NoConfig> for MyActorBuilder {
-///     fn connect_consumer(
-///        &mut self,
-///        config: NoConfig,
-///        response_sender: DynSender<MyActorOutput>)
-///     -> DynSender<MyActorInput> {
-///         self.messages.connect_consumer(config, response_sender)
-///     }
-/// }
-/// ```
-///
 /// A notable use of [SimpleMessageBox] is for testing.
-/// As a `SimpleMessageBoxBuilder` is a [ServiceConsumer]
-/// one can use such a builder to connect and test an actor that is a [ServiceProvider].
-///
-/// Similarly:
-/// - A `SimpleMessageBoxBuilder` is a [ServiceProvider] and can be used to test an actor that is a [ServiceConsumer].
 /// - A `SimpleMessageBoxBuilder` is a [MessageSource] and can be used to test an actor that is a [MessageSink].
 /// - A `SimpleMessageBoxBuilder` is a [MessageSink] and can be used to test an actor that is a [MessageSource].
 ///
 /// ```
 /// # use std::convert::Infallible;
-/// # use tedge_actors::{Actor, Builder, DynSender, MessageReceiver, NoConfig, RuntimeError, Sender, ServiceConsumer, ServiceProvider, SimpleMessageBox, SimpleMessageBoxBuilder};
+/// # use tedge_actors::{Actor, Builder, DynSender, MessageReceiver, MessageSource, MessageSink, NoConfig, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder};
 /// # struct MyActorState (i64);
 /// # type MyActorConfig = i64;
 /// # type MyActorInput = i64;
@@ -412,9 +291,17 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 /// #         MyActorBuilder { config, messages }
 /// #     }
 /// # }
-/// # impl ServiceProvider<MyActorInput, MyActorOutput, NoConfig> for MyActorBuilder {
-/// #    fn connect_consumer(&mut self, config: NoConfig, response_sender: DynSender<MyActorOutput>) -> DynSender<MyActorInput> {
-/// #        self.messages.connect_consumer(config, response_sender)
+/// # impl MessageSource<MyActorOutput, NoConfig> for MyActorBuilder {
+/// #    fn register_peer(&mut self, config: NoConfig, sender: DynSender<MyActorOutput>) {
+/// #        self.messages.register_peer(config, sender)
+/// #    }
+/// # }
+/// # impl MessageSink<MyActorInput, NoConfig> for MyActorBuilder {
+/// #    fn get_config(&self) -> NoConfig {
+/// #        NoConfig
+/// #    }
+/// #    fn get_sender(&self) -> DynSender<MyActorInput> {
+/// #        self.messages.get_sender()
 /// #    }
 /// # }
 /// # impl Builder<MyActor> for MyActorBuilder {
@@ -448,7 +335,8 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 /// // Connect a test box to an actor under test
 /// let mut my_actor_builder = MyActorBuilder::new(MyActorConfig::default());
 /// let mut test_box_builder = SimpleMessageBoxBuilder::new("Test box", 16);
-/// my_actor_builder.add_peer(&mut test_box_builder);
+/// my_actor_builder.register_peer(NoConfig, test_box_builder.get_sender());
+/// test_box_builder.register_peer(NoConfig, my_actor_builder.get_sender());
 ///
 /// // Build the test box and run the actor
 /// let mut test_box = test_box_builder.build();
@@ -489,38 +377,28 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
             input_receiver,
         }
     }
-}
 
-/// A `SimpleMessageBoxBuilder<Request,Response>` is a [ServiceProvider]
-/// accepting `Request` and sending back `Response`, with no specific config.
-impl<Req: Message, Res: Message, Config> ServiceProvider<Req, Res, Config>
-    for SimpleMessageBoxBuilder<Req, Res>
-{
-    fn connect_consumer(
+    /// Connect this client message box to the service message box
+    pub fn set_connection<Config>(
         &mut self,
-        _config: Config,
-        response_sender: DynSender<Res>,
-    ) -> DynSender<Req> {
-        self.output_sender = response_sender;
-        self.input_sender.sender_clone()
-    }
-}
-
-/// A `SimpleMessageBoxBuilder<Request,Response>` is a [ServiceConsumer]
-/// sending `Request` and expecting back `Response`, with no specific config.
-impl<Req: Message, Res: Message> ServiceConsumer<Req, Res, NoConfig>
-    for SimpleMessageBoxBuilder<Res, Req>
-{
-    fn get_config(&self) -> NoConfig {
-        NoConfig
+        config: Config,
+        service: &mut (impl MessageSink<O, NoConfig> + MessageSource<I, Config>),
+    ) {
+        service.register_peer(config, self.input_sender.sender_clone());
+        self.register_peer(NoConfig, service.get_sender());
     }
 
-    fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
-        self.output_sender = request_sender;
-    }
-
-    fn get_response_sender(&self) -> DynSender<Res> {
-        self.input_sender.sender_clone()
+    /// Connect this client message box to the service message box
+    ///
+    /// Return the updated client message box.
+    #[must_use]
+    pub fn with_connection<Config>(
+        mut self,
+        config: Config,
+        service: &mut (impl MessageSink<O, NoConfig> + MessageSource<I, Config>),
+    ) -> Self {
+        self.set_connection(config, service);
+        self
     }
 }
 

@@ -4,10 +4,11 @@ use crate::software_manager::config::SoftwareManagerConfig;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 
 pub struct SoftwareManagerBuilder {
@@ -26,13 +27,19 @@ impl SoftwareManagerBuilder {
     }
 }
 
-impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig> for SoftwareManagerBuilder {
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<SoftwareCommand>,
-    ) -> DynSender<SoftwareCommand> {
-        self.message_box.connect_consumer(config, response_sender)
+impl MessageSink<SoftwareCommand, NoConfig> for SoftwareManagerBuilder {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn get_sender(&self) -> DynSender<SoftwareCommand> {
+        self.message_box.get_sender()
+    }
+}
+
+impl MessageSource<SoftwareCommand, NoConfig> for SoftwareManagerBuilder {
+    fn register_peer(&mut self, config: NoConfig, sender: DynSender<SoftwareCommand>) {
+        self.message_box.register_peer(config, sender)
     }
 }
 

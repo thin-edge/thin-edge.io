@@ -161,12 +161,6 @@
 //! - The [MessageReceiverExt](crate::test_helpers::MessageReceiverExt) extension
 //!   extends a message with assertion methods checking that expected messages are actually received
 //!   .i.e sent by the actor under test.
-//! - The [ServiceProviderExt](crate::test_helpers::ServiceProviderExt) extension
-//!   extends the message box builders of any actor that [provide a service](crate::ServiceProvider)
-//! - The [ServiceConsumerExt](crate::test_helpers::ServiceConsumerExt) extension
-//!   extends the message box builders of any actor that [consume a service](crate::ServiceConsumer)
-//! - A [Probe](crate::test_helpers::Probe) can be interleaved between two actors
-//!   to observe their interactions.
 //!
 //! ## Connecting actors
 //!
@@ -177,11 +171,9 @@
 //! These builders implement connector traits
 //! that define the services provided and consumed by the actors under construction.
 //!
-//! The connection builder traits work by pairs:
-//! - A [MessageSink](crate::MessageSink) connects to a [MessageSource](crate::MessageSource),
-//!   so the messages sent by the latter will be received by the former.
-//! - A [ServiceConsumer](crate::ServiceConsumer) connects a [ServiceProvider](crate::ServiceProvider),
-//!   to use the service, sending requests to and receiving responses from the service.
+//! The connection builder traits work by pairs.
+//! A [MessageSink](crate::MessageSink) connects to a [MessageSource](crate::MessageSource),
+//! so the messages sent by the latter will be received by the former.
 //!
 //! These traits define the types of the messages sent and received.
 //! - A sink that excepts message of type `M` can only be connected to a source of messages
@@ -204,44 +196,37 @@
 //! Note that these traits are implemented by the actor builders, not by the actors themselves.
 //!
 //! ```no_run
-//! # use tedge_actors::{DynSender, NoConfig, ServiceConsumer, ServiceProvider};
+//! # use tedge_actors::{DynSender, MessageSink, MessageSource, NoConfig};
 //! # #[derive(Default)]
 //! # struct SomeActorBuilder;
 //! # #[derive(Default)]
 //! # struct SomeOtherActorBuilder;
 //! # #[derive(Debug)]
-//! # struct SomeInput;
+//! # struct SomeMessage;
 //! # #[derive(Debug)]
 //! # struct SomeOutput;
 //! # struct SomeConfig;
-//! /// An actor builder declares that it provides a service
-//! /// by implementing the `ServiceProvider` trait for the appropriate input, output and config types.
-//! impl ServiceProvider<SomeInput,SomeOutput,SomeConfig> for SomeActorBuilder {
-//!     /// Exchange two message senders with the new peer, so each can send messages to the other
+//! /// An actor builder declares that it produces messages
+//! /// by implementing the `MessageSource` trait for the appropriate output and config types.
+//! impl MessageSource<SomeMessage, SomeConfig> for SomeActorBuilder {
+//!     /// Get a message sender from the new peer, to send messages to.
 //!     ///
-//!     /// The service registers the new consumer and its sender (i.e. where to send response),
-//!     /// possibly using the configuration `config` to adapt the service,
-//!     /// and returns to the consumer a sender where the requests will have to be sent.
-//!     fn connect_consumer(&mut self, config: SomeConfig, response_sender: DynSender<SomeOutput>)
-//!         -> DynSender<SomeInput> {
-//!          todo!()
-//!      }
+//!     /// The source registers the new consumer and its sender (i.e. where to send response),
+//!     /// possibly using the configuration `config` to filter messages.
+//!     fn register_peer(&mut self, config: SomeConfig, sender: DynSender<SomeMessage>) {
+//!         todo!()
+//!     }
 //! }
 //!
-//! /// An actor builder also declares that it is a consumer of other services required by it. This is done
-//! /// by implementing the `ServiceConsumer` trait for the appropriate input, output and config types.
-//! impl ServiceConsumer<SomeInput,SomeOutput,SomeConfig> for SomeOtherActorBuilder {
+//! /// An actor builder also declares that it consumes messages
+//! /// by implementing the `MessageSink` trait for the appropriate input and config types.
+//! impl MessageSink<SomeMessage, SomeConfig> for SomeOtherActorBuilder {
 //!     fn get_config(&self) -> SomeConfig {
 //!        todo!()
 //!     }
 //!
-//!     /// Update this actor with the sender where the service expects input messages to be sent
-//!     fn set_request_sender(&mut self, request_sender: DynSender<SomeInput>) {
-//!         todo!()
-//!     }
-//!
-//!     /// Tell the service where to send its output messages to this actor
-//!     fn get_response_sender(&self) -> DynSender<SomeOutput> {
+//!     /// Return a sender where to send the input messages.
+//!     fn get_sender(&self) -> DynSender<SomeMessage> {
 //!         todo!()
 //!     }
 //! }
@@ -250,7 +235,7 @@
 //! // can then be connected to each other.
 //! let mut producer = SomeActorBuilder::default();
 //! let mut consumer = SomeOtherActorBuilder::default();
-//! consumer.set_connection(&mut producer);
+//! producer.register_peer(SomeConfig, consumer.get_sender());
 //! ```
 //!
 //! ## Running actors
@@ -270,7 +255,7 @@
 //! an [Actor] implementation. One needs an [actor builder](crate::builders) that implements:
 //! - `Builder<A>` to let the runtime create the actor instance,
 //! - `RuntimeRequestSink` so the [Runtime] can be connected to the runtime,
-//! - possibly [MessageSink], [MessageSource], [ServiceProvider] or [ServiceConsumer],
+//! - possibly [MessageSink] or [MessageSource],
 //!   to be connected to other actors, accordingly to the actor dependencies and services.
 //!
 //! ```no_run
@@ -286,7 +271,7 @@
 //!         todo!()
 //!     }
 //!
-//!     async fn run(mut self) -> Result<(), RuntimeError> {
+//!     async fn run(self) -> Result<(), RuntimeError> {
 //!         todo!()
 //!     }
 //! }

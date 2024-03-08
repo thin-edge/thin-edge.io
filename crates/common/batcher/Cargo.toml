@@ -15,6 +15,7 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]
+tedge_actors = { workspace = true, features = ["test-helpers"] }
 tokio = { workspace = true, features = ["rt", "macros"] }
 
 [lints]

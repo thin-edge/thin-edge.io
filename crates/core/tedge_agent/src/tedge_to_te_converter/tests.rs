@@ -6,8 +6,10 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ConvertingActor;
 use tedge_actors::DynError;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::Sender;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;
@@ -329,10 +331,10 @@ async fn spawn_tedge_to_te_converter(
     let mut tedge_converter_actor =
         ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter, subscriptions);
 
-    let mqtt_box = SimpleMessageBoxBuilder::new("MQTT", 5)
-        .with_connection(&mut tedge_converter_actor)
-        .build()
-        .with_timeout(Duration::from_millis(100));
+    let mut mqtt_box = SimpleMessageBoxBuilder::new("MQTT", 5);
+    mqtt_box.register_peer(NoConfig, tedge_converter_actor.get_input_sender());
+    tedge_converter_actor.register_peer(NoConfig, mqtt_box.get_sender());
+    let mqtt_box = mqtt_box.build().with_timeout(Duration::from_millis(100));
 
     tokio::spawn(async move { tedge_converter_actor.build().run().await });
 

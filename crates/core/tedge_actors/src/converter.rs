@@ -14,7 +14,6 @@
 //! # use crate::tedge_actors::ConvertingActor;
 //! # use crate::tedge_actors::RuntimeError;
 //! # use crate::tedge_actors::SimpleMessageBoxBuilder;
-//! # use crate::tedge_actors::ServiceConsumer;
 //! struct Repeater;
 //!
 //! impl Converter for Repeater {
@@ -39,7 +38,7 @@
 //! # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig, Sender};
 //! # use tedge_actors::test_helpers::MessageReceiverExt;
 //! let mut actor = ConvertingActor::builder("Repeater", Repeater, NoConfig);
-//! let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(&mut actor).build().with_timeout(Duration::from_millis(100));
+//! let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(NoConfig, &mut actor).build().with_timeout(Duration::from_millis(100));
 //! tokio::spawn(async move { actor.build().run().await });
 //!
 //! test_box.send((3, 42)).await?;
@@ -67,7 +66,6 @@ use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
 use crate::Sender;
-use crate::ServiceProvider;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
@@ -191,7 +189,6 @@ impl<C: Converter> ConvertingActor<C> {
 /// # use tedge_actors::MessageSink;
 /// # use tedge_actors::MessageSource;
 /// # use tedge_actors::NoConfig;
-/// # use tedge_actors::ServiceProvider;
 /// # #[derive(Debug)]
 /// # struct MqttMessage;
 /// # #[derive(Clone)]
@@ -245,6 +242,10 @@ impl<C: Converter, Config> ConvertingActorBuilder<C, Config> {
             message_box: SimpleMessageBoxBuilder::new(name, 16), // FIXME: capacity should not be hardcoded
         }
     }
+
+    pub fn get_input_sender(&self) -> DynSender<C::Input> {
+        self.message_box.get_sender()
+    }
 }
 
 impl<C: Converter, Config> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C, Config> {
@@ -282,18 +283,6 @@ where
 
     fn get_sender(&self) -> DynSender<C::Input> {
         self.message_box.get_sender()
-    }
-}
-
-impl<C: Converter, Config> ServiceProvider<C::Input, C::Output, NoConfig>
-    for ConvertingActorBuilder<C, Config>
-{
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<C::Output>,
-    ) -> DynSender<C::Input> {
-        self.message_box.connect_consumer(config, response_sender)
     }
 }
 

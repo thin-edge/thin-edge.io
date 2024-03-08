@@ -22,7 +22,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
-use tedge_actors::ServiceProvider;
 use tedge_actors::WrappedInput;
 
 pub type MqttConfig = mqtt_channel::Config;
@@ -71,18 +70,6 @@ impl MqttActorBuilder {
 impl AsMut<MqttConfig> for MqttActorBuilder {
     fn as_mut(&mut self) -> &mut MqttConfig {
         &mut self.mqtt_config
-    }
-}
-
-impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
-    fn connect_consumer(
-        &mut self,
-        subscriptions: TopicFilter,
-        response_sender: DynSender<MqttMessage>,
-    ) -> DynSender<MqttMessage> {
-        let sender = LoggingSender::new("MQTT".into(), response_sender);
-        self.subscriber_addresses.push((subscriptions, sender));
-        self.publish_sender.clone().into()
     }
 }
 

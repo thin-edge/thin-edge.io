@@ -8,10 +8,10 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceConsumer;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
@@ -37,7 +37,9 @@ impl HealthMonitorBuilder {
     /// a new topic scheme.
     pub fn from_service_topic_id(
         service: Service,
-        mqtt: &mut (impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> + AsMut<MqttConfig>),
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter>
+                  + MessageSink<MqttMessage, NoConfig>
+                  + AsMut<MqttConfig>),
         // TODO: pass it less annoying way
         mqtt_schema: &MqttSchema,
         service_config: &TEdgeConfigReaderService,
@@ -71,8 +73,8 @@ impl HealthMonitorBuilder {
         .into_iter()
         .collect();
 
-        box_builder
-            .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));
+        mqtt.register_peer(subscriptions, box_builder.get_sender());
+        box_builder.register_peer(NoConfig, mqtt.get_sender());
 
         if service_type.is_empty() {
             service_type = "service"

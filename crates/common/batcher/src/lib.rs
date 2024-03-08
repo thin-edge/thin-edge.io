@@ -24,7 +24,6 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 
 pub struct BatchingActorBuilder<B: Batchable> {
@@ -65,21 +64,6 @@ impl<B: Batchable> BatchingActorBuilder<B> {
             message_leap_limit,
             ..self
         }
-    }
-}
-
-// FIXME: This implementation highlights something new to me.
-//        For some actor it makes little sense to impl ServiceProvider,
-//        as the consumer of the outputs is likely a *different* actor as the producer of the inputs
-impl<B: Batchable> ServiceProvider<BatchDriverInput<B>, BatchDriverOutput<B>, NoConfig>
-    for BatchingActorBuilder<B>
-{
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<BatchDriverOutput<B>>,
-    ) -> DynSender<BatchDriverInput<B>> {
-        self.message_box.connect_consumer(config, response_sender)
     }
 }
 

@@ -43,7 +43,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, Sender, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, Sender, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder, Service, MessageSink};
 //! # use crate::tedge_actors::examples::calculator_server::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {
@@ -60,12 +60,12 @@
 //! // Connecting the two boxes, so the box built by the `player_box_builder`:
 //! // - receives as input, the output messages sent from the server message box
 //! // - sends output messages to the server message box as its input.
-//! player_1_box_builder.set_connection(&mut server_box_builder);
+//! server_box_builder.add_client(&mut player_1_box_builder);
 //!
 //! // It matters that the builder of the server box is a `ServerMessageBoxBuilder`:
 //! // as this builder accepts multiple client actors to connect to the same server.
 //! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
-//! player_2_box_builder.set_connection(&mut server_box_builder);
+//! server_box_builder.add_client(&mut player_2_box_builder);
 //!
 //! // One can then build the message boxes
 //! let server_box: ServerMessageBox<Operation,Update> = server_box_builder.build();

@@ -11,11 +11,12 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
@@ -45,9 +46,12 @@ impl TedgeOperationConverterBuilder {
     pub fn new(
         config: OperationConfig,
         mut workflows: WorkflowSupervisor,
-        software_actor: &mut impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig>,
-        restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
-        mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        software_actor: &mut (impl MessageSink<SoftwareCommand, NoConfig>
+                  + MessageSource<SoftwareCommand, NoConfig>),
+        restart_actor: &mut (impl MessageSink<RestartCommand, NoConfig>
+                  + MessageSource<RestartCommand, NoConfig>),
+        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter>
+                  + MessageSink<MqttMessage, NoConfig>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
@@ -59,15 +63,17 @@ impl TedgeOperationConverterBuilder {
             signal_receiver,
         );
 
-        let software_sender =
-            software_actor.connect_consumer(NoConfig, input_sender.clone().into());
+        let software_sender = software_actor.get_sender();
+        software_actor.register_peer(NoConfig, input_sender.clone().into());
         let software_sender = LoggingSender::new("SoftwareSender".into(), software_sender);
 
-        let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
+        let restart_sender = restart_actor.get_sender();
+        restart_actor.register_peer(NoConfig, input_sender.clone().into());
         let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
         let command_sender = input_sender.clone().into();
 
-        let mqtt_publisher = mqtt_actor.connect_consumer(
+        let mqtt_publisher = mqtt_actor.get_sender();
+        mqtt_actor.register_peer(
             Self::subscriptions(&config.mqtt_schema, &config.device_topic_id),
             input_sender.into(),
         );

@@ -6,7 +6,9 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
-use tedge_actors::ServiceProvider;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -128,12 +130,18 @@ impl<'a> AsMut<MqttConfig> for MqttActorBuilder<'a> {
     }
 }
 
-impl<'a> ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder<'a> {
-    fn connect_consumer(
-        &mut self,
-        config: TopicFilter,
-        response_sender: DynSender<MqttMessage>,
-    ) -> DynSender<MqttMessage> {
-        self.message_box.connect_consumer(config, response_sender)
+impl<'a> MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder<'a> {
+    fn register_peer(&mut self, config: TopicFilter, sender: DynSender<MqttMessage>) {
+        self.message_box.register_peer(config, sender)
+    }
+}
+
+impl<'a> MessageSink<MqttMessage, NoConfig> for MqttActorBuilder<'a> {
+    fn get_config(&self) -> NoConfig {
+        self.message_box.get_config()
+    }
+
+    fn get_sender(&self) -> DynSender<MqttMessage> {
+        self.message_box.get_sender()
     }
 }

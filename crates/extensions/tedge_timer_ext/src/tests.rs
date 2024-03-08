@@ -7,13 +7,14 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::Message;
 use tedge_actors::MessageReceiver;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
-use tedge_actors::ServiceConsumer;
-use tedge_actors::ServiceProvider;
+use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tokio::task::JoinHandle;
 
@@ -145,13 +146,13 @@ async fn should_process_all_pending_timers_on_end_of_inputs() {
 }
 
 async fn spawn_timer_actor<T: Message>(
-    peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
+    peer: &mut (impl MessageSource<SetTimeout<T>, NoConfig> + MessageSink<Timeout<T>, NoConfig>),
 ) -> (
     JoinHandle<Result<(), RuntimeError>>,
     DynSender<RuntimeRequest>,
 ) {
     let mut actor = TimerActor::builder();
-    actor.add_peer(peer);
+    peer.register_peer(NoConfig, actor.add_requester(peer.get_sender()));
     let signal_sender = actor.get_signal_sender();
 
     let handle = tokio::spawn(actor.build().run());

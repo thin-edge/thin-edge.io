@@ -14,11 +14,12 @@ use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
+use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -45,7 +46,7 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerBuilder {
     pub async fn try_new(
         config: ConfigManagerConfig,
-        mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>),
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,
@@ -62,8 +63,8 @@ impl ConfigManagerBuilder {
             signal_receiver,
         );
 
-        let mqtt_publisher =
-            mqtt.connect_consumer(Self::subscriptions(&config), events_sender.clone().into());
+        mqtt.register_peer(Self::subscriptions(&config), events_sender.clone().into());
+        let mqtt_publisher = mqtt.get_sender();
 
         let download_sender = downloader_actor.add_requester(events_sender.clone().into());
 

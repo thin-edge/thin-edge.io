@@ -18,7 +18,6 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
@@ -77,9 +76,6 @@ pub enum C8yHttpConfigBuildError {
 }
 
 /// A proxy to C8Y REST API
-///
-/// This is an actor builder.
-/// - `impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>`
 pub struct C8YHttpProxyBuilder {
     /// Config
     config: C8YHttpConfig,
@@ -127,16 +123,6 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
         };
 
         C8YHttpProxyActor::new(self.config, message_box)
-    }
-}
-
-impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<C8YRestResult>,
-    ) -> DynSender<C8YRestRequest> {
-        self.clients.connect_consumer(config, response_sender)
     }
 }
 

@@ -11,14 +11,12 @@ use crate::Message;
 use crate::MessageSink;
 use crate::NoConfig;
 use crate::RequestEnvelope;
-use crate::RequestSender;
 use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
 use crate::Server;
 use crate::ServerActor;
 use crate::ServerMessageBox;
-use crate::ServiceProvider;
 use std::convert::Infallible;
 use std::fmt::Debug;
 
@@ -73,17 +71,6 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
 impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<Req, Res> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.signal_sender.sender_clone()
-    }
-}
-
-impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
-    for ServerMessageBoxBuilder<Req, Res>
-{
-    fn connect_consumer(&mut self, _config: NoConfig, reply_to: DynSender<Res>) -> DynSender<Req> {
-        Box::new(RequestSender {
-            sender: self.request_sender.sender_clone(),
-            reply_to,
-        })
     }
 }
 

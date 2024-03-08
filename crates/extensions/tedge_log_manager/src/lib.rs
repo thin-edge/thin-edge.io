@@ -16,11 +16,11 @@ use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
@@ -43,7 +43,7 @@ pub struct LogManagerBuilder {
 impl LogManagerBuilder {
     pub async fn try_new(
         config: LogManagerConfig,
-        mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>),
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {
@@ -51,7 +51,8 @@ impl LogManagerBuilder {
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
-        let mqtt_publisher = mqtt.connect_consumer(
+        let mqtt_publisher = mqtt.get_sender();
+        mqtt.register_peer(
             Self::subscriptions(&config),
             box_builder.get_sender().sender_clone(),
         );

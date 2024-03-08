@@ -25,13 +25,13 @@ use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
@@ -291,14 +291,16 @@ impl FileCacheActorBuilder {
         tedge_http_host: Arc<str>,
         data_dir: DataDir,
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
-        mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter>
+                  + MessageSink<MqttMessage, NoConfig>),
     ) -> Self {
         let message_box = SimpleMessageBoxBuilder::new("RestartManager", 10);
 
         let download_sender =
             downloader_actor.add_requester(message_box.get_sender().sender_clone());
 
-        let mqtt_sender = mqtt_actor.connect_consumer(
+        let mqtt_sender = mqtt_actor.get_sender();
+        mqtt_actor.register_peer(
             Self::subscriptions(&mqtt_schema),
             message_box.get_sender().sender_clone(),
         );
