@@ -12,10 +12,8 @@ repository = { workspace = true }
 [features]
 # No features on by default
 default = []
-test-helpers = ["dep:assert-json-diff"]
 
 [dependencies]
-assert-json-diff = { workspace = true, optional = true }
 async-trait = { workspace = true }
 c8y_api = { workspace = true }
 certificate = { workspace = true }
@@ -28,9 +26,6 @@ tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["macros"] }
 tracing = { workspace = true }
-
-[dev-dependencies]
-mqtt_tests = { path = "../../tests/mqtt_tests" }
 
 [lints]
 workspace = true
