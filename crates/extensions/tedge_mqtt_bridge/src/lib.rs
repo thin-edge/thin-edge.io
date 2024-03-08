@@ -159,10 +159,9 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 /// Forward messages received from `recv_event_loop` to `target`
 ///
 /// The result of running this function constitutes half the MQTT bridge, hence the name.
-/// Each half has two main responsibilities, one is to take messages received on the event
-/// loop and forward them to the target client, the other is to communicate with the corresponding
-/// half of the bridge to ensure published messages get acknowledged only when they have been
-/// fully processed.
+/// Each half has two main responsibilities, one is to take messages received on the event loop and
+/// forward them to the target client, the other is to communicate with the companion half of the
+/// bridge to ensure published messages get acknowledged only when they have been fully processed.
 ///
 /// # Message flow
 /// Messages in the bridge go through a few states
@@ -184,14 +183,25 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 ///
 /// The channel sends [Option<Publish>] rather than [Publish] to allow the bridge to send entirely
 /// novel messages, and not just forwarded ones, as attaching packet IDs relies on pairing every
-/// [Outgoing] publish notification with a message sent by the relevant client. This means the
+/// [Outgoing] publish notification with a message sent by the relevant client. So, when a QoS 1
+/// message is forwarded, this will be accompanied by sending `Some(message)` to the channel,
+/// allowing the original message to be acknowledged once an acknowledgement is received for the
+/// forwarded message. When publishing a health message, this will be accompanied by sending `None`
+/// to the channel, telling the bridge to ignore the associated packet ID as this didn't arise from
+/// a forwarded message that itself requires acknowledgement.
 ///
 /// # Health topics
+/// The bridge will publish health information to `health_topic` (if supplied) on `target` to enable
+/// other components to establish bridge health. This is intended to be used the half with cloud
+/// event loop, so the status of this connection will be relayed to a relevant `te` topic like its
+/// mosquitto-based predecessor. The payload is either `1` (healthy) or `0` (unhealthy). When the
+/// connection is created, the last-will message is set to send the `0` payload when the connection
+/// is dropped.
 async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     mut recv_event_loop: EventLoop,
     target: AsyncClient,
     transform_topic: F,
-    mut corresponding_bridge_half: BidirectionalChannelHalf<Option<Publish>>,
+    mut companion_bridge_half: BidirectionalChannelHalf<Option<Publish>>,
     health_topic: Option<String>,
     name: &'static str,
 ) {
@@ -209,7 +219,7 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                             .publish(health_topic, QoS::AtLeastOnce, true, C8Y_BRIDGE_UP_PAYLOAD)
                             .await
                             .unwrap();
-                        corresponding_bridge_half.send(None).await.unwrap();
+                        companion_bridge_half.send(None).await.unwrap();
                     }
                 }
                 notification
@@ -229,7 +239,7 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                             )
                             .await
                             .unwrap();
-                        corresponding_bridge_half.send(None).await.unwrap();
+                        companion_bridge_half.send(None).await.unwrap();
                     }
                 }
                 continue;
@@ -248,7 +258,7 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                     .await
                     .unwrap();
                 let publish = (publish.qos > QoS::AtMostOnce).then_some(publish);
-                corresponding_bridge_half.send(publish).await.unwrap();
+                companion_bridge_half.send(publish).await.unwrap();
             }
             // Forwarding acks from event loop to target
             Event::Incoming(
@@ -259,15 +269,13 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                     target.ack(&msg).await.unwrap();
                 }
             }
-            Event::Outgoing(Outgoing::Publish(pkid)) => {
-                match corresponding_bridge_half.recv().await {
-                    Some(Some(msg)) => {
-                        forward_pkid_to_received_msg.insert(pkid, msg);
-                    }
-                    Some(None) => {}
-                    None => break,
+            Event::Outgoing(Outgoing::Publish(pkid)) => match companion_bridge_half.recv().await {
+                Some(Some(msg)) => {
+                    forward_pkid_to_received_msg.insert(pkid, msg);
                 }
-            }
+                Some(None) => {}
+                None => break,
+            },
             _ => {}
         }
     }
