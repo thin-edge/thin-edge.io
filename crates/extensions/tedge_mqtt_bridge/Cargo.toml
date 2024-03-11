@@ -15,15 +15,13 @@ default = []
 
 [dependencies]
 async-trait = { workspace = true }
-c8y_api = { workspace = true }
 certificate = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
 rumqttc = { workspace = true }
-serde_json = { workspace = true }
 tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
 tedge_config = { workspace = true }
-tedge_utils = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["macros"] }
 tracing = { workspace = true }
 

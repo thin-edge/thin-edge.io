@@ -197,7 +197,7 @@ impl C8yMapperConfig {
             }
         }
 
-        let bridge_in_mapper = tedge_config.c8y.bridge.in_mapper;
+        let bridge_in_mapper = tedge_config.c8y.bridge.built_in;
 
         Ok(C8yMapperConfig::new(
             config_dir,

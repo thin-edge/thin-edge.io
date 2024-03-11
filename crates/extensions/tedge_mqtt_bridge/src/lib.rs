@@ -1,11 +1,9 @@
 use async_trait::async_trait;
-use c8y_api::utils::bridge::main_device_health_topic;
-use c8y_api::utils::bridge::C8Y_BRIDGE_DOWN_PAYLOAD;
-use c8y_api::utils::bridge::C8Y_BRIDGE_UP_PAYLOAD;
 use certificate::parse_root_certificate::create_tls_config;
 use futures::SinkExt;
 use futures::StreamExt;
 use rumqttc::AsyncClient;
+use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
@@ -39,6 +37,9 @@ pub use mqtt_channel::MqttError;
 pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
+use tedge_api::main_device_health_topic;
+use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
+use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
 use tedge_config::TEdgeConfig;
 
 pub struct MqttBridgeActorBuilder {}
@@ -67,7 +68,7 @@ impl MqttBridgeActorBuilder {
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic,
-            C8Y_BRIDGE_DOWN_PAYLOAD,
+            MQTT_BRIDGE_DOWN_PAYLOAD,
             QoS::AtLeastOnce,
             true,
         ));
@@ -172,16 +173,16 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 ///
 /// Since the function is processing one [EventLoop], messages can be sent to the receiving broker,
 /// but we cannot receive acknowledgements from that broker, therefore a communication link must
-/// be established between the bridge halves. This link is the argument `corresponding_bridge_half`,
+/// be established between the bridge halves. This link is the argument `companion_bridge_half`,
 /// which can both send and receive messages from the other bridge loop.
 ///
-/// When a message is forwarded, the [Publish] is forwarded from this loop to the corresponding loop.
+/// When a message is forwarded, the [Publish] is forwarded from this loop to the companion loop.
 /// This allows the loop to store the message along with its packet ID when the forwarded message is
 /// published. When an acknowledgement is received for the forwarded message, the packet id is used
 /// to retrieve the original [Publish], which is then passed to [AsyncClient::ack] to complete the
 /// final step of the message flow.
 ///
-/// The channel sends [Option<Publish>] rather than [Publish] to allow the bridge to send entirely
+/// The channel sends [`Option<Publish>`] rather than [`Publish`] to allow the bridge to send entirely
 /// novel messages, and not just forwarded ones, as attaching packet IDs relies on pairing every
 /// [Outgoing] publish notification with a message sent by the relevant client. So, when a QoS 1
 /// message is forwarded, this will be accompanied by sending `Some(message)` to the channel,
@@ -189,6 +190,66 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 /// forwarded message. When publishing a health message, this will be accompanied by sending `None`
 /// to the channel, telling the bridge to ignore the associated packet ID as this didn't arise from
 /// a forwarded message that itself requires acknowledgement.
+///
+/// ## Bridging local messages to the cloud
+///
+/// The two `half-bridge` instances cooperate:
+///
+/// - The `half_bridge(local_event_loop,cloud_client)` receives local messages and publishes these message on the cloud.
+/// - The `half_bridge(cloud_event_loop,local_client)` handles the acknowledgements: waiting for messages be acknowledged by the cloud, before sending acks for the original messages.
+///
+/// ```text
+///                   ┌───────────────┐                                   ┌───────────────┐                                           
+///                   │  (EventLoop)  │                                   │   (client)    │                                           
+///  Incoming::PubAck │     ┌──┐      │                                   │     ┌──┐      │ client.ack                          
+///  ─────────────────┼────►│6.├──────┼───────────────────┬───────────────┼────►│7.├──────┼──────────────►                            
+///                   │     └──┘      │                   │               │     └──┘      │                                           
+///                   │               │                   │               │               │                                           
+///                   │               │             ┌─────┼────────┐      │               │                                           
+///                   │               │             │     │        │      │               │                                           
+/// Outgoing::Publish │     ┌──┐      │             │    ┌┴─┐      │      │               │
+///  ─────────────────┼────►│4.├──────┼─────────────┼───►│5.│      │      │               │                                           
+///                   │     └─▲┘      │             │    └▲─┘      │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │ half_bridge(cloud_event_loop,local_client)
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+/// xxxxxxxxxxxxxxxxxxxxxxxxxx│xxxxxxxxxxxxxxxxxxxxx│xxxxx│xxxxxxxx│xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │ half_bridge(local_event_loop,cloud_client)
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///                   │       │       │             │     │        │      │               │                                           
+///    client.publish │      ┌┴─┐     │             │    ┌┴─┐      │      │     ┌──┐      │ Incoming::Publish                         
+///  ◄────────────────┼──────┤3.◄─────┼─────────────┼────┤2.│◄─────┼──────┼─────┤1.│◄─────┼───────────────                            
+///                   │      └──┘     │             │    └──┘      │      │     └──┘      │                                           
+///                   │               │             │              │      │               │                                           
+///                   │   MQTT        │             │              │      │    MQTT       │                                           
+///                   │   cloud       │             └──────────────┘      │    local      │                                           
+///                   │   connection  │                                   │    connection │                                           
+///                   │               │                                   │               │                                           
+///                   │   (client)    │                                   │  (EventLoop)  │                                           
+///                   └───────────────┘                                   └───────────────┘                                           
+/// ```
+///
+/// 1. A message is received via the local_event_loop.
+/// 2. This message is sent unchanged to the second half_bridge which owns the local_client: so the latter will be able to acknowledge it when fully processed.
+/// 3. A copy of this message is published by the cloud_client on the cloud topic derived from the local topic.
+/// 4. The cloud_event_loop is notified that the message has been published by the cloud client. The notification event provides the `pkid` of the message used on the cloud connection.
+/// 5. The message cloud `pkid` is joined with the original local message sent step 2. The pair (cloud `pkid`, local message) is cached
+/// 6. The cloud MQTT end-point acknowledges the message, providing its cloud `pkid`.
+/// 7. The pair (cloud `pkid`, local message) is extracted from the cache and the local message is finaly acknowledged.
+///  
+/// ## Bridging cloud messages to the local broker
+///
+/// The very same two `half-bridge` instances ensure the reverse flow. Their roles are simply swapped:
+///
+/// - The `half_bridge(cloud_event_loop,local_client)` receives cloud messages and publishes these message locally.
+/// - The `half_bridge(local_event_loop,cloud_client)` handles the acknowledgements: waiting for messages be acknowledged locally, before sending acks for the original messages.
 ///
 /// # Health topics
 /// The bridge will publish health information to `health_topic` (if supplied) on `target` to enable
@@ -206,47 +267,19 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     name: &'static str,
 ) {
     let mut forward_pkid_to_received_msg = HashMap::new();
-    let mut last_err = Some("dummy error".into());
+    let mut bridge_health = BridgeHealth::new(name, health_topic, &target);
 
     loop {
-        let notification = match recv_event_loop.poll().await {
-            Ok(notification) => {
-                if last_err.as_ref().is_some() {
-                    info!("MQTT bridge connected to {name} broker");
-                    last_err = None;
-                    if let Some(health_topic) = &health_topic {
-                        target
-                            .publish(health_topic, QoS::AtLeastOnce, true, C8Y_BRIDGE_UP_PAYLOAD)
-                            .await
-                            .unwrap();
-                        companion_bridge_half.send(None).await.unwrap();
-                    }
-                }
-                notification
-            }
-            Err(err) => {
-                let err = err.to_string();
-                if last_err.as_ref() != Some(&err) {
-                    error!("MQTT bridge failed to connect to {name} broker: {err}");
-                    last_err = Some(err);
-                    if let Some(health_topic) = &health_topic {
-                        target
-                            .publish(
-                                health_topic,
-                                QoS::AtLeastOnce,
-                                true,
-                                C8Y_BRIDGE_DOWN_PAYLOAD,
-                            )
-                            .await
-                            .unwrap();
-                        companion_bridge_half.send(None).await.unwrap();
-                    }
-                }
-                continue;
-            }
+        let res = recv_event_loop.poll().await;
+        bridge_health.update(&res, &mut companion_bridge_half).await;
+
+        let notification = match res {
+            Ok(notification) => notification,
+            Err(_) => continue,
         };
+
         match notification {
-            // Forwarding messages from event loop to target
+            // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
                 target
                     .publish(
@@ -260,7 +293,8 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                 let publish = (publish.qos > QoS::AtMostOnce).then_some(publish);
                 companion_bridge_half.send(publish).await.unwrap();
             }
-            // Forwarding acks from event loop to target
+
+            // Forward acks from event loop to target
             Event::Incoming(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
@@ -269,11 +303,18 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                     target.ack(&msg).await.unwrap();
                 }
             }
+
+            // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => match companion_bridge_half.recv().await {
+                // A message was forwarded by the other bridge half, note the packet id
                 Some(Some(msg)) => {
                     forward_pkid_to_received_msg.insert(pkid, msg);
                 }
+
+                // A healthcheck message was published, ignore this packet id
                 Some(None) => {}
+
+                // The other bridge half has disconnected, break the loop and shut down the bridge
                 None => break,
             },
             _ => {}
@@ -281,6 +322,55 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     }
 }
 
+type NotificationRes = Result<Event, ConnectionError>;
+
+struct BridgeHealth<'a> {
+    name: &'static str,
+    health_topic: Option<String>,
+    target: &'a AsyncClient,
+    last_err: Option<String>,
+}
+
+impl<'a> BridgeHealth<'a> {
+    fn new(name: &'static str, health_topic: Option<String>, target: &'a AsyncClient) -> Self {
+        Self {
+            name,
+            health_topic,
+            target,
+            last_err: Some("dummy error".into()),
+        }
+    }
+    async fn update(
+        &mut self,
+        result: &NotificationRes,
+        companion_bridge_half: &mut BidirectionalChannelHalf<Option<Publish>>,
+    ) {
+        let name = self.name;
+        let (err, health_payload) = match result {
+            Ok(_) => {
+                info!("MQTT bridge connected to {name} broker");
+                (None, MQTT_BRIDGE_UP_PAYLOAD)
+            }
+            Err(err) => {
+                error!("MQTT bridge failed to connect to {name} broker: {err}");
+                (Some(err.to_string()), MQTT_BRIDGE_DOWN_PAYLOAD)
+            }
+        };
+
+        if self.last_err != err {
+            self.last_err = err;
+            if let Some(health_topic) = &self.health_topic {
+                self.target
+                    .publish(health_topic, QoS::AtLeastOnce, true, health_payload)
+                    .await
+                    .unwrap();
+                // Send a note that a message has been published to maintain synchronisation
+                // between the two bridge halves
+                companion_bridge_half.send(None).await.unwrap();
+            }
+        }
+    }
+}
 impl Builder<MqttBridgeActor> for MqttBridgeActorBuilder {
     type Error = Infallible;
 

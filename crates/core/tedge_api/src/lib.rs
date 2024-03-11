@@ -23,6 +23,7 @@ pub mod workflow;
 pub use download::*;
 pub use entity_store::EntityStore;
 pub use error::*;
+pub use health::*;
 pub use messages::CommandStatus;
 pub use messages::Jsonify;
 pub use messages::OperationStatus;

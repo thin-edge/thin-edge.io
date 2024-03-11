@@ -38,7 +38,7 @@ pub struct BridgeConfig {
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum BridgeLocation {
     Mosquitto,
-    Mapper,
+    BuiltIn,
 }
 
 impl BridgeConfig {

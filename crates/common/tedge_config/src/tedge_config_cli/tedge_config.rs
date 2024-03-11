@@ -455,7 +455,7 @@ define_tedge_config! {
 
             #[tedge_config(default(value = false))]
             #[doku(skip)] // Hide the configuration in `tedge config list --doc`
-            in_mapper: bool,
+            built_in: bool,
 
             // TODO validation
             /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
@@ -818,10 +818,15 @@ define_tedge_config! {
 }
 
 impl ReadableKey {
-    // This is designed to be simple way of
+    // This is designed to be a simple way of controlling whether values appear in the output of
+    // `tedge config list`. Ideally this would be integrated into [define_tedge_config], see
+    // https://github.com/thin-edge/thin-edge.io/issues/2767 for more detail on that.
+    // Currently this accompanies `#[doku(skip)]` on the relevant configurations, which hides
+    // them in `tedge config list --doc`. The configurations are hidden to avoid unfinished
+    // features from being discovered.
     pub fn is_printable_value(self, value: &str) -> bool {
         match self {
-            Self::C8yBridgeInMapper => value != "false",
+            Self::C8yBridgeBuiltIn => value != "false",
             Self::C8yBridgeTopicPrefix => value != "c8y",
             _ => true,
         }

@@ -197,8 +197,8 @@ pub fn bridge_config(
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
-            let bridge_location = match config.c8y.bridge.in_mapper {
-                true => BridgeLocation::Mapper,
+            let bridge_location = match config.c8y.bridge.built_in {
+                true => BridgeLocation::BuiltIn,
                 false => BridgeLocation::Mosquitto,
             };
             let params = BridgeConfigC8yParams {
@@ -440,7 +440,7 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
     device_type: &str,
 ) -> Result<(), ConnectError> {
-    if bridge_config.bridge_location == BridgeLocation::Mapper {
+    if bridge_config.bridge_location == BridgeLocation::BuiltIn {
         clean_up(config_location, bridge_config)?;
         return Ok(());
     }

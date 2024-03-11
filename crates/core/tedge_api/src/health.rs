@@ -11,6 +11,14 @@ use std::process;
 use std::sync::Arc;
 use tedge_utils::timestamp::TimeFormat;
 
+pub const MQTT_BRIDGE_UP_PAYLOAD: &str = "1";
+pub const MQTT_BRIDGE_DOWN_PAYLOAD: &str = "0";
+
+// FIXME: doesn't account for custom topic root, use MQTT scheme API here
+pub fn main_device_health_topic(service: &str) -> String {
+    format!("te/device/main/service/{service}/status/health")
+}
+
 /// Encodes a valid health topic.
 ///
 /// Health topics are topics on which messages about health status of services are published. To be

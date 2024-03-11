@@ -1,19 +1,14 @@
 pub mod bridge {
     use mqtt_channel::Message;
-
-    // FIXME: doesn't account for custom topic root, use MQTT scheme API here
-    pub const C8Y_BRIDGE_UP_PAYLOAD: &str = "1";
-    pub const C8Y_BRIDGE_DOWN_PAYLOAD: &str = "0";
-
-    pub fn main_device_health_topic(service: &str) -> String {
-        format!("te/device/main/service/{service}/status/health")
-    }
+    use tedge_api::main_device_health_topic;
+    use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
+    use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
 
     pub fn is_c8y_bridge_up(message: &Message, service: &str) -> bool {
         let c8y_bridge_health_topic = main_device_health_topic(service);
         match message.payload_str() {
             Ok(payload) => {
-                message.topic.name == c8y_bridge_health_topic && payload == C8Y_BRIDGE_UP_PAYLOAD
+                message.topic.name == c8y_bridge_health_topic && payload == MQTT_BRIDGE_UP_PAYLOAD
             }
             Err(_err) => false,
         }
@@ -24,7 +19,7 @@ pub mod bridge {
         match message.payload_str() {
             Ok(payload) => {
                 message.topic.name == c8y_bridge_health_topic
-                    && (payload == C8Y_BRIDGE_UP_PAYLOAD || payload == C8Y_BRIDGE_DOWN_PAYLOAD)
+                    && (payload == MQTT_BRIDGE_UP_PAYLOAD || payload == MQTT_BRIDGE_DOWN_PAYLOAD)
             }
             Err(_err) => false,
         }
