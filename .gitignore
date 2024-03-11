@@ -51,3 +51,8 @@ containers/tedge/*.tar
 Makefile.toml
 .vimspector.json
 *.env
+
+
+# thin-edge.io certificate files
+tedge-certificate.pem
+tedge-private-key.pem

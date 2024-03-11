@@ -1,0 +1,13 @@
+# Default values for tedge.
+image:
+  repository: ghcr.io/thin-edge/tedge
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+c8y:
+  url: ""
+
+services:
+  mqtt:
+    port: 1883
