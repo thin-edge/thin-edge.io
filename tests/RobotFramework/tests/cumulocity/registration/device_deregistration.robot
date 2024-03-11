@@ -10,13 +10,6 @@ Test Teardown    Get Logs    ${DEVICE_SN}
 
 *** Test Cases ***
 
-Main device registration
-    ${mo}=    Device Should Exist              ${DEVICE_SN}
-    ${mo}=    Cumulocity.Device Should Have Fragment Values    name\=${DEVICE_SN}
-    Should Be Equal    ${mo["owner"]}    device_${DEVICE_SN}
-    Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
-
-
 Child device registration
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}"}'
 
@@ -33,13 +26,6 @@ Child device registration
     #Deregister Child device
     Run Keyword And Ignore Error    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}//'
     
-
-Register child device with defaults via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_XID}    child_type=thin-edge.io-child
-
-    #Deregister Child device
-    Run Keyword And Ignore Error    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}//'
 
 Register service on a child device via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
