@@ -24,7 +24,7 @@ Child device registration
     Cumulocity.Should Be A Child Device Of Device    ${CHILD_SN}
 
     #Deregister Child device
-    Run Keyword And Ignore Error    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}//'
+    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}//'    exp_exit_code=27
     
 
 Register service on a child device via MQTT
@@ -38,7 +38,7 @@ Register service on a child device via MQTT
     Check Service    child_sn=${CHILD_XID}    service_sn=${CHILD_XID}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
 
     #Deregister service on a child device
-    Run Keyword And Ignore Error    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}/service/custom-app/#'
+    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}/service/custom-app/#'    exp_exit_code=27
 
 
 
@@ -46,24 +46,13 @@ Register service on a child device via MQTT
 
 *** Keywords ***
 
-Re-enable auto-registration and collect logs
-    [Teardown]    Get Logs    ${DEVICE_SN}
-    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
-
-Enable clean start and collect logs
-    [Teardown]    Get Logs    ${DEVICE_SN}
-    Execute Command    sudo tedge config set c8y.entity_store.clean_start true
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
 
 Check Child Device
     [Arguments]    ${parent_sn}    ${child_sn}    ${child_name}    ${child_type}
-    ${child_mo}=    Device Should Exist        ${child_sn}
+    Cumulocity.Device Should Exist    ${child_sn}
 
     ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${child_name}
-    Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}    # The parent is the owner of the child
+    Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}
     Should Be Equal    ${child_mo["name"]}     ${child_name}
     Should Be Equal    ${child_mo["type"]}     ${child_type}
 

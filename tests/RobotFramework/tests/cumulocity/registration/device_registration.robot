@@ -30,6 +30,9 @@ Child device registration
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Be A Child Device Of Device    ${CHILD_SN}
 
+    #Deregister Child device
+    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}//'    exp_exit_code=27
+
 Register child device with defaults via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_XID}    child_type=thin-edge.io-child
@@ -73,6 +76,8 @@ Register service on a child device via MQTT
     # Check service registration
     Check Service    child_sn=${CHILD_XID}    service_sn=${CHILD_XID}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
 
+    #Deregister service on a child device
+    Execute Command    mosquitto_sub --remove-retained -W 3 -t 'te/device/${CHILD_SN}/service/custom-app/#'    exp_exit_code=27
 
 Register devices using custom MQTT schema
     [Documentation]    Complex example showing how to use custom MQTT topics to register devices/services using
@@ -251,7 +256,7 @@ Check Child Device
     ${child_mo}=    Device Should Exist        ${child_sn}
 
     ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${child_name}
-    Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}    # The parent is the owner of the child
+    Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN} 
     Should Be Equal    ${child_mo["name"]}     ${child_name}
     Should Be Equal    ${child_mo["type"]}     ${child_type}
 
