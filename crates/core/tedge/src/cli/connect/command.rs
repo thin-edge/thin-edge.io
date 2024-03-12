@@ -65,7 +65,11 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
 
         if self.is_test_connection {
-            if self.check_if_bridge_exists(&bridge_config) {
+            // If the bridge is part of the mapper, the bridge config file won't exist
+            // TODO tidy me up once mosquitto is no longer required for bridge
+            if bridge_config.bridge_location == BridgeLocation::BuiltIn
+                || self.check_if_bridge_exists(&bridge_config)
+            {
                 return match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
