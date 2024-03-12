@@ -220,7 +220,7 @@ impl<C: Converter> ConvertingActor<C> {
 ///     converter_builder.add_input(converter_builder.get_config(), &mut mqtt_builder);
 ///
 ///     // Connect the same mqtt actor as a sink of this actor, to send output messages to it
-///     converter_builder.add_sink(&mut mqtt_builder);
+///     converter_builder.add_sink(NoConfig, &mut mqtt_builder);
 ///
 ///     // Finally build the actor
 ///     converter_builder.build()

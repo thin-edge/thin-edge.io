@@ -58,7 +58,7 @@ pub struct SignalActor {
 impl SignalActor {
     pub fn builder(runtime: &impl MessageSink<RuntimeAction, NoConfig>) -> SignalActorBuilder {
         let mut box_builder = SimpleMessageBoxBuilder::new("Signal-Handler", 1);
-        box_builder.add_sink(runtime);
+        box_builder.add_sink(NoConfig, runtime);
         SignalActorBuilder { box_builder }
     }
 }

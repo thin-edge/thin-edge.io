@@ -29,6 +29,7 @@ use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_actors::ServerActorBuilder;
 use tedge_api::mqtt_topics::DeviceTopicId;
@@ -440,7 +441,7 @@ pub fn create_tedge_to_te_converter(
         );
 
     tedge_converter_actor.add_input(subscriptions, mqtt_actor_builder);
-    tedge_converter_actor.add_sink(mqtt_actor_builder);
+    tedge_converter_actor.add_sink(NoConfig, mqtt_actor_builder);
 
     Ok(tedge_converter_actor)
 }
