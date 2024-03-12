@@ -340,6 +340,7 @@ impl<'a> BridgeHealth<'a> {
             last_err: Some("dummy error".into()),
         }
     }
+
     async fn update(
         &mut self,
         result: &NotificationRes,
@@ -347,14 +348,18 @@ impl<'a> BridgeHealth<'a> {
     ) {
         let name = self.name;
         let (err, health_payload) = match result {
-            Ok(_) => (None, MQTT_BRIDGE_UP_PAYLOAD),
+            Ok(event) => {
+                if let Event::Incoming(Incoming::ConnAck(_)) = event {
+                    info!("MQTT bridge connected to {name} broker")
+                }
+                (None, MQTT_BRIDGE_UP_PAYLOAD)
+            }
             Err(err) => (Some(err.to_string()), MQTT_BRIDGE_DOWN_PAYLOAD),
         };
 
         if self.last_err != err {
-            match &err {
-                None => info!("MQTT bridge connected to {name} broker"),
-                Some(err) => error!("MQTT bridge failed to connect to {name} broker: {err}"),
+            if let Some(err) = &err {
+                error!("MQTT bridge failed to connect to {name} broker: {err}")
             }
             self.last_err = err;
 
