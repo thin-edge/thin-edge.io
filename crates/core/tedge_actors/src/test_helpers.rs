@@ -519,7 +519,7 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
         &mut self,
         config: C,
         source: &mut impl MessageSource<I, C>,
-        sink: &mut impl MessageSink<O, NoConfig>,
+        sink: &mut impl MessageSink<O>,
     ) {
         self.output_forwarder = sink.get_sender();
         source.register_peer(config, self.input_interceptor.clone().into());
@@ -633,7 +633,7 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
 impl<T, Request: MessagePlus, Response: MessagePlus> ServiceConsumerExt<Request, Response> for T
 where
     T: MessageSource<Request, NoConfig>,
-    T: MessageSink<Response, NoConfig>,
+    T: MessageSink<Response>,
 {
     fn with_probe<'a>(
         &'a mut self,
@@ -651,7 +651,7 @@ impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> 
     }
 }
 
-impl<I: MessagePlus, O: MessagePlus> MessageSink<I, NoConfig> for Probe<I, O> {
+impl<I: MessagePlus, O: MessagePlus> MessageSink<I> for Probe<I, O> {
     fn get_sender(&self) -> DynSender<I> {
         self.input_interceptor.clone().into()
     }
@@ -794,7 +794,7 @@ impl<Request: Message, Response: Message> Default for FakeServerBoxBuilder<Reque
     }
 }
 
-impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>>
     for FakeServerBoxBuilder<Request, Response>
 {
     fn get_sender(&self) -> DynSender<RequestEnvelope<Request, Response>> {

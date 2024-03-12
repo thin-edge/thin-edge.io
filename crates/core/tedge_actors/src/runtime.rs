@@ -6,7 +6,6 @@ use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
 use crate::MessageSink;
-use crate::NoConfig;
 use crate::RuntimeError;
 use crate::RuntimeRequestSink;
 use futures::channel::mpsc;
@@ -138,7 +137,7 @@ impl RuntimeHandle {
     }
 }
 
-impl MessageSink<RuntimeAction, NoConfig> for RuntimeHandle {
+impl MessageSink<RuntimeAction> for RuntimeHandle {
     fn get_sender(&self) -> DynSender<RuntimeAction> {
         self.actions_sender.clone().into()
     }

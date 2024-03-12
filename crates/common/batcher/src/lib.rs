@@ -67,7 +67,7 @@ impl<B: Batchable> BatchingActorBuilder<B> {
     }
 }
 
-impl<B: Batchable> MessageSink<BatchDriverInput<B>, NoConfig> for BatchingActorBuilder<B> {
+impl<B: Batchable> MessageSink<BatchDriverInput<B>> for BatchingActorBuilder<B> {
     fn get_sender(&self) -> DynSender<BatchDriverInput<B>> {
         self.message_box.get_sender()
     }

@@ -26,7 +26,6 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -291,8 +290,7 @@ impl FileCacheActorBuilder {
         tedge_http_host: Arc<str>,
         data_dir: DataDir,
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
-        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter>
-                  + MessageSink<MqttMessage, NoConfig>),
+        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Self {
         let message_box = SimpleMessageBoxBuilder::new("RestartManager", 10);
 
@@ -323,7 +321,7 @@ impl FileCacheActorBuilder {
     }
 }
 
-impl MessageSink<FileCacheInput, NoConfig> for FileCacheActorBuilder {
+impl MessageSink<FileCacheInput> for FileCacheActorBuilder {
     fn get_sender(&self) -> DynSender<FileCacheInput> {
         self.message_box.get_sender()
     }

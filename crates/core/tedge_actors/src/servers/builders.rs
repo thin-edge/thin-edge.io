@@ -9,7 +9,6 @@ use crate::DynSender;
 use crate::LoggingReceiver;
 use crate::Message;
 use crate::MessageSink;
-use crate::NoConfig;
 use crate::RequestEnvelope;
 use crate::RuntimeError;
 use crate::RuntimeRequest;
@@ -74,7 +73,7 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
     }
 }
 
-impl<Req: Message, Res: Message> MessageSink<RequestEnvelope<Req, Res>, NoConfig>
+impl<Req: Message, Res: Message> MessageSink<RequestEnvelope<Req, Res>>
     for ServerMessageBoxBuilder<Req, Res>
 {
     fn get_sender(&self) -> DynSender<RequestEnvelope<Req, Res>> {
@@ -184,7 +183,7 @@ impl<S: Server + Clone> Builder<ConcurrentServerActor<S>> for ServerActorBuilder
     }
 }
 
-impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>, NoConfig>
+impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>>
     for ServerActorBuilder<S, K>
 {
     fn get_sender(&self) -> DynSender<RequestEnvelope<S::Request, S::Response>> {

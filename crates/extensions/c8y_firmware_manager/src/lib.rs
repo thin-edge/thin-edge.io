@@ -21,7 +21,6 @@ use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
@@ -47,8 +46,7 @@ pub struct FirmwareManagerBuilder {
 impl FirmwareManagerBuilder {
     pub fn try_new(
         config: FirmwareManagerConfig,
-        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter>
-                  + MessageSink<MqttMessage, NoConfig>),
+        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         jwt_actor: &mut impl Service<(), JwtResult>,
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<FirmwareManagerBuilder, FileError> {

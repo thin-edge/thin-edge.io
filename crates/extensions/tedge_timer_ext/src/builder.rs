@@ -10,7 +10,6 @@ use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::Message;
 use tedge_actors::MessageSink;
-use tedge_actors::NoConfig;
 use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -48,9 +47,7 @@ impl RuntimeRequestSink for TimerActorBuilder {
     }
 }
 
-impl<T: Message> MessageSink<RequestEnvelope<SetTimeout<T>, Timeout<T>>, NoConfig>
-    for TimerActorBuilder
-{
+impl<T: Message> MessageSink<RequestEnvelope<SetTimeout<T>, Timeout<T>>> for TimerActorBuilder {
     fn get_sender(&self) -> DynSender<RequestEnvelope<SetTimeout<T>, Timeout<T>>> {
         let request_sender = self.box_builder.get_sender();
         Box::new(SetTimeoutSender {

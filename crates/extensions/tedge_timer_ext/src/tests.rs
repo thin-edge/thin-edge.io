@@ -146,7 +146,7 @@ async fn should_process_all_pending_timers_on_end_of_inputs() {
 }
 
 async fn spawn_timer_actor<T: Message>(
-    peer: &mut (impl MessageSource<SetTimeout<T>, NoConfig> + MessageSink<Timeout<T>, NoConfig>),
+    peer: &mut (impl MessageSource<SetTimeout<T>, NoConfig> + MessageSink<Timeout<T>>),
 ) -> (
     JoinHandle<Result<(), RuntimeError>>,
     DynSender<RuntimeRequest>,

@@ -5,7 +5,6 @@ use crate::LoggingReceiver;
 use crate::Message;
 use crate::MessageReceiver;
 use crate::MessageSink;
-use crate::NoConfig;
 use crate::RequestEnvelope;
 use crate::RuntimeRequest;
 use crate::Sender;
@@ -111,9 +110,7 @@ impl<Request: Message, Response: Message> Clone for ClientMessageBox<Request, Re
 
 impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
     /// Create a [ClientMessageBox] connected to a given [Server]
-    pub fn new(
-        server: &mut impl MessageSink<RequestEnvelope<Request, Response>, NoConfig>,
-    ) -> Self {
+    pub fn new(server: &mut impl MessageSink<RequestEnvelope<Request, Response>>) -> Self {
         ClientMessageBox {
             sender: server.get_sender(),
         }

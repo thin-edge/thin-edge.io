@@ -8,7 +8,6 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -136,7 +135,7 @@ impl<'a> MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder<'a> {
     }
 }
 
-impl<'a> MessageSink<MqttMessage, NoConfig> for MqttActorBuilder<'a> {
+impl<'a> MessageSink<MqttMessage> for MqttActorBuilder<'a> {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.message_box.get_sender()
     }

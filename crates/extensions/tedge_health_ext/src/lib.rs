@@ -38,7 +38,7 @@ impl HealthMonitorBuilder {
     pub fn from_service_topic_id(
         service: Service,
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter>
-                  + MessageSink<MqttMessage, NoConfig>
+                  + MessageSink<MqttMessage>
                   + AsMut<MqttConfig>),
         // TODO: pass it less annoying way
         mqtt_schema: &MqttSchema,

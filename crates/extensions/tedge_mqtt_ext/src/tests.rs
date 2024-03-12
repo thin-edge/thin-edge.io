@@ -33,7 +33,7 @@ impl MqttClientBuilder {
 
     fn with_connection(
         self,
-        mqtt: &mut (impl MessageSink<MqttMessage, NoConfig> + MessageSource<MqttMessage, TopicFilter>),
+        mqtt: &mut (impl MessageSink<MqttMessage> + MessageSource<MqttMessage, TopicFilter>),
     ) -> Self {
         let box_builder = self
             .box_builder

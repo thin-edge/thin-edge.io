@@ -17,7 +17,6 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -80,7 +79,7 @@ impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     }
 }
 
-impl MessageSink<MqttMessage, NoConfig> for MqttActorBuilder {
+impl MessageSink<MqttMessage> for MqttActorBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.publish_sender.clone().into()
     }

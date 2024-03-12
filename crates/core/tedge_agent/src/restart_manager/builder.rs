@@ -27,7 +27,7 @@ impl RestartManagerBuilder {
     }
 }
 
-impl MessageSink<RestartCommand, NoConfig> for RestartManagerBuilder {
+impl MessageSink<RestartCommand> for RestartManagerBuilder {
     fn get_sender(&self) -> DynSender<RestartCommand> {
         self.message_box.get_sender()
     }

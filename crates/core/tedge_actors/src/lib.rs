@@ -219,8 +219,8 @@
 //! }
 //!
 //! /// An actor builder also declares that it consumes messages
-//! /// by implementing the `MessageSink` trait for the appropriate input and config types.
-//! impl MessageSink<SomeMessage, SomeConfig> for SomeOtherActorBuilder {
+//! /// by implementing the `MessageSink` trait for the appropriate input type.
+//! impl MessageSink<SomeMessage> for SomeOtherActorBuilder {
 //!     /// Return a sender where to send the input messages.
 //!     fn get_sender(&self) -> DynSender<SomeMessage> {
 //!         todo!()

@@ -39,7 +39,7 @@ pub struct OldAgentAdapter;
 
 impl OldAgentAdapter {
     pub fn builder(
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>),
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> ConvertingActorBuilder<OldAgentAdapter> {
         let mut builder = ConvertingActor::builder("OldAgentAdapter", OldAgentAdapter);
         builder.add_input(old_and_new_command_topics(), mqtt);

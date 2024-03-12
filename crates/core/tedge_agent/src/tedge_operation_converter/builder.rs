@@ -46,12 +46,10 @@ impl TedgeOperationConverterBuilder {
     pub fn new(
         config: OperationConfig,
         mut workflows: WorkflowSupervisor,
-        software_actor: &mut (impl MessageSink<SoftwareCommand, NoConfig>
+        software_actor: &mut (impl MessageSink<SoftwareCommand>
                   + MessageSource<SoftwareCommand, NoConfig>),
-        restart_actor: &mut (impl MessageSink<RestartCommand, NoConfig>
-                  + MessageSource<RestartCommand, NoConfig>),
-        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter>
-                  + MessageSink<MqttMessage, NoConfig>),
+        restart_actor: &mut (impl MessageSink<RestartCommand> + MessageSource<RestartCommand, NoConfig>),
+        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();

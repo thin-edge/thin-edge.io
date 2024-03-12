@@ -16,7 +16,6 @@ use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -43,7 +42,7 @@ pub struct LogManagerBuilder {
 impl LogManagerBuilder {
     pub async fn try_new(
         config: LogManagerConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>),
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {

@@ -16,7 +16,6 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
@@ -46,7 +45,7 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerBuilder {
     pub async fn try_new(
         config: ConfigManagerConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>),
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,

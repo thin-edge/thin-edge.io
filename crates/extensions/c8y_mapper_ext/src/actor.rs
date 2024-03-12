@@ -24,7 +24,6 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -294,14 +293,13 @@ impl C8yMapperBuilder {
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         config: C8yMapperConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>),
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         http: &mut impl Service<C8YRestRequest, C8YRestResult>,
         timer: &mut impl Service<SyncStart, SyncComplete>,
         uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
         downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-        service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter>
-                  + MessageSink<MqttMessage, NoConfig>),
+        service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
 

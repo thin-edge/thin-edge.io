@@ -149,20 +149,20 @@ pub type DynRequestSender<Request, Response> = DynSender<RequestEnvelope<Request
 
 /// A connector to a [Server] expecting Request and returning Response.
 pub trait Service<Request: Message, Response: Message>:
-    MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+    MessageSink<RequestEnvelope<Request, Response>>
 {
     /// Connect a request message box to the server box under construction
     fn add_requester(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
 
     fn add_client(
         &mut self,
-        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response, NoConfig>),
+        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response>),
     );
 }
 
 impl<T, Request: Message, Response: Message> Service<Request, Response> for T
 where
-    T: MessageSink<RequestEnvelope<Request, Response>, NoConfig>,
+    T: MessageSink<RequestEnvelope<Request, Response>>,
 {
     fn add_requester(&mut self, reply_to: DynSender<Response>) -> DynSender<Request> {
         let request_sender = RequestSender {
@@ -174,7 +174,7 @@ where
 
     fn add_client(
         &mut self,
-        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response, NoConfig>),
+        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response>),
     ) {
         let request_sender = self.add_requester(client.get_sender());
         client.register_peer(NoConfig, request_sender);

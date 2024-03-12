@@ -12,7 +12,6 @@ use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::MessageSink;
-use tedge_actors::NoConfig;
 use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -126,7 +125,7 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
     }
 }
 
-impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>, NoConfig> for C8YHttpProxyBuilder {
+impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>> for C8YHttpProxyBuilder {
     fn get_sender(&self) -> DynSender<RequestEnvelope<C8YRestRequest, C8YRestResult>> {
         self.clients.get_sender()
     }

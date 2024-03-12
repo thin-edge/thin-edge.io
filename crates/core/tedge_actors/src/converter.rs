@@ -204,7 +204,7 @@ impl<C: Converter> ConvertingActor<C> {
 ///
 /// /// Return a converting actor connected to a peer that is both a source and sink of MQTT messages
 /// fn new_converter(
-///     mut mqtt_builder: impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>
+///     mut mqtt_builder: impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>
 /// ) -> ConvertingActor<MyConverter> {
 ///     // Use a builder to connect and build the actor
 ///     let mut converter_builder = ConvertingActor::builder(
@@ -264,7 +264,7 @@ impl<C: Converter> MessageSource<C::Output, NoConfig> for ConvertingActorBuilder
     }
 }
 
-impl<C: Converter> MessageSink<C::Input, NoConfig> for ConvertingActorBuilder<C> {
+impl<C: Converter> MessageSink<C::Input> for ConvertingActorBuilder<C> {
     fn get_sender(&self) -> DynSender<C::Input> {
         self.message_box.get_sender()
     }
