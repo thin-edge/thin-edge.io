@@ -324,10 +324,6 @@ impl FileCacheActorBuilder {
 }
 
 impl MessageSink<FileCacheInput, NoConfig> for FileCacheActorBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<FileCacheInput> {
         self.message_box.get_sender()
     }

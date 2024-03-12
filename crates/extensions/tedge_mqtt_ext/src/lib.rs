@@ -81,10 +81,6 @@ impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
 }
 
 impl MessageSink<MqttMessage, NoConfig> for MqttActorBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.publish_sender.clone().into()
     }

@@ -137,10 +137,6 @@ impl<'a> MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder<'a> {
 }
 
 impl<'a> MessageSink<MqttMessage, NoConfig> for MqttActorBuilder<'a> {
-    fn get_config(&self) -> NoConfig {
-        self.message_box.get_config()
-    }
-
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.message_box.get_sender()
     }

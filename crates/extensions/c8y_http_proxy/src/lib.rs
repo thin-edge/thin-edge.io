@@ -127,10 +127,6 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
 }
 
 impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>, NoConfig> for C8YHttpProxyBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<C8YRestRequest, C8YRestResult>> {
         self.clients.get_sender()
     }

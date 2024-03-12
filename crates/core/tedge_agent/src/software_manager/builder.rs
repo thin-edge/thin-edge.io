@@ -28,10 +28,6 @@ impl SoftwareManagerBuilder {
 }
 
 impl MessageSink<SoftwareCommand, NoConfig> for SoftwareManagerBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<SoftwareCommand> {
         self.message_box.get_sender()
     }

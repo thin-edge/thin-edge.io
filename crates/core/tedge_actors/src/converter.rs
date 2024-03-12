@@ -37,7 +37,7 @@
 //! # use std::time::Duration;
 //! # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig, Sender};
 //! # use tedge_actors::test_helpers::MessageReceiverExt;
-//! let mut actor = ConvertingActor::builder("Repeater", Repeater, NoConfig);
+//! let mut actor = ConvertingActor::builder("Repeater", Repeater);
 //! let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(NoConfig, &mut actor).build().with_timeout(Duration::from_millis(100));
 //! tokio::spawn(async move { actor.build().run().await });
 //!
@@ -114,12 +114,8 @@ pub struct ConvertingActor<C: Converter> {
 }
 
 impl<C: Converter> ConvertingActor<C> {
-    pub fn builder<Config>(
-        name: &str,
-        converter: C,
-        config: Config,
-    ) -> ConvertingActorBuilder<C, Config> {
-        ConvertingActorBuilder::new(name, converter, config)
+    pub fn builder(name: &str, converter: C) -> ConvertingActorBuilder<C> {
+        ConvertingActorBuilder::new(name, converter)
     }
 }
 
@@ -214,10 +210,10 @@ impl<C: Converter> ConvertingActor<C> {
 ///     let mut converter_builder = ConvertingActor::builder(
 ///         "MyConverter",
 ///         MyConverter,
-///         TopicFilter("some/mqtt/topics/#"));
+///     );
 ///
 ///     // Connect this actor as a sink of the mqtt actor, to receive input messages from it
-///     converter_builder.add_input(converter_builder.get_config(), &mut mqtt_builder);
+///     converter_builder.add_input(TopicFilter("some/mqtt/topics/#"), &mut mqtt_builder);
 ///
 ///     // Connect the same mqtt actor as a sink of this actor, to send output messages to it
 ///     converter_builder.add_sink(NoConfig, &mut mqtt_builder);
@@ -226,19 +222,17 @@ impl<C: Converter> ConvertingActor<C> {
 ///     converter_builder.build()
 /// }
 /// ```
-pub struct ConvertingActorBuilder<C: Converter, Config> {
+pub struct ConvertingActorBuilder<C: Converter> {
     name: String,
     converter: C,
-    config: Config,
     message_box: SimpleMessageBoxBuilder<C::Input, C::Output>,
 }
 
-impl<C: Converter, Config> ConvertingActorBuilder<C, Config> {
-    fn new(name: &str, converter: C, config: Config) -> Self {
+impl<C: Converter> ConvertingActorBuilder<C> {
+    fn new(name: &str, converter: C) -> Self {
         ConvertingActorBuilder {
             name: name.to_string(),
             converter,
-            config,
             message_box: SimpleMessageBoxBuilder::new(name, 16), // FIXME: capacity should not be hardcoded
         }
     }
@@ -248,7 +242,7 @@ impl<C: Converter, Config> ConvertingActorBuilder<C, Config> {
     }
 }
 
-impl<C: Converter, Config> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C, Config> {
+impl<C: Converter> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C> {
     type Error = Infallible;
 
     fn try_build(self) -> Result<ConvertingActor<C>, Self::Error> {
@@ -264,27 +258,19 @@ impl<C: Converter, Config> Builder<ConvertingActor<C>> for ConvertingActorBuilde
     }
 }
 
-impl<C: Converter, Config> MessageSource<C::Output, NoConfig>
-    for ConvertingActorBuilder<C, Config>
-{
+impl<C: Converter> MessageSource<C::Output, NoConfig> for ConvertingActorBuilder<C> {
     fn register_peer(&mut self, config: NoConfig, sender: DynSender<C::Output>) {
         self.message_box.register_peer(config, sender)
     }
 }
 
-impl<C: Converter, Config: Clone> MessageSink<C::Input, Config>
-    for ConvertingActorBuilder<C, Config>
-{
-    fn get_config(&self) -> Config {
-        self.config.clone()
-    }
-
+impl<C: Converter> MessageSink<C::Input, NoConfig> for ConvertingActorBuilder<C> {
     fn get_sender(&self) -> DynSender<C::Input> {
         self.message_box.get_sender()
     }
 }
 
-impl<C: Converter, Config> RuntimeRequestSink for ConvertingActorBuilder<C, Config> {
+impl<C: Converter> RuntimeRequestSink for ConvertingActorBuilder<C> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.message_box.get_signal_sender()
     }

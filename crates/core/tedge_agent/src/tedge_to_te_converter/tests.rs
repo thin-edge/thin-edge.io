@@ -329,10 +329,10 @@ async fn spawn_tedge_to_te_converter(
 
     // Tedge to Te converter
     let mut tedge_converter_actor =
-        ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter, subscriptions);
+        ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter);
 
     let mut mqtt_box = SimpleMessageBoxBuilder::new("MQTT", 5);
-    mqtt_box.register_peer(NoConfig, tedge_converter_actor.get_input_sender());
+    mqtt_box.register_peer(subscriptions, tedge_converter_actor.get_input_sender());
     tedge_converter_actor.register_peer(NoConfig, mqtt_box.get_sender());
     let mqtt_box = mqtt_box.build().with_timeout(Duration::from_millis(100));
 

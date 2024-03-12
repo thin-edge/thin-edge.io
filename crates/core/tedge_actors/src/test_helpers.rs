@@ -652,10 +652,6 @@ impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> 
 }
 
 impl<I: MessagePlus, O: MessagePlus> MessageSink<I, NoConfig> for Probe<I, O> {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<I> {
         self.input_interceptor.clone().into()
     }
@@ -801,10 +797,6 @@ impl<Request: Message, Response: Message> Default for FakeServerBoxBuilder<Reque
 impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>, NoConfig>
     for FakeServerBoxBuilder<Request, Response>
 {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<Request, Response>> {
         self.messages.get_sender()
     }

@@ -102,9 +102,6 @@ pub struct NoConfig;
 /// For that purpose each source implementation defines a `Config` type parameter,
 /// and the sink has to provide the configuration value specific to its needs.
 pub trait MessageSink<M: Message, Config> {
-    /// Return the config used by this actor to connect the message source
-    fn get_config(&self) -> Config;
-
     /// Return the sender that can be used by peers to send messages to this actor
     fn get_sender(&self) -> DynSender<M>;
 
@@ -299,9 +296,6 @@ pub trait RuntimeRequestSink {
 /// #    }
 /// # }
 /// # impl MessageSink<MyActorInput, NoConfig> for MyActorBuilder {
-/// #    fn get_config(&self) -> NoConfig {
-/// #        NoConfig
-/// #    }
 /// #    fn get_sender(&self) -> DynSender<MyActorInput> {
 /// #        self.messages.get_sender()
 /// #    }
@@ -413,10 +407,6 @@ impl<I: Message, O: Message, C> MessageSource<O, C> for SimpleMessageBoxBuilder<
 
 /// A `SimpleMessageBoxBuilder<Input,Output>` is a [MessageSink] of `Input` messages with no specific config.
 impl<I: Message, O: Message> MessageSink<I, NoConfig> for SimpleMessageBoxBuilder<I, O> {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<I> {
         self.input_sender.sender_clone()
     }

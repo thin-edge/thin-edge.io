@@ -51,10 +51,6 @@ impl RuntimeRequestSink for TimerActorBuilder {
 impl<T: Message> MessageSink<RequestEnvelope<SetTimeout<T>, Timeout<T>>, NoConfig>
     for TimerActorBuilder
 {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<SetTimeout<T>, Timeout<T>>> {
         let request_sender = self.box_builder.get_sender();
         Box::new(SetTimeoutSender {

@@ -77,10 +77,6 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
 impl<Req: Message, Res: Message> MessageSink<RequestEnvelope<Req, Res>, NoConfig>
     for ServerMessageBoxBuilder<Req, Res>
 {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<Req, Res>> {
         self.request_sender().sender_clone()
     }
@@ -191,10 +187,6 @@ impl<S: Server + Clone> Builder<ConcurrentServerActor<S>> for ServerActorBuilder
 impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>, NoConfig>
     for ServerActorBuilder<S, K>
 {
-    fn get_config(&self) -> NoConfig {
-        self.box_builder.get_config()
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<S::Request, S::Response>> {
         self.box_builder.get_sender()
     }

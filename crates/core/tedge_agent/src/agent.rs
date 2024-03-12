@@ -419,7 +419,7 @@ fn load_operation_workflow(
 
 pub fn create_tedge_to_te_converter(
     mqtt_actor_builder: &mut MqttActorBuilder,
-) -> Result<ConvertingActorBuilder<TedgetoTeConverter, TopicFilter>, anyhow::Error> {
+) -> Result<ConvertingActorBuilder<TedgetoTeConverter>, anyhow::Error> {
     let tedge_to_te_converter = TedgetoTeConverter::new();
 
     let subscriptions: TopicFilter = vec![
@@ -433,12 +433,8 @@ pub fn create_tedge_to_te_converter(
     .try_into()?;
 
     // Tedge to Te converter
-    let mut tedge_converter_actor: ConvertingActorBuilder<TedgetoTeConverter, TopicFilter> =
-        ConvertingActor::builder(
-            "TedgetoTeConverter",
-            tedge_to_te_converter,
-            subscriptions.clone(),
-        );
+    let mut tedge_converter_actor =
+        ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter);
 
     tedge_converter_actor.add_input(subscriptions, mqtt_actor_builder);
     tedge_converter_actor.add_sink(NoConfig, mqtt_actor_builder);
