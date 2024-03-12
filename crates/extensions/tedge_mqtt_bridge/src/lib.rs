@@ -347,18 +347,17 @@ impl<'a> BridgeHealth<'a> {
     ) {
         let name = self.name;
         let (err, health_payload) = match result {
-            Ok(_) => {
-                info!("MQTT bridge connected to {name} broker");
-                (None, MQTT_BRIDGE_UP_PAYLOAD)
-            }
-            Err(err) => {
-                error!("MQTT bridge failed to connect to {name} broker: {err}");
-                (Some(err.to_string()), MQTT_BRIDGE_DOWN_PAYLOAD)
-            }
+            Ok(_) => (None, MQTT_BRIDGE_UP_PAYLOAD),
+            Err(err) => (Some(err.to_string()), MQTT_BRIDGE_DOWN_PAYLOAD),
         };
 
         if self.last_err != err {
+            match &err {
+                None => info!("MQTT bridge connected to {name} broker"),
+                Some(err) => error!("MQTT bridge failed to connect to {name} broker: {err}"),
+            }
             self.last_err = err;
+
             if let Some(health_topic) = &self.health_topic {
                 self.target
                     .publish(health_topic, QoS::AtLeastOnce, true, health_payload)
