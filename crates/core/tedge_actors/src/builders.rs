@@ -109,12 +109,12 @@ pub trait MessageSink<M: Message, Config> {
     fn get_sender(&self) -> DynSender<M>;
 
     /// Add a source of messages to the actor under construction
-    fn add_input<N>(&mut self, source: &mut impl MessageSource<N, Config>)
+    fn add_input<N, C>(&mut self, config: C, source: &mut impl MessageSource<N, C>)
     where
         N: Message,
         M: From<N>,
     {
-        source.register_peer(self.get_config(), self.get_sender().sender_clone())
+        source.register_peer(config, self.get_sender().sender_clone())
     }
 
     /// Add a source of messages to the actor under construction, the messages being translated on the fly.
@@ -129,6 +129,7 @@ pub trait MessageSink<M: Message, Config> {
     /// # use tedge_actors::MessageReceiver;
     /// # use tedge_actors::MessageSink;
     /// # use tedge_actors::NoMessage;
+    /// # use tedge_actors::NoConfig;
     /// # use tedge_actors::Sender;
     /// # use tedge_actors::SimpleMessageBox;
     /// # use tedge_actors::SimpleMessageBoxBuilder;
@@ -142,7 +143,7 @@ pub trait MessageSink<M: Message, Config> {
     /// let mut sender_builder = SimpleMessageBoxBuilder::new("Send", 16);
     ///
     /// // Convert the `&str` sent by the source into an iterator of `char` as expected by the receiver.
-    /// receiver_builder.add_mapped_input(&mut sender_builder, |str: &'static str| str.chars() );
+    /// receiver_builder.add_mapped_input(NoConfig, &mut sender_builder, |str: &'static str| str.chars() );
     ///
     /// let mut sender: SimpleMessageBox<NoMessage, &'static str>= sender_builder.build();
     /// let receiver: SimpleMessageBox<char, NoMessage> = receiver_builder.build();
@@ -161,9 +162,10 @@ pub trait MessageSink<M: Message, Config> {
     /// # Ok(())
     /// # }
     /// ```
-    fn add_mapped_input<N, MS, MessageMapper>(
+    fn add_mapped_input<N, C, MS, MessageMapper>(
         &mut self,
-        source: &mut impl MessageSource<N, Config>,
+        config: C,
+        source: &mut impl MessageSource<N, C>,
         cast: MessageMapper,
     ) where
         N: Message,
@@ -172,7 +174,7 @@ pub trait MessageSink<M: Message, Config> {
         MessageMapper: 'static + Send + Sync,
     {
         let sender = MappingSender::new(self.get_sender(), cast);
-        source.register_peer(self.get_config(), sender.into())
+        source.register_peer(config, sender.into())
     }
 }
 

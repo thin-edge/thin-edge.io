@@ -46,7 +46,7 @@ impl OldAgentAdapter {
             OldAgentAdapter,
             old_and_new_command_topics(),
         );
-        builder.add_input(mqtt);
+        builder.add_input(builder.get_config(), mqtt);
         builder.add_sink(mqtt);
         builder
     }

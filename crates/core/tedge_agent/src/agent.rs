@@ -432,10 +432,14 @@ pub fn create_tedge_to_te_converter(
     .try_into()?;
 
     // Tedge to Te converter
-    let mut tedge_converter_actor =
-        ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter, subscriptions);
+    let mut tedge_converter_actor: ConvertingActorBuilder<TedgetoTeConverter, TopicFilter> =
+        ConvertingActor::builder(
+            "TedgetoTeConverter",
+            tedge_to_te_converter,
+            subscriptions.clone(),
+        );
 
-    tedge_converter_actor.add_input(mqtt_actor_builder);
+    tedge_converter_actor.add_input(subscriptions, mqtt_actor_builder);
     tedge_converter_actor.add_sink(mqtt_actor_builder);
 
     Ok(tedge_converter_actor)

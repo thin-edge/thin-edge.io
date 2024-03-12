@@ -44,7 +44,7 @@ impl TEdgeComponent for AwsMapper {
             get_topic_filter(&tedge_config),
         );
 
-        aws_converting_actor.add_input(&mut mqtt_actor);
+        aws_converting_actor.add_input(aws_converting_actor.get_config(), &mut mqtt_actor);
         aws_converting_actor.register_peer(NoConfig, mqtt_actor.get_sender());
 
         runtime.spawn(aws_converting_actor).await?;

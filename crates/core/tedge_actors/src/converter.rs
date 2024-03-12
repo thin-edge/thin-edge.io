@@ -217,7 +217,7 @@ impl<C: Converter> ConvertingActor<C> {
 ///         TopicFilter("some/mqtt/topics/#"));
 ///
 ///     // Connect this actor as a sink of the mqtt actor, to receive input messages from it
-///     converter_builder.add_input(&mut mqtt_builder);
+///     converter_builder.add_input(converter_builder.get_config(), &mut mqtt_builder);
 ///
 ///     // Connect the same mqtt actor as a sink of this actor, to send output messages to it
 ///     converter_builder.add_sink(&mut mqtt_builder);
@@ -272,13 +272,11 @@ impl<C: Converter, Config> MessageSource<C::Output, NoConfig>
     }
 }
 
-impl<C: Converter, Config: Clone, SourceConfig> MessageSink<C::Input, SourceConfig>
+impl<C: Converter, Config: Clone> MessageSink<C::Input, Config>
     for ConvertingActorBuilder<C, Config>
-where
-    SourceConfig: From<Config>,
 {
-    fn get_config(&self) -> SourceConfig {
-        self.config.clone().into()
+    fn get_config(&self) -> Config {
+        self.config.clone()
     }
 
     fn get_sender(&self) -> DynSender<C::Input> {
