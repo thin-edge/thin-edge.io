@@ -4,9 +4,10 @@ use crate::smartrest::topic::C8yTopic;
 use csv::StringRecord;
 use mqtt_channel::Message;
 use serde::ser::SerializeSeq;
-use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
+use tedge_api::SoftwareListCommand;
+use tedge_api::SoftwareModule;
 use tedge_config::TopicPrefix;
 use tracing::warn;
 
@@ -105,11 +106,93 @@ pub fn declare_supported_operations(ops: &[&str]) -> String {
     format!("114,{}", fields_to_csv_string(ops))
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmartRestSoftwareModuleItem {
-    pub software: String,
-    pub version: Option<String>,
-    pub url: Option<String>,
+    pub name: String,
+    pub version: String,
+    pub software_type: String,
+    pub url: String,
+}
+
+impl From<SoftwareModule> for SmartRestSoftwareModuleItem {
+    fn from(module: SoftwareModule) -> Self {
+        let url = match module.url {
+            None => "".to_string(),
+            Some(download_info) => download_info.url,
+        };
+
+        Self {
+            name: module.name,
+            version: module.version.unwrap_or_default(),
+            software_type: module.module_type.unwrap_or(SoftwareModule::default_type()),
+            url,
+        }
+    }
+}
+
+pub enum AdvancedSoftwareList {
+    Set(Vec<SmartRestSoftwareModuleItem>),
+    Append(Vec<SmartRestSoftwareModuleItem>),
+}
+
+impl AdvancedSoftwareList {
+    fn smartrest_payload(self) -> String {
+        let vec = match self {
+            AdvancedSoftwareList::Set(items) => Self::create_software_list("140", items),
+            AdvancedSoftwareList::Append(items) => Self::create_software_list("141", items),
+        };
+        let list: Vec<&str> = vec.iter().map(std::ops::Deref::deref).collect();
+
+        fields_to_csv_string(list.as_slice())
+    }
+
+    fn create_software_list(id: &str, items: Vec<SmartRestSoftwareModuleItem>) -> Vec<String> {
+        if items.is_empty() {
+            vec![id.into(), "".into(), "".into(), "".into(), "".into()]
+        } else {
+            let mut vec = vec![id.to_string()];
+            for item in items {
+                vec.push(item.name);
+                vec.push(item.version);
+                vec.push(item.software_type);
+                vec.push(item.url);
+            }
+            vec
+        }
+    }
+}
+
+pub fn get_advanced_software_list_payloads(
+    software_list_cmd: &SoftwareListCommand,
+    chunk_size: usize,
+) -> Vec<String> {
+    let mut messages: Vec<String> = Vec::new();
+
+    if software_list_cmd.modules().is_empty() {
+        messages.push(AdvancedSoftwareList::Set(vec![]).smartrest_payload());
+        return messages;
+    }
+
+    let mut items: Vec<SmartRestSoftwareModuleItem> = Vec::new();
+    software_list_cmd
+        .modules()
+        .into_iter()
+        .for_each(|software_module| {
+            let c8y_software_module: SmartRestSoftwareModuleItem = software_module.into();
+            items.push(c8y_software_module);
+        });
+
+    let mut first = true;
+    for chunk in items.chunks(chunk_size) {
+        if first {
+            messages.push(AdvancedSoftwareList::Set(chunk.to_vec()).smartrest_payload());
+            first = false;
+        } else {
+            messages.push(AdvancedSoftwareList::Append(chunk.to_vec()).smartrest_payload());
+        }
+    }
+
+    messages
 }
 
 /// A supported operation of the thin-edge device, used in status updates via SmartREST
@@ -230,6 +313,9 @@ pub trait OperationStatusMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tedge_api::messages::SoftwareListCommandPayload;
+    use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::Jsonify;
 
     #[test]
     fn serialize_smartrest_supported_operations() {
@@ -350,5 +436,77 @@ mod tests {
     fn serialize_smartrest_set_operation_to_failed_with_empty_reason() {
         let smartrest = fail_operation(CumulocitySupportedOperations::C8ySoftwareUpdate, "");
         assert_eq!(smartrest, "502,c8y_SoftwareUpdate,");
+    }
+
+    #[test]
+    fn from_software_module_to_smartrest_software_module_item() {
+        let software_module = SoftwareModule {
+            module_type: Some("a".into()),
+            name: "b".into(),
+            version: Some("c".into()),
+            url: Some("".into()),
+            file_path: None,
+        };
+
+        let expected_c8y_item = SmartRestSoftwareModuleItem {
+            name: "b".into(),
+            version: "c".into(),
+            software_type: "a".to_string(),
+            url: "".into(),
+        };
+
+        let converted: SmartRestSoftwareModuleItem = software_module.into();
+        assert_eq!(converted, expected_c8y_item);
+    }
+
+    #[test]
+    fn from_thin_edge_json_to_advanced_software_list() {
+        let input_json = r#"{
+            "id":"1",
+            "status":"successful",
+            "currentSoftwareList":[ 
+                {"type":"debian", "modules":[
+                    {"name":"a"},
+                    {"name":"b","version":"1.0"},
+                    {"name":"c","url":"https://foobar.io/c.deb"},
+                    {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
+                ]},
+                {"type":"apama","modules":[
+                    {"name":"m","url":"https://foobar.io/m.epl"}
+                ]}
+            ]}"#;
+
+        let command = SoftwareListCommand {
+            target: EntityTopicId::default_main_device(),
+            cmd_id: "1".to_string(),
+            payload: SoftwareListCommandPayload::from_json(input_json).unwrap(),
+        };
+
+        let advanced_sw_list = get_advanced_software_list_payloads(&command, 2);
+
+        assert_eq!(advanced_sw_list[0], "140,a,,debian,,b,1.0,debian,");
+        assert_eq!(
+            advanced_sw_list[1],
+            "141,c,,debian,https://foobar.io/c.deb,d,beta,debian,https://foobar.io/d.deb"
+        );
+        assert_eq!(advanced_sw_list[2], "141,m,,apama,https://foobar.io/m.epl");
+    }
+
+    #[test]
+    fn empty_to_advanced_list() {
+        let input_json = r#"{
+            "id":"1",
+            "status":"successful",
+            "currentSoftwareList":[]
+            }"#;
+
+        let command = &SoftwareListCommand {
+            target: EntityTopicId::default_main_device(),
+            cmd_id: "1".to_string(),
+            payload: SoftwareListCommandPayload::from_json(input_json).unwrap(),
+        };
+
+        let advanced_sw_list = get_advanced_software_list_payloads(command, 2);
+        assert_eq!(advanced_sw_list[0], "140,,,,");
     }
 }

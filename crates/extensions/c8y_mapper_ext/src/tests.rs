@@ -37,6 +37,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
+use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
@@ -287,6 +288,77 @@ async fn service_registration_mapping() {
         )],
     )
     .await;
+}
+
+#[tokio::test]
+async fn mapper_publishes_supported_software_types() {
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate software_list capability message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/software_list"),
+        json!({"types": ["apt", "docker"]}).to_string(),
+    ))
+    .await
+    .expect("Send failed");
+
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "c8y/inventory/managedObjects/update/test-device",
+            json!({"c8y_SupportedSoftwareTypes":["apt","docker"]}),
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapper_publishes_advanced_software_list() {
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate software_list request
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/software_list/c8y-mapper-1234"),
+        json!({
+        "id":"1",
+        "status":"successful",
+        "currentSoftwareList":[
+            {"type":"debian", "modules":[
+                {"name":"a"},
+                {"name":"b","version":"1.0"},
+                {"name":"c","url":"https://foobar.io/c.deb"},
+                {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
+            ]},
+            {"type":"apama","modules":[
+                {"name":"m","url":"https://foobar.io/m.epl"}
+            ]}
+        ]})
+        .to_string(),
+    ))
+    .await
+    .expect("Send failed");
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us", 
+                "140,a,,debian,,b,1.0,debian,,c,,debian,https://foobar.io/c.deb,d,beta,debian,https://foobar.io/d.deb,m,,apama,https://foobar.io/m.epl"
+            )
+        ])
+        .await;
 }
 
 #[tokio::test]
@@ -2474,6 +2546,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         true,
         "c8y".into(),
         false,
+        SoftwareManagementApiFlag::Advanced,
+        true,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

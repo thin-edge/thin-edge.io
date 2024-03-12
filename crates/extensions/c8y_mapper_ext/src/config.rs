@@ -20,6 +20,7 @@ use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
+use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigReaderService;
 use tedge_config::TopicPrefix;
@@ -54,6 +55,8 @@ pub struct C8yMapperConfig {
     pub clean_start: bool,
     pub c8y_prefix: TopicPrefix,
     pub bridge_in_mapper: bool,
+    pub software_management_api: SoftwareManagementApiFlag,
+    pub software_management_with_types: bool,
 }
 
 impl C8yMapperConfig {
@@ -79,6 +82,8 @@ impl C8yMapperConfig {
         clean_start: bool,
         c8y_prefix: TopicPrefix,
         bridge_in_mapper: bool,
+        software_management_api: SoftwareManagementApiFlag,
+        software_management_with_types: bool,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -108,6 +113,8 @@ impl C8yMapperConfig {
             clean_start,
             c8y_prefix,
             bridge_in_mapper,
+            software_management_api,
+            software_management_with_types,
         }
     }
 
@@ -160,6 +167,9 @@ impl C8yMapperConfig {
         let mut topics = Self::default_internal_topic_filter(&config_dir, &c8y_prefix)?;
         let enable_auto_register = tedge_config.c8y.entity_store.auto_register;
         let clean_start = tedge_config.c8y.entity_store.clean_start;
+
+        let software_management_api = tedge_config.c8y.software_management.api.clone();
+        let software_management_with_types = tedge_config.c8y.software_management.with_types;
 
         // Add feature topic filters
         for cmd in [
@@ -220,6 +230,8 @@ impl C8yMapperConfig {
             clean_start,
             c8y_prefix,
             bridge_in_mapper,
+            software_management_api,
+            software_management_with_types,
         ))
     }
 
