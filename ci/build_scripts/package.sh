@@ -119,7 +119,7 @@ fi
 
 if [ -z "$PACKAGE_TYPES" ]; then
     case "$TARGET" in
-        *linux*) PACKAGE_TYPES="deb,apk,rpm,tarball" ;;
+        *linux*|all) PACKAGE_TYPES="deb,apk,rpm,tarball" ;;
         *apple*) PACKAGE_TYPES="tarball" ;;
         *) PACKAGE_TYPES="tarball" ;;
     esac
