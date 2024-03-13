@@ -3,6 +3,8 @@ use std::fs::read_to_string;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_actors::test_helpers::FakeServerBox;
+use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
@@ -34,9 +36,8 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_secs(5);
 
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
 type DownloaderMessageBox =
-    TimedMessageBox<SimpleMessageBox<ConfigDownloadRequest, ConfigDownloadResult>>;
-type UploaderMessageBox =
-    TimedMessageBox<SimpleMessageBox<ConfigUploadRequest, ConfigUploadResult>>;
+    TimedMessageBox<FakeServerBox<ConfigDownloadRequest, ConfigDownloadResult>>;
+type UploaderMessageBox = TimedMessageBox<FakeServerBox<ConfigUploadRequest, ConfigUploadResult>>;
 
 fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
     let tempdir = TempTedgeDir::new();
@@ -95,12 +96,10 @@ async fn new_config_manager_builder(
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
-    let mut downloader_builder: SimpleMessageBoxBuilder<
-        ConfigDownloadRequest,
-        ConfigDownloadResult,
-    > = SimpleMessageBoxBuilder::new("Downloader", 5);
-    let mut uploader_builder: SimpleMessageBoxBuilder<ConfigUploadRequest, ConfigUploadResult> =
-        SimpleMessageBoxBuilder::new("Uploader", 5);
+    let mut downloader_builder: FakeServerBoxBuilder<ConfigDownloadRequest, ConfigDownloadResult> =
+        FakeServerBoxBuilder::default();
+    let mut uploader_builder: FakeServerBoxBuilder<ConfigUploadRequest, ConfigUploadResult> =
+        FakeServerBoxBuilder::default();
 
     let config_builder = ConfigManagerBuilder::try_new(
         config,

@@ -77,7 +77,7 @@ pub mod tests {
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
-        let mut client_message_box = box_builder.new_client_box(NoConfig);
+        let mut client_message_box = box_builder.new_client_box();
         let mut runtime_box = box_builder.get_signal_sender();
         let actor_message_box = box_builder.build();
         let actor = Echo {

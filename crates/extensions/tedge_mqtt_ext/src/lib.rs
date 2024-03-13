@@ -17,12 +17,10 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
-use tedge_actors::ServiceProvider;
 use tedge_actors::WrappedInput;
 
 pub type MqttConfig = mqtt_channel::Config;
@@ -74,18 +72,6 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
     }
 }
 
-impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
-    fn connect_consumer(
-        &mut self,
-        subscriptions: TopicFilter,
-        response_sender: DynSender<MqttMessage>,
-    ) -> DynSender<MqttMessage> {
-        let sender = LoggingSender::new("MQTT".into(), response_sender);
-        self.subscriber_addresses.push((subscriptions, sender));
-        self.publish_sender.clone().into()
-    }
-}
-
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     fn register_peer(&mut self, subscriptions: TopicFilter, sender: DynSender<MqttMessage>) {
         let sender = LoggingSender::new("MQTT".into(), sender);
@@ -93,11 +79,7 @@ impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     }
 }
 
-impl MessageSink<MqttMessage, NoConfig> for MqttActorBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
+impl MessageSink<MqttMessage> for MqttActorBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.publish_sender.clone().into()
     }

@@ -1,7 +1,8 @@
 //! Testing actors
-use crate::mpsc;
 use crate::Builder;
 use crate::ChannelError;
+use crate::CloneSender;
+use crate::DynRequestSender;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageReceiver;
@@ -9,20 +10,17 @@ use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::NoMessage;
-use crate::NullSender;
 use crate::RequestEnvelope;
+use crate::RequestSender;
 use crate::RuntimeRequest;
 use crate::Sender;
-use crate::ServiceConsumer;
-use crate::ServiceProvider;
+use crate::ServerMessageBoxBuilder;
+use crate::Service;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
 use crate::WrappedInput;
 use async_trait::async_trait;
 use core::future::Future;
-use futures::stream::FusedStream;
-use futures::SinkExt;
-use futures::StreamExt;
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -36,13 +34,13 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Return a new receiver which returns None if no message is received after the given timeout
     ///
     /// ```
-    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use tedge_actors::{Builder, NoConfig, NoMessage, MessageReceiver, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
     ///
     /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
-    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(NoConfig, &mut receiver_builder);
     /// let mut sender = sender_builder.build();
     /// let receiver: SimpleMessageBox<&str,NoMessage> = receiver_builder.build();
     ///
@@ -88,13 +86,13 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Skip the given number of messages
     ///
     /// ```
-    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use tedge_actors::{Builder, NoConfig, NoMessage, MessageReceiver, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
     ///
     /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
-    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(NoConfig, &mut receiver_builder);
     /// let mut sender = sender_builder.build();
     /// let mut receiver: SimpleMessageBox<&str,NoMessage> = receiver_builder.build();
     ///
@@ -114,7 +112,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Check that all messages are received in the given order without any interleaved messages.
     ///
     /// ```rust
-    /// # use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+    /// # use crate::tedge_actors::{Builder, NoConfig, NoMessage, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
     /// # use std::time::Duration;
     /// #[derive(Debug,Eq,PartialEq)]
     /// enum MyMessage {
@@ -126,7 +124,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// # async fn main() -> Result<(),RuntimeError> {
     ///
     /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
-    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(NoConfig, &mut receiver_builder);
     /// let mut sender = sender_builder.build();
     /// let receiver: SimpleMessageBox<MyMessage,NoMessage> = receiver_builder.build();
     ///
@@ -155,7 +153,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Check that all messages are received possibly in a different order or with interleaved messages.
     ///
     /// ```rust
-    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
     ///
     /// #[derive(Debug,Eq,PartialEq)]
     /// enum MyMessage {
@@ -167,8 +165,9 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// # async fn main() -> Result<(),RuntimeError> {
     ///
     /// # use std::time::Duration;
+    /// # use tedge_actors::NoConfig;
     /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
-    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(NoConfig, &mut receiver_builder);
     /// let mut sender = sender_builder.build();
     /// let receiver: SimpleMessageBox<MyMessage,NoMessage> = receiver_builder.build();
     ///
@@ -198,7 +197,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// The messages can possibly be received in a different order or with interleaved messages.
     ///
     /// ```rust
-    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
     ///
     /// #[derive(Debug,Eq,PartialEq)]
     /// enum MyMessage {
@@ -218,9 +217,10 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
     ///
-    /// use std::time::Duration;
+    /// # use std::time::Duration;
+    /// # use tedge_actors::NoConfig;
     /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
-    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(NoConfig, &mut receiver_builder);
     /// let mut sender = sender_builder.build();
     /// let receiver: SimpleMessageBox<MyMessage,NoMessage> = receiver_builder.build();
     ///
@@ -389,6 +389,12 @@ impl<T> AsMut<T> for TimedMessageBox<T> {
 pub trait MessagePlus: Message + Clone + Eq {}
 impl<T: Message + Clone + Eq> MessagePlus for T {}
 
+use crate::mpsc;
+use crate::NullSender;
+use futures::stream::FusedStream;
+use futures::SinkExt;
+use futures::StreamExt;
+
 /// For testing purpose, a `Probe` can be interposed between two actors to observe their interactions.
 ///
 /// The two actors under test, as well as their message boxes, are built and launched as usual,
@@ -401,7 +407,7 @@ impl<T: Message + Clone + Eq> MessagePlus for T {}
 ///   or [received](crate::test_helpers::ProbeEvent::Recv) by the actor on which the probe has been set.
 ///
 /// ```
-/// # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, NoConfig, ServerActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
+/// # use tedge_actors::{Actor, Builder, ChannelError, NoConfig, ServerActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
 ///
 /// # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
 /// # use crate::tedge_actors::examples::calculator_server::*;
@@ -417,7 +423,7 @@ impl<T: Message + Clone + Eq> MessagePlus for T {}
 ///
 /// // Connect the two actor message boxes interposing a probe.
 /// let mut probe = Probe::new();
-/// player_box_builder.with_probe(&mut probe).set_connection(&mut server_box_builder);
+/// player_box_builder.with_probe(&mut probe).connect_to_server(&mut server_box_builder);
 ///
 /// // Spawn the actors
 /// let calculator = Calculator::default();
@@ -508,6 +514,22 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
         }
     }
 
+    /// Connect this probe to a source and a sink
+    pub fn connect_to_peers<C>(
+        &mut self,
+        config: C,
+        source: &mut impl MessageSource<I, C>,
+        sink: &mut impl MessageSink<O>,
+    ) {
+        self.output_forwarder = sink.get_sender();
+        source.register_peer(config, self.input_interceptor.clone().into());
+    }
+
+    /// Connect this probe to a service provider
+    pub fn connect_to_server(&mut self, service: &mut impl Service<O, I>) {
+        self.output_forwarder = service.add_requester(self.input_interceptor.clone().into())
+    }
+
     /// Return the next event observed between the two connected actors.
     ///
     /// Note that calling `observe()` is mandatory for the actors to make progress.
@@ -578,10 +600,10 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
 
 /// Extend any [ServiceConsumer] with a `with_probe` method.
 pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
-    /// Add a probe to an actor `self` that is a [ServiceConsumer](crate::ServiceConsumer).
+    /// Add a probe to an actor `self` that is a [MessageSource](crate::MessageSource) and [MessageSink](crate::MessageSink).
     ///
-    /// Return a [ServiceConsumer](crate::ServiceConsumer)
-    /// that can be plugged into another actor which is a [ServiceProvider](crate::ServiceProvider).
+    /// Return a [MessageSource](crate::MessageSource) and [MessageSink](crate::MessageSink)
+    /// that can be plugged into another actor which consumes the source messages and produces messages for the sink.
     ///
     /// The added `Probe` is then interposed between the two actors,
     /// observing all the [ProbeEvent](crate::test_helpers::ProbeEvent) exchanged between them.
@@ -590,7 +612,8 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
     /// # use tedge_actors::{NoConfig, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
     /// # use crate::tedge_actors::examples::calculator::*;
     /// use tedge_actors::test_helpers::Probe;               // The probe struct
-    /// use tedge_actors::ServiceConsumer;                   // is a `ServiceConsumer`
+    /// use tedge_actors::MessageSource;                     // is a `MessageSource`
+    /// use tedge_actors::MessageSink;                       // is a `MessageSink`
     /// use tedge_actors::test_helpers::ServiceConsumerExt;  // Adds `.with_probe()`
     ///
     /// // Build the actor message boxes
@@ -599,7 +622,7 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
     ///
     /// // Connect the two actor message boxes interposing a probe.
     /// let mut probe = Probe::new();
-    /// client_box_builder.with_probe(&mut probe).set_connection(&mut server_box_builder);
+    /// client_box_builder.with_probe(&mut probe).connect_to_server(&mut server_box_builder);
     /// ```
     fn with_probe<'a>(
         &'a mut self,
@@ -609,29 +632,16 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
 
 impl<T, Request: MessagePlus, Response: MessagePlus> ServiceConsumerExt<Request, Response> for T
 where
-    T: ServiceConsumer<Request, Response, NoConfig>,
+    T: MessageSource<Request, NoConfig>,
+    T: MessageSink<Response>,
 {
     fn with_probe<'a>(
         &'a mut self,
         probe: &'a mut Probe<Response, Request>,
     ) -> &'a mut Probe<Response, Request> {
-        probe.input_forwarder = self.get_response_sender();
-        self.set_request_sender(probe.output_interceptor.clone().into());
+        probe.input_forwarder = self.get_sender();
+        self.register_peer(NoConfig, probe.output_interceptor.sender_clone());
         probe
-    }
-}
-
-impl<I: MessagePlus, O: MessagePlus> ServiceConsumer<O, I, NoConfig> for Probe<I, O> {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
-    fn set_request_sender(&mut self, sender: DynSender<O>) {
-        self.output_forwarder = sender;
-    }
-
-    fn get_response_sender(&self) -> DynSender<I> {
-        self.input_interceptor.clone().into()
     }
 }
 
@@ -641,66 +651,45 @@ impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> 
     }
 }
 
-impl<I: MessagePlus, O: MessagePlus> MessageSink<I, NoConfig> for Probe<I, O> {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
+impl<I: MessagePlus, O: MessagePlus> MessageSink<I> for Probe<I, O> {
     fn get_sender(&self) -> DynSender<I> {
         self.input_interceptor.clone().into()
     }
 }
 
-pub trait ServiceProviderExt<I: Message, O: Message, C> {
-    /// Create a simple message box connected to a box under construction.
-    fn new_client_box(&mut self, config: C) -> SimpleMessageBox<O, I>;
+pub trait ServiceProviderExt<I: Message, O: Message> {
+    /// Create a simple message box connected to a server box under construction.
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I>;
 }
 
-impl<I, O, C, T> ServiceProviderExt<I, O, C> for T
-where
-    I: Message,
-    O: Message,
-    C: Clone,
-    T: ServiceProvider<I, O, C>,
-{
-    fn new_client_box(&mut self, config: C) -> SimpleMessageBox<O, I> {
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynRequestSender<I, O> {
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
         let name = "client-box";
         let capacity = 16;
-        let mut client_box = ConsumerBoxBuilder::new(name, capacity, config);
-        self.add_peer(&mut client_box);
+        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
+        let request_sender = RequestSender {
+            sender: self.sender_clone(),
+            reply_to: client_box.get_sender(),
+        };
+        client_box.register_peer(NoConfig, request_sender.into());
         client_box.build()
     }
 }
 
-struct ConsumerBoxBuilder<I, O: Debug, C> {
-    config: C,
-    box_builder: SimpleMessageBoxBuilder<O, I>,
-}
-
-impl<I: Message, O: Message, C> ConsumerBoxBuilder<I, O, C> {
-    fn new(name: &str, capacity: usize, config: C) -> Self {
-        ConsumerBoxBuilder {
-            config,
-            box_builder: SimpleMessageBoxBuilder::new(name, capacity),
-        }
-    }
-
-    fn build(self) -> SimpleMessageBox<O, I> {
-        self.box_builder.build()
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for ServerMessageBoxBuilder<I, O> {
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
+        self.request_sender().new_client_box()
     }
 }
 
-impl<I: Message, O: Message, C: Clone> ServiceConsumer<I, O, C> for ConsumerBoxBuilder<I, O, C> {
-    fn get_config(&self) -> C {
-        self.config.clone()
-    }
-
-    fn set_request_sender(&mut self, request_sender: DynSender<I>) {
-        self.box_builder.set_request_sender(request_sender)
-    }
-
-    fn get_response_sender(&self) -> DynSender<O> {
-        self.box_builder.get_response_sender()
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for SimpleMessageBoxBuilder<I, O> {
+    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
+        let name = "client-box";
+        let capacity = 16;
+        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
+        self.register_peer(NoConfig, client_box.get_sender());
+        client_box.register_peer(NoConfig, self.get_sender());
+        client_box.build()
     }
 }
 
@@ -735,9 +724,7 @@ pub struct FakeServerBox<Request: Debug, Response> {
 impl<Request: Message, Response: Message> FakeServerBox<Request, Response> {
     /// Return a fake message box builder
     pub fn builder() -> FakeServerBoxBuilder<Request, Response> {
-        FakeServerBoxBuilder {
-            messages: SimpleMessageBoxBuilder::new("Fake Server", 16),
-        }
+        FakeServerBoxBuilder::default()
     }
 }
 
@@ -799,13 +786,17 @@ pub struct FakeServerBoxBuilder<Request: Debug, Response> {
     messages: SimpleMessageBoxBuilder<RequestEnvelope<Request, Response>, NoMessage>,
 }
 
-impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>, NoConfig>
+impl<Request: Message, Response: Message> Default for FakeServerBoxBuilder<Request, Response> {
+    fn default() -> Self {
+        FakeServerBoxBuilder {
+            messages: SimpleMessageBoxBuilder::new("Fake Server", 16),
+        }
+    }
+}
+
+impl<Request: Message, Response: Message> MessageSink<RequestEnvelope<Request, Response>>
     for FakeServerBoxBuilder<Request, Response>
 {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<Request, Response>> {
         self.messages.get_sender()
     }

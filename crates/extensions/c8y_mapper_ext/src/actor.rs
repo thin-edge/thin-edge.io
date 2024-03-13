@@ -24,13 +24,11 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_downloader_ext::DownloadRequest;
@@ -295,29 +293,27 @@ impl C8yMapperBuilder {
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         config: C8yMapperConfig,
-        mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         http: &mut impl Service<C8YRestRequest, C8YRestResult>,
-        timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
-        uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
-        downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
+        timer: &mut impl Service<SyncStart, SyncComplete>,
+        uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
+        downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-        service_monitor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
 
         let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
-        let mqtt_publisher = mqtt.connect_consumer(
+        let mqtt_publisher = mqtt.get_sender();
+        mqtt.register_peer(
             config.topics.clone(),
             box_builder.get_sender().sender_clone(),
         );
         let http_proxy = C8YHttpProxy::new(http);
-        let timer_sender =
-            timer.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
-        let upload_sender =
-            uploader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
-        let download_sender =
-            downloader.connect_consumer(NoConfig, box_builder.get_sender().sender_clone());
+        let timer_sender = timer.add_requester(box_builder.get_sender().sender_clone());
+        let upload_sender = uploader.add_requester(box_builder.get_sender().sender_clone());
+        let download_sender = downloader.add_requester(box_builder.get_sender().sender_clone());
         fs_watcher.register_peer(
             config.ops_dir.clone(),
             box_builder.get_sender().sender_clone(),
@@ -330,7 +326,7 @@ impl C8yMapperBuilder {
 
         let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
-        service_monitor.connect_consumer(
+        service_monitor.register_peer(
             C8Y_BRIDGE_HEALTH_TOPIC.try_into().unwrap(),
             bridge_monitor_builder.get_sender(),
         );

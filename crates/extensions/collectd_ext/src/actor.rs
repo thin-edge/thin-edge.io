@@ -13,7 +13,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;
@@ -62,20 +61,6 @@ impl CollectdActorBuilder {
 
     pub fn add_input(&mut self, source: &mut impl MessageSource<MqttMessage, TopicFilter>) {
         source.register_peer(self.topics.clone(), self.message_box.get_sender())
-    }
-}
-
-impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for CollectdActorBuilder {
-    fn get_config(&self) -> TopicFilter {
-        self.topics.clone()
-    }
-
-    fn set_request_sender(&mut self, _request_sender: DynSender<MqttMessage>) {
-        // this actor publishes no messages over MQTT
-    }
-
-    fn get_response_sender(&self) -> DynSender<MqttMessage> {
-        self.message_box.get_response_sender()
     }
 }
 

@@ -2,7 +2,6 @@ use crate::*;
 use mqtt_channel::Topic;
 use std::time::Duration;
 use tedge_actors::Builder;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 
@@ -31,19 +30,18 @@ impl MqttClientBuilder {
             box_builder: SimpleMessageBoxBuilder::new(name, capacity),
         }
     }
-}
 
-impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for MqttClientBuilder {
-    fn get_config(&self) -> TopicFilter {
-        self.subscriptions.clone()
-    }
-
-    fn set_request_sender(&mut self, request_sender: DynSender<MqttMessage>) {
-        self.box_builder.set_request_sender(request_sender)
-    }
-
-    fn get_response_sender(&self) -> DynSender<MqttMessage> {
-        self.box_builder.get_response_sender()
+    fn with_connection(
+        self,
+        mqtt: &mut (impl MessageSink<MqttMessage> + MessageSource<MqttMessage, TopicFilter>),
+    ) -> Self {
+        let box_builder = self
+            .box_builder
+            .with_connection(self.subscriptions.clone(), mqtt);
+        MqttClientBuilder {
+            subscriptions: self.subscriptions,
+            box_builder,
+        }
     }
 }
 

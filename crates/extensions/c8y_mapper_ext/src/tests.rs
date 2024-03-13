@@ -99,7 +99,9 @@ async fn child_device_registration_mapping() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -157,7 +159,9 @@ async fn custom_topic_scheme_registration_mapping() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -214,7 +218,9 @@ async fn service_registration_mapping() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -498,7 +504,9 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -521,7 +529,9 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -567,7 +577,9 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -616,7 +628,9 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -689,7 +703,9 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -730,7 +746,9 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -777,7 +795,9 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -823,7 +843,9 @@ async fn c8y_mapper_alarm_with_custom_message() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -863,7 +885,9 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -892,7 +916,9 @@ async fn c8y_mapper_alarm_empty_payload() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -912,7 +938,9 @@ async fn c8y_mapper_alarm_empty_json_payload() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -937,7 +965,9 @@ async fn c8y_mapper_alarm_empty_json_payload() {
 async fn c8y_mapper_child_event() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -997,7 +1027,9 @@ async fn c8y_mapper_child_event() {
 async fn c8y_mapper_child_service_event() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1080,7 +1112,9 @@ async fn c8y_mapper_child_service_event() {
 async fn c8y_mapper_main_service_event() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1145,7 +1179,9 @@ async fn c8y_mapper_main_service_event() {
 async fn c8y_mapper_child_service_alarm() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1221,7 +1257,9 @@ async fn c8y_mapper_child_service_alarm() {
 async fn c8y_mapper_main_service_alarm() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1280,7 +1318,9 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -2046,7 +2086,9 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -2105,7 +2147,9 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -2173,7 +2217,9 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -2236,7 +2282,9 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
-    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -2363,6 +2411,11 @@ fn create_thin_edge_child_operations(cfg_dir: &TempTedgeDir, child_id: &str, ops
     }
 }
 
+async fn trigger_timeout(timer: &mut FakeServerBox<SyncStart, SyncComplete>) {
+    timer.recv().await.unwrap();
+    timer.send(Timeout::new(())).await.unwrap();
+}
+
 pub(crate) async fn spawn_c8y_mapper_actor(
     config_dir: &TempTedgeDir,
     init: bool,
@@ -2370,9 +2423,9 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     SimpleMessageBox<MqttMessage, MqttMessage>,
     FakeServerBox<C8YRestRequest, C8YRestResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
-    SimpleMessageBox<SyncStart, SyncComplete>,
-    SimpleMessageBox<IdUploadRequest, IdUploadResult>,
-    SimpleMessageBox<IdDownloadRequest, IdDownloadResult>,
+    FakeServerBox<SyncStart, SyncComplete>,
+    FakeServerBox<IdUploadRequest, IdUploadResult>,
+    FakeServerBox<IdDownloadRequest, IdDownloadResult>,
 ) {
     if init {
         config_dir.dir("operations").dir("c8y");
@@ -2422,15 +2475,15 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
     let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
-        FakeServerBox::builder();
+        FakeServerBoxBuilder::default();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
-    let mut uploader_builder: SimpleMessageBoxBuilder<IdUploadRequest, IdUploadResult> =
-        SimpleMessageBoxBuilder::new("Uploader", 5);
-    let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
-        SimpleMessageBoxBuilder::new("Downloader", 5);
-    let mut timer_builder: SimpleMessageBoxBuilder<SyncStart, SyncComplete> =
-        SimpleMessageBoxBuilder::new("Timer", 5);
+    let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
+        FakeServerBoxBuilder::default();
+    let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+        FakeServerBoxBuilder::default();
+    let mut timer_builder: FakeServerBoxBuilder<SyncStart, SyncComplete> =
+        FakeServerBoxBuilder::default();
     let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 

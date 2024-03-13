@@ -9,8 +9,10 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
 use tedge_actors::MessageReceiver;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::Sender;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::CommandStatus;
@@ -187,7 +189,8 @@ async fn spawn_software_manager(
     };
 
     let mut software_actor_builder = SoftwareManagerBuilder::new(config);
-    converter_builder.set_connection(&mut software_actor_builder);
+    converter_builder.register_peer(NoConfig, software_actor_builder.get_sender());
+    software_actor_builder.register_peer(NoConfig, converter_builder.get_sender());
 
     let converter_box = converter_builder.build().with_timeout(TEST_TIMEOUT_MS);
 

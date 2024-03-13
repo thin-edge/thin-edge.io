@@ -9,16 +9,13 @@ use crate::DynSender;
 use crate::LoggingReceiver;
 use crate::Message;
 use crate::MessageSink;
-use crate::NoConfig;
 use crate::RequestEnvelope;
-use crate::RequestSender;
 use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
 use crate::Server;
 use crate::ServerActor;
 use crate::ServerMessageBox;
-use crate::ServiceProvider;
 use std::convert::Infallible;
 use std::fmt::Debug;
 
@@ -76,24 +73,9 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
     }
 }
 
-impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
+impl<Req: Message, Res: Message> MessageSink<RequestEnvelope<Req, Res>>
     for ServerMessageBoxBuilder<Req, Res>
 {
-    fn connect_consumer(&mut self, _config: NoConfig, reply_to: DynSender<Res>) -> DynSender<Req> {
-        Box::new(RequestSender {
-            sender: self.request_sender.sender_clone(),
-            reply_to,
-        })
-    }
-}
-
-impl<Req: Message, Res: Message> MessageSink<RequestEnvelope<Req, Res>, NoConfig>
-    for ServerMessageBoxBuilder<Req, Res>
-{
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<Req, Res>> {
         self.request_sender().sender_clone()
     }
@@ -201,23 +183,9 @@ impl<S: Server + Clone> Builder<ConcurrentServerActor<S>> for ServerActorBuilder
     }
 }
 
-impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for ServerActorBuilder<S, K> {
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<S::Response>,
-    ) -> DynSender<S::Request> {
-        self.box_builder.connect_consumer(config, response_sender)
-    }
-}
-
-impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>, NoConfig>
+impl<S: Server, K> MessageSink<RequestEnvelope<S::Request, S::Response>>
     for ServerActorBuilder<S, K>
 {
-    fn get_config(&self) -> NoConfig {
-        self.box_builder.get_config()
-    }
-
     fn get_sender(&self) -> DynSender<RequestEnvelope<S::Request, S::Response>> {
         self.box_builder.get_sender()
     }

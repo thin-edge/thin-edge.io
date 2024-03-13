@@ -178,7 +178,6 @@ mod tests {
     use std::time::Duration;
     use tedge_actors::test_helpers::ServiceProviderExt;
     use tedge_actors::Builder;
-    use tedge_actors::NoConfig;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tokio::time::timeout;
 
@@ -256,7 +255,7 @@ mod tests {
             .build();
         let batcher = Batcher::new(config);
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 1);
-        let test_box = box_builder.new_client_box(NoConfig);
+        let test_box = box_builder.new_client_box();
         let driver_box = box_builder.build();
 
         let driver = BatchDriver::new(batcher, driver_box);
