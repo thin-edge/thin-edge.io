@@ -213,7 +213,7 @@ impl<C: Converter> ConvertingActor<C> {
 ///     );
 ///
 ///     // Connect this actor as a sink of the mqtt actor, to receive input messages from it
-///     converter_builder.add_input(TopicFilter("some/mqtt/topics/#"), &mut mqtt_builder);
+///     converter_builder.connect_source(TopicFilter("some/mqtt/topics/#"), &mut mqtt_builder);
 ///
 ///     // Connect the same mqtt actor as a sink of this actor, to send output messages to it
 ///     converter_builder.add_sink(NoConfig, &mut mqtt_builder);

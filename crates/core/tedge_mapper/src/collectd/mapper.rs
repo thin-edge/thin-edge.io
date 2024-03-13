@@ -48,7 +48,7 @@ impl TEdgeComponent for CollectdMapper {
         let mut collectd_actor = CollectdActorBuilder::new(input_topic);
 
         collectd_actor.add_input(&mut mqtt_actor);
-        batching_actor.add_input(NoConfig, &mut collectd_actor);
+        batching_actor.connect_source(NoConfig, &mut collectd_actor);
         mqtt_actor.add_mapped_input(NoConfig, &mut batching_actor, move |batch| {
             collectd_ext::converter::batch_into_mqtt_messages(&output_topic, batch).into_iter()
         });

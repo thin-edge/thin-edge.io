@@ -95,8 +95,8 @@ pub struct NoConfig;
 /// The [Builder] of an [Actor](crate::Actor) must implement this trait
 /// for every message type that actor can receive from its peers.
 ///
-/// An actor whose builder is a `MessageSink<M, C>` can be connected to any other actor
-/// whose builder is a `MessageSource<M, C>` so that the sink can receive messages from that source.
+/// An actor whose builder is a `MessageSink<M` can be connected to any other actor
+/// whose builder is a `MessageSource<Into<M>, C>` so that the sink can receive messages from that source.
 pub trait MessageSink<M: Message> {
     /// Return the sender that can be used by peers to send messages to this actor
     fn get_sender(&self) -> DynSender<M>;
@@ -105,7 +105,7 @@ pub trait MessageSink<M: Message> {
     ///
     /// A sink might be interested only in a subset of the messages emitted by the source.
     /// This subset is defined by the config parameter.
-    fn add_input<N, C>(&mut self, config: C, source: &mut impl MessageSource<N, C>)
+    fn connect_source<N, C>(&mut self, config: C, source: &mut impl MessageSource<N, C>)
     where
         N: Message,
         M: From<N>,
