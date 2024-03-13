@@ -177,7 +177,7 @@ pub trait MessageSink<M: Message> {
 /// The [Builder] of an [Actor](crate::Actor) must implement this trait
 /// for every message type that actor can send to its peers.
 ///
-/// To receive messages from a `MessageSource<M, C>`, the peer must be a `MessageSink<M>`.
+/// To receive messages from a `MessageSource<M, C>`, the peer must be a `MessageSink<From<M>`.
 pub trait MessageSource<M: Message, Config> {
     /// The message will be sent to the peer using the provided `sender`
     fn register_peer(&mut self, config: Config, sender: DynSender<M>);

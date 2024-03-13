@@ -2,7 +2,6 @@
 use crate::Builder;
 use crate::ChannelError;
 use crate::CloneSender;
-use crate::DynRequestSender;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageReceiver;
@@ -662,7 +661,7 @@ pub trait ServiceProviderExt<I: Message, O: Message> {
     fn new_client_box(&mut self) -> SimpleMessageBox<O, I>;
 }
 
-impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynRequestSender<I, O> {
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynSender<RequestEnvelope<I, O>> {
     fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
         let name = "client-box";
         let capacity = 16;

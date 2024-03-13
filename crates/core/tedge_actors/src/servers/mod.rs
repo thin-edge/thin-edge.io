@@ -144,9 +144,6 @@ impl<Request, Response> AsRef<Request> for RequestEnvelope<Request, Response> {
     }
 }
 
-/// A request sender to some [Server]
-pub type DynRequestSender<Request, Response> = DynSender<RequestEnvelope<Request, Response>>;
-
 /// A connector to a [Server] expecting Request and returning Response.
 pub trait Service<Request: Message, Response: Message>:
     MessageSink<RequestEnvelope<Request, Response>>

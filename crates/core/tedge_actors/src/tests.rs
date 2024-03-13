@@ -27,7 +27,7 @@ impl Server for SleepService {
     }
 }
 
-async fn spawn_sleep_service() -> DynRequestSender<u64, u64> {
+async fn spawn_sleep_service() -> DynSender<RequestEnvelope<u64, u64>> {
     let config = ServerConfig::default();
     let actor = ServerActorBuilder::new(SleepService, &config, Sequential);
     let handle = actor.request_sender();
@@ -37,7 +37,9 @@ async fn spawn_sleep_service() -> DynRequestSender<u64, u64> {
     handle
 }
 
-async fn spawn_concurrent_sleep_service(max_concurrency: usize) -> DynRequestSender<u64, u64> {
+async fn spawn_concurrent_sleep_service(
+    max_concurrency: usize,
+) -> DynSender<RequestEnvelope<u64, u64>> {
     let config = ServerConfig::default().with_max_concurrency(max_concurrency);
     let actor = ServerActorBuilder::new(SleepService, &config, Concurrent);
     let handle = actor.request_sender();
