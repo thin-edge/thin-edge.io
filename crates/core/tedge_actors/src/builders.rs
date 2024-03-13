@@ -139,7 +139,7 @@ pub trait MessageSink<M: Message> {
     /// let mut sender_builder = SimpleMessageBoxBuilder::new("Send", 16);
     ///
     /// // Convert the `&str` sent by the source into an iterator of `char` as expected by the receiver.
-    /// receiver_builder.add_mapped_input(NoConfig, &mut sender_builder, |str: &'static str| str.chars() );
+    /// receiver_builder.connect_mapped_source(NoConfig, &mut sender_builder, |str: &'static str| str.chars() );
     ///
     /// let mut sender: SimpleMessageBox<NoMessage, &'static str>= sender_builder.build();
     /// let receiver: SimpleMessageBox<char, NoMessage> = receiver_builder.build();
@@ -158,7 +158,7 @@ pub trait MessageSink<M: Message> {
     /// # Ok(())
     /// # }
     /// ```
-    fn add_mapped_input<N, C, MS, MessageMapper>(
+    fn connect_mapped_source<N, C, MS, MessageMapper>(
         &mut self,
         config: C,
         source: &mut impl MessageSource<N, C>,
