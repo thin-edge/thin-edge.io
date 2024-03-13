@@ -437,7 +437,7 @@ pub fn create_tedge_to_te_converter(
         ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter);
 
     tedge_converter_actor.connect_source(subscriptions, mqtt_actor_builder);
-    tedge_converter_actor.add_sink(NoConfig, mqtt_actor_builder);
+    tedge_converter_actor.connect_sink(NoConfig, mqtt_actor_builder);
 
     Ok(tedge_converter_actor)
 }

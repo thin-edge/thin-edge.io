@@ -43,7 +43,7 @@ impl OldAgentAdapter {
     ) -> ConvertingActorBuilder<OldAgentAdapter> {
         let mut builder = ConvertingActor::builder("OldAgentAdapter", OldAgentAdapter);
         builder.connect_source(old_and_new_command_topics(), mqtt);
-        builder.add_sink(NoConfig, mqtt);
+        builder.connect_sink(NoConfig, mqtt);
         builder
     }
 }

@@ -183,7 +183,7 @@ pub trait MessageSource<M: Message, Config> {
     fn register_peer(&mut self, config: Config, sender: DynSender<M>);
 
     /// Connect a peer actor that will consume the message produced by this actor
-    fn add_sink(&mut self, config: Config, peer: &impl MessageSink<M>) {
+    fn connect_sink(&mut self, config: Config, peer: &impl MessageSink<M>) {
         self.register_peer(config, peer.get_sender());
     }
 }
