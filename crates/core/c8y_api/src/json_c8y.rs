@@ -605,7 +605,7 @@ mod tests {
 
         assert_eq!(actual_c8y_event.event_type, "empty_event".to_string());
         assert_eq!(actual_c8y_event.text, "empty_event".to_string());
-        assert!(actual_c8y_event.time < OffsetDateTime::now_utc());
+        assert!(actual_c8y_event.time <= OffsetDateTime::now_utc());
         assert_matches!(actual_c8y_event.source, None);
         assert!(actual_c8y_event.extras.is_empty());
 
