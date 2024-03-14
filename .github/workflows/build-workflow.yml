@@ -8,11 +8,6 @@ on:
   merge_group:
   workflow_dispatch:
     inputs:
-      disable_cache:
-        description: Disable rust caching
-        type: boolean
-        required: false
-        default: false
       include:
         description: Only run tests matching tests with the given tags
         type: string
@@ -23,6 +18,12 @@ on:
         type: string
         required: false
         default: "10"
+      run_rust_tests:
+        description: Run Rust tests (generally this is not required as the PR check will run full Rust tests)
+        type: boolean
+        required: false
+        default: false
+
   # Use a manual approval process before PR's are given access to
   # the secrets which are required to run the integration tests.
   # The PR code should be manually approved to see if it can be trusted.
@@ -33,45 +34,95 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
   build:
-    name: Build ${{ matrix.job.target }}
-    runs-on: ubuntu-20.04
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.host_os }}
     strategy:
       fail-fast: false
       matrix:
-        job:
-          - { target: x86_64-unknown-linux-musl, cache: true }
-          - { target: aarch64-unknown-linux-musl, cache: true }
-          - { target: arm-unknown-linux-musleabihf, cache: true }
-          - { target: armv7-unknown-linux-musleabihf, cache: true }
+        # Note: Targets which requires a non-default rust_channel
+        # then they should not be included in the .target list, but
+        # rather in the include section.
+        # This is just how Github processes matrix jobs
+        target:
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - arm-unknown-linux-musleabihf
+          - arm-unknown-linux-musleabi
+          - armv5te-unknown-linux-musleabi
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - riscv64gc-unknown-linux-gnu
+          - x86_64-apple-darwin
+        mode:
+          - --release
+
+        rust_channel:
+          - "1.70"
+
+        include:
+          - target: aarch64-unknown-linux-musl
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+          
+          - target: armv7-unknown-linux-musleabihf
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: arm-unknown-linux-musleabihf
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: arm-unknown-linux-musleabi
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: armv5te-unknown-linux-musleabi
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: x86_64-unknown-linux-musl
+            host_os: ubuntu-22.04
+
+          - target: i686-unknown-linux-musl
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: riscv64gc-unknown-linux-gnu
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: aarch64-apple-darwin
+            mode: --release
+            rust_channel: "1.72" # ahash uses "stdsimd" feature which was stabilized in 1.72, https://github.com/tkaitchuck/aHash/issues/195
+            host_os: macos-14
+            cargo_options: --no-run
+
+          - target: x86_64-apple-darwin
+            host_os: macos-14
 
     steps:
+      - if: ${{ contains(matrix.host_os, 'ubuntu') }}
+        run: sudo apt-get update -y
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
 
-      - name: Retrieve MSRV from workspace Cargo.toml
-        id: rust_version
-        uses: SebRollen/toml-action@v1.2.0
-        with:
-          file: Cargo.toml
-          field: "workspace.package.rust-version"
+      - run: mk/install-build-tools.sh +${{ matrix.rust_channel }} --target=${{ matrix.target }}
+        shell: sh
+      - name: Build
+        run: |
+          . ./ci/build_scripts/version.sh
+          mk/cargo.sh +${{ matrix.rust_channel }} build --target=${{ matrix.target }} ${{ matrix.mode }}
 
-      - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ steps.rust_version.outputs.value }}
-          targets: ${{ matrix.job.target }}
-
-      - name: Enable cache
-        if: ${{ matrix.job.cache && !inputs.disable_cache }}
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v2
+      - if: ${{ inputs.run_rust_tests && !contains(matrix.host_os, 'windows') }}
+        name: Test
+        run: |
+          mk/cargo.sh +${{ matrix.rust_channel }} test -vv --target=${{ matrix.target }} ${{ matrix.cargo_options }} ${{ matrix.mode }} --no-fail-fast --locked --all-features --all-targets
 
       # Install nfpm used to for linux packaging
       - uses: actions/setup-go@v5
@@ -80,16 +131,16 @@ jobs:
           cache: false
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
-      - uses: taiki-e/install-action@just
-      - name: Build for ${{ matrix.job.target }}
-        run: just release ${{ matrix.job.target }}
+      - name: Package
+        run: |
+          ./ci/build_scripts/build.sh ${{ matrix.target }} --skip-build --skip-deprecated-packages
 
       - name: Upload packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v4
         with:
-            name: packages-${{ matrix.job.target }}
-            path: target/${{ matrix.job.target }}/packages/*.*
+            name: packages-${{ matrix.target }}
+            path: target/${{ matrix.target }}/packages/*.*
 
   approve:
     # Note: Use approval as a job so that the downstream jobs are only prompted once (if more than 1 matrix job is defined)
@@ -200,6 +251,13 @@ jobs:
           # Keep arm-unknown-linux-musleabihf in separate repo due to armhf conflict between raspbian and debian
           - { target: arm-unknown-linux-musleabihf,   repo: tedge-main-armv6,    component: main }
           - { target: armv7-unknown-linux-musleabihf, repo: tedge-main,          component: main }
+          - { target: arm-unknown-linux-musleabi,     repo: tedge-main,          component: main }
+          - { target: i686-unknown-linux-musl,        repo: tedge-main,          component: main }
+          # Debian also calls this "armel" (conflict with arm-unknown-linux-musleabi)
+          # - { target: armv5te-unknown-linux-musleabi, repo: tedge-main,          component: main }
+          - { target: riscv64gc-unknown-linux-gnu,    repo: tedge-main,          component: main }
+          - { target: aarch64-apple-darwin,      repo: tedge-main,          component: main }
+          - { target: x86_64-apple-darwin,       repo: tedge-main,          component: main }
 
     steps:
       - name: Checkout
