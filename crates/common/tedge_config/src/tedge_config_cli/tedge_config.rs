@@ -346,6 +346,11 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         cert_path: Utf8PathBuf,
 
+        /// Path where the device's certificate signing request is stored
+        #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(function = "default_device_csr"))]
+        #[doku(as = "PathBuf")]
+        csr_path: Utf8PathBuf,
+
         /// The default device type
         #[tedge_config(example = "thin-edge.io", default(value = "thin-edge.io"))]
         #[tedge_config(rename = "type")]
@@ -941,6 +946,13 @@ fn default_device_cert(location: &TEdgeConfigLocation) -> Utf8PathBuf {
         .tedge_config_root_path()
         .join("device-certs")
         .join("tedge-certificate.pem")
+}
+
+fn default_device_csr(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+    location
+        .tedge_config_root_path()
+        .join("device-certs")
+        .join("tedge.csr")
 }
 
 fn default_mqtt_port() -> NonZeroU16 {
