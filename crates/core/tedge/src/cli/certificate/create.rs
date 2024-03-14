@@ -4,13 +4,15 @@ use camino::Utf8PathBuf;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
 use certificate::NewCertificateConfig;
+use certificate::PemCertificate;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::io::ErrorKind;
 use std::path::Path;
+use tedge_utils::file::create_file_with_mode_or_overwrite;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
-
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
     /// The device identifier
@@ -21,6 +23,9 @@ pub struct CreateCertCmd {
 
     /// The path where the device private key will be stored
     pub key_path: Utf8PathBuf,
+
+    /// The path where the device CSR file will be stored
+    pub csr_path: Option<Utf8PathBuf>,
 }
 
 impl Command for CreateCertCmd {
@@ -38,13 +43,32 @@ impl Command for CreateCertCmd {
 
 impl CreateCertCmd {
     pub fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
-        self.create_test_certificate_for(config, &KeyKind::New)
+        // Reuse private key if it already exists
+        let key_kind = match std::fs::read_to_string(&self.key_path) {
+            Ok(keypair_pem) => KeyKind::Reuse { keypair_pem },
+            Err(err) if err.kind() == ErrorKind::NotFound => KeyKind::New,
+            Err(err) => return Err(CertError::IoError(err).cert_context(self.cert_path.clone())),
+        };
+        self.create_test_certificate_for(config, &key_kind)
     }
 
     pub fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let keypair_pem = std::fs::read_to_string(&self.key_path)
             .map_err(|e| CertError::IoError(e).key_context(self.key_path.clone()))?;
         self.create_test_certificate_for(config, &KeyKind::Reuse { keypair_pem })
+    }
+
+    pub fn create_certificate_signing_request(
+        &self,
+        config: &NewCertificateConfig,
+    ) -> Result<(), CertError> {
+        // Reuse private key if it already exists
+        let key_kind = match std::fs::read_to_string(&self.key_path) {
+            Ok(keypair_pem) => KeyKind::Reuse { keypair_pem },
+            Err(err) if err.kind() == ErrorKind::NotFound => KeyKind::New,
+            Err(err) => return Err(CertError::IoError(err).cert_context(self.cert_path.clone())),
+        };
+        self.create_test_certificate_for(config, &key_kind)
     }
 
     fn create_test_certificate_for(
@@ -55,22 +79,38 @@ impl CreateCertCmd {
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
-        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, key_kind)?;
+        let cert = match &self.csr_path {
+            Some(csr_path) => {
+                validate_parent_dir_exists(csr_path).map_err(CertError::CsrPathError)?;
 
-        // TODO cope with broker user being tedge
-        // Creating files with permission 644 owned by the MQTT broker
-        let mut cert_file =
-            create_new_file(&self.cert_path, crate::BROKER_USER, crate::BROKER_GROUP)
-                .map_err(|err| err.cert_context(self.cert_path.clone()))?;
+                let cert = KeyCertPair::new_certificate_sign_request(config, &self.id, key_kind)?;
+                let cert_csr = cert.certificate_signing_request_string()?;
 
-        let cert_pem = cert.certificate_pem_string()?;
-        cert_file.write_all(cert_pem.as_bytes())?;
-        cert_file.sync_all()?;
+                create_file_with_mode_or_overwrite(csr_path, Some(cert_csr.as_str()), 0o444)?;
 
-        // Prevent the certificate to be overwritten
-        set_permission(&cert_file, 0o444)?;
+                cert
+            }
+            None => {
+                let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, key_kind)?;
+
+                // Creating files with permission 644 owned by the MQTT broker
+                let mut cert_file =
+                    create_new_file(&self.cert_path, crate::BROKER_USER, crate::BROKER_GROUP)
+                        .map_err(|err| err.cert_context(self.cert_path.clone()))?;
+
+                let cert_pem = cert.certificate_pem_string()?;
+                cert_file.write_all(cert_pem.as_bytes())?;
+                cert_file.sync_all()?;
+
+                // Prevent the certificate to be overwritten
+                set_permission(&cert_file, 0o444)?;
+
+                cert
+            }
+        };
 
         if let KeyKind::New = key_kind {
+            // TODO cope with broker user being tedge
             let mut key_file =
                 create_new_file(&self.key_path, crate::BROKER_USER, crate::BROKER_GROUP)
                     .map_err(|err| err.key_context(self.key_path.clone()))?;
@@ -105,6 +145,23 @@ fn create_new_file(path: impl AsRef<Path>, user: &str, group: &str) -> Result<Fi
     Ok(file)
 }
 
+pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+    let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
+        certificate::CertificateError::IoError(from) => {
+            CertError::IoError(from).cert_context(cert_path.clone())
+        }
+        from => CertError::CertificateError(from),
+    })?;
+
+    if pem.issuer()? == pem.subject()? {
+        Ok(pem.subject_common_name()?)
+    } else {
+        Err(CertError::NotASelfSignedCertificate {
+            path: cert_path.clone(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +180,7 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            csr_path: None,
         };
 
         assert_matches!(
@@ -150,6 +208,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            csr_path: None,
         };
 
         assert!(cmd
@@ -171,6 +230,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            csr_path: None,
         };
 
         let cert_error = cmd
@@ -189,6 +249,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            csr_path: None,
         };
 
         let cert_error = cmd
@@ -207,6 +268,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            csr_path: None,
         };
 
         let cert_error = cmd

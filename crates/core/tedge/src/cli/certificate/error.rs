@@ -4,6 +4,7 @@ use reqwest::StatusCode;
 use std::error::Error;
 use tedge_config::ConfigSettingError;
 use tedge_config::TEdgeConfigError;
+use tedge_utils::file::FileError;
 use tedge_utils::paths::PathsError;
 
 #[derive(thiserror::Error, Debug)]
@@ -52,6 +53,9 @@ pub enum CertError {
     #[error("Invalid device.key_path path: {0}")]
     KeyPathError(PathsError),
 
+    #[error("Invalid device.csr_path path: {0}")]
+    CsrPathError(PathsError),
+
     #[error(transparent)]
     CertificateError(#[from] certificate::CertificateError),
 
@@ -78,6 +82,9 @@ pub enum CertError {
 
     #[error(transparent)]
     TedgeConfigSettingError(#[from] ConfigSettingError),
+
+    #[error(transparent)]
+    FileError(#[from] FileError),
 
     #[error("Root certificate path {0} does not exist")]
     RootCertificatePathDoesNotExist(String),

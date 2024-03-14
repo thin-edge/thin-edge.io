@@ -1,9 +1,9 @@
+use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
 use crate::command::Command;
 use crate::CreateCertCmd;
 use camino::Utf8PathBuf;
 use certificate::NewCertificateConfig;
-use certificate::PemCertificate;
 
 pub struct RenewCertCmd {
     pub cert_path: Utf8PathBuf,
@@ -25,7 +25,7 @@ impl Command for RenewCertCmd {
 
 impl RenewCertCmd {
     fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
-        let id = self.cn_of_self_signed_certificate()?;
+        let id = cn_of_self_signed_certificate(&self.cert_path)?;
 
         // Remove only certificate
         std::fs::remove_file(&self.cert_path)
@@ -36,26 +36,10 @@ impl RenewCertCmd {
             id,
             cert_path: self.cert_path.clone(),
             key_path: self.key_path.clone(),
+            csr_path: None,
         };
 
         create_cmd.renew_test_certificate(config)
-    }
-
-    fn cn_of_self_signed_certificate(&self) -> Result<String, CertError> {
-        let pem = PemCertificate::from_pem_file(&self.cert_path).map_err(|err| match err {
-            certificate::CertificateError::IoError(from) => {
-                CertError::IoError(from).cert_context(self.cert_path.clone())
-            }
-            from => CertError::CertificateError(from),
-        })?;
-
-        if pem.issuer()? == pem.subject()? {
-            Ok(pem.subject_common_name()?)
-        } else {
-            Err(CertError::NotASelfSignedCertificate {
-                path: self.cert_path.clone(),
-            })
-        }
     }
 }
 
@@ -77,6 +61,7 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            csr_path: None,
         };
 
         // First create both cert and key
