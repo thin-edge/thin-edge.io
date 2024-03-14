@@ -213,7 +213,7 @@
 //!     ///
 //!     /// The source registers the new consumer and its sender (i.e. where to send response),
 //!     /// possibly using the configuration `config` to filter messages.
-//!     fn register_peer(&mut self, config: SomeConfig, sender: DynSender<SomeMessage>) {
+//!     fn connect_sink(&mut self, config: SomeConfig, peer: &impl MessageSink<SomeMessage>) {
 //!         todo!()
 //!     }
 //! }
@@ -231,7 +231,7 @@
 //! // can then be connected to each other.
 //! let mut producer = SomeActorBuilder::default();
 //! let mut consumer = SomeOtherActorBuilder::default();
-//! producer.register_peer(SomeConfig, consumer.get_sender());
+//! producer.connect_sink(SomeConfig, &consumer);
 //! ```
 //!
 //! ## Running actors

@@ -95,7 +95,7 @@ pub struct NoConfig;
 /// The [Builder] of an [Actor](crate::Actor) must implement this trait
 /// for every message type that actor can receive from its peers.
 ///
-/// An actor whose builder is a `MessageSink<M` can be connected to any other actor
+/// An actor whose builder is a `MessageSink<M>` can be connected to any other actor
 /// whose builder is a `MessageSource<Into<M>, C>` so that the sink can receive messages from that source.
 pub trait MessageSink<M: Message> {
     /// Return the sender that can be used by peers to send messages to this actor
@@ -105,12 +105,12 @@ pub trait MessageSink<M: Message> {
     ///
     /// A sink might be interested only in a subset of the messages emitted by the source.
     /// This subset is defined by the config parameter.
-    fn connect_source<N, C>(&mut self, config: C, source: &mut impl MessageSource<N, C>)
+    fn connect_source<N, C>(&self, config: C, source: &mut impl MessageSource<N, C>)
     where
         N: Message,
         M: From<N>,
     {
-        source.register_peer(config, self.get_sender().sender_clone())
+        source.connect_sink(config, &self.get_sender())
     }
 
     /// Add a source of messages to the actor under construction, the messages being translated on the fly.
@@ -159,7 +159,7 @@ pub trait MessageSink<M: Message> {
     /// # }
     /// ```
     fn connect_mapped_source<N, C, MS, MessageMapper>(
-        &mut self,
+        &self,
         config: C,
         source: &mut impl MessageSource<N, C>,
         cast: MessageMapper,
@@ -169,23 +169,30 @@ pub trait MessageSink<M: Message> {
         MessageMapper: Fn(N) -> MS,
         MessageMapper: 'static + Send + Sync,
     {
-        let sender = MappingSender::new(self.get_sender(), cast);
-        source.register_peer(config, sender.into())
+        let sender: DynSender<N> = MappingSender::new(self.get_sender(), cast).into();
+        source.connect_sink(config, &sender)
+    }
+}
+
+/// A [DynSender] can be used as a [MessageSink],
+/// provided the messages expected by the sender can be built from those sent to the sink.
+impl<N: Message, M: Message + From<N>> MessageSink<N> for DynSender<M> {
+    fn get_sender(&self) -> DynSender<N> {
+        self.sender_clone()
     }
 }
 
 /// The [Builder] of an [Actor](crate::Actor) must implement this trait
 /// for every message type that actor can send to its peers.
 ///
-/// To receive messages from a `MessageSource<M, C>`, the peer must be a `MessageSink<From<M>`.
+/// To receive messages from a `MessageSource<M, C>`, the peer must be a `MessageSink<From<M>>`.
 pub trait MessageSource<M: Message, Config> {
-    /// The message will be sent to the peer using the provided `sender`
-    fn register_peer(&mut self, config: Config, sender: DynSender<M>);
-
-    /// Connect a peer actor that will consume the message produced by this actor
-    fn connect_sink(&mut self, config: Config, peer: &impl MessageSink<M>) {
-        self.register_peer(config, peer.get_sender());
-    }
+    /// Connect a peer actor that will consume the messages produced by this actor
+    ///
+    /// The messages will be sent to the peer using its sender, the `peer.get_sender()`.
+    /// A peer can subscribe to a subset of the messages produced by this source.
+    /// This subset of messages expected by the peer is defined by the `config` parameter.
+    fn connect_sink(&mut self, config: Config, peer: &impl MessageSink<M>);
 }
 
 /// The [Builder] of an [Actor](crate::Actor) must implement this trait
@@ -290,8 +297,8 @@ pub trait RuntimeRequestSink {
 /// #     }
 /// # }
 /// # impl MessageSource<MyActorOutput, NoConfig> for MyActorBuilder {
-/// #    fn register_peer(&mut self, config: NoConfig, sender: DynSender<MyActorOutput>) {
-/// #        self.messages.register_peer(config, sender)
+/// #    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<MyActorOutput>) {
+/// #        self.messages.connect_sink(config, peer)
 /// #    }
 /// # }
 /// # impl MessageSink<MyActorInput> for MyActorBuilder {
@@ -330,8 +337,8 @@ pub trait RuntimeRequestSink {
 /// // Connect a test box to an actor under test
 /// let mut my_actor_builder = MyActorBuilder::new(MyActorConfig::default());
 /// let mut test_box_builder = SimpleMessageBoxBuilder::new("Test box", 16);
-/// my_actor_builder.register_peer(NoConfig, test_box_builder.get_sender());
-/// test_box_builder.register_peer(NoConfig, my_actor_builder.get_sender());
+/// my_actor_builder.connect_sink(NoConfig, &test_box_builder);
+/// my_actor_builder.connect_source(NoConfig, &mut test_box_builder);
 ///
 /// // Build the test box and run the actor
 /// let mut test_box = test_box_builder.build();
@@ -379,8 +386,8 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
         config: Config,
         service: &mut (impl MessageSink<O> + MessageSource<I, Config>),
     ) {
-        service.register_peer(config, self.input_sender.sender_clone());
-        self.register_peer(NoConfig, service.get_sender());
+        service.connect_sink(config, self);
+        self.connect_sink(NoConfig, service);
     }
 
     /// Connect this client message box to the service message box
@@ -399,8 +406,8 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
 
 /// A `SimpleMessageBoxBuilder<Input,Output>` is a [MessageSource] of `Output` messages ignoring the config.
 impl<I: Message, O: Message, C> MessageSource<O, C> for SimpleMessageBoxBuilder<I, O> {
-    fn register_peer(&mut self, _config: C, sender: DynSender<O>) {
-        self.output_sender = sender;
+    fn connect_sink(&mut self, _config: C, peer: &impl MessageSink<O>) {
+        self.output_sender = peer.get_sender();
     }
 }
 

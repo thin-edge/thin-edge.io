@@ -306,21 +306,16 @@ impl C8yMapperBuilder {
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
 
-        let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
+        let box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput> =
+            SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
         let mqtt_publisher = mqtt.get_sender();
-        mqtt.register_peer(
-            config.topics.clone(),
-            box_builder.get_sender().sender_clone(),
-        );
+        mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
         let http_proxy = C8YHttpProxy::new(http);
         let timer_sender = timer.add_requester(box_builder.get_sender().sender_clone());
         let upload_sender = uploader.add_requester(box_builder.get_sender().sender_clone());
         let download_sender = downloader.add_requester(box_builder.get_sender().sender_clone());
-        fs_watcher.register_peer(
-            config.ops_dir.clone(),
-            box_builder.get_sender().sender_clone(),
-        );
+        fs_watcher.connect_sink(config.ops_dir.clone(), &box_builder.get_sender());
         let auth_proxy = ProxyUrlGenerator::new(
             config.auth_proxy_addr.clone(),
             config.auth_proxy_port,
@@ -330,9 +325,9 @@ impl C8yMapperBuilder {
         let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
         let bridge_health_topic = main_device_health_topic(&config.bridge_service_name());
-        service_monitor.register_peer(
+        service_monitor.connect_sink(
             bridge_health_topic.as_str().try_into().unwrap(),
-            bridge_monitor_builder.get_sender(),
+            &bridge_monitor_builder,
         );
 
         Ok(Self {

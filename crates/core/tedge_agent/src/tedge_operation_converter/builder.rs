@@ -8,6 +8,7 @@ use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
@@ -60,20 +61,21 @@ impl TedgeOperationConverterBuilder {
             input_receiver,
             signal_receiver,
         );
+        let input_sender: DynSender<AgentInput> = input_sender.into();
 
         let software_sender = software_actor.get_sender();
-        software_actor.register_peer(NoConfig, input_sender.clone().into());
+        software_actor.connect_sink(NoConfig, &input_sender);
         let software_sender = LoggingSender::new("SoftwareSender".into(), software_sender);
 
         let restart_sender = restart_actor.get_sender();
-        restart_actor.register_peer(NoConfig, input_sender.clone().into());
+        restart_actor.connect_sink(NoConfig, &input_sender);
         let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
-        let command_sender = input_sender.clone().into();
+        let command_sender = input_sender.sender_clone();
 
         let mqtt_publisher = mqtt_actor.get_sender();
-        mqtt_actor.register_peer(
+        mqtt_actor.connect_sink(
             Self::subscriptions(&config.mqtt_schema, &config.device_topic_id),
-            input_sender.into(),
+            &input_sender,
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
 

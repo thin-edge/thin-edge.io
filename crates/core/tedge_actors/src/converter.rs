@@ -259,8 +259,8 @@ impl<C: Converter> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C> {
 }
 
 impl<C: Converter> MessageSource<C::Output, NoConfig> for ConvertingActorBuilder<C> {
-    fn register_peer(&mut self, config: NoConfig, sender: DynSender<C::Output>) {
-        self.message_box.register_peer(config, sender)
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<C::Output>) {
+        self.message_box.connect_sink(config, peer)
     }
 }
 

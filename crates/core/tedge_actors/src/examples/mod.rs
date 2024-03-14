@@ -61,13 +61,13 @@
 //! // - receives as input, the output messages sent from the server message box
 //! // - sends output messages to the server message box as its input.
 //! let request_sender = server_box_builder.add_requester(player_1_box_builder.get_sender());
-//! player_1_box_builder.register_peer(NoConfig, request_sender);
+//! player_1_box_builder.connect_sink(NoConfig, &request_sender);
 //!
 //! // It matters that the builder of the server box is a `ServerMessageBoxBuilder`:
 //! // as this builder accepts multiple client actors to connect to the same server.
 //! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
 //! let request_sender = server_box_builder.add_requester(player_2_box_builder.get_sender());
-//! player_2_box_builder.register_peer(NoConfig, request_sender);
+//! player_2_box_builder.connect_sink(NoConfig, &request_sender);
 //!
 //! // One can then build the message boxes
 //! let server_box: ServerMessageBox<Operation,Update> = server_box_builder.build();

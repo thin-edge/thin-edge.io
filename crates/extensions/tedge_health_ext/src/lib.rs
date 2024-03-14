@@ -73,8 +73,8 @@ impl HealthMonitorBuilder {
         .into_iter()
         .collect();
 
-        mqtt.register_peer(subscriptions, box_builder.get_sender());
-        box_builder.register_peer(NoConfig, mqtt.get_sender());
+        mqtt.connect_sink(subscriptions, &box_builder);
+        box_builder.connect_sink(NoConfig, mqtt);
 
         if service_type.is_empty() {
             service_type = "service"

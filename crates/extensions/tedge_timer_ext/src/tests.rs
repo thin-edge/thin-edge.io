@@ -152,7 +152,7 @@ async fn spawn_timer_actor<T: Message>(
     DynSender<RuntimeRequest>,
 ) {
     let mut actor = TimerActor::builder();
-    peer.register_peer(NoConfig, actor.add_requester(peer.get_sender()));
+    peer.connect_sink(NoConfig, &actor.add_requester(peer.get_sender()));
     let signal_sender = actor.get_signal_sender();
 
     let handle = tokio::spawn(actor.build().run());

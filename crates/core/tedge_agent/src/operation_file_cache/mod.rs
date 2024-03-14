@@ -298,10 +298,7 @@ impl FileCacheActorBuilder {
             downloader_actor.add_requester(message_box.get_sender().sender_clone());
 
         let mqtt_sender = mqtt_actor.get_sender();
-        mqtt_actor.register_peer(
-            Self::subscriptions(&mqtt_schema),
-            message_box.get_sender().sender_clone(),
-        );
+        mqtt_actor.connect_sink(Self::subscriptions(&mqtt_schema), &message_box.get_sender());
 
         Self {
             message_box,

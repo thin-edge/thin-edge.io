@@ -73,8 +73,8 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
 }
 
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
-    fn register_peer(&mut self, subscriptions: TopicFilter, sender: DynSender<MqttMessage>) {
-        let sender = LoggingSender::new("MQTT".into(), sender);
+    fn connect_sink(&mut self, subscriptions: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
+        let sender = LoggingSender::new("MQTT".into(), peer.get_sender());
         self.subscriber_addresses.push((subscriptions, sender));
     }
 }

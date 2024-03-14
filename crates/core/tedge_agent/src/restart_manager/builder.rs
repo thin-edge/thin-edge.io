@@ -34,8 +34,8 @@ impl MessageSink<RestartCommand> for RestartManagerBuilder {
 }
 
 impl MessageSource<RestartCommand, NoConfig> for RestartManagerBuilder {
-    fn register_peer(&mut self, config: NoConfig, sender: DynSender<RestartCommand>) {
-        self.message_box.register_peer(config, sender)
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<RestartCommand>) {
+        self.message_box.connect_sink(config, peer)
     }
 }
 

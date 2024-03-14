@@ -520,8 +520,9 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
         source: &mut impl MessageSource<I, C>,
         sink: &mut impl MessageSink<O>,
     ) {
+        let input_interceptor: DynSender<I> = self.input_interceptor.clone().into();
         self.output_forwarder = sink.get_sender();
-        source.register_peer(config, self.input_interceptor.clone().into());
+        source.connect_sink(config, &input_interceptor);
     }
 
     /// Connect this probe to a service provider
@@ -638,15 +639,16 @@ where
         &'a mut self,
         probe: &'a mut Probe<Response, Request>,
     ) -> &'a mut Probe<Response, Request> {
+        let output_interceptor: DynSender<Request> = probe.output_interceptor.clone().into();
         probe.input_forwarder = self.get_sender();
-        self.register_peer(NoConfig, probe.output_interceptor.sender_clone());
+        self.connect_sink(NoConfig, &output_interceptor);
         probe
     }
 }
 
 impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> {
-    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<O>) {
-        self.output_forwarder = sender;
+    fn connect_sink(&mut self, _config: NoConfig, peer: &impl MessageSink<O>) {
+        self.output_forwarder = peer.get_sender();
     }
 }
 
@@ -666,11 +668,11 @@ impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynSender<RequestEnvel
         let name = "client-box";
         let capacity = 16;
         let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
-        let request_sender = RequestSender {
+        let request_sender = Box::new(RequestSender {
             sender: self.sender_clone(),
             reply_to: client_box.get_sender(),
-        };
-        client_box.register_peer(NoConfig, request_sender.into());
+        });
+        client_box.connect_sink(NoConfig, &request_sender.sender_clone());
         client_box.build()
     }
 }
@@ -686,8 +688,8 @@ impl<I: Message, O: Message> ServiceProviderExt<I, O> for SimpleMessageBoxBuilde
         let name = "client-box";
         let capacity = 16;
         let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
-        self.register_peer(NoConfig, client_box.get_sender());
-        client_box.register_peer(NoConfig, self.get_sender());
+        self.connect_sink(NoConfig, &client_box);
+        self.connect_source(NoConfig, &mut client_box);
         client_box.build()
     }
 }

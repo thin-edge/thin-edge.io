@@ -16,6 +16,7 @@ pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
@@ -60,11 +61,9 @@ impl FirmwareManagerBuilder {
             input_receiver,
             signal_receiver,
         );
+        let mqtt_sender: DynSender<MqttMessage> = input_sender.sender_clone();
 
-        mqtt_actor.register_peer(
-            Self::subscriptions(&config.c8y_prefix),
-            input_sender.clone().into(),
-        );
+        mqtt_actor.connect_sink(Self::subscriptions(&config.c8y_prefix), &mqtt_sender);
         let mqtt_publisher = mqtt_actor.get_sender();
         let jwt_retriever = JwtRetriever::new(jwt_actor);
         let download_sender = ClientMessageBox::new(downloader_actor);

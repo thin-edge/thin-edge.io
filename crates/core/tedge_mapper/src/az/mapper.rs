@@ -39,8 +39,7 @@ impl TEdgeComponent for AzureMapper {
         );
         let mut az_converting_actor = ConvertingActor::builder("AzConverter", az_converter);
         az_converting_actor.connect_source(get_topic_filter(&tedge_config), &mut mqtt_actor);
-
-        az_converting_actor.register_peer(NoConfig, mqtt_actor.get_sender());
+        az_converting_actor.connect_sink(NoConfig, &mqtt_actor);
 
         runtime.spawn(az_converting_actor).await?;
         runtime.spawn(mqtt_actor).await?;
