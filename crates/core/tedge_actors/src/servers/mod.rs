@@ -101,8 +101,6 @@ use std::fmt::Debug;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageSink;
-use crate::MessageSource;
-use crate::NoConfig;
 use crate::Sender;
 use async_trait::async_trait;
 
@@ -150,11 +148,6 @@ pub trait Service<Request: Message, Response: Message>:
 {
     /// Connect a request message box to the server box under construction
     fn add_requester(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
-
-    fn add_client(
-        &mut self,
-        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response>),
-    );
 }
 
 impl<T, Request: Message, Response: Message> Service<Request, Response> for T
@@ -167,13 +160,5 @@ where
             reply_to,
         };
         request_sender.into()
-    }
-
-    fn add_client(
-        &mut self,
-        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response>),
-    ) {
-        let request_sender = self.add_requester(client.get_sender());
-        client.register_peer(NoConfig, request_sender);
     }
 }
