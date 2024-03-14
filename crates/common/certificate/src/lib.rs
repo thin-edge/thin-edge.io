@@ -113,15 +113,19 @@ impl KeyCertPair {
     ) -> Result<KeyCertPair, CertificateError> {
         let today = OffsetDateTime::now_utc();
         let not_before = today - Duration::days(1); // Ensure the certificate is valid today
-        KeyCertPair::new_selfsigned_certificate_at(config, id, not_before, key_kind)
+        let params =
+            Self::create_selfsigned_certificate_parameters(config, id, key_kind, not_before)?;
+        Ok(KeyCertPair {
+            certificate: Zeroizing::new(Certificate::from_params(params)?),
+        })
     }
 
-    fn new_selfsigned_certificate_at(
+    fn create_selfsigned_certificate_parameters(
         config: &NewCertificateConfig,
         id: &str,
+        key_kind: &KeyKind,
         not_before: OffsetDateTime,
-        cert_kind: &KeyKind,
-    ) -> Result<KeyCertPair, CertificateError> {
+    ) -> Result<CertificateParams, CertificateError> {
         KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
         distinguished_name.push(rcgen::DnType::CommonName, id);
@@ -131,21 +135,62 @@ impl KeyCertPair {
             &config.organizational_unit_name,
         );
 
-        let not_after = not_before + Duration::days(config.validity_period_days.into());
-
         let mut params = CertificateParams::default();
+
         params.distinguished_name = distinguished_name;
+
+        let not_after = not_before + Duration::days(config.validity_period_days.into());
         params.not_before = not_before;
         params.not_after = not_after;
-        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
-        if let KeyKind::Reuse { keypair_pem } = cert_kind {
+
+        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+
+        if let KeyKind::Reuse { keypair_pem } = key_kind {
             params.key_pair = Some(KeyPair::from_pem(keypair_pem)?);
         }
 
+        Ok(params)
+    }
+
+    // Create Certificate without `not_before` and `not_after` fields
+    // as rcgen library will not parse it for certificate signing request
+    pub fn new_certificate_sign_request(
+        config: &NewCertificateConfig,
+        id: &str,
+        key_kind: &KeyKind,
+    ) -> Result<KeyCertPair, CertificateError> {
+        let params = Self::create_certificate_sign_request_parameters(config, id, key_kind)?;
         Ok(KeyCertPair {
             certificate: Zeroizing::new(Certificate::from_params(params)?),
         })
+    }
+
+    fn create_certificate_sign_request_parameters(
+        config: &NewCertificateConfig,
+        id: &str,
+        key_kind: &KeyKind,
+    ) -> Result<CertificateParams, CertificateError> {
+        KeyCertPair::check_identifier(id, config.max_cn_size)?;
+        let mut distinguished_name = rcgen::DistinguishedName::new();
+        distinguished_name.push(rcgen::DnType::CommonName, id);
+        distinguished_name.push(rcgen::DnType::OrganizationName, &config.organization_name);
+        distinguished_name.push(
+            rcgen::DnType::OrganizationalUnitName,
+            &config.organizational_unit_name,
+        );
+
+        let mut params = CertificateParams::default();
+        params.distinguished_name = distinguished_name;
+
+        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+
+        if let KeyKind::Reuse { keypair_pem } = key_kind {
+            params.key_pair = Some(KeyPair::from_pem(keypair_pem)?);
+        }
+
+        Ok(params)
     }
 
     pub fn certificate_pem_string(&self) -> Result<String, CertificateError> {
@@ -154,6 +199,10 @@ impl KeyCertPair {
 
     pub fn private_key_pem_string(&self) -> Result<Zeroizing<String>, CertificateError> {
         Ok(Zeroizing::new(self.certificate.serialize_private_key_pem()))
+    }
+
+    pub fn certificate_signing_request_string(&self) -> Result<String, CertificateError> {
+        Ok(self.certificate.serialize_request_pem()?)
     }
 
     fn check_identifier(id: &str, max_cn_size: usize) -> Result<(), CertificateError> {
@@ -243,6 +292,7 @@ mod tests {
     use super::*;
     use std::error::Error;
     use time::macros::datetime;
+    use x509_parser::der_parser::asn1_rs::FromDer;
 
     impl KeyCertPair {
         fn new_selfsigned_certificate_with_new_key(
@@ -258,6 +308,24 @@ mod tests {
             .certificate_pem_string()
             .expect("Fail to read the certificate PEM");
         PemCertificate::from_pem_string(&pem_string).expect("Fail to decode the certificate PEM")
+    }
+
+    fn subject_of_csr(keypair: &KeyCertPair) -> String {
+        let csr = keypair
+            .certificate_signing_request_string()
+            .expect("Failed to read the CSR string");
+
+        let pem = x509_parser::pem::Pem::iter_from_buffer(csr.as_bytes())
+            .next()
+            .unwrap()
+            .expect("Reading PEM block failed");
+
+        x509_parser::certification_request::X509CertificationRequest::from_der(&pem.contents)
+            .unwrap()
+            .1
+            .certification_request_info
+            .subject
+            .to_string()
     }
 
     #[test]
@@ -326,9 +394,19 @@ mod tests {
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
-        let keypair =
-            KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate, &KeyKind::New)
-                .expect("Fail to create a certificate");
+        let params = KeyCertPair::create_selfsigned_certificate_parameters(
+            &config,
+            id,
+            &KeyKind::New,
+            birthdate,
+        )
+        .expect("Fail to get a certificate parameters");
+
+        let keypair = KeyCertPair {
+            certificate: Zeroizing::new(
+                Certificate::from_params(params).expect("Fail to create a certificate"),
+            ),
+        };
 
         // Check the not_before date
         let pem = pem_of_keypair(&keypair);
@@ -348,14 +426,45 @@ mod tests {
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
-        let keypair =
-            KeyCertPair::new_selfsigned_certificate_at(&config, id, birthdate, &KeyKind::New)
-                .expect("Fail to create a certificate");
+        let params = KeyCertPair::create_selfsigned_certificate_parameters(
+            &config,
+            id,
+            &KeyKind::New,
+            birthdate,
+        )
+        .expect("Fail to get a certificate parameters");
+
+        let keypair = KeyCertPair {
+            certificate: Zeroizing::new(
+                Certificate::from_params(params).expect("Fail to create a certificate"),
+            ),
+        };
 
         // Check the not_after date
         let pem = pem_of_keypair(&keypair);
         let not_after = pem.not_after().expect("Fail to extract the not_after date");
         assert_eq!(not_after, "Sat, 10 Apr 2021 15:39:57 +0000");
+    }
+
+    #[test]
+    fn create_certificate_sign_request() {
+        // Create a certificate with a given birthdate.
+        let config = NewCertificateConfig::default();
+        let id = "some-id";
+
+        let params =
+            KeyCertPair::create_certificate_sign_request_parameters(&config, id, &KeyKind::New)
+                .expect("Fail to get a certificate parameters");
+
+        let keypair = KeyCertPair {
+            certificate: Zeroizing::new(
+                Certificate::from_params(params).expect("Fail to create a certificate"),
+            ),
+        };
+
+        // Check the subject
+        let subject = subject_of_csr(&keypair);
+        assert_eq!(subject, "CN=some-id, O=Thin Edge, OU=Test Device");
     }
 
     #[test]
