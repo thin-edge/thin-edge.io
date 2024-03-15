@@ -183,11 +183,27 @@ get_user_friendly_arch() {
         *arm-unknown-linux-musleabihf*)
             easy_arch=armv6
             ;;
+        *arm-unknown-linux-musleabi*)
+            easy_arch=armv5
+            ;;
+        *armv5te-unknown-linux-*)
+            easy_arch=armv5
+            ;;
+        *i686-unknown-linux-musl*)
+            easy_arch=i386
+            ;;
+        *riscv64gc-unknown-linux-*)
+            easy_arch=riscv64
+            ;;
         *aarch64-apple-darwin*)
             easy_arch=macos-arm64
             ;;
         *x86_64-apple-darwin*)
             easy_arch=macos-amd64
+            ;;
+        *)
+            echo "Unknown architecture. $1" >&2
+            exit 1
             ;;
     esac
     echo "$easy_arch"
