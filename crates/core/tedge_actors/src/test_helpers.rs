@@ -17,7 +17,6 @@ use crate::ServerMessageBoxBuilder;
 use crate::Service;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
-use crate::WrappedInput;
 use async_trait::async_trait;
 use core::future::Future;
 use std::collections::VecDeque;
@@ -340,12 +339,6 @@ where
         tokio::time::timeout(self.timeout, self.inner.try_recv())
             .await
             .unwrap_or(Ok(None))
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<M>> {
-        tokio::time::timeout(self.timeout, self.inner.recv_message())
-            .await
-            .unwrap_or(None)
     }
 
     async fn recv(&mut self) -> Option<M> {
@@ -740,19 +733,6 @@ impl<Request: Message, Response: Message> MessageReceiver<Request>
                 Ok(Some(request))
             }
             Err(signal) => Err(signal),
-        }
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<Request>> {
-        match self.messages.recv_message().await {
-            None => None,
-            Some(WrappedInput::Message(RequestEnvelope { request, reply_to })) => {
-                self.reply_to.push_back(reply_to);
-                Some(WrappedInput::Message(request))
-            }
-            Some(WrappedInput::RuntimeRequest(signal)) => {
-                Some(WrappedInput::RuntimeRequest(signal))
-            }
         }
     }
 

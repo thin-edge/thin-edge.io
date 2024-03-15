@@ -30,7 +30,6 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_actors::WrappedInput;
 use tedge_api::main_device_health_topic;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -1542,7 +1541,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
 
     // Assert that the creation of the operation file alone doesn't trigger the supported operations update
     assert!(
-        mqtt.recv_message().await.is_none(),
+        mqtt.recv().await.is_none(),
         "No messages expected on operation file creation event"
     );
 
@@ -2053,7 +2052,7 @@ async fn inventory_registers_unknown_entity_once() {
     }
 
     let mut messages = vec![];
-    while let Some(WrappedInput::Message(msg)) = mqtt.recv_message().await {
+    while let Ok(Some(msg)) = mqtt.try_recv().await {
         messages.push(msg);
     }
 
