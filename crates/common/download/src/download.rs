@@ -559,7 +559,7 @@ mod tests {
     async fn downloader_download_with_content_length_larger_than_usable_disk_space() {
         use nix::sys::statvfs;
         let tmpstats = statvfs::statvfs("/tmp").unwrap();
-        let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
+        let usable_disk_space = (tmpstats.blocks_free() as u64) * (tmpstats.block_size() as u64);
 
         let mut server = mockito::Server::new();
         let _mock1 = server
