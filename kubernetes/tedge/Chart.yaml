@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tedge
+description: Device management application using thin-edge.io
+type: application
+version: "0.1.0"
+appVersion: "1.0.1"

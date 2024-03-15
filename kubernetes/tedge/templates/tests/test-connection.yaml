@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "tedge.fullname" . }}-test-connection"
+  labels:
+    {{- include "tedge.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: mosquitto-sub
+      image: eclipse-mosquitto
+      command: ['sh']
+      args:
+        - -xc
+        - mosquitto_sub -h mosquitto.{{ .Release.Namespace }}.svc -p {{ .Values.services.mqtt.port }} -t "#" -W 2; [ $? -eq 27 ]
+  restartPolicy: Never

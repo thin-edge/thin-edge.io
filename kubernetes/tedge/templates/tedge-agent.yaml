@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tedge-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tedge-agent
+  template:
+    metadata:
+      labels:
+        app: tedge-agent
+    spec:
+      containers:
+      - name: tedge-agent
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8000
+          name: fts-svc
+        env:
+        - name: TEDGE_MQTT_CLIENT_HOST
+          value: "mosquitto"
+        - name: TEDGE_HTTP_CLIENT_HOST
+          value: "localhost"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: fts
+spec:
+  selector:
+    app: tedge-agent
+  ports:
+    - name: fts
+      port: 8000
+      targetPort: fts-svc
