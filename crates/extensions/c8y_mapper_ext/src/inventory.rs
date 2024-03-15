@@ -17,7 +17,7 @@ use tracing::info;
 use tracing::warn;
 
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
-const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
+const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
 
 impl CumulocityConverter {
     /// Creates the inventory update message with fragments from inventory.json file
@@ -115,7 +115,8 @@ impl CumulocityConverter {
     ) -> Result<Message, ConversionError> {
         let entity_external_id = self.entity_store.try_get(source)?.external_id.as_ref();
         let inventory_update_topic = Topic::new_unchecked(&format!(
-            "{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}"
+            "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}",
+            prefix = self.config.c8y_prefix,
         ));
 
         Ok(Message::new(

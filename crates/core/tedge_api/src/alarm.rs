@@ -136,7 +136,7 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 severity: Some("high".into()),
                 text: Some("I raised it".into()),
-                time: Some(datetime ! (2021 - 04 - 23 19: 00: 00 + 05: 00)),
+                time: Some(datetime!(2021-04-23 19:00:00+05:00)),
                 extras: hashmap!{},
             }),
         };

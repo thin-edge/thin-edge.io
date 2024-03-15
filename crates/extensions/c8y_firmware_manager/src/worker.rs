@@ -29,7 +29,6 @@ use tedge_api::OperationStatus;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::Topic;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
@@ -370,9 +369,8 @@ impl FirmwareManagerWorker {
     ) -> Result<(), FirmwareManagementError> {
         self.executing = true;
 
-        let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string(),
-        );
+        let c8y_child_topic = C8yTopic::ChildSmartRestResponse(child_id.to_string())
+            .to_topic(&self.config.c8y_prefix)?;
         let executing_msg = MqttMessage::new(
             &c8y_child_topic,
             DownloadFirmwareStatusMessage::status_executing(),
@@ -388,9 +386,8 @@ impl FirmwareManagerWorker {
         if !self.executing {
             self.publish_c8y_executing_message(child_id).await?;
         }
-        let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string(),
-        );
+        let c8y_child_topic = C8yTopic::ChildSmartRestResponse(child_id.to_string())
+            .to_topic(&self.config.c8y_prefix)?;
         let successful_msg = MqttMessage::new(
             &c8y_child_topic,
             DownloadFirmwareStatusMessage::status_successful(None),
@@ -407,9 +404,8 @@ impl FirmwareManagerWorker {
         if !self.executing {
             self.publish_c8y_executing_message(child_id).await?;
         }
-        let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string(),
-        );
+        let c8y_child_topic = C8yTopic::ChildSmartRestResponse(child_id.to_string())
+            .to_topic(&self.config.c8y_prefix)?;
         let failed_msg = MqttMessage::new(
             &c8y_child_topic,
             DownloadFirmwareStatusMessage::status_failed(failure_reason),
@@ -422,9 +418,8 @@ impl FirmwareManagerWorker {
         &mut self,
         operation_entry: &FirmwareOperationEntry,
     ) -> Result<(), FirmwareManagementError> {
-        let c8y_child_topic = Topic::new_unchecked(
-            &C8yTopic::ChildSmartRestResponse(operation_entry.child_id.clone()).to_string(),
-        );
+        let c8y_child_topic = C8yTopic::ChildSmartRestResponse(operation_entry.child_id.clone())
+            .to_topic(&self.config.c8y_prefix)?;
         let installed_firmware_payload = format!(
             "115,{},{},{}",
             operation_entry.name, operation_entry.version, operation_entry.server_url
@@ -460,7 +455,10 @@ impl FirmwareManagerWorker {
     pub(crate) async fn get_pending_operations_from_cloud(
         &mut self,
     ) -> Result<(), FirmwareManagementError> {
-        let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        let message = MqttMessage::new(
+            &C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?,
+            "500",
+        );
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }

@@ -2,6 +2,7 @@ use crate::bridge::aws::BridgeConfigAwsParams;
 use crate::bridge::azure::BridgeConfigAzureParams;
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
+use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
 use crate::cli::connect::jwt_token::*;
@@ -64,6 +65,8 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
 
         if self.is_test_connection {
+            // If the bridge is part of the mapper, the bridge config file won't exist
+            // TODO tidy me up once mosquitto is no longer required for bridge
             if self.check_if_bridge_exists(&bridge_config) {
                 return match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
@@ -98,6 +101,12 @@ impl Command for ConnectCommand {
             Err(err) => return Err(err.into()),
         }
 
+        if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::BuiltIn {
+            // If the bridge is built in, the mapper needs to be running with the new configuration
+            // to be connected
+            self.start_mapper();
+        }
+
         match self.check_connection(config) {
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Connection check is successful.\n");
@@ -110,16 +119,10 @@ impl Command for ConnectCommand {
             }
         }
 
-        if bridge_config.use_mapper {
-            println!("Checking if tedge-mapper is installed.\n");
-
-            if which("tedge-mapper").is_err() {
-                println!("Warning: tedge-mapper is not installed.\n");
-            } else {
-                self.service_manager
-                    .as_ref()
-                    .start_and_enable_service(self.cloud.mapper_service(), std::io::stdout());
-            }
+        if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::Mosquitto {
+            // If the bridge is in mosquitto, the mapper should only start once the cloud connection
+            // is verified
+            self.start_mapper();
         }
 
         if let Cloud::C8y = self.cloud {
@@ -160,7 +163,20 @@ impl ConnectCommand {
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(br_config.config_file.clone());
 
-        Path::new(&bridge_conf_path).exists()
+        br_config.bridge_location == BridgeLocation::BuiltIn
+            || Path::new(&bridge_conf_path).exists()
+    }
+
+    fn start_mapper(&self) {
+        println!("Checking if tedge-mapper is installed.\n");
+
+        if which("tedge-mapper").is_err() {
+            println!("Warning: tedge-mapper is not installed.\n");
+        } else {
+            self.service_manager
+                .as_ref()
+                .start_and_enable_service(self.cloud.mapper_service(), std::io::stdout());
+        }
     }
 }
 
@@ -196,6 +212,10 @@ pub fn bridge_config(
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
+            let bridge_location = match config.c8y.bridge.built_in {
+                true => BridgeLocation::BuiltIn,
+                false => BridgeLocation::Mosquitto,
+            };
             let params = BridgeConfigC8yParams {
                 mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
@@ -205,6 +225,7 @@ pub fn bridge_config(
                 bridge_keyfile: config.device.key_path.clone(),
                 smartrest_templates: config.c8y.smartrest.templates.clone(),
                 include_local_clean_session: config.c8y.bridge.include.local_cleansession.clone(),
+                bridge_location,
             };
 
             Ok(BridgeConfig::from(params))
@@ -215,8 +236,9 @@ pub fn bridge_config(
 // Check the connection by using the jwt token retrieval over the mqtt.
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
-    const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
+    let prefix = &tedge_config.c8y.bridge.topic_prefix;
+    let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
+    let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
 
     let mut mqtt_options = tedge_config
@@ -234,14 +256,14 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
 
-    client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;
+    client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
                 client.publish(
-                    C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM,
+                    &c8y_topic_builtin_jwt_token_upstream,
                     rumqttc::QoS::AtMostOnce,
                     false,
                     "",
@@ -433,6 +455,12 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
     device_type: &str,
 ) -> Result<(), ConnectError> {
+    if bridge_config.bridge_location == BridgeLocation::BuiltIn {
+        println!("Deleting mosquitto bridge configuration in favour of built-in bridge");
+        clean_up(config_location, bridge_config)?;
+        restart_mosquitto(bridge_config, service_manager, config_location)?;
+        return Ok(());
+    }
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
 
@@ -497,6 +525,27 @@ fn restart_mosquitto(
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Restarting mosquitto service.\n");
+
+    if let Err(err) = service_manager.stop_service(SystemService::Mosquitto) {
+        clean_up(config_location, bridge_config)?;
+        return Err(err.into());
+    }
+
+    let (user, group) = match bridge_config.bridge_location {
+        BridgeLocation::BuiltIn => ("tedge", "tedge"),
+        BridgeLocation::Mosquitto => (crate::BROKER_USER, crate::BROKER_GROUP),
+    };
+    // Ignore errors - This was the behavior with the now deprecated user manager.
+    // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
+    // - A better approach could be to remove this `chown` and run the command as mosquitto.
+    for path in [
+        &bridge_config.bridge_certfile,
+        &bridge_config.bridge_keyfile,
+    ] {
+        // TODO maybe ignore errors here
+        tedge_utils::file::change_user_and_group(dbg!(path.as_ref()), user, group).unwrap();
+    }
+
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());

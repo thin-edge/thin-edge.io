@@ -10,8 +10,6 @@ use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
-use c8y_api::utils::bridge::C8Y_BRIDGE_UP_PAYLOAD;
 use c8y_auth_proxy::url::Protocol;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
@@ -33,10 +31,12 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_actors::WrappedInput;
+use tedge_api::main_device_health_topic;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
+use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
@@ -303,7 +303,7 @@ async fn mapper_publishes_software_update_request() {
 
     // Simulate c8y_SoftwareUpdate JSON over MQTT request
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(),
+        &C8yDeviceControlTopic::topic(&"c8y".into()),
         json!({
             "id": "123456",
             "c8y_SoftwareUpdate": [
@@ -462,7 +462,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
     // Publish a c8y_SoftwareUpdate via JSON over MQTT that contains a wrong action `remove`, that is not known by c8y.
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(),
+        &C8yDeviceControlTopic::topic(&"c8y".into()),
         json!({
             "id": "123456",
             "c8y_SoftwareUpdate": [
@@ -496,7 +496,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
             )
         ],
     )
-    .await;
+        .await;
 }
 
 #[tokio::test]
@@ -1358,7 +1358,7 @@ async fn mapper_handles_multiple_modules_in_update_list_sm_requests() {
 
     // Publish multiple modules software update via JSON over MQTT.
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(),
+        &C8yDeviceControlTopic::topic(&"c8y".into()),
         json!({
             "id": "123456",
             "c8y_SoftwareUpdate": [
@@ -1806,7 +1806,7 @@ async fn custom_operation_without_timeout_successful() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
+        &C8yTopic::downstream_topic(&"c8y".into()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -1868,7 +1868,7 @@ async fn custom_operation_with_timeout_successful() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
+        &C8yTopic::downstream_topic(&"c8y".into()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -1929,7 +1929,7 @@ async fn custom_operation_timeout_sigterm() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
+        &C8yTopic::downstream_topic(&"c8y".into()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -1994,7 +1994,7 @@ async fn custom_operation_timeout_sigkill() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
+        &C8yTopic::downstream_topic(&"c8y".into()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -2118,8 +2118,8 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
         &Topic::new_unchecked("te/device/nested_child///a/"),
         json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string(),
     ))
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     // Expect nested child device creating an minor alarm
     assert_received_contains_str(
@@ -2261,8 +2261,8 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
         &Topic::new_unchecked("te/device/nested_child/service/nested_service/a/"),
         json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string(),
     ))
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     mqtt.skip(3).await;
 
@@ -2358,6 +2358,7 @@ fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &st
         assert!(contents.contains(expected_contents));
     }
 }
+
 fn create_custom_op_file(
     cfg_dir: &TempTedgeDir,
     cmd_file: &Path,
@@ -2441,7 +2442,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let mqtt_schema = MqttSchema::default();
     let auth_proxy_addr = "127.0.0.1".into();
     let auth_proxy_port = 8001;
-    let mut topics = C8yMapperConfig::default_internal_topic_filter(config_dir.path()).unwrap();
+    let mut topics =
+        C8yMapperConfig::default_internal_topic_filter(config_dir.path(), &"c8y".into()).unwrap();
     topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
         &mqtt_schema,
     ));
@@ -2470,6 +2472,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         MqttSchema::default(),
         true,
         true,
+        "c8y".into(),
+        false,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
@@ -2504,8 +2508,8 @@ pub(crate) async fn spawn_c8y_mapper_actor(
 
     let mut service_monitor_box = service_monitor_builder.build();
     let bridge_status_msg = MqttMessage::new(
-        &Topic::new_unchecked(C8Y_BRIDGE_HEALTH_TOPIC),
-        C8Y_BRIDGE_UP_PAYLOAD,
+        &Topic::new_unchecked(&main_device_health_topic("tedge-mapper-bridge-c8y")),
+        MQTT_BRIDGE_UP_PAYLOAD,
     );
     service_monitor_box.send(bridge_status_msg).await.unwrap();
 

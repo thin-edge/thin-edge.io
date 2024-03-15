@@ -22,6 +22,7 @@ use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigReaderService;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
@@ -51,6 +52,8 @@ pub struct C8yMapperConfig {
     pub mqtt_schema: MqttSchema,
     pub enable_auto_register: bool,
     pub clean_start: bool,
+    pub c8y_prefix: TopicPrefix,
+    pub bridge_in_mapper: bool,
 }
 
 impl C8yMapperConfig {
@@ -74,6 +77,8 @@ impl C8yMapperConfig {
         mqtt_schema: MqttSchema,
         enable_auto_register: bool,
         clean_start: bool,
+        c8y_prefix: TopicPrefix,
+        bridge_in_mapper: bool,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -101,6 +106,17 @@ impl C8yMapperConfig {
             mqtt_schema,
             enable_auto_register,
             clean_start,
+            c8y_prefix,
+            bridge_in_mapper,
+        }
+    }
+
+    // TODO don't allocate string
+    pub fn bridge_service_name(&self) -> String {
+        if self.bridge_in_mapper {
+            format!("tedge-mapper-bridge-{}", self.c8y_prefix)
+        } else {
+            "mosquitto-c8y-bridge".into()
         }
     }
 
@@ -139,8 +155,9 @@ impl C8yMapperConfig {
             config_update: tedge_config.c8y.enable.config_update,
             firmware_update: tedge_config.c8y.enable.firmware_update,
         };
+        let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
-        let mut topics = Self::default_internal_topic_filter(&config_dir)?;
+        let mut topics = Self::default_internal_topic_filter(&config_dir, &c8y_prefix)?;
         let enable_auto_register = tedge_config.c8y.entity_store.auto_register;
         let clean_start = tedge_config.c8y.entity_store.clean_start;
 
@@ -180,6 +197,8 @@ impl C8yMapperConfig {
             }
         }
 
+        let bridge_in_mapper = tedge_config.c8y.bridge.built_in;
+
         Ok(C8yMapperConfig::new(
             config_dir,
             logs_path,
@@ -199,16 +218,19 @@ impl C8yMapperConfig {
             mqtt_schema,
             enable_auto_register,
             clean_start,
+            c8y_prefix,
+            bridge_in_mapper,
         ))
     }
 
     pub fn default_internal_topic_filter(
         config_dir: &Path,
+        prefix: &TopicPrefix,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
-            C8yTopic::SmartRestRequest.to_string().as_str(),
-            C8yDeviceControlTopic::name(),
+            C8yTopic::SmartRestRequest.with_prefix(prefix).as_str(),
+            &C8yDeviceControlTopic::name(prefix),
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");

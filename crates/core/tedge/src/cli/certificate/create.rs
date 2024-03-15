@@ -57,6 +57,7 @@ impl CreateCertCmd {
 
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, key_kind)?;
 
+        // TODO cope with broker user being tedge
         // Creating files with permission 644 owned by the MQTT broker
         let mut cert_file =
             create_new_file(&self.cert_path, crate::BROKER_USER, crate::BROKER_GROUP)

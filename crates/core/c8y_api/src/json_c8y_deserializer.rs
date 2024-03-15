@@ -7,21 +7,22 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareUpdateCommand;
+use tedge_config::TopicPrefix;
 use time::OffsetDateTime;
 
 pub struct C8yDeviceControlTopic;
 
 impl C8yDeviceControlTopic {
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(Self::name())
+    pub fn topic(prefix: &TopicPrefix) -> Topic {
+        Topic::new_unchecked(&Self::name(prefix))
     }
 
-    pub fn accept(topic: &Topic) -> bool {
-        topic.name.starts_with(Self::name())
+    pub fn accept(topic: &Topic, prefix: &TopicPrefix) -> bool {
+        topic.name.starts_with(&Self::name(prefix))
     }
 
-    pub fn name() -> &'static str {
-        "c8y/devicecontrol/notifications"
+    pub fn name(prefix: &TopicPrefix) -> String {
+        format!("{prefix}/devicecontrol/notifications")
     }
 }
 
@@ -422,10 +423,15 @@ pub trait C8yDeviceControlOperationHelper {
 }
 
 impl C8yDeviceControlOperationHelper for C8yRestart {}
+
 impl C8yDeviceControlOperationHelper for C8ySoftwareUpdate {}
+
 impl C8yDeviceControlOperationHelper for C8yLogfileRequest {}
+
 impl C8yDeviceControlOperationHelper for C8yUploadConfigFile {}
+
 impl C8yDeviceControlOperationHelper for C8yDownloadConfigFile {}
+
 impl C8yDeviceControlOperationHelper for C8yFirmware {}
 
 #[derive(thiserror::Error, Debug)]

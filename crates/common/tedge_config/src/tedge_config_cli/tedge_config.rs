@@ -14,13 +14,20 @@ use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
 use doku::Document;
+use doku::Type;
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 use std::borrow::Cow;
+use std::convert::Infallible;
+use std::fmt;
+use std::fmt::Formatter;
 use std::io::Read;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
+use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tedge_config_macros::all_or_nothing;
 use tedge_config_macros::define_tedge_config;
@@ -444,7 +451,19 @@ define_tedge_config! {
                 #[tedge_config(note = "If set to 'auto', this cleans the local session accordingly the detected version of mosquitto.")]
                 #[tedge_config(example = "auto", default(variable = "AutoFlag::Auto"))]
                 local_cleansession: AutoFlag,
-            }
+            },
+
+            #[tedge_config(default(value = false))]
+            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
+            built_in: bool,
+
+            // TODO validation
+            /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
+            /// if this is set to "c8y", then messages published to `c8y/s/us` will be
+            /// forwarded by to Cumulocity on the `s/us` topic
+            #[tedge_config(example = "c8y", default(value = "c8y"))]
+            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
+            topic_prefix: TopicPrefix,
         },
 
         entity_store: {
@@ -798,6 +817,80 @@ define_tedge_config! {
 
 }
 
+impl ReadableKey {
+    // This is designed to be a simple way of controlling whether values appear in the output of
+    // `tedge config list`. Ideally this would be integrated into [define_tedge_config], see
+    // https://github.com/thin-edge/thin-edge.io/issues/2767 for more detail on that.
+    // Currently this accompanies `#[doku(skip)]` on the relevant configurations, which hides
+    // them in `tedge config list --doc`. The configurations are hidden to avoid unfinished
+    // features from being discovered.
+    pub fn is_printable_value(self, value: &str) -> bool {
+        match self {
+            Self::C8yBridgeBuiltIn => value != "false",
+            Self::C8yBridgeTopicPrefix => value != "c8y",
+            _ => true,
+        }
+    }
+}
+
+// TODO doc comment
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]
+#[serde(from = "String", into = "Arc<str>")]
+pub struct TopicPrefix(Arc<str>);
+
+impl Document for TopicPrefix {
+    fn ty() -> Type {
+        String::ty()
+    }
+}
+
+// TODO actual validation
+// TODO make sure we don't allow c8y-internal either, or az, or aws as those are all used
+impl From<String> for TopicPrefix {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&str> for TopicPrefix {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl FromStr for TopicPrefix {
+    type Err = Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.into())
+    }
+}
+
+impl From<TopicPrefix> for Arc<str> {
+    fn from(value: TopicPrefix) -> Self {
+        value.0
+    }
+}
+
+// TODO is deref actually right here
+impl Deref for TopicPrefix {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl TopicPrefix {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for TopicPrefix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
     let external_address = dto.mqtt.external.bind.address;
     external_address
@@ -817,7 +910,8 @@ fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
 fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ReadError {
     match &err {
         CertificateError::IoError(io_err) => match io_err.kind() {
-            std::io::ErrorKind::NotFound => ReadError::ReadOnlyNotFound { key,
+            std::io::ErrorKind::NotFound => ReadError::ReadOnlyNotFound {
+                key,
                 message: concat!(
                     "The device id is read from the device certificate.\n",
                     "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",

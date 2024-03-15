@@ -144,6 +144,7 @@ tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
 tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
 tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
 tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }
+tedge_mqtt_bridge = { path = "crates/extensions/tedge_mqtt_bridge" }
 tedge_mqtt_ext = { path = "crates/extensions/tedge_mqtt_ext" }
 tedge_script_ext = { path = "crates/extensions/tedge_script_ext" }
 tedge_signal_ext = { path = "crates/extensions/tedge_signal_ext" }

@@ -7,13 +7,14 @@ use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::alarm::ThinEdgeAlarmDeserializerError;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::EntityStore;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::Topic;
 
 use crate::error::ConversionError;
 
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "c8y/alarm/alarms/create";
+const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "alarm/alarms/create";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlarmConverter {
@@ -38,6 +39,7 @@ impl AlarmConverter {
         input_message: &Message,
         alarm_type: &str,
         entity_store: &EntityStore,
+        c8y_prefix: &TopicPrefix,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output_messages: Vec<Message> = Vec::new();
         match self {
@@ -68,14 +70,17 @@ impl AlarmConverter {
                     {
                         // JSON over MQTT
                         let cumulocity_alarm_json = serde_json::to_string(&c8y_create_alarm)?;
-                        let c8y_alarm_topic = Topic::new_unchecked(C8Y_JSON_MQTT_ALARMS_TOPIC);
+                        let c8y_json_mqtt_alarms_topic =
+                            format!("{c8y_prefix}/{C8Y_JSON_MQTT_ALARMS_TOPIC}");
+                        let c8y_alarm_topic = Topic::new_unchecked(&c8y_json_mqtt_alarms_topic);
                         output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
                     }
                     _ => {
                         // SmartREST
                         let smartrest_alarm = alarm::serialize_alarm(&c8y_alarm)?;
-                        let smartrest_topic =
-                            C8yTopic::from(&c8y_alarm).to_topic().expect("Infallible");
+                        let smartrest_topic = C8yTopic::from(&c8y_alarm)
+                            .to_topic(c8y_prefix)
+                            .expect("Infallible");
                         output_messages.push(Message::new(&smartrest_topic, smartrest_alarm));
                     }
                 }

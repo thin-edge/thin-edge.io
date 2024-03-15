@@ -20,6 +20,7 @@ pub struct BridgeConfig {
     pub local_clientid: String,
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
+    pub bridge_location: BridgeLocation,
     pub use_mapper: bool,
     pub use_agent: bool,
     pub try_private: bool,
@@ -32,6 +33,12 @@ pub struct BridgeConfig {
     pub notification_topic: String,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum BridgeLocation {
+    Mosquitto,
+    BuiltIn,
 }
 
 impl BridgeConfig {
@@ -166,6 +173,7 @@ mod test {
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -231,6 +239,7 @@ bridge_attempt_unsubscribe false
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -298,6 +307,7 @@ bridge_attempt_unsubscribe false
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let mut buffer = Vec::new();
@@ -435,6 +445,7 @@ bridge_attempt_unsubscribe false
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![],
+            bridge_location: BridgeLocation::Mosquitto,
         }
     }
 }

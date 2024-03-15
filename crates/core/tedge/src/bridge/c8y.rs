@@ -1,4 +1,5 @@
 use super::BridgeConfig;
+use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::process::Command;
 use tedge_config::AutoFlag;
@@ -19,6 +20,7 @@ pub struct BridgeConfigC8yParams {
     pub bridge_keyfile: Utf8PathBuf,
     pub smartrest_templates: TemplatesSet,
     pub include_local_clean_session: AutoFlag,
+    pub bridge_location: BridgeLocation,
 }
 
 impl From<BridgeConfigC8yParams> for BridgeConfig {
@@ -32,6 +34,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_keyfile,
             smartrest_templates,
             include_local_clean_session,
+            bridge_location,
         } = params;
 
         let mut topics: Vec<String> = vec![
@@ -115,6 +118,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             notification_topic: C8Y_BRIDGE_HEALTH_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
             topics,
+            bridge_location,
         }
     }
 }
@@ -163,6 +167,7 @@ mod tests {
             bridge_keyfile: "./test-private-key.pem".into(),
             smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
             include_local_clean_session: AutoFlag::False,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -225,6 +230,7 @@ mod tests {
             notifications_local_only: true,
             notification_topic: C8Y_BRIDGE_HEALTH_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         assert_eq!(bridge, expected);

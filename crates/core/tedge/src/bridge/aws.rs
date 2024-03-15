@@ -1,4 +1,5 @@
 use super::BridgeConfig;
+use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
 
@@ -74,6 +75,8 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
                 connection_check_pub_msg_topic,
                 connection_check_sub_msg_topic,
             ],
+            // TODO support configurability
+            bridge_location: BridgeLocation::Mosquitto,
         }
     }
 }
@@ -123,6 +126,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         notifications_local_only: true,
         notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
+        bridge_location: BridgeLocation::Mosquitto,
     };
 
     assert_eq!(bridge, expected);

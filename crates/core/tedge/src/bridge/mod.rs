@@ -9,6 +9,7 @@ pub mod c8y;
 
 pub use common_mosquitto_config::*;
 pub use config::BridgeConfig;
+pub use config::BridgeLocation;
 
 pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 pub const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";

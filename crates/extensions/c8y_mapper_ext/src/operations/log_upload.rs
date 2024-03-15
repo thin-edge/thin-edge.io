@@ -306,7 +306,7 @@ mod tests {
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_LogfileRequest": {
@@ -363,7 +363,7 @@ mod tests {
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
-            &C8yDeviceControlTopic::topic(),
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
             json!({
                 "id": "123456",
                 "c8y_LogfileRequest": {

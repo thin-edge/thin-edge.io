@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::Message;
 use tracing::error;
 
@@ -20,6 +21,7 @@ pub fn convert_health_status_message(
     entity: &EntityMetadata,
     ancestors_external_ids: &[String],
     message: &Message,
+    prefix: &TopicPrefix,
 ) -> Vec<Message> {
     // TODO: introduce type to remove entity type guards
     if entity.r#type != EntityType::Service {
@@ -56,10 +58,10 @@ pub fn convert_health_status_message(
 
     let Ok(status_message) =
         // smartrest::inventory::service_status_update_message(&external_ids, &health_status);
-        smartrest::inventory::service_creation_message(entity.external_id.as_ref(), display_name, display_type, &health_status, ancestors_external_ids) else {
-            error!("Can't create 102 for service status update");
-            return vec![];
-        };
+        smartrest::inventory::service_creation_message(entity.external_id.as_ref(), display_name, display_type, &health_status, ancestors_external_ids, prefix) else {
+        error!("Can't create 102 for service status update");
+        return vec![];
+    };
 
     vec![status_message]
 }
@@ -72,6 +74,7 @@ mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Topic;
     use test_case::test_case;
+
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
@@ -179,7 +182,12 @@ mod tests {
             .ancestors_external_ids(&entity_topic_id)
             .unwrap();
 
-        let msg = convert_health_status_message(entity, &ancestors_external_ids, &health_message);
+        let msg = convert_health_status_message(
+            entity,
+            &ancestors_external_ids,
+            &health_message,
+            &"c8y".into(),
+        );
         assert_eq!(msg[0], expected_message);
     }
 }

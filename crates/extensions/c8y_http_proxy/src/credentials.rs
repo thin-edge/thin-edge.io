@@ -6,6 +6,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
+use tedge_config::TopicPrefix;
 
 pub type JwtRequest = ();
 pub type JwtResult = Result<String, JwtError>;
@@ -21,8 +22,9 @@ pub struct C8YJwtRetriever {
 impl C8YJwtRetriever {
     pub fn builder(
         mqtt_config: mqtt_channel::Config,
+        topic_prefix: TopicPrefix,
     ) -> ServerActorBuilder<C8YJwtRetriever, Sequential> {
-        let mqtt_retriever = C8yMqttJwtTokenRetriever::new(mqtt_config);
+        let mqtt_retriever = C8yMqttJwtTokenRetriever::new(mqtt_config, topic_prefix);
         let server = C8YJwtRetriever { mqtt_retriever };
         ServerActorBuilder::new(server, &ServerConfig::default(), Sequential)
     }
