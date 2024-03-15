@@ -12,13 +12,11 @@ use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::MessageSink;
-use tedge_actors::NoConfig;
 use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
@@ -77,9 +75,6 @@ pub enum C8yHttpConfigBuildError {
 }
 
 /// A proxy to C8Y REST API
-///
-/// This is an actor builder.
-/// - `impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>`
 pub struct C8YHttpProxyBuilder {
     /// Config
     config: C8YHttpConfig,
@@ -130,21 +125,7 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
     }
 }
 
-impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
-    fn connect_consumer(
-        &mut self,
-        config: NoConfig,
-        response_sender: DynSender<C8YRestResult>,
-    ) -> DynSender<C8YRestRequest> {
-        self.clients.connect_consumer(config, response_sender)
-    }
-}
-
-impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>, NoConfig> for C8YHttpProxyBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
+impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>> for C8YHttpProxyBuilder {
     fn get_sender(&self) -> DynSender<RequestEnvelope<C8YRestRequest, C8YRestResult>> {
         self.clients.get_sender()
     }

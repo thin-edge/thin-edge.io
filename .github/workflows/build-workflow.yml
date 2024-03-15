@@ -176,7 +176,7 @@ jobs:
           path: tests/RobotFramework/output
 
       - name: Send report to commit
-        uses: joonvena/robotframework-reporter-action@v2.3
+        uses: joonvena/robotframework-reporter-action@v2.4
         if: always() && github.event_name == 'pull_request_target'
         with:
           gh_access_token: ${{ secrets.GITHUB_TOKEN }}
@@ -353,7 +353,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

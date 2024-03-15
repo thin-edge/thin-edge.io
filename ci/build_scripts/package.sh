@@ -119,7 +119,7 @@ fi
 
 if [ -z "$PACKAGE_TYPES" ]; then
     case "$TARGET" in
-        *linux*) PACKAGE_TYPES="deb,apk,rpm,tarball" ;;
+        *linux*|all) PACKAGE_TYPES="deb,apk,rpm,tarball" ;;
         *apple*) PACKAGE_TYPES="tarball" ;;
         *) PACKAGE_TYPES="tarball" ;;
     esac
@@ -193,6 +193,14 @@ build_virtual_package() {
 
     if [[ "$PACKAGE_TYPES" =~ apk ]]; then
         env GIT_SEMVER="${APK_VERSION:-$GIT_SEMVER}" RELEASE="r0" nfpm "${COMMON_ARGS[@]}" --packager apk
+    fi
+
+    # Expect to build at least 1 virtual package to prevent silent errors
+    # when no virtual packages were created
+    VIRTUAL_PACKAGE_COUNT=$(find target/virtual-packages -type f | wc -l | xargs)
+    if [ "$VIRTUAL_PACKAGE_COUNT" -lt 1 ]; then
+        echo "Expected at least 1 virtual packages to have been created. got=$VIRTUAL_PACKAGE_COUNT" >&2
+        exit 1
     fi
 }
 

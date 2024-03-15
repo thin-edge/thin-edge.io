@@ -19,10 +19,11 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
-use tedge_actors::ServiceProvider;
 use tedge_api::path::DataDir;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
@@ -46,7 +47,7 @@ pub struct FirmwareManagerBuilder {
 impl FirmwareManagerBuilder {
     pub fn try_new(
         config: FirmwareManagerConfig,
-        mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         jwt_actor: &mut impl Service<(), JwtResult>,
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<FirmwareManagerBuilder, FileError> {
@@ -60,10 +61,11 @@ impl FirmwareManagerBuilder {
             signal_receiver,
         );
 
-        let mqtt_publisher = mqtt_actor.connect_consumer(
+        mqtt_actor.register_peer(
             Self::subscriptions(&config.c8y_prefix),
             input_sender.clone().into(),
         );
+        let mqtt_publisher = mqtt_actor.get_sender();
         let jwt_retriever = JwtRetriever::new(jwt_actor);
         let download_sender = ClientMessageBox::new(downloader_actor);
         let progress_sender = input_sender.into();
