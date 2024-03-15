@@ -281,8 +281,7 @@
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), RuntimeError> {
-//! let runtime_events_logger = None;
-//! let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+//! let mut runtime = Runtime::new();
 //!
 //! let my_actor_builder = MyActorBuilder::default();
 //!

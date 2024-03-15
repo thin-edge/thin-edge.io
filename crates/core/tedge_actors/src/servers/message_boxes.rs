@@ -306,7 +306,7 @@ mod tests {
             }
         }
 
-        let mut runtime = Runtime::try_new(None).await.unwrap();
+        let mut runtime = Runtime::new();
 
         let (mut server_actor_builder, mut test_rx) = TestServerBuilder::new();
         let mut client_box = server_actor_builder.client_box();

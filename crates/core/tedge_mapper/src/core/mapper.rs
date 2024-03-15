@@ -15,8 +15,7 @@ pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
-    let runtime_events_logger = None;
-    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+    let mut runtime = Runtime::new();
 
     let mut mqtt_actor = get_mqtt_actor(mapper_name, config).await?;
 

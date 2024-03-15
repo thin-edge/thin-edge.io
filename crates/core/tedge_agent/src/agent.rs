@@ -226,8 +226,7 @@ impl Agent {
         self.init()?;
 
         // Runtime
-        let runtime_events_logger = None;
-        let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+        let mut runtime = Runtime::new();
 
         // Operation workflows
         let workflows = self.load_operation_workflows().await?;
