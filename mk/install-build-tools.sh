@@ -101,6 +101,13 @@ arm-unknown-linux-musleabi)
     gcc-arm-linux-gnueabi \
     libc6-dev-armel-cross
   ;;
+arm-unknown-linux-musleabihf)
+  use_clang=1
+  install_packages \
+    qemu-user \
+    gcc-arm-linux-gnueabihf \
+    libc6-dev-armhf-cross
+  ;;
 arm-unknown-linux-gnueabi)
   install_packages \
     qemu-user \
