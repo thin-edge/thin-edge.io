@@ -276,3 +276,5 @@ Custom Setup
     ThinEdgeIO.Execute Command    tedge reconnect c8y
     File Should Not Exist    /etc/tedge/mosquitto-conf/c8y-bridge.conf
     Service Health Status Should Be Up    tedge-mapper-c8y
+    ${output}=    Execute Command    sudo tedge connect c8y --test
+    Should Contain    ${output}    Connection check to c8y cloud is successful.
