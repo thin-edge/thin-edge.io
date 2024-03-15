@@ -100,7 +100,7 @@ use tracing::trace;
 use tracing::warn;
 
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
+const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
@@ -499,7 +499,10 @@ impl CumulocityConverter {
             } else {
                 // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
                 let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
-                let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+                let json_mqtt_topic = Topic::new_unchecked(&format!(
+                    "{}/{C8Y_JSON_MQTT_EVENTS_TOPIC}",
+                    self.config.c8y_prefix
+                ));
                 Message::new(&json_mqtt_topic, cumulocity_event_json)
             };
 
@@ -2389,6 +2392,30 @@ pub(crate) mod tests {
         assert_eq!(converted_events.len(), 1);
         let converted_event = converted_events.get(0).unwrap();
         assert_eq!(converted_event.topic.name, "c8y/s/us");
+
+        assert_eq!(
+            converted_event.payload_str().unwrap(),
+            r#"400,click_event,"Someone clicked",2020-02-02T01:02:03+05:30"#
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_event_with_custom_c8y_topic_prefix() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
+        config.service = tedge_config.service.clone();
+        config.c8y_prefix = "custom-topic".into();
+
+        let (mut converter, _) = create_c8y_converter_from_config(config);
+        let event_topic = "te/device/main///e/click_event";
+        let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+        assert_eq!(converted_events.len(), 1);
+        let converted_event = converted_events.get(0).unwrap();
+        assert_eq!(converted_event.topic.name, "custom-topic/s/us");
 
         assert_eq!(
             converted_event.payload_str().unwrap(),
