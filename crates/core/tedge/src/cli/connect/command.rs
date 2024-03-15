@@ -67,9 +67,7 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
-            if bridge_config.bridge_location == BridgeLocation::BuiltIn
-                || self.check_if_bridge_exists(&bridge_config)
-            {
+            if self.check_if_bridge_exists(&bridge_config) {
                 return match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
@@ -103,6 +101,12 @@ impl Command for ConnectCommand {
             Err(err) => return Err(err.into()),
         }
 
+        if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::BuiltIn {
+            // If the bridge is built in, the mapper needs to be running with the new configuration
+            // to be connected
+            self.start_mapper();
+        }
+
         match self.check_connection(config) {
             Ok(DeviceStatus::AlreadyExists) => {
                 println!("Connection check is successful.\n");
@@ -115,16 +119,10 @@ impl Command for ConnectCommand {
             }
         }
 
-        if bridge_config.use_mapper {
-            println!("Checking if tedge-mapper is installed.\n");
-
-            if which("tedge-mapper").is_err() {
-                println!("Warning: tedge-mapper is not installed.\n");
-            } else {
-                self.service_manager
-                    .as_ref()
-                    .start_and_enable_service(self.cloud.mapper_service(), std::io::stdout());
-            }
+        if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::Mosquitto {
+            // If the bridge is in mosquitto, the mapper should only start once the cloud connection
+            // is verified
+            self.start_mapper();
         }
 
         if let Cloud::C8y = self.cloud {
@@ -165,7 +163,20 @@ impl ConnectCommand {
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(br_config.config_file.clone());
 
-        Path::new(&bridge_conf_path).exists()
+        br_config.bridge_location == BridgeLocation::BuiltIn
+            || Path::new(&bridge_conf_path).exists()
+    }
+
+    fn start_mapper(&self) {
+        println!("Checking if tedge-mapper is installed.\n");
+
+        if which("tedge-mapper").is_err() {
+            println!("Warning: tedge-mapper is not installed.\n");
+        } else {
+            self.service_manager
+                .as_ref()
+                .start_and_enable_service(self.cloud.mapper_service(), std::io::stdout());
+        }
     }
 }
 
@@ -445,7 +456,9 @@ fn new_bridge(
     device_type: &str,
 ) -> Result<(), ConnectError> {
     if bridge_config.bridge_location == BridgeLocation::BuiltIn {
+        println!("Deleting mosquitto bridge configuration in favour of built-in bridge");
         clean_up(config_location, bridge_config)?;
+        restart_mosquitto(bridge_config, service_manager, config_location)?;
         return Ok(());
     }
     println!("Checking if {} is available.\n", service_manager.name());
@@ -512,6 +525,27 @@ fn restart_mosquitto(
     config_location: &TEdgeConfigLocation,
 ) -> Result<(), ConnectError> {
     println!("Restarting mosquitto service.\n");
+
+    if let Err(err) = service_manager.stop_service(SystemService::Mosquitto) {
+        clean_up(config_location, bridge_config)?;
+        return Err(err.into());
+    }
+
+    let (user, group) = match bridge_config.bridge_location {
+        BridgeLocation::BuiltIn => ("tedge", "tedge"),
+        BridgeLocation::Mosquitto => (crate::BROKER_USER, crate::BROKER_GROUP),
+    };
+    // Ignore errors - This was the behavior with the now deprecated user manager.
+    // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
+    // - A better approach could be to remove this `chown` and run the command as mosquitto.
+    for path in [
+        &bridge_config.bridge_certfile,
+        &bridge_config.bridge_keyfile,
+    ] {
+        // TODO maybe ignore errors here
+        tedge_utils::file::change_user_and_group(dbg!(path.as_ref()), user, group).unwrap();
+    }
+
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
