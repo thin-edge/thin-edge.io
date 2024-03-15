@@ -40,6 +40,7 @@ pub use mqtt_channel::TopicFilter;
 use tedge_api::main_device_health_topic;
 use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
 use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
+use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
 
 pub struct MqttBridgeActorBuilder {}
@@ -64,7 +65,38 @@ impl MqttBridgeActorBuilder {
             tedge_config.mqtt.client.port.into(),
         );
         let health_topic = main_device_health_topic(&service_name);
-        // TODO cope with secured mosquitto
+        // TODO cope with certs but not ca_dir, or handle that case with an explicit error message?
+        let auth_config = tedge_config.mqtt_client_auth_config();
+        let local_tls_config = match auth_config {
+            MqttAuthConfig {
+                ca_dir: Some(ca_dir),
+                client: Some(client),
+                ..
+            } => Some(
+                create_tls_config(
+                    ca_dir.into(),
+                    client.key_file.into(),
+                    client.cert_file.into(),
+                )
+                .unwrap(),
+            ),
+            MqttAuthConfig {
+                ca_file: Some(ca_file),
+                client: Some(client),
+                ..
+            } => Some(
+                create_tls_config(
+                    ca_file.into(),
+                    client.key_file.into(),
+                    client.cert_file.into(),
+                )
+                .unwrap(),
+            ),
+            _ => None,
+        };
+        if let Some(tls_config) = local_tls_config {
+            local_config.set_transport(Transport::tls_with_config(tls_config.into()));
+        }
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic,
