@@ -47,17 +47,17 @@
 //!   (possibly several receivers to handle message priorities among inputs),
 //!   and has to give clones of the associated Sender (or Senders) to its peers.
 //! - The first responsibility of a builder is to create a channel per receiver of the actor
-//!   under construction. The receiver will be given to the actor on build.
+//!   under construction. The receiver will be given to the actor when built.
 //!   The sender is owned by the builder to be cloned and given to any peer that needs to send data
 //!   to the actor under construction.
-//! - The second responsibility of the builder is to collect a Sender for each peer the actor
+//! - The second responsibility of the builder is to collect a sender for each peer the actor
 //!   under construction needs to send messages to. This is the mirror of the previous responsibility:
 //!   each builder gives to the others clones of its senders and collects senders from others.
 //! - This is why all the actor building traits
 //!   ([MessageSource], [MessageSink] and [RuntimeRequestSink])
-//!   are related to exchanges of Sender. A sink gives to a source a sender attached to its receiver.
-//! - To be precise, the actor builders exchange [DynSender] and not [Sender]. The difference is that
-//!   a [DynSender] can transform the messages sent by the source to adapt them to the sink expectations,
+//!   are related to exchanges of Sender. A sink gives to a source a sender attached to its own receiver.
+//! - To be precise, the actor builders exchange [DynSender] and not [Sender](futures::channel::mpsc::Sender).
+//!   The difference is that a [DynSender] can transform the messages sent by the source to adapt them to the sink expectations,
 //!   using an `impl From<SourceMessage> for SinkMessage`. This flexibility allows an actor to receive
 //!   messages from several independent sources (see the [fan_in_message_type](crate::fan_in_message_type) macro).
 use crate::mpsc;

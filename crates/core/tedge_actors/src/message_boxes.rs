@@ -7,11 +7,11 @@
 //! Conceptually, a message box is a receiver of input messages combined with a sender of output messages.
 //! * The receiver is connected to the senders of peer actors;
 //!   and reciprocally the sender is connected to receivers of peer actors.
-//! * The receivers are [mpsc::Receiver](crate::mpsc::Receiver) that collect messages from several sources,
+//! * The receivers are [mpsc::Receiver] that collect messages from several sources,
 //!   and deliver the messages to the actor in the order they have been received.
-//! * The senders are [DynSender](crate::DynSender) that adapt the messages sent to match constraints of the receivers.
+//! * The senders are [DynSender] that adapt the messages sent to match constraints of the receivers.
 //!
-//! A [SimpleMessageBox](crate::SimpleMessageBox) implements exactly this conceptual view:
+//! A [SimpleMessageBox] implements exactly this conceptual view:
 //!
 //! ```ascii
 //!                    input_senders: DynSender<Input> ...
@@ -79,7 +79,7 @@
 //!
 //! This crates provides several built-in message box implementations:
 //!
-//! - [SimpleMessageBox](crate::SimpleMessageBox) for actors that simply process messages in turn,
+//! - [SimpleMessageBox] for actors that simply process messages in turn,
 //! - [ServerMessageBox](crate::ServerMessageBox) for server actors that deliver a request-response service,
 //! - [ConcurrentServerMessageBox](crate::ConcurrentServerMessageBox) for server actors that process requests concurrently,
 //! - [ClientMessageBox](crate::ClientMessageBox) for client actors that use a request-response service from a server actor,

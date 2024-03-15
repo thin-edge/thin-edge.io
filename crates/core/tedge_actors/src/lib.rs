@@ -4,7 +4,7 @@
 //!
 //! Actors are processing units that interact using asynchronous messages.
 //!
-//! The behavior of an [Actor](crate::Actor) is defined by:
+//! The behavior of an [Actor] is defined by:
 //! - a state owned and freely updated by the actor,
 //! - a [message box](crate::message_boxes) connected to peer actors,
 //! - input [messages](crate::Message) that the actor receives from its peers and processes in turn,
@@ -87,9 +87,9 @@
 //! ```
 //!
 //! This crate provides specific `Actor` implementations:
-//! - The [ServerActor](crate::ServerActor) wraps a [Server](crate::Server),
+//! - The [ServerActor] wraps a [Server],
 //!   to implement a request-response communication pattern with a set of connected client actors.
-//! - The [ConvertingActor](crate::ConvertingActor) wraps a [Converter](crate::Converter),
+//! - The [ConvertingActor] wraps a [Converter],
 //!   that translates each input message into a sequence of output messages.
 //!
 //! ## Testing an actor
@@ -104,9 +104,8 @@
 //! [Actor and message box builders](crate::builders) are provided to address these specificities
 //! with a generic approach without exposing the internal structure of the actors.
 //!
-//! To test the `Calculator` example we need first to create its box using a
-//! [SimpleMessageBoxBuilder](crate::SimpleMessageBoxBuilder),
-//! as this actor expects a [SimpleMessageBox](crate::SimpleMessageBox).
+//! To test the `Calculator` example we need first to create its box using a [SimpleMessageBoxBuilder],
+//! as this actor expects a [SimpleMessageBox].
 //! And then, to create a test box connected to the actor message box,
 //! we use the [ServiceProviderExt](crate::test_helpers::ServiceProviderExt) test helper extension
 //! and the [new_client_box](crate::test_helpers::ServiceProviderExt::new_client_box) method.
@@ -153,7 +152,7 @@
 //! # }
 //! ```
 //!
-//! See the [test_helpers](crate::test_helpers) module for various ways
+//! See the [test_helpers] module for various ways
 //! to observe and interact with running actors.
 //!
 //! - The primary tool to interact with an actor under test is the [SimpleMessageBoxBuilder],
@@ -172,26 +171,20 @@
 //! that define the services provided and consumed by the actors under construction.
 //!
 //! The connection builder traits work by pairs.
-//! A [MessageSink](crate::MessageSink) connects to a [MessageSource](crate::MessageSource),
+//! A [MessageSink] connects to a [MessageSource],
 //! so the messages sent by the latter will be received by the former.
 //!
 //! These traits define the types of the messages sent and received.
 //! - A sink that excepts message of type `M` can only be connected to a source of messages
 //!   that can be converted into `M` values.
-//! - Similarly a service is defined by two types of messages, the requests received by the service
-//!   and the responses sent by the service. To use a service, a consumer will have to send messages
-//!   that can be converted into the service request type and be ready to receive messages converted from
-//!   the service response type.
 //! - Note, that no contract is enforced beyond the type-compatibility of the messages sent between the actors.
 //!   A consumer of an HTTP service needs to known that a request must be sent before any response can be received;
 //!   while a consumer of an MQTT service can expect to receive messages without sending a single one.
 //!
 //! The connection builder traits also define a configuration type.
-//! - The semantics of this type is defined by the message source or the service provider.
-//!   It can be used to filter the values sent to a given sink
-//!   or to restrict the scope of the service provided to a given service consumer.
-//! - The configuration values are provided by the message sinks and the service consumers
-//!   to specify the context of their connection to a source or a service.
+//! - The semantics of this type is defined by the message source and is used to filter the values sent to a sink.
+//! - The actual configuration values are provided by the actor sinks when connecting the source
+//!   to specify the subset of messages their are interested into.
 //!
 //! Note that these traits are implemented by the actor builders, not by the actors themselves.
 //!

@@ -47,7 +47,7 @@
 //! }
 //! ```
 //!
-//! To be used as an actor, a `Server` is wrapped into a [ServerActor](crate::ServerActor)
+//! To be used as an actor, a `Server` is wrapped into a [ServerActor]
 //!
 //! ```
 //! # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, Sender, ServerActorBuilder, ServerConfig, Sequential};

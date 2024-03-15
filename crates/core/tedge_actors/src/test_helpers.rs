@@ -399,7 +399,7 @@ use futures::StreamExt;
 /// The two actors under test, as well as their message boxes, are built and launched as usual,
 /// the only interaction being on the wire:
 /// - A probe is set on one side using the [with_probe()](crate::test_helpers::ServiceConsumerExt::with_probe)
-///   method added by the [ServiceConsumerExt](crate::test_helpers::ServiceConsumerExt)
+///   method added by the [ServiceConsumerExt]
 ///   to any actor or message box builder.
 /// - The [Probe::observe()](crate::test_helpers::Probe::observe) method can then be used
 ///   to observe all the messages either [sent](crate::test_helpers::ProbeEvent::Send)
@@ -459,7 +459,7 @@ pub struct Probe<I: MessagePlus, O: MessagePlus> {
     output_forwarder: DynSender<O>,
 }
 
-/// An event observed by a [Probe](crate::test_helpers::Probe)
+/// An event observed by a [Probe]
 ///
 /// These events have to be interpreted from the point of view of
 /// the actor on which the probe has been set.
@@ -491,8 +491,7 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     /// Create a new `Probe` ready to be interposed between two actors.
     ///
     /// The connection is done using the [with_probe()](crate::test_helpers::ServiceConsumerExt::with_probe)
-    /// method added to any [ServiceConsumer](crate::ServiceConsumer)
-    /// by [ServiceConsumerExt](crate::test_helpers::ServiceConsumerExt).
+    /// method added by [ServiceConsumerExt] to any actor builder implementing [MessageSource] and [MessageSink].
     pub fn new() -> Self {
         // The capacity of the interceptor channels is 1,
         // so the probe will control at which pace input/output messages are sent.
@@ -598,15 +597,15 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     }
 }
 
-/// Extend any [ServiceConsumer] with a `with_probe` method.
+/// Extend with a `with_probe` method any actor builder implementing [MessageSource] and [MessageSink].
 pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
-    /// Add a probe to an actor `self` that is a [MessageSource](crate::MessageSource) and [MessageSink](crate::MessageSink).
+    /// Add a probe to an actor `self` that is a [MessageSource] and [MessageSink].
     ///
-    /// Return a [MessageSource](crate::MessageSource) and [MessageSink](crate::MessageSink)
+    /// Return a [MessageSource] and [MessageSink]
     /// that can be plugged into another actor which consumes the source messages and produces messages for the sink.
     ///
     /// The added `Probe` is then interposed between the two actors,
-    /// observing all the [ProbeEvent](crate::test_helpers::ProbeEvent) exchanged between them.
+    /// observing all the [ProbeEvent] exchanged between them.
     ///
     /// ```
     /// # use tedge_actors::{NoConfig, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};

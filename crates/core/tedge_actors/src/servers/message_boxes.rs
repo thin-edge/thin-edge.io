@@ -109,7 +109,7 @@ impl<Request: Message, Response: Message> Clone for ClientMessageBox<Request, Re
 }
 
 impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
-    /// Create a [ClientMessageBox] connected to a given [Server]
+    /// Create a [ClientMessageBox] connected to a given [Server](crate::Server)
     pub fn new(server: &mut impl MessageSink<RequestEnvelope<Request, Response>>) -> Self {
         ClientMessageBox {
             sender: server.get_sender(),
