@@ -8,7 +8,6 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
 use tedge_actors::MessageReceiver;
-use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Sender;
@@ -120,8 +119,8 @@ async fn spawn_restart_manager(
     };
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);
-    converter_builder.register_peer(NoConfig, restart_actor_builder.get_sender());
-    restart_actor_builder.register_peer(NoConfig, converter_builder.get_sender());
+    converter_builder.connect_sink(NoConfig, &restart_actor_builder);
+    restart_actor_builder.connect_sink(NoConfig, &converter_builder);
 
     let converter_box = converter_builder.build().with_timeout(TEST_TIMEOUT_MS);
 

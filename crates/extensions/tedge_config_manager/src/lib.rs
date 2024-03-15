@@ -10,6 +10,7 @@ pub use config::*;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
@@ -61,17 +62,18 @@ impl ConfigManagerBuilder {
             events_receiver,
             signal_receiver,
         );
+        let events_sender: DynSender<ConfigInput> = events_sender.into();
 
-        mqtt.register_peer(Self::subscriptions(&config), events_sender.clone().into());
+        mqtt.connect_sink(Self::subscriptions(&config), &events_sender);
         let mqtt_publisher = mqtt.get_sender();
 
-        let download_sender = downloader_actor.add_requester(events_sender.clone().into());
+        let download_sender = downloader_actor.connect_client(events_sender.sender_clone());
 
-        let upload_sender = uploader_actor.add_requester(events_sender.clone().into());
+        let upload_sender = uploader_actor.connect_client(events_sender.sender_clone());
 
-        fs_notify.register_peer(
+        fs_notify.connect_sink(
             ConfigManagerBuilder::watched_directory(&config),
-            events_sender.into(),
+            &events_sender,
         );
 
         Ok(ConfigManagerBuilder {

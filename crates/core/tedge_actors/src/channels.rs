@@ -25,7 +25,7 @@ pub trait CloneSender<M>: Sender<M> {
 
     /// Clone a cast of this sender into a `Box<dyn Sender<M>>`
     ///
-    /// This is a workaround for https://github.com/rust-lang/rust/issues/65991
+    /// This is a workaround for <https://github.com/rust-lang/rust/issues/65991>
     fn sender(&self) -> Box<dyn Sender<M>>;
 }
 

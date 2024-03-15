@@ -130,8 +130,8 @@ impl<'a> AsMut<MqttConfig> for MqttActorBuilder<'a> {
 }
 
 impl<'a> MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder<'a> {
-    fn register_peer(&mut self, config: TopicFilter, sender: DynSender<MqttMessage>) {
-        self.message_box.register_peer(config, sender)
+    fn connect_sink(&mut self, config: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
+        self.message_box.connect_sink(config, peer)
     }
 }
 

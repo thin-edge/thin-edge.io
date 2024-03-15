@@ -34,8 +34,8 @@ impl MessageSink<SoftwareCommand> for SoftwareManagerBuilder {
 }
 
 impl MessageSource<SoftwareCommand, NoConfig> for SoftwareManagerBuilder {
-    fn register_peer(&mut self, config: NoConfig, sender: DynSender<SoftwareCommand>) {
-        self.message_box.register_peer(config, sender)
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<SoftwareCommand>) {
+        self.message_box.connect_sink(config, peer)
     }
 }
 

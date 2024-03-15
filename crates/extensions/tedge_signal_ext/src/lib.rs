@@ -46,8 +46,8 @@ impl RuntimeRequestSink for SignalActorBuilder {
 }
 
 impl MessageSource<RuntimeAction, NoConfig> for SignalActorBuilder {
-    fn register_peer(&mut self, config: NoConfig, sender: DynSender<RuntimeAction>) {
-        self.box_builder.register_peer(config, sender)
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<RuntimeAction>) {
+        self.box_builder.connect_sink(config, peer)
     }
 }
 
@@ -58,7 +58,7 @@ pub struct SignalActor {
 impl SignalActor {
     pub fn builder(runtime: &impl MessageSink<RuntimeAction>) -> SignalActorBuilder {
         let mut box_builder = SimpleMessageBoxBuilder::new("Signal-Handler", 1);
-        box_builder.add_sink(NoConfig, runtime);
+        box_builder.connect_sink(NoConfig, runtime);
         SignalActorBuilder { box_builder }
     }
 }

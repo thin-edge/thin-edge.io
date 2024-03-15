@@ -47,7 +47,7 @@
 //! }
 //! ```
 //!
-//! To be used as an actor, a `Server` is wrapped into a [ServerActor](crate::ServerActor)
+//! To be used as an actor, a `Server` is wrapped into a [ServerActor]
 //!
 //! ```
 //! # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, Sender, ServerActorBuilder, ServerConfig, Sequential};
@@ -101,8 +101,6 @@ use std::fmt::Debug;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageSink;
-use crate::MessageSource;
-use crate::NoConfig;
 use crate::Sender;
 use async_trait::async_trait;
 
@@ -144,39 +142,26 @@ impl<Request, Response> AsRef<Request> for RequestEnvelope<Request, Response> {
     }
 }
 
-/// A request sender to some [Server]
-pub type DynRequestSender<Request, Response> = DynSender<RequestEnvelope<Request, Response>>;
-
 /// A connector to a [Server] expecting Request and returning Response.
 pub trait Service<Request: Message, Response: Message>:
     MessageSink<RequestEnvelope<Request, Response>>
 {
-    /// Connect a request message box to the server box under construction
-    fn add_requester(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
-
-    fn add_client(
-        &mut self,
-        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response>),
-    );
+    /// Connect a client message box to the server box under construction
+    ///
+    /// The client provides a `response_sender` on which it wants to response to be sent to.
+    /// In exchange the client is returned a request sender on which its requests will have to be sent.
+    fn connect_client(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
 }
 
 impl<T, Request: Message, Response: Message> Service<Request, Response> for T
 where
     T: MessageSink<RequestEnvelope<Request, Response>>,
 {
-    fn add_requester(&mut self, reply_to: DynSender<Response>) -> DynSender<Request> {
+    fn connect_client(&mut self, reply_to: DynSender<Response>) -> DynSender<Request> {
         let request_sender = RequestSender {
             sender: self.get_sender(),
             reply_to,
         };
         request_sender.into()
-    }
-
-    fn add_client(
-        &mut self,
-        client: &mut (impl MessageSource<Request, NoConfig> + MessageSink<Response>),
-    ) {
-        let request_sender = self.add_requester(client.get_sender());
-        client.register_peer(NoConfig, request_sender);
     }
 }

@@ -51,16 +51,13 @@ impl LogManagerBuilder {
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
         let mqtt_publisher = mqtt.get_sender();
-        mqtt.register_peer(
-            Self::subscriptions(&config),
-            box_builder.get_sender().sender_clone(),
-        );
-        fs_notify.register_peer(
+        mqtt.connect_sink(Self::subscriptions(&config), &box_builder.get_sender());
+        fs_notify.connect_sink(
             LogManagerBuilder::watched_directory(&config),
-            box_builder.get_sender().sender_clone(),
+            &box_builder.get_sender(),
         );
 
-        let upload_sender = uploader_actor.add_requester(box_builder.get_sender().sender_clone());
+        let upload_sender = uploader_actor.connect_client(box_builder.get_sender().sender_clone());
 
         Ok(Self {
             config,

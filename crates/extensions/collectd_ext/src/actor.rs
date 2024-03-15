@@ -60,7 +60,7 @@ impl CollectdActorBuilder {
     }
 
     pub fn add_input(&mut self, source: &mut impl MessageSource<MqttMessage, TopicFilter>) {
-        source.register_peer(self.topics.clone(), self.message_box.get_sender())
+        source.connect_sink(self.topics.clone(), &self.message_box)
     }
 }
 
@@ -71,8 +71,8 @@ impl RuntimeRequestSink for CollectdActorBuilder {
 }
 
 impl MessageSource<CollectdMessage, NoConfig> for CollectdActorBuilder {
-    fn register_peer(&mut self, config: NoConfig, sender: DynSender<CollectdMessage>) {
-        self.message_box.register_peer(config, sender)
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<CollectdMessage>) {
+        self.message_box.connect_sink(config, peer)
     }
 }
 

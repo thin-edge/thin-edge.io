@@ -74,8 +74,8 @@ impl<B: Batchable> MessageSink<BatchDriverInput<B>> for BatchingActorBuilder<B> 
 }
 
 impl<B: Batchable> MessageSource<BatchDriverOutput<B>, NoConfig> for BatchingActorBuilder<B> {
-    fn register_peer(&mut self, config: NoConfig, sender: DynSender<BatchDriverOutput<B>>) {
-        self.message_box.register_peer(config, sender)
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<BatchDriverOutput<B>>) {
+        self.message_box.connect_sink(config, peer)
     }
 }
 

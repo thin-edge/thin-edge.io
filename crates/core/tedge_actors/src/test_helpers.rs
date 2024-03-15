@@ -2,7 +2,6 @@
 use crate::Builder;
 use crate::ChannelError;
 use crate::CloneSender;
-use crate::DynRequestSender;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageReceiver;
@@ -400,7 +399,7 @@ use futures::StreamExt;
 /// The two actors under test, as well as their message boxes, are built and launched as usual,
 /// the only interaction being on the wire:
 /// - A probe is set on one side using the [with_probe()](crate::test_helpers::ServiceConsumerExt::with_probe)
-///   method added by the [ServiceConsumerExt](crate::test_helpers::ServiceConsumerExt)
+///   method added by the [ServiceConsumerExt]
 ///   to any actor or message box builder.
 /// - The [Probe::observe()](crate::test_helpers::Probe::observe) method can then be used
 ///   to observe all the messages either [sent](crate::test_helpers::ProbeEvent::Send)
@@ -460,7 +459,7 @@ pub struct Probe<I: MessagePlus, O: MessagePlus> {
     output_forwarder: DynSender<O>,
 }
 
-/// An event observed by a [Probe](crate::test_helpers::Probe)
+/// An event observed by a [Probe]
 ///
 /// These events have to be interpreted from the point of view of
 /// the actor on which the probe has been set.
@@ -492,8 +491,7 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     /// Create a new `Probe` ready to be interposed between two actors.
     ///
     /// The connection is done using the [with_probe()](crate::test_helpers::ServiceConsumerExt::with_probe)
-    /// method added to any [ServiceConsumer](crate::ServiceConsumer)
-    /// by [ServiceConsumerExt](crate::test_helpers::ServiceConsumerExt).
+    /// method added by [ServiceConsumerExt] to any actor builder implementing [MessageSource] and [MessageSink].
     pub fn new() -> Self {
         // The capacity of the interceptor channels is 1,
         // so the probe will control at which pace input/output messages are sent.
@@ -521,13 +519,14 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
         source: &mut impl MessageSource<I, C>,
         sink: &mut impl MessageSink<O>,
     ) {
+        let input_interceptor: DynSender<I> = self.input_interceptor.clone().into();
         self.output_forwarder = sink.get_sender();
-        source.register_peer(config, self.input_interceptor.clone().into());
+        source.connect_sink(config, &input_interceptor);
     }
 
     /// Connect this probe to a service provider
     pub fn connect_to_server(&mut self, service: &mut impl Service<O, I>) {
-        self.output_forwarder = service.add_requester(self.input_interceptor.clone().into())
+        self.output_forwarder = service.connect_client(self.input_interceptor.clone().into())
     }
 
     /// Return the next event observed between the two connected actors.
@@ -598,15 +597,15 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     }
 }
 
-/// Extend any [ServiceConsumer] with a `with_probe` method.
+/// Extend with a `with_probe` method any actor builder implementing [MessageSource] and [MessageSink].
 pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
-    /// Add a probe to an actor `self` that is a [MessageSource](crate::MessageSource) and [MessageSink](crate::MessageSink).
+    /// Add a probe to an actor `self` that is a [MessageSource] and [MessageSink].
     ///
-    /// Return a [MessageSource](crate::MessageSource) and [MessageSink](crate::MessageSink)
+    /// Return a [MessageSource] and [MessageSink]
     /// that can be plugged into another actor which consumes the source messages and produces messages for the sink.
     ///
     /// The added `Probe` is then interposed between the two actors,
-    /// observing all the [ProbeEvent](crate::test_helpers::ProbeEvent) exchanged between them.
+    /// observing all the [ProbeEvent] exchanged between them.
     ///
     /// ```
     /// # use tedge_actors::{NoConfig, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
@@ -639,15 +638,16 @@ where
         &'a mut self,
         probe: &'a mut Probe<Response, Request>,
     ) -> &'a mut Probe<Response, Request> {
+        let output_interceptor: DynSender<Request> = probe.output_interceptor.clone().into();
         probe.input_forwarder = self.get_sender();
-        self.register_peer(NoConfig, probe.output_interceptor.sender_clone());
+        self.connect_sink(NoConfig, &output_interceptor);
         probe
     }
 }
 
 impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> {
-    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<O>) {
-        self.output_forwarder = sender;
+    fn connect_sink(&mut self, _config: NoConfig, peer: &impl MessageSink<O>) {
+        self.output_forwarder = peer.get_sender();
     }
 }
 
@@ -662,16 +662,16 @@ pub trait ServiceProviderExt<I: Message, O: Message> {
     fn new_client_box(&mut self) -> SimpleMessageBox<O, I>;
 }
 
-impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynRequestSender<I, O> {
+impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynSender<RequestEnvelope<I, O>> {
     fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
         let name = "client-box";
         let capacity = 16;
         let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
-        let request_sender = RequestSender {
+        let request_sender = Box::new(RequestSender {
             sender: self.sender_clone(),
             reply_to: client_box.get_sender(),
-        };
-        client_box.register_peer(NoConfig, request_sender.into());
+        });
+        client_box.connect_sink(NoConfig, &request_sender.sender_clone());
         client_box.build()
     }
 }
@@ -687,8 +687,8 @@ impl<I: Message, O: Message> ServiceProviderExt<I, O> for SimpleMessageBoxBuilde
         let name = "client-box";
         let capacity = 16;
         let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
-        self.register_peer(NoConfig, client_box.get_sender());
-        client_box.register_peer(NoConfig, self.get_sender());
+        self.connect_sink(NoConfig, &client_box);
+        self.connect_source(NoConfig, &mut client_box);
         client_box.build()
     }
 }

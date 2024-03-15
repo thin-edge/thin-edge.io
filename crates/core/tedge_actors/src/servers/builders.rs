@@ -4,7 +4,6 @@ use crate::Builder;
 use crate::CloneSender;
 use crate::ConcurrentServerActor;
 use crate::ConcurrentServerMessageBox;
-use crate::DynRequestSender;
 use crate::DynSender;
 use crate::LoggingReceiver;
 use crate::Message;
@@ -52,7 +51,7 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
     }
 
     /// Return a sender for the requests
-    pub fn request_sender(&self) -> DynRequestSender<Request, Response> {
+    pub fn request_sender(&self) -> DynSender<RequestEnvelope<Request, Response>> {
         self.request_sender.sender_clone()
     }
 
@@ -134,7 +133,7 @@ impl<S: Server, K> ServerActorBuilder<S, K> {
     }
 
     /// Return a sender for the requests
-    pub fn request_sender(&self) -> DynRequestSender<S::Request, S::Response> {
+    pub fn request_sender(&self) -> DynSender<RequestEnvelope<S::Request, S::Response>> {
         self.box_builder.request_sender()
     }
 }

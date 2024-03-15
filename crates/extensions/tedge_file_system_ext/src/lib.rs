@@ -8,6 +8,7 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
+use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
@@ -84,9 +85,9 @@ impl Default for FsWatchActorBuilder {
 }
 
 impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
-    fn register_peer(&mut self, path: PathBuf, sender: DynSender<FsWatchEvent>) {
+    fn connect_sink(&mut self, path: PathBuf, peer: &impl MessageSink<FsWatchEvent>) {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        self.watch_dirs.push((path, sender));
+        self.watch_dirs.push((path, peer.get_sender()));
     }
 }
 
@@ -164,7 +165,6 @@ mod tests {
     use tedge_actors::Actor;
     use tedge_actors::Builder;
     use tedge_actors::DynError;
-    use tedge_actors::MessageSink;
     use tedge_actors::MessageSource;
     use tedge_actors::NoMessage;
     use tedge_actors::SimpleMessageBoxBuilder;
@@ -182,7 +182,7 @@ mod tests {
         let client_builder: SimpleMessageBoxBuilder<FsWatchEvent, NoMessage> =
             SimpleMessageBoxBuilder::new("FS Client", 5);
 
-        fs_actor_builder.register_peer(ttd_link.to_path_buf(), client_builder.get_sender());
+        fs_actor_builder.connect_sink(ttd_link.to_path_buf(), &client_builder);
 
         let actor = fs_actor_builder.build();
         let client_box = client_builder.build();
