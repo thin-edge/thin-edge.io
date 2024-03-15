@@ -295,7 +295,7 @@ impl FileCacheActorBuilder {
         let message_box = SimpleMessageBoxBuilder::new("RestartManager", 10);
 
         let download_sender =
-            downloader_actor.add_requester(message_box.get_sender().sender_clone());
+            downloader_actor.connect_client(message_box.get_sender().sender_clone());
 
         let mqtt_sender = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(Self::subscriptions(&mqtt_schema), &message_box.get_sender());

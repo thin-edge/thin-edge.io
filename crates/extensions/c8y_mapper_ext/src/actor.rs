@@ -312,9 +312,9 @@ impl C8yMapperBuilder {
         let mqtt_publisher = mqtt.get_sender();
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
         let http_proxy = C8YHttpProxy::new(http);
-        let timer_sender = timer.add_requester(box_builder.get_sender().sender_clone());
-        let upload_sender = uploader.add_requester(box_builder.get_sender().sender_clone());
-        let download_sender = downloader.add_requester(box_builder.get_sender().sender_clone());
+        let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
+        let upload_sender = uploader.connect_client(box_builder.get_sender().sender_clone());
+        let download_sender = downloader.connect_client(box_builder.get_sender().sender_clone());
         fs_watcher.connect_sink(config.ops_dir.clone(), &box_builder.get_sender());
         let auth_proxy = ProxyUrlGenerator::new(
             config.auth_proxy_addr.clone(),

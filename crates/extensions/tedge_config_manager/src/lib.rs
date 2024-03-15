@@ -67,9 +67,9 @@ impl ConfigManagerBuilder {
         mqtt.connect_sink(Self::subscriptions(&config), &events_sender);
         let mqtt_publisher = mqtt.get_sender();
 
-        let download_sender = downloader_actor.add_requester(events_sender.sender_clone());
+        let download_sender = downloader_actor.connect_client(events_sender.sender_clone());
 
-        let upload_sender = uploader_actor.add_requester(events_sender.sender_clone());
+        let upload_sender = uploader_actor.connect_client(events_sender.sender_clone());
 
         fs_notify.connect_sink(
             ConfigManagerBuilder::watched_directory(&config),

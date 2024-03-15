@@ -146,15 +146,18 @@ impl<Request, Response> AsRef<Request> for RequestEnvelope<Request, Response> {
 pub trait Service<Request: Message, Response: Message>:
     MessageSink<RequestEnvelope<Request, Response>>
 {
-    /// Connect a request message box to the server box under construction
-    fn add_requester(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
+    /// Connect a client message box to the server box under construction
+    ///
+    /// The client provides a `response_sender` on which it wants to response to be sent to.
+    /// In exchange the client is returned a request sender on which its requests will have to be sent.
+    fn connect_client(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
 }
 
 impl<T, Request: Message, Response: Message> Service<Request, Response> for T
 where
     T: MessageSink<RequestEnvelope<Request, Response>>,
 {
-    fn add_requester(&mut self, reply_to: DynSender<Response>) -> DynSender<Request> {
+    fn connect_client(&mut self, reply_to: DynSender<Response>) -> DynSender<Request> {
         let request_sender = RequestSender {
             sender: self.get_sender(),
             reply_to,

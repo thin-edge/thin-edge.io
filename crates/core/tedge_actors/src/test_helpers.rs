@@ -527,7 +527,7 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
 
     /// Connect this probe to a service provider
     pub fn connect_to_server(&mut self, service: &mut impl Service<O, I>) {
-        self.output_forwarder = service.add_requester(self.input_interceptor.clone().into())
+        self.output_forwarder = service.connect_client(self.input_interceptor.clone().into())
     }
 
     /// Return the next event observed between the two connected actors.

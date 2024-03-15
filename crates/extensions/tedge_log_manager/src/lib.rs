@@ -57,7 +57,7 @@ impl LogManagerBuilder {
             &box_builder.get_sender(),
         );
 
-        let upload_sender = uploader_actor.add_requester(box_builder.get_sender().sender_clone());
+        let upload_sender = uploader_actor.connect_client(box_builder.get_sender().sender_clone());
 
         Ok(Self {
             config,
