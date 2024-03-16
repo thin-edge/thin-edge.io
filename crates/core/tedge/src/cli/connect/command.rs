@@ -543,7 +543,7 @@ fn restart_mosquitto(
         &bridge_config.bridge_keyfile,
     ] {
         // TODO maybe ignore errors here
-        tedge_utils::file::change_user_and_group(dbg!(path.as_ref()), user, group).unwrap();
+        tedge_utils::file::change_user_and_group(path.as_ref(), user, group).unwrap();
     }
 
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
