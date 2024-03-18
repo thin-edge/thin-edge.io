@@ -1,14 +1,14 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
-use tedge_config::ConnectUrl;
+use tedge_config::HostPort;
+use tedge_config::MQTT_TLS_PORT;
 
 const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-aws-bridge/status/health";
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAwsParams {
-    pub connect_url: ConnectUrl,
-    pub mqtt_tls_port: u16,
+    pub mqtt_host: HostPort<MQTT_TLS_PORT>,
     pub config_file: String,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
@@ -19,8 +19,7 @@ pub struct BridgeConfigAwsParams {
 impl From<BridgeConfigAwsParams> for BridgeConfig {
     fn from(params: BridgeConfigAwsParams) -> Self {
         let BridgeConfigAwsParams {
-            connect_url,
-            mqtt_tls_port,
+            mqtt_host,
             config_file,
             bridge_root_cert_path,
             remote_clientid,
@@ -28,7 +27,6 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             bridge_keyfile,
         } = params;
 
-        let address = format!("{}:{}", connect_url, mqtt_tls_port);
         let user_name = remote_clientid.to_string();
 
         // telemetry/command topics for use by the user
@@ -50,7 +48,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             cloud_name: "aws".into(),
             config_file,
             connection: "edge_to_aws".into(),
-            address,
+            address: mqtt_host,
             remote_username: Some(user_name),
             bridge_root_cert_path,
             remote_clientid,
@@ -86,8 +84,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
     use std::convert::TryFrom;
 
     let params = BridgeConfigAwsParams {
-        connect_url: ConnectUrl::try_from("test.test.io")?,
-        mqtt_tls_port: 8883,
+        mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         config_file: "aws-bridge.conf".into(),
         remote_clientid: "alpha".into(),
         bridge_root_cert_path: "./test_root.pem".into(),
@@ -101,7 +98,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         cloud_name: "aws".into(),
         config_file: "aws-bridge.conf".to_string(),
         connection: "edge_to_aws".into(),
-        address: "test.test.io:8883".into(),
+        address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("alpha".into()),
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),

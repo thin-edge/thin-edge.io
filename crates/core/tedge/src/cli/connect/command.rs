@@ -187,8 +187,10 @@ pub fn bridge_config(
     match cloud {
         Cloud::Azure => {
             let params = BridgeConfigAzureParams {
-                connect_url: config.az.url.or_config_not_set()?.clone(),
-                mqtt_tls_port: MQTT_TLS_PORT,
+                mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
+                    config.az.url.or_config_not_set()?.as_str(),
+                )
+                .map_err(TEdgeConfigError::from)?,
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 bridge_root_cert_path: config.az.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
@@ -200,8 +202,10 @@ pub fn bridge_config(
         }
         Cloud::Aws => {
             let params = BridgeConfigAwsParams {
-                connect_url: config.aws.url.or_config_not_set()?.clone(),
-                mqtt_tls_port: MQTT_TLS_PORT,
+                mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
+                    config.aws.url.or_config_not_set()?.as_str(),
+                )
+                .map_err(TEdgeConfigError::from)?,
                 config_file: AWS_CONFIG_FILENAME.into(),
                 bridge_root_cert_path: config.aws.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),

@@ -1,14 +1,14 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
-use tedge_config::ConnectUrl;
+use tedge_config::HostPort;
+use tedge_config::MQTT_TLS_PORT;
 
 const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-az-bridge/status/health";
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAzureParams {
-    pub connect_url: ConnectUrl,
-    pub mqtt_tls_port: u16,
+    pub mqtt_host: HostPort<MQTT_TLS_PORT>,
     pub config_file: String,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
@@ -19,8 +19,7 @@ pub struct BridgeConfigAzureParams {
 impl From<BridgeConfigAzureParams> for BridgeConfig {
     fn from(params: BridgeConfigAzureParams) -> Self {
         let BridgeConfigAzureParams {
-            connect_url,
-            mqtt_tls_port,
+            mqtt_host,
             config_file,
             bridge_root_cert_path,
             remote_clientid,
@@ -28,10 +27,11 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             bridge_keyfile,
         } = params;
 
-        let address = format!("{}:{}", connect_url, mqtt_tls_port);
+        let address = mqtt_host.clone();
         let user_name = format!(
             "{}/{}/?api-version=2018-06-30",
-            connect_url, remote_clientid
+            mqtt_host.host(),
+            remote_clientid
         );
         let pub_msg_topic = format!("messages/events/# out 1 az/ devices/{}/", remote_clientid);
         let sub_msg_topic = format!(
@@ -84,8 +84,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
     use std::convert::TryFrom;
 
     let params = BridgeConfigAzureParams {
-        connect_url: ConnectUrl::try_from("test.test.io")?,
-        mqtt_tls_port: 8883,
+        mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         config_file: "az-bridge.conf".into(),
         remote_clientid: "alpha".into(),
         bridge_root_cert_path: "./test_root.pem".into(),
@@ -99,7 +98,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".to_string(),
         connection: "edge_to_az".into(),
-        address: "test.test.io:8883".into(),
+        address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),
