@@ -1,19 +1,14 @@
 //! Testing actors
 use crate::Builder;
 use crate::ChannelError;
-use crate::CloneSender;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageReceiver;
 use crate::MessageSink;
-use crate::MessageSource;
-use crate::NoConfig;
 use crate::NoMessage;
 use crate::RequestEnvelope;
-use crate::RequestSender;
 use crate::RuntimeRequest;
 use crate::Sender;
-use crate::ServerMessageBoxBuilder;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
@@ -373,42 +368,6 @@ impl<T> AsRef<T> for TimedMessageBox<T> {
 impl<T> AsMut<T> for TimedMessageBox<T> {
     fn as_mut(&mut self) -> &mut T {
         &mut self.inner
-    }
-}
-
-pub trait ServiceProviderExt<I: Message, O: Message> {
-    /// Create a simple message box connected to a server box under construction.
-    fn new_client_box(&mut self) -> SimpleMessageBox<O, I>;
-}
-
-impl<I: Message, O: Message> ServiceProviderExt<I, O> for DynSender<RequestEnvelope<I, O>> {
-    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
-        let name = "client-box";
-        let capacity = 16;
-        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
-        let request_sender = Box::new(RequestSender {
-            sender: self.sender_clone(),
-            reply_to: client_box.get_sender(),
-        });
-        client_box.connect_sink(NoConfig, &request_sender.sender_clone());
-        client_box.build()
-    }
-}
-
-impl<I: Message, O: Message> ServiceProviderExt<I, O> for ServerMessageBoxBuilder<I, O> {
-    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
-        self.request_sender().new_client_box()
-    }
-}
-
-impl<I: Message, O: Message> ServiceProviderExt<I, O> for SimpleMessageBoxBuilder<I, O> {
-    fn new_client_box(&mut self) -> SimpleMessageBox<O, I> {
-        let name = "client-box";
-        let capacity = 16;
-        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
-        self.connect_sink(NoConfig, &client_box);
-        self.connect_source(NoConfig, &mut client_box);
-        client_box.build()
     }
 }
 

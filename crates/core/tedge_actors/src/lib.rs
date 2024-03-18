@@ -104,17 +104,17 @@
 //! [Actor and message box builders](crate::builders) are provided to address these specificities
 //! with a generic approach without exposing the internal structure of the actors.
 //!
-//! To test the `Calculator` example we need first to create its box using a [SimpleMessageBoxBuilder],
-//! as this actor expects a [SimpleMessageBox].
-//! And then, to create a test box connected to the actor message box,
-//! we use the [ServiceProviderExt](crate::test_helpers::ServiceProviderExt) test helper extension
-//! and the [new_client_box](crate::test_helpers::ServiceProviderExt::new_client_box) method.
+//! To test the `Calculator` example we create two message boxes [SimpleMessageBox]es using [SimpleMessageBoxBuilder]s.
+//! The first box will given to the actor under test,
+//! the second box will be used by the test to control the actor input and to observe its output.
+//! For that, the two boxes are connected so the output messages of the first are sent to the second, and vice-versa.
 //!
 //! ```
 //! # use crate::tedge_actors::Actor;
 //! # use crate::tedge_actors::Builder;
 //! # use crate::tedge_actors::ChannelError;
 //! # use crate::tedge_actors::MessageReceiver;
+//! # use crate::tedge_actors::MessageSink;
 //! # use crate::tedge_actors::NoConfig;
 //! # use crate::tedge_actors::Sender;
 //! # use crate::tedge_actors::SimpleMessageBox;
@@ -125,15 +125,18 @@
 //! # #[tokio::main]
 //! # async fn main() {
 //! #
-//! // Add the `new_client_box()` extension to the `SimpleMessageBoxBuilder`.
-//! use tedge_actors::test_helpers::ServiceProviderExt;
-//!
-//! // Use a builder for the actor message box
+//! // Use builders to create message boxes for the actor and test driver
+//! use tedge_actors::MessageSource;
 //! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
+//! let mut test_box_builder = SimpleMessageBoxBuilder::new("Test", 10);
 //!
-//! // Create a test box ready then the actor box
-//! let mut test_box = actor_box_builder.new_client_box();
+//! // Connect the two boxes under construction, so each receives the message sent by the other
+//! actor_box_builder.connect_source(NoConfig, &mut test_box_builder);
+//! test_box_builder.connect_source(NoConfig, &mut actor_box_builder);
+//!
+//! // Build the boxes
 //! let actor_box = actor_box_builder.build();
+//! let mut test_box = test_box_builder.build();
 //!
 //! // The actor is then spawn in the background with its message box.
 //! let mut actor = Calculator::new(actor_box);
