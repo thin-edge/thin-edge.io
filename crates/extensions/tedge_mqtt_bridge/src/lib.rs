@@ -274,7 +274,7 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 /// 4. The cloud_event_loop is notified that the message has been published by the cloud client. The notification event provides the `pkid` of the message used on the cloud connection.
 /// 5. The message cloud `pkid` is joined with the original local message sent step 2. The pair (cloud `pkid`, local message) is cached
 /// 6. The cloud MQTT end-point acknowledges the message, providing its cloud `pkid`.
-/// 7. The pair (cloud `pkid`, local message) is extracted from the cache and the local message is finaly acknowledged.
+/// 7. The pair (cloud `pkid`, local message) is extracted from the cache and the local message is finally acknowledged.
 ///  
 /// ## Bridging cloud messages to the local broker
 ///
