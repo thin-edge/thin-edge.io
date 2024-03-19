@@ -116,6 +116,7 @@ async fn spawn_restart_manager(
         tmp_dir: tmp_dir.utf8_path_buf(),
         config_dir: tmp_dir.utf8_path_buf(),
         state_dir: "/some/unknown/dir".into(),
+        is_sudo_enabled: true,
     };
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);

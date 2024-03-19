@@ -7,6 +7,7 @@ pub struct RestartManagerConfig {
     pub tmp_dir: Utf8PathBuf,
     pub config_dir: Utf8PathBuf,
     pub state_dir: Utf8PathBuf,
+    pub is_sudo_enabled: bool,
 }
 
 impl RestartManagerConfig {
@@ -21,6 +22,7 @@ impl RestartManagerConfig {
             tmp_dir: tedge_config.tmp.path.clone(),
             config_dir: tedge_config_location.tedge_config_root_path.clone(),
             state_dir: tedge_config.agent.state.path.clone(),
+            is_sudo_enabled: tedge_config.sudo.enable,
         })
     }
 }

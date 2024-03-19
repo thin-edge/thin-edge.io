@@ -12,7 +12,6 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -79,7 +78,15 @@ impl Actor for SoftwareManagerActor {
         let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
             .map_err(SoftwareManagerError::FromOperationsLogs)?;
 
-        let sudo: Option<PathBuf> = which(SUDO).ok();
+        let sudo = if self.config.is_sudo_enabled {
+            let sudo = which(SUDO).ok();
+            if sudo.is_none() {
+                warn!("`sudo.enable` is `true` but sudo wasn't found in $PATH");
+            }
+            sudo
+        } else {
+            None
+        };
 
         let mut plugins = ExternalPlugins::open(
             &self.config.sm_plugins_dir,

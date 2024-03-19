@@ -21,6 +21,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 use which::which;
 
 const SYNC: &str = "sync";
@@ -244,8 +245,13 @@ impl RestartManagerActor {
         let system_config = SystemConfig::try_new(&self.config.config_dir)?;
 
         // Check if sudo command is available
-        match which(SUDO) {
-            Ok(sudo) => {
+        let sudo = which(SUDO).ok();
+        if self.config.is_sudo_enabled && sudo.is_none() {
+            warn!("`sudo.enable` is `true` but sudo wasn't found in $PATH");
+        }
+
+        match sudo {
+            Some(sudo) if self.config.is_sudo_enabled => {
                 let mut sync_command = Command::new(&sudo);
                 sync_command.arg(SYNC);
                 vec.push(sync_command);
@@ -254,7 +260,7 @@ impl RestartManagerActor {
                 command.args(system_config.system.reboot);
                 vec.push(command);
             }
-            Err(_) => {
+            Some(_) | None => {
                 let sync_command = Command::new(SYNC);
                 vec.push(sync_command);
 
