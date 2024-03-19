@@ -1,3 +1,4 @@
+use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
 
 use super::create::CreateCertCmd;
@@ -26,6 +27,10 @@ pub enum TEdgeCertCli {
         /// The device identifier to be used as the common name for the certificate
         #[clap(long = "device-id")]
         id: Option<String>,
+
+        /// Path where a Certificate signing request will be stored
+        #[clap(long = "output-path")]
+        output_path: Option<Utf8PathBuf>,
     },
 
     /// Renew the device certificate
@@ -57,12 +62,13 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::CreateCsr { id } => {
+            TEdgeCertCli::CreateCsr { id, output_path } => {
                 let cmd = CreateCsrCmd {
                     id,
                     cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
-                    csr_path: config.device.csr_path.clone(),
+                    // Use output file instead of csr_path from tedge config if provided
+                    csr_path: output_path.unwrap_or_else(|| config.device.csr_path.clone()),
                 };
                 cmd.into_boxed()
             }
