@@ -370,7 +370,7 @@ For example, a configuration update can be triggered with:
 ```toml
 [trigger_config_update]
 command = "config_update"
-cmd_arg.tedgeUrl = "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",
+cmd_arg.tedgeUrl = "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234"
 cmd_arg.type = "mosquitto"
 on_exec = "waiting_for_config_update"
 
@@ -476,7 +476,7 @@ that awaits the agent restart using the `await-agent-restart` action after the s
 1. The script is declared as a `background_script` with an `on_exec` handler.
    This handler tells the agent to move to the next state awaiting the agent restart after the script is executed.
    The agent persists this next state on disk before launching the script that can result in a reboot.
-3. The action attached to this next state is to `await-agent-restart`
+2. The action attached to this next state is to `await-agent-restart`
    with two handlers for the successful and timeout cases.
 3. On a successful reboot, the agent resumes from this persisted state awaiting restart and simply moves to the successful case.
 4. If for some reason, no restart happens within the given timeout window, the agent moves to the `on_timeout` operation state.
