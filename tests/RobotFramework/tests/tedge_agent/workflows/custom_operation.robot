@@ -65,6 +65,14 @@ Trigger native-reboot within workflow (on_error) - missing sudoers entry for reb
     ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-2.log
     Should Not Contain    ${workflow_log}    restarted:    msg=restarted state should not have been executed
 
+Invoke sub-command from a super-command operation
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 '{"status":"init", "output_file":"/tmp/test-42.json"}'
+    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/super_command/test-42    message_pattern=.*successful.*   maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 ''
+    ${actual_log}      Execute Command    cat /tmp/test-42.json
+    ${expected_log}    Get File    ${CURDIR}/super-command-expected.log
+    Should Be Equal    ${actual_log}    ${expected_log}
+
 *** Keywords ***
 
 Custom Test Setup
@@ -90,3 +98,7 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/super_command.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/inner_command.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh          /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/write-file.sh            /etc/tedge/operations/

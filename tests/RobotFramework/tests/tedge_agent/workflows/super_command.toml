@@ -1,0 +1,30 @@
+operation = "super_command"
+
+[init]
+script = "/etc/tedge/operations/echo-as-json.sh y 'some y value'"
+on_success = "executing"
+
+# A super-command can trigger a sub-command defined by another workflow
+# Data can be injected from the current state payload into the sub-command init payload
+[executing]
+command = "sub_command"
+input.x = "some x value"
+input.y = "${.payload.y}"
+on_exec = "awaiting_completion"
+
+# Data can be injected back from the successful sub-command payload into the current state payload
+[awaiting_completion]
+action = "await-command-completion"
+on_success = "dump_payload"
+output.x_ter = "${.payload.x_bis}"
+output.y_ter = "${.payload.y_bis}"
+
+[dump_payload]
+script = "/etc/tedge/operations/write-file.sh ${.paylod.output_file} ${.}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
