@@ -209,6 +209,10 @@ impl GenericStateUpdate {
         }
     }
 
+    pub fn timeout() -> Self {
+        Self::failed("timeout".to_string())
+    }
+
     pub fn into_json(self) -> Value {
         self.into()
     }

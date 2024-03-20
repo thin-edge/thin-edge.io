@@ -17,7 +17,6 @@ pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::time::Duration;
 pub use supervisor::*;
 
 pub type StateName = String;
@@ -68,11 +67,7 @@ pub enum OperationAction {
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    AwaitingAgentRestart {
-        on_success: GenericStateUpdate,
-        timeout: Duration,
-        on_timeout: GenericStateUpdate,
-    },
+    AwaitingAgentRestart(AwaitHandlers),
 
     /// Restart the device
     ///
@@ -248,6 +243,9 @@ impl OperationAction {
         match self {
             OperationAction::Script(script, handlers) => {
                 OperationAction::Script(script, handlers.with_default(default))
+            }
+            OperationAction::AwaitingAgentRestart(handlers) => {
+                OperationAction::AwaitingAgentRestart(handlers.with_default(default))
             }
             action => action,
         }

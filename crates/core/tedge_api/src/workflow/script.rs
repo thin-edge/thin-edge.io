@@ -288,6 +288,31 @@ impl BgExitHandlers {
     }
 }
 
+/// Define how to await the completion of a command
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AwaitHandlers {
+    pub timeout: Option<Duration>,
+    pub on_success: GenericStateUpdate,
+    pub on_error: Option<GenericStateUpdate>,
+    pub on_timeout: Option<GenericStateUpdate>,
+}
+
+impl AwaitHandlers {
+    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
+        if self.timeout.is_none() {
+            self.timeout = default.timeout
+        }
+        if self.on_timeout.is_none() {
+            self.on_timeout = default.on_timeout.clone()
+        }
+        if self.on_error.is_none() {
+            self.on_error = default.on_error.clone()
+        }
+
+        self
+    }
+}
+
 /// Define default handlers for all state of an operation workflow
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DefaultHandlers {

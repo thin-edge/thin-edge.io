@@ -1,4 +1,5 @@
 use crate::mqtt_topics::OperationType;
+use crate::workflow::AwaitHandlers;
 use crate::workflow::BgExitHandlers;
 use crate::workflow::DefaultHandlers;
 use crate::workflow::ExitHandlers;
@@ -139,22 +140,8 @@ impl TryFrom<TomlOperationState> for OperationAction {
                     })
                 }
                 "await-agent-restart" => {
-                    let on_success: GenericStateUpdate = input
-                        .handlers
-                        .on_success
-                        .map(|u| u.into())
-                        .unwrap_or_else(GenericStateUpdate::successful);
-                    let on_timeout: GenericStateUpdate = input
-                        .handlers
-                        .on_error
-                        .map(|u| u.into())
-                        .unwrap_or_else(|| GenericStateUpdate::failed("timeout".to_string()));
-                    let timeout = Duration::from_secs(input.handlers.timeout_second.unwrap_or(300));
-                    Ok(OperationAction::AwaitingAgentRestart {
-                        on_success,
-                        timeout,
-                        on_timeout,
-                    })
+                    let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
+                    Ok(OperationAction::AwaitingAgentRestart(handlers))
                 }
                 _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
             },
@@ -257,6 +244,27 @@ impl TryFrom<TomlExitHandlers> for BgExitHandlers {
     fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
         let on_exec = value.on_exec.map(|u| u.into());
         BgExitHandlers::try_new(on_exec)
+    }
+}
+
+impl TryFrom<TomlExitHandlers> for AwaitHandlers {
+    type Error = ScriptDefinitionError;
+
+    fn try_from(handlers: TomlExitHandlers) -> Result<Self, Self::Error> {
+        let timeout = handlers.timeout_second.map(Duration::from_secs);
+        let on_success: GenericStateUpdate = handlers
+            .on_success
+            .map(|u| u.into())
+            .unwrap_or_else(GenericStateUpdate::successful);
+        let on_error = handlers.on_error.map(|u| u.into());
+        let on_timeout = handlers.on_timeout.map(|u| u.into());
+
+        Ok(AwaitHandlers {
+            timeout,
+            on_success,
+            on_error,
+            on_timeout,
+        })
     }
 }
 
