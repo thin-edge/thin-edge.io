@@ -234,8 +234,8 @@ The following dependencies are requires for the instructions:
 3. Add the `CA_KEY` and `CA_PUB` environment variables to your `.env` file used by the tests.
 
     ```sh
-    echo CA_KEY=\""$(cat ~/tedge-ca.key | base64)"\" >> .env
-    echo CA_PUB=\""$(cat ~/tedge-ca.crt | base64)"\" >> .env
+    echo CA_KEY=\""$(cat ~/tedge-ca.key | base64 | tr -d '\n')"\" >> .env
+    echo CA_PUB=\""$(cat ~/tedge-ca.crt | base64 | tr -d '\n')"\" >> .env
     ```
 
     **Note**
