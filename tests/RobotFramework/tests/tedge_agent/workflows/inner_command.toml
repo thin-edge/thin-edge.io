@@ -1,0 +1,15 @@
+operation = "inner_command"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/echo-as-json.sh x_bis ${.payload.x} y_bis ${.payload.y}  "
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

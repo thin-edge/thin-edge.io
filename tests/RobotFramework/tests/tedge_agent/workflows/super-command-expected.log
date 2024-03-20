@@ -1,0 +1,9 @@
+{
+   "topic": "te/device/main///cmd/super-command/test-42",
+   "payload": {
+       "status": "successful",
+       "output_file": "/tmp/test-42.json",
+       "x_ter": "some x value",
+       "y_ter": "some y value"
+   }
+}
