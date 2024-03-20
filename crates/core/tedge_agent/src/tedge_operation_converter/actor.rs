@@ -25,6 +25,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
@@ -207,18 +208,18 @@ impl TedgeOperationConverterActor {
                 self.process_internal_operation(target, operation, cmd_id, state.payload)
                     .await
             }
-            OperationAction::AwaitingAgentRestart {
-                timeout,
-                on_timeout,
-                ..
-            } => {
+            OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
                 info!("{operation} operation {step} waiting for agent restart");
                 // The following sleep is expected to be interrupted by a restart
-                sleep(timeout + Duration::from_secs(60)).await;
+                sleep(handlers.timeout.unwrap_or_default() + Duration::from_secs(60)).await;
                 // As the sleep completes, it means the agent was not restarted
                 // hence the operation is moved to its `on_timeout` target state
-                let new_state = state.update(on_timeout);
+                let new_state = state.update(
+                    handlers
+                        .on_timeout
+                        .unwrap_or_else(GenericStateUpdate::timeout),
+                );
                 self.publish_command_state(new_state).await
             }
             OperationAction::Restart {

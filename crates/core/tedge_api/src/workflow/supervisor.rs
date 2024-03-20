@@ -147,8 +147,8 @@ impl WorkflowSupervisor {
         };
 
         match action {
-            OperationAction::AwaitingAgentRestart { on_success, .. } => {
-                Some(command.clone().update(on_success))
+            OperationAction::AwaitingAgentRestart(handlers) => {
+                Some(command.clone().update(handlers.on_success))
             }
 
             _ => {
