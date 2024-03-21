@@ -35,6 +35,7 @@ use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::get_advanced_software_list_payloads;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation;
@@ -51,6 +52,7 @@ use camino::Utf8Path;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
+use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
 use service_monitor::convert_health_status_message;
@@ -72,6 +74,7 @@ use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommand;
+use tedge_api::messages::SoftwareCommandMetadata;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
@@ -82,6 +85,8 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
+use tedge_api::Jsonify;
+use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::Message;
@@ -107,6 +112,7 @@ const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const REQUESTER_NAME: &str = "c8y-mapper";
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
+const SOFTWARE_LIST_CHUNK_SIZE: usize = 100;
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -1055,7 +1061,8 @@ impl CumulocityConverter {
                 match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
                     OperationType::SoftwareList => {
-                        self.register_software_list_operation(&source).await
+                        self.register_software_list_operation(&source, message)
+                            .await
                     }
                     OperationType::SoftwareUpdate => {
                         self.register_software_update_operation(&source).await
@@ -1469,10 +1476,20 @@ impl CumulocityConverter {
 
     async fn register_software_list_operation(
         &self,
-        _target: &EntityTopicId,
+        target: &EntityTopicId,
+        message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        // On c8y, "software list" is implied by "software update"
-        Ok(vec![])
+        if !self.config.software_management_with_types {
+            debug!("Publishing c8y_SupportedSoftwareTypes is disabled. To enable it, run `tedge config set c8y.software_management.with_types true`.");
+            return Ok(vec![]);
+        }
+
+        // Send c8y_SupportedSoftwareTypes, which is introduced in c8y >= 10.14
+        let data = SoftwareCommandMetadata::from_json(message.payload_str()?)?;
+        let payload = json!({"c8y_SupportedSoftwareTypes": data.types}).to_string();
+        let topic = self.get_inventory_update_topic(target)?;
+
+        Ok(vec![Message::new(&topic, payload)])
     }
 
     async fn register_software_update_operation(
@@ -1568,16 +1585,37 @@ impl CumulocityConverter {
 
         match response.status() {
             CommandStatus::Successful => {
-                if let Some(device) = self.entity_store.get(target) {
-                    let c8y_software_list: C8yUpdateSoftwareListResponse = (&response).into();
-                    self.http_proxy
-                        .send_software_list_http(
-                            c8y_software_list,
-                            device.external_id.as_ref().to_string(),
-                        )
-                        .await?;
+                // Send a list via HTTP to support backwards compatibility to c8y < 10.14
+                if self.config.software_management_api == SoftwareManagementApiFlag::Legacy {
+                    if let Some(device) = self.entity_store.get(target) {
+                        let c8y_software_list: C8yUpdateSoftwareListResponse = (&response).into();
+                        self.http_proxy
+                            .send_software_list_http(
+                                c8y_software_list,
+                                device.external_id.as_ref().to_string(),
+                            )
+                            .await?;
+                    }
+                    return Ok(vec![response.clearing_message(&self.mqtt_schema)]);
                 }
-                Ok(vec![response.clearing_message(&self.mqtt_schema)])
+
+                // Send a list via SmartREST, "advanced software list" feature c8y >= 10.14
+                let topic = self
+                    .entity_store
+                    .get(target)
+                    .and_then(|entity| {
+                        C8yTopic::smartrest_response_topic(entity, &self.config.c8y_prefix)
+                    })
+                    .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
+                let payloads =
+                    get_advanced_software_list_payloads(&response, SOFTWARE_LIST_CHUNK_SIZE);
+
+                let mut messages: Vec<Message> = Vec::new();
+                for payload in payloads {
+                    messages.push(Message::new(&topic, payload))
+                }
+                messages.push(response.clearing_message(&self.mqtt_schema));
+                Ok(messages)
             }
 
             CommandStatus::Failed { reason } => {
@@ -1655,6 +1693,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::SoftwareUpdateCommand;
+    use tedge_config::SoftwareManagementApiFlag;
     use tedge_config::TEdgeConfig;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
@@ -3223,6 +3262,8 @@ pub(crate) mod tests {
             true,
             "c8y".into(),
             false,
+            SoftwareManagementApiFlag::Advanced,
+            true,
         )
     }
 

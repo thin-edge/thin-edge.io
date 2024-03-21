@@ -153,6 +153,34 @@ set/unset c8y.bridge.include.local_cleansession
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    c8y.bridge.include.local_cleansession=auto
 
+set/unset c8y.software_management.api
+    Execute Command    sudo tedge config set c8y.software_management.api legacy
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    c8y.software_management.api=legacy
+
+    Execute Command    sudo tedge config set c8y.software_management.api advanced
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    c8y.software_management.api=advanced
+
+    # Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset c8y.software_management.api
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    c8y.software_management.api=legacy
+
+set/unset c8y.software_management.with_types
+    Execute Command    sudo tedge config set c8y.software_management.with_types false
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    c8y.software_management.with_types=false
+
+    Execute Command    sudo tedge config set c8y.software_management.with_types true
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    c8y.software_management.with_types=true
+
+    # Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset c8y.software_management.with_types
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    c8y.software_management.with_types=false
+
 set/unset az.root_cert_path
     Execute Command    sudo tedge config set az.root_cert_path /etc/ssl/certs1    # Changing az.root_cert_path
     ${set}    Execute Command    tedge config list

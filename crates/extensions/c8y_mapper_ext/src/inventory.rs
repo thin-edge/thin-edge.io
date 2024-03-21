@@ -113,11 +113,7 @@ impl CumulocityConverter {
         source: &EntityTopicId,
         fragment_value: JsonValue,
     ) -> Result<Message, ConversionError> {
-        let entity_external_id = self.entity_store.try_get(source)?.external_id.as_ref();
-        let inventory_update_topic = Topic::new_unchecked(&format!(
-            "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}",
-            prefix = self.config.c8y_prefix,
-        ));
+        let inventory_update_topic = self.get_inventory_update_topic(source)?;
 
         Ok(Message::new(
             &inventory_update_topic,
@@ -171,6 +167,18 @@ impl CumulocityConverter {
         let json: serde_json::Value = serde_json::from_str(&data)?;
         info!("Read the fragments from {file_path:?} file");
         Ok(json)
+    }
+
+    /// Returns the JSON over MQTT inventory update topic
+    pub fn get_inventory_update_topic(
+        &self,
+        source: &EntityTopicId,
+    ) -> Result<Topic, ConversionError> {
+        let entity_external_id = self.entity_store.try_get(source)?.external_id.as_ref();
+        Ok(Topic::new_unchecked(&format!(
+            "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}",
+            prefix = self.config.c8y_prefix,
+        )))
     }
 }
 

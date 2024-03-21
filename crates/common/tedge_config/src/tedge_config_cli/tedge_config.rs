@@ -4,6 +4,7 @@ use crate::AutoFlag;
 use crate::ConnectUrl;
 use crate::HostPort;
 use crate::Seconds;
+use crate::SoftwareManagementApiFlag;
 use crate::TEdgeConfigLocation;
 use crate::TemplatesSet;
 use crate::HTTPS_PORT;
@@ -474,6 +475,16 @@ define_tedge_config! {
             /// On a clean start, the whole state of the device, services and child-devices is resent to the cloud
             #[tedge_config(example = "true", default(value = true))]
             clean_start: bool,
+        },
+
+        software_management: {
+            /// Switch legacy or advanced software management API to use. Value: legacy or advanced
+            #[tedge_config(example = "advanced", default(variable = "SoftwareManagementApiFlag::Legacy"))]
+            api: SoftwareManagementApiFlag,
+
+            /// Enable publishing c8y_SupportedSoftwareTypes fragment to the c8y inventory API
+            #[tedge_config(example = "true", default(value = false))]
+            with_types: bool,
         },
     },
 

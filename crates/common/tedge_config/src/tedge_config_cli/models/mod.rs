@@ -1,5 +1,6 @@
 pub mod apt_config;
 pub mod auto;
+pub mod c8y_software_management;
 pub mod connect_url;
 pub mod flag;
 pub mod host_port;
@@ -15,6 +16,7 @@ pub const MQTT_TLS_PORT: u16 = 8883;
 
 pub use self::apt_config::*;
 pub use self::auto::*;
+pub use self::c8y_software_management::*;
 pub use self::connect_url::*;
 pub use self::flag::*;
 #[doc(inline)]

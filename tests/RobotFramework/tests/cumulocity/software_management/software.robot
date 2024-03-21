@@ -9,11 +9,26 @@ Test Teardown    Custom Teardown
 
 *** Test Cases ***
 Supported software types should be declared during startup
-    [Documentation]    #2654 This test will be updated once advanced software management support is implemented
+    [Documentation]    c8y_SupportedSoftwareTypes should NOT be created by default #2654
     Should Have MQTT Messages    topic=te/device/main///cmd/software_list    minimum=1    maximum=1    message_contains="types":["apt"]
     Should Have MQTT Messages    topic=te/device/main///cmd/software_update    minimum=1    maximum=1    message_contains="types":["apt"]
+    Run Keyword And Expect Error    *    Device Should Have Fragment Values    c8y_SupportedSoftwareTypes\=["apt"]
+
+Supported software types and c8y_SupportedSoftwareTypes should be declared during startup
+    [Documentation]    c8y_SupportedSoftwareTypes should be created if the relevant config is set to true #2654
+    Execute Command    tedge config set c8y.software_management.with_types true
+    Restart Service    tedge-mapper-c8y
+    Device Should Have Fragment Values    c8y_SupportedSoftwareTypes\=["apt"]
 
 Software list should be populated during startup
+    [Documentation]    The list is sent via HTTP by default.
+    Device Should Have Installed Software    tedge    timeout=120
+
+Software list should be populated during startup with advanced software management
+    [Documentation]    The list is sent via SmartREST with advanced software management. See #2654
+    Execute Command    tedge config set c8y.software_management.api advanced
+    Restart Service    tedge-mapper-c8y
+    Should Have MQTT Messages    c8y/s/us    message_contains=140,    minimum=1    maximum=1
     Device Should Have Installed Software    tedge    timeout=120
 
 Install software via Cumulocity
