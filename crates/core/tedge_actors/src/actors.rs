@@ -48,7 +48,6 @@ where
 #[cfg(test)]
 #[cfg(feature = "test-helpers")]
 pub mod tests {
-    use crate::test_helpers::ServiceProviderExt;
     use crate::*;
     use async_trait::async_trait;
     use futures::channel::mpsc;
@@ -77,7 +76,10 @@ pub mod tests {
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
-        let mut client_message_box = box_builder.new_client_box();
+        let mut client_box_builder = SimpleMessageBoxBuilder::new("client", 16);
+        client_box_builder.connect_sink(NoConfig, &box_builder);
+        client_box_builder.connect_source(NoConfig, &mut box_builder);
+        let mut client_message_box = client_box_builder.build();
         let mut runtime_box = box_builder.get_signal_sender();
         let actor_message_box = box_builder.build();
         let actor = Echo {

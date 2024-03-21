@@ -159,7 +159,6 @@ impl<Request: Message, Response: Message> Sender<Request> for RequestSender<Requ
 mod tests {
     use super::*;
 
-    use crate::test_helpers::ServiceProviderExt;
     use crate::Builder;
     use crate::ConcurrentServerActor;
     use crate::DynSender;
@@ -168,6 +167,7 @@ mod tests {
     use crate::RuntimeRequestSink;
     use crate::Server;
     use crate::ServerMessageBoxBuilder;
+    use crate::Service;
     use crate::SimpleMessageBox;
     use async_trait::async_trait;
     use std::time::Duration;
@@ -306,7 +306,7 @@ mod tests {
             }
         }
 
-        let mut runtime = Runtime::try_new(None).await.unwrap();
+        let mut runtime = Runtime::new();
 
         let (mut server_actor_builder, mut test_rx) = TestServerBuilder::new();
         let mut client_box = server_actor_builder.client_box();

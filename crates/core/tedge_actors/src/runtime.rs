@@ -48,23 +48,30 @@ pub struct Runtime {
     bg_task: JoinHandle<Result<(), RuntimeError>>,
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Runtime::new()
+    }
+}
+
 impl Runtime {
     /// Launch the runtime, returning a runtime handler
     ///
     /// TODO: ensure this can only be called once
-    pub async fn try_new(
-        events_sender: Option<DynSender<RuntimeEvent>>,
-    ) -> Result<Runtime, RuntimeError> {
+    pub fn new() -> Runtime {
+        Self::with_events_sender(None)
+    }
+
+    fn with_events_sender(events_sender: Option<DynSender<RuntimeEvent>>) -> Runtime {
         let (actions_sender, actions_receiver) = mpsc::channel(16);
         let runtime_actor =
             RuntimeActor::new(actions_receiver, events_sender, Duration::from_secs(60));
 
         let runtime_task = tokio::spawn(runtime_actor.run());
-        let runtime = Runtime {
+        Runtime {
             handle: RuntimeHandle { actions_sender },
             bg_task: runtime_task,
-        };
-        Ok(runtime)
+        }
     }
 
     pub fn get_handle(&self) -> RuntimeHandle {

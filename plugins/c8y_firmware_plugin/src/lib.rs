@@ -76,8 +76,7 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
 }
 
 async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-    let runtime_events_logger = None;
-    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+    let mut runtime = Runtime::new();
 
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;

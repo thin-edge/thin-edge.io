@@ -1,4 +1,3 @@
-use crate::test_helpers::ServiceProviderExt;
 use crate::*;
 use async_trait::async_trait;
 use std::time::Duration;

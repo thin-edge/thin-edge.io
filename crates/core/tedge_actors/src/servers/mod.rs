@@ -56,7 +56,7 @@
 //! #[cfg(feature = "test-helpers")]
 //! # #[tokio::main]
 //! # async fn main_test() {
-//! # use tedge_actors::test_helpers::ServiceProviderExt;
+//! # use tedge_actors::Service;
 //! #
 //! // As for any actor, one needs a handle to the message box of the server.
 //! // The simpler is to use a builder.
@@ -98,10 +98,15 @@ pub use builders::*;
 pub use message_boxes::*;
 use std::fmt::Debug;
 
+use crate::Builder;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageSink;
+use crate::MessageSource;
+use crate::NoConfig;
 use crate::Sender;
+use crate::SimpleMessageBox;
+use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 
 /// Define how a server process a request
@@ -151,6 +156,10 @@ pub trait Service<Request: Message, Response: Message>:
     /// The client provides a `response_sender` on which it wants to response to be sent to.
     /// In exchange the client is returned a request sender on which its requests will have to be sent.
     fn connect_client(&mut self, response_sender: DynSender<Response>) -> DynSender<Request>;
+
+    #[cfg(feature = "test-helpers")]
+    /// Create a simple message box connected to a server box under construction.
+    fn new_client_box(&mut self) -> SimpleMessageBox<Response, Request>;
 }
 
 impl<T, Request: Message, Response: Message> Service<Request, Response> for T
@@ -163,5 +172,14 @@ where
             reply_to,
         };
         request_sender.into()
+    }
+
+    #[cfg(feature = "test-helpers")]
+    fn new_client_box(&mut self) -> SimpleMessageBox<Response, Request> {
+        let name = "client-box";
+        let capacity = 16;
+        let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
+        client_box.connect_sink(NoConfig, &self.connect_client(client_box.get_sender()));
+        client_box.build()
     }
 }

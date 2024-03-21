@@ -176,8 +176,9 @@ mod tests {
     use crate::config::BatchConfigBuilder;
     use crate::driver::BatchDriver;
     use std::time::Duration;
-    use tedge_actors::test_helpers::ServiceProviderExt;
     use tedge_actors::Builder;
+    use tedge_actors::MessageSource;
+    use tedge_actors::NoConfig;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tokio::time::timeout;
 
@@ -254,8 +255,11 @@ mod tests {
             .message_leap_limit(0)
             .build();
         let batcher = Batcher::new(config);
-        let mut box_builder = SimpleMessageBoxBuilder::new("test", 1);
-        let test_box = box_builder.new_client_box();
+        let mut box_builder = SimpleMessageBoxBuilder::new("SUT", 1);
+        let mut test_box_builder = SimpleMessageBoxBuilder::new("Test", 1);
+        box_builder.connect_sink(NoConfig, &test_box_builder);
+        test_box_builder.connect_sink(NoConfig, &box_builder);
+        let test_box = test_box_builder.build();
         let driver_box = box_builder.build();
 
         let driver = BatchDriver::new(batcher, driver_box);
