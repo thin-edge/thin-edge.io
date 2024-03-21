@@ -58,6 +58,7 @@ pub enum TomlOperationAction {
     Script(ShellScript),
     BackgroundScript(ShellScript),
     Action(String),
+    Command(String),
 }
 
 impl Default for TomlOperationAction {
@@ -104,6 +105,10 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
                 Ok(OperationAction::BgScript(script, handlers))
             }
+            TomlOperationAction::Command(operation) => {
+                let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
+                Ok(OperationAction::Command(operation, handlers))
+            }
             TomlOperationAction::Action(command) => match command.as_str() {
                 "builtin" => Ok(OperationAction::BuiltIn),
                 "cleanup" => Ok(OperationAction::Clear),
@@ -142,6 +147,10 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 "await-agent-restart" => {
                     let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
                     Ok(OperationAction::AwaitingAgentRestart(handlers))
+                }
+                "await-command-completion" => {
+                    let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
+                    Ok(OperationAction::AwaitCommandCompletion(handlers))
                 }
                 _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
             },

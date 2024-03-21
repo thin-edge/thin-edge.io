@@ -191,6 +191,9 @@ impl TedgeOperationConverterActor {
 
         match action {
             OperationAction::Clear => {
+                if let Some(invoking_command) = self.workflows.invoking_command_state(&state) {
+                    self.command_sender.send(invoking_command.clone()).await?;
+                }
                 info!(
                     "Waiting {} {operation} operation to be cleared",
                     state.status
@@ -276,6 +279,60 @@ impl TedgeOperationConverterActor {
                 let command = Execute::new(script.command, script.args);
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
+                Ok(())
+            }
+            OperationAction::Command(sub_operation, handlers) => {
+                let next_state = &handlers.on_exec.status;
+                info!(
+                    "Triggering {sub_operation} command, and moving {operation} operation to {next_state} state"
+                );
+
+                // Create the sub-command init state with a reference to its invoking command
+                let sub_cmd_init_state = GenericCommandState::sub_command_init_state(
+                    &self.mqtt_schema,
+                    &self.device_topic_id,
+                    operation,
+                    cmd_id,
+                    sub_operation,
+                );
+
+                // Persist the new state for this command
+                let new_state = state.update(handlers.on_exec);
+                self.publish_command_state(new_state).await?;
+
+                // Finally, init the sub-operation
+                self.mqtt_publisher
+                    .send(sub_cmd_init_state.into_message())
+                    .await?;
+                Ok(())
+            }
+            OperationAction::AwaitCommandCompletion(handlers) => {
+                let step = &state.status;
+                info!("{operation} operation {step} waiting for sub-command completion");
+
+                // Get the sub-command state and resume this command when the sub-command is in a terminal state
+                if let Some(sub_state) = self
+                    .workflows
+                    .sub_command_state(&state)
+                    .map(|s| s.to_owned())
+                {
+                    if sub_state.is_successful() {
+                        let new_state = state.update(handlers.on_success);
+                        self.publish_command_state(new_state).await?;
+                        self.mqtt_publisher.send(sub_state.clear_message()).await?;
+                    } else if sub_state.is_failed() {
+                        let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
+                            GenericStateUpdate::failed("sub-command failed".to_string())
+                        }));
+                        self.publish_command_state(new_state).await?;
+                        self.mqtt_publisher.send(sub_state.clear_message()).await?;
+                    } else {
+                        // Nothing specific has to be done: the current state has been persisted
+                        // and will be resumed on completion of the sub-command
+                        // TODO: Register a timeout event
+                    }
+                };
+
                 Ok(())
             }
         }

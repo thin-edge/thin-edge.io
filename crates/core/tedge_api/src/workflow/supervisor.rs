@@ -98,7 +98,7 @@ impl WorkflowSupervisor {
             Some(_) => {
                 // Ignore command updates published over MQTT
                 //
-                // TODO: There is exception here - not implemented yet:
+                // TODO: There is one exception here - not implemented yet:
                 //       when a step is delegated to an external process,
                 //       this process will notify the outcome of its action over MQTT,
                 //       and the agent will have then to react on this message.
@@ -124,6 +124,44 @@ impl WorkflowSupervisor {
                 operation: operation_name,
             })
             .and_then(|workflow| workflow.get_action(command_state))
+    }
+
+    pub fn get_state(&self, command: &TopicName) -> Option<&GenericCommandState> {
+        self.commands.get_state(command).map(|(_, state)| state)
+    }
+
+    /// Return the state of the invoking command of a command, if any
+    pub fn invoking_command_state(
+        &self,
+        sub_command: &GenericCommandState,
+    ) -> Option<&GenericCommandState> {
+        invoking_command(&sub_command.topic.name)
+            .and_then(|invoking_topic| self.get_state(&invoking_topic))
+    }
+
+    /// Return the sub command of a command, if any
+    pub fn sub_command_state(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Option<&GenericCommandState> {
+        self.commands
+            .lookup_sub_command(command_state.command_topic())
+            .and_then(|sub_topic| self.get_state(sub_topic))
+    }
+
+    /// Return the chain of command / sub-command invocation leading to the given leaf command
+    pub fn command_invocation_chain(
+        &self,
+        leaf_command: &TopicName,
+    ) -> Vec<(OperationName, CommandId)> {
+        self.commands
+            .command_invocation_chain(leaf_command)
+            .into_iter()
+            .filter_map(|topic| {
+                command_identifier(&topic)
+                    .map(|(operation, cmd_id)| (operation.to_string(), cmd_id.to_string()))
+            })
+            .collect()
     }
 
     /// Update the state of the command board on reception of new state for a command
@@ -178,6 +216,31 @@ pub type Timestamp = time::OffsetDateTime;
 impl CommandBoard {
     pub fn new(commands: HashMap<TopicName, (Timestamp, GenericCommandState)>) -> Self {
         CommandBoard { commands }
+    }
+
+    pub fn get_state(&self, command: &TopicName) -> Option<&(Timestamp, GenericCommandState)> {
+        self.commands.get(command)
+    }
+
+    /// Return the sub command of a command, if any
+    pub fn lookup_sub_command(&self, command_topic: &TopicName) -> Option<&TopicName> {
+        // The sequential search is okay because in practice there is no more than 10 concurrent commands
+        self.commands
+            .keys()
+            .find(|sub_command| invoking_command(sub_command).as_ref() == Some(command_topic))
+    }
+
+    /// Return the chain of command / sub-command invocation leading to the given leaf command
+    pub fn command_invocation_chain(&self, leaf_command: &TopicName) -> Vec<TopicName> {
+        let mut invoking_commands = vec![];
+        let mut command = leaf_command.clone();
+        while let Some(super_command) = invoking_command(&command) {
+            if self.commands.contains_key(&super_command) {
+                invoking_commands.push(super_command.clone());
+            }
+            command = super_command;
+        }
+        invoking_commands
     }
 
     /// Iterate over the pending commands

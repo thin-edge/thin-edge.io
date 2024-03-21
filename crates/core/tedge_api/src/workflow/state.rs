@@ -1,4 +1,11 @@
+use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicId;
+use crate::mqtt_topics::MqttSchema;
+use crate::mqtt_topics::OperationType;
+use crate::workflow::CommandId;
 use crate::workflow::ExitHandlers;
+use crate::workflow::OperationName;
+use crate::workflow::TopicName;
 use crate::workflow::WorkflowExecutionError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS::AtLeastOnce;
@@ -23,7 +30,41 @@ pub struct GenericStateUpdate {
     pub reason: Option<String>,
 }
 
+const STATUS: &str = "status";
+const INIT: &str = "init";
+const SUCCESSFUL: &str = "successful";
+const FAILED: &str = "failed";
+const REASON: &str = "reason";
+
 impl GenericCommandState {
+    /// Create an init state for a sub-command
+    pub fn sub_command_init_state(
+        schema: &MqttSchema,
+        entity: &EntityTopicId,
+        operation: OperationType,
+        cmd_id: CommandId,
+        sub_operation: OperationName,
+    ) -> GenericCommandState {
+        let sub_cmd_id = sub_command_id(&operation.to_string(), &cmd_id);
+        let topic = schema.topic_for(
+            entity,
+            &Channel::Command {
+                operation: OperationType::Custom(sub_operation),
+                cmd_id: sub_cmd_id,
+            },
+        );
+        let status = INIT.to_string();
+        let payload = json!({
+            STATUS: status
+        });
+
+        GenericCommandState {
+            topic,
+            status,
+            payload,
+        }
+    }
+
     /// Extract a command state from a json payload
     pub fn from_command_message(
         message: &MqttMessage,
@@ -34,7 +75,7 @@ impl GenericCommandState {
         }
         let topic = message.topic.clone();
         let json: Value = serde_json::from_slice(payload)?;
-        let status = GenericCommandState::extract_text_property(&json, "status")
+        let status = GenericCommandState::extract_text_property(&json, STATUS)
             .ok_or(WorkflowExecutionError::MissingStatus)?;
         Ok(Some(GenericCommandState {
             topic,
@@ -53,12 +94,20 @@ impl GenericCommandState {
             .with_qos(AtLeastOnce)
     }
 
+    /// Build an MQTT message to clear the command state
+    pub fn clear_message(&self) -> MqttMessage {
+        let topic = &self.topic;
+        MqttMessage::new(topic, "")
+            .with_retain()
+            .with_qos(AtLeastOnce)
+    }
+
     /// Update this state
     pub fn update(mut self, update: GenericStateUpdate) -> Self {
         let status = update.status;
-        GenericCommandState::inject_text_property(&mut self.payload, "status", &status);
+        GenericCommandState::inject_text_property(&mut self.payload, STATUS, &status);
         if let Some(reason) = &update.reason {
-            GenericCommandState::inject_text_property(&mut self.payload, "reason", reason)
+            GenericCommandState::inject_text_property(&mut self.payload, REASON, reason)
         };
 
         GenericCommandState { status, ..self }
@@ -71,7 +120,7 @@ impl GenericCommandState {
                 values.insert(k.to_string(), v.clone());
             }
         }
-        match GenericCommandState::extract_text_property(&self.payload, "status") {
+        match GenericCommandState::extract_text_property(&self.payload, STATUS) {
             None => self.fail_with("Unknown status".to_string()),
             Some(status) => GenericCommandState { status, ..self },
         }
@@ -90,16 +139,16 @@ impl GenericCommandState {
 
     /// Update the command state with a new status describing the next state
     pub fn move_to(mut self, status: String) -> Self {
-        GenericCommandState::inject_text_property(&mut self.payload, "status", &status);
+        GenericCommandState::inject_text_property(&mut self.payload, STATUS, &status);
 
         GenericCommandState { status, ..self }
     }
 
     /// Update the command state to failed status with the given reason
     pub fn fail_with(mut self, reason: String) -> Self {
-        let status = "failed";
-        GenericCommandState::inject_text_property(&mut self.payload, "status", status);
-        GenericCommandState::inject_text_property(&mut self.payload, "reason", &reason);
+        let status = FAILED;
+        GenericCommandState::inject_text_property(&mut self.payload, STATUS, status);
+        GenericCommandState::inject_text_property(&mut self.payload, REASON, &reason);
 
         GenericCommandState {
             status: status.to_owned(),
@@ -109,7 +158,7 @@ impl GenericCommandState {
 
     /// Return the error reason if any
     pub fn failure_reason(&self) -> Option<String> {
-        GenericCommandState::extract_text_property(&self.payload, "reason")
+        GenericCommandState::extract_text_property(&self.payload, REASON)
     }
 
     /// Extract a text property from a Json object
@@ -170,6 +219,11 @@ impl GenericCommandState {
         }
     }
 
+    /// Return the topic that uniquely identifies the command
+    pub fn command_topic(&self) -> &String {
+        &self.topic.name
+    }
+
     fn target(&self) -> Option<String> {
         match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
@@ -191,22 +245,61 @@ impl GenericCommandState {
         }
     }
 
-    pub fn is_terminal(&self) -> bool {
-        matches!(self.status.as_str(), "successful" | "failed")
+    pub fn is_successful(&self) -> bool {
+        matches!(self.status.as_str(), SUCCESSFUL)
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self.status.as_str(), FAILED)
+    }
+}
+
+/// Return the invoking command topic name, if any
+pub fn invoking_command(sub_command: &TopicName) -> Option<TopicName> {
+    match sub_command.split('/').collect::<Vec<&str>>()[..] {
+        [pre, t1, t2, t3, t4, "cmd", _, sub_id] => extract_invoking_command_id(sub_id)
+            .map(|(op, id)| format!("{pre}/{t1}/{t2}/{t3}/{t4}/cmd/{op}/{id}")),
+        _ => None,
+    }
+}
+
+/// Build a sub command identifier from its invoking command identifier
+///
+/// Using such a structure command id for sub commands is key
+/// to retrieve the invoking command of a sub-command from its state using [extract_invoking_command_id].
+fn sub_command_id(operation: &str, cmd_id: &str) -> String {
+    format!("sub:{operation}:{cmd_id}")
+}
+
+/// Extract the invoking command identifier from a sub command identifier
+///
+/// Return None if the given id is not a sub command identifier
+/// i.e. if not generated with [sub_command_id].
+fn extract_invoking_command_id(sub_cmd_id: &str) -> Option<(&str, &str)> {
+    match sub_cmd_id.split(':').collect::<Vec<&str>>()[..] {
+        ["sub", operation, cmd_id] => Some((operation, cmd_id)),
+        _ => None,
+    }
+}
+
+pub fn command_identifier(topic: &str) -> Option<(&str, &str)> {
+    match topic.split('/').collect::<Vec<&str>>()[..] {
+        [_, _, _, _, _, "cmd", operation, cmd_id] => Some((operation, cmd_id)),
+        _ => None,
     }
 }
 
 impl GenericStateUpdate {
     pub fn successful() -> Self {
         GenericStateUpdate {
-            status: "successful".to_string(),
+            status: SUCCESSFUL.to_string(),
             reason: None,
         }
     }
 
     pub fn failed(reason: String) -> Self {
         GenericStateUpdate {
-            status: "failed".to_string(),
+            status: FAILED.to_string(),
             reason: Some(reason),
         }
     }
@@ -228,10 +321,10 @@ impl GenericStateUpdate {
         match json.as_object_mut() {
             None => self.into_json(),
             Some(object) => {
-                object.insert("status".to_string(), self.status.into());
-                if object.get("reason").is_none() {
+                object.insert(STATUS.to_string(), self.status.into());
+                if object.get(REASON).is_none() {
                     if let Some(reason) = self.reason {
-                        object.insert("reason".to_string(), reason.into());
+                        object.insert(REASON.to_string(), reason.into());
                     }
                 }
                 json
@@ -259,11 +352,11 @@ impl From<GenericStateUpdate> for Value {
     fn from(update: GenericStateUpdate) -> Self {
         match update.reason {
             None => json!({
-                "status": update.status
+                STATUS: update.status
             }),
             Some(reason) => json!({
-                "status": update.status,
-                "reason": reason,
+                STATUS: update.status,
+                REASON: reason,
             }),
         }
     }
