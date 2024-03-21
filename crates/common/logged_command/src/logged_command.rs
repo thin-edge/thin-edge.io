@@ -131,30 +131,26 @@ fn send_signal_to_stop_child(child: Option<u32>, signal_type: CmdStatus) {
 /// A command which execution is logged.
 ///
 /// This struct wraps the main command with a nice representation of that command.
-/// This `command_line` field is only required because the
-/// [`Command::get_program()`](https://doc.rust-lang.org/std/process/struct.Command.html#method.get_program)
-/// and
-/// [`Command::get_args()`](https://doc.rust-lang.org/std/process/struct.Command.html#method.get_args)
-/// are nightly-only experimental APIs.
 pub struct LoggedCommand {
-    command_line: String,
     command: Command,
 }
 
 impl std::fmt::Display for LoggedCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.command_line.fmt(f)
+        let command = self.command.as_std();
+
+        command.get_program().to_string_lossy().fmt(f)?;
+        for arg in command.get_args() {
+            // The arguments are displayed as debug, to be properly quoted and distinguished from each other.
+            write!(f, " {:?}", arg.to_string_lossy())?;
+        }
+        Ok(())
     }
 }
 
 impl LoggedCommand {
     pub fn new(program: impl AsRef<OsStr>) -> Result<LoggedCommand, std::io::Error> {
-        let command_line = match program.as_ref().to_str() {
-            None => format!("{:?}", program.as_ref()),
-            Some(cmd) => cmd.to_string(),
-        };
-
-        let mut args = shell_words::split(&command_line)
+        let mut args = shell_words::split(&program.as_ref().to_string_lossy())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
 
         let mut command = match args.len() {
@@ -178,16 +174,10 @@ impl LoggedCommand {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        Ok(LoggedCommand {
-            command_line,
-            command,
-        })
+        Ok(LoggedCommand { command })
     }
 
     pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut LoggedCommand {
-        use std::fmt::Write;
-        // The arguments are displayed as debug, to be properly quoted and distinguished from each other.
-        let _ = write!(self.command_line, " {:?}", arg.as_ref());
         self.command.arg(arg);
         self
     }
@@ -202,7 +192,7 @@ impl LoggedCommand {
     pub async fn execute(mut self, logger: &mut BufWriter<File>) -> Result<Output, std::io::Error> {
         let outcome = self.command.output().await;
 
-        if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
+        if let Err(err) = LoggedCommand::log_outcome(&self.to_string(), &outcome, logger).await {
             error!("Fail to log the command execution: {}", err);
         }
 
@@ -212,7 +202,7 @@ impl LoggedCommand {
     pub fn spawn(&mut self) -> Result<LoggingChild, std::io::Error> {
         let child = self.command.spawn()?;
         Ok(LoggingChild {
-            command_line: self.command_line.clone(),
+            command_line: self.to_string(),
             inner_child: child,
         })
     }
