@@ -94,7 +94,7 @@ impl WorkflowSupervisor {
             Some(_) => {
                 // Ignore command updates published over MQTT
                 //
-                // TODO: There is exception here - not implemented yet:
+                // TODO: There is one exception here - not implemented yet:
                 //       when a step is delegated to an external process,
                 //       this process will notify the outcome of its action over MQTT,
                 //       and the agent will have then to react on this message.
@@ -120,6 +120,10 @@ impl WorkflowSupervisor {
                 operation: operation_name,
             })
             .and_then(|workflow| workflow.get_action(command_state))
+    }
+
+    pub fn get_state(&self, command: &TopicName) -> Option<&GenericCommandState> {
+        self.commands.get_state(command).map(|(_, state)| state)
     }
 
     /// Update the state of the command board on reception of new state for a command
@@ -174,6 +178,10 @@ pub type Timestamp = time::OffsetDateTime;
 impl CommandBoard {
     pub fn new(commands: HashMap<TopicName, (Timestamp, GenericCommandState)>) -> Self {
         CommandBoard { commands }
+    }
+
+    pub fn get_state(&self, command: &TopicName) -> Option<&(Timestamp, GenericCommandState)> {
+        self.commands.get(command)
     }
 
     /// Iterate over the pending commands

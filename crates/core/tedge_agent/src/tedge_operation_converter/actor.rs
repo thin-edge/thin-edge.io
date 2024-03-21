@@ -21,6 +21,7 @@ use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::CommandBoard;
@@ -48,6 +49,7 @@ pub struct TedgeOperationConverterActor {
     pub(crate) workflows: WorkflowSupervisor,
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
+    pub(crate) id_generator: IdGenerator,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) software_sender: LoggingSender<SoftwareCommand>,
     pub(crate) restart_sender: LoggingSender<RestartCommand>,
@@ -192,6 +194,11 @@ impl TedgeOperationConverterActor {
 
         match action {
             OperationAction::Clear => {
+                if let Some(invoking_command) = state.invoking_command() {
+                    if let Some(resumed_state) = self.workflows.get_state(&invoking_command) {
+                        self.command_sender.send(resumed_state.clone()).await?;
+                    };
+                }
                 info!(
                     "Waiting {} {operation} operation to be cleared",
                     state.status
@@ -278,6 +285,45 @@ impl TedgeOperationConverterActor {
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
                 Ok(())
+            }
+            OperationAction::Command(sub_operation, handlers) => {
+                let next_state = &handlers.on_exec.status;
+                info!(
+                    "Moving {operation} operation to {next_state} state before triggering the sub-command: {sub_operation}"
+                );
+                let new_state = state.update(handlers.on_exec);
+                self.publish_command_state(new_state).await?;
+
+                let sub_cmd_id = self.id_generator.new_id();
+                let sub_cmd_init_state = GenericCommandState::sub_command_init_state(
+                    &self.mqtt_schema,
+                    &self.device_topic_id,
+                    operation,
+                    cmd_id,
+                    sub_operation,
+                    sub_cmd_id,
+                );
+                self.mqtt_publisher
+                    .send(sub_cmd_init_state.into_message())
+                    .await?;
+                Ok(())
+            }
+            OperationAction::AwaitCommandCompletion(_handlers) => {
+                let step = &state.status;
+                info!("{operation} operation {step} waiting for sub-command completion");
+
+                // Nothing specific has to be done: the current state has been persisted
+                // and will used on reception of ResumeOnCommandCompletion
+                // TODO: Register a timeout event
+
+                Ok(())
+            }
+            OperationAction::ResumeOnCommandCompletion => {
+                todo!()
+
+                // Pop the handlers that have been pushed when AwaitingCommandCompletion
+                // Move this command to its next step
+                // Clear the sub-command topic (unless this is a timeout)
             }
         }
     }

@@ -22,6 +22,7 @@ use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
@@ -136,6 +137,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
             workflows: self.workflows,
             state_repository: repository,
             log_dir: self.config.log_dir,
+            id_generator: IdGenerator::new("agent"),
             input_receiver: self.input_receiver,
             software_sender: self.software_sender,
             restart_sender: self.restart_sender,
