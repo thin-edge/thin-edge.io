@@ -1,6 +1,8 @@
 pub mod mqtt_config;
+mod sudo;
 pub mod system_services;
 pub mod tedge_config_cli;
+pub use sudo::SudoCommandBuilder;
 
 pub use self::tedge_config_cli::config_setting::*;
 pub use self::tedge_config_cli::error::*;
