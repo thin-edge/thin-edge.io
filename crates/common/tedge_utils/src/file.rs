@@ -114,6 +114,20 @@ pub fn create_file_with_mode(
     perm_entry.create_file(file.as_ref(), content)
 }
 
+pub fn create_file_with_mode_or_overwrite(
+    file: impl AsRef<Path>,
+    content: Option<&str>,
+    mode: u32,
+) -> Result<(), FileError> {
+    match content {
+        Some(content) if file.as_ref().exists() => overwrite_file(file.as_ref(), content),
+        _ => {
+            let perm_entry = PermissionEntry::new(None, None, Some(mode));
+            perm_entry.create_file(file.as_ref(), content)
+        }
+    }
+}
+
 pub fn create_file_with_user_group(
     file: impl AsRef<Path>,
     user: &str,

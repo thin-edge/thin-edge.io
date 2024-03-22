@@ -38,6 +38,21 @@ OPTIONS:
     -h, --help              Print help information
 ```
 
+## Create-csr
+
+```sh title="tedge cert create-csr"
+tedge-cert-create-csr 
+Create certificate signing request
+
+Usage: tedge cert create-csr [OPTIONS]
+
+Options:
+      --device-id <ID>           The device identifier to be used as the common name for the certificate
+      --output-path <OUTPUT_PATH>  Path where a Certificate signing request will be stored
+      --config-dir <CONFIG_DIR>  [default: /etc/tedge]
+  -h, --help                     Print help
+```
+
 ## Show
 
 ```sh title="tedge cert show"
