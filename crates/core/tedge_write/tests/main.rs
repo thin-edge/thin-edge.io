@@ -4,6 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use tedge_config::SudoCommandBuilder;
 use tempfile::TempDir;
 
 #[test]
@@ -81,7 +82,7 @@ fn uses_sudo_only_if_installed() {
     let options = tedge_write::CopyOptions {
         from: source_path.as_path().try_into().unwrap(),
         to: dest_path.as_path().try_into().unwrap(),
-        sudo: true,
+        sudo: SudoCommandBuilder::enabled(true),
         mode: None,
         user: None,
         group: None,

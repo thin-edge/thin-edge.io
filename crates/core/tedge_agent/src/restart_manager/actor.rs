@@ -22,14 +22,8 @@ use tokio::time::timeout;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
-use which::which;
 
 const SYNC: &str = "sync";
-
-#[cfg(not(test))]
-const SUDO: &str = "sudo";
-#[cfg(test)]
-const SUDO: &str = "echo";
 
 pub struct RestartManagerActor {
     config: RestartManagerConfig,
@@ -239,41 +233,23 @@ impl RestartManagerActor {
     }
 
     fn get_restart_operation_commands(&self) -> Result<Vec<Command>, RestartManagerError> {
-        let mut vec = vec![];
+        let mut restart_commands = vec![];
 
         // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
         let system_config = SystemConfig::try_new(&self.config.config_dir)?;
 
-        // Check if sudo command is available
-        let sudo = which(SUDO).ok();
-        if self.config.is_sudo_enabled && sudo.is_none() {
-            warn!("`sudo.enable` is `true` but sudo wasn't found in $PATH");
-        }
+        let sync_command = self.config.sudo_wrapper.command(SYNC).into();
+        restart_commands.push(sync_command);
 
-        match sudo {
-            Some(sudo) if self.config.is_sudo_enabled => {
-                let mut sync_command = Command::new(&sudo);
-                sync_command.arg(SYNC);
-                vec.push(sync_command);
+        let Some((reboot_command, reboot_args)) = system_config.system.reboot.split_first() else {
+            warn!("`system.reboot` is empty");
+            return Ok(restart_commands);
+        };
 
-                let mut command = Command::new(sudo);
-                command.args(system_config.system.reboot);
-                vec.push(command);
-            }
-            Some(_) | None => {
-                let sync_command = Command::new(SYNC);
-                vec.push(sync_command);
+        let mut reboot_command: Command = self.config.sudo_wrapper.command(reboot_command).into();
+        reboot_command.args(reboot_args);
 
-                let mut args = system_config.system.reboot.iter();
-
-                let mut command =
-                    Command::new(args.next().map(|s| s.to_string()).unwrap_or_default());
-                command.args(args);
-                vec.push(command);
-            }
-        }
-
-        Ok(vec)
+        Ok(restart_commands)
     }
 
     fn get_restart_timeout(&self) -> Duration {

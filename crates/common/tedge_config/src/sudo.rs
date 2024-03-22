@@ -50,26 +50,4 @@ impl SudoCommandBuilder {
             }
         }
     }
-
-    // pub fn with_command_fn<C, S, F>(&self, command_fn: F, program: S) -> C
-    // where
-    //     S: AsRef<OsStr>,
-    //     F: FnOnce(S) -> C,
-    // {
-    //     if !self.enabled {
-    //         return command_fn(program);
-    //     }
-
-    //     match &self.path {
-    //         Some(sudo) => {
-    //             let mut c = command_fn(sudo);
-    //             c.arg(program);
-    //             c
-    //         }
-    //         None => {
-    //             warn!("`sudo.enable` set to `true`, but sudo not found in $PATH");
-    //             command_fn(program)
-    //         }
-    //     }
-    // }
 }

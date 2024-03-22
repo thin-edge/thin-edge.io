@@ -4,6 +4,7 @@ mod tests {
     use plugin_sm::plugin_manager::ExternalPlugins;
     use plugin_sm::plugin_manager::Plugins;
     use std::fs::File;
+    use tedge_config::SudoCommandBuilder;
     use tedge_config::TEdgeConfigLocation;
     use tempfile::NamedTempFile;
 
@@ -14,8 +15,13 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins =
-            ExternalPlugins::open(plugin_dir, None, None, TEdgeConfigLocation::default()).unwrap();
+        let mut plugins = ExternalPlugins::open(
+            plugin_dir,
+            None,
+            SudoCommandBuilder::enabled(false),
+            TEdgeConfigLocation::default(),
+        )
+        .unwrap();
         let _ = plugins.load();
 
         // Plugins registry should not register any plugin as no files in the directory are present.
@@ -33,8 +39,13 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins =
-            ExternalPlugins::open(plugin_dir, None, None, TEdgeConfigLocation::default()).unwrap();
+        let mut plugins = ExternalPlugins::open(
+            plugin_dir,
+            None,
+            SudoCommandBuilder::enabled(false),
+            TEdgeConfigLocation::default(),
+        )
+        .unwrap();
         let _ = plugins.load();
 
         // Check if registry has loaded plugin of type `test`.
@@ -52,7 +63,7 @@ mod tests {
         let result = ExternalPlugins::open(
             plugin_dir.into_path(),
             Some("dummy".into()),
-            None,
+            SudoCommandBuilder::enabled(false),
             TEdgeConfigLocation::default(),
         )?;
         assert!(result.empty());

@@ -17,6 +17,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_config::ReadError;
+use tedge_config::SudoCommandBuilder;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::PermissionEntry;
 
@@ -90,7 +91,7 @@ impl ConfigManagerConfig {
             config_update_topic,
             config_snapshot_topic,
             use_tedge_write: TedgeWriteStatus::Enabled {
-                sudo: cliopts.is_sudo_enabled,
+                sudo: SudoCommandBuilder::enabled(cliopts.is_sudo_enabled),
             },
             config_update_enabled: cliopts.config_update_enabled,
         })
@@ -255,8 +256,8 @@ impl PluginConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TedgeWriteStatus {
-    Enabled { sudo: bool },
+    Enabled { sudo: SudoCommandBuilder },
     Disabled,
 }
