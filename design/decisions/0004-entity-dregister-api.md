@@ -152,6 +152,10 @@ Deregister using commands as follows:
 tedge mqtt pub -r te/device/child01///cmd/deregister/id-1234 '{"status": "init", "children-only": true}'
 ```
 
+The agent would react to this command as described in the previous solution and send the final `successful` or `failed` status.
+
+More commands like `list`, that can be used to fetch the list of child devices, services or both can also be added in future.
+
 **Pros**
 
 * Using existing `cmd` mechanism which already covers responses as well.
