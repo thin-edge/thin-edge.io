@@ -85,7 +85,7 @@ The following options are provided to enable more fine-grained deregistration of
 
 * Deregistrations can't be done remotely, unless `tedge` is installed on those remote device as well.
 
-### MQTT API
+### MQTT API 1
 
 Deregister entities by publishing MQTT requests as follows:
 
@@ -93,9 +93,16 @@ Deregister entities by publishing MQTT requests as follows:
 tedge mqtt pub te/device/child01///req/deregister '{"children-only": true}'
 ```
 
+The request payload supports various filtering options as follows:
+* `children-only`
+* `services-only`
+* `child-type` 
+
+...where an empty payload means deregister the target device as well as its linked entities.
+
 The `tedge-agent` handles these requests exactly as done by the `tedge deregister` command proposed above,
 by clearing all the retained messages associated with the target entities.
-The mappers react the same way as prosed in the previous solution.
+The mappers react the same way as proposed in the previous solution.
 
 The responsibility of issuing the clear messages is left with the agent instead of the mapper,
 which already has its own entity store, to prevent multiple mappers from doing the same simultaneously.
@@ -105,11 +112,55 @@ Since deregistrations are rare operations, creating it on the fly and discarding
 **Pros**
 
 * Allows these commands to be triggered from any remote device over MQTT without needing `tedge` to be installed.
+* Scope to support filtering options which can be added/expanded in future.
 
 **Cons**
 
 * No immediate feedback on the status of the deregister request unless the status is published to a corresponding response topic,
   which is difficult to manage for clients.
+* Not symmetric with registration message
+* No support for resumption on partial failure 
+
+### MQTT API 2
+
+By publishing empty retained message to the entity topic id as follows:
+
+```sh
+tedge mqtt pub -r te/device/child01// ''
+```
+
+**Pros**
+
+* Symmetric with the registration API by using the same topic
+
+**Cons**
+
+* The status response will have to be sent on an entirely different topic, which breaks the symmetry anyway.
+* If the mapper crashes in the middle of the deregistration of a deeply nested hierarchy of nested devices,
+  resumption on restart would be difficult as there is no trace of a pending request as the retained message is cleared.
+* Further API expansion to support more filtering options not possible
+
+### MQTT API 3
+
+:::note
+Preferred solution
+:::
+
+Deregister using commands as follows:
+
+```sh
+tedge mqtt pub -r te/device/child01///cmd/deregister/id-1234 '{"status": "init", "children-only": true}'
+```
+
+**Pros**
+
+* Using existing `cmd` mechanism which already covers responses as well.
+* Since commands are resumable by nature, deregistration can also be resumed in the event of a crash.
+* Allows future expansions to include more filtering parameters as well.
+
+**Cons**
+
+* Not symmetric with registration message
 
 ### HTTP API
 
@@ -145,3 +196,11 @@ The mappers must also react the same way to the clear commands.
 **Cons**
 
 * Inconsistency with the registration API which is available only via MQTT
+
+### Other Enhancements
+
+Here are a few other enhancements required, irrespective of the solution chosen:
+
+* The mappers, on receipt of an empty retained messages on an entity topic id, must remove that entity from its own entity store.
+* A tedge config setting, that allows the user to choose whether entity deregistrations must be propagated to the cloud or not.
+  Optionally, an additional command payload option can also be provided to control this at an individual request level.
