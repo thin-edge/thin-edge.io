@@ -186,7 +186,7 @@ async fn spawn_software_manager(
         log_dir: tmp_dir.utf8_path_buf(),
         default_plugin_type: None,
         config_location: TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
-        sudo_command_builder: SudoCommandBuilder::enabled(true),
+        sudo: SudoCommandBuilder::enabled(true),
     };
 
     let mut software_actor_builder = SoftwareManagerBuilder::new(config);

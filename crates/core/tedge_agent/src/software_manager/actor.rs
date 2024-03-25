@@ -75,7 +75,7 @@ impl Actor for SoftwareManagerActor {
         let mut plugins = ExternalPlugins::open(
             &self.config.sm_plugins_dir,
             self.config.default_plugin_type.clone(),
-            self.config.sudo_command_builder.clone(),
+            self.config.sudo.clone(),
             self.config.config_location.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;

@@ -238,7 +238,7 @@ impl RestartManagerActor {
         // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
         let system_config = SystemConfig::try_new(&self.config.config_dir)?;
 
-        let sync_command = self.config.sudo_wrapper.command(SYNC).into();
+        let sync_command = self.config.sudo.command(SYNC).into();
         restart_commands.push(sync_command);
 
         let Some((reboot_command, reboot_args)) = system_config.system.reboot.split_first() else {
@@ -246,7 +246,7 @@ impl RestartManagerActor {
             return Ok(restart_commands);
         };
 
-        let mut reboot_command: Command = self.config.sudo_wrapper.command(reboot_command).into();
+        let mut reboot_command: Command = self.config.sudo.command(reboot_command).into();
         reboot_command.args(reboot_args);
 
         Ok(restart_commands)

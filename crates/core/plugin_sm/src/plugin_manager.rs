@@ -104,14 +104,14 @@ impl ExternalPlugins {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
-        sudo_command_builder: SudoCommandBuilder,
+        sudo: SudoCommandBuilder,
         config_location: TEdgeConfigLocation,
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: BTreeMap::new(),
             default_plugin_type: default_plugin_type.clone(),
-            sudo: sudo_command_builder,
+            sudo,
             config_location,
         };
         if let Err(e) = plugins.load() {

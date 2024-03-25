@@ -11,7 +11,7 @@ pub struct SoftwareManagerConfig {
     pub log_dir: Utf8PathBuf,
     pub default_plugin_type: Option<String>,
     pub config_location: TEdgeConfigLocation,
-    pub sudo_command_builder: SudoCommandBuilder,
+    pub sudo: SudoCommandBuilder,
 }
 
 impl SoftwareManagerConfig {
@@ -44,7 +44,7 @@ impl SoftwareManagerConfig {
             log_dir: tedge_config.logs.path.join("agent"),
             default_plugin_type,
             config_location: tedge_config_location.clone(),
-            sudo_command_builder: SudoCommandBuilder::new(&tedge_config),
+            sudo: SudoCommandBuilder::new(&tedge_config),
         })
     }
 }
