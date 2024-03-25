@@ -51,9 +51,16 @@ impl CumulocityConverter {
         };
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
 
+        let tedge_url =
+            if let Some(c8y_url) = self.c8y_endpoint.maybe_tenant_url(&firmware_request.url) {
+                self.auth_proxy.proxy_url(c8y_url).to_string()
+            } else {
+                firmware_request.url.clone()
+            };
+
         let request = FirmwareUpdateCmdPayload {
             status: CommandStatus::Init,
-            tedge_url: None,
+            tedge_url: Some(tedge_url),
             remote_url: firmware_request.url,
             name: firmware_request.name,
             version: firmware_request.version,
@@ -289,7 +296,52 @@ mod tests {
                     "status": "init",
                     "name": "myFirmware",
                     "version": "1.0",
-                    "remoteUrl": "http://www.my.url"
+                    "remoteUrl": "http://www.my.url",
+                    "tedgeUrl": "http://www.my.url"
+                }),
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn mapper_converts_firmware_op_to_firmware_update_cmd_when_remote_utl_has_c8y_url() {
+        let cfg_dir = TempTedgeDir::new();
+        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate c8y_Firmware operation delivered via JSON over MQTT
+        mqtt.send(MqttMessage::new(
+            &C8yDeviceControlTopic::topic(&"c8y".into()),
+            json!({
+                "id": "123456",
+                "c8y_Firmware": {
+                    "name": "myFirmware",
+                    "version": "1.0",
+                    "url": "http://test.c8y.io/inventory/binaries/51541"
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/firmware_update/+",
+                json!({
+                    "status": "init",
+                    "name": "myFirmware",
+                    "version": "1.0",
+                    "remoteUrl": "http://test.c8y.io/inventory/binaries/51541",
+                    "tedgeUrl": "http://127.0.0.1:8001/c8y/inventory/binaries/51541"
                 }),
             )],
         )
@@ -342,7 +394,8 @@ mod tests {
                     "status": "init",
                     "name": "myFirmware",
                     "version": "1.0",
-                    "remoteUrl": "http://www.my.url"
+                    "remoteUrl": "http://www.my.url",
+                    "tedgeUrl": "http://www.my.url"
                 }),
             )],
         )
