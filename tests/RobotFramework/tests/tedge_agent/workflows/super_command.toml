@@ -20,7 +20,7 @@ payload.x_ter = "${.command.payload.x_bis}"
 payload.y_ter = "${.command.payload.y_bis}"
 
 [dump_payload]
-script = "/etc/tedge/operations/write-file.sh ${.paylod.output_file} ${.}"
+script = "/etc/tedge/operations/write-file.sh ${.payload.output_file} ${.}"
 on_success = "successful"
 
 [successful]

@@ -289,10 +289,8 @@ impl TedgeOperationConverterActor {
             OperationAction::Command(sub_operation, handlers) => {
                 let next_state = &handlers.on_exec.status;
                 info!(
-                    "Moving {operation} operation to {next_state} state before triggering the sub-command: {sub_operation}"
+                    "Triggering {sub_operation} command, and moving {operation} operation to {next_state} state"
                 );
-                let new_state = state.update(handlers.on_exec);
-                self.publish_command_state(new_state).await?;
 
                 let sub_cmd_id = self.id_generator.new_id();
                 let sub_cmd_init_state = GenericCommandState::sub_command_init_state(
@@ -303,27 +301,47 @@ impl TedgeOperationConverterActor {
                     sub_operation,
                     sub_cmd_id,
                 );
+
+                let new_state = state.await_sub_command(&sub_cmd_init_state, next_state);
+                self.publish_command_state(new_state).await?;
                 self.mqtt_publisher
                     .send(sub_cmd_init_state.into_message())
                     .await?;
                 Ok(())
             }
-            OperationAction::AwaitCommandCompletion(_handlers) => {
+            OperationAction::AwaitCommandCompletion(handlers) => {
                 let step = &state.status;
                 info!("{operation} operation {step} waiting for sub-command completion");
 
-                // Nothing specific has to be done: the current state has been persisted
-                // and will used on reception of ResumeOnCommandCompletion
-                // TODO: Register a timeout event
+                let Some(sub_command) = state.sub_command() else {
+                    let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
+                        GenericStateUpdate::failed("No sub-command".to_string())
+                    }));
+                    self.publish_command_state(new_state).await?;
+                    return Ok(());
+                };
+
+                if let Some(sub_state) =
+                    self.workflows.get_state(&sub_command).map(|s| s.to_owned())
+                {
+                    if sub_state.is_successful() {
+                        let new_state = state.update(handlers.on_success);
+                        self.publish_command_state(new_state).await?;
+                        self.mqtt_publisher.send(sub_state.clear_message()).await?;
+                    } else if sub_state.is_failed() {
+                        let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
+                            GenericStateUpdate::failed("sub-command failed".to_string())
+                        }));
+                        self.publish_command_state(new_state).await?;
+                        self.mqtt_publisher.send(sub_state.clear_message()).await?;
+                    } else {
+                        // Nothing specific has to be done: the current state has been persisted
+                        // and will be resumed on completion of the sub-command
+                        // TODO: Register a timeout event
+                    }
+                };
 
                 Ok(())
-            }
-            OperationAction::ResumeOnCommandCompletion => {
-                todo!()
-
-                // Pop the handlers that have been pushed when AwaitingCommandCompletion
-                // Move this command to its next step
-                // Clear the sub-command topic (unless this is a timeout)
             }
         }
     }

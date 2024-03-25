@@ -1,4 +1,4 @@
-operation = "inner_command"
+operation = "sub_command"
 
 [init]
 action = "proceed"

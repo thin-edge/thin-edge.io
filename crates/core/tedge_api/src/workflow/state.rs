@@ -35,6 +35,7 @@ const SUCCESSFUL: &str = "successful";
 const FAILED: &str = "failed";
 const REASON: &str = "reason";
 const INVOKING_COMMAND: &str = "__invoking_command__";
+const SUB_COMMAND: &str = "__sub_command__";
 
 impl GenericCommandState {
     /// Create an init state for a sub-command
@@ -96,6 +97,12 @@ impl GenericCommandState {
             .with_qos(AtLeastOnce)
     }
 
+    /// Build an MQTT message to clear the command state
+    pub fn clear_message(&self) -> Message {
+        let topic = &self.topic;
+        Message::new(topic, "").with_retain().with_qos(AtLeastOnce)
+    }
+
     /// Update this state
     pub fn update(mut self, update: GenericStateUpdate) -> Self {
         let status = update.status;
@@ -105,6 +112,12 @@ impl GenericCommandState {
         };
 
         GenericCommandState { status, ..self }
+    }
+
+    /// Update this state to await a sub command
+    pub fn await_sub_command(mut self, sub_command: &GenericCommandState, status: &str) -> Self {
+        Self::inject_text_property(&mut self.payload, SUB_COMMAND, &sub_command.topic.name);
+        self.move_to(status.to_string())
     }
 
     /// Inject a json payload into this one
@@ -158,6 +171,11 @@ impl GenericCommandState {
     /// Return the invoking command, if any
     pub fn invoking_command(&self) -> Option<String> {
         GenericCommandState::extract_text_property(&self.payload, INVOKING_COMMAND)
+    }
+
+    /// Return the sub command, if any
+    pub fn sub_command(&self) -> Option<String> {
+        GenericCommandState::extract_text_property(&self.payload, SUB_COMMAND)
     }
 
     /// Extract a text property from a Json object
@@ -239,8 +257,12 @@ impl GenericCommandState {
         }
     }
 
-    pub fn is_terminal(&self) -> bool {
-        matches!(self.status.as_str(), SUCCESSFUL | FAILED)
+    pub fn is_successful(&self) -> bool {
+        matches!(self.status.as_str(), SUCCESSFUL)
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self.status.as_str(), FAILED)
     }
 }
 
