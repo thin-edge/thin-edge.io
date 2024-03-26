@@ -180,7 +180,7 @@ impl GenericCommandState {
     ///
     /// - The script command is first tokenized using shell escaping rules.
     ///   `/some/script.sh arg1 "arg 2" "arg 3"` -> ["/some/script.sh", "arg1", "arg 2", "arg 3"]
-    /// - Then each token matching `${x.y.z}` is substituted with the value of
+    /// - Then each token matching `${x.y.z}` is substituted with the value pointed by the JSON path.
     pub fn inject_parameters(&self, args: &[String]) -> Vec<String> {
         args.iter().map(|arg| self.inject_parameter(arg)).collect()
     }
@@ -190,32 +190,39 @@ impl GenericCommandState {
     /// `${.payload}` -> the whole message payload
     /// `${.payload.x}` -> the value of x if there is any in the payload
     /// `${.payload.unknown}` -> `${.payload.unknown}` unchanged
-    /// `Not a variable pattern` -> `Not a variable pattern` unchanged
+    /// `Not a path expression` -> `Not a path expression` unchanged
     pub fn inject_parameter(&self, script_parameter: &str) -> String {
-        script_parameter
-            .strip_prefix("${")
-            .and_then(|s| s.strip_suffix('}'))
-            .and_then(|path| self.extract(path))
+        Self::extract_path(script_parameter)
+            .and_then(|path| self.extract_value(path))
+            .map(|v| json_as_string(&v))
             .unwrap_or_else(|| script_parameter.to_string())
     }
 
-    fn extract(&self, path: &str) -> Option<String> {
+    /// Extract a path  from a `${ ... }` expression
+    ///
+    /// Return None if the input is not a path expression
+    pub fn extract_path(input: &str) -> Option<&str> {
+        input.strip_prefix("${").and_then(|s| s.strip_suffix('}'))
+    }
+
+    /// Extract the JSON value pointed by a path from this command state
+    ///
+    /// Return None if the path contains unknown fields.
+    pub fn extract_value(&self, path: &str) -> Option<Value> {
         match path {
-            "." => Some(
-                json!({
-                    "topic": self.topic.name,
-                    "payload": self.payload
-                })
-                .to_string(),
-            ),
-            ".topic" => Some(self.topic.name.clone()),
-            ".topic.target" => self.target(),
-            ".topic.operation" => self.operation(),
-            ".topic.cmd_id" => self.cmd_id(),
-            ".payload" => Some(self.payload.to_string()),
+            "." => Some(json!({
+                "topic": self.topic.name,
+                "payload": self.payload
+            })),
+            ".topic" => Some(self.topic.name.clone().into()),
+            ".topic.target" => self.target().map(|s| s.into()),
+            ".topic.operation" => self.operation().map(|s| s.into()),
+            ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
+            ".payload" => Some(self.payload.clone()),
             path => path
                 .strip_prefix(".payload.")
-                .and_then(|path| json_excerpt(&self.payload, path)),
+                .and_then(|path| json_excerpt(&self.payload, path))
+                .cloned(),
         }
     }
 
@@ -362,10 +369,10 @@ impl From<GenericStateUpdate> for Value {
     }
 }
 
-fn json_excerpt(value: &Value, path: &str) -> Option<String> {
+fn json_excerpt<'a>(value: &'a Value, path: &'a str) -> Option<&'a Value> {
     match path.split_once('.') {
-        None if path.is_empty() => Some(json_as_string(value)),
-        None => value.get(path).map(json_as_string),
+        None if path.is_empty() => Some(value),
+        None => value.get(path),
         Some((key, path)) => value.get(key).and_then(|value| json_excerpt(value, path)),
     }
 }
