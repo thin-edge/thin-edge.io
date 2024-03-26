@@ -286,13 +286,15 @@ impl TedgeOperationConverterActor {
                 log_file.log_script_output(&output).await;
                 Ok(())
             }
-            OperationAction::Command(sub_operation, handlers) => {
+            OperationAction::Command(sub_operation, input_excerpt, handlers) => {
                 let next_state = &handlers.on_exec.status;
                 info!(
                     "Triggering {sub_operation} command, and moving {operation} operation to {next_state} state"
                 );
 
+                // Create the sub-command init state with a reference to its invoking command
                 let sub_cmd_id = self.id_generator.new_id();
+                let sub_cmd_input = input_excerpt.extract_value_from(&state);
                 let sub_cmd_init_state = GenericCommandState::sub_command_init_state(
                     &self.mqtt_schema,
                     &self.device_topic_id,
@@ -300,19 +302,26 @@ impl TedgeOperationConverterActor {
                     cmd_id,
                     sub_operation,
                     sub_cmd_id,
-                );
+                )
+                .update_with_json(sub_cmd_input);
 
+                // Add a reference from the invoking command to its sub command
                 let new_state = state.await_sub_command(&sub_cmd_init_state, next_state);
+
+                // Persist the new state for this command
                 self.publish_command_state(new_state).await?;
+
+                // Finally, init the sub-command
                 self.mqtt_publisher
                     .send(sub_cmd_init_state.into_message())
                     .await?;
                 Ok(())
             }
-            OperationAction::AwaitCommandCompletion(handlers) => {
+            OperationAction::AwaitCommandCompletion(handlers, output_excerpt) => {
                 let step = &state.status;
                 info!("{operation} operation {step} waiting for sub-command completion");
 
+                // Get from this command state, the topic used for the sub-command
                 let Some(sub_command) = state.sub_command() else {
                     let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
                         GenericStateUpdate::failed("No sub-command".to_string())
@@ -321,11 +330,15 @@ impl TedgeOperationConverterActor {
                     return Ok(());
                 };
 
+                // Get the sub-command state and resume this command when the sub-command is in a terminal state
                 if let Some(sub_state) =
                     self.workflows.get_state(&sub_command).map(|s| s.to_owned())
                 {
                     if sub_state.is_successful() {
-                        let new_state = state.update(handlers.on_success);
+                        let sub_cmd_output = output_excerpt.extract_value_from(&sub_state);
+                        let new_state = state
+                            .update_with_json(sub_cmd_output)
+                            .update(handlers.on_success);
                         self.publish_command_state(new_state).await?;
                         self.mqtt_publisher.send(sub_state.clear_message()).await?;
                     } else if sub_state.is_failed() {

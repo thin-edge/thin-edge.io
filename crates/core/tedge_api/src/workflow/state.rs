@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// Generic command state that can be used to manipulate any type of command payload.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -361,6 +362,86 @@ fn json_as_string(value: &Value) -> String {
         Value::Number(n) => n.to_string(),
         Value::String(s) => s.clone(),
         _ => value.to_string(),
+    }
+}
+
+/// A set of values to be injected/extracted into/from a [GenericCommandState]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(try_from = "Option<Value>")]
+pub enum StateExcerpt {
+    /// A constant JSON value
+    Literal(Value),
+
+    /// A JSON path to the excerpt
+    ///
+    /// `"${.some.value.extracted.from.a.command.state}"`
+    PathExpr(String),
+
+    /// A map of named excerpts
+    ///
+    /// `{ x = "${.some.x.value}", y = "${.some.y.value}"`
+    ExcerptMap(HashMap<String, StateExcerpt>),
+
+    /// An array of excerpts
+    ///
+    /// `["${.some.x.value}", "${.some.y.value}"]`
+    ExcerptArray(Vec<StateExcerpt>),
+}
+
+impl StateExcerpt {
+    /// Extract a JSON value from the input state
+    pub fn extract_value_from(&self, input: &GenericCommandState) -> Value {
+        match self {
+            StateExcerpt::Literal(value) => value.clone(),
+            StateExcerpt::PathExpr(path) => input.extract_value(path).unwrap_or(Value::Null),
+            StateExcerpt::ExcerptMap(excerpts) => {
+                let mut values = serde_json::Map::new();
+                for (key, excerpt) in excerpts {
+                    let value = excerpt.extract_value_from(input);
+                    values.insert(key.to_string(), value);
+                }
+                Value::Object(values)
+            }
+            StateExcerpt::ExcerptArray(excerpts) => {
+                let mut values = Vec::new();
+                for excerpt in excerpts {
+                    let value = excerpt.extract_value_from(input);
+                    values.push(value);
+                }
+                Value::Array(values)
+            }
+        }
+    }
+}
+
+impl From<Option<Value>> for StateExcerpt {
+    fn from(value: Option<Value>) -> Self {
+        match value {
+            None => StateExcerpt::ExcerptMap(HashMap::new()), // A mapping that change nothing
+            Some(value) => value.into(),
+        }
+    }
+}
+
+impl From<Value> for StateExcerpt {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Null => StateExcerpt::Literal(Value::Null),
+            Value::Bool(b) => StateExcerpt::Literal(Value::Bool(b)),
+            Value::Number(n) => StateExcerpt::Literal(Value::Number(n)),
+            Value::String(s) => match GenericCommandState::extract_path(&s) {
+                None => StateExcerpt::Literal(Value::String(s)),
+                Some(path) => StateExcerpt::PathExpr(path.to_string()),
+            },
+            Value::Array(a) => {
+                StateExcerpt::ExcerptArray(a.iter().map(|v| v.clone().into()).collect())
+            }
+            Value::Object(o) => StateExcerpt::ExcerptMap(
+                o.iter()
+                    .map(|(k, v)| (k.to_owned(), v.clone().into()))
+                    .collect(),
+            ),
+        }
     }
 }
 

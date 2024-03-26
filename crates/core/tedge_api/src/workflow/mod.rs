@@ -102,7 +102,7 @@ pub enum OperationAction {
     BgScript(ShellScript, BgExitHandlers),
 
     /// Trigger a command and move to the next state from where the outcome of the command will be awaited
-    Command(OperationName, BgExitHandlers),
+    Command(OperationName, StateExcerpt, BgExitHandlers),
 
     /// Await the completion of a sub-command
     ///
@@ -113,7 +113,7 @@ pub enum OperationAction {
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    AwaitCommandCompletion(AwaitHandlers),
+    AwaitCommandCompletion(AwaitHandlers, StateExcerpt),
 
     /// The command has been fully processed and needs to be cleared
     Clear,
@@ -124,13 +124,13 @@ impl Display for OperationAction {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn => "builtin".to_string(),
-            OperationAction::AwaitingAgentRestart { .. } => "awaiting agent restart".to_string(),
+            OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
-            OperationAction::Command(operation, _) => operation.to_string(),
+            OperationAction::Command(operation, _, _) => format!("execute {operation} sub-command"),
             OperationAction::AwaitCommandCompletion { .. } => {
-                "awaiting sub-command completion".to_string()
+                "await sub-command completion".to_string()
             }
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
         };
