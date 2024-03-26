@@ -8,16 +8,16 @@ on_success = "executing"
 # Data can be injected from the current state payload into the sub-command init payload
 [executing]
 command = "sub_command"
-cmd_arg.x = "some x value"
-cmd_arg.y = "${.payload.y}"
+input.x = "some x value"
+input.y = "${.payload.y}"
 on_exec = "awaiting_completion"
 
 # Data can be injected back from the successful sub-command payload into the current state payload
 [awaiting_completion]
 action = "await-command-completion"
 on_success = "dump_payload"
-payload.x_ter = "${.command.payload.x_bis}"
-payload.y_ter = "${.command.payload.y_bis}"
+output.x_ter = "${.payload.x_bis}"
+output.y_ter = "${.payload.y_bis}"
 
 [dump_payload]
 script = "/etc/tedge/operations/write-file.sh ${.payload.output_file} ${.}"

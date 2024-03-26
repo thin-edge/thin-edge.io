@@ -15,7 +15,7 @@ do
     else
         SEP=""
     fi
-    echo "\"$KEY\" = \"$VAL\"$SEP"
+    echo "\"$KEY\": \"$VAL\"$SEP"
 done
 echo '}'
 echo ':::end-tedge:::'
