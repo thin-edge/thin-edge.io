@@ -10,6 +10,9 @@ pub enum WorkflowDefinitionError {
     #[error(transparent)]
     ScriptDefinitionError(#[from] ScriptDefinitionError),
 
+    #[error(transparent)]
+    StateExcerptError(#[from] StateExcerptError),
+
     #[error("Unknown action: {action}")]
     UnknownAction { action: String },
 }
@@ -31,6 +34,16 @@ pub enum ScriptDefinitionError {
 
     #[error("Invalid exit code range '{from}-{to}' as {from}>{to}")]
     IncorrectRange { from: u8, to: u8 },
+}
+
+/// Error related to state excerpt definitions
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum StateExcerptError {
+    #[error("Only records can be used for command input/output, not a {kind} as {value}")]
+    NotAnObject {
+        kind: String,
+        value: serde_json::Value,
+    },
 }
 
 /// Error preventing a workflow to be registered

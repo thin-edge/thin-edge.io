@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -49,6 +50,14 @@ pub struct TomlOperationState {
     /// Handlers used to determine the next state from the action outcome
     #[serde(flatten)]
     pub handlers: TomlExitHandlers,
+
+    /// Values to be injected into the sub-command init state
+    #[serde(default)]
+    pub input: Option<Value>,
+
+    /// Values to be extracted from the sub-command final state
+    #[serde(default)]
+    pub output: Option<Value>,
 }
 
 /// User-friendly representation of an [OperationAction]
@@ -107,7 +116,8 @@ impl TryFrom<TomlOperationState> for OperationAction {
             }
             TomlOperationAction::Command(operation) => {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
-                Ok(OperationAction::Command(operation, handlers))
+                let cmd_input = input.input.try_into()?;
+                Ok(OperationAction::Command(operation, cmd_input, handlers))
             }
             TomlOperationAction::Action(command) => match command.as_str() {
                 "builtin" => Ok(OperationAction::BuiltIn),
@@ -150,7 +160,10 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 }
                 "await-command-completion" => {
                     let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
-                    Ok(OperationAction::AwaitCommandCompletion(handlers))
+                    let cmd_output = input.output.try_into()?;
+                    Ok(OperationAction::AwaitCommandCompletion(
+                        handlers, cmd_output,
+                    ))
                 }
                 _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
             },
