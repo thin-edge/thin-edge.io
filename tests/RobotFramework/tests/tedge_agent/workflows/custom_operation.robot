@@ -34,6 +34,13 @@ Trigger Device Restart
     ${expected_log}     Get File    ${CURDIR}/restart-command-expected.log
     Should Be Equal     ${actual_log}    ${expected_log}
 
+Trigger Device Restart Using A Sub-Command
+    ${pid_before}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/restart_sub_command/robot-314 '{"status":"init"}'
+    Should Have MQTT Messages    te/device/main///cmd/restart_sub_command/robot-314    message_pattern=.*successful.*   maximum=1    timeout=300
+    ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
+
 Timeout An Action
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/slow_operation/robot-1 '{"status":"init"}'
     Should Have MQTT Messages    te/device/main///cmd/slow_operation/robot-1    message_pattern=.*timeout.*   maximum=1
@@ -102,3 +109,4 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/inner_command.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/write-file.sh            /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart_sub_command.toml    /etc/tedge/operations/
