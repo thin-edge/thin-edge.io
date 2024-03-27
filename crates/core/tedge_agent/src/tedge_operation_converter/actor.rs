@@ -195,7 +195,7 @@ impl TedgeOperationConverterActor {
         match action {
             OperationAction::Clear => {
                 if let Some(invoking_command) = state.invoking_command() {
-                    if let Some(resumed_state) = self.workflows.get_state(&invoking_command) {
+                    if let Some(resumed_state) = self.workflows.get_state(invoking_command) {
                         self.command_sender.send(resumed_state.clone()).await?;
                     };
                 }
@@ -331,8 +331,7 @@ impl TedgeOperationConverterActor {
                 };
 
                 // Get the sub-command state and resume this command when the sub-command is in a terminal state
-                if let Some(sub_state) =
-                    self.workflows.get_state(&sub_command).map(|s| s.to_owned())
+                if let Some(sub_state) = self.workflows.get_state(sub_command).map(|s| s.to_owned())
                 {
                     if sub_state.is_successful() {
                         let sub_cmd_output = output_excerpt.extract_value_from(&sub_state);
