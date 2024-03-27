@@ -4,6 +4,7 @@
        "status": "successful",
        "output_file": "/tmp/test-42.json",
        "x_ter": "some x value",
+       "y": "some y value"
        "y_ter": "some y value"
    }
 }

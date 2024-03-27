@@ -73,9 +73,9 @@ Trigger native-reboot within workflow (on_error) - missing sudoers entry for reb
     Should Not Contain    ${workflow_log}    restarted:    msg=restarted state should not have been executed
 
 Invoke sub-command from a super-command operation
-    Execute Command    tedge mqtt pub --retain te/device/main///cmd/super-command/test-42 '{"status":"init", "output_file":"/tmp/test-42.json"}'
-    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/super-command/test-42    message_pattern=.*successful.*   maximum=1
-    Execute Command    tedge mqtt pub --retain te/device/main///cmd/super-command/test-42 ''
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 '{"status":"init", "output_file":"/tmp/test-42.json"}'
+    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/super_command/test-42    message_pattern=.*successful.*   maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 ''
     ${actual_log}      Execute Command    jq . /tmp/test-42.json
     ${expected_log}    Get File    ${CURDIR}/super-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
