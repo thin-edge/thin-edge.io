@@ -255,13 +255,25 @@ impl LoggedCommand {
 }
 
 impl From<tokio::process::Command> for LoggedCommand {
-    fn from(command: Command) -> Self {
+    fn from(mut command: Command) -> Self {
+        command
+            .current_dir("/tmp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
         Self { command }
     }
 }
 
 impl From<std::process::Command> for LoggedCommand {
-    fn from(command: std::process::Command) -> Self {
+    fn from(mut command: std::process::Command) -> Self {
+        command
+            .current_dir("/tmp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
         Self {
             command: tokio::process::Command::from(command),
         }
