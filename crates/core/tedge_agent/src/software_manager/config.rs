@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_config::{SudoCommandBuilder, TEdgeConfigLocation};
+use tedge_config::SudoCommandBuilder;
+use tedge_config::TEdgeConfigLocation;
 #[derive(Debug, Clone)]
 pub struct SoftwareManagerConfig {
     pub device: EntityTopicId,
