@@ -338,13 +338,17 @@ impl TedgeOperationConverterActor {
                         let sub_cmd_output = output_excerpt.extract_value_from(&sub_state);
                         let new_state = state
                             .update_with_json(sub_cmd_output)
+                            .clear_sub_command()
                             .update(handlers.on_success);
                         self.publish_command_state(new_state).await?;
                         self.mqtt_publisher.send(sub_state.clear_message()).await?;
                     } else if sub_state.is_failed() {
-                        let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
-                            GenericStateUpdate::failed("sub-command failed".to_string())
-                        }));
+                        let new_state =
+                            state
+                                .clear_sub_command()
+                                .update(handlers.on_error.unwrap_or_else(|| {
+                                    GenericStateUpdate::failed("sub-command failed".to_string())
+                                }));
                         self.publish_command_state(new_state).await?;
                         self.mqtt_publisher.send(sub_state.clear_message()).await?;
                     } else {

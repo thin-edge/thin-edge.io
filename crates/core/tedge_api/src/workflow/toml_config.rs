@@ -116,7 +116,7 @@ impl TryFrom<TomlOperationState> for OperationAction {
             }
             TomlOperationAction::Command(operation) => {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
-                let cmd_input = input.input.into();
+                let cmd_input = input.input.try_into()?;
                 Ok(OperationAction::Command(operation, cmd_input, handlers))
             }
             TomlOperationAction::Action(command) => match command.as_str() {
@@ -160,7 +160,7 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 }
                 "await-command-completion" => {
                     let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
-                    let cmd_output = input.output.into();
+                    let cmd_output = input.output.try_into()?;
                     Ok(OperationAction::AwaitCommandCompletion(
                         handlers, cmd_output,
                     ))

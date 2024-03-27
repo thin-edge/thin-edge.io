@@ -5,6 +5,7 @@ use crate::mqtt_topics::OperationType;
 use crate::workflow::CommandId;
 use crate::workflow::ExitHandlers;
 use crate::workflow::OperationName;
+use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
 use mqtt_channel::Message;
 use mqtt_channel::QoS::AtLeastOnce;
@@ -177,6 +178,14 @@ impl GenericCommandState {
     /// Return the sub command, if any
     pub fn sub_command(&self) -> Option<String> {
         GenericCommandState::extract_text_property(&self.payload, SUB_COMMAND)
+    }
+
+    /// Clear the sub command, if any
+    pub fn clear_sub_command(mut self) -> Self {
+        if let Some(payload) = self.payload.as_object_mut() {
+            payload.remove(SUB_COMMAND);
+        };
+        self
     }
 
     /// Extract a text property from a Json object
@@ -414,11 +423,29 @@ impl StateExcerpt {
     }
 }
 
-impl From<Option<Value>> for StateExcerpt {
-    fn from(value: Option<Value>) -> Self {
+impl TryFrom<Option<Value>> for StateExcerpt {
+    type Error = StateExcerptError;
+
+    fn try_from(value: Option<Value>) -> Result<Self, Self::Error> {
         match value {
-            None => StateExcerpt::ExcerptMap(HashMap::new()), // A mapping that change nothing
-            Some(value) => value.into(),
+            None | Some(Value::Null) => {
+                // A mapping that change nothing
+                Ok(StateExcerpt::ExcerptMap(HashMap::new()))
+            }
+            Some(value) if value.is_object() => Ok(value.into()),
+            Some(value) => {
+                let kind = match &value {
+                    Value::Bool(_) => "bool",
+                    Value::Number(_) => "number",
+                    Value::String(_) => "string",
+                    Value::Array(_) => "array",
+                    _ => unreachable!(),
+                };
+                Err(StateExcerptError::NotAnObject {
+                    kind: kind.to_string(),
+                    value,
+                })
+            }
         }
     }
 }
