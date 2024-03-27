@@ -126,6 +126,7 @@ impl WorkflowSupervisor {
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
+    /// Return the current state of a command (identified by its topic)
     pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
         self.commands.get_state(command).map(|(_, state)| state)
     }
@@ -150,18 +151,8 @@ impl WorkflowSupervisor {
     }
 
     /// Return the chain of command / sub-command invocation leading to the given leaf command
-    pub fn command_invocation_chain(
-        &self,
-        leaf_command: &TopicName,
-    ) -> Vec<(OperationName, CommandId)> {
-        self.commands
-            .command_invocation_chain(leaf_command)
-            .into_iter()
-            .filter_map(|topic| {
-                command_identifier(&topic)
-                    .map(|(operation, cmd_id)| (operation.to_string(), cmd_id.to_string()))
-            })
-            .collect()
+    pub fn command_invocation_chain(&self, leaf_command: &TopicName) -> Vec<TopicName> {
+        self.commands.command_invocation_chain(leaf_command)
     }
 
     /// Update the state of the command board on reception of new state for a command

@@ -23,10 +23,14 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::extract_command_identifier;
 use tedge_api::workflow::CommandBoard;
+use tedge_api::workflow::CommandId;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
+use tedge_api::workflow::OperationName;
+use tedge_api::workflow::TopicName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::Jsonify;
@@ -129,7 +133,8 @@ impl TedgeOperationConverterActor {
             }
         };
 
-        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
+        let mut log_file = self.open_command_log(&message.topic.name, &operation, &cmd_id);
+
         match self.workflows.apply_external_update(&operation, &message) {
             Ok(None) => {
                 if message.payload_bytes().is_empty() {
@@ -169,7 +174,7 @@ impl TedgeOperationConverterActor {
                 return Ok(());
             }
         };
-        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
+        let mut log_file = self.open_command_log(&state.topic.name, &operation, &cmd_id);
 
         let action = match self.workflows.get_action(&state) {
             Ok(action) => action,
@@ -343,6 +348,31 @@ impl TedgeOperationConverterActor {
         }
     }
 
+    fn open_command_log(
+        &mut self,
+        command_topic: &TopicName,
+        operation: &OperationType,
+        cmd_id: &str,
+    ) -> CommandLog {
+        let (root_operation, root_cmd_id) = match self
+            .workflows
+            .command_invocation_chain(command_topic)
+            .pop()
+            .and_then(|topic| extract_command_identifier(&topic))
+        {
+            None => (None, None),
+            Some((op, id)) => (Some(op), Some(id)),
+        };
+
+        CommandLog::new(
+            self.log_dir.clone(),
+            operation.to_string(),
+            cmd_id.to_string(),
+            root_operation,
+            root_cmd_id,
+        )
+    }
+
     async fn process_internal_operation(
         &mut self,
         target: EntityTopicId,
@@ -461,31 +491,54 @@ impl TedgeOperationConverterActor {
     }
 }
 
+/// Log all command steps
 struct CommandLog {
+    /// Path to the command log file
     path: Utf8PathBuf,
+
+    /// operation name
+    operation: OperationName,
+
+    /// command id
+    cmd_id: CommandId,
+
+    /// The log file of the root command invoking this command
+    ///
+    /// None, if not open yet.
     file: Option<File>,
 }
 
 impl CommandLog {
-    pub async fn new(log_dir: Utf8PathBuf, operation: &OperationType, cmd_id: &str) -> Self {
-        let path = log_dir
-            .clone()
-            .join(format!("workflow-{}-{}.log", operation, cmd_id));
-        match File::options()
-            .append(true)
-            .create(true)
-            .open(path.clone())
-            .await
-        {
-            Ok(file) => CommandLog {
-                path,
-                file: Some(file),
-            },
-            Err(err) => {
-                error!("Fail to open log file {path}: {err}");
-                CommandLog { path, file: None }
-            }
+    pub fn new(
+        log_dir: Utf8PathBuf,
+        operation: OperationName,
+        cmd_id: CommandId,
+        root_operation: Option<OperationName>,
+        root_cmd_id: Option<CommandId>,
+    ) -> Self {
+        let root_operation = root_operation.unwrap_or(operation.clone());
+        let root_cmd_id = root_cmd_id.unwrap_or(cmd_id.clone());
+
+        let path = log_dir.join(format!("workflow-{}-{}.log", root_operation, root_cmd_id));
+        CommandLog {
+            path,
+            operation,
+            cmd_id,
+            file: None,
         }
+    }
+
+    async fn open(&mut self) -> Result<&mut File, std::io::Error> {
+        if self.file.is_none() {
+            self.file = Some(
+                File::options()
+                    .append(true)
+                    .create(true)
+                    .open(self.path.clone())
+                    .await?,
+            );
+        }
+        Ok(self.file.as_mut().unwrap())
     }
 
     async fn log_state_action(&mut self, state: &GenericCommandState, action: &OperationAction) {
@@ -504,9 +557,11 @@ Action: {action}
         let now = OffsetDateTime::now_utc()
             .format(&format_description::well_known::Rfc3339)
             .unwrap();
+        let operation = &self.operation;
+        let cmd_id = &self.cmd_id;
         let message = format!(
             r#"------------------------------------
-{step}: {now}
+{operation}/{cmd_id}/{step}: {now}
 {action}
 
 "#
@@ -526,19 +581,17 @@ Action: {action}
         &mut self,
         result: &Result<Output, std::io::Error>,
     ) -> Result<(), std::io::Error> {
-        if let Some(file) = self.file.as_mut() {
-            logged_command::LoggedCommand::log_outcome("", result, file).await?;
-            file.sync_all().await?;
-        }
+        let file = self.open().await?;
+        logged_command::LoggedCommand::log_outcome("", result, file).await?;
+        file.sync_all().await?;
         Ok(())
     }
 
     async fn write(&mut self, message: &str) -> Result<(), std::io::Error> {
-        if let Some(file) = self.file.as_mut() {
-            file.write_all(message.as_bytes()).await?;
-            file.flush().await?;
-            file.sync_all().await?;
-        }
+        let file = self.open().await?;
+        file.write_all(message.as_bytes()).await?;
+        file.flush().await?;
+        file.sync_all().await?;
         Ok(())
     }
 }

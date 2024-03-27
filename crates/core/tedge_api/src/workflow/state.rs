@@ -243,17 +243,11 @@ impl GenericCommandState {
     }
 
     pub fn operation(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
-            _ => None,
-        }
+        extract_command_identifier(&self.topic.name).map(|(operation, _)| operation)
     }
 
     pub fn cmd_id(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
-            _ => None,
-        }
+        extract_command_identifier(&self.topic.name).map(|(_, cmd_id)| cmd_id)
     }
 
     pub fn is_successful(&self) -> bool {
@@ -293,9 +287,11 @@ fn extract_invoking_command_id(sub_cmd_id: &str) -> Option<(&str, &str)> {
     }
 }
 
-pub fn command_identifier(topic: &str) -> Option<(&str, &str)> {
+pub fn extract_command_identifier(topic: &str) -> Option<(String, String)> {
     match topic.split('/').collect::<Vec<&str>>()[..] {
-        [_, _, _, _, _, "cmd", operation, cmd_id] => Some((operation, cmd_id)),
+        [_, _, _, _, _, "cmd", operation, cmd_id] => {
+            Some((operation.to_string(), cmd_id.to_string()))
+        }
         _ => None,
     }
 }
