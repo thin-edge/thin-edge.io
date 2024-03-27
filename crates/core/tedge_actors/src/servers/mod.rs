@@ -98,15 +98,10 @@ pub use builders::*;
 pub use message_boxes::*;
 use std::fmt::Debug;
 
-use crate::Builder;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageSink;
-use crate::MessageSource;
-use crate::NoConfig;
 use crate::Sender;
-use crate::SimpleMessageBox;
-use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 
 /// Define how a server process a request
@@ -159,7 +154,7 @@ pub trait Service<Request: Message, Response: Message>:
 
     #[cfg(feature = "test-helpers")]
     /// Create a simple message box connected to a server box under construction.
-    fn new_client_box(&mut self) -> SimpleMessageBox<Response, Request>;
+    fn new_client_box(&mut self) -> crate::SimpleMessageBox<Response, Request>;
 }
 
 impl<T, Request: Message, Response: Message> Service<Request, Response> for T
@@ -175,7 +170,12 @@ where
     }
 
     #[cfg(feature = "test-helpers")]
-    fn new_client_box(&mut self) -> SimpleMessageBox<Response, Request> {
+    fn new_client_box(&mut self) -> crate::SimpleMessageBox<Response, Request> {
+        use crate::Builder;
+        use crate::MessageSource;
+        use crate::NoConfig;
+        use crate::SimpleMessageBoxBuilder;
+
         let name = "client-box";
         let capacity = 16;
         let mut client_box = SimpleMessageBoxBuilder::new(name, capacity);
