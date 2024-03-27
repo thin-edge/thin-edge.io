@@ -392,11 +392,11 @@ impl ConfigManagerActor {
                 tedge_utils::fs::atomically_write_file_sync(&to, src_file)?;
             }
 
-            TedgeWriteStatus::Enabled { ref sudo } => {
+            TedgeWriteStatus::Enabled { sudo } => {
                 let options = CopyOptions {
                     from,
                     to: to.as_path(),
-                    sudo: sudo.clone(),
+                    sudo,
                     mode,
                     user,
                     group,

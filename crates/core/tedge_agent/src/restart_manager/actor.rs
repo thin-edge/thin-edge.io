@@ -248,6 +248,7 @@ impl RestartManagerActor {
 
         let mut reboot_command: Command = self.config.sudo.command(reboot_command).into();
         reboot_command.args(reboot_args);
+        restart_commands.push(reboot_command);
 
         Ok(restart_commands)
     }
