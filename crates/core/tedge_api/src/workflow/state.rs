@@ -263,17 +263,11 @@ impl GenericCommandState {
     }
 
     pub fn operation(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
-            _ => None,
-        }
+        command_identifier(&self.topic.name).map(|(operation, _)| operation.to_string())
     }
 
     pub fn cmd_id(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
-            _ => None,
-        }
+        command_identifier(&self.topic.name).map(|(_, cmd_id)| cmd_id.to_string())
     }
 
     pub fn is_successful(&self) -> bool {
@@ -282,6 +276,13 @@ impl GenericCommandState {
 
     pub fn is_failed(&self) -> bool {
         matches!(self.status.as_str(), FAILED)
+    }
+}
+
+pub fn command_identifier(topic: &str) -> Option<(&str, &str)> {
+    match topic.split('/').collect::<Vec<&str>>()[..] {
+        [_, _, _, _, _, "cmd", operation, cmd_id] => Some((operation, cmd_id)),
+        _ => None,
     }
 }
 

@@ -132,7 +132,10 @@ impl TedgeOperationConverterActor {
             }
         };
 
-        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
+        let mut log_file = self
+            .open_command_log(&message.topic.name, &operation, &cmd_id)
+            .await;
+
         match self.workflows.apply_external_update(&operation, &message) {
             Ok(None) => {
                 if message.payload_bytes().is_empty() {
@@ -172,7 +175,9 @@ impl TedgeOperationConverterActor {
                 return Ok(());
             }
         };
-        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
+        let mut log_file = self
+            .open_command_log(&state.topic.name, &operation, &cmd_id)
+            .await;
 
         let action = match self.workflows.get_action(&state) {
             Ok(action) => action,
@@ -362,6 +367,25 @@ impl TedgeOperationConverterActor {
         }
     }
 
+    async fn open_command_log(
+        &mut self,
+        command_topic: &str,
+        operation: &OperationType,
+        cmd_id: &str,
+    ) -> CommandLog {
+        let mut log_file = CommandLog::new(self.log_dir.clone(), operation, cmd_id).await;
+
+        for (invoking_operation, invoking_cmd_id) in
+            self.workflows.command_invocation_chain(command_topic)
+        {
+            log_file
+                .add_invocation_context(&invoking_operation, &invoking_cmd_id)
+                .await;
+        }
+
+        log_file
+    }
+
     async fn process_internal_operation(
         &mut self,
         target: EntityTopicId,
@@ -480,15 +504,37 @@ impl TedgeOperationConverterActor {
     }
 }
 
+/// Log all command steps
 struct CommandLog {
-    path: Utf8PathBuf,
-    file: Option<File>,
+    /// Path to the command log directory
+    log_dir: Utf8PathBuf,
+
+    /// operation name
+    operation: String,
+
+    /// command id
+    cmd_id: String,
+
+    /// The log file of the command as well as the log files for the invoking commands (if any)
+    files: Vec<File>,
 }
 
 impl CommandLog {
     pub async fn new(log_dir: Utf8PathBuf, operation: &OperationType, cmd_id: &str) -> Self {
-        let path = log_dir
-            .clone()
+        let mut log = CommandLog {
+            log_dir,
+            operation: operation.to_string(),
+            cmd_id: cmd_id.to_string(),
+            files: vec![],
+        };
+        log.add_invocation_context(&operation.to_string(), cmd_id)
+            .await;
+        log
+    }
+
+    pub async fn add_invocation_context(&mut self, operation: &str, cmd_id: &str) {
+        let path = self
+            .log_dir
             .join(format!("workflow-{}-{}.log", operation, cmd_id));
         match File::options()
             .append(true)
@@ -496,15 +542,15 @@ impl CommandLog {
             .open(path.clone())
             .await
         {
-            Ok(file) => CommandLog {
-                path,
-                file: Some(file),
-            },
-            Err(err) => {
-                error!("Fail to open log file {path}: {err}");
-                CommandLog { path, file: None }
-            }
+            Ok(file) => self.files.push(file),
+            Err(err) => error!("Fail to open log file {path}: {err}"),
         }
+    }
+
+    fn path(&self) -> Utf8PathBuf {
+        self.log_dir
+            .clone()
+            .join(format!("workflow-{}-{}.log", &self.operation, &self.cmd_id))
     }
 
     async fn log_state_action(&mut self, state: &GenericCommandState, action: &OperationAction) {
@@ -523,21 +569,23 @@ Action: {action}
         let now = OffsetDateTime::now_utc()
             .format(&format_description::well_known::Rfc3339)
             .unwrap();
+        let operation = &self.operation;
+        let cmd_id = &self.cmd_id;
         let message = format!(
             r#"------------------------------------
-{step}: {now}
+{operation}/{cmd_id}/{step}: {now}
 {action}
 
 "#
         );
         if let Err(err) = self.write(&message).await {
-            error!("Fail to log to {}: {err}", self.path)
+            error!("Fail to log to {}: {err}", self.path())
         }
     }
 
     async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
         if let Err(err) = self.write_script_output(result).await {
-            error!("Fail to log to {}: {err}", self.path)
+            error!("Fail to log to {}: {err}", self.path())
         }
     }
 
@@ -545,7 +593,7 @@ Action: {action}
         &mut self,
         result: &Result<Output, std::io::Error>,
     ) -> Result<(), std::io::Error> {
-        if let Some(file) = self.file.as_mut() {
+        for file in self.files.iter_mut() {
             logged_command::LoggedCommand::log_outcome("", result, file).await?;
             file.sync_all().await?;
         }
@@ -553,7 +601,7 @@ Action: {action}
     }
 
     async fn write(&mut self, message: &str) -> Result<(), std::io::Error> {
-        if let Some(file) = self.file.as_mut() {
+        for file in self.files.iter_mut() {
             file.write_all(message.as_bytes()).await?;
             file.flush().await?;
             file.sync_all().await?;

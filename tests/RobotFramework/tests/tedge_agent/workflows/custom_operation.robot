@@ -79,6 +79,15 @@ Invoke sub-command from a super-command operation
     ${actual_log}      Execute Command    cat /tmp/test-42.json
     ${expected_log}    Get File    ${CURDIR}/super-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
+    # Remove all dates from the workflow log
+    ${workflow_log}=  Execute Command    sed -e 's/....-..-..T..:..:............Z//g' /var/log/tedge/agent/workflow-super_command-test-42.log
+    Should Contain    ${workflow_log}    super_command/test-42/init:
+    Should Contain    ${workflow_log}    super_command/test-42/executing:
+    Should Contain    ${workflow_log}    super_command/test-42/awaiting_completion:
+    Should Contain    ${workflow_log}    sub_command/agent-/init:                      msg=main command log should contain sub command steps
+    Should Contain    ${workflow_log}    sub_command/agent-/executing:                 msg=main command log should contain sub command steps
+    Should Contain    ${workflow_log}    sub_command/agent-/successful:                msg=main command log should contain sub command steps
+    Should Contain    ${workflow_log}    super_command/test-42/successful:
 
 *** Keywords ***
 
