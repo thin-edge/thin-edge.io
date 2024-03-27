@@ -81,7 +81,7 @@ impl GenericCommandState {
             .ok_or(WorkflowExecutionError::MissingStatus)?;
         Ok(Some(GenericCommandState {
             topic,
-            status,
+            status: status.to_string(),
             payload: json,
         }))
     }
@@ -124,7 +124,10 @@ impl GenericCommandState {
         }
         match GenericCommandState::extract_text_property(&self.payload, STATUS) {
             None => self.fail_with("Unknown status".to_string()),
-            Some(status) => GenericCommandState { status, ..self },
+            Some(status) => GenericCommandState {
+                status: status.to_string(),
+                ..self
+            },
         }
     }
 
@@ -159,16 +162,15 @@ impl GenericCommandState {
     }
 
     /// Return the error reason if any
-    pub fn failure_reason(&self) -> Option<String> {
+    pub fn failure_reason(&self) -> Option<&str> {
         GenericCommandState::extract_text_property(&self.payload, REASON)
     }
 
     /// Extract a text property from a Json object
-    fn extract_text_property(json: &Value, property: &str) -> Option<String> {
+    fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
         json.as_object()
             .and_then(|o| o.get(property))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
     }
 
     /// Inject a text property into a Json object

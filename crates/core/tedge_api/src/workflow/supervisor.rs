@@ -126,7 +126,7 @@ impl WorkflowSupervisor {
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
-    pub fn get_state(&self, command: &TopicName) -> Option<&GenericCommandState> {
+    pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
         self.commands.get_state(command).map(|(_, state)| state)
     }
 
@@ -218,7 +218,7 @@ impl CommandBoard {
         CommandBoard { commands }
     }
 
-    pub fn get_state(&self, command: &TopicName) -> Option<&(Timestamp, GenericCommandState)> {
+    pub fn get_state(&self, command: &str) -> Option<&(Timestamp, GenericCommandState)> {
         self.commands.get(command)
     }
 
