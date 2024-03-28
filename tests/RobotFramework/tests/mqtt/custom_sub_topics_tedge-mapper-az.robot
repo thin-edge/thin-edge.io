@@ -18,7 +18,7 @@ Publish events to subscribed topic
 Publish measurements to unsubscribed topic
     Execute Command    tedge mqtt pub te/device/main///m/ '{"temperature": 10}'
     Sleep    5s    reason=If a message is not published in 5s, it will never be published.
-    Should Have MQTT Messages    az/messages/events/#   minimum=0    maximum=0
+    Should Have MQTT Messages    az/messages/events/#   minimum=0    maximum=0    message_contains=temperature
 
 
 *** Keywords ***
