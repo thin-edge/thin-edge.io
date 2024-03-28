@@ -341,6 +341,10 @@ impl CumulocityConverter {
                 let ancestors_external_ids =
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
 
+                if entity_topic_id.is_bridge_health_topic() {
+                    return Ok(vec![]);
+                }
+
                 let service_creation_message = service_creation_message(
                     external_id.as_ref(),
                     display_name.unwrap_or_else(|| {
