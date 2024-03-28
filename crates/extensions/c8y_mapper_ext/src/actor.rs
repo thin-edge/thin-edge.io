@@ -77,10 +77,12 @@ impl Actor for C8yMapperActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        // Wait till the c8y bridge is established
-        while let Some(message) = self.bridge_status_messages.recv().await {
-            if is_c8y_bridge_established(&message, &self.c8y_bridge_service_name) {
-                break;
+        if !self.converter.config.bridge_in_mapper {
+            // Wait till the c8y bridge is established
+            while let Some(message) = self.bridge_status_messages.recv().await {
+                if is_c8y_bridge_established(&message, &self.c8y_bridge_service_name) {
+                    break;
+                }
             }
         }
 

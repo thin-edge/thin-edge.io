@@ -4,16 +4,6 @@ pub mod bridge {
     use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
     use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
 
-    pub fn is_c8y_bridge_up(message: &Message, service: &str) -> bool {
-        let c8y_bridge_health_topic = main_device_health_topic(service);
-        match message.payload_str() {
-            Ok(payload) => {
-                message.topic.name == c8y_bridge_health_topic && payload == MQTT_BRIDGE_UP_PAYLOAD
-            }
-            Err(_err) => false,
-        }
-    }
-
     pub fn is_c8y_bridge_established(message: &Message, service: &str) -> bool {
         let c8y_bridge_health_topic = main_device_health_topic(service);
         match message.payload_str() {
@@ -46,22 +36,9 @@ mod tests {
     use test_case::test_case;
 
     use crate::utils::bridge::is_c8y_bridge_established;
-    use crate::utils::bridge::is_c8y_bridge_up;
 
     const C8Y_BRIDGE_HEALTH_TOPIC: &str =
         "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
-
-    #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "1", true)]
-    #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "0", false)]
-    #[test_case("tedge/not/health/topic", "1", false)]
-    #[test_case("tedge/not/health/topic", "0", false)]
-    fn test_bridge_is_up(topic: &str, payload: &str, expected: bool) {
-        let topic = Topic::new(topic).unwrap();
-        let message = Message::new(&topic, payload);
-
-        let actual = is_c8y_bridge_up(&message, "tedge-mapper-bridge-c8y");
-        assert_eq!(actual, expected);
-    }
 
     #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "1", true)]
     #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "0", true)]
