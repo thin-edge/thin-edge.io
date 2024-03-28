@@ -1,7 +1,8 @@
 use std::fs;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use assert_cmd::Command;
 use tedge_config::SudoCommandBuilder;

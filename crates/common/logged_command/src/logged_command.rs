@@ -174,6 +174,7 @@ impl LoggedCommand {
         };
 
         command
+            // TODO: should use tmp from config
             .current_dir("/tmp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -257,6 +258,7 @@ impl LoggedCommand {
 impl From<tokio::process::Command> for LoggedCommand {
     fn from(mut command: Command) -> Self {
         command
+            // TODO: should use tmp from config
             .current_dir("/tmp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -269,6 +271,7 @@ impl From<tokio::process::Command> for LoggedCommand {
 impl From<std::process::Command> for LoggedCommand {
     fn from(mut command: std::process::Command) -> Self {
         command
+            // TODO: should use tmp from config
             .current_dir("/tmp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
