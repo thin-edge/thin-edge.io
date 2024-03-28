@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
 use std::process::Command;
+use tedge_config::SudoCommandBuilder;
 
 /// Additional flags passed to `tedge-write` process
 #[derive(Debug, PartialEq)]
@@ -12,8 +13,8 @@ pub struct CopyOptions<'a> {
     /// Destination path
     pub to: &'a Utf8Path,
 
-    /// If tedge-write will be used with sudo
-    pub sudo: bool,
+    /// User's sudo preference, received from TedgeConfig
+    pub sudo: SudoCommandBuilder,
 
     /// Permission mode for the file, in octal form.
     pub mode: Option<u32>,
@@ -45,15 +46,7 @@ impl<'a> CopyOptions<'a> {
     }
 
     pub fn command(&self) -> std::io::Result<Command> {
-        let is_sudo_installed = which::which_global("sudo").is_ok();
-
-        let mut command = if is_sudo_installed && self.sudo {
-            let mut command = Command::new("sudo");
-            command.arg(crate::TEDGE_WRITE_PATH);
-            command
-        } else {
-            Command::new(crate::TEDGE_WRITE_PATH)
-        };
+        let mut command = self.sudo.command(crate::TEDGE_WRITE_PATH);
 
         let from_reader = std::fs::File::open(self.from)?;
         command.stdin(from_reader).arg(self.to);

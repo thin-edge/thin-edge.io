@@ -9,10 +9,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use tedge_api::*;
+use tedge_config::SudoCommandBuilder;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tracing::error;
+
 #[async_trait]
 pub trait Plugin {
     async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
@@ -235,7 +237,7 @@ struct ModuleInfo {
 pub struct ExternalPluginCommand {
     pub name: SoftwareType,
     pub path: PathBuf,
-    pub sudo: Option<PathBuf>,
+    pub sudo: SudoCommandBuilder,
     pub max_packages: u32,
     identity: Option<Identity>,
 }
@@ -244,7 +246,7 @@ impl ExternalPluginCommand {
     pub fn new(
         name: impl Into<SoftwareType>,
         path: impl Into<PathBuf>,
-        sudo: Option<PathBuf>,
+        sudo: SudoCommandBuilder,
         max_packages: u32,
         identity: Option<Identity>,
     ) -> ExternalPluginCommand {
@@ -262,17 +264,10 @@ impl ExternalPluginCommand {
         action: &str,
         maybe_module: Option<&SoftwareModule>,
     ) -> Result<LoggedCommand, SoftwareError> {
-        let mut command = if let Some(sudo) = &self.sudo {
-            // Safe unwrap
-            let mut command = LoggedCommand::new(sudo).unwrap();
-            command.arg(&self.path);
-            command
-        } else {
-            LoggedCommand::new(&self.path).map_err(|err| SoftwareError::ParseError {
-                reason: err.to_string(),
-            })?
-        };
+        let mut command = self.sudo.command(&self.path);
         command.arg(action);
+
+        let mut command = LoggedCommand::from(command);
 
         if let Some(module) = maybe_module {
             self.check_module_type(module)?;

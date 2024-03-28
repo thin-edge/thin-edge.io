@@ -21,14 +21,9 @@ use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::error;
 use tracing::info;
-use which::which;
+use tracing::warn;
 
 const SYNC: &str = "sync";
-
-#[cfg(not(test))]
-const SUDO: &str = "sudo";
-#[cfg(test)]
-const SUDO: &str = "echo";
 
 pub struct RestartManagerActor {
     config: RestartManagerConfig,
@@ -195,9 +190,10 @@ impl RestartManagerActor {
         let commands = self.get_restart_operation_commands()?;
         let mut not_interrupted = true;
         for mut command in commands {
-            if let Some(cmd) = command.as_std().get_program().to_str() {
-                info!("Restarting: {cmd}");
-            }
+            let cmd = command.as_std().get_program().to_string_lossy();
+            let args = command.as_std().get_args();
+            info!("Restarting: {cmd} {args:?}");
+
             match command.status().await {
                 Ok(status) => {
                     if status.code().is_none() {
@@ -238,36 +234,24 @@ impl RestartManagerActor {
     }
 
     fn get_restart_operation_commands(&self) -> Result<Vec<Command>, RestartManagerError> {
-        let mut vec = vec![];
+        let mut restart_commands = vec![];
 
         // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
         let system_config = SystemConfig::try_new(&self.config.config_dir)?;
 
-        // Check if sudo command is available
-        match which(SUDO) {
-            Ok(sudo) => {
-                let mut sync_command = Command::new(&sudo);
-                sync_command.arg(SYNC);
-                vec.push(sync_command);
+        let sync_command = self.config.sudo.command(SYNC).into();
+        restart_commands.push(sync_command);
 
-                let mut command = Command::new(sudo);
-                command.args(system_config.system.reboot);
-                vec.push(command);
-            }
-            Err(_) => {
-                let sync_command = Command::new(SYNC);
-                vec.push(sync_command);
+        let Some((reboot_command, reboot_args)) = system_config.system.reboot.split_first() else {
+            warn!("`system.reboot` is empty");
+            return Ok(restart_commands);
+        };
 
-                let mut args = system_config.system.reboot.iter();
+        let mut reboot_command: Command = self.config.sudo.command(reboot_command).into();
+        reboot_command.args(reboot_args);
+        restart_commands.push(reboot_command);
 
-                let mut command =
-                    Command::new(args.next().map(|s| s.to_string()).unwrap_or_default());
-                command.args(args);
-                vec.push(command);
-            }
-        }
-
-        Ok(vec)
+        Ok(restart_commands)
     }
 
     fn get_restart_timeout(&self) -> Duration {

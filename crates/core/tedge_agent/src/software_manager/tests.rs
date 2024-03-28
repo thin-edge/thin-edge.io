@@ -23,6 +23,7 @@ use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::SudoCommandBuilder;
 use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
 
@@ -185,6 +186,7 @@ async fn spawn_software_manager(
         log_dir: tmp_dir.utf8_path_buf(),
         default_plugin_type: None,
         config_location: TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
+        sudo: SudoCommandBuilder::enabled(false),
     };
 
     let mut software_actor_builder = SoftwareManagerBuilder::new(config);

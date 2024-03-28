@@ -11,6 +11,7 @@ mod tests {
     use std::str::FromStr;
     use tedge_api::SoftwareError;
     use tedge_api::SoftwareModule;
+    use tedge_config::SudoCommandBuilder;
     use tedge_config::TEdgeConfigLocation;
     use test_case::test_case;
 
@@ -64,7 +65,7 @@ mod tests {
         let plugin = ExternalPluginCommand::new(
             "test",
             &dummy_plugin_path,
-            None,
+            SudoCommandBuilder::enabled(false),
             config.software.plugin.max_packages,
             config.http.client.auth.identity()?,
         );
@@ -79,7 +80,13 @@ mod tests {
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100, None);
+        let plugin = ExternalPluginCommand::new(
+            "test",
+            dummy_plugin_path,
+            SudoCommandBuilder::enabled(false),
+            100,
+            None,
+        );
 
         let module = SoftwareModule {
             module_type: Some("test".into()),
@@ -103,7 +110,13 @@ mod tests {
         let dummy_plugin_path = get_dummy_plugin_path();
 
         // Create new plugin in the registry with name `test`.
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100, None);
+        let plugin = ExternalPluginCommand::new(
+            "test",
+            dummy_plugin_path,
+            SudoCommandBuilder::enabled(false),
+            100,
+            None,
+        );
 
         // Create test module with name `test2`.
         let module = SoftwareModule {
@@ -133,7 +146,13 @@ mod tests {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100, None);
+        let plugin = ExternalPluginCommand::new(
+            "test",
+            dummy_plugin_path,
+            SudoCommandBuilder::enabled(false),
+            100,
+            None,
+        );
 
         // Create software module without an explicit type.
         let module = SoftwareModule {

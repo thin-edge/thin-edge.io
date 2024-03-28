@@ -17,6 +17,7 @@ use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::RestartCommand;
+use tedge_config::SudoCommandBuilder;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -116,6 +117,7 @@ async fn spawn_restart_manager(
         tmp_dir: tmp_dir.utf8_path_buf(),
         config_dir: tmp_dir.utf8_path_buf(),
         state_dir: "/some/unknown/dir".into(),
+        sudo: SudoCommandBuilder::enabled(true),
     };
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);

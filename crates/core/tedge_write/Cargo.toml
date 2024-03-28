@@ -17,6 +17,7 @@ camino.workspace = true
 clap.workspace = true
 nix.workspace = true
 path-clean.workspace = true
+tedge_config.workspace = true
 uzers.workspace = true
 which.workspace = true
 
