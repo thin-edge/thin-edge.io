@@ -9,10 +9,22 @@ pub mod bridge {
         match message.payload_str() {
             Ok(payload) => {
                 message.topic.name == c8y_bridge_health_topic
-                    && (payload == MQTT_BRIDGE_UP_PAYLOAD || payload == MQTT_BRIDGE_DOWN_PAYLOAD)
+                    && (payload == MQTT_BRIDGE_UP_PAYLOAD
+                        || payload == MQTT_BRIDGE_DOWN_PAYLOAD
+                        || is_valid_status_payload(payload))
             }
             Err(_err) => false,
         }
+    }
+
+    #[derive(serde::Deserialize)]
+    struct HealthStatus<'a> {
+        status: &'a str,
+    }
+
+    fn is_valid_status_payload(payload: &str) -> bool {
+        serde_json::from_str::<HealthStatus>(payload)
+            .map_or(false, |h| h.status == "up" || h.status == "down")
     }
 }
 
