@@ -17,9 +17,9 @@ pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::time::Duration;
 pub use supervisor::*;
 
+pub type OperationName = String;
 pub type StateName = String;
 pub type CommandId = String;
 
@@ -61,18 +61,19 @@ pub enum OperationAction {
     /// ```
     BuiltIn,
 
-    /// The command is delegated to a participant identified by its name
+    /// Await a restart
+    ///
+    /// In practice, this command simply waits till a timeout.
+    /// If the timeout triggers, this step fails.
+    /// If the agent stops before the timeout and finds on restart a persisted state of `await-agent-restart`,
+    /// then this step is successful.
     ///
     /// ```toml
-    /// awaiting = "agent-restart"
+    /// action = "await-agent-restart"
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    AwaitingAgentRestart {
-        on_success: GenericStateUpdate,
-        timeout: Duration,
-        on_timeout: GenericStateUpdate,
-    },
+    AwaitingAgentRestart(AwaitHandlers),
 
     /// Restart the device
     ///
@@ -100,6 +101,20 @@ pub enum OperationAction {
     /// ```
     BgScript(ShellScript, BgExitHandlers),
 
+    /// Trigger a command and move to the next state from where the outcome of the command will be awaited
+    Command(OperationName, StateExcerpt, BgExitHandlers),
+
+    /// Await the completion of a sub-command
+    ///
+    /// The sub-command is stored in the command state.
+    ///
+    /// ```toml
+    /// action = "await-command-completion"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    AwaitCommandCompletion(AwaitHandlers, StateExcerpt),
+
     /// The command has been fully processed and needs to be cleared
     Clear,
 }
@@ -109,10 +124,14 @@ impl Display for OperationAction {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn => "builtin".to_string(),
-            OperationAction::AwaitingAgentRestart { .. } => "awaiting agent restart".to_string(),
+            OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
+            OperationAction::Command(operation, _, _) => format!("execute {operation} sub-command"),
+            OperationAction::AwaitCommandCompletion { .. } => {
+                "await sub-command completion".to_string()
+            }
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
         };
         f.write_str(&str)
@@ -248,6 +267,9 @@ impl OperationAction {
         match self {
             OperationAction::Script(script, handlers) => {
                 OperationAction::Script(script, handlers.with_default(default))
+            }
+            OperationAction::AwaitingAgentRestart(handlers) => {
+                OperationAction::AwaitingAgentRestart(handlers.with_default(default))
             }
             action => action,
         }

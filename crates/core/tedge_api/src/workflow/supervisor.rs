@@ -94,7 +94,7 @@ impl WorkflowSupervisor {
             Some(_) => {
                 // Ignore command updates published over MQTT
                 //
-                // TODO: There is exception here - not implemented yet:
+                // TODO: There is one exception here - not implemented yet:
                 //       when a step is delegated to an external process,
                 //       this process will notify the outcome of its action over MQTT,
                 //       and the agent will have then to react on this message.
@@ -122,6 +122,30 @@ impl WorkflowSupervisor {
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
+    /// Return the current state of a command (identified by its topic)
+    pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
+        self.commands.get_state(command).map(|(_, state)| state)
+    }
+
+    /// Return the chain of command / sub-command invocation leading to the given leaf command
+    pub fn command_invocation_chain(&self, leaf_command: &str) -> Vec<(OperationName, CommandId)> {
+        let mut invoking_commands = vec![];
+        let mut command = leaf_command;
+        while let Some(state) = self.get_state(command) {
+            match state.invoking_command() {
+                None => break,
+                Some(invoking_command) => match command_identifier(invoking_command) {
+                    None => break,
+                    Some((operation, cmd_id)) => {
+                        invoking_commands.push((operation.to_string(), cmd_id.to_string()));
+                        command = invoking_command;
+                    }
+                },
+            }
+        }
+        invoking_commands
+    }
+
     /// Update the state of the command board on reception of new state for a command
     ///
     /// Return the next CommandRequest state if any is required.
@@ -143,8 +167,8 @@ impl WorkflowSupervisor {
         };
 
         match action {
-            OperationAction::AwaitingAgentRestart { on_success, .. } => {
-                Some(command.clone().update(on_success))
+            OperationAction::AwaitingAgentRestart(handlers) => {
+                Some(command.clone().update(handlers.on_success))
             }
 
             _ => {
@@ -174,6 +198,10 @@ pub type Timestamp = time::OffsetDateTime;
 impl CommandBoard {
     pub fn new(commands: HashMap<TopicName, (Timestamp, GenericCommandState)>) -> Self {
         CommandBoard { commands }
+    }
+
+    pub fn get_state(&self, command: &str) -> Option<&(Timestamp, GenericCommandState)> {
+        self.commands.get(command)
     }
 
     /// Iterate over the pending commands
