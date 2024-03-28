@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::convert::TryInto;
+use std::fmt::Display;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Port(pub u16);
@@ -22,11 +22,9 @@ impl TryFrom<String> for Port {
     }
 }
 
-impl TryInto<String> for Port {
-    type Error = std::convert::Infallible;
-
-    fn try_into(self) -> Result<String, Self::Error> {
-        Ok(format!("{}", self.0))
+impl Display for Port {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -53,5 +51,5 @@ fn conversion_from_longer_integer_fails() {
 
 #[test]
 fn conversion_from_port_to_string() {
-    assert_matches!(TryInto::<String>::try_into(Port(1234)), Ok(port_str) if port_str == "1234");
+    assert_eq!(Port(1234).to_string(), "1234");
 }

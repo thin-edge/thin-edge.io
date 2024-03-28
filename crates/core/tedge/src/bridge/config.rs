@@ -1,7 +1,8 @@
 use camino::Utf8PathBuf;
+use tedge_config::HostPort;
 use tedge_config::TEdgeConfigLocation;
+use tedge_config::MQTT_TLS_PORT;
 use tedge_utils::paths::DraftFile;
-use url::Url;
 
 use crate::ConnectError;
 
@@ -13,7 +14,7 @@ pub struct BridgeConfig {
     // XXX: having file name squished together with 20 fields which go into file content is a bit obscure
     pub config_file: String,
     pub connection: String,
-    pub address: String,
+    pub address: HostPort<MQTT_TLS_PORT>,
     pub remote_username: Option<String>,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub remote_clientid: String,
@@ -91,10 +92,6 @@ impl BridgeConfig {
     }
 
     pub fn validate(&self) -> Result<(), ConnectError> {
-        // XXX: This is actually wrong. Our address looks like this: `domain:port`
-        // `Url::parse` will treat `domain` as `schema` ...
-        Url::parse(&self.address)?;
-
         if !self.bridge_root_cert_path.exists() {
             return Err(ConnectError::Certificate);
         }
@@ -141,6 +138,8 @@ impl BridgeConfig {
 #[cfg(test)]
 mod test {
 
+    use std::str::FromStr;
+
     use super::*;
     use camino::Utf8Path;
     use camino::Utf8PathBuf;
@@ -154,7 +153,7 @@ mod test {
             cloud_name: "test".into(),
             config_file: "test-bridge.conf".into(),
             connection: "edge_to_test".into(),
-            address: "test.test.io:8883".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
@@ -220,7 +219,7 @@ bridge_attempt_unsubscribe false
             cloud_name: "test".into(),
             config_file: "test-bridge.conf".into(),
             connection: "edge_to_test".into(),
-            address: "test.test.io:8883".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
@@ -285,7 +284,7 @@ bridge_attempt_unsubscribe false
             cloud_name: "az".into(),
             config_file: "az-bridge.conf".into(),
             connection: "edge_to_az".into(),
-            address: "test.test.io:8883".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
@@ -355,10 +354,8 @@ bridge_attempt_unsubscribe false
         let key_file = tempfile::NamedTempFile::new()?;
         let bridge_keyfile = Utf8Path::from_path(key_file.path()).unwrap().to_owned();
 
-        let correct_url = "http://test.com";
-
         let config = BridgeConfig {
-            address: correct_url.into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883".to_string())?,
             bridge_root_cert_path: bridge_ca_path.to_owned(),
             bridge_certfile,
             bridge_keyfile,
@@ -370,30 +367,12 @@ bridge_attempt_unsubscribe false
         Ok(())
     }
 
-    // XXX: This test is flawed as it is not clear what it tests.
-    // It can fail due to either `incorrect_url` OR `non_existent_path`.
-    #[test]
-    fn test_validate_wrong_url() {
-        let incorrect_url = "noturl";
-        let non_existent_path = Utf8PathBuf::from("/path/that/does/not/exist");
-
-        let config = BridgeConfig {
-            address: incorrect_url.into(),
-            bridge_certfile: non_existent_path.clone(),
-            bridge_keyfile: non_existent_path,
-            ..default_bridge_config()
-        };
-
-        assert!(config.validate().is_err());
-    }
-
     #[test]
     fn test_validate_wrong_cert_path() {
-        let correct_url = "http://test.com";
         let non_existent_path = Utf8PathBuf::from("/path/that/does/not/exist");
 
         let config = BridgeConfig {
-            address: correct_url.into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.com").unwrap(),
             bridge_certfile: non_existent_path.clone(),
             bridge_keyfile: non_existent_path,
             ..default_bridge_config()
@@ -406,11 +385,10 @@ bridge_attempt_unsubscribe false
     fn test_validate_wrong_key_path() -> anyhow::Result<()> {
         let cert_file = tempfile::NamedTempFile::new()?;
         let bridge_certfile = Utf8Path::from_path(cert_file.path()).unwrap().to_owned();
-        let correct_url = "http://test.com";
         let non_existent_path = "/path/that/does/not/exist";
 
         let config = BridgeConfig {
-            address: correct_url.into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.com".to_string())?,
             bridge_certfile,
             bridge_keyfile: non_existent_path.into(),
             ..default_bridge_config()
@@ -426,7 +404,7 @@ bridge_attempt_unsubscribe false
             cloud_name: "az/c8y".into(),
             config_file: "cfg".to_string(),
             connection: "edge_to_az/c8y".into(),
-            address: "".into(),
+            address: HostPort::<MQTT_TLS_PORT>::from_str("test.com").unwrap(),
             remote_username: None,
             bridge_root_cert_path: "".into(),
             bridge_certfile: "".into(),

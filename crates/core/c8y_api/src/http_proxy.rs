@@ -101,12 +101,19 @@ impl C8yEndPoint {
         // * <tenant_id>.<domain> eg: t12345.c8y.io
         // These URLs may be both equivalent and point to the same tenant.
         // We are going to remove that and only check if the domain is the same.
-        let tenant_uri = &self.c8y_host;
+        let (tenant_host, _port) = self
+            .c8y_host
+            .split_once(':')
+            .unwrap_or((&self.c8y_host, ""));
         let url = Url::parse(url).ok()?;
         let url_host = url.domain()?;
 
         let (_, host) = url_host.split_once('.').unwrap_or((url_host, ""));
-        let (_, c8y_host) = tenant_uri.split_once('.').unwrap();
+        let (_, c8y_host) = tenant_host.split_once('.').unwrap_or((tenant_host, ""));
+
+        // The configured `c8y.http` setting may have a port value specified,
+        // but the incoming URL is less likely to have any port specified.
+        // Hence just matching the host prefix.
         (host == c8y_host).then_some(url)
     }
 }
@@ -237,9 +244,26 @@ mod tests {
     #[test_case("http://test.co.te")]
     #[test_case("http://test.com:123456")]
     #[test_case("http://test.com::12345")]
+    #[test_case("http://localhost")]
+    #[test_case("http://abc.com")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
         let c8y = C8yEndPoint::new("test.test.com", "test_device");
         assert!(c8y.maybe_tenant_url(url).is_none());
+    }
+
+    #[test]
+    fn url_is_my_tenant_with_hostname_without_commas() {
+        let c8y = C8yEndPoint::new("custom-domain", "test_device");
+        let url = "http://custom-domain/path";
+        assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
+    }
+
+    #[ignore = "Until #2804 is fixed"]
+    #[test]
+    fn url_is_my_tenant_check_not_too_broad() {
+        let c8y = C8yEndPoint::new("abc.com", "test_device");
+        dbg!(c8y.maybe_tenant_url("http://xyz.com"));
+        assert!(c8y.maybe_tenant_url("http://xyz.com").is_none());
     }
 
     #[test]

@@ -29,6 +29,9 @@ pub enum TEdgeConfigError {
 
     #[error(transparent)]
     DirNotFound(#[from] tedge_utils::paths::PathsError),
+
+    #[error(transparent)]
+    FromParseHostPortError(#[from] crate::tedge_config_cli::models::host_port::ParseHostPortError),
 }
 
 impl TEdgeConfigError {

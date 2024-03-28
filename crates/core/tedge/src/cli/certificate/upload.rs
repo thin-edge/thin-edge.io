@@ -82,7 +82,7 @@ impl UploadCertCmd {
         // and therefore we need to get tenant_id.
         let tenant_id = get_tenant_id_blocking(
             &client,
-            build_get_tenant_id_url(self.host.as_str())?,
+            build_get_tenant_id_url(&self.host.to_string())?,
             &self.username,
             &password,
         )?;
@@ -95,7 +95,7 @@ impl UploadCertCmd {
         tenant_id: &str,
         password: &str,
     ) -> Result<(), CertError> {
-        let post_url = build_upload_certificate_url(self.host.as_str(), tenant_id)?;
+        let post_url = build_upload_certificate_url(&self.host.to_string(), tenant_id)?;
 
         let post_body = UploadCertBody {
             auto_registration_enabled: true,

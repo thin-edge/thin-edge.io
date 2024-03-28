@@ -93,11 +93,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             cloud_name: "c8y".into(),
             config_file,
             connection: "edge_to_c8y".into(),
-            address: format!(
-                "{host}:{port}",
-                host = mqtt_host.host(),
-                port = mqtt_host.port().0
-            ),
+            address: mqtt_host,
             remote_username: None,
             bridge_root_cert_path,
             remote_clientid,
@@ -159,7 +155,7 @@ mod tests {
     fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         use std::convert::TryFrom;
         let params = BridgeConfigC8yParams {
-            mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io".to_string())?,
+            mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             config_file: C8Y_CONFIG_FILENAME.into(),
             remote_clientid: "alpha".into(),
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
@@ -176,7 +172,7 @@ mod tests {
             cloud_name: "c8y".into(),
             config_file: C8Y_CONFIG_FILENAME.into(),
             connection: "edge_to_c8y".into(),
-            address: "test.test.io:8883".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             remote_username: None,
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             remote_clientid: "alpha".into(),

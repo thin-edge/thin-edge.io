@@ -58,14 +58,6 @@ impl<const P: u16> HostPort<P> {
     pub fn port(&self) -> Port {
         self.port
     }
-
-    /// Returns a string representation of the host.
-    ///
-    /// In practice, it just returns the input string used to construct the
-    /// struct.
-    pub fn as_str(&self) -> &str {
-        &self.input
-    }
 }
 
 impl<const P: u16> From<HostPort<P>> for String {
@@ -76,7 +68,7 @@ impl<const P: u16> From<HostPort<P>> for String {
 
 impl<const P: u16> fmt::Display for HostPort<P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.input.fmt(f)
+        write!(f, "{}:{}", self.hostname, self.port)
     }
 }
 
@@ -115,6 +107,14 @@ impl<const P: u16> TryFrom<String> for HostPort<P> {
     }
 }
 
+impl<const P: u16> TryFrom<&str> for HostPort<P> {
+    type Error = ParseHostPortError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_owned())
+    }
+}
+
 impl<const P: u16> From<ConnectUrl> for HostPort<P> {
     fn from(value: ConnectUrl) -> Self {
         HostPort {
@@ -137,4 +137,19 @@ pub enum ParseHostPortError {
 
     #[error("Could not parse port")]
     ParsePort(#[from] ParseIntError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::HTTPS_PORT;
+    use crate::MQTT_TLS_PORT;
+    use test_case::test_case;
+
+    #[test_case(HostPort::<HTTPS_PORT>::try_from("test.com").unwrap(), "test.com:443")]
+    #[test_case(HostPort::<MQTT_TLS_PORT>::try_from("test.com").unwrap(), "test.com:8883")]
+    #[test_case(HostPort::<HTTPS_PORT>::try_from("test.com:8443").unwrap(), "test.com:8443")]
+    fn to_string<const P: u16>(input: HostPort<P>, expected: &str) {
+        assert_eq!(input.to_string(), expected);
+    }
 }
