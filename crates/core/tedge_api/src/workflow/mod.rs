@@ -102,7 +102,12 @@ pub enum OperationAction {
     BgScript(ShellScript, BgExitHandlers),
 
     /// Trigger a command and move to the next state from where the outcome of the command will be awaited
-    Command(OperationName, StateExcerpt, BgExitHandlers),
+    Command(
+        OperationName,
+        Option<ShellScript>,
+        StateExcerpt,
+        BgExitHandlers,
+    ),
 
     /// Await the completion of a sub-command
     ///
@@ -128,7 +133,9 @@ impl Display for OperationAction {
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
-            OperationAction::Command(operation, _, _) => format!("execute {operation} sub-command"),
+            OperationAction::Command(operation, _, _, _) => {
+                format!("execute {operation} sub-command")
+            }
             OperationAction::AwaitCommandCompletion { .. } => {
                 "await sub-command completion".to_string()
             }
@@ -284,6 +291,17 @@ impl OperationAction {
                 },
                 handlers.clone(),
             ),
+            OperationAction::Command(command, Some(script), input, handlers) => {
+                OperationAction::Command(
+                    command.clone(),
+                    Some(ShellScript {
+                        command: state.inject_parameter(&script.command),
+                        args: state.inject_parameters(&script.args),
+                    }),
+                    input.clone(),
+                    handlers.clone(),
+                )
+            }
             _ => self.clone(),
         }
     }

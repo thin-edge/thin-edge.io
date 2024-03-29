@@ -24,6 +24,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::extract_command_identifier;
+use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
 use tedge_api::workflow::GenericCommandState;
@@ -286,11 +287,28 @@ impl TedgeOperationConverterActor {
                 log_file.log_script_output(&output).await;
                 Ok(())
             }
-            OperationAction::Command(sub_operation, input_excerpt, handlers) => {
+            OperationAction::Command(sub_operation, input_script, input_excerpt, handlers) => {
                 let next_state = &handlers.on_exec.status;
                 info!(
                     "Triggering {sub_operation} command, and moving {operation} operation to {next_state} state"
                 );
+
+                // Run the input script, if any, to generate the init state of the sub-command
+                let generated_init_state = match input_script {
+                    None => GenericStateUpdate::empty_payload(),
+                    Some(script) => {
+                        let command = Execute::new(script.command.clone(), script.args);
+                        let output = self.script_runner.await_response(command).await?;
+                        match extract_json_output(&script.command, output) {
+                            Ok(init_state) => init_state,
+                            Err(reason) => {
+                                let err_state = state.update(GenericStateUpdate::failed(reason));
+                                self.publish_command_state(err_state).await?;
+                                return Ok(());
+                            }
+                        }
+                    }
+                };
 
                 // Create the sub-command init state with a reference to its invoking command
                 let sub_cmd_input = input_excerpt.extract_value_from(&state);
@@ -301,7 +319,9 @@ impl TedgeOperationConverterActor {
                     cmd_id,
                     sub_operation,
                 )
-                .update_with_json(sub_cmd_input);
+                .update_with_json(generated_init_state)
+                .update_with_json(sub_cmd_input)
+                .update_with_json(GenericStateUpdate::init_payload());
 
                 // Persist the new state for this command
                 let new_state = state.update(handlers.on_exec);

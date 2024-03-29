@@ -297,6 +297,14 @@ pub fn extract_command_identifier(topic: &str) -> Option<(String, String)> {
 }
 
 impl GenericStateUpdate {
+    pub fn empty_payload() -> Value {
+        json!({})
+    }
+
+    pub fn init_payload() -> Value {
+        json!({STATUS: INIT})
+    }
+
     pub fn successful() -> Self {
         GenericStateUpdate {
             status: SUCCESSFUL.to_string(),

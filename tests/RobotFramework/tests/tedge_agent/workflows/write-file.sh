@@ -2,9 +2,10 @@
 set -e
 
 FILE="$1"
-CONTENT="$2"
+shift
+CONTENT="$*"
 
 if [ -n "$FILE" ]
 then
-    echo "$CONTENT" >"$FILE"
+    echo "$CONTENT" >>"$FILE"
 fi

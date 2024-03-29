@@ -89,6 +89,13 @@ Invoke sub-command from a super-command operation
     Should Contain    ${workflow_log}    sub_command/sub:super_command:test-42/successful:                msg=main command log should contain sub command steps
     Should Contain    ${workflow_log}    super_command/test-42/successful:
 
+Use scripts to create sub-command init states
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/lite_device_profile/test-42 '{"status":"init", "logfile":"/tmp/profile-42.log", "profile":"/etc/tedge/operations/lite_device_profile.example.txt"}'
+    Should Have MQTT Messages    te/device/main///cmd/lite_device_profile/test-42    message_pattern=.*successful.*   maximum=1
+    ${actual_log}      Execute Command    cat /tmp/profile-42.log
+    ${expected_log}    Get File    ${CURDIR}/lite_device_profile.expected.log
+    Should Be Equal    ${actual_log}    ${expected_log}
+
 *** Keywords ***
 
 Custom Test Setup
@@ -118,4 +125,9 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/inner_command.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/write-file.sh            /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart_sub_command.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart_sub_command.toml           /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/extract_updates.sh                 /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.toml           /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_config_update.toml            /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_software_update.toml          /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/

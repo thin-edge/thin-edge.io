@@ -1,0 +1,5 @@
+step_2 install jq
+step_1 install mosquitto
+step_2 configure tedge
+step_1 configure mosquitto
+step_2 install ripgrep

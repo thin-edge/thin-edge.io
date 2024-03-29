@@ -51,6 +51,10 @@ pub struct TomlOperationState {
     #[serde(flatten)]
     pub handlers: TomlExitHandlers,
 
+    /// Script producing values to be injected into the sub-command init state
+    #[serde(default)]
+    pub input_script: Option<ShellScript>,
+
     /// Values to be injected into the sub-command init state
     #[serde(default)]
     pub input: Option<Value>,
@@ -116,8 +120,14 @@ impl TryFrom<TomlOperationState> for OperationAction {
             }
             TomlOperationAction::Command(operation) => {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
+                let input_script = input.input_script;
                 let cmd_input = input.input.try_into()?;
-                Ok(OperationAction::Command(operation, cmd_input, handlers))
+                Ok(OperationAction::Command(
+                    operation,
+                    input_script,
+                    cmd_input,
+                    handlers,
+                ))
             }
             TomlOperationAction::Action(command) => match command.as_str() {
                 "builtin" => Ok(OperationAction::BuiltIn),

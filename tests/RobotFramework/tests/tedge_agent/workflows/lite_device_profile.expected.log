@@ -1,0 +1,4 @@
+install ["mosquitto"]
+config ["mosquitto"]
+install ["jq","ripgrep"]
+config ["tedge"]

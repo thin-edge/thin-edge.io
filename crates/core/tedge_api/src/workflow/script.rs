@@ -161,7 +161,7 @@ impl ExitHandlers {
                 Some(0) => {
                     match (
                         &self.on_success,
-                        self.json_stdout_excerpt(program, output.stdout),
+                        json_stdout_excerpt(program, output.stdout),
                     ) {
                         (None, Err(reason)) => GenericStateUpdate::failed(reason).into_json(),
                         (None, Ok(dynamic_update)) => dynamic_update,
@@ -175,12 +175,10 @@ impl ExitHandlers {
                     None => self
                         .state_update_on_unknown_exit_code(program, code as u8)
                         .into_json(),
-                    Some(error_state) => {
-                        match self.json_stdout_excerpt(program, output.stdout).ok() {
-                            None => error_state.into_json(),
-                            Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
-                        }
-                    }
+                    Some(error_state) => match json_stdout_excerpt(program, output.stdout).ok() {
+                        None => error_state.into_json(),
+                        Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
+                    },
                 },
             },
             Err(err) => self.state_update_on_launch_error(program, err).into_json(),
@@ -214,23 +212,6 @@ impl ExitHandlers {
             .unwrap_or_else(GenericStateUpdate::successful)
     }
 
-    fn json_stdout_excerpt(&self, program: &str, stdout: Vec<u8>) -> Result<Value, String> {
-        match String::from_utf8(stdout) {
-            Err(_) => Err(format!("{program} returned no UTF8 stdout")),
-            Ok(content) => match extract_script_output(content) {
-                None => Err(format!(
-                    "{program} returned no :::tedge::: content on stdout"
-                )),
-                Some(excerpt) => match serde_json::from_str(&excerpt) {
-                    Ok(json) => Ok(json),
-                    Err(err) => Err(format!(
-                        "{program} returned non JSON content on stdout: {err}"
-                    )),
-                },
-            },
-        }
-    }
-
     fn state_update_on_launch_error(
         &self,
         program: &str,
@@ -262,6 +243,41 @@ impl ExitHandlers {
             let extra = min(60, timeout.as_secs() / 20);
             Duration::from_secs(extra)
         })
+    }
+}
+
+/// Extract the json output of a script outcome
+pub fn extract_json_output(
+    program: &str,
+    outcome: std::io::Result<std::process::Output>,
+) -> Result<Value, String> {
+    match outcome {
+        Ok(output) => match output.status.code() {
+            None => Err(format!(
+                "Program {program} has been killed by SIG{}",
+                output.status.signal().unwrap_or(0) as u8
+            )),
+            Some(0) => json_stdout_excerpt(program, output.stdout),
+            Some(code) => Err(format!("Program {program} failed with exit code {code}")),
+        },
+        Err(err) => Err(format!("Program {program} cannot be launched: {err}")),
+    }
+}
+
+fn json_stdout_excerpt(program: &str, stdout: Vec<u8>) -> Result<Value, String> {
+    match String::from_utf8(stdout) {
+        Err(_) => Err(format!("{program} returned no UTF8 stdout")),
+        Ok(content) => match extract_script_output(content) {
+            None => Err(format!(
+                "{program} returned no :::tedge::: content on stdout"
+            )),
+            Some(excerpt) => match serde_json::from_str(&excerpt) {
+                Ok(json) => Ok(json),
+                Err(err) => Err(format!(
+                    "{program} returned non JSON content on stdout: {err}"
+                )),
+            },
+        },
     }
 }
 
