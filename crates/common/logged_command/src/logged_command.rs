@@ -149,6 +149,11 @@ impl std::fmt::Display for LoggedCommand {
 }
 
 impl LoggedCommand {
+    /// Creates a new `LoggedCommand`.
+    ///
+    /// In contrast to [`std::process::Command`], `program` can contain space-separated arguments,
+    /// which will be properly parsed, split, and passed into `.args()` call for the underlying
+    /// command.
     pub fn new(program: impl AsRef<OsStr>) -> Result<LoggedCommand, std::io::Error> {
         let mut args = shell_words::split(&program.as_ref().to_string_lossy())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
@@ -169,6 +174,7 @@ impl LoggedCommand {
         };
 
         command
+            // TODO: should use tmp from config
             .current_dir("/tmp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -246,6 +252,34 @@ impl LoggedCommand {
 
         logger.flush().await?;
         Ok(())
+    }
+}
+
+impl From<tokio::process::Command> for LoggedCommand {
+    fn from(mut command: Command) -> Self {
+        command
+            // TODO: should use tmp from config
+            .current_dir("/tmp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        Self { command }
+    }
+}
+
+impl From<std::process::Command> for LoggedCommand {
+    fn from(mut command: std::process::Command) -> Self {
+        command
+            // TODO: should use tmp from config
+            .current_dir("/tmp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        Self {
+            command: tokio::process::Command::from(command),
+        }
     }
 }
 

@@ -3640,6 +3640,7 @@ dependencies = [
  "clap",
  "nix",
  "path-clean",
+ "tedge_config",
  "tempfile",
  "uzers",
  "which",
@@ -3713,6 +3714,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "which",
 ]
 
 [[package]]

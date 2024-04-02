@@ -386,7 +386,7 @@ impl ConfigManagerActor {
 
         let to = Utf8PathBuf::from(&file_entry.path);
 
-        match self.config.use_tedge_write {
+        match self.config.use_tedge_write.clone() {
             TedgeWriteStatus::Disabled => {
                 let src_file = std::fs::File::open(from)?;
                 tedge_utils::fs::atomically_write_file_sync(&to, src_file)?;

@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::SudoCommandBuilder;
 use tedge_config::TEdgeConfigLocation;
 #[derive(Debug, Clone)]
 pub struct SoftwareManagerConfig {
@@ -11,7 +12,7 @@ pub struct SoftwareManagerConfig {
     pub log_dir: Utf8PathBuf,
     pub default_plugin_type: Option<String>,
     pub config_location: TEdgeConfigLocation,
-    pub is_sudo_enabled: bool,
+    pub sudo: SudoCommandBuilder,
 }
 
 impl SoftwareManagerConfig {
@@ -44,7 +45,7 @@ impl SoftwareManagerConfig {
             log_dir: tedge_config.logs.path.join("agent"),
             default_plugin_type,
             config_location: tedge_config_location.clone(),
-            is_sudo_enabled: tedge_config.sudo.enable,
+            sudo: SudoCommandBuilder::new(&tedge_config),
         })
     }
 }

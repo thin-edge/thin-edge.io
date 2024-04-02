@@ -32,12 +32,6 @@ use tedge_config::TEdgeConfigError;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
-use which::which;
-
-#[cfg(not(test))]
-const SUDO: &str = "sudo";
-#[cfg(test)]
-const SUDO: &str = "echo";
 
 fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand, SoftwareCommandMetadata] : Debug, Eq, PartialEq, Deserialize, Serialize);
 
@@ -78,20 +72,10 @@ impl Actor for SoftwareManagerActor {
         let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
             .map_err(SoftwareManagerError::FromOperationsLogs)?;
 
-        let sudo = if self.config.is_sudo_enabled {
-            let sudo = which(SUDO).ok();
-            if sudo.is_none() {
-                warn!("`sudo.enable` is `true` but sudo wasn't found in $PATH");
-            }
-            sudo
-        } else {
-            None
-        };
-
         let mut plugins = ExternalPlugins::open(
             &self.config.sm_plugins_dir,
             self.config.default_plugin_type.clone(),
-            sudo,
+            self.config.sudo.clone(),
             self.config.config_location.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;

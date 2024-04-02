@@ -23,10 +23,13 @@ use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::SudoCommandBuilder;
 use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+
+const SUDO: &str = "echo";
 
 #[tokio::test]
 async fn test_pending_software_update_operation() -> Result<(), DynError> {
@@ -185,7 +188,7 @@ async fn spawn_software_manager(
         log_dir: tmp_dir.utf8_path_buf(),
         default_plugin_type: None,
         config_location: TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
-        is_sudo_enabled: true,
+        sudo: SudoCommandBuilder::with_program(SUDO),
     };
 
     let mut software_actor_builder = SoftwareManagerBuilder::new(config);

@@ -8,7 +8,6 @@ use std::io::ErrorKind;
 use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
 use std::process::Stdio;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::SoftwareListCommand;
@@ -16,6 +15,7 @@ use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::SoftwareError;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
+use tedge_config::SudoCommandBuilder;
 use tedge_config::TEdgeConfigLocation;
 use tracing::error;
 use tracing::info;
@@ -54,7 +54,7 @@ pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: BTreeMap<SoftwareType, ExternalPluginCommand>,
     default_plugin_type: Option<SoftwareType>,
-    sudo: Option<PathBuf>,
+    sudo: SudoCommandBuilder,
     config_location: TEdgeConfigLocation,
 }
 
@@ -104,7 +104,7 @@ impl ExternalPlugins {
     pub fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
-        sudo: Option<PathBuf>,
+        sudo: SudoCommandBuilder,
         config_location: TEdgeConfigLocation,
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
@@ -158,13 +158,7 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                let mut command = if let Some(sudo) = &self.sudo {
-                    let mut command = Command::new(sudo);
-                    command.arg(&path);
-                    command
-                } else {
-                    Command::new(&path)
-                };
+                let mut command = self.sudo.command(&path);
 
                 match command
                     .arg(LIST)
@@ -314,7 +308,7 @@ fn test_no_sm_plugin_dir() {
     let actual = ExternalPlugins::open(
         plugin_dir.path(),
         None,
-        None,
+        SudoCommandBuilder::enabled(false),
         TEdgeConfigLocation::default(),
     );
     assert!(actual.is_ok());
