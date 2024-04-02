@@ -1,10 +1,14 @@
 use std::fs;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use tedge_config::SudoCommandBuilder;
 use tempfile::TempDir;
+
+const SUDO: &str = "sudo";
 
 #[test]
 fn creates_dest_file_if_doesnt_exist() {
@@ -81,16 +85,16 @@ fn uses_sudo_only_if_installed() {
     let options = tedge_write::CopyOptions {
         from: source_path.as_path().try_into().unwrap(),
         to: dest_path.as_path().try_into().unwrap(),
-        sudo: true,
+        sudo: SudoCommandBuilder::enabled(true),
         mode: None,
         user: None,
         group: None,
     };
 
     let no_sudo_command = options.command().unwrap();
-    assert_ne!(no_sudo_command.get_program(), "sudo");
+    assert_ne!(no_sudo_command.get_program(), SUDO);
 
-    let dummy_sudo_path = temp_dir.path().join("sudo");
+    let dummy_sudo_path = temp_dir.path().join(SUDO);
     let dummy_sudo = std::fs::File::create(dummy_sudo_path).unwrap();
     let mut dummy_sudo_permissions = dummy_sudo.metadata().unwrap().permissions();
     // chmod +x
@@ -98,7 +102,9 @@ fn uses_sudo_only_if_installed() {
     dummy_sudo.set_permissions(dummy_sudo_permissions).unwrap();
 
     let sudo_command = options.command().unwrap();
-    assert_eq!(sudo_command.get_program(), "sudo");
+    // sudo can be either just program name or full path
+    let sudo_command = Path::new(sudo_command.get_program());
+    assert_eq!(sudo_command.file_name().unwrap(), SUDO);
 }
 
 fn setup_source_file() -> (TempDir, PathBuf) {
