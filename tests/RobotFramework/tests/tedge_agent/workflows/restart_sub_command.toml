@@ -6,11 +6,11 @@ on_success = "executing"
 
 # Reboot the device using a restart command
 [executing]
-command = "restart"
+operation = "restart"
 on_exec = "awaiting_reboot"
 
 [awaiting_reboot]
-action = "await-command-completion"
+action = "await-operation-completion"
 on_success = "successful"
 
 [successful]

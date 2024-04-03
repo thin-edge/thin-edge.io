@@ -150,7 +150,7 @@ impl WorkflowSupervisor {
             .and_then(|sub_topic| self.get_state(sub_topic))
     }
 
-    /// Return the chain of command / sub-command invocation leading to the given leaf command
+    /// Return the chain of sub-operation invocation leading to the given leaf command
     pub fn command_invocation_chain(&self, leaf_command: &TopicName) -> Vec<TopicName> {
         self.commands.command_invocation_chain(leaf_command)
     }
@@ -221,7 +221,7 @@ impl CommandBoard {
             .find(|sub_command| invoking_command(sub_command).as_ref() == Some(command_topic))
     }
 
-    /// Return the chain of command / sub-command invocation leading to the given leaf command
+    /// Return the chain of command / sub-operation invocation leading to the given leaf command
     pub fn command_invocation_chain(&self, leaf_command: &TopicName) -> Vec<TopicName> {
         let mut invoking_commands = vec![];
         let mut command = leaf_command.clone();

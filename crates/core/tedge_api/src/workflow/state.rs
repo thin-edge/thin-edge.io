@@ -39,7 +39,7 @@ const FAILED: &str = "failed";
 const REASON: &str = "reason";
 
 impl GenericCommandState {
-    /// Create an init state for a sub-command
+    /// Create an init state for a sub-operation
     pub fn sub_command_init_state(
         schema: &MqttSchema,
         entity: &EntityTopicId,
@@ -271,7 +271,7 @@ pub fn invoking_command(sub_command: &TopicName) -> Option<TopicName> {
 /// Build a sub command identifier from its invoking command identifier
 ///
 /// Using such a structure command id for sub commands is key
-/// to retrieve the invoking command of a sub-command from its state using [extract_invoking_command_id].
+/// to retrieve the invoking command of a sub-operation from its state using [extract_invoking_command_id].
 fn sub_command_id(operation: &str, cmd_id: &str) -> String {
     format!("sub:{operation}:{cmd_id}")
 }

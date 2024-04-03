@@ -61,7 +61,7 @@ pub enum OperationAction {
     /// ```
     BuiltIn,
 
-    /// Await a restart
+    /// Await agent restart
     ///
     /// In practice, this command simply waits till a timeout.
     /// If the timeout triggers, this step fails.
@@ -101,24 +101,31 @@ pub enum OperationAction {
     /// ```
     BgScript(ShellScript, BgExitHandlers),
 
-    /// Trigger a command and move to the next state from where the outcome of the command will be awaited
-    Command(
+    /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
+    ///
+    /// ```toml
+    /// operation = "sub_operation"
+    /// input_script = "/path/to/sub_operation/input_scrip.sh ${.payload.x}" ${.payload.y}"
+    /// input.logfile = "${.payload.logfile}"
+    /// on_exec = "awaiting_sub_operation"
+    /// ```
+    Operation(
         OperationName,
         Option<ShellScript>,
         StateExcerpt,
         BgExitHandlers,
     ),
 
-    /// Await the completion of a sub-command
+    /// Await the completion of a sub-operation
     ///
-    /// The sub-command is stored in the command state.
+    /// The sub-operation is stored in the command state.
     ///
     /// ```toml
-    /// action = "await-command-completion"
+    /// action = "await-operation-completion"
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    AwaitCommandCompletion(AwaitHandlers, StateExcerpt),
+    AwaitOperationCompletion(AwaitHandlers, StateExcerpt),
 
     /// The command has been fully processed and needs to be cleared
     Clear,
@@ -133,11 +140,11 @@ impl Display for OperationAction {
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
-            OperationAction::Command(operation, _, _, _) => {
-                format!("execute {operation} sub-command")
+            OperationAction::Operation(operation, _, _, _) => {
+                format!("execute {operation} sub-operation")
             }
-            OperationAction::AwaitCommandCompletion { .. } => {
-                "await sub-command completion".to_string()
+            OperationAction::AwaitOperationCompletion { .. } => {
+                "await sub-operation completion".to_string()
             }
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
         };
@@ -278,6 +285,9 @@ impl OperationAction {
             OperationAction::AwaitingAgentRestart(handlers) => {
                 OperationAction::AwaitingAgentRestart(handlers.with_default(default))
             }
+            OperationAction::AwaitOperationCompletion(handlers, state_excerpt) => {
+                OperationAction::AwaitOperationCompletion(handlers.with_default(default), state_excerpt)
+            }
             action => action,
         }
     }
@@ -291,8 +301,8 @@ impl OperationAction {
                 },
                 handlers.clone(),
             ),
-            OperationAction::Command(command, Some(script), input, handlers) => {
-                OperationAction::Command(
+            OperationAction::Operation(command, Some(script), input, handlers) => {
+                OperationAction::Operation(
                     command.clone(),
                     Some(ShellScript {
                         command: state.inject_parameter(&script.command),

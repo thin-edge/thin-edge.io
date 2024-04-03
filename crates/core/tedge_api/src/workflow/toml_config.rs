@@ -51,15 +51,15 @@ pub struct TomlOperationState {
     #[serde(flatten)]
     pub handlers: TomlExitHandlers,
 
-    /// Script producing values to be injected into the sub-command init state
+    /// Script producing values to be injected into the sub-operation init state
     #[serde(default)]
     pub input_script: Option<ShellScript>,
 
-    /// Values to be injected into the sub-command init state
+    /// Values to be injected into the sub-operation init state
     #[serde(default)]
     pub input: Option<Value>,
 
-    /// Values to be extracted from the sub-command final state
+    /// Values to be extracted from the sub-operation final state
     #[serde(default)]
     pub output: Option<Value>,
 }
@@ -71,7 +71,7 @@ pub enum TomlOperationAction {
     Script(ShellScript),
     BackgroundScript(ShellScript),
     Action(String),
-    Command(String),
+    Operation(String),
 }
 
 impl Default for TomlOperationAction {
@@ -118,11 +118,11 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
                 Ok(OperationAction::BgScript(script, handlers))
             }
-            TomlOperationAction::Command(operation) => {
+            TomlOperationAction::Operation(operation) => {
                 let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
                 let input_script = input.input_script;
                 let cmd_input = input.input.try_into()?;
-                Ok(OperationAction::Command(
+                Ok(OperationAction::Operation(
                     operation,
                     input_script,
                     cmd_input,
@@ -168,10 +168,10 @@ impl TryFrom<TomlOperationState> for OperationAction {
                     let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
                     Ok(OperationAction::AwaitingAgentRestart(handlers))
                 }
-                "await-command-completion" => {
+                "await-operation-completion" => {
                     let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
                     let cmd_output = input.output.try_into()?;
-                    Ok(OperationAction::AwaitCommandCompletion(
+                    Ok(OperationAction::AwaitOperationCompletion(
                         handlers, cmd_output,
                     ))
                 }

@@ -287,13 +287,13 @@ impl TedgeOperationConverterActor {
                 log_file.log_script_output(&output).await;
                 Ok(())
             }
-            OperationAction::Command(sub_operation, input_script, input_excerpt, handlers) => {
+            OperationAction::Operation(sub_operation, input_script, input_excerpt, handlers) => {
                 let next_state = &handlers.on_exec.status;
                 info!(
                     "Triggering {sub_operation} command, and moving {operation} operation to {next_state} state"
                 );
 
-                // Run the input script, if any, to generate the init state of the sub-command
+                // Run the input script, if any, to generate the init state of the sub-operation
                 let generated_init_state = match input_script {
                     None => GenericStateUpdate::empty_payload(),
                     Some(script) => {
@@ -310,7 +310,7 @@ impl TedgeOperationConverterActor {
                     }
                 };
 
-                // Create the sub-command init state with a reference to its invoking command
+                // Create the sub-operation init state with a reference to its invoking command
                 let sub_cmd_input = input_excerpt.extract_value_from(&state);
                 let sub_cmd_init_state = GenericCommandState::sub_command_init_state(
                     &self.mqtt_schema,
@@ -327,17 +327,17 @@ impl TedgeOperationConverterActor {
                 let new_state = state.update(handlers.on_exec);
                 self.publish_command_state(new_state).await?;
 
-                // Finally, init the sub-command
+                // Finally, init the sub-operation
                 self.mqtt_publisher
                     .send(sub_cmd_init_state.into_message())
                     .await?;
                 Ok(())
             }
-            OperationAction::AwaitCommandCompletion(handlers, output_excerpt) => {
+            OperationAction::AwaitOperationCompletion(handlers, output_excerpt) => {
                 let step = &state.status;
-                info!("{operation} operation {step} waiting for sub-command completion");
+                info!("{operation} operation {step} waiting for sub-operation completion");
 
-                // Get the sub-command state and resume this command when the sub-command is in a terminal state
+                // Get the sub-operation state and resume this command when the sub-operation is in a terminal state
                 if let Some(sub_state) = self
                     .workflows
                     .sub_command_state(&state)
@@ -352,13 +352,13 @@ impl TedgeOperationConverterActor {
                         self.mqtt_publisher.send(sub_state.clear_message()).await?;
                     } else if sub_state.is_failed() {
                         let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
-                            GenericStateUpdate::failed("sub-command failed".to_string())
+                            GenericStateUpdate::failed("sub-operation failed".to_string())
                         }));
                         self.publish_command_state(new_state).await?;
                         self.mqtt_publisher.send(sub_state.clear_message()).await?;
                     } else {
                         // Nothing specific has to be done: the current state has been persisted
-                        // and will be resumed on completion of the sub-command
+                        // and will be resumed on completion of the sub-operation
                         // TODO: Register a timeout event
                     }
                 };

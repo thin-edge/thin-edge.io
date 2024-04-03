@@ -72,7 +72,7 @@ Trigger native-reboot within workflow (on_error) - missing sudoers entry for reb
     ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-2.log
     Should Not Contain    ${workflow_log}    restarted:    msg=restarted state should not have been executed
 
-Invoke sub-command from a super-command operation
+Invoke sub-operation from a super-command operation
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 '{"status":"init", "output_file":"/tmp/test-42.json"}'
     ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/super_command/test-42    message_pattern=.*successful.*   maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 ''
@@ -89,7 +89,7 @@ Invoke sub-command from a super-command operation
     Should Contain    ${workflow_log}    sub_command/sub:super_command:test-42/successful:                msg=main command log should contain sub command steps
     Should Contain    ${workflow_log}    super_command/test-42/successful:
 
-Use scripts to create sub-command init states
+Use scripts to create sub-operation init states
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/lite_device_profile/test-42 '{"status":"init", "logfile":"/tmp/profile-42.log", "profile":"/etc/tedge/operations/lite_device_profile.example.txt"}'
     Should Have MQTT Messages    te/device/main///cmd/lite_device_profile/test-42    message_pattern=.*successful.*   maximum=1
     ${actual_log}      Execute Command    cat /tmp/profile-42.log
