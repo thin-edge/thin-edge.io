@@ -12,6 +12,7 @@ use crate::MQTT_TLS_PORT;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::create_tls_config;
 use certificate::CertificateError;
 use certificate::PemCertificate;
 use doku::Document;
@@ -1045,6 +1046,29 @@ pub struct MqttAuthConfig {
 pub struct MqttAuthClientConfig {
     pub cert_file: Utf8PathBuf,
     pub key_file: Utf8PathBuf,
+}
+
+impl TEdgeConfigReaderHttp {
+    pub fn client_tls_config(&self) -> anyhow::Result<Option<rustls::ClientConfig>> {
+        let client_cert_key = crate::all_or_nothing((
+            self.client.auth.key_file.as_ref(),
+            self.client.auth.cert_file.as_ref(),
+        ))
+        .map_err(|e| anyhow!("{e}"))?;
+
+        client_cert_key
+            .map(|(key, cert)| {
+                create_tls_config(
+                    self.ca_path
+                        .or_none()
+                        .map_or(DEFAULT_ROOT_CERT_PATH, |ca| ca.as_str()),
+                    key,
+                    cert,
+                )
+            })
+            .transpose()
+            .map_err(|e| anyhow!("{e}"))
+    }
 }
 
 impl TEdgeConfigReaderHttpClientAuth {

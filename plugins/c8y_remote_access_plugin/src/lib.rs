@@ -179,8 +179,13 @@ async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Res
         .or_none()
         .map_or(WsProtocol::Ws, |_| WsProtocol::Wss);
     let url = build_proxy_url(protocol, host, port, command.key())?;
+    let client_config = config
+        .http
+        .client_tls_config()
+        .map_err(|e| miette!("{e}"))?;
 
-    let proxy = WebsocketSocketProxy::connect(&url, command.target_address()).await?;
+    let proxy =
+        WebsocketSocketProxy::connect(&url, command.target_address(), client_config).await?;
 
     proxy.run().await;
     Ok(())

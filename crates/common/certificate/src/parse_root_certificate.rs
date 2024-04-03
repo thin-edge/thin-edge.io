@@ -10,16 +10,15 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::path::PathBuf;
 
 use crate::CertificateError;
 
 pub fn create_tls_config(
-    root_certificates: PathBuf,
-    client_private_key: PathBuf,
-    client_certificate: PathBuf,
+    root_certificates: impl AsRef<Path>,
+    client_private_key: impl AsRef<Path>,
+    client_certificate: impl AsRef<Path>,
 ) -> Result<ClientConfig, CertificateError> {
-    let root_cert_store = new_root_store(&root_certificates)?;
+    let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let pvt_key = read_pvt_key(client_private_key)?;
     let cert_chain = read_cert_chain(client_certificate)?;
 
