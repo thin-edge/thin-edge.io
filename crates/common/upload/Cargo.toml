@@ -14,7 +14,13 @@ axum_tls = { workspace = true, features = ["error-matching"] }
 backoff = { workspace = true }
 camino = { workspace = true }
 log = { workspace = true }
-reqwest = { workspace = true, features = ["stream", "rustls-tls-native-roots"] }
+mime = { workspace = true }
+mime_guess = { workspace = true }
+reqwest = { workspace = true, features = [
+    "stream",
+    "rustls-tls-native-roots",
+    "multipart",
+] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { workspace = true, features = ["codec"] }

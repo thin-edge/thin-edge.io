@@ -5,12 +5,13 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use log::info;
 use log::warn;
+use mime::Mime;
+use mime_guess::MimeGuess;
 use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
+use reqwest::multipart;
 use reqwest::Body;
 use reqwest::Identity;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
@@ -27,19 +28,51 @@ fn default_backoff() -> ExponentialBackoff {
     }
 }
 
+/// Auto tries to detect the mime from the given file extension without direct file access.
+/// Custom sets a custom Content-Type.
+/// If multipart request is needed, choose FormData.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ContentType {
-    TextPlain,
-    ApplicationOctetStream,
+    Auto,
+    Custom(Mime),
+    FormData(FormData),
 }
 
-impl Display for ContentType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ContentType::TextPlain => write!(f, "text/plain"),
-            ContentType::ApplicationOctetStream => write!(f, "application/octet-stream"),
+/// Dataset to construct reqwest::multipart::Form.
+/// To avoid using reqwest::multipart::Form inside the ContentType enum
+/// since reqwest::multipart::Form doesn't support Copy or Clone.
+/// If mime is None, the mime will be guessed while uploading a file.
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct FormData {
+    filename: String,
+    mime: Option<Mime>,
+}
+
+impl FormData {
+    pub fn new(filename: String) -> Self {
+        Self {
+            filename,
+            mime: None,
         }
     }
+
+    pub fn set_mime(self, mime: Mime) -> Self {
+        Self {
+            mime: Some(mime),
+            ..self
+        }
+    }
+
+    pub fn text_plain(self) -> Self {
+        self.set_mime(mime::TEXT_PLAIN)
+    }
+}
+
+/// Switch upload method
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum UploadMethod {
+    PUT,
+    POST,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -47,6 +80,7 @@ pub struct UploadInfo {
     pub url: String,
     pub auth: Option<Auth>,
     pub content_type: ContentType,
+    pub method: UploadMethod,
 }
 
 impl From<&str> for UploadInfo {
@@ -60,7 +94,8 @@ impl UploadInfo {
         Self {
             url: url.into(),
             auth: None,
-            content_type: ContentType::ApplicationOctetStream,
+            content_type: ContentType::Auto,
+            method: UploadMethod::PUT,
         }
     }
 
@@ -71,11 +106,15 @@ impl UploadInfo {
         }
     }
 
-    pub fn with_content_type(self, content_type: ContentType) -> Self {
+    pub fn set_content_type(self, content_type: ContentType) -> Self {
         Self {
             content_type,
             ..self
         }
+    }
+
+    pub fn set_method(self, method: UploadMethod) -> Self {
+        Self { method, ..self }
     }
 
     pub fn url(&self) -> &str {
@@ -166,18 +205,42 @@ impl Uploader {
                 info!("Redirecting request from {} to {target_url}", url.url())
             }
 
-            // Todo: Ideally it detects the appropriate content-type automatically, e.g. UTF-8 => text/plain
-            let mut client = client
-                .put(target_url)
-                .header(CONTENT_TYPE, url.content_type.to_string())
-                .header(CONTENT_LENGTH, file_length);
+            let mut client = match url.method {
+                UploadMethod::PUT => client.put(target_url),
+                UploadMethod::POST => client.post(target_url),
+            };
 
             if let Some(Auth::Bearer(token)) = &url.auth {
                 client = client.bearer_auth(token)
             }
 
+            client = match url.content_type.clone() {
+                ContentType::Auto => {
+                    let mime = MimeGuess::from_path(&self.source_filename).first_or_octet_stream();
+                    client
+                        .header(CONTENT_TYPE, mime.as_ref())
+                        .header(CONTENT_LENGTH, file_length)
+                        .body(file_body)
+                }
+                ContentType::Custom(mime) => client
+                    .header(CONTENT_TYPE, mime.as_ref())
+                    .header(CONTENT_LENGTH, file_length)
+                    .body(file_body),
+                ContentType::FormData(data) => {
+                    let mime = match data.mime {
+                        None => MimeGuess::from_path(&self.source_filename).first_or_octet_stream(),
+                        Some(mime) => mime,
+                    };
+                    let file_part = multipart::Part::stream_with_length(file_body, file_length)
+                        .file_name(data.filename)
+                        .mime_str(mime.as_ref())
+                        .unwrap(); // safe, ensured that mime is valid
+                    let form = multipart::Form::new().part("file", file_part);
+                    client.multipart(form)
+                }
+            };
+
             client
-                .body(file_body)
                 .send()
                 .await
                 .map_err(|err| {
@@ -241,6 +304,34 @@ mod tests {
         target_url.push_str("/some_file.txt");
 
         let url = UploadInfo::new(&target_url);
+
+        let ttd = TempTedgeDir::new();
+        ttd.file("file_upload.txt")
+            .with_raw_content("Hello, world!");
+
+        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"), None);
+        uploader.set_backoff(ExponentialBackoff {
+            current_interval: Duration::ZERO,
+            ..Default::default()
+        });
+
+        assert!(uploader.upload(&url).await.is_ok())
+    }
+
+    #[tokio::test]
+    async fn upload_content_no_auth_post() {
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("POST", "/some_file.txt")
+            .with_status(201)
+            .create();
+
+        let mut target_url = server.url();
+        target_url.push_str("/some_file.txt");
+
+        let url = UploadInfo::new(&target_url)
+            .set_content_type(ContentType::FormData(FormData::new("filename".into())))
+            .set_method(UploadMethod::POST);
 
         let ttd = TempTedgeDir::new();
         ttd.file("file_upload.txt")
