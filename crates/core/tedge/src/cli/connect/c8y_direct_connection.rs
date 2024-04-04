@@ -34,9 +34,9 @@ pub fn create_device_with_direct_connection(
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
     let tls_config = create_tls_config(
-        bridge_config.bridge_root_cert_path.clone().into(),
-        bridge_config.bridge_keyfile.clone().into(),
-        bridge_config.bridge_certfile.clone().into(),
+        &bridge_config.bridge_root_cert_path,
+        &bridge_config.bridge_keyfile,
+        &bridge_config.bridge_certfile,
     )?;
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 

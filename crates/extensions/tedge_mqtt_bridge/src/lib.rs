@@ -52,9 +52,9 @@ impl MqttBridgeActorBuilder {
         cloud_topics: &[impl AsRef<str>],
     ) -> Self {
         let tls_config = create_tls_config(
-            tedge_config.c8y.root_cert_path.clone().into(),
-            tedge_config.device.key_path.clone().into(),
-            tedge_config.device.cert_path.clone().into(),
+            &tedge_config.c8y.root_cert_path,
+            &tedge_config.device.key_path,
+            &tedge_config.device.cert_path,
         )
         .unwrap();
 
@@ -72,26 +72,12 @@ impl MqttBridgeActorBuilder {
                 ca_dir: Some(ca_dir),
                 client: Some(client),
                 ..
-            } => Some(
-                create_tls_config(
-                    ca_dir.into(),
-                    client.key_file.into(),
-                    client.cert_file.into(),
-                )
-                .unwrap(),
-            ),
+            } => Some(create_tls_config(ca_dir, &client.key_file, &client.cert_file).unwrap()),
             MqttAuthConfig {
                 ca_file: Some(ca_file),
                 client: Some(client),
                 ..
-            } => Some(
-                create_tls_config(
-                    ca_file.into(),
-                    client.key_file.into(),
-                    client.cert_file.into(),
-                )
-                .unwrap(),
-            ),
+            } => Some(create_tls_config(ca_file, &client.key_file, &client.cert_file).unwrap()),
             _ => None,
         };
         if let Some(tls_config) = local_tls_config {
