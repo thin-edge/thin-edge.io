@@ -148,13 +148,13 @@ def detect_target():
     uname = str(platform.uname()[4]).casefold()
     arch = None
     if "arm64" in uname or "aarch64" in uname:
-        arch = "aarch64-unknown-linux"
+        arch = "aarch64-unknown-linux-musl"
     elif "armv7" in uname:
-        arch = "armv7-unknown-linux"
+        arch = "armv7-unknown-linux-musl"
     elif "armv6" in uname:
-        arch = "arm-unknown-linux"
+        arch = "arm-unknown-linux-musl"
     elif "x86_64" in uname or "amd64" in uname:
-        arch = "x86_64-unknown-linux"
+        arch = "x86_64-unknown-linux-musl"
 
     return arch
 
