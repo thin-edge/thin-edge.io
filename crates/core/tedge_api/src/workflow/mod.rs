@@ -140,9 +140,13 @@ impl Display for OperationAction {
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
-            OperationAction::Operation(operation, _, _, _) => {
-                format!("execute {operation} sub-operation")
-            }
+            OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
+                None => format!("execute {operation} as sub-operation"),
+                Some(script) => format!(
+                    "execute {operation} as sub-operation, with input payload derived from: {}",
+                    script
+                ),
+            },
             OperationAction::AwaitOperationCompletion { .. } => {
                 "await sub-operation completion".to_string()
             }

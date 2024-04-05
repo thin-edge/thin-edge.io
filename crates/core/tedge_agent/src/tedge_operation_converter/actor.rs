@@ -299,6 +299,7 @@ impl TedgeOperationConverterActor {
                     Some(script) => {
                         let command = Execute::new(script.command.clone(), script.args);
                         let output = self.script_runner.await_response(command).await?;
+                        log_file.log_script_output(&output).await;
                         match extract_json_output(&script.command, output) {
                             Ok(init_state) => init_state,
                             Err(reason) => {
