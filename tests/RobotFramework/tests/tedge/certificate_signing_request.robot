@@ -43,8 +43,8 @@ Generate CSR without an existing certificate and private key
     Execute Command    sudo tedge cert create-csr --device-id test-user
 
     ${output_csr_subject}=    Execute Command
-    ...    openssl req -noout -subject -in /etc/tedge/device-certs/tedge.csr
-    Should Contain    ${output_csr_subject}    subject=CN = test-user
+    ...    openssl req -noout -subject -in /etc/tedge/device-certs/tedge.csr | tr -d ' '
+    Should Contain    ${output_csr_subject}    subject=CN=test-user
 
     ${output_private_key_md5}=    Execute Command
     ...    openssl pkey -in /etc/tedge/device-certs/tedge-private-key.pem -pubout | openssl md5

@@ -15,7 +15,7 @@ Test Tags           theme:mqtt    theme:aws
 
 Publish events to subscribed topic
     ${timestamp}=        Get Unix Timestamp
-    Execute Command    tedge mqtt pub te/device/main///e/event-type '{"text": "somone logged-in"}'   
+    Execute Command    tedge mqtt pub te/device/main///e/event-type '{"text": "someone logged-in"}'
     Should Have MQTT Messages    aws/td/device:main/e/event-type
 
 Publish measurements to unsubscribed topic   
