@@ -1,4 +1,5 @@
 use super::error::CertError;
+use crate::bridge::BridgeLocation;
 use crate::command::Command;
 use camino::Utf8PathBuf;
 use certificate::KeyCertPair;
@@ -26,6 +27,9 @@ pub struct CreateCertCmd {
 
     /// The path where the device CSR file will be stored
     pub csr_path: Option<Utf8PathBuf>,
+
+    /// The component that is configured to host the MQTT bridge logic
+    pub bridge_location: BridgeLocation,
 }
 
 impl Command for CreateCertCmd {
@@ -79,6 +83,11 @@ impl CreateCertCmd {
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
+        let (user, group) = match self.bridge_location {
+            BridgeLocation::BuiltIn => ("tedge", "tedge"),
+            BridgeLocation::Mosquitto => (crate::BROKER_USER, crate::BROKER_GROUP),
+        };
+
         let cert = match &self.csr_path {
             Some(csr_path) => {
                 validate_parent_dir_exists(csr_path).map_err(CertError::CsrPathError)?;
@@ -94,9 +103,8 @@ impl CreateCertCmd {
                 let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, key_kind)?;
 
                 // Creating files with permission 644 owned by the MQTT broker
-                let mut cert_file =
-                    create_new_file(&self.cert_path, crate::BROKER_USER, crate::BROKER_GROUP)
-                        .map_err(|err| err.cert_context(self.cert_path.clone()))?;
+                let mut cert_file = create_new_file(&self.cert_path, user, group)
+                    .map_err(|err| err.cert_context(self.cert_path.clone()))?;
 
                 let cert_pem = cert.certificate_pem_string()?;
                 cert_file.write_all(cert_pem.as_bytes())?;
@@ -181,6 +189,7 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
             csr_path: None,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         assert_matches!(
@@ -209,6 +218,7 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
             csr_path: None,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         assert!(cmd
@@ -231,6 +241,7 @@ mod tests {
             cert_path,
             key_path,
             csr_path: None,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let cert_error = cmd
@@ -250,6 +261,7 @@ mod tests {
             cert_path,
             key_path,
             csr_path: None,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let cert_error = cmd
@@ -269,6 +281,7 @@ mod tests {
             cert_path,
             key_path,
             csr_path: None,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         let cert_error = cmd

@@ -38,8 +38,6 @@ pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 use tedge_api::main_device_health_topic;
-use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
-use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
 use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
 
@@ -86,7 +84,7 @@ impl MqttBridgeActorBuilder {
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic,
-            MQTT_BRIDGE_DOWN_PAYLOAD,
+            BridgeHealth::DOWN_PAYLOAD,
             QoS::AtLeastOnce,
             true,
         ));
@@ -350,6 +348,9 @@ struct BridgeHealth<'a> {
 }
 
 impl<'a> BridgeHealth<'a> {
+    const UP_PAYLOAD: &'static str = "{\"status\":\"up\"}";
+    const DOWN_PAYLOAD: &'static str = "{\"status\":\"down\"}";
+
     fn new(name: &'static str, health_topic: Option<String>, target: &'a AsyncClient) -> Self {
         Self {
             name,
@@ -370,9 +371,9 @@ impl<'a> BridgeHealth<'a> {
                 if let Event::Incoming(Incoming::ConnAck(_)) = event {
                     info!("MQTT bridge connected to {name} broker")
                 }
-                (None, MQTT_BRIDGE_UP_PAYLOAD)
+                (None, Self::UP_PAYLOAD)
             }
-            Err(err) => (Some(err.to_string()), MQTT_BRIDGE_DOWN_PAYLOAD),
+            Err(err) => (Some(err.to_string()), Self::DOWN_PAYLOAD),
         };
 
         if self.last_err != err {

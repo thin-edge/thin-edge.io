@@ -28,10 +28,7 @@ pub fn convert_health_status_message(
         return vec![];
     }
 
-    // If not Bridge health status
-    // FIXME: can also match "device/bridge//" or "/device/main/service/my_custom_bridge"
-    // should match ONLY the single mapper bridge
-    if entity.topic_id.as_str().contains("bridge") {
+    if entity.topic_id.is_bridge_health_topic() {
         return vec![];
     }
 

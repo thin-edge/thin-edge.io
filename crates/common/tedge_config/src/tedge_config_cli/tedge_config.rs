@@ -460,10 +460,6 @@ define_tedge_config! {
                 local_cleansession: AutoFlag,
             },
 
-            #[tedge_config(default(value = false))]
-            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
-            built_in: bool,
-
             // TODO validation
             /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
@@ -655,7 +651,13 @@ define_tedge_config! {
             #[doku(as = "PathBuf")]
             #[tedge_config(deprecated_key = "mqtt.external.keyfile")]
             key_file: Utf8PathBuf,
-        }
+        },
+
+        bridge: {
+            #[tedge_config(default(value = false))]
+            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
+            built_in: bool,
+        },
     },
 
     http: {
@@ -843,7 +845,7 @@ impl ReadableKey {
     // features from being discovered.
     pub fn is_printable_value(self, value: &str) -> bool {
         match self {
-            Self::C8yBridgeBuiltIn => value != "false",
+            Self::MqttBridgeBuiltIn => value != "false",
             Self::C8yBridgeTopicPrefix => value != "c8y",
             _ => true,
         }

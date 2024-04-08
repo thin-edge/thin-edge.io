@@ -1,5 +1,6 @@
 use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
+use crate::bridge::BridgeLocation;
 use crate::command::Command;
 use crate::CreateCertCmd;
 use camino::Utf8PathBuf;
@@ -10,6 +11,7 @@ pub struct CreateCsrCmd {
     pub cert_path: Utf8PathBuf,
     pub key_path: Utf8PathBuf,
     pub csr_path: Utf8PathBuf,
+    pub bridge_location: BridgeLocation,
 }
 
 impl Command for CreateCsrCmd {
@@ -41,6 +43,7 @@ impl CreateCsrCmd {
             cert_path: self.cert_path.clone(),
             key_path: self.key_path.clone(),
             csr_path: Some(self.csr_path.clone()),
+            bridge_location: self.bridge_location,
         };
 
         create_cmd.create_certificate_signing_request(config)
@@ -70,6 +73,7 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
             csr_path: csr_path.clone(),
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         assert_matches!(
@@ -94,6 +98,7 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
             csr_path: None,
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         // create private key and public cert with standard command
@@ -112,6 +117,7 @@ mod tests {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
             csr_path: csr_path.clone(),
+            bridge_location: BridgeLocation::Mosquitto,
         };
 
         // create csr using existing private key and device_id from public cert

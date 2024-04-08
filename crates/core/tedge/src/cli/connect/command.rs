@@ -216,7 +216,7 @@ pub fn bridge_config(
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
-            let bridge_location = match config.c8y.bridge.built_in {
+            let bridge_location = match config.mqtt.bridge.built_in {
                 true => BridgeLocation::BuiltIn,
                 false => BridgeLocation::Mosquitto,
             };
@@ -459,12 +459,6 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
     device_type: &str,
 ) -> Result<(), ConnectError> {
-    if bridge_config.bridge_location == BridgeLocation::BuiltIn {
-        println!("Deleting mosquitto bridge configuration in favour of built-in bridge");
-        clean_up(config_location, bridge_config)?;
-        restart_mosquitto(bridge_config, service_manager, config_location)?;
-        return Ok(());
-    }
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
 
@@ -477,8 +471,10 @@ fn new_bridge(
         );
     }
 
-    println!("Checking if configuration for requested bridge already exists.\n");
-    bridge_config_exists(config_location, bridge_config)?;
+    if bridge_config.bridge_location == BridgeLocation::Mosquitto {
+        println!("Checking if configuration for requested bridge already exists.\n");
+        bridge_config_exists(config_location, bridge_config)?;
+    }
 
     println!("Validating the bridge certificates.\n");
     bridge_config.validate()?;
@@ -488,13 +484,20 @@ fn new_bridge(
         c8y_direct_connection::create_device_with_direct_connection(bridge_config, device_type)?;
     }
 
-    println!("Saving configuration for requested bridge.\n");
-    if let Err(err) =
-        write_bridge_config_to_file(config_location, bridge_config, common_mosquitto_config)
-    {
-        // We want to preserve previous errors and therefore discard result of this function.
-        let _ = clean_up(config_location, bridge_config);
-        return Err(err);
+    if bridge_config.bridge_location == BridgeLocation::Mosquitto {
+        println!("Saving configuration for requested bridge.\n");
+
+        if let Err(err) =
+            write_bridge_config_to_file(config_location, bridge_config, common_mosquitto_config)
+        {
+            // We want to preserve previous errors and therefore discard result of this function.
+            let _ = clean_up(config_location, bridge_config);
+            return Err(err);
+        }
+    } else {
+        println!("Deleting mosquitto bridge configuration in favour of built-in bridge");
+        clean_up(config_location, bridge_config)?;
+        restart_mosquitto(bridge_config, service_manager, config_location)?;
     }
 
     if let Err(err) = service_manager_result {
