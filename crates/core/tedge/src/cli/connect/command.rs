@@ -216,7 +216,7 @@ pub fn bridge_config(
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
-            let bridge_location = match config.c8y.bridge.built_in {
+            let bridge_location = match config.mqtt.bridge.built_in {
                 true => BridgeLocation::BuiltIn,
                 false => BridgeLocation::Mosquitto,
             };

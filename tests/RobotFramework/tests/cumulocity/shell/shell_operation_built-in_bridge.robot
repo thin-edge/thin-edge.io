@@ -35,7 +35,7 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist                      ${DEVICE_SN}
-    ThinEdgeIO.Execute Command      tedge config set c8y.bridge.built_in true
+    ThinEdgeIO.Execute Command      tedge config set mqtt.bridge.built_in true
     ThinEdgeIO.Execute Command      tedge config set c8y.bridge.topic_prefix custom-c8y
     ThinEdgeIO.Transfer To Device    ${CURDIR}/command_handler.*    /etc/tedge/operations/command
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command*         /etc/tedge/operations/c8y/

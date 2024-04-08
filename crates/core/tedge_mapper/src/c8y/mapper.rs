@@ -38,7 +38,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         let mqtt_config = tedge_config.mqtt_config()?;
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
-        if tedge_config.c8y.bridge.built_in {
+        if tedge_config.mqtt.bridge.built_in {
             let custom_topics = tedge_config
                 .c8y
                 .smartrest
