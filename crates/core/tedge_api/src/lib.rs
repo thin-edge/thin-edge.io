@@ -1,26 +1,26 @@
 pub mod alarm;
+pub mod commands;
 pub mod entity_store;
 pub mod error;
 pub mod event;
 pub mod health;
 pub mod measurement;
-pub mod messages;
 pub mod mqtt_topics;
 pub mod path;
 mod software;
 mod store;
 pub mod workflow;
 
+pub use commands::CommandStatus;
+pub use commands::Jsonify;
+pub use commands::OperationStatus;
+pub use commands::RestartCommand;
+pub use commands::SoftwareListCommand;
+pub use commands::SoftwareUpdateCommand;
 pub use download::*;
 pub use entity_store::EntityStore;
 pub use error::*;
 pub use health::*;
-pub use messages::CommandStatus;
-pub use messages::Jsonify;
-pub use messages::OperationStatus;
-pub use messages::RestartCommand;
-pub use messages::SoftwareListCommand;
-pub use messages::SoftwareUpdateCommand;
 pub use software::*;
 pub use store::pending_entity_store;
 

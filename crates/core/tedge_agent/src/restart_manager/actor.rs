@@ -13,7 +13,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_api::messages::CommandStatus;
+use tedge_api::commands::CommandStatus;
 use tedge_api::RestartCommand;
 use tedge_config::system_services::SystemConfig;
 use tedge_config::system_services::SystemSpecificCommands;
