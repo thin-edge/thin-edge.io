@@ -27,7 +27,6 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
@@ -54,7 +53,7 @@ impl CumulocityConverter {
         device_xid: String,
         cmd_id: String,
         log_request: C8yLogfileRequest,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let target = self
             .entity_store
             .try_get_by_external_id(&device_xid.into())?;
@@ -84,7 +83,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![Message::new(&topic, request.to_json()).with_retain()])
+        Ok(vec![
+            MqttMessage::new(&topic, request.to_json()).with_retain()
+        ])
     }
 
     /// Address a received log_upload command. If its status is
@@ -95,8 +96,8 @@ impl CumulocityConverter {
         &mut self,
         topic_id: &EntityTopicId,
         cmd_id: &str,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         debug!("Handling log_upload command");
 
         if !self.config.capabilities.log_upload {
@@ -113,7 +114,10 @@ impl CumulocityConverter {
             CommandStatus::Executing => {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yLogFileRequest);
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
+                vec![MqttMessage::new(
+                    &smartrest_topic,
+                    smartrest_operation_status,
+                )]
             }
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
@@ -155,8 +159,9 @@ impl CumulocityConverter {
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
                     fail_operation(CumulocitySupportedOperations::C8yLogFileRequest, reason);
-                let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
-                let clean_operation = Message::new(&message.topic, "")
+                let c8y_notification =
+                    MqttMessage::new(&smartrest_topic, smartrest_operation_status);
+                let clean_operation = MqttMessage::new(&message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
                 vec![c8y_notification, clean_operation]
@@ -176,7 +181,7 @@ impl CumulocityConverter {
         cmd_id: CmdId,
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
-    ) -> Result<Vec<Message>, ConversionError> {
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         let topic_id = fts_download.entity_topic_id;
         let target = self.entity_store.try_get(&topic_id)?;
         let smartrest_topic = self.smartrest_publish_topic_for_entity(&topic_id)?;
@@ -192,8 +197,8 @@ impl CumulocityConverter {
                     ),
                 );
 
-                let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
-                let clean_operation = Message::new(&fts_download.message.topic, "")
+                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
+                let clean_operation = MqttMessage::new(&fts_download.message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
                 return Ok(vec![c8y_notification, clean_operation]);
@@ -248,8 +253,8 @@ impl CumulocityConverter {
     pub fn convert_log_metadata(
         &mut self,
         topic_id: &EntityTopicId,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.log_upload {
             warn!("Received log_upload metadata, however, log_upload feature is disabled");
             return Ok(vec![]);

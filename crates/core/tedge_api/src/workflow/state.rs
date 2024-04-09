@@ -1,6 +1,6 @@
 use crate::workflow::ExitHandlers;
 use crate::workflow::WorkflowExecutionError;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS::AtLeastOnce;
 use mqtt_channel::Topic;
 use serde::Deserialize;
@@ -25,7 +25,9 @@ pub struct GenericStateUpdate {
 
 impl GenericCommandState {
     /// Extract a command state from a json payload
-    pub fn from_command_message(message: &Message) -> Result<Option<Self>, WorkflowExecutionError> {
+    pub fn from_command_message(
+        message: &MqttMessage,
+    ) -> Result<Option<Self>, WorkflowExecutionError> {
         let payload = message.payload_bytes();
         if payload.is_empty() {
             return Ok(None);
@@ -42,11 +44,11 @@ impl GenericCommandState {
     }
 
     /// Build an MQTT message to publish the command state
-    pub fn into_message(mut self) -> Message {
+    pub fn into_message(mut self) -> MqttMessage {
         GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
         let topic = &self.topic;
         let payload = self.payload.to_string();
-        Message::new(topic, payload)
+        MqttMessage::new(topic, payload)
             .with_retain()
             .with_qos(AtLeastOnce)
     }
@@ -291,7 +293,7 @@ mod tests {
     fn serde_generic_command_payload() {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
         let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
-        let command = mqtt_channel::Message::new(&topic, payload);
+        let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command)
             .expect("parsing error")
             .expect("no message");
@@ -348,7 +350,7 @@ mod tests {
     fn inject_json_into_parameters() {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
         let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
-        let command = mqtt_channel::Message::new(&topic, payload);
+        let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command)
             .expect("parsing error")
             .expect("no message");

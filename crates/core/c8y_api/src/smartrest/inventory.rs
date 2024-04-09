@@ -11,7 +11,7 @@
 
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::topic::publish_topic_from_ancestors;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use tedge_config::TopicPrefix;
 
 use super::message::sanitize_for_smartrest;
@@ -25,7 +25,7 @@ pub fn child_device_creation_message(
     device_type: Option<&str>,
     ancestors: &[String],
     prefix: &TopicPrefix,
-) -> Result<Message, InvalidValueError> {
+) -> Result<MqttMessage, InvalidValueError> {
     if child_id.is_empty() {
         return Err(InvalidValueError {
             field_name: "child_id".to_string(),
@@ -45,7 +45,7 @@ pub fn child_device_creation_message(
         });
     }
 
-    Ok(Message::new(
+    Ok(MqttMessage::new(
         &publish_topic_from_ancestors(ancestors, prefix),
         // XXX: if any arguments contain commas, output will be wrong
         format!(
@@ -67,7 +67,7 @@ pub fn service_creation_message(
     service_status: &str,
     ancestors: &[String],
     prefix: &TopicPrefix,
-) -> Result<Message, InvalidValueError> {
+) -> Result<MqttMessage, InvalidValueError> {
     // TODO: most of this noise can be eliminated by implementing `Serialize`/`Deserialize` for smartrest format
     if service_id.is_empty() {
         return Err(InvalidValueError {
@@ -94,7 +94,7 @@ pub fn service_creation_message(
         });
     }
 
-    Ok(Message::new(
+    Ok(MqttMessage::new(
         &publish_topic_from_ancestors(ancestors, prefix),
         fields_to_csv_string(&[
             "102",
@@ -120,13 +120,13 @@ pub fn service_status_update_message(
     external_ids: &[impl AsRef<str>],
     service_status: &str,
     prefix: &TopicPrefix,
-) -> Message {
+) -> MqttMessage {
     let topic = publish_topic_from_ancestors(external_ids, prefix);
 
     let service_status =
         sanitize_for_smartrest(service_status, super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);
 
-    Message::new(&topic, fields_to_csv_string(&["104", &service_status]))
+    MqttMessage::new(&topic, fields_to_csv_string(&["104", &service_status]))
 }
 
 #[derive(thiserror::Error, Debug)]

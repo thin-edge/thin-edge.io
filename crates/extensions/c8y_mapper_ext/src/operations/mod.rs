@@ -18,7 +18,6 @@ use crate::error::ConversionError;
 use tedge_api::messages::ConfigMetadata;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::Jsonify;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 
@@ -57,9 +56,9 @@ impl CumulocityConverter {
     fn convert_config_metadata(
         &mut self,
         topic_id: &EntityTopicId,
-        message: &Message,
+        message: &MqttMessage,
         c8y_op_name: &str,
-    ) -> Result<Vec<Message>, ConversionError> {
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         let metadata = ConfigMetadata::from_json(message.payload_str()?)?;
 
         let mut messages = match self.register_operation(topic_id, c8y_op_name) {

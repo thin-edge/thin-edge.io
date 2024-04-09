@@ -29,7 +29,6 @@ use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::Jsonify;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
@@ -111,7 +110,7 @@ impl TedgeOperationConverterActor {
             let meta_topic = self
                 .mqtt_schema
                 .capability_topic_for(&self.device_topic_id, operation);
-            let message = Message::new(&meta_topic, payload.to_json())
+            let message = MqttMessage::new(&meta_topic, payload.to_json())
                 .with_retain()
                 .with_qos(QoS::AtLeastOnce);
             self.mqtt_publisher.send(message).await?;

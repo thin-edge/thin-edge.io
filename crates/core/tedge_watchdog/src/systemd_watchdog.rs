@@ -5,7 +5,7 @@ use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
 use futures::SinkExt;
 use futures::StreamExt;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
 use serde::Deserialize;
@@ -201,7 +201,7 @@ async fn monitor_tedge_service(
         .context("Could not send initial health status message")?;
 
     loop {
-        let message = Message::new(&req_topic, "");
+        let message = MqttMessage::new(&req_topic, "");
         let _ = publisher
             .publish(message)
             .await
@@ -238,7 +238,7 @@ async fn monitor_tedge_service(
 
 async fn get_latest_health_status_message(
     request_timestamp: OffsetDateTime,
-    messages: &mut mpsc::UnboundedReceiver<Message>,
+    messages: &mut mpsc::UnboundedReceiver<MqttMessage>,
 ) -> Result<HealthStatus, WatchdogError> {
     while let Some(message) = messages.next().await {
         if let Ok(message) = message.payload_str() {
@@ -304,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_latest_health_status_message() -> Result<()> {
-        let (mut sender, mut receiver) = mpsc::unbounded::<Message>();
+        let (mut sender, mut receiver) = mpsc::unbounded::<MqttMessage>();
         let health_topic =
             Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
         let base_timestamp = OffsetDateTime::now_utc();
@@ -319,7 +319,7 @@ mod tests {
                 "time": timestamp_str,
             })
             .to_string();
-            let health_message = Message::new(&health_topic, health_status);
+            let health_message = MqttMessage::new(&health_topic, health_status);
             sender.publish(health_message).await?;
         }
 
@@ -344,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_latest_health_status_message_unix() {
-        let (mut sender, mut receiver) = mpsc::unbounded::<Message>();
+        let (mut sender, mut receiver) = mpsc::unbounded::<MqttMessage>();
         let health_topic =
             Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
         let request_timestamp = OffsetDateTime::parse(
@@ -361,7 +361,7 @@ mod tests {
             "time": payload_timestamp,
         })
         .to_string();
-        let health_message = Message::new(&health_topic, health_status);
+        let health_message = MqttMessage::new(&health_topic, health_status);
         sender.publish(health_message).await.unwrap();
         sender.close_channel();
 

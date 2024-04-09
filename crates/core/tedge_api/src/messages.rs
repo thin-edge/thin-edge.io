@@ -7,7 +7,7 @@ use crate::software::*;
 use crate::workflow::GenericCommandState;
 use crate::workflow::StateName;
 use download::DownloadInfo;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
 use serde::de::DeserializeOwned;
@@ -78,10 +78,10 @@ where
     }
 
     /// Return the MQTT message to register support for this types of command
-    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
+    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> MqttMessage {
         let meta_topic = schema.capability_topic_for(target, Payload::operation_type());
         let payload = "{}";
-        Message::new(&meta_topic, payload)
+        MqttMessage::new(&meta_topic, payload)
             .with_retain()
             .with_qos(QoS::AtLeastOnce)
     }
@@ -141,18 +141,18 @@ where
     }
 
     /// Return the MQTT message for this command
-    pub fn command_message(&self, schema: &MqttSchema) -> Message {
+    pub fn command_message(&self, schema: &MqttSchema) -> MqttMessage {
         let topic = self.topic(schema);
         let payload = self.payload.to_bytes();
-        Message::new(&topic, payload)
+        MqttMessage::new(&topic, payload)
             .with_qos(QoS::AtLeastOnce)
             .with_retain()
     }
 
     /// Return the MQTT message to clear this command
-    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
+    pub fn clearing_message(&self, schema: &MqttSchema) -> MqttMessage {
         let topic = self.topic(schema);
-        Message::new(&topic, vec![])
+        MqttMessage::new(&topic, vec![])
             .with_qos(QoS::AtLeastOnce)
             .with_retain()
     }

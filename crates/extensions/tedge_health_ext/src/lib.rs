@@ -21,13 +21,12 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
 use tedge_config::TEdgeConfigReaderService;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct HealthMonitorBuilder {
-    registration_message: Option<Message>,
+    registration_message: Option<MqttMessage>,
     health_topic: ServiceHealthTopic,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }

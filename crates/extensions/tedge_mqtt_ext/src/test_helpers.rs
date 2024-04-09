@@ -1,6 +1,5 @@
-use crate::MqttMessage;
 use assert_json_diff::assert_json_include;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use mqtt_channel::TopicFilter;
 use std::fmt::Debug;
 use tedge_actors::MessageReceiver;
@@ -36,7 +35,7 @@ pub async fn assert_received_includes_json<I, S>(
     }
 }
 
-pub fn assert_message_contains_str(message: &Message, expected: (&str, &str)) {
+pub fn assert_message_contains_str(message: &MqttMessage, expected: (&str, &str)) {
     let expected_topic = expected.0;
     let expected_payload = expected.1;
     assert!(
@@ -51,7 +50,7 @@ pub fn assert_message_contains_str(message: &Message, expected: (&str, &str)) {
     )
 }
 
-pub fn assert_message_includes_json<S>(message: &Message, expected: (S, serde_json::Value))
+pub fn assert_message_includes_json<S>(message: &MqttMessage, expected: (S, serde_json::Value))
 where
     S: AsRef<str>,
 {
@@ -92,7 +91,7 @@ impl From<serde_json::Value> for MessagePayloadMatcher {
 
 pub fn assert_messages_matching<'a, M, I>(messages: M, expected: I)
 where
-    M: IntoIterator<Item = &'a Message>,
+    M: IntoIterator<Item = &'a MqttMessage>,
     I: IntoIterator<Item = (&'static str, MessagePayloadMatcher)>,
 {
     let mut messages_iter = messages.into_iter();

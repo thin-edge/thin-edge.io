@@ -11,7 +11,7 @@ use std::path::Path;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::info;
 use tracing::warn;
@@ -22,7 +22,9 @@ const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
 impl CumulocityConverter {
     /// Creates the inventory update message with fragments from inventory.json file
     /// while also updating the live `inventory_model` of this converter
-    pub(crate) fn parse_base_inventory_file(&mut self) -> Result<Vec<Message>, ConversionError> {
+    pub(crate) fn parse_base_inventory_file(
+        &mut self,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = vec![];
         let inventory_file_path = self.cfg_dir.join(INVENTORY_FRAGMENTS_FILE_LOCATION);
         let mut inventory_base = Self::get_inventory_fragments(&inventory_file_path)?;
@@ -63,10 +65,10 @@ impl CumulocityConverter {
         entity: &EntityTopicId,
         fragment_key: String,
         fragment_value: JsonValue,
-    ) -> Message {
+    ) -> MqttMessage {
         let twin_channel = Channel::EntityTwinData { fragment_key };
         let topic = self.mqtt_schema.topic_for(entity, &twin_channel);
-        Message::new(&topic, fragment_value.to_string()).with_retain()
+        MqttMessage::new(&topic, fragment_value.to_string()).with_retain()
     }
 
     /// Convert a twin metadata message into Cumulocity inventory update messages.
@@ -75,9 +77,9 @@ impl CumulocityConverter {
     pub(crate) fn try_convert_entity_twin_data(
         &mut self,
         source: &EntityTopicId,
-        message: &Message,
+        message: &MqttMessage,
         mut fragment_key: &str,
-    ) -> Result<Vec<Message>, ConversionError> {
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if fragment_key == "name" || fragment_key == "type" {
             warn!("Updating the entity `name` and `type` fields via the twin/ topic channel is not supported");
             return Ok(vec![]);
@@ -112,17 +114,19 @@ impl CumulocityConverter {
         &self,
         source: &EntityTopicId,
         fragment_value: JsonValue,
-    ) -> Result<Message, ConversionError> {
+    ) -> Result<MqttMessage, ConversionError> {
         let inventory_update_topic = self.get_inventory_update_topic(source)?;
 
-        Ok(Message::new(
+        Ok(MqttMessage::new(
             &inventory_update_topic,
             fragment_value.to_string(),
         ))
     }
 
     /// Create the inventory update message to update the `type` of the main device
-    pub(crate) fn inventory_device_type_update_message(&self) -> Result<Message, ConversionError> {
+    pub(crate) fn inventory_device_type_update_message(
+        &self,
+    ) -> Result<MqttMessage, ConversionError> {
         let device_data = C8yDeviceDataFragment::from_type(&self.device_type)?;
         let device_type_fragment = device_data.to_json()?;
 
@@ -187,7 +191,7 @@ mod tests {
     use crate::converter::tests::create_c8y_converter;
     use serde_json::json;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
-    use tedge_mqtt_ext::Message;
+    use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -202,7 +206,7 @@ mod tests {
           "version": "11"
         });
         let twin_message =
-            Message::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
+            MqttMessage::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
         let inventory_messages = converter.convert(&twin_message).await;
 
         assert_messages_matching(
@@ -225,7 +229,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
             r#""bar""#, // String values must be quoted to be valid JSON string values
         );
@@ -248,7 +252,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
             "unquoted value",
         );
@@ -261,7 +265,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
             r#"5.6789"#,
         );
@@ -284,7 +288,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/enabled"),
             r#"false"#,
         );
@@ -307,7 +311,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/name"),
             r#"New Name"#,
         );
@@ -326,14 +330,14 @@ mod tests {
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
         // Register a twin data fragment first
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
             "\"bar\"",
         );
         let _ = converter.convert(&twin_message).await;
 
         // Clear that fragment
-        let twin_message = Message::new(&Topic::new_unchecked("te/device/main///twin/foo"), "");
+        let twin_message = MqttMessage::new(&Topic::new_unchecked("te/device/main///twin/foo"), "");
         let inventory_messages = converter.convert(&twin_message).await;
 
         assert_messages_matching(
@@ -356,7 +360,7 @@ mod tests {
           "version": "11"
         });
         let twin_message =
-            Message::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
+            MqttMessage::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
         let inventory_messages = converter.convert(&twin_message).await;
 
         assert_messages_matching(
@@ -382,7 +386,7 @@ mod tests {
         );
 
         // Assert that the same payload with different key order is also ignored
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked(twin_topic),
             r#"{"version": "11","family": "Debian"}"#,
         );
@@ -405,7 +409,7 @@ mod tests {
           "version": "11"
         });
         let twin_message =
-            Message::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
+            MqttMessage::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
         let inventory_messages = converter.convert(&twin_message).await;
 
         let expected_message = (
@@ -421,7 +425,7 @@ mod tests {
         assert_messages_matching(&inventory_messages, [expected_message.clone()]);
 
         let clear_message =
-            Message::new(&Topic::new_unchecked("te/device/main///twin/device_os"), "");
+            MqttMessage::new(&Topic::new_unchecked("te/device/main///twin/device_os"), "");
         let _ = converter.convert(&clear_message).await;
 
         // Assert duplicate payload converted after it was cleared
@@ -434,7 +438,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/firmware"),
             r#"{"name":"firmware", "version":"1.0"}"#,
         );
@@ -455,7 +459,7 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message = Message::new(
+        let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///twin/firmware"),
             r#"{"name":"firmware", "version":"1.0"}"#,
         );

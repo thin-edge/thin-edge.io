@@ -18,7 +18,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
-use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
@@ -47,8 +47,8 @@ impl CumulocityConverter {
         &mut self,
         topic_id: &EntityTopicId,
         _cmd_id: &str,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.config_update {
             warn!("Received a config_update command, however, config_update feature is disabled");
             return Ok(vec![]);
@@ -63,14 +63,14 @@ impl CumulocityConverter {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yDownloadConfigFile);
 
-                vec![Message::new(&sm_topic, smartrest_operation_status)]
+                vec![MqttMessage::new(&sm_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
                 let smartrest_operation_status = succeed_operation_no_payload(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
                 );
-                let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
-                let clear_local_cmd = Message::new(&message.topic, "")
+                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
@@ -79,8 +79,8 @@ impl CumulocityConverter {
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
                     fail_operation(CumulocitySupportedOperations::C8yDownloadConfigFile, reason);
-                let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
-                let clear_local_cmd = Message::new(&message.topic, "")
+                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
@@ -101,7 +101,7 @@ impl CumulocityConverter {
         device_xid: String,
         cmd_id: String,
         config_download_request: C8yDownloadConfigFile,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
         let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
 
@@ -116,8 +116,8 @@ impl CumulocityConverter {
     pub fn convert_config_update_metadata(
         &mut self,
         topic_id: &EntityTopicId,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.config_update {
             warn!("Received config_update metadata, however, config_update feature is disabled");
             return Ok(vec![]);
@@ -130,7 +130,7 @@ impl CumulocityConverter {
         cmd_id: Arc<str>,
         config_download_request: &C8yDownloadConfigFile,
         target: &EntityMetadata,
-    ) -> Vec<Message> {
+    ) -> Vec<MqttMessage> {
         let channel = Channel::Command {
             operation: OperationType::ConfigUpdate,
             cmd_id: cmd_id.to_string(),
@@ -153,7 +153,7 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        vec![Message::new(&topic, request.to_json()).with_retain()]
+        vec![MqttMessage::new(&topic, request.to_json()).with_retain()]
     }
 }
 

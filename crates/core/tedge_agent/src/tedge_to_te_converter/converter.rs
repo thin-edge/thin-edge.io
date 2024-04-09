@@ -23,7 +23,7 @@ impl TedgetoTeConverter {
         TedgetoTeConverter {}
     }
 
-    fn try_convert(&mut self, message: MqttMessage) -> Vec<tedge_mqtt_ext::Message> {
+    fn try_convert(&mut self, message: MqttMessage) -> Vec<tedge_mqtt_ext::MqttMessage> {
         match message.topic.clone() {
             topic if topic.name.starts_with("tedge/measurements") => {
                 self.convert_measurement(message)
@@ -36,7 +36,10 @@ impl TedgetoTeConverter {
 
     // tedge/measurements -> te/device/main///m/
     // tedge/measurements/child -> te/device/child///m/
-    fn convert_measurement(&mut self, mut message: MqttMessage) -> Vec<tedge_mqtt_ext::Message> {
+    fn convert_measurement(
+        &mut self,
+        mut message: MqttMessage,
+    ) -> Vec<tedge_mqtt_ext::MqttMessage> {
         let te_topic = match message.topic.name.split('/').collect::<Vec<_>>()[..] {
             ["tedge", "measurements"] => Topic::new_unchecked("te/device/main///m/"),
             ["tedge", "measurements", cid] => {
@@ -84,7 +87,7 @@ impl TedgetoTeConverter {
 
     // tedge/events/event_type -> te/device/main///e/event_type
     // tedge/events/event_type/child -> te/device/child///e/event_type
-    fn convert_event(&mut self, mut message: MqttMessage) -> Vec<tedge_mqtt_ext::Message> {
+    fn convert_event(&mut self, mut message: MqttMessage) -> Vec<tedge_mqtt_ext::MqttMessage> {
         let topic = match message.topic.name.split('/').collect::<Vec<_>>()[..] {
             ["tedge", "events", event_type] => {
                 Topic::new_unchecked(format!("te/device/main///e/{event_type}").as_str())
