@@ -1,9 +1,9 @@
 use clock::Timestamp;
-use tedge_api::group::MeasurementGroup;
-use tedge_api::group::MeasurementGrouper;
-use tedge_api::group::MeasurementGrouperError;
+use tedge_api::measurement::MeasurementGroup;
+use tedge_api::measurement::MeasurementGrouper;
+use tedge_api::measurement::MeasurementGrouperError;
 use tedge_api::measurement::MeasurementVisitor;
-use tedge_api::serialize::ThinEdgeJsonSerializer;
+use tedge_api::measurement::ThinEdgeJsonSerializer;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 

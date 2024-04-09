@@ -276,7 +276,7 @@ fn invalid_empty_measurement(key: &str) -> String {
 fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
     const MAX_INPUT_EXCERPT: usize = 80;
     let input_excerpt =
-        crate::utils::excerpt(input, error.line(), error.column(), MAX_INPUT_EXCERPT);
+        crate::measurement::utils::excerpt(input, error.line(), error.column(), MAX_INPUT_EXCERPT);
     ThinEdgeJsonParserError {
         error,
         input_excerpt,
@@ -287,11 +287,11 @@ mod tests {
     use time::macros::datetime;
     use time::OffsetDateTime;
 
-    use crate::parser::parse_str;
+    use super::parse_str;
 
     #[test]
     fn it_deserializes_thin_edge_json() -> anyhow::Result<()> {
-        use crate::builder::ThinEdgeJsonBuilder;
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
         let input = r#"{
         "time" : "2021-04-30T17:03:14.123+02:00",
         "pressure": 123.4,
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn it_shows_input_excerpt_on_error() {
-        use crate::builder::ThinEdgeJsonBuilder;
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : null\n}";
 
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn it_accepts_unix_timestamps_in_place_of_iso_8601() {
-        use crate::builder::ThinEdgeJsonBuilder;
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : 1701949168,\n\"test\": 1023}";
         let expected_timestamp = OffsetDateTime::parse(
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn it_accepts_decimals_as_unix_timestamps() {
-        use crate::builder::ThinEdgeJsonBuilder;
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : 1701949168.001,\n\"test\": 1023}";
         let expected_timestamp = OffsetDateTime::parse(
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn it_produces_a_clear_error_message_when_unix_timestamp_is_out_of_range() {
-        use crate::builder::ThinEdgeJsonBuilder;
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : -377705116801,\n\"test\": 1023}";
         let mut builder = ThinEdgeJsonBuilder::default();
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn parse_type_as_measurement() {
-        use crate::builder::ThinEdgeJsonBuilder;
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = r#"{
             "time" : "2021-04-30T17:03:14.123+02:00",
