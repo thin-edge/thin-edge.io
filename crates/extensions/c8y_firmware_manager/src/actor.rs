@@ -27,7 +27,6 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
-use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_mqtt_ext::MqttMessage;
 
 fan_in_message_type!(FirmwareInput[MqttMessage, OperationOutcome] : Debug);
@@ -208,13 +207,6 @@ impl FirmwareManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), FirmwareManagementError> {
-        let topic_name = &message.topic.name;
-        let child_id = get_child_id_from_child_topic(topic_name).ok_or(
-            FirmwareManagementError::InvalidTopicFromChildOperation {
-                topic: topic_name.to_string(),
-            },
-        )?;
-
         match FirmwareOperationResponse::try_from(&message) {
             Ok(response) => {
                 if let Err(err) =
@@ -224,7 +216,7 @@ impl FirmwareManagerActor {
                         .await
                 {
                     self.fail_operation_in_cloud(
-                        &child_id,
+                        &response.get_child_id(),
                         Some(response.get_payload().operation_id.as_str()),
                         &err.to_string(),
                     )
@@ -233,7 +225,7 @@ impl FirmwareManagerActor {
             }
             Err(err) => {
                 // Ignore bad responses. Eventually, timeout will fail an operation.
-                error!("Received a firmware update response with invalid payload for child {child_id}. Error: {err}");
+                error!("Received a firmware update response with invalid payload:  {err}");
             }
         }
         Ok(())

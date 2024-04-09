@@ -16,7 +16,6 @@ pub mod pending_entity_store;
 mod ring_buffer;
 pub mod serialize;
 mod software;
-pub mod topic;
 pub mod utils;
 pub mod workflow;
 

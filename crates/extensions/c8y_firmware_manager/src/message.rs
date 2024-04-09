@@ -8,7 +8,6 @@ use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations::C8yFirmware;
 use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
 use c8y_api::smartrest::smartrest_serializer::SmartRest;
-use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -98,11 +97,17 @@ impl TryFrom<&MqttMessage> for FirmwareOperationResponse {
 
     fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let topic = &message.topic.name;
-        let child_id = get_child_id_from_child_topic(topic).ok_or(
-            FirmwareManagementError::InvalidTopicFromChildOperation {
-                topic: topic.into(),
-            },
-        )?;
+        let child_id = match topic.split('/').collect::<Vec<&str>>()[..] {
+            // This plugin is still listening to the deprecated `tedge` command topic
+            ["tedge", child_id, "commands", "res", "firmware_update"] if !child_id.is_empty() => {
+                child_id.to_string()
+            }
+            _ => {
+                return Err(FirmwareManagementError::InvalidTopicFromChildOperation {
+                    topic: topic.into(),
+                })
+            }
+        };
         let request_payload: ResponsePayload = serde_json::from_str(message.payload_str()?)?;
 
         Ok(Self {
