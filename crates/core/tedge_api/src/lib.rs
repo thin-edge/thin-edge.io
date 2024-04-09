@@ -39,7 +39,7 @@ mod tests {
     use crate::mqtt_topics::EntityTopicId;
     use crate::mqtt_topics::MqttSchema;
     use crate::mqtt_topics::OperationType;
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use mqtt_channel::QoS;
     use mqtt_channel::Topic;
 
@@ -91,7 +91,7 @@ mod tests {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let request = SoftwareListCommand::new(&device, "1".to_string());
 
-        let expected_msg = Message {
+        let expected_msg = MqttMessage {
             topic: Topic::new_unchecked("te/device/abc///cmd/software_list/1"),
             payload: r#"{"status":"init"}"#.to_string().into(),
             qos: QoS::AtLeastOnce,

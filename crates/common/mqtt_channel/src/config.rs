@@ -1,4 +1,4 @@
-use crate::Message;
+use crate::MqttMessage;
 use crate::TopicFilter;
 use certificate::parse_root_certificate;
 use certificate::CertificateError;
@@ -51,7 +51,7 @@ pub struct Config {
     /// LastWill message for a mqtt client
     ///
     /// Default: None
-    pub last_will_message: Option<Message>,
+    pub last_will_message: Option<MqttMessage>,
 
     /// With first message on connection
     ///
@@ -130,17 +130,17 @@ impl zeroize::Zeroize for PrivateKey {
 
 #[derive(Clone)]
 pub struct InitMessageFn {
-    initfn: Arc<Box<dyn Fn() -> Message + Send + Sync>>,
+    initfn: Arc<Box<dyn Fn() -> MqttMessage + Send + Sync>>,
 }
 
 impl InitMessageFn {
-    pub fn new(call_back: impl Fn() -> Message + Sync + Send + 'static) -> InitMessageFn {
+    pub fn new(call_back: impl Fn() -> MqttMessage + Sync + Send + 'static) -> InitMessageFn {
         InitMessageFn {
             initfn: Arc::new(Box::new(call_back)),
         }
     }
 
-    pub fn new_init_message(&self) -> Message {
+    pub fn new_init_message(&self) -> MqttMessage {
         (*self.initfn)()
     }
 }
@@ -241,7 +241,7 @@ impl Config {
     }
 
     /// Set the last will message, this will be published when the mqtt connection gets closed.
-    pub fn with_last_will_message(self, lwm: Message) -> Self {
+    pub fn with_last_will_message(self, lwm: MqttMessage) -> Self {
         Self {
             last_will_message: Some(lwm),
             ..self
@@ -251,7 +251,7 @@ impl Config {
     /// Set the initial message
     pub fn with_initial_message(
         self,
-        initial_message: impl Fn() -> Message + Send + Sync + 'static,
+        initial_message: impl Fn() -> MqttMessage + Send + Sync + 'static,
     ) -> Self {
         Self {
             initial_message: Some(InitMessageFn::new(initial_message)),

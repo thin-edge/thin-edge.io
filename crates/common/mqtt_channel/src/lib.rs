@@ -1,7 +1,7 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```no_run
-//! use mqtt_channel::{Config, Connection, Message, Topic, MqttError, StreamExt, SinkExt};
+//! use mqtt_channel::{Config, Connection, MqttMessage, Topic, MqttError, StreamExt, SinkExt};
 //! use std::convert::TryInto;
 //!
 //! #[tokio::main]
@@ -17,7 +17,7 @@
 //!
 //!     // Messages are published by sending them on the published channel
 //!     let output_topic = "test/output/topic".try_into()?;
-//!     published_messages.send(Message::new(&output_topic, "hello mqtt")).await?;
+//!     published_messages.send(MqttMessage::new(&output_topic, "hello mqtt")).await?;
 //!
 //!     // Messages are received from the subscriptions on the received channel
 //!     let message = received_messages.next().await.ok_or(MqttError::ReadOnClosedConnection)?;

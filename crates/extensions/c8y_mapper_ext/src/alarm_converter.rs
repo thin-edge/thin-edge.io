@@ -8,7 +8,7 @@ use tedge_api::alarm::ThinEdgeAlarmDeserializerError;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::EntityStore;
 use tedge_config::TopicPrefix;
-use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
 use crate::error::ConversionError;
@@ -19,8 +19,8 @@ const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "alarm/alarms/create";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlarmConverter {
     Syncing {
-        pending_alarms_map: HashMap<String, Message>,
-        old_alarms_map: HashMap<String, Message>,
+        pending_alarms_map: HashMap<String, MqttMessage>,
+        old_alarms_map: HashMap<String, MqttMessage>,
     },
     Synced,
 }
@@ -36,12 +36,12 @@ impl AlarmConverter {
     pub(crate) fn try_convert_alarm(
         &mut self,
         source: &EntityTopicId,
-        input_message: &Message,
+        input_message: &MqttMessage,
         alarm_type: &str,
         entity_store: &EntityStore,
         c8y_prefix: &TopicPrefix,
-    ) -> Result<Vec<Message>, ConversionError> {
-        let mut output_messages: Vec<Message> = Vec::new();
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let mut output_messages: Vec<MqttMessage> = Vec::new();
         match self {
             Self::Syncing {
                 pending_alarms_map,
@@ -73,7 +73,8 @@ impl AlarmConverter {
                         let c8y_json_mqtt_alarms_topic =
                             format!("{c8y_prefix}/{C8Y_JSON_MQTT_ALARMS_TOPIC}");
                         let c8y_alarm_topic = Topic::new_unchecked(&c8y_json_mqtt_alarms_topic);
-                        output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
+                        output_messages
+                            .push(MqttMessage::new(&c8y_alarm_topic, cumulocity_alarm_json));
                     }
                     _ => {
                         // SmartREST
@@ -81,7 +82,7 @@ impl AlarmConverter {
                         let smartrest_topic = C8yTopic::from(&c8y_alarm)
                             .to_topic(c8y_prefix)
                             .expect("Infallible");
-                        output_messages.push(Message::new(&smartrest_topic, smartrest_alarm));
+                        output_messages.push(MqttMessage::new(&smartrest_topic, smartrest_alarm));
                     }
                 }
 
@@ -89,15 +90,15 @@ impl AlarmConverter {
                 let alarm_id = input_message.topic.name.to_string();
                 let topic =
                     Topic::new_unchecked(format!("{INTERNAL_ALARMS_TOPIC}{alarm_id}").as_str());
-                let alarm_copy =
-                    Message::new(&topic, input_message.payload_bytes().to_owned()).with_retain();
+                let alarm_copy = MqttMessage::new(&topic, input_message.payload_bytes().to_owned())
+                    .with_retain();
                 output_messages.push(alarm_copy);
             }
         }
         Ok(output_messages)
     }
 
-    pub(crate) fn process_internal_alarm(&mut self, input: &Message) {
+    pub(crate) fn process_internal_alarm(&mut self, input: &MqttMessage) {
         match self {
             Self::Syncing {
                 pending_alarms_map: _,
@@ -131,8 +132,8 @@ impl AlarmConverter {
     /// is one that was raised while the mapper process was down.
     /// An alarm present in both, if their payload is the same, is one that was already processed before the restart
     /// and hence can be ignored during sync.
-    pub(crate) fn sync(&mut self) -> Vec<Message> {
-        let mut sync_messages: Vec<Message> = Vec::new();
+    pub(crate) fn sync(&mut self) -> Vec<MqttMessage> {
+        let mut sync_messages: Vec<MqttMessage> = Vec::new();
 
         match self {
             Self::Syncing {
@@ -146,7 +147,7 @@ impl AlarmConverter {
                         // it is assumed to have been cleared while the mapper process was down
                         Entry::Vacant(_) => {
                             let topic = Topic::new_unchecked(&alarm_id);
-                            let message = Message::new(&topic, vec![]).with_retain();
+                            let message = MqttMessage::new(&topic, vec![]).with_retain();
                             // Recreate the clear alarm message and add it to the pending alarms list to be processed later
                             sync_messages.push(message);
                         }

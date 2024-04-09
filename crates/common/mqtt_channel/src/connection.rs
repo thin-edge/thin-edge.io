@@ -1,7 +1,7 @@
 use crate::Config;
 use crate::ErrChannel;
-use crate::Message;
 use crate::MqttError;
+use crate::MqttMessage;
 use crate::PubChannel;
 use crate::SubChannel;
 use futures::channel::mpsc;
@@ -24,10 +24,10 @@ use tokio::time::sleep;
 /// A connection to some MQTT server
 pub struct Connection {
     /// The channel of the input messages received by this connection.
-    pub received: mpsc::UnboundedReceiver<Message>,
+    pub received: mpsc::UnboundedReceiver<MqttMessage>,
 
     /// The channel of the output messages to be published on this connection.
-    pub published: mpsc::UnboundedSender<Message>,
+    pub published: mpsc::UnboundedSender<MqttMessage>,
 
     /// The channel of the error messages received by this connection.
     pub errors: mpsc::UnboundedReceiver<MqttError>,
@@ -120,7 +120,7 @@ impl Connection {
 
     async fn open(
         config: &Config,
-        mut message_sender: mpsc::UnboundedSender<Message>,
+        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
         const INSECURE_MQTT_PORT: u16 = 1883;
@@ -198,7 +198,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         config: Config,
         mut event_loop: EventLoop,
-        mut message_sender: mpsc::UnboundedSender<Message>,
+        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(), MqttError> {
         loop {
@@ -269,9 +269,9 @@ impl Connection {
 
     async fn sender_loop(
         mqtt_client: AsyncClient,
-        mut messages_receiver: mpsc::UnboundedReceiver<Message>,
+        mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
-        last_will: Option<Message>,
+        last_will: Option<MqttMessage>,
         done: oneshot::Sender<()>,
     ) {
         loop {

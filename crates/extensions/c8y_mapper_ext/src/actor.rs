@@ -34,7 +34,6 @@ use tedge_api::main_device_health_topic;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
@@ -213,8 +212,8 @@ impl C8yMapperActor {
                     }
                 };
 
-                let c8y_notification = Message::new(&queued_data.smartrest_topic, payload);
-                let clear_local_cmd = Message::new(&queued_data.clear_cmd_topic, "")
+                let c8y_notification = MqttMessage::new(&queued_data.smartrest_topic, payload);
+                let clear_local_cmd = MqttMessage::new(&queued_data.clear_cmd_topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
                 for converted_message in [c8y_notification, clear_local_cmd] {

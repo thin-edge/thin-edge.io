@@ -4,7 +4,7 @@ use serde::Serialize;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_config::TopicPrefix;
-use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -20,9 +20,9 @@ fn default_status() -> String {
 pub fn convert_health_status_message(
     entity: &EntityMetadata,
     ancestors_external_ids: &[String],
-    message: &Message,
+    message: &MqttMessage,
     prefix: &TopicPrefix,
-) -> Vec<Message> {
+) -> Vec<MqttMessage> {
     // TODO: introduce type to remove entity type guards
     if entity.r#type != EntityType::Service {
         return vec![];
@@ -140,8 +140,8 @@ mod tests {
         let mqtt_schema = MqttSchema::new();
         let (entity_topic_id, _) = mqtt_schema.entity_channel_of(&topic).unwrap();
 
-        let health_message = Message::new(&topic, health_payload.as_bytes().to_owned());
-        let expected_message = Message::new(
+        let health_message = MqttMessage::new(&topic, health_payload.as_bytes().to_owned());
+        let expected_message = MqttMessage::new(
             &Topic::new_unchecked(c8y_monitor_topic),
             c8y_monitor_payload.as_bytes(),
         );

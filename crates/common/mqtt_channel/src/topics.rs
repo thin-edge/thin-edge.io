@@ -1,5 +1,5 @@
 use crate::errors::MqttError;
-use crate::Message;
+use crate::MqttMessage;
 use rumqttc::QoS;
 use rumqttc::SubscribeFilter;
 use serde::Deserialize;
@@ -115,7 +115,7 @@ impl TopicFilter {
     }
 
     /// Check if the given message matches this filter pattern.
-    pub fn accept(&self, msg: &Message) -> bool {
+    pub fn accept(&self, msg: &MqttMessage) -> bool {
         self.accept_topic(&msg.topic)
     }
 

@@ -25,7 +25,7 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
-use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_uploader_ext::UploadRequest;
@@ -54,7 +54,7 @@ impl CumulocityConverter {
         device_xid: String,
         cmd_id: String,
         config_upload_request: C8yUploadConfigFile,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let target = self
             .entity_store
             .try_get_by_external_id(&device_xid.into())?;
@@ -82,7 +82,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![Message::new(&topic, request.to_json()).with_retain()])
+        Ok(vec![
+            MqttMessage::new(&topic, request.to_json()).with_retain()
+        ])
     }
 
     /// Address received ThinEdge config_snapshot command. If its status is
@@ -93,8 +95,8 @@ impl CumulocityConverter {
         &mut self,
         topic_id: &EntityTopicId,
         cmd_id: &str,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.config_snapshot {
             warn!(
                 "Received a config_snapshot command, however, config_snapshot feature is disabled"
@@ -111,7 +113,10 @@ impl CumulocityConverter {
             CommandStatus::Executing => {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yUploadConfigFile);
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
+                vec![MqttMessage::new(
+                    &smartrest_topic,
+                    smartrest_operation_status,
+                )]
             }
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
@@ -154,8 +159,9 @@ impl CumulocityConverter {
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
                     fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, reason);
-                let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
-                let clear_local_cmd = Message::new(&message.topic, "")
+                let c8y_notification =
+                    MqttMessage::new(&smartrest_topic, smartrest_operation_status);
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
                 vec![c8y_notification, clear_local_cmd]
@@ -175,7 +181,7 @@ impl CumulocityConverter {
         cmd_id: CmdId,
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
-    ) -> Result<Vec<Message>, ConversionError> {
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         let target = self.entity_store.try_get(&fts_download.entity_topic_id)?;
         let smartrest_topic =
             self.smartrest_publish_topic_for_entity(&fts_download.entity_topic_id)?;
@@ -190,8 +196,8 @@ impl CumulocityConverter {
                         &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
                     );
 
-                let c8y_notification = Message::new(&smartrest_topic, smartrest_error);
-                let clean_operation = Message::new(&fts_download.message.topic, "")
+                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
+                let clean_operation = MqttMessage::new(&fts_download.message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
@@ -246,8 +252,8 @@ impl CumulocityConverter {
     pub fn convert_config_snapshot_metadata(
         &mut self,
         topic_id: &EntityTopicId,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.config_snapshot {
             warn!(
                 "Received config_snapshot metadata, however, config_snapshot feature is disabled"

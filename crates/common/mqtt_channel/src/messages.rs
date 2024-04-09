@@ -12,7 +12,7 @@ use std::fmt::Write;
 
 /// A message to be sent to or received from MQTT.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Message {
+pub struct MqttMessage {
     pub topic: Topic,
     pub payload: DebugPayload,
     #[serde(serialize_with = "serialize_qos", deserialize_with = "deserialize_qos")]
@@ -135,12 +135,12 @@ impl DebugPayload {
 /// A message payload
 pub type Payload = Vec<u8>;
 
-impl Message {
-    pub fn new<B>(topic: &Topic, payload: B) -> Message
+impl MqttMessage {
+    pub fn new<B>(topic: &Topic, payload: B) -> MqttMessage
     where
         B: Into<Payload>,
     {
-        Message {
+        MqttMessage {
             topic: topic.clone(),
             payload: DebugPayload(payload.into()),
             qos: QoS::AtLeastOnce,
@@ -175,15 +175,15 @@ impl Message {
     }
 }
 
-impl From<Message> for Publish {
-    fn from(val: Message) -> Self {
+impl From<MqttMessage> for Publish {
+    fn from(val: MqttMessage) -> Self {
         let mut publish = Publish::new(&val.topic.name, val.qos, val.payload.0);
         publish.retain = val.retain;
         publish
     }
 }
 
-impl From<Publish> for Message {
+impl From<Publish> for MqttMessage {
     fn from(msg: Publish) -> Self {
         let Publish {
             topic,
@@ -193,7 +193,7 @@ impl From<Publish> for Message {
             ..
         } = msg;
 
-        Message {
+        MqttMessage {
             topic: Topic::new_unchecked(&topic),
             payload: DebugPayload(payload.to_vec()),
             qos,
@@ -202,13 +202,13 @@ impl From<Publish> for Message {
     }
 }
 
-impl<T, U> From<(T, U)> for Message
+impl<T, U> From<(T, U)> for MqttMessage
 where
     T: AsRef<str>,
     U: AsRef<str>,
 {
     fn from(value: (T, U)) -> Self {
-        Message::new(&Topic::new_unchecked(value.0.as_ref()), value.1.as_ref())
+        MqttMessage::new(&Topic::new_unchecked(value.0.as_ref()), value.1.as_ref())
     }
 }
 
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn check_null_terminated_messages() {
         let topic = Topic::new("trimmed").unwrap();
-        let message = Message::new(&topic, &b"123\0"[..]);
+        let message = MqttMessage::new(&topic, &b"123\0"[..]);
 
         assert_eq!(message.payload_bytes(), b"123");
     }
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn payload_bytes_removes_only_last_null_char() {
         let topic = Topic::new("trimmed").unwrap();
-        let message = Message::new(&topic, &b"123\0\0"[..]);
+        let message = MqttMessage::new(&topic, &b"123\0\0"[..]);
 
         assert_eq!(message.payload_bytes(), b"123\0");
     }
@@ -237,21 +237,21 @@ mod tests {
     #[test]
     fn check_empty_messages() {
         let topic = Topic::new("trimmed").unwrap();
-        let message = Message::new(&topic, &b""[..]);
+        let message = MqttMessage::new(&topic, &b""[..]);
 
         assert_eq!(message.payload_bytes(), b"");
     }
     #[test]
     fn check_non_null_terminated_messages() {
         let topic = Topic::new("trimmed").unwrap();
-        let message = Message::new(&topic, &b"123"[..]);
+        let message = MqttMessage::new(&topic, &b"123"[..]);
 
         assert_eq!(message.payload_bytes(), b"123");
     }
     #[test]
     fn payload_str_with_invalid_utf8_char_in_the_middle() {
         let topic = Topic::new("trimmed").unwrap();
-        let message = Message::new(&topic, &b"temperature\xc3\x28"[..]);
+        let message = MqttMessage::new(&topic, &b"temperature\xc3\x28"[..]);
         assert_eq!(
             message.payload_str().unwrap_err().to_string(),
             "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 11: temperature..."
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn payload_str_with_invalid_utf8_char_in_the_beginning() {
         let topic = Topic::new("trimmed").unwrap();
-        let message = Message::new(&topic, &b"\xc3\x28"[..]);
+        let message = MqttMessage::new(&topic, &b"\xc3\x28"[..]);
         assert_eq!(
             message.payload_str().unwrap_err().to_string(),
             "Invalid UTF8 payload: invalid utf-8 sequence of 1 bytes from index 0: ..."
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn message_serialize_deserialize() {
-        let message = Message {
+        let message = MqttMessage {
             topic: Topic::new("test").unwrap(),
             payload: DebugPayload("test-payload".as_bytes().to_vec()),
             qos: QoS::AtMostOnce,
@@ -278,7 +278,8 @@ mod tests {
 
         let json = serde_json::to_value(&message).expect("Serialization failed");
         assert_eq!(json.get("payload").unwrap(), &json!("test-payload"));
-        let deserialized: Message = serde_json::from_value(json).expect("Deserialization failed");
+        let deserialized: MqttMessage =
+            serde_json::from_value(json).expect("Deserialization failed");
         assert_eq!(deserialized, message);
     }
 }

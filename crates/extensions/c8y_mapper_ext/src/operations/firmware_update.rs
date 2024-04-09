@@ -18,7 +18,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::CommandStatus;
 use tedge_api::Jsonify;
-use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
@@ -40,7 +40,7 @@ impl CumulocityConverter {
         device_xid: String,
         cmd_id: String,
         firmware_request: C8yFirmware,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
 
         let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
@@ -67,7 +67,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![Message::new(&topic, request.to_json()).with_retain()])
+        Ok(vec![
+            MqttMessage::new(&topic, request.to_json()).with_retain()
+        ])
     }
 
     /// Address a received ThinEdge firmware_update command. If its status is
@@ -77,8 +79,8 @@ impl CumulocityConverter {
     pub async fn handle_firmware_update_state_change(
         &mut self,
         topic_id: &EntityTopicId,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.firmware_update {
             warn!(
                 "Received a firmware_update command, however, firmware_update feature is disabled"
@@ -95,14 +97,14 @@ impl CumulocityConverter {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yFirmware);
 
-                vec![Message::new(&sm_topic, smartrest_operation_status)]
+                vec![MqttMessage::new(&sm_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
                 let smartrest_operation_status =
                     succeed_operation_no_payload(CumulocitySupportedOperations::C8yFirmware);
-                let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
+                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
 
-                let clear_local_cmd = Message::new(&message.topic, "")
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
@@ -120,7 +122,7 @@ impl CumulocityConverter {
                 };
 
                 let twin_metadata =
-                    Message::new(&twin_metadata_topic, twin_metadata_payload.to_json())
+                    MqttMessage::new(&twin_metadata_topic, twin_metadata_payload.to_json())
                         .with_retain()
                         .with_qos(QoS::AtLeastOnce);
 
@@ -129,8 +131,8 @@ impl CumulocityConverter {
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
                     fail_operation(CumulocitySupportedOperations::C8yFirmware, reason);
-                let c8y_notification = Message::new(&sm_topic, smartrest_operation_status);
-                let clear_local_cmd = Message::new(&message.topic, "")
+                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
@@ -147,7 +149,7 @@ impl CumulocityConverter {
     pub fn register_firmware_update_operation(
         &mut self,
         topic_id: &EntityTopicId,
-    ) -> Result<Vec<Message>, ConversionError> {
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.firmware_update {
             warn!(
                 "Received firmware_update metadata, however, firmware_update feature is disabled"

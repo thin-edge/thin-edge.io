@@ -1,7 +1,7 @@
 //! The message log is a persistent append-only log of MQTT messages.
 //! Each line is the JSON representation of that MQTT message.
 //! The underlying file is a JSON lines file.
-use mqtt_channel::Message as MqttMessage;
+use mqtt_channel::MqttMessage;
 use serde_json::json;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -120,7 +120,7 @@ mod tests {
     use crate::message_log::MessageLogReader;
 
     use super::MessageLogWriter;
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use mqtt_channel::Topic;
     use tempfile::tempdir;
 
@@ -131,7 +131,7 @@ mod tests {
         // Prepare some dummy messages
         let mut messages = vec![];
         for i in 1..5 {
-            let message = Message::new(
+            let message = MqttMessage::new(
                 &Topic::new(&format!("topic{i}")).unwrap(),
                 format!("payload{i}"),
             );

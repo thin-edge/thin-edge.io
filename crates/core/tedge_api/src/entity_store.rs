@@ -20,7 +20,7 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use serde_json::json;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
@@ -119,10 +119,10 @@ type ExternalIdValidatorFn =
 /// # Examples
 ///
 /// ```
-/// # use mqtt_channel::{Message, Topic};
+/// # use mqtt_channel::{MqttMessage, Topic};
 /// # use tedge_api::mqtt_topics::MqttSchema;
 /// # use tedge_api::entity_store::{EntityStore, EntityRegistrationMessage};
-/// let mqtt_message = Message::new(
+/// let mqtt_message = MqttMessage::new(
 ///     &Topic::new("te/device/main//").unwrap(),
 ///     r#"{"@type": "device"}"#.to_string(),
 /// );
@@ -704,7 +704,7 @@ impl EntityStore {
         Ok(updated)
     }
 
-    pub fn cache_early_data_message(&mut self, message: Message) {
+    pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entity_store.cache_early_data_message(message)
     }
 }
@@ -844,7 +844,7 @@ impl EntityRegistrationMessage {
     // TODO: this is basically manual Deserialize implementation, better impl
     // Serialize/Deserialize.
     #[must_use]
-    pub fn new(message: &Message) -> Option<Self> {
+    pub fn new(message: &MqttMessage) -> Option<Self> {
         let topic_id = message
             .topic
             .name
@@ -949,7 +949,7 @@ impl EntityRegistrationMessage {
     }
 
     // TODO: manual serialize impl
-    pub fn to_mqtt_message(mut self, mqtt_schema: &MqttSchema) -> Message {
+    pub fn to_mqtt_message(mut self, mqtt_schema: &MqttSchema) -> MqttMessage {
         let mut props = serde_json::Map::new();
 
         props.insert("@type".to_string(), self.r#type.to_string().into());
@@ -967,14 +967,14 @@ impl EntityRegistrationMessage {
         let message = serde_json::to_string(&props).unwrap();
 
         let message_topic = mqtt_schema.topic_for(&self.topic_id, &Channel::EntityMetadata);
-        Message::new(&message_topic, message).with_retain()
+        MqttMessage::new(&message_topic, message).with_retain()
     }
 }
 
-impl TryFrom<&Message> for EntityRegistrationMessage {
+impl TryFrom<&MqttMessage> for EntityRegistrationMessage {
     type Error = ();
 
-    fn try_from(value: &Message) -> Result<Self, Self::Error> {
+    fn try_from(value: &MqttMessage) -> Result<Self, Self::Error> {
         EntityRegistrationMessage::new(value).ok_or(())
     }
 }
@@ -1009,14 +1009,14 @@ impl EntityTwinMessage {
         }
     }
 
-    pub fn to_mqtt_message(self, mqtt_schema: &MqttSchema) -> Message {
+    pub fn to_mqtt_message(self, mqtt_schema: &MqttSchema) -> MqttMessage {
         let message_topic = mqtt_schema.topic_for(
             &self.topic_id,
             &Channel::EntityTwinData {
                 fragment_key: self.fragment_key,
             },
         );
-        Message::new(&message_topic, self.fragment_value.to_string()).with_retain()
+        MqttMessage::new(&message_topic, self.fragment_value.to_string()).with_retain()
     }
 }
 
@@ -1056,7 +1056,7 @@ mod tests {
 
     #[test]
     fn parse_entity_registration_message() {
-        let message = Message::new(
+        let message = MqttMessage::new(
             &Topic::new("te/device/child1//").unwrap(),
             json!({
                 "@type" : "child-device",
@@ -1098,7 +1098,7 @@ mod tests {
         // child of the main device.
         let updated_entities = store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child1//").unwrap(),
                     json!({"@type": "child-device"}).to_string(),
                 ))
@@ -1114,7 +1114,7 @@ mod tests {
 
         let updated_entities = store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child2//").unwrap(),
                     json!({"@type": "child-device", "@parent": "device/main//"}).to_string(),
                 ))
@@ -1183,7 +1183,7 @@ mod tests {
         // Register service on main
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/main/service/collectd").unwrap(),
                     json!({"@type": "service"}).to_string(),
                 ))
@@ -1202,7 +1202,7 @@ mod tests {
         // Register immediate child of main
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child1//").unwrap(),
                     json!({"@type": "child-device"}).to_string(),
                 ))
@@ -1221,7 +1221,7 @@ mod tests {
         // Register service on child1
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child1/service/collectd").unwrap(),
                     json!({"@type": "service"}).to_string(),
                 ))
@@ -1240,7 +1240,7 @@ mod tests {
         // Register child2 as child of child1
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child2//").unwrap(),
                     json!({"@type": "child-device", "@parent": "device/child1//"}).to_string(),
                 ))
@@ -1259,7 +1259,7 @@ mod tests {
         // Register service on child2
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child2/service/collectd").unwrap(),
                     json!({"@type": "service"}).to_string(),
                 ))
@@ -1290,7 +1290,7 @@ mod tests {
         // Register service on main
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/main/service/collectd").unwrap(),
                     json!({"@type": "service"}).to_string(),
                 ))
@@ -1309,7 +1309,7 @@ mod tests {
         // Register immediate child of main
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child1//").unwrap(),
                     json!({"@type": "child-device"}).to_string(),
                 ))
@@ -1328,7 +1328,7 @@ mod tests {
         // Register service on child1
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child1/service/collectd").unwrap(),
                     json!({"@type": "service"}).to_string(),
                 ))
@@ -1349,7 +1349,7 @@ mod tests {
         // Register child2 as child of child1
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child2//").unwrap(),
                     json!({"@type": "child-device", "@parent": "device/child1//"}).to_string(),
                 ))
@@ -1368,7 +1368,7 @@ mod tests {
         // Register service on child2
         store
             .update(
-                EntityRegistrationMessage::new(&Message::new(
+                EntityRegistrationMessage::new(&MqttMessage::new(
                     &Topic::new("te/device/child2/service/collectd").unwrap(),
                     json!({"@type": "service"}).to_string(),
                 ))

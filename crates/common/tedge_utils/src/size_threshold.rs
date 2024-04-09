@@ -1,11 +1,11 @@
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use thiserror::Error;
 
 #[derive(Debug)]
 pub struct SizeThreshold(pub usize);
 
 impl SizeThreshold {
-    pub fn validate(&self, input: &Message) -> Result<(), SizeThresholdExceededError> {
+    pub fn validate(&self, input: &MqttMessage) -> Result<(), SizeThresholdExceededError> {
         let size = input.payload_bytes().len();
         let threshold = self.0;
         if size > threshold {

@@ -1,10 +1,10 @@
 pub mod bridge {
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use tedge_api::main_device_health_topic;
     use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
     use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
 
-    pub fn is_c8y_bridge_established(message: &Message, service: &str) -> bool {
+    pub fn is_c8y_bridge_established(message: &MqttMessage, service: &str) -> bool {
         let c8y_bridge_health_topic = main_device_health_topic(service);
         match message.payload_str() {
             Ok(payload) => {
@@ -30,11 +30,11 @@ pub mod bridge {
 
 pub mod child_device {
     use crate::smartrest::topic::C8yTopic;
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use tedge_config::TopicPrefix;
 
-    pub fn new_child_device_message(child_id: &str, prefix: &TopicPrefix) -> Message {
-        Message::new(
+    pub fn new_child_device_message(child_id: &str, prefix: &TopicPrefix) -> MqttMessage {
+        MqttMessage::new(
             &C8yTopic::upstream_topic(prefix),
             format!("101,{child_id},{child_id},thin-edge.io-child"),
         )
@@ -43,7 +43,7 @@ pub mod child_device {
 
 #[cfg(test)]
 mod tests {
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use mqtt_channel::Topic;
     use test_case::test_case;
 
@@ -59,7 +59,7 @@ mod tests {
     #[test_case("tedge/not/health/topic", "0", false)]
     fn test_bridge_is_established(topic: &str, payload: &str, expected: bool) {
         let topic = Topic::new(topic).unwrap();
-        let message = Message::new(&topic, payload);
+        let message = MqttMessage::new(&topic, payload);
 
         let actual = is_c8y_bridge_established(&message, "tedge-mapper-bridge-c8y");
         assert_eq!(actual, expected);

@@ -9,7 +9,7 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 pub use error::*;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 pub use script::*;
 use serde::Deserialize;
@@ -192,7 +192,7 @@ impl OperationWorkflow {
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,
-    ) -> Option<Message> {
+    ) -> Option<MqttMessage> {
         match self.operation {
             // Need to treat SoftwareList and SoftwareUpdate as exceptions as they require software types in the payload
             OperationType::SoftwareList | OperationType::SoftwareUpdate => None,
@@ -200,7 +200,7 @@ impl OperationWorkflow {
                 let meta_topic = schema.capability_topic_for(target, self.operation.clone());
                 let payload = "{}".to_string();
                 Some(
-                    Message::new(&meta_topic, payload)
+                    MqttMessage::new(&meta_topic, payload)
                         .with_retain()
                         .with_qos(QoS::AtLeastOnce),
                 )
@@ -216,7 +216,7 @@ impl OperationWorkflow {
     /// - `Err(error)` when the request is ill-formed
     pub fn get_operation_current_action(
         &self,
-        message: &Message,
+        message: &MqttMessage,
     ) -> Result<Option<(GenericCommandState, OperationAction)>, WorkflowExecutionError> {
         match GenericCommandState::from_command_message(message) {
             Ok(Some(command_state)) => {

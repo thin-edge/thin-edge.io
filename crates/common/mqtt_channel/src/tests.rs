@@ -45,18 +45,18 @@ async fn subscribing_to_messages() -> Result<(), anyhow::Error> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum MaybeMessage {
-    Next(Message),
+    Next(MqttMessage),
     Eos,
     Timeout,
 }
 
-fn message(t: &str, p: &str) -> Message {
+fn message(t: &str, p: &str) -> MqttMessage {
     let topic = Topic::new(t).expect("a valid topic");
     let payload = p.as_bytes();
-    Message::new(&topic, payload)
+    MqttMessage::new(&topic, payload)
 }
 
-async fn next_message(received: &mut (impl StreamExt<Item = Message> + Unpin)) -> MaybeMessage {
+async fn next_message(received: &mut (impl StreamExt<Item = MqttMessage> + Unpin)) -> MaybeMessage {
     match tokio::time::timeout(TIMEOUT, received.next()).await {
         Ok(Some(msg)) => MaybeMessage::Next(msg),
         Ok(None) => MaybeMessage::Eos,
@@ -181,7 +181,7 @@ async fn implementing_a_message_mapper() -> Result<(), anyhow::Error> {
         while let MaybeMessage::Next(msg) = next_message(&mut input).await {
             let req = msg.payload_str().expect("utf8 payload");
             let res = req.to_uppercase();
-            let msg = Message::new(&out_topic, res.as_bytes());
+            let msg = MqttMessage::new(&out_topic, res.as_bytes());
             if output.send(msg).await.is_err() {
                 // the connection has been closed
                 break;
@@ -253,7 +253,7 @@ async fn testing_an_mqtt_client_without_mqtt() -> Result<(), anyhow::Error> {
         while let Some(msg) = input.next().await {
             let req = msg.payload_str().expect("utf8 payload");
             let res = req.to_uppercase();
-            let msg = Message::new(&out_topic, res.as_bytes());
+            let msg = MqttMessage::new(&out_topic, res.as_bytes());
             if output.send(msg).await.is_err() {
                 break;
             }
@@ -456,15 +456,15 @@ async fn ensure_that_all_messages_are_sent_before_disconnect() -> Result<(), any
                 let mut con = Connection::new(&mqtt_config).await.expect("a connection");
 
                 con.published
-                    .send(Message::new(&topic, "datum 1"))
+                    .send(MqttMessage::new(&topic, "datum 1"))
                     .await
                     .expect("message sent");
                 con.published
-                    .send(Message::new(&topic, "datum 2"))
+                    .send(MqttMessage::new(&topic, "datum 2"))
                     .await
                     .expect("message sent");
                 con.published
-                    .send(Message::new(&topic, "datum 3"))
+                    .send(MqttMessage::new(&topic, "datum 3"))
                     .await
                     .expect("message sent");
 
@@ -498,7 +498,7 @@ async fn ensure_that_last_will_message_is_delivered() -> Result<(), anyhow::Erro
         let topic = Topic::new_unchecked(topic);
         let mqtt_config = Config::default()
             .with_port(broker.port)
-            .with_last_will_message(Message {
+            .with_last_will_message(MqttMessage {
                 topic: topic.clone(),
                 payload: "good bye".to_string().into(),
                 qos: QoS::AtLeastOnce,
@@ -507,17 +507,17 @@ async fn ensure_that_last_will_message_is_delivered() -> Result<(), anyhow::Erro
         let mut con = Connection::new(&mqtt_config).await.expect("a connection");
 
         con.published
-            .send(Message::new(&topic, "hello 1"))
+            .send(MqttMessage::new(&topic, "hello 1"))
             .await
             .expect("message sent");
 
         con.published
-            .send(Message::new(&topic, "hello 2"))
+            .send(MqttMessage::new(&topic, "hello 2"))
             .await
             .expect("message sent");
 
         con.published
-            .send(Message::new(&topic, "hello 3"))
+            .send(MqttMessage::new(&topic, "hello 3"))
             .await
             .expect("message sent");
 

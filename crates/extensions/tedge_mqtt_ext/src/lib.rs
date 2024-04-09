@@ -23,10 +23,9 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 
 pub type MqttConfig = mqtt_channel::Config;
-pub type MqttMessage = mqtt_channel::Message;
 pub use mqtt_channel::DebugPayload;
-pub use mqtt_channel::Message;
 pub use mqtt_channel::MqttError;
+pub use mqtt_channel::MqttMessage;
 pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;

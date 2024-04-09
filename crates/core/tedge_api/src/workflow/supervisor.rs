@@ -57,7 +57,11 @@ impl WorkflowSupervisor {
     }
 
     /// List the capabilities provided by the registered workflows
-    pub fn capability_messages(&self, schema: &MqttSchema, target: &EntityTopicId) -> Vec<Message> {
+    pub fn capability_messages(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+    ) -> Vec<MqttMessage> {
         // To ease testing the capability messages are emitted in a deterministic order
         let mut operations = self.workflows.values().collect::<Vec<_>>();
         operations.sort_by(|&a, &b| a.operation.to_string().cmp(&b.operation.to_string()));
@@ -73,7 +77,7 @@ impl WorkflowSupervisor {
     pub fn apply_external_update(
         &mut self,
         operation: &OperationType,
-        message: &Message,
+        message: &MqttMessage,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
         if !self.workflows.contains_key(operation) {
             return Err(WorkflowExecutionError::UnknownOperation {

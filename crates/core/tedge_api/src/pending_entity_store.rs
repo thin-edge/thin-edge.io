@@ -4,7 +4,7 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::ring_buffer::RingBuffer;
 use log::error;
-use mqtt_channel::Message as MqttMessage;
+use mqtt_channel::MqttMessage;
 use std::collections::HashMap;
 
 /// A store for all the entities for which data messages are received before
@@ -167,7 +167,7 @@ impl PendingEntityStore {
 
 #[cfg(test)]
 mod tests {
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use mqtt_channel::Topic;
     use serde_json::json;
 
@@ -244,19 +244,19 @@ mod tests {
     fn take_cached_entity_filters_telemetry() {
         let mut store = build_pending_entity_store();
 
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/environment"),
             json!({"temperature": 50}).to_string(),
         ));
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child2///m/environment"),
             json!({"temperature": 60}).to_string(),
         ));
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/environment"),
             json!({"pressure": 40}).to_string(),
         ));
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child3///m/environment"),
             json!({"pressure": 30}).to_string(),
         ));
@@ -268,11 +268,11 @@ mod tests {
         assert_eq!(
             cached_entity.data_messages,
             vec![
-                Message::new(
+                MqttMessage::new(
                     &Topic::new_unchecked("te/device/child1///m/environment"),
                     json!({"temperature": 50}).to_string(),
                 ),
-                Message::new(
+                MqttMessage::new(
                     &Topic::new_unchecked("te/device/child1///m/environment"),
                     json!({"pressure": 40}).to_string(),
                 ),
@@ -285,7 +285,7 @@ mod tests {
         ));
         assert_eq!(
             cached_entity.data_messages,
-            vec![Message::new(
+            vec![MqttMessage::new(
                 &Topic::new_unchecked("te/device/child2///m/environment"),
                 json!({"temperature": 60}).to_string(),
             ),]
@@ -297,7 +297,7 @@ mod tests {
         ));
         assert_eq!(
             cached_entity.data_messages,
-            vec![Message::new(
+            vec![MqttMessage::new(
                 &Topic::new_unchecked("te/device/child3///m/environment"),
                 json!({"pressure": 30}).to_string(),
             ),]
@@ -308,19 +308,19 @@ mod tests {
     fn cached_entity_returns_metadata_before_telemetry() {
         let mut store = build_pending_entity_store();
 
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/environment"),
             json!({"temperature": 50}).to_string(),
         ));
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///twin/maintenance_mode"),
             "true",
         ));
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/environment"),
             json!({"pressure": 40}).to_string(),
         ));
-        store.cache_early_data_message(Message::new(
+        store.cache_early_data_message(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///twin/service_count"),
             "5",
         ));
@@ -332,19 +332,19 @@ mod tests {
         assert_eq!(
             cached_entity.data_messages,
             vec![
-                Message::new(
+                MqttMessage::new(
                     &Topic::new_unchecked("te/device/child1///twin/maintenance_mode"),
                     "true",
                 ),
-                Message::new(
+                MqttMessage::new(
                     &Topic::new_unchecked("te/device/child1///twin/service_count"),
                     "5",
                 ),
-                Message::new(
+                MqttMessage::new(
                     &Topic::new_unchecked("te/device/child1///m/environment"),
                     json!({"temperature": 50}).to_string(),
                 ),
-                Message::new(
+                MqttMessage::new(
                     &Topic::new_unchecked("te/device/child1///m/environment"),
                     json!({"pressure": 40}).to_string(),
                 ),

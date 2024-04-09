@@ -4,7 +4,7 @@ use crate::mqtt_topics::ServiceTopicId;
 use clock::Clock;
 use clock::WallClock;
 use log::error;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use mqtt_channel::Topic;
 use serde_json::json;
 use std::process;
@@ -51,8 +51,8 @@ impl ServiceHealthTopic {
         &self.topic
     }
 
-    pub fn down_message(&self) -> Message {
-        Message {
+    pub fn down_message(&self) -> MqttMessage {
+        MqttMessage {
             topic: Topic::new_unchecked(self.as_str()),
             payload: json!({
                 "status": "down",
@@ -64,7 +64,7 @@ impl ServiceHealthTopic {
         }
     }
 
-    pub fn up_message(&self) -> Message {
+    pub fn up_message(&self) -> MqttMessage {
         let now = WallClock.now();
         let time_format = self.time_format;
         let timestamp = time_format.to_json(now).unwrap_or_else(|err| {
@@ -83,7 +83,7 @@ impl ServiceHealthTopic {
 
         let response_topic_health = Topic::new_unchecked(self.as_str());
 
-        Message::new(&response_topic_health, health_status)
+        MqttMessage::new(&response_topic_health, health_status)
             .with_qos(mqtt_channel::QoS::AtLeastOnce)
             .with_retain()
     }

@@ -5,19 +5,18 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::health::ServiceHealthTopic;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 
 pub struct HealthMonitorActor {
     // TODO(marcel): move this
-    service_registration_message: Option<Message>,
+    service_registration_message: Option<MqttMessage>,
     health_topic: ServiceHealthTopic,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
 }
 
 impl HealthMonitorActor {
     pub fn new(
-        service_registration_message: Option<Message>,
+        service_registration_message: Option<MqttMessage>,
         health_topic: ServiceHealthTopic,
         messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     ) -> Self {

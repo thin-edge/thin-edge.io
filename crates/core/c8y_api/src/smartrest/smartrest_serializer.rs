@@ -2,7 +2,7 @@ use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::error::SmartRestSerializerError;
 use crate::smartrest::topic::C8yTopic;
 use csv::StringRecord;
-use mqtt_channel::Message;
+use mqtt_channel::MqttMessage;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
@@ -288,21 +288,21 @@ where
 
 /// Helper to generate a SmartREST operation status message
 pub trait OperationStatusMessage {
-    fn executing(prefix: &TopicPrefix) -> Message {
+    fn executing(prefix: &TopicPrefix) -> MqttMessage {
         Self::create_message(Self::status_executing(), prefix)
     }
 
-    fn successful(parameter: Option<&str>, prefix: &TopicPrefix) -> Message {
+    fn successful(parameter: Option<&str>, prefix: &TopicPrefix) -> MqttMessage {
         Self::create_message(Self::status_successful(parameter), prefix)
     }
 
-    fn failed(failure_reason: &str, prefix: &TopicPrefix) -> Message {
+    fn failed(failure_reason: &str, prefix: &TopicPrefix) -> MqttMessage {
         Self::create_message(Self::status_failed(failure_reason), prefix)
     }
 
-    fn create_message(payload: SmartRest, prefix: &TopicPrefix) -> Message {
+    fn create_message(payload: SmartRest, prefix: &TopicPrefix) -> MqttMessage {
         let topic = C8yTopic::SmartRestResponse.to_topic(prefix).unwrap(); // never fail
-        Message::new(&topic, payload)
+        MqttMessage::new(&topic, payload)
     }
 
     fn status_executing() -> SmartRest;

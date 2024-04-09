@@ -360,7 +360,7 @@ mod tests {
     use crate::json_c8y::AlarmSeverity;
     use anyhow::Result;
     use assert_matches::assert_matches;
-    use mqtt_channel::Message;
+    use mqtt_channel::MqttMessage;
     use mqtt_channel::Topic;
     use serde_json::json;
     use std::collections::HashSet;
@@ -723,7 +723,7 @@ mod tests {
         )
         .unwrap();
 
-        let child_registration = EntityRegistrationMessage::new(&Message::new(
+        let child_registration = EntityRegistrationMessage::new(&MqttMessage::new(
             &Topic::new_unchecked("te/device/external_source//"),
             r#"{"@id": "external_source", "@type": "child-device"}"#,
         ))
