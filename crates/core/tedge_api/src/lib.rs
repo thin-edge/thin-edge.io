@@ -7,15 +7,13 @@ pub mod event;
 pub mod group;
 pub mod health;
 pub mod measurement;
-pub mod message_log;
 pub mod messages;
 pub mod mqtt_topics;
 pub mod parser;
 pub mod path;
-pub mod pending_entity_store;
-mod ring_buffer;
 pub mod serialize;
 mod software;
+mod store;
 pub mod utils;
 pub mod workflow;
 
@@ -30,6 +28,7 @@ pub use messages::RestartCommand;
 pub use messages::SoftwareListCommand;
 pub use messages::SoftwareUpdateCommand;
 pub use software::*;
+pub use store::pending_entity_store;
 
 #[cfg(test)]
 mod tests {

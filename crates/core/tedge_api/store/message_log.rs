@@ -15,7 +15,7 @@ const LOG_FILE_NAME: &str = "entity_store.jsonl";
 const LOG_FORMAT_VERSION: &str = "1.0";
 
 #[derive(thiserror::Error, Debug)]
-pub enum LogEntryError {
+pub(crate) enum LogEntryError {
     #[error(transparent)]
     FromStdIo(std::io::Error),
 
@@ -24,7 +24,7 @@ pub enum LogEntryError {
 }
 
 /// A reader to read the log file entries line by line
-pub struct MessageLogReader {
+pub(crate) struct MessageLogReader {
     reader: BufReader<File>,
 }
 

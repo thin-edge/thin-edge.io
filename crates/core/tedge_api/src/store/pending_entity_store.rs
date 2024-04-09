@@ -2,7 +2,7 @@ use crate::entity_store::EntityRegistrationMessage;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
-use crate::ring_buffer::RingBuffer;
+use crate::store::ring_buffer::RingBuffer;
 use log::error;
 use mqtt_channel::MqttMessage;
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 /// its registration message itself is received.
 /// It also stores all the child device registration messages received before
 /// their parents themselves are registered, including their data.
-pub struct PendingEntityStore {
+pub(crate) struct PendingEntityStore {
     mqtt_schema: MqttSchema,
     // This orphans map is keyed by the unregistered parent topic id to their children
     orphans: HashMap<EntityTopicId, Vec<EntityTopicId>>,
@@ -26,7 +26,7 @@ pub struct PendingEntityStore {
 /// Other metadata messages which are are stored in an unbounded vector,
 /// as these are more critical data, none of which can be dropped.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct PendingEntityCache {
+pub(crate) struct PendingEntityCache {
     pub reg_message: Option<EntityRegistrationMessage>,
     pub metadata: Vec<MqttMessage>,
 }
