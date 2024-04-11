@@ -271,9 +271,17 @@ impl GenericCommandState {
 
     /// Infer the topic of the invoking command, given a sub command topic
     fn infer_invoking_command_topic(sub_command_topic: &str) -> Option<String> {
-        match sub_command_topic.split('/').collect::<Vec<&str>>()[..] {
-            [pre, t1, t2, t3, t4, "cmd", _, sub_id] => Self::extract_invoking_command_id(sub_id)
-                .map(|(op, id)| format!("{pre}/{t1}/{t2}/{t3}/{t4}/cmd/{op}/{id}")),
+        let schema = MqttSchema::from_topic(sub_command_topic);
+        match schema.entity_channel_of(sub_command_topic) {
+            Ok((entity, Channel::Command { cmd_id, .. })) => {
+                Self::extract_invoking_command_id(&cmd_id).map(|(op, id)| {
+                    let channel = Channel::Command {
+                        operation: op.into(),
+                        cmd_id: id.into(),
+                    };
+                    schema.topic_for(&entity, &channel).as_ref().to_string()
+                })
+            }
             _ => None,
         }
     }
@@ -297,18 +305,15 @@ impl GenericCommandState {
     }
 
     fn target(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
-            _ => None,
-        }
+        MqttSchema::get_entity_id(&self.topic)
     }
 
     pub fn operation(&self) -> Option<String> {
-        extract_command_identifier(&self.topic.name).map(|(operation, _)| operation)
+        MqttSchema::get_operation_name(&self.topic)
     }
 
     pub fn cmd_id(&self) -> Option<String> {
-        extract_command_identifier(&self.topic.name).map(|(_, cmd_id)| cmd_id)
+        MqttSchema::get_command_id(&self.topic)
     }
 
     pub fn is_init(&self) -> bool {
@@ -325,15 +330,6 @@ impl GenericCommandState {
 
     pub fn is_cleared(&self) -> bool {
         self.payload.is_null()
-    }
-}
-
-fn extract_command_identifier(topic: &str) -> Option<(String, String)> {
-    match topic.split('/').collect::<Vec<&str>>()[..] {
-        [_, _, _, _, _, "cmd", operation, cmd_id] => {
-            Some((operation.to_string(), cmd_id.to_string()))
-        }
-        _ => None,
     }
 }
 
