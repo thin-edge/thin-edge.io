@@ -6,7 +6,6 @@ use crate::workflow::CommandId;
 use crate::workflow::ExitHandlers;
 use crate::workflow::OperationName;
 use crate::workflow::StateExcerptError;
-use crate::workflow::TopicName;
 use crate::workflow::WorkflowExecutionError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS::AtLeastOnce;
@@ -16,6 +15,7 @@ use serde::Serialize;
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt::Display;
 
 /// Generic command state that can be used to manipulate any type of command payload.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -23,6 +23,7 @@ pub struct GenericCommandState {
     pub topic: Topic,
     pub status: String,
     pub payload: Value,
+    invoking_command_topic: Option<String>,
 }
 
 /// Update for a command state
@@ -39,6 +40,16 @@ const FAILED: &str = "failed";
 const REASON: &str = "reason";
 
 impl GenericCommandState {
+    pub fn new(topic: Topic, status: String, payload: Value) -> Self {
+        let invoking_command_topic = Self::infer_invoking_command_topic(topic.as_ref());
+        GenericCommandState {
+            topic,
+            status,
+            payload,
+            invoking_command_topic,
+        }
+    }
+
     /// Create an init state for a sub-operation
     pub fn sub_command_init_state(
         schema: &MqttSchema,
@@ -47,7 +58,7 @@ impl GenericCommandState {
         cmd_id: CommandId,
         sub_operation: OperationName,
     ) -> GenericCommandState {
-        let sub_cmd_id = sub_command_id(&operation.to_string(), &cmd_id);
+        let sub_cmd_id = Self::sub_command_id(&operation, &cmd_id);
         let topic = schema.topic_for(
             entity,
             &Channel::Command {
@@ -55,6 +66,8 @@ impl GenericCommandState {
                 cmd_id: sub_cmd_id,
             },
         );
+        let invoking_command_topic =
+            schema.topic_for(entity, &Channel::Command { operation, cmd_id });
         let status = INIT.to_string();
         let payload = json!({
             STATUS: status
@@ -64,27 +77,29 @@ impl GenericCommandState {
             topic,
             status,
             payload,
+            invoking_command_topic: Some(invoking_command_topic.name),
         }
     }
 
     /// Extract a command state from a json payload
     pub fn from_command_message(message: &MqttMessage) -> Result<Self, WorkflowExecutionError> {
         let topic = message.topic.clone();
-        let payload = message.payload_bytes();
-        if payload.is_empty() {
-            return Ok(GenericCommandState {
-                topic,
-                status: "".to_string(),
-                payload: json!(null),
-            });
-        }
-        let json: Value = serde_json::from_slice(payload)?;
-        let status = GenericCommandState::extract_text_property(&json, STATUS)
-            .ok_or(WorkflowExecutionError::MissingStatus)?;
+        let invoking_command_topic = Self::infer_invoking_command_topic(topic.as_ref());
+        let bytes = message.payload_bytes();
+        let (status, payload) = if bytes.is_empty() {
+            ("".to_string(), json!(null))
+        } else {
+            let json: Value = serde_json::from_slice(bytes)?;
+            let status = GenericCommandState::extract_text_property(&json, STATUS)
+                .ok_or(WorkflowExecutionError::MissingStatus)?;
+            (status.to_string(), json)
+        };
+
         Ok(GenericCommandState {
             topic,
-            status: status.to_string(),
-            payload: json,
+            status,
+            payload,
+            invoking_command_topic,
         })
     }
 
@@ -102,7 +117,7 @@ impl GenericCommandState {
     }
 
     /// Build an MQTT message to clear the command state
-    pub fn clear_message(&self) -> MqttMessage {
+    fn clear_message(&self) -> MqttMessage {
         let topic = &self.topic;
         MqttMessage::new(topic, "")
             .with_retain()
@@ -249,6 +264,38 @@ impl GenericCommandState {
         &self.topic.name
     }
 
+    /// Return the topic of the invoking command, if any
+    pub fn invoking_command_topic(&self) -> Option<&str> {
+        self.invoking_command_topic.as_deref()
+    }
+
+    /// Infer the topic of the invoking command, given a sub command topic
+    fn infer_invoking_command_topic(sub_command_topic: &str) -> Option<String> {
+        match sub_command_topic.split('/').collect::<Vec<&str>>()[..] {
+            [pre, t1, t2, t3, t4, "cmd", _, sub_id] => Self::extract_invoking_command_id(sub_id)
+                .map(|(op, id)| format!("{pre}/{t1}/{t2}/{t3}/{t4}/cmd/{op}/{id}")),
+            _ => None,
+        }
+    }
+
+    /// Build a sub command identifier from its invoking command identifier
+    ///
+    /// Using such a structure command id for sub commands is key
+    /// to retrieve the invoking command of a sub-operation from its state using [extract_invoking_command_id].
+    fn sub_command_id(operation: &impl Display, cmd_id: &impl Display) -> String {
+        format!("sub:{operation}:{cmd_id}")
+    }
+
+    /// Extract the invoking command identifier from a sub command identifier
+    ///
+    /// Return None if the given id is not a sub command identifier, i.e. if not generated with [sub_command_id].
+    fn extract_invoking_command_id(sub_cmd_id: &str) -> Option<(&str, &str)> {
+        match sub_cmd_id.split(':').collect::<Vec<&str>>()[..] {
+            ["sub", operation, cmd_id, ..] => Some((operation, cmd_id)),
+            _ => None,
+        }
+    }
+
     fn target(&self) -> Option<String> {
         match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
             [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
@@ -281,35 +328,7 @@ impl GenericCommandState {
     }
 }
 
-/// Return the invoking command topic name, if any
-pub fn invoking_command(sub_command: &TopicName) -> Option<TopicName> {
-    match sub_command.split('/').collect::<Vec<&str>>()[..] {
-        [pre, t1, t2, t3, t4, "cmd", _, sub_id] => extract_invoking_command_id(sub_id)
-            .map(|(op, id)| format!("{pre}/{t1}/{t2}/{t3}/{t4}/cmd/{op}/{id}")),
-        _ => None,
-    }
-}
-
-/// Build a sub command identifier from its invoking command identifier
-///
-/// Using such a structure command id for sub commands is key
-/// to retrieve the invoking command of a sub-operation from its state using [extract_invoking_command_id].
-fn sub_command_id(operation: &str, cmd_id: &str) -> String {
-    format!("sub:{operation}:{cmd_id}")
-}
-
-/// Extract the invoking command identifier from a sub command identifier
-///
-/// Return None if the given id is not a sub command identifier
-/// i.e. if not generated with [sub_command_id].
-fn extract_invoking_command_id(sub_cmd_id: &str) -> Option<(&str, &str)> {
-    match sub_cmd_id.split(':').collect::<Vec<&str>>()[..] {
-        ["sub", operation, cmd_id] => Some((operation, cmd_id)),
-        _ => None,
-    }
-}
-
-pub fn extract_command_identifier(topic: &str) -> Option<(String, String)> {
+fn extract_command_identifier(topic: &str) -> Option<(String, String)> {
     match topic.split('/').collect::<Vec<&str>>()[..] {
         [_, _, _, _, _, "cmd", operation, cmd_id] => {
             Some((operation.to_string(), cmd_id.to_string()))
@@ -539,7 +558,8 @@ mod tests {
                     "bar": {
                         "extra": [1,2,3]
                     }
-                })
+                }),
+                invoking_command_topic: None,
             }
         );
 
@@ -555,7 +575,8 @@ mod tests {
                     "bar": {
                         "extra": [1,2,3]
                     }
-                })
+                }),
+                invoking_command_topic: None,
             }
         );
 
@@ -572,7 +593,32 @@ mod tests {
                     "bar": {
                         "extra": [1,2,3]
                     }
-                })
+                }),
+                invoking_command_topic: None,
+            }
+        );
+    }
+
+    #[test]
+    fn retrieve_invoking_command() {
+        let topic = Topic::new_unchecked("te/device/main///cmd/do_it/sub:make_it:456");
+        let payload = r#"{ "status":"successful", "foo":42, "bar": { "extra": [1,2,3] }}"#;
+        let command = mqtt_channel::MqttMessage::new(&topic, payload);
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_successful());
+        assert_eq!(
+            cmd,
+            GenericCommandState {
+                topic: topic.clone(),
+                status: "successful".to_string(),
+                payload: json!({
+                    "status": "successful",
+                    "foo": 42,
+                    "bar": {
+                        "extra": [1,2,3]
+                    }
+                }),
+                invoking_command_topic: Some("te/device/main///cmd/make_it/456".to_string()),
             }
         );
     }

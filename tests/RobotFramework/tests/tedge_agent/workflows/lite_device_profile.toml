@@ -2,15 +2,15 @@ operation = "lite_device_profile"
 
 [init]
 action = "proceed"
-on_success = "step_1"
+on_success = "step_1_install"
 
-[step_1]
+[step_1_install]
 operation = "lite_software_update"
 input_script = "/etc/tedge/operations/extract_updates.sh step_1 install ${.payload.profile}"
 input.logfile = "${.payload.logfile}"
-on_exec = "awaiting_step_1_completion"
+on_exec = "awaiting_step_1_install_completion"
 
-[awaiting_step_1_completion]
+[awaiting_step_1_install_completion]
 action = "await-operation-completion"
 on_success = "step_1_config"
 
@@ -22,15 +22,15 @@ on_exec = "awaiting_step_1_config_completion"
 
 [awaiting_step_1_config_completion]
 action = "await-operation-completion"
-on_success = "step_2"
+on_success = "step_2_install"
 
-[step_2]
+[step_2_install]
 operation = "lite_software_update"
 input_script = "/etc/tedge/operations/extract_updates.sh step_2 install ${.payload.profile}"
 input.logfile = "${.payload.logfile}"
-on_exec = "awaiting_step_2_completion"
+on_exec = "awaiting_step_2_install_completion"
 
-[awaiting_step_2_completion]
+[awaiting_step_2_install_completion]
 action = "await-operation-completion"
 on_success = "step_2_config"
 

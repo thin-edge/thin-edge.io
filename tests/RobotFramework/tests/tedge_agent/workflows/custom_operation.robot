@@ -60,7 +60,7 @@ Trigger native-reboot within workflow (on_success)
     ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
     ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-1.log
-    Should Contain    ${workflow_log}    restarted:    msg=restarted state should have been executed
+    Should Contain    ${workflow_log}    item=status=restarted    msg=restarted state should have been executed
 
 Trigger native-reboot within workflow (on_error) - missing sudoers entry for reboot
     Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync' > /etc/sudoers.d/tedge
@@ -70,7 +70,7 @@ Trigger native-reboot within workflow (on_error) - missing sudoers entry for reb
     ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-agent
     Should Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should not have been restarted
     ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-2.log
-    Should Not Contain    ${workflow_log}    restarted:    msg=restarted state should not have been executed
+    Should Not Contain    ${workflow_log}    item=status=restarted    msg=restarted state should not have been executed
 
 Invoke sub-operation from a super-command operation
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 '{"status":"init", "output_file":"/tmp/test-42.json"}'
@@ -81,13 +81,13 @@ Invoke sub-operation from a super-command operation
     Should Be Equal    ${actual_log}    ${expected_log}
     # Remove all dates from the workflow log
     ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-super_command-test-42.log
-    Should Contain    ${workflow_log}    super_command/test-42/init:
-    Should Contain    ${workflow_log}    super_command/test-42/executing:
-    Should Contain    ${workflow_log}    super_command/test-42/awaiting_completion:
-    Should Contain    ${workflow_log}    sub_command/sub:super_command:test-42/init:                      msg=main command log should contain sub command steps
-    Should Contain    ${workflow_log}    sub_command/sub:super_command:test-42/executing:                 msg=main command log should contain sub command steps
-    Should Contain    ${workflow_log}    sub_command/sub:super_command:test-42/successful:                msg=main command log should contain sub command steps
-    Should Contain    ${workflow_log}    super_command/test-42/successful:
+    Should Contain    ${workflow_log}    item=super_command/test-42 status=init
+    Should Contain    ${workflow_log}    item=super_command/test-42 status=executing
+    Should Contain    ${workflow_log}    item=super_command/test-42 status=awaiting_completion
+    Should Contain    ${workflow_log}    item=sub_command/sub:super_command:test-42 status=init                      msg=main command log should contain sub command steps
+    Should Contain    ${workflow_log}    item=sub_command/sub:super_command:test-42 status=executing                 msg=main command log should contain sub command steps
+    Should Contain    ${workflow_log}    item=sub_command/sub:super_command:test-42 status=successful                msg=main command log should contain sub command steps
+    Should Contain    ${workflow_log}    item=super_command/test-42 status=successful
 
 Use scripts to create sub-operation init states
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/lite_device_profile/test-42 '{"status":"init", "logfile":"/tmp/profile-42.log", "profile":"/etc/tedge/operations/lite_device_profile.example.txt"}'

@@ -77,18 +77,17 @@ impl WorkflowSupervisor {
     pub fn apply_external_update(
         &mut self,
         operation: &OperationType,
-        message: &MqttMessage,
+        command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
         if !self.workflows.contains_key(operation) {
             return Err(WorkflowExecutionError::UnknownOperation {
                 operation: operation.to_string(),
             });
         };
-        let command_state = GenericCommandState::from_command_message(message)?;
         if command_state.is_cleared() {
             // The command has been cleared
             self.commands.remove(&command_state.topic.name);
-            Ok(None)
+            Ok(Some(command_state))
         } else if command_state.is_init() {
             // This is a new command request
             self.commands.insert(command_state.clone())?;
@@ -133,8 +132,9 @@ impl WorkflowSupervisor {
         &self,
         sub_command: &GenericCommandState,
     ) -> Option<&GenericCommandState> {
-        invoking_command(&sub_command.topic.name)
-            .and_then(|invoking_topic| self.get_state(&invoking_topic))
+        sub_command
+            .invoking_command_topic()
+            .and_then(|invoking_topic| self.get_state(invoking_topic))
     }
 
     /// Return the sub command of a command, if any
@@ -144,12 +144,20 @@ impl WorkflowSupervisor {
     ) -> Option<&GenericCommandState> {
         self.commands
             .lookup_sub_command(command_state.command_topic())
-            .and_then(|sub_topic| self.get_state(sub_topic))
     }
 
-    /// Return the chain of sub-operation invocation leading to the given leaf command
-    pub fn command_invocation_chain(&self, leaf_command: &TopicName) -> Vec<TopicName> {
-        self.commands.command_invocation_chain(leaf_command)
+    /// Return the state of the root command which execution leads to the execution of a leaf-command
+    ///
+    /// Return None, if the given command is not a sub-command
+    pub fn root_invoking_command_state(
+        &self,
+        leaf_command: &GenericCommandState,
+    ) -> Option<&GenericCommandState> {
+        let invoking_command = self.invoking_command_state(leaf_command)?;
+        let root_command = self
+            .root_invoking_command_state(invoking_command)
+            .unwrap_or(invoking_command);
+        Some(root_command)
     }
 
     /// Update the state of the command board on reception of new state for a command
@@ -216,24 +224,12 @@ impl CommandBoard {
     }
 
     /// Return the sub command of a command, if any
-    pub fn lookup_sub_command(&self, command_topic: &TopicName) -> Option<&TopicName> {
-        // The sequential search is okay because in practice there is no more than 10 concurrent commands
+    pub fn lookup_sub_command(&self, command_topic: &TopicName) -> Option<&GenericCommandState> {
+        // Sequential search is okay because in practice there is no more than 10 concurrent commands
         self.commands
-            .keys()
-            .find(|sub_command| invoking_command(sub_command).as_ref() == Some(command_topic))
-    }
-
-    /// Return the chain of command / sub-operation invocation leading to the given leaf command
-    pub fn command_invocation_chain(&self, leaf_command: &TopicName) -> Vec<TopicName> {
-        let mut invoking_commands = vec![];
-        let mut command = leaf_command.clone();
-        while let Some(super_command) = invoking_command(&command) {
-            if self.commands.contains_key(&super_command) {
-                invoking_commands.push(super_command.clone());
-            }
-            command = super_command;
-        }
-        invoking_commands
+            .values()
+            .find(|(_, command)| command.invoking_command_topic() == Some(command_topic))
+            .map(|(_, command)| command)
     }
 
     /// Iterate over the pending commands

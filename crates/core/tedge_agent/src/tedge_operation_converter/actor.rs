@@ -20,10 +20,10 @@ use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::extract_command_identifier;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
@@ -31,7 +31,6 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
-use tedge_api::workflow::TopicName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::Jsonify;
@@ -125,38 +124,34 @@ impl TedgeOperationConverterActor {
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let (operation, cmd_id) = match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((_, Channel::Command { operation, cmd_id })) => (operation, cmd_id),
-
-            _ => {
-                log::error!("Unknown command channel: {}", message.topic.name);
-                return Ok(());
-            }
+        let Ok((_, operation, cmd_id)) = self.extract_command_identifiers(&message.topic.name)
+        else {
+            log::error!("Unknown command channel: {}", &message.topic.name);
+            return Ok(());
         };
 
-        let mut log_file = self.open_command_log(&message.topic.name, &operation, &cmd_id);
+        let Ok(state) = GenericCommandState::from_command_message(&message) else {
+            log::error!("Invalid command payload: {}", &message.topic.name);
+            return Ok(());
+        };
+        let step = state.status.clone();
 
-        match self.workflows.apply_external_update(&operation, &message) {
-            Ok(None) => {
-                if message.payload_bytes().is_empty() {
-                    log_file
-                        .log_step("", "The command has been fully processed")
-                        .await;
-                    self.persist_command_board().await?;
-                }
-            }
-            Ok(Some(state)) => {
+        let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
+
+        match self.workflows.apply_external_update(&operation, state) {
+            Ok(None) => (),
+            Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
-                self.process_command_state_update(state).await?;
+                if new_state.is_init() {
+                    self.process_command_state_update(new_state).await?;
+                }
             }
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {
                 info!("Ignoring {operation} operation which is not registered");
             }
             Err(err) => {
                 error!("{operation} operation request cannot be processed: {err}");
-                log_file
-                    .log_step("Unknown", &format!("Error: {err}\n"))
-                    .await;
+                log_file.log_step(&step, &format!("Error: {err}\n")).await;
             }
         }
 
@@ -167,15 +162,12 @@ impl TedgeOperationConverterActor {
         &mut self,
         state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        let (target, operation, cmd_id) = match self.mqtt_schema.entity_channel_of(&state.topic) {
-            Ok((target, Channel::Command { operation, cmd_id })) => (target, operation, cmd_id),
-
-            _ => {
-                log::error!("Unknown command channel: {}", state.topic.name);
-                return Ok(());
-            }
+        let Ok((target, operation, cmd_id)) = self.extract_command_identifiers(&state.topic.name)
+        else {
+            log::error!("Unknown command channel: {}", state.topic.name);
+            return Ok(());
         };
-        let mut log_file = self.open_command_log(&state.topic.name, &operation, &cmd_id);
+        let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
         let action = match self.workflows.get_action(&state) {
             Ok(action) => action,
@@ -187,7 +179,7 @@ impl TedgeOperationConverterActor {
             Err(err) => {
                 error!("{operation} operation request cannot be processed: {err}");
                 log_file
-                    .log_step("Unknown", &format!("Error: {err}\n"))
+                    .log_step(&state.status, &format!("Error: {err}\n"))
                     .await;
                 return Ok(());
             }
@@ -198,12 +190,17 @@ impl TedgeOperationConverterActor {
         match action {
             OperationAction::Clear => {
                 if let Some(invoking_command) = self.workflows.invoking_command_state(&state) {
+                    info!(
+                        "Resuming invoking command {}",
+                        invoking_command.topic.as_ref()
+                    );
                     self.command_sender.send(invoking_command.clone()).await?;
+                } else {
+                    info!(
+                        "Waiting {} {operation} operation to be cleared",
+                        state.status
+                    );
                 }
-                info!(
-                    "Waiting {} {operation} operation to be cleared",
-                    state.status
-                );
                 Ok(())
             }
             OperationAction::MoveTo(next_step) => {
@@ -371,18 +368,18 @@ impl TedgeOperationConverterActor {
 
     fn open_command_log(
         &mut self,
-        command_topic: &TopicName,
+        state: &GenericCommandState,
         operation: &OperationType,
         cmd_id: &str,
     ) -> CommandLog {
         let (root_operation, root_cmd_id) = match self
             .workflows
-            .command_invocation_chain(command_topic)
-            .pop()
-            .and_then(|topic| extract_command_identifier(&topic))
+            .root_invoking_command_state(state)
+            .map(|s| s.topic.as_ref())
+            .and_then(|root_topic| self.extract_command_identifiers(root_topic).ok())
         {
             None => (None, None),
-            Some((op, id)) => (Some(op), Some(id)),
+            Some((_, op, id)) => (Some(op.to_string()), Some(id)),
         };
 
         CommandLog::new(
@@ -512,6 +509,26 @@ impl TedgeOperationConverterActor {
 
         Ok(())
     }
+
+    fn extract_command_identifiers(
+        &self,
+        topic: impl AsRef<str>,
+    ) -> Result<(EntityTopicId, OperationType, CommandId), CommandTopicError> {
+        let (target, channel) = self.mqtt_schema.entity_channel_of(topic)?;
+        match channel {
+            Channel::Command { operation, cmd_id } => Ok((target, operation, cmd_id)),
+            _ => Err(CommandTopicError::InvalidCommandTopic),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum CommandTopicError {
+    #[error(transparent)]
+    InvalidTopic(#[from] EntityTopicError),
+
+    #[error("Not a command topic")]
+    InvalidCommandTopic,
 }
 
 /// Log all command steps
@@ -584,7 +601,7 @@ Action: {action}
         let cmd_id = &self.cmd_id;
         let message = format!(
             r#"------------------------------------
-{operation}/{cmd_id}/{step}: {now}
+{operation}/{cmd_id} status={step} time={now}
 {action}
 
 "#
