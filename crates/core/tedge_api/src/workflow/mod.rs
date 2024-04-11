@@ -245,26 +245,6 @@ impl OperationWorkflow {
         }
     }
 
-    /// Extract the current action to be performed on a command request
-    ///
-    /// Returns:
-    /// - `Ok(Some(action)` when the request is well-formed
-    /// - `Ok(None)` when the request is finalized, i.e. when the command topic hase been cleared
-    /// - `Err(error)` when the request is ill-formed
-    pub fn get_operation_current_action(
-        &self,
-        message: &MqttMessage,
-    ) -> Result<Option<(GenericCommandState, OperationAction)>, WorkflowExecutionError> {
-        match GenericCommandState::from_command_message(message) {
-            Ok(Some(command_state)) => {
-                let contextualized_action = self.get_action(&command_state)?;
-                Ok(Some((command_state, contextualized_action)))
-            }
-            Ok(None) => Ok(None),
-            Err(err) => Err(err),
-        }
-    }
-
     /// Return the action to be performed on a given state
     pub fn get_action(
         &self,
@@ -290,7 +270,10 @@ impl OperationAction {
                 OperationAction::AwaitingAgentRestart(handlers.with_default(default))
             }
             OperationAction::AwaitOperationCompletion(handlers, state_excerpt) => {
-                OperationAction::AwaitOperationCompletion(handlers.with_default(default), state_excerpt)
+                OperationAction::AwaitOperationCompletion(
+                    handlers.with_default(default),
+                    state_excerpt,
+                )
             }
             action => action,
         }

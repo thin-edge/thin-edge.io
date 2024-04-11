@@ -68,26 +68,31 @@ impl GenericCommandState {
     }
 
     /// Extract a command state from a json payload
-    pub fn from_command_message(
-        message: &MqttMessage,
-    ) -> Result<Option<Self>, WorkflowExecutionError> {
+    pub fn from_command_message(message: &MqttMessage) -> Result<Self, WorkflowExecutionError> {
+        let topic = message.topic.clone();
         let payload = message.payload_bytes();
         if payload.is_empty() {
-            return Ok(None);
+            return Ok(GenericCommandState {
+                topic,
+                status: "".to_string(),
+                payload: json!(null),
+            });
         }
-        let topic = message.topic.clone();
         let json: Value = serde_json::from_slice(payload)?;
         let status = GenericCommandState::extract_text_property(&json, STATUS)
             .ok_or(WorkflowExecutionError::MissingStatus)?;
-        Ok(Some(GenericCommandState {
+        Ok(GenericCommandState {
             topic,
             status: status.to_string(),
             payload: json,
-        }))
+        })
     }
 
     /// Build an MQTT message to publish the command state
     pub fn into_message(mut self) -> MqttMessage {
+        if self.is_cleared() {
+            return self.clear_message();
+        }
         GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
         let topic = &self.topic;
         let payload = self.payload.to_string();
@@ -157,6 +162,15 @@ impl GenericCommandState {
 
         GenericCommandState {
             status: status.to_owned(),
+            ..self
+        }
+    }
+
+    /// Mark the command as completed
+    pub fn clear(self) -> Self {
+        GenericCommandState {
+            status: "".to_string(),
+            payload: json!(null),
             ..self
         }
     }
@@ -250,12 +264,20 @@ impl GenericCommandState {
         extract_command_identifier(&self.topic.name).map(|(_, cmd_id)| cmd_id)
     }
 
+    pub fn is_init(&self) -> bool {
+        matches!(self.status.as_str(), INIT)
+    }
+
     pub fn is_successful(&self) -> bool {
         matches!(self.status.as_str(), SUCCESSFUL)
     }
 
     pub fn is_failed(&self) -> bool {
         matches!(self.status.as_str(), FAILED)
+    }
+
+    pub fn is_cleared(&self) -> bool {
+        self.payload.is_null()
     }
 }
 
@@ -504,9 +526,8 @@ mod tests {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
         let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
-        let cmd = GenericCommandState::from_command_message(&command)
-            .expect("parsing error")
-            .expect("no message");
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_init());
         assert_eq!(
             cmd,
             GenericCommandState {
@@ -561,9 +582,8 @@ mod tests {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
         let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
-        let cmd = GenericCommandState::from_command_message(&command)
-            .expect("parsing error")
-            .expect("no message");
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_init());
 
         // Valid paths
         assert_eq!(
@@ -612,6 +632,14 @@ mod tests {
             cmd.inject_parameter("${.payload.bar.unknown}"),
             "${.payload.bar.unknown}"
         );
+    }
+
+    #[test]
+    fn parse_empty_payload() {
+        let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
+        let command = mqtt_channel::MqttMessage::new(&topic, "".to_string());
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_cleared())
     }
 
     trait JsonContent {

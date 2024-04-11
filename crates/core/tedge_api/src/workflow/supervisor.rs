@@ -84,26 +84,23 @@ impl WorkflowSupervisor {
                 operation: operation.to_string(),
             });
         };
-        match GenericCommandState::from_command_message(message)? {
-            None => {
-                // The command has been cleared
-                self.commands.remove(&message.topic.name);
-                Ok(None)
-            }
-            Some(command_state) if command_state.status == "init" => {
-                // This is a new command request
-                self.commands.insert(command_state.clone())?;
-                Ok(Some(command_state))
-            }
-            Some(_) => {
-                // Ignore command updates published over MQTT
-                //
-                // TODO: There is one exception here - not implemented yet:
-                //       when a step is delegated to an external process,
-                //       this process will notify the outcome of its action over MQTT,
-                //       and the agent will have then to react on this message.
-                Ok(None)
-            }
+        let command_state = GenericCommandState::from_command_message(message)?;
+        if command_state.is_cleared() {
+            // The command has been cleared
+            self.commands.remove(&command_state.topic.name);
+            Ok(None)
+        } else if command_state.is_init() {
+            // This is a new command request
+            self.commands.insert(command_state.clone())?;
+            Ok(Some(command_state))
+        } else {
+            // Ignore command updates published over MQTT
+            //
+            // TODO: There is one exception here - not implemented yet:
+            //       when a step is delegated to an external process,
+            //       this process will notify the outcome of its action over MQTT,
+            //       and the agent will have then to react on this message.
+            Ok(None)
         }
     }
 
@@ -162,7 +159,12 @@ impl WorkflowSupervisor {
         &mut self,
         new_command_state: GenericCommandState,
     ) -> Result<(), WorkflowExecutionError> {
-        self.commands.update(new_command_state)
+        if new_command_state.is_cleared() {
+            self.commands.remove(new_command_state.command_topic());
+            Ok(())
+        } else {
+            self.commands.update(new_command_state)
+        }
     }
 
     /// Resume the given command when the agent is restarting after an interruption

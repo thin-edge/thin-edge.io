@@ -350,13 +350,13 @@ impl TedgeOperationConverterActor {
                             .update_with_json(sub_cmd_output)
                             .update(handlers.on_success);
                         self.publish_command_state(new_state).await?;
-                        self.mqtt_publisher.send(sub_state.clear_message()).await?;
+                        self.publish_command_state(sub_state.clear()).await?;
                     } else if sub_state.is_failed() {
                         let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
                             GenericStateUpdate::failed("sub-operation failed".to_string())
                         }));
                         self.publish_command_state(new_state).await?;
-                        self.mqtt_publisher.send(sub_state.clear_message()).await?;
+                        self.publish_command_state(sub_state.clear()).await?;
                     } else {
                         // Nothing specific has to be done: the current state has been persisted
                         // and will be resumed on completion of the sub-operation
@@ -470,7 +470,9 @@ impl TedgeOperationConverterActor {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
-        self.command_sender.send(new_state.clone()).await?;
+        if !new_state.is_cleared() {
+            self.command_sender.send(new_state.clone()).await?;
+        }
         self.mqtt_publisher.send(new_state.into_message()).await?;
         Ok(())
     }
