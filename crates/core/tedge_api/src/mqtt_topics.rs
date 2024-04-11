@@ -127,9 +127,9 @@ impl MqttSchema {
     /// ```
     pub fn entity_channel_of(
         &self,
-        topic: &mqtt_channel::Topic,
+        topic: impl AsRef<str>,
     ) -> Result<(EntityTopicId, Channel), EntityTopicError> {
-        self.parse(&topic.name)
+        self.parse(topic.as_ref())
     }
 
     /// Get the topic filter to subscribe to messages from specific entities and channels

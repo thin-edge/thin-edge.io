@@ -199,6 +199,12 @@ impl TryInto<TopicFilter> for Vec<String> {
     }
 }
 
+impl AsRef<str> for Topic {
+    fn as_ref(&self) -> &str {
+        &self.name
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
