@@ -3893,6 +3893,7 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "thiserror",
  "tokio",
  "tracing",
 ]

@@ -10,12 +10,14 @@ use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
+use std::borrow::Cow;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
@@ -48,24 +50,34 @@ impl TEdgeComponent for CumulocityMapper {
                 .templates
                 .0
                 .iter()
-                .map(|id| format!("s/dc/{id}"));
-            let smartrest_topics: Vec<String> = [
+                .map(|id| Cow::Owned(format!("s/dc/{id}")));
+
+            let cloud_topics = [
                 "s/dt",
                 "s/dat",
                 "s/ds",
                 "s/e",
-                "s/dc/#",
                 "devicecontrol/notifications",
                 "error",
             ]
             .into_iter()
-            .map(<_>::to_owned)
-            .chain(custom_topics)
-            .collect();
+            .map(Cow::Borrowed)
+            .chain(custom_topics);
+
+            let mut tc = BridgeConfig::new();
+            let local_prefix = format!("{}/", tedge_config.c8y.bridge.topic_prefix.as_str());
+
+            for topic in cloud_topics {
+                tc.forward_from_remote(topic, local_prefix.clone(), "")?;
+            }
+
+            tc.forward_from_local("#", local_prefix, "")?;
+
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
                 c8y_mapper_config.bridge_service_name(),
-                &smartrest_topics,
+                tc,
+                &tedge_config.c8y.root_cert_path,
             )
             .await;
             runtime.spawn(bridge_actor).await?;
