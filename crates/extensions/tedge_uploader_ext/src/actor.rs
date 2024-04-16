@@ -11,6 +11,7 @@ use upload::Auth;
 use upload::ContentType;
 use upload::UploadError;
 use upload::UploadInfo;
+use upload::UploadMethod;
 use upload::Uploader;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -19,6 +20,7 @@ pub struct UploadRequest {
     pub file_path: Utf8PathBuf,
     pub auth: Option<Auth>,
     pub content_type: ContentType,
+    pub method: UploadMethod,
 }
 
 impl UploadRequest {
@@ -27,7 +29,8 @@ impl UploadRequest {
             url: url.into(),
             file_path: file_path.to_owned(),
             auth: None,
-            content_type: ContentType::ApplicationOctetStream,
+            content_type: ContentType::Auto,
+            method: UploadMethod::PUT,
         }
     }
 
@@ -41,6 +44,20 @@ impl UploadRequest {
     pub fn with_content_type(self, content_type: ContentType) -> Self {
         Self {
             content_type,
+            ..self
+        }
+    }
+
+    pub fn put(self) -> Self {
+        Self {
+            method: UploadMethod::PUT,
+            ..self
+        }
+    }
+
+    pub fn post(self) -> Self {
+        Self {
+            method: UploadMethod::POST,
             ..self
         }
     }
@@ -101,7 +118,9 @@ impl Server for UploaderActor {
     async fn handle(&mut self, id_request: Self::Request) -> Self::Response {
         let (id, request) = id_request;
 
-        let mut upload_info = UploadInfo::new(&request.url).with_content_type(request.content_type);
+        let mut upload_info = UploadInfo::new(&request.url)
+            .set_content_type(request.content_type)
+            .set_method(request.method);
         if let Some(auth) = request.auth {
             upload_info = upload_info.with_auth(auth);
         }

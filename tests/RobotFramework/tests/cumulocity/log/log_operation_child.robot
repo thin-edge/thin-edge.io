@@ -3,6 +3,7 @@ Resource            ../../../resources/common.resource
 Library             Cumulocity
 Library             DateTime
 Library             ThinEdgeIO
+Library             String
 
 Test Setup          Custom Setup
 Test Teardown       Custom Teardown
@@ -19,6 +20,7 @@ Successful log operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Log File Contents Should Be Equal    ${operation}    filename: example.log\n1 first line\n
 
 
 *** Keywords ***
@@ -66,3 +68,14 @@ Custom Setup
 Custom Teardown
     Get Logs    ${PARENT_SN}
     Get Logs    ${CHILD_SN}
+
+Log File Contents Should Be Equal
+    [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8    ${expected_filename}=^${CHILD_XID}_[\\w\\W]+-c8y-mapper-\\d+$    ${expected_mime_type}=text/plain
+    ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
+    ${event_id}=    Set Variable    ${event_url_parts}[-2]
+    ${contents}=    Cumulocity.Event Should Have An Attachment
+    ...    ${event_id}
+    ...    expected_contents=${expected_contents}
+    ...    encoding=${encoding}
+    ${event}=    Cumulocity.Event Attachment Should Have File Info    ${event_id}    name=${expected_filename}    mime_type=${expected_mime_type}
+    RETURN    ${contents}

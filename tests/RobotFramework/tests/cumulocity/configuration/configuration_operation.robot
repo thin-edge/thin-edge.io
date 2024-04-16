@@ -232,6 +232,9 @@ Get Configuration from Device
     ${contents}=    Cumulocity.Event Should Have An Attachment
     ...    ${events[0]["id"]}
     ...    expected_md5=${expected_checksum}
+
+    ${event}=    Cumulocity.Event Attachment Should Have File Info    ${events[0]["id"]}    name=^${external_id}_[\\w\\W]+-c8y-mapper-\\d+$
+
     RETURN    ${contents}
 
 #

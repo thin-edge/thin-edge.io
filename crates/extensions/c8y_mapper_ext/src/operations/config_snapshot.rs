@@ -28,6 +28,8 @@ use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_uploader_ext::ContentType;
+use tedge_uploader_ext::FormData;
 use tedge_uploader_ext::UploadRequest;
 use time::OffsetDateTime;
 use tracing::log::warn;
@@ -183,6 +185,7 @@ impl CumulocityConverter {
         fts_download: FtsDownloadOperationData,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let target = self.entity_store.try_get(&fts_download.entity_topic_id)?;
+        let xid = target.external_id.as_ref();
         let smartrest_topic =
             self.smartrest_publish_topic_for_entity(&fts_download.entity_topic_id)?;
         let payload = fts_download.message.payload_str()?;
@@ -212,7 +215,7 @@ impl CumulocityConverter {
             time: OffsetDateTime::now_utc(),
             text: response.config_type.clone(),
             extras: HashMap::new(),
-            device_id: target.external_id.as_ref().to_string(),
+            device_id: xid.to_string(),
         };
         let event_response_id = self.http_proxy.send_event(create_event).await?;
 
@@ -220,12 +223,20 @@ impl CumulocityConverter {
             .c8y_endpoint
             .get_url_for_event_binary_upload_unchecked(&event_response_id);
 
+        let file_path = Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?;
+
+        // The method must be POST, otherwise file name won't be supported.
         let upload_request = UploadRequest::new(
             self.auth_proxy
                 .proxy_url(binary_upload_event_url.clone())
                 .as_str(),
-            &Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?,
-        );
+            &file_path,
+        )
+        .post()
+        .with_content_type(ContentType::FormData(FormData::new(format!(
+            "{xid}_{filename}",
+            filename = file_path.file_name().unwrap_or("filename")
+        ))));
 
         self.pending_upload_operations.insert(
             cmd_id.clone(),

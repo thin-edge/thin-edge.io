@@ -152,13 +152,14 @@ Publish and Verify Local Command
     [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
 
 Log File Contents Should Be Equal
-    [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8
+    [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8    ${expected_filename}=^${DEVICE_SN}_[\\w\\W]+-c8y-mapper-\\d+$    ${expected_mime_type}=text/plain
     ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
     ${event_id}=    Set Variable    ${event_url_parts}[-2]
     ${contents}=    Cumulocity.Event Should Have An Attachment
     ...    ${event_id}
     ...    expected_contents=${expected_contents}
     ...    encoding=${encoding}
+    ${event}=    Cumulocity.Event Attachment Should Have File Info    ${event_id}    name=${expected_filename}    mime_type=${expected_mime_type}
     RETURN    ${contents}
 
 Disable log upload capability of tedge-agent

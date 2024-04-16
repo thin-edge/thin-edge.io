@@ -31,6 +31,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_uploader_ext::ContentType;
+use tedge_uploader_ext::FormData;
 use tedge_uploader_ext::UploadRequest;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -187,6 +188,7 @@ impl CumulocityConverter {
         let smartrest_topic = self.smartrest_publish_topic_for_entity(&topic_id)?;
         let payload = fts_download.message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
+        let xid = target.external_id.as_ref();
 
         let download_response = match download_result {
             Err(err) => {
@@ -212,7 +214,7 @@ impl CumulocityConverter {
             time: OffsetDateTime::now_utc(),
             text: response.log_type.clone(),
             extras: HashMap::new(),
-            device_id: target.external_id.as_ref().to_string(),
+            device_id: xid.to_string(),
         };
         let event_response_id = self.http_proxy.send_event(create_event).await?;
 
@@ -220,13 +222,25 @@ impl CumulocityConverter {
             .c8y_endpoint
             .get_url_for_event_binary_upload_unchecked(&event_response_id);
 
+        let file_path =
+            Utf8PathBuf::try_from(download_response.file_path).map_err(|e| e.into_io_error())?;
+
+        // The method must be POST, otherwise file name won't be supported.
+        // Mime must be text/*, otherwise c8y UI doesn't give a preview of the content.
         let upload_request = UploadRequest::new(
             self.auth_proxy
                 .proxy_url(binary_upload_event_url.clone())
                 .as_str(),
-            &Utf8PathBuf::try_from(download_response.file_path).map_err(|e| e.into_io_error())?,
+            &file_path,
         )
-        .with_content_type(ContentType::TextPlain);
+        .post()
+        .with_content_type(ContentType::FormData(
+            FormData::new(format!(
+                "{xid}_{filename}",
+                filename = file_path.file_name().unwrap_or("filename")
+            ))
+            .text_plain(),
+        ));
 
         self.uploader_sender
             .send((cmd_id.clone(), upload_request))
