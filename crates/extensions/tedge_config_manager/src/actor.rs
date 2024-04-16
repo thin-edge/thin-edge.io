@@ -18,6 +18,8 @@ use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -167,7 +169,20 @@ impl ConfigManagerActor {
     ) -> Result<(), ChannelError> {
         match operation {
             ConfigOperation::Snapshot(ref mut request) => {
-                request.executing();
+                match &request.tedge_url {
+                    Some(_) => request.executing(None),
+                    None => {
+                        match self
+                            .create_tedge_url_for_config_operation(topic, &request.config_type)
+                        {
+                            Ok(tedge_url) => request.executing(Some(tedge_url)),
+                            Err(err) => {
+                                error!("Failed to create tedgeUrl: {}", err);
+                                return Ok(());
+                            }
+                        };
+                    }
+                };
             }
             ConfigOperation::Update(ref mut request) => {
                 request.executing();
@@ -181,7 +196,10 @@ impl ConfigManagerActor {
         topic: &Topic,
         mut request: ConfigSnapshotCmdPayload,
     ) -> Result<(), ChannelError> {
-        match self.execute_config_snapshot_request(topic, &request).await {
+        match self
+            .execute_config_snapshot_request(topic, &mut request)
+            .await
+        {
             Ok(_) => {
                 self.pending_operations
                     .insert(topic.name.clone(), ConfigOperation::Snapshot(request));
@@ -202,18 +220,28 @@ impl ConfigManagerActor {
     async fn execute_config_snapshot_request(
         &mut self,
         topic: &Topic,
-        request: &ConfigSnapshotCmdPayload,
+        request: &mut ConfigSnapshotCmdPayload,
     ) -> Result<(), ConfigManagementError> {
         let file_entry = self
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
 
-        let upload_request =
-            UploadRequest::new(&request.tedge_url, Utf8Path::new(&file_entry.path));
+        let tedge_url = match &request.tedge_url {
+            Some(tedge_url) => tedge_url,
+            None => {
+                request.executing(Some(
+                    self.create_tedge_url_for_config_operation(topic, &request.config_type)?,
+                ));
+                // Safe to unwrap because we've just created the url
+                request.tedge_url.as_ref().unwrap()
+            }
+        };
+
+        let upload_request = UploadRequest::new(tedge_url, Utf8Path::new(&file_entry.path));
 
         info!(
             "Awaiting upload of config type: {} to url: {}",
-            request.config_type, request.tedge_url
+            request.config_type, tedge_url
         );
 
         self.upload_sender
@@ -221,6 +249,41 @@ impl ConfigManagerActor {
             .await?;
 
         Ok(())
+    }
+
+    fn create_tedge_url_for_config_operation(
+        &self,
+        topic: &Topic,
+        config_type: &str,
+    ) -> Result<String, EntityTopicError> {
+        let (device_name, operation_type, cmd_id) =
+            match self.config.mqtt_schema.entity_channel_of(topic) {
+                Ok((entity, Channel::Command { operation, cmd_id })) => {
+                    match entity.default_device_name() {
+                        Some(device_name) => (device_name.to_owned(), operation, cmd_id),
+                        None => {
+                            return Err(EntityTopicError::TopicId(
+                                tedge_api::mqtt_topics::TopicIdError::InvalidMqttTopic,
+                            ))
+                        }
+                    }
+                }
+
+                _ => {
+                    return Err(EntityTopicError::Channel(
+                        tedge_api::mqtt_topics::ChannelError::InvalidCategory(topic.name.clone()),
+                    ));
+                }
+            };
+
+        Ok(format!(
+            "http://{}/tedge/file-transfer/{}/{}/{}-{}",
+            &self.config.tedge_http_host,
+            device_name,
+            operation_type,
+            config_type.replace('/', ":"),
+            cmd_id
+        ))
     }
 
     async fn process_uploaded_config(

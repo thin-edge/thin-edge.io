@@ -34,10 +34,11 @@ pub struct ConfigManagerConfig {
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
     pub tmp_path: Arc<Utf8Path>,
+    pub mqtt_schema: MqttSchema,
     pub config_reload_topics: TopicFilter,
     pub config_update_topic: TopicFilter,
     pub config_snapshot_topic: TopicFilter,
-
+    pub tedge_http_host: Arc<str>,
     /// If enabled, config file updates are deployed by tedge-write.
     pub use_tedge_write: TedgeWriteStatus,
 
@@ -48,6 +49,7 @@ pub struct ConfigManagerOptions {
     pub config_dir: PathBuf,
     pub mqtt_topic_root: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
+    pub tedge_http_host: Arc<str>,
     pub tmp_path: Arc<Utf8Path>,
     pub is_sudo_enabled: bool,
     pub config_update_enabled: bool,
@@ -87,9 +89,11 @@ impl ConfigManagerConfig {
             plugin_config_dir,
             plugin_config_path,
             tmp_path: cliopts.tmp_path,
+            mqtt_schema: mqtt_topic_root,
             config_reload_topics,
             config_update_topic,
             config_snapshot_topic,
+            tedge_http_host: cliopts.tedge_http_host,
             use_tedge_write: TedgeWriteStatus::Enabled {
                 sudo: SudoCommandBuilder::enabled(cliopts.is_sudo_enabled),
             },

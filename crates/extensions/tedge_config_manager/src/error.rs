@@ -30,6 +30,9 @@ pub enum ConfigManagementError {
     DirectoryNotFound { path: std::path::PathBuf },
 
     #[error(transparent)]
+    FromEntityTopicError(#[from] tedge_api::mqtt_topics::EntityTopicError),
+
+    #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
 

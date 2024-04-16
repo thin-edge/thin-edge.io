@@ -78,7 +78,7 @@ impl CumulocityConverter {
 
         let request = ConfigSnapshotCmdPayload {
             status: CommandStatus::Init,
-            tedge_url,
+            tedge_url: Some(tedge_url),
             config_type: config_upload_request.config_type,
             path: None,
         };

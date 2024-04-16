@@ -14,6 +14,7 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
@@ -87,8 +88,10 @@ async fn new_config_manager_builder(
         .expect("Infallible"),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
         use_tedge_write: TedgeWriteStatus::Disabled,
+        mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
+        tedge_http_host: "127.0.0.1:3000".into(),
         config_update_enabled: true,
     };
 
@@ -262,6 +265,69 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, _downloader, mut uploader) =
+        spawn_config_manager_actor(tempdir.path()).await;
+
+    let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
+
+    // Let's ignore the reload messages sent on start
+    mqtt.skip(2).await;
+
+    // When a config snapshot request is received
+    let snapshot_request = r#"
+        {
+            "status": "init",
+            "type": "type_two"
+        }"#;
+
+    mqtt.send(MqttMessage::new(&config_topic, snapshot_request).with_retain())
+        .await?;
+
+    // The config manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
+    assert_eq!(
+        executing_message,
+        Some(
+            MqttMessage::new(&config_topic, r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_snapshot/type_two-1234","type":"type_two"}"#)
+                .with_retain()
+        )
+    );
+
+    // This message being published over MQTT is also received by the config-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
+
+    // Assert config upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
+
+    assert_eq!(Topic::new_unchecked(&topic), config_topic);
+
+    assert_eq!(
+        upload_request.url,
+        "http://127.0.0.1:3000/tedge/file-transfer/main/config_snapshot/type_two-1234"
+    );
+    assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
+
+    assert_eq!(upload_request.auth, None);
+
+    // Simulate upload file completion
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
+
+    // Finally, the config manager notifies that request was successfully processed
+    assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &config_topic,
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+            ).with_retain())
+        );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn config_manager_download_update() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
     let (mut mqtt, _fs, mut downloader, _uploader) =
@@ -399,7 +465,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     mqtt.send(MqttMessage::new(&another_device_topic, snapshot_request).with_retain())
         .await?;
 
-    // The config manager does proceed to "executing" state
+    // The config manager does not proceed to "executing" state
     assert!(mqtt.recv().await.is_none());
 
     Ok(())
@@ -415,19 +481,69 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     // Let's ignore the init message sent on start
     mqtt.skip(2).await;
 
-    // When a config snapshot request is received with url instead of tedgeUrl
+    // When a config snapshot request is received with kind instead of type
     let snapshot_request = r#"
         {
             "status": "init",
-            "url": "http://127.0.0.1:3000/tedge/file-transfer/child01/config-snapshot/type_two-1234",
-            "type": "type_two"
+            "tedgeurl": "http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234",
+            "kind": "type_two"
         }"#;
 
     mqtt.send(MqttMessage::new(&config_topic, snapshot_request).with_retain())
         .await?;
 
-    // The config manager does proceed to "executing" state
+    // The config manager does not proceed to "executing" state
     assert!(mqtt.recv().await.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, _downloader, mut uploader) =
+        spawn_config_manager_actor(tempdir.path()).await;
+
+    let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
+
+    // Let's ignore the reload messages sent on start
+    mqtt.skip(2).await;
+
+    // Received executing snapshot request
+    let executing_request = r#"
+        {
+            "status": "executing",
+            "type": "type_two"
+        }"#;
+
+    mqtt.send(MqttMessage::new(&config_topic, executing_request).with_retain())
+        .await?;
+
+    // Assert config upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
+
+    assert_eq!(Topic::new_unchecked(&topic), config_topic);
+
+    assert_eq!(
+        upload_request.url,
+        "http://127.0.0.1:3000/tedge/file-transfer/main/config_snapshot/type_two-1234"
+    );
+    assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
+
+    assert_eq!(upload_request.auth, None);
+
+    // Simulate upload file completion
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
+
+    // Finally, the config manager notifies that request was successfully processed
+    assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &config_topic,
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+            ).with_retain())
+        );
 
     Ok(())
 }
