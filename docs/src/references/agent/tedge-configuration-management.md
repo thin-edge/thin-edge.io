@@ -140,6 +140,10 @@ tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
 }'
 ```
 
+:::note
+The `tedgeUrl` is an optional field. If the user does not provide the URL, the agent will create it, and the link will be added while the operation is being processed.
+:::
+
 Upon receiving a configuration snapshot command, the agent performs the following actions:
    1. The agent uses the `type` information (`mosquitto`) to look up the target path from the `tedge-configuration-plugin.toml` file
    and retrieves the requested configuration content from the corresponding `path`(`/etc/mosquitto/mosquitto.conf`).
