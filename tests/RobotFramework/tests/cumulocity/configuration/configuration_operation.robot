@@ -108,6 +108,23 @@ Manual config_snapshot operation request
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
 
+Config_snapshot operation request with the tedgeUrl created by agent
+    Set Device Context    ${PARENT_SN}
+    ${timestamp}=    Get Unix Timestamp
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/config_snapshot/local-3333
+    ...    payload={"status":"init","type":"tedge-configuration-plugin"}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_UploadConfigFile
+
+    ${messages}=    Should Have MQTT Messages
+    ...    te/device/main///cmd/config_snapshot/local-3333
+    ...    message_contains=http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333
+    ...    date_from=${timestamp}
+
+    ${output}=    Execute Command    curl -sSLf "http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333"    strip=${True}
+    Should Match Regexp    ${output}    pattern=files\\s*=\\s*\\[.*\\]    flags=DOTALL
+    
 Manual config_update operation request
     Set Device Context    ${PARENT_SN}
     # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
