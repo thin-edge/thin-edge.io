@@ -27,7 +27,7 @@ The registration messages received for child devices and services are mapped as 
 **%%te%% (input)**
 
 ```text title="Topic"
-te/device/child01
+te/device/child01//
 ```
 
 ```json5 title="Payload"
@@ -49,7 +49,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-101,<main-device-id>:device:child01,SmartHomeHub
+101,<main-device-id>:device:child01,child01,SmartHomeHub
 ```
 
 </div>
@@ -64,7 +64,7 @@ with devices using the same name in other tedge deployments connected to the sam
 **%%te%% (input)**
 
 ```text title="Topic"
-te/device/child01
+te/device/child01//
 ```
 
 ```json5 title="Payload"
@@ -87,7 +87,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-101,child01,SmartHomeHub
+101,child01,child01,SmartHomeHub
 ```
 
 </div>
@@ -101,7 +101,7 @@ Where the provided `@id` is directly used as the external id.
 **%%te%% (input)**
 
 ```text title="Topic"
-te/device/nested_child01
+te/device/nested_child01//
 ```
 
 ```json5 title="Payload"
