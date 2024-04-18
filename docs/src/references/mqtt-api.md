@@ -662,13 +662,13 @@ tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
 Services are responsible for updating their own health status by publishing to the above topic on any status changes. However, other clients can request the service to update its status by sending a health check command as shown below:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r te/device/main/service/tedge-agent/cmd/health/check '{}'
+tedge mqtt pub te/device/main/service/tedge-agent/cmd/health/check '{}'
 ```
 
 Services are also expected to react to device-wide health check commands as well (where service and `<service_id>` segments are left blank):
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r te/device/main///cmd/health/check '{}'
+tedge mqtt pub te/device/main///cmd/health/check '{}'
 ```
 
 On receipt of the above command, all services on that device should respond with their health status.
