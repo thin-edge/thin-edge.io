@@ -8,6 +8,7 @@ use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use std::sync::Arc;
 use tedge_api::commands::CommandStatus;
+use tedge_api::commands::ConfigUpdateCmd;
 use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityMetadata;
@@ -17,6 +18,7 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
@@ -46,19 +48,29 @@ impl CumulocityConverter {
     pub async fn handle_config_update_state_change(
         &mut self,
         topic_id: &EntityTopicId,
-        _cmd_id: &str,
+        cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
+    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
         if !self.config.capabilities.config_update {
             warn!("Received a config_update command, however, config_update feature is disabled");
-            return Ok(vec![]);
+            return Ok((vec![], None));
         }
 
-        let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        let payload = message.payload_str()?;
-        let response = &ConfigUpdateCmdPayload::from_json(payload)?;
+        let command = match ConfigUpdateCmd::try_from(
+            topic_id.clone(),
+            cmd_id.into(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok((vec![], None));
+            }
+        };
 
-        let messages = match &response.status {
+        let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
+
+        let messages = match command.status() {
             CommandStatus::Executing => {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yDownloadConfigFile);
@@ -77,8 +89,10 @@ impl CumulocityConverter {
                 vec![c8y_notification, clear_local_cmd]
             }
             CommandStatus::Failed { reason } => {
-                let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yDownloadConfigFile, reason);
+                let smartrest_operation_status = fail_operation(
+                    CumulocitySupportedOperations::C8yDownloadConfigFile,
+                    &reason,
+                );
                 let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
                 let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
@@ -91,7 +105,10 @@ impl CumulocityConverter {
             }
         };
 
-        Ok(messages)
+        Ok((
+            messages,
+            Some(command.into_generic_command(&self.mqtt_schema)),
+        ))
     }
 
     /// Upon receiving a SmartREST c8y_DownloadConfigFile request, convert it to a message on the
@@ -150,6 +167,7 @@ impl CumulocityConverter {
             remote_url,
             config_type: config_download_request.config_type.clone(),
             path: None,
+            log_path: None,
         };
 
         // Command messages must be retained

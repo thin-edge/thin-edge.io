@@ -15,6 +15,7 @@ use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
+use tedge_api::commands::ConfigSnapshotCmd;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -22,6 +23,7 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -81,6 +83,7 @@ impl CumulocityConverter {
             tedge_url: Some(tedge_url),
             config_type: config_upload_request.config_type,
             path: None,
+            log_path: None,
         };
 
         // Command messages must be retained
@@ -98,20 +101,30 @@ impl CumulocityConverter {
         topic_id: &EntityTopicId,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
+    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
         if !self.config.capabilities.config_snapshot {
             warn!(
                 "Received a config_snapshot command, however, config_snapshot feature is disabled"
             );
-            return Ok(vec![]);
+            return Ok((vec![], None));
         }
+
+        let command = match ConfigSnapshotCmd::try_from(
+            topic_id.clone(),
+            cmd_id.into(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok((vec![], None));
+            }
+        };
 
         let target = self.entity_store.try_get(topic_id)?;
         let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        let payload = message.payload_str()?;
-        let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
 
-        let messages = match &response.status {
+        let messages = match command.status() {
             CommandStatus::Executing => {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yUploadConfigFile);
@@ -122,8 +135,11 @@ impl CumulocityConverter {
             }
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
-                let config_filename =
-                    format!("{}-{}", response.config_type.replace('/', ":"), cmd_id);
+                let config_filename = format!(
+                    "{}-{}",
+                    command.payload.config_type.replace('/', ":"),
+                    cmd_id
+                );
 
                 let tedge_file_url = format!(
                     "http://{}/tedge/file-transfer/{external_id}/config_snapshot/{config_filename}",
@@ -160,7 +176,7 @@ impl CumulocityConverter {
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, reason);
+                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, &reason);
                 let c8y_notification =
                     MqttMessage::new(&smartrest_topic, smartrest_operation_status);
                 let clear_local_cmd = MqttMessage::new(&message.topic, "")
@@ -173,7 +189,10 @@ impl CumulocityConverter {
             }
         };
 
-        Ok(messages)
+        Ok((
+            messages,
+            Some(command.into_generic_command(&self.mqtt_schema)),
+        ))
     }
 
     /// Resumes `config_snapshot` operation after required file was downloaded

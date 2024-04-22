@@ -7,6 +7,7 @@ use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::FirmwareInfo;
+use tedge_api::commands::FirmwareUpdateCmd;
 use tedge_api::commands::FirmwareUpdateCmdPayload;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::Channel;
@@ -16,6 +17,7 @@ use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
@@ -64,6 +66,7 @@ impl CumulocityConverter {
             remote_url: firmware_request.url,
             name: firmware_request.name,
             version: firmware_request.version,
+            log_path: None,
         };
 
         // Command messages must be retained
@@ -79,20 +82,31 @@ impl CumulocityConverter {
     pub async fn handle_firmware_update_state_change(
         &mut self,
         topic_id: &EntityTopicId,
+        cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
+    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
         if !self.config.capabilities.firmware_update {
             warn!(
                 "Received a firmware_update command, however, firmware_update feature is disabled"
             );
-            return Ok(vec![]);
+            return Ok((vec![], None));
         }
 
-        let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        let payload = message.payload_str()?;
-        let response = &FirmwareUpdateCmdPayload::from_json(payload)?;
+        let command = match FirmwareUpdateCmd::try_from(
+            topic_id.clone(),
+            cmd_id.into(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok((vec![], None));
+            }
+        };
 
-        let messages = match &response.status {
+        let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
+
+        let messages = match command.status() {
             CommandStatus::Executing => {
                 let smartrest_operation_status =
                     set_operation_executing(CumulocitySupportedOperations::C8yFirmware);
@@ -116,9 +130,9 @@ impl CumulocityConverter {
                 );
 
                 let twin_metadata_payload = FirmwareInfo {
-                    name: Some(response.name.clone()),
-                    version: Some(response.version.clone()),
-                    remote_url: Some(response.remote_url.clone()),
+                    name: Some(command.payload.name.clone()),
+                    version: Some(command.payload.version.clone()),
+                    remote_url: Some(command.payload.remote_url.clone()),
                 };
 
                 let twin_metadata =
@@ -130,7 +144,7 @@ impl CumulocityConverter {
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yFirmware, reason);
+                    fail_operation(CumulocitySupportedOperations::C8yFirmware, &reason);
                 let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
                 let clear_local_cmd = MqttMessage::new(&message.topic, "")
                     .with_retain()
@@ -143,7 +157,10 @@ impl CumulocityConverter {
             }
         };
 
-        Ok(messages)
+        Ok((
+            messages,
+            Some(command.into_generic_command(&self.mqtt_schema)),
+        ))
     }
 
     pub fn register_firmware_update_operation(

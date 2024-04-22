@@ -36,6 +36,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
+use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchEvent;
@@ -2549,6 +2550,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         false,
         SoftwareManagementApiFlag::Advanced,
         true,
+        AutoLogUpload::Never,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

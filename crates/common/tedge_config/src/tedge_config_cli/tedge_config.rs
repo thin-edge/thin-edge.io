@@ -1,6 +1,7 @@
 use super::models::timestamp::TimeFormat;
 use crate::AptConfig;
 use crate::AutoFlag;
+use crate::AutoLogUpload;
 use crate::ConnectUrl;
 use crate::HostPort;
 use crate::Seconds;
@@ -487,6 +488,12 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = false))]
             with_types: bool,
         },
+
+        operations: {
+            /// Auto-upload the operation log once it finishes.
+            #[tedge_config(example = "always", example = "never", example = "on-failure", default(variable = "AutoLogUpload::OnFailure"))]
+            auto_log_upload: AutoLogUpload,
+        }
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
