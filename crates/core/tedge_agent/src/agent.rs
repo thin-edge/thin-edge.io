@@ -79,6 +79,7 @@ pub(crate) struct AgentConfig {
     pub operations_dir: Utf8PathBuf,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
+    pub tedge_http_host: Arc<str>,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
     pub fts_url: Arc<str>,
@@ -112,6 +113,11 @@ impl AgentConfig {
             .mqtt_config()?
             .with_max_packet_size(10 * 1024 * 1024)
             .with_session_name(mqtt_session_name);
+
+        // Tedge HTTP config
+        let tedge_http_address = tedge_config.http.client.host.clone();
+        let tedge_http_port = tedge_config.http.client.port;
+        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 
         // HTTP config
         let data_dir: DataDir = tedge_config.data.path.clone().into();
@@ -177,6 +183,7 @@ impl AgentConfig {
             operations_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
+            tedge_http_host,
             identity,
             fts_url,
             is_sudo_enabled,
@@ -285,6 +292,7 @@ impl Agent {
                     config_dir: self.config.config_dir.clone().into(),
                     mqtt_topic_root: mqtt_schema.clone(),
                     mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
+                    tedge_http_host: self.config.tedge_http_host,
                     tmp_path: self.config.tmp_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_update_enabled: self.config.capabilities.config_update,

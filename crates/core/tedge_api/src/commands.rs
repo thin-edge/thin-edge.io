@@ -714,7 +714,8 @@ impl<'a> Jsonify<'a> for ConfigMetadata {}
 pub struct ConfigSnapshotCmdPayload {
     #[serde(flatten)]
     pub status: CommandStatus,
-    pub tedge_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tedge_url: Option<String>,
     #[serde(rename = "type")]
     pub config_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -724,8 +725,11 @@ pub struct ConfigSnapshotCmdPayload {
 impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
 
 impl ConfigSnapshotCmdPayload {
-    pub fn executing(&mut self) {
+    pub fn executing(&mut self, tedge_url: Option<String>) {
         self.status = CommandStatus::Executing;
+        if tedge_url.is_some() {
+            self.tedge_url = tedge_url;
+        }
     }
 
     pub fn successful(&mut self, path: impl Into<String>) {
