@@ -6,7 +6,7 @@ use c8y_http_proxy::messages::C8YRestError;
 use plugin_sm::operation_logs::OperationLogsError;
 use std::path::PathBuf;
 use tedge_api::entity_store::InvalidExternalIdError;
-use tedge_api::serialize::ThinEdgeJsonSerializationError;
+use tedge_api::measurement::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::MqttError;
 use tedge_utils::file::FileError;
@@ -59,7 +59,7 @@ pub enum ConversionError {
     ),
 
     #[error(transparent)]
-    FromThinEdgeJsonParser(#[from] tedge_api::parser::ThinEdgeJsonParserError),
+    FromThinEdgeJsonParser(#[from] tedge_api::measurement::ThinEdgeJsonParserError),
 
     #[error(transparent)]
     SizeThresholdExceeded(#[from] SizeThresholdExceededError),

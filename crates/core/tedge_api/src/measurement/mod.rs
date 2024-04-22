@@ -1,5 +1,18 @@
 use time::OffsetDateTime;
 
+#[cfg(test)]
+pub mod builder;
+#[cfg(test)]
+mod data;
+mod group;
+mod parser;
+mod serialize;
+pub(crate) mod utils;
+
+pub use group::*;
+pub use parser::*;
+pub use serialize::*;
+
 /// The `MeasurementVisitor` trait represents the capability to visit a series of measurements, possibly grouped.
 ///
 /// Here is an implementation of the `MeasurementVisitor` trait that prints the measurements:

@@ -1,4 +1,4 @@
-use tedge_api::serialize::ThinEdgeJsonSerializationError;
+use tedge_api::measurement::ThinEdgeJsonSerializationError;
 use tedge_mqtt_ext::MqttError;
 
 #[derive(Debug, thiserror::Error)]
@@ -7,7 +7,7 @@ pub enum ConversionError {
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
-    FromThinEdgeJsonParser(#[from] tedge_api::parser::ThinEdgeJsonParserError),
+    FromThinEdgeJsonParser(#[from] tedge_api::measurement::ThinEdgeJsonParserError),
 
     #[error("The size of the message received on {topic} is {actual_size} which is greater than the threshold size of {threshold}.")]
     SizeThresholdExceeded {

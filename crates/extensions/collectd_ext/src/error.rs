@@ -11,15 +11,15 @@ pub enum DeviceMonitorError {
     FromInvalidCollectdMeasurement(#[from] crate::collectd::CollectdError),
 
     #[error(transparent)]
-    FromInvalidThinEdgeJson(#[from] tedge_api::group::MeasurementGrouperError),
+    FromInvalidThinEdgeJson(#[from] tedge_api::measurement::MeasurementGrouperError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerializationError(
-        #[from] tedge_api::serialize::ThinEdgeJsonSerializationError,
+        #[from] tedge_api::measurement::ThinEdgeJsonSerializationError,
     ),
 
     #[error(transparent)]
-    FromBatchingError(#[from] SendError<tedge_api::group::MeasurementGrouper>),
+    FromBatchingError(#[from] SendError<tedge_api::measurement::MeasurementGrouper>),
 }
 
 impl From<DeviceMonitorError> for RuntimeError {

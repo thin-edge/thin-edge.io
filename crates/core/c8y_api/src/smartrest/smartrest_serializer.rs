@@ -313,7 +313,7 @@ pub trait OperationStatusMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_api::messages::SoftwareListCommandPayload;
+    use tedge_api::commands::SoftwareListCommandPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::Jsonify;
 

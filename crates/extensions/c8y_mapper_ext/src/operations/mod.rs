@@ -15,7 +15,7 @@
 
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
-use tedge_api::messages::ConfigMetadata;
+use tedge_api::commands::ConfigMetadata;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;

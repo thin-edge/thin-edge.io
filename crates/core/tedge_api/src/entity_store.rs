@@ -8,14 +8,14 @@
 // TODO: move entity business logic to its own module
 
 use crate::entity_store;
-use crate::message_log::MessageLogReader;
-use crate::message_log::MessageLogWriter;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::TopicIdError;
-use crate::pending_entity_store::PendingEntityData;
-use crate::pending_entity_store::PendingEntityStore;
+use crate::store::message_log::MessageLogReader;
+use crate::store::message_log::MessageLogWriter;
+use crate::store::pending_entity_store::PendingEntityData;
+use crate::store::pending_entity_store::PendingEntityStore;
 use log::debug;
 use log::error;
 use log::info;
