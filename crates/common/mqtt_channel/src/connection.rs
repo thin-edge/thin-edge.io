@@ -11,13 +11,11 @@ use futures::StreamExt;
 use log::error;
 use log::info;
 use rumqttc::AsyncClient;
-use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
-use rumqttc::StateError;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -178,14 +176,11 @@ impl Connection {
                         host = config.broker.host,
                         port = config.broker.port
                     );
-                    let should_delay = Connection::pause_on_error(&err);
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
 
-                    if should_delay {
-                        Connection::do_pause().await;
-                    }
+                    Connection::do_pause().await;
                 }
                 _ => (),
             }
@@ -249,14 +244,11 @@ impl Connection {
 
                 Err(err) => {
                     error!("MQTT connection error: {err}");
-                    let delay = Connection::pause_on_error(&err);
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
 
-                    if delay {
-                        Connection::do_pause().await;
-                    }
+                    Connection::do_pause().await;
                 }
                 _ => (),
             }
@@ -303,15 +295,6 @@ impl Connection {
         }
         let _ = mqtt_client.disconnect().await;
         let _ = done.send(());
-    }
-
-    pub(crate) fn pause_on_error(err: &ConnectionError) -> bool {
-        matches!(
-            err,
-            rumqttc::ConnectionError::Io(_)
-                | rumqttc::ConnectionError::MqttState(StateError::Io(_))
-                | rumqttc::ConnectionError::MqttState(_)
-        )
     }
 
     pub(crate) async fn do_pause() {
