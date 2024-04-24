@@ -332,7 +332,7 @@ Note that:
 - No `on_exit` nor `on_kill` status can be provided, as the script is not monitored.
 - If the script cannot be launched, the workflow will be moved to the final `"failed"` state.
 
-### 🚧 Sub-Command Execution {#sub-command-execution}
+### 🚧 Sub-Operation Execution {#sub-operation-execution}
 
 :::info
 🚧 The syntax for triggering other workflows from an existing workflow is still being finalized so please avoid using it in production environments.
@@ -341,8 +341,12 @@ Note that:
 An operation workflow can trigger a command defined by another workflow.
 
 ```toml
-["<state-name>"]
-operation = "<operation-name>"
+[<state-name>]
+operation = "<sub-operation-name>"
+input_script = "/some/script/which/stdout/is/used/as/sub-operation/init/state"
+input.x = "some static value"
+input.y = "${.payload.y}"
+on_exec = "<next-state-waiting-for-sub-operation>"
 ```
 
 Operation specific arguments can be provided to the sub-operation instance,
@@ -352,18 +356,18 @@ and data extracted from the calling command status topic and message payload can
   adds an `url` property to the init message of the sub-operation.
 - Similarly, `input.url = "${.payload.config_update.url}"`
   adds an `url` property to the init message of the sub-operation, extracting this url from the calling command state.
-- Several such arguments can be added to the sub-operation initial state.
+- Several such arguments can be added to the sub-operation initial state payload.
   - All these individual arguments are combined into a JSON object value published on the sub-operation MQTT topic.
-  - The calling command excerpts are injected into this initial state are defined using the same path conventions as for script handlers.
+  - The calling command excerpts injected into this initial state are defined using the same path conventions as for script handlers.
   - If an `input.status` value is provided, this value will be ignored and replaced by `"init"`
     as this is the only valid value for the initial state of a command.
   - If no value at all is provided for `input`, then the default value is `{"status" = "init"}`.
-- For cases where there no one-to-one relationship between the properties of the current command state
+- For cases where there is no one-to-one relationship between the properties of the current operation state
   and the properties of sub-operation init state, the sub-operation init state can be computed using a script.
   - `input_script = "/some/script/which/stdout/is/used/as/sub-operation/init/state"`
   - The input script can be passed parameters extracted from the current command state,
     *e.g.* `input_script = "/bin/extra_configuration_updates.sh ${.payload.device_profile}"`
-  - When the input script is successful, its stdout is used to determine the init state of the sub-operation
+  - When the input script is successful, its stdout is used to derive the init state of the sub-operation
       - From this output, only the excerpt between a `:::begin-tedge:::` header and a `:::end-tedge:::` trailer is decoded.
       - If this excerpt is a json payload, this payload is injected into the previous message payload
         (adding new fields, overriding overlapping ones, keeping previous unchanged ones).
@@ -376,7 +380,7 @@ and data extracted from the calling command status topic and message payload can
 From an execution perspective, triggering a sub-operation is similar to running a background script.
 
 - The calling command workflow is paused while the sub-operation is processed.
-- The calling workflow move to an `on_exec` state from where to sub-operation execution is watched until success, failure or timeout.
+- The calling workflow moves to an `on_exec` state from where the sub-operation execution is watched until success, failure or timeout.
 - A specific `"await-operation-completion"` action is to be used for this `on_exec` state where the sub-operation completion is awaited.
 - The steps following the sub-operation completion are defined on the `on_exec` state with `on_success`, `on_error` and `on_timeout` handlers.
 
