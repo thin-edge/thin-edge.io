@@ -111,7 +111,10 @@ jobs:
 
     steps:
       - if: ${{ contains(matrix.host_os, 'ubuntu') }}
-        run: sudo apt-get update -y
+        run: |
+          # WORKAROUND: Remove microsoft debian repo due to https://github.com/microsoft/linux-package-repositories/issues/130. Remove line below after it is resolved
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update -y
       - name: Checkout
         uses: actions/checkout@v4
         with:
