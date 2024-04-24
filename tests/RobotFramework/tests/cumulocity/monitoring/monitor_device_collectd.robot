@@ -63,7 +63,7 @@ Custom Setup
     Device Should Exist    ${DEVICE_SN}
     # 1. Install collectd
     # 2. Configure collectd
-    Execute Command    sudo apt-get install -y --no-install-recommends collectd-core libmosquitto1
+    Execute Command    sudo apt-get update && sudo apt-get install -y --no-install-recommends collectd-core libmosquitto1
     Execute Command    sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 
     # Shorten the interval to 1 second so it is easier to test. This is technically not a documentation step,

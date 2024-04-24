@@ -28,6 +28,6 @@ Wrong type
 *** Keywords ***
 Custom Setup
     Setup
-    Execute Command    apt-get install --download-only rolldice
+    Execute Command    apt-get update && apt-get install --download-only rolldice
     ${DEB_FILE}=    Execute Command    find /var/cache/apt/archives -type f -name "rolldice_*.deb"    strip=True
     Set Suite Variable    ${DEB_FILE}
