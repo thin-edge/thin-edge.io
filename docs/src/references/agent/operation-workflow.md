@@ -376,7 +376,7 @@ and data extracted from the calling command status topic and message payload can
 From an execution perspective, triggering a sub-operation is similar to running a background script.
 
 - The calling command workflow is paused while the sub-operation is processed.
-- The calling workflow move to an `on_exec` state from where to sub-operation execution is watched till success, failure or timeout.
+- The calling workflow move to an `on_exec` state from where to sub-operation execution is watched until success, failure or timeout.
 - A specific `"await-operation-completion"` action is to be used for this `on_exec` state where the sub-operation completion is awaited.
 - The steps following the sub-operation completion are defined on the `on_exec` state with `on_success`, `on_error` and `on_timeout` handlers.
 
