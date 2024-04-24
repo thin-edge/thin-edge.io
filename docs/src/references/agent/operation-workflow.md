@@ -511,12 +511,12 @@ on_success = "successful_restart"
 #### Awaiting Sub-Command Completion
 
 When a sub `operation` is executed, the operation workflow moves to a waiting state which `action` must be `await-operation-completion`.
-This waiting state specifies, with `on_success`, `on_error` and `on_timeout` handlers,
-the next step of the calling workflow on success, failure or timeout of the sub-operation.
+This waiting state specifies the next step of the calling workflow on success, failure or timeout of the sub-operation
+using the `on_success`, `on_error` and `on_timeout` properties respectively.
 
-The `await-operation-completion` action also tells how to inject back the outcome of the sub-operation into the invoking command state.
+The `await-operation-completion` action also tells how to inject the outcome of the sub-operation into the invoking command state.
 - This is done by attaching values to `output` subfields, as in `output.x.y.z = "${.payload.x.y.z}"`
-- Many independent subfields can be added. They will all be injected into the current payload of the command state, letting untouched the others.
+- Many independent subfields can be added. They will all be injected into the current payload of the command state, leaving the other fields untouched.
 - The invoking command payload cannot be overridden as a whole. Subfields can be added and updated but not removed.
 - Specific path expressions can be used to extract specific excerpts from the sub-operation final state.
 - `${.}` denotes the whole sub-operation final message including the `topic` and the `payload`.
