@@ -33,6 +33,13 @@ use tracing::warn;
 
 const SERVICE_NAME: &str = "tedge-watchdog";
 
+/// How many times more often do we send notify to systemd watchdog, than is necessary from the
+/// `WatchdogSec` value.
+///
+/// Notifications are sent more often to make sure we don't miss the notify interval due to
+/// a timing misalignment.
+const NOTIFY_SEND_FREQ_RATIO: u64 = 4;
+
 // TODO: extract to common module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthStatus {
@@ -61,7 +68,10 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
                     let _ = notify_systemd(process::id(), "WATCHDOG=1").map_err(|e| {
                         eprintln!("Notifying systemd failed with {}", e);
                     });
-                    tokio::time::sleep(tokio::time::Duration::from_secs(interval / 4)).await;
+                    let delay = tokio::time::Duration::from_secs(
+                        (interval / NOTIFY_SEND_FREQ_RATIO).max(1),
+                    );
+                    tokio::time::sleep(delay).await;
                 }
             });
             Ok(())
@@ -95,7 +105,6 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
         .parse::<EntityTopicId>()
         .expect("Services not in default scheme unsupported");
 
-    // let device_topic_id = tedge_config_dir
     let tedge_services = vec![
         "tedge-mapper-c8y",
         "tedge-mapper-az",
@@ -129,12 +138,14 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
 
                 let tedge_config_location = tedge_config_location.clone();
                 watchdog_tasks.push(tokio::spawn(async move {
+                    //
+                    let interval = Duration::from_secs((interval / NOTIFY_SEND_FREQ_RATIO).max(1));
                     monitor_tedge_service(
                         tedge_config_location,
                         service.as_str(),
                         req_topic,
                         res_topic,
-                        interval / 4,
+                        interval,
                     )
                     .await
                 }));
@@ -154,7 +165,7 @@ async fn monitor_tedge_service(
     name: &str,
     req_topic: Topic,
     res_topic: Topic,
-    interval: u64,
+    interval: Duration,
 ) -> Result<(), WatchdogError> {
     let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
 
@@ -210,7 +221,7 @@ async fn monitor_tedge_service(
         let start = Instant::now();
 
         match tokio::time::timeout(
-            Duration::from_secs(interval),
+            interval,
             get_latest_health_status_message(OffsetDateTime::now_utc(), &mut received),
         )
         .await
@@ -229,9 +240,9 @@ async fn monitor_tedge_service(
         }
 
         let elapsed = start.elapsed();
-        if elapsed < Duration::from_secs(interval) {
-            tokio::time::sleep(Duration::from_secs(interval) - elapsed).await;
-            warn!("tedge systemd watchdog not started because no services to monitor")
+        if elapsed < interval {
+            tokio::time::sleep(interval - elapsed).await;
+            warn!("tedge systemd watchdog not started because no services to monitor");
         }
     }
 }
