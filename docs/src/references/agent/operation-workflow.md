@@ -332,7 +332,11 @@ Note that:
 - No `on_exit` nor `on_kill` status can be provided, as the script is not monitored.
 - If the script cannot be launched, the workflow will be moved to the final `"failed"` state.
 
-### Sub-Command Execution
+### 🚧 Sub-Command Execution {#sub-command-execution}
+
+:::info
+🚧 The syntax for triggering other workflows from an existing workflow is still being finalized so please avoid using it in production environments.
+:::
 
 An operation workflow can trigger a command defined by another workflow.
 
