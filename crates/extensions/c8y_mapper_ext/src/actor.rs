@@ -157,8 +157,12 @@ impl C8yMapperActor {
             | FsWatchEvent::Modified(path) => {
                 // Process inotify events only for the main device at the root operations directory
                 // directly under /etc/tedge/operations/c8y
-                if path.parent() == Some(&self.converter.ops_dir) {
-                    match process_inotify_events(&self.converter.ops_dir, &path, file_event) {
+                if path.parent() == Some(self.converter.config.ops_dir.as_std_path()) {
+                    match process_inotify_events(
+                        self.converter.config.ops_dir.as_std_path(),
+                        &path,
+                        file_event,
+                    ) {
                         Ok(Some(discovered_ops)) => {
                             self.mqtt_publisher
                                 .send(
@@ -316,7 +320,10 @@ impl C8yMapperBuilder {
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
         let upload_sender = uploader.connect_client(box_builder.get_sender().sender_clone());
         let download_sender = downloader.connect_client(box_builder.get_sender().sender_clone());
-        fs_watcher.connect_sink(config.ops_dir.clone(), &box_builder.get_sender());
+        fs_watcher.connect_sink(
+            config.ops_dir.as_std_path().to_path_buf(),
+            &box_builder.get_sender(),
+        );
         let auth_proxy = ProxyUrlGenerator::new(
             config.auth_proxy_addr.clone(),
             config.auth_proxy_port,
@@ -346,11 +353,11 @@ impl C8yMapperBuilder {
 
     fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
         // Create c8y operations directory
-        create_directory_with_defaults(config.ops_dir.clone())?;
+        create_directory_with_defaults(config.ops_dir.as_std_path())?;
         // Create directory for device custom fragments
         create_directory_with_defaults(config.config_dir.join("device"))?;
         // Create directory for persistent entity store
-        create_directory_with_defaults(&config.state_dir)?;
+        create_directory_with_defaults(config.state_dir.as_std_path())?;
         Ok(())
     }
 }

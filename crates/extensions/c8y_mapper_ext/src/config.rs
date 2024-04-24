@@ -5,9 +5,7 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::Protocol;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use std::path::Path;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::Command;
@@ -33,16 +31,10 @@ const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 
 pub struct C8yMapperConfig {
-    pub config_dir: PathBuf,
-    pub logs_path: Utf8PathBuf,
-    pub data_dir: DataDir,
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
     pub device_type: String,
     pub service: TEdgeConfigReaderService,
-    pub ops_dir: PathBuf,
-    pub state_dir: PathBuf,
-    pub tmp_dir: Arc<Utf8Path>,
     pub c8y_host: String,
     pub tedge_http_host: Arc<str>,
     pub topics: TopicFilter,
@@ -57,15 +49,23 @@ pub struct C8yMapperConfig {
     pub bridge_in_mapper: bool,
     pub software_management_api: SoftwareManagementApiFlag,
     pub software_management_with_types: bool,
+
+    pub data_dir: DataDir,
+    pub config_dir: Arc<Utf8Path>,
+    pub logs_path: Arc<Utf8Path>,
+    pub ops_dir: Arc<Utf8Path>,
+    pub state_dir: Arc<Utf8Path>,
+    pub tmp_dir: Arc<Utf8Path>,
 }
 
 impl C8yMapperConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        config_dir: PathBuf,
-        logs_path: Utf8PathBuf,
+        config_dir: Arc<Utf8Path>,
+        logs_path: Arc<Utf8Path>,
         data_dir: DataDir,
         tmp_dir: Arc<Utf8Path>,
+
         device_id: String,
         device_topic_id: EntityTopicId,
         device_type: String,
@@ -87,20 +87,16 @@ impl C8yMapperConfig {
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
-            .join(C8Y_CLOUD);
-        let state_dir = config_dir.join(STATE_DIR_NAME);
+            .join(C8Y_CLOUD)
+            .into();
+        let state_dir = config_dir.join(STATE_DIR_NAME).into();
 
         Self {
-            config_dir,
-            logs_path,
             data_dir,
             device_id,
             device_topic_id,
             device_type,
             service,
-            ops_dir,
-            state_dir,
-            tmp_dir,
             c8y_host,
             tedge_http_host,
             topics,
@@ -115,6 +111,12 @@ impl C8yMapperConfig {
             bridge_in_mapper,
             software_management_api,
             software_management_with_types,
+
+            config_dir,
+            logs_path,
+            ops_dir,
+            state_dir,
+            tmp_dir,
         }
     }
 
@@ -128,14 +130,14 @@ impl C8yMapperConfig {
     }
 
     pub fn from_tedge_config(
-        config_dir: impl AsRef<Path>,
+        config_dir: impl AsRef<Utf8Path>,
         tedge_config: &TEdgeConfig,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
-        let config_dir: PathBuf = config_dir.as_ref().into();
+        let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
-        let logs_path = tedge_config.logs.path.clone();
+        let logs_path = tedge_config.logs.path.as_path().into();
         let data_dir: DataDir = tedge_config.data.path.clone().into();
-        let tmp_dir = tedge_config.tmp.path.clone().into();
+        let tmp_dir = tedge_config.tmp.path.as_path().into();
 
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
@@ -164,7 +166,8 @@ impl C8yMapperConfig {
         };
         let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
-        let mut topics = Self::default_internal_topic_filter(&config_dir, &c8y_prefix)?;
+        let mut topics =
+            Self::default_internal_topic_filter(config_dir.as_std_path(), &c8y_prefix)?;
         let enable_auto_register = tedge_config.c8y.entity_store.auto_register;
         let clean_start = tedge_config.c8y.entity_store.clean_start;
 

@@ -26,8 +26,11 @@ impl CumulocityConverter {
         &mut self,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = vec![];
-        let inventory_file_path = self.cfg_dir.join(INVENTORY_FRAGMENTS_FILE_LOCATION);
-        let mut inventory_base = Self::get_inventory_fragments(&inventory_file_path)?;
+        let inventory_file_path = self
+            .config
+            .config_dir
+            .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
+        let mut inventory_base = Self::get_inventory_fragments(inventory_file_path.as_std_path())?;
 
         if let Some(map) = inventory_base.as_object_mut() {
             if map.remove("name").is_some() {

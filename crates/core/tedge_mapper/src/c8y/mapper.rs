@@ -10,7 +10,6 @@ use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
-use std::path::Path;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::TEdgeConfig;
@@ -32,7 +31,11 @@ impl TEdgeComponent for CumulocityMapper {
         CUMULOCITY_MAPPER_NAME
     }
 
-    async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), anyhow::Error> {
+    async fn start(
+        &self,
+        tedge_config: TEdgeConfig,
+        cfg_dir: &tedge_config::Path,
+    ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
 

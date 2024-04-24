@@ -2525,10 +2525,10 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     let config = C8yMapperConfig::new(
-        config_dir.to_path_buf(),
-        config_dir.utf8_path_buf(),
+        config_dir.utf8_path().into(),
+        config_dir.utf8_path().into(),
         config_dir.utf8_path_buf().into(),
-        config_dir.utf8_path_buf().into(),
+        config_dir.utf8_path().into(),
         device_name,
         device_topic_id,
         device_type,
