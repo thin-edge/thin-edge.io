@@ -56,6 +56,7 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
             config: reconnect_cmd.config.clone(),
             cloud: reconnect_cmd.cloud,
             is_test_connection: false,
+            offline_mode: false,
             service_manager: reconnect_cmd.service_manager.clone(),
         }
     }

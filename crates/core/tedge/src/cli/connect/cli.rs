@@ -15,6 +15,10 @@ pub enum TEdgeConnectOpt {
         /// Test connection to Cumulocity
         #[clap(long = "test")]
         is_test_connection: bool,
+
+        /// Ignore connection registration and connection check
+        #[clap(long = "offline")]
+        offline_mode: bool,
     },
 
     /// Create connection to Azure
@@ -24,6 +28,10 @@ pub enum TEdgeConnectOpt {
         /// Test connection to Azure
         #[clap(long = "test")]
         is_test_connection: bool,
+
+        /// Ignore connection registration and connection check
+        #[clap(long = "offline")]
+        offline_mode: bool,
     },
 
     /// Create connection to AWS
@@ -33,31 +41,47 @@ pub enum TEdgeConnectOpt {
         /// Test connection to AWS
         #[clap(long = "test")]
         is_test_connection: bool,
+
+        /// Ignore connection registration and connection check
+        #[clap(long = "offline")]
+        offline_mode: bool,
     },
 }
 
 impl BuildCommand for TEdgeConnectOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(match self {
-            TEdgeConnectOpt::C8y { is_test_connection } => ConnectCommand {
+            TEdgeConnectOpt::C8y {
+                is_test_connection,
+                offline_mode,
+            } => ConnectCommand {
                 config_location: context.config_location.clone(),
                 config: context.load_config()?,
                 cloud: Cloud::C8y,
                 is_test_connection,
+                offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
             },
-            TEdgeConnectOpt::Az { is_test_connection } => ConnectCommand {
+            TEdgeConnectOpt::Az {
+                is_test_connection,
+                offline_mode,
+            } => ConnectCommand {
                 config_location: context.config_location.clone(),
                 config: context.load_config()?,
                 cloud: Cloud::Azure,
                 is_test_connection,
+                offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
             },
-            TEdgeConnectOpt::Aws { is_test_connection } => ConnectCommand {
+            TEdgeConnectOpt::Aws {
+                is_test_connection,
+                offline_mode,
+            } => ConnectCommand {
                 config_location: context.config_location.clone(),
                 config: context.load_config()?,
                 cloud: Cloud::Aws,
                 is_test_connection,
+                offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
             },
         }

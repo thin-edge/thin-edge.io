@@ -42,6 +42,7 @@ pub struct ConnectCommand {
     pub config: TEdgeConfig,
     pub cloud: Cloud,
     pub is_test_connection: bool,
+    pub offline_mode: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
@@ -93,6 +94,7 @@ impl Command for ConnectCommand {
             self.service_manager.as_ref(),
             &self.config_location,
             device_type,
+            self.offline_mode,
         ) {
             Ok(()) => println!("Successfully created bridge connection!\n"),
             Err(ConnectError::SystemServiceError(
@@ -107,15 +109,19 @@ impl Command for ConnectCommand {
             self.start_mapper();
         }
 
-        match self.check_connection(config) {
-            Ok(DeviceStatus::AlreadyExists) => {
-                println!("Connection check is successful.\n");
-            }
-            _ => {
-                println!(
-                    "Warning: Bridge has been configured, but {} connection check failed.\n",
-                    self.cloud.as_str()
-                );
+        if self.offline_mode {
+            println!("Offline mode. Skipping connection check.\n");
+        } else {
+            match self.check_connection(config) {
+                Ok(DeviceStatus::AlreadyExists) => {
+                    println!("Connection check is successful.\n");
+                }
+                _ => {
+                    println!(
+                        "Warning: Bridge has been configured, but {} connection check failed.\n",
+                        self.cloud.as_str()
+                    );
+                }
             }
         }
 
@@ -126,16 +132,18 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            check_connected_c8y_tenant_as_configured(
-                config,
-                &config
-                    .c8y
-                    .mqtt
-                    .or_none()
-                    .cloned()
-                    .map(|u| u.to_string())
-                    .unwrap_or_default(),
-            );
+            if !self.offline_mode {
+                check_connected_c8y_tenant_as_configured(
+                    config,
+                    &config
+                        .c8y
+                        .mqtt
+                        .or_none()
+                        .cloned()
+                        .map(|u| u.to_string())
+                        .unwrap_or_default(),
+                );
+            }
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
 
@@ -458,6 +466,7 @@ fn new_bridge(
     service_manager: &dyn SystemServiceManager,
     config_location: &TEdgeConfigLocation,
     device_type: &str,
+    offline_mode: bool,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
@@ -480,8 +489,15 @@ fn new_bridge(
     bridge_config.validate()?;
 
     if bridge_config.cloud_name.eq("c8y") {
-        println!("Creating the device in Cumulocity cloud.\n");
-        c8y_direct_connection::create_device_with_direct_connection(bridge_config, device_type)?;
+        if offline_mode {
+            println!("Offline mode. Skipping device creation in Cumulocity cloud.\n")
+        } else {
+            println!("Creating the device in Cumulocity cloud.\n");
+            c8y_direct_connection::create_device_with_direct_connection(
+                bridge_config,
+                device_type,
+            )?;
+        }
     }
 
     if bridge_config.bridge_location == BridgeLocation::Mosquitto {
