@@ -12,9 +12,7 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
-use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
-use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
@@ -38,14 +36,12 @@ pub type LogUploadRequest = (MqttTopic, UploadRequest);
 pub type LogUploadResult = (MqttTopic, UploadResult);
 
 fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent, LogUploadResult] : Debug);
-fan_in_message_type!(LogOutput[MqttMessage, LogUploadRequest]: Debug);
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
     plugin_config: LogPluginConfig,
     pending_operations: HashMap<String, LogUploadCmdPayload>,
-    messages: SimpleMessageBox<LogInput, NoMessage>,
-    mqtt_publisher: LoggingSender<MqttMessage>,
+    messages: SimpleMessageBox<LogInput, MqttMessage>,
     upload_sender: DynSender<LogUploadRequest>,
 }
 
@@ -79,15 +75,13 @@ impl LogManagerActor {
     pub fn new(
         config: LogManagerConfig,
         plugin_config: LogPluginConfig,
-        mqtt_publisher: LoggingSender<MqttMessage>,
-        messages: SimpleMessageBox<LogInput, NoMessage>,
+        messages: SimpleMessageBox<LogInput, MqttMessage>,
         upload_sender: DynSender<LogUploadRequest>,
     ) -> Self {
         Self {
             config,
             plugin_config,
             pending_operations: HashMap::new(),
-            mqtt_publisher,
             messages,
             upload_sender,
         }
@@ -266,7 +260,7 @@ impl LogManagerActor {
         config_types.sort();
         let payload = json!({ "types": config_types }).to_string();
         let msg = MqttMessage::new(&self.config.logtype_reload_topic, payload).with_retain();
-        self.mqtt_publisher.send(msg).await
+        self.messages.send(msg).await
     }
 
     async fn publish_command_status(
@@ -275,7 +269,7 @@ impl LogManagerActor {
         request: &LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
         let message = request_into_message(topic, request);
-        self.mqtt_publisher.send(message).await
+        self.messages.send(message).await
     }
 }
 

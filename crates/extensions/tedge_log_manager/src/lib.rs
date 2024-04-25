@@ -13,10 +13,9 @@ use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoMessage;
+use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
@@ -34,8 +33,7 @@ use toml::toml;
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
     plugin_config: LogPluginConfig,
-    box_builder: SimpleMessageBoxBuilder<LogInput, NoMessage>,
-    mqtt_publisher: DynSender<MqttMessage>,
+    box_builder: SimpleMessageBoxBuilder<LogInput, MqttMessage>,
     upload_sender: DynSender<LogUploadRequest>,
 }
 
@@ -49,8 +47,8 @@ impl LogManagerBuilder {
         Self::init(&config).await?;
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
-        let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
-        let mqtt_publisher = mqtt.get_sender();
+        let mut box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
+        mqtt.connect_source(NoConfig, &mut box_builder);
         mqtt.connect_sink(Self::subscriptions(&config), &box_builder.get_sender());
         fs_notify.connect_sink(
             LogManagerBuilder::watched_directory(&config),
@@ -63,7 +61,6 @@ impl LogManagerBuilder {
             config,
             plugin_config,
             box_builder,
-            mqtt_publisher,
             upload_sender,
         })
     }
@@ -121,13 +118,11 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
     type Error = LinkError;
 
     fn try_build(self) -> Result<LogManagerActor, Self::Error> {
-        let mqtt_publisher = LoggingSender::new("Tedge-Log-Manager".into(), self.mqtt_publisher);
         let message_box = self.box_builder.build();
 
         Ok(LogManagerActor::new(
             self.config,
             self.plugin_config,
-            mqtt_publisher,
             message_box,
             self.upload_sender,
         ))
