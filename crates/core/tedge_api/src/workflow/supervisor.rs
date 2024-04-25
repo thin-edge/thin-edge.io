@@ -77,33 +77,29 @@ impl WorkflowSupervisor {
     pub fn apply_external_update(
         &mut self,
         operation: &OperationType,
-        message: &MqttMessage,
+        command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
         if !self.workflows.contains_key(operation) {
             return Err(WorkflowExecutionError::UnknownOperation {
                 operation: operation.to_string(),
             });
         };
-        match GenericCommandState::from_command_message(message)? {
-            None => {
-                // The command has been cleared
-                self.commands.remove(&message.topic.name);
-                Ok(None)
-            }
-            Some(command_state) if command_state.status == "init" => {
-                // This is a new command request
-                self.commands.insert(command_state.clone())?;
-                Ok(Some(command_state))
-            }
-            Some(_) => {
-                // Ignore command updates published over MQTT
-                //
-                // TODO: There is exception here - not implemented yet:
-                //       when a step is delegated to an external process,
-                //       this process will notify the outcome of its action over MQTT,
-                //       and the agent will have then to react on this message.
-                Ok(None)
-            }
+        if command_state.is_cleared() {
+            // The command has been cleared
+            self.commands.remove(&command_state.topic.name);
+            Ok(Some(command_state))
+        } else if command_state.is_init() {
+            // This is a new command request
+            self.commands.insert(command_state.clone())?;
+            Ok(Some(command_state))
+        } else {
+            // Ignore command updates published over MQTT
+            //
+            // TODO: There is one exception here - not implemented yet:
+            //       when a step is delegated to an external process,
+            //       this process will notify the outcome of its action over MQTT,
+            //       and the agent will have then to react on this message.
+            Ok(None)
         }
     }
 
@@ -126,6 +122,44 @@ impl WorkflowSupervisor {
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
+    /// Return the current state of a command (identified by its topic)
+    pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
+        self.commands.get_state(command).map(|(_, state)| state)
+    }
+
+    /// Return the state of the invoking command of a command, if any
+    pub fn invoking_command_state(
+        &self,
+        sub_command: &GenericCommandState,
+    ) -> Option<&GenericCommandState> {
+        sub_command
+            .invoking_command_topic()
+            .and_then(|invoking_topic| self.get_state(invoking_topic))
+    }
+
+    /// Return the sub command of a command, if any
+    pub fn sub_command_state(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Option<&GenericCommandState> {
+        self.commands
+            .lookup_sub_command(command_state.command_topic())
+    }
+
+    /// Return the state of the root command which execution leads to the execution of a leaf-command
+    ///
+    /// Return None, if the given command is not a sub-command
+    pub fn root_invoking_command_state(
+        &self,
+        leaf_command: &GenericCommandState,
+    ) -> Option<&GenericCommandState> {
+        let invoking_command = self.invoking_command_state(leaf_command)?;
+        let root_command = self
+            .root_invoking_command_state(invoking_command)
+            .unwrap_or(invoking_command);
+        Some(root_command)
+    }
+
     /// Update the state of the command board on reception of new state for a command
     ///
     /// Return the next CommandRequest state if any is required.
@@ -133,7 +167,12 @@ impl WorkflowSupervisor {
         &mut self,
         new_command_state: GenericCommandState,
     ) -> Result<(), WorkflowExecutionError> {
-        self.commands.update(new_command_state)
+        if new_command_state.is_cleared() {
+            self.commands.remove(new_command_state.command_topic());
+            Ok(())
+        } else {
+            self.commands.update(new_command_state)
+        }
     }
 
     /// Resume the given command when the agent is restarting after an interruption
@@ -147,8 +186,8 @@ impl WorkflowSupervisor {
         };
 
         match action {
-            OperationAction::AwaitingAgentRestart { on_success, .. } => {
-                Some(command.clone().update(on_success))
+            OperationAction::AwaitingAgentRestart(handlers) => {
+                Some(command.clone().update(handlers.on_success))
             }
 
             _ => {
@@ -178,6 +217,19 @@ pub type Timestamp = time::OffsetDateTime;
 impl CommandBoard {
     pub fn new(commands: HashMap<TopicName, (Timestamp, GenericCommandState)>) -> Self {
         CommandBoard { commands }
+    }
+
+    pub fn get_state(&self, command: &str) -> Option<&(Timestamp, GenericCommandState)> {
+        self.commands.get(command)
+    }
+
+    /// Return the sub command of a command, if any
+    pub fn lookup_sub_command(&self, command_topic: &TopicName) -> Option<&GenericCommandState> {
+        // Sequential search is okay because in practice there is no more than 10 concurrent commands
+        self.commands
+            .values()
+            .find(|(_, command)| command.invoking_command_topic() == Some(command_topic))
+            .map(|(_, command)| command)
     }
 
     /// Iterate over the pending commands

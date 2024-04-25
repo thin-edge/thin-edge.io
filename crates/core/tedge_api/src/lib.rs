@@ -577,7 +577,7 @@ mod tests {
                 }
             ]
         }"#;
-        let (device, cmd) = mqtt_schema.entity_channel_of(&topic).unwrap();
+        let (device, cmd) = mqtt_schema.entity_channel_of(topic).unwrap();
         assert_eq!(
             cmd,
             Channel::Command {

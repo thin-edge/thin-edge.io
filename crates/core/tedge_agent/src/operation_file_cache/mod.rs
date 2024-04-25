@@ -146,7 +146,7 @@ impl FileCacheActor {
 
         let (entity, Channel::Command { cmd_id, .. }) = self
             .mqtt_schema
-            .entity_channel_of(&Topic::new(&topic).unwrap())
+            .entity_channel_of(&topic)
             .expect("only topics targeting config update command should be inserted")
         else {
             return Ok(());

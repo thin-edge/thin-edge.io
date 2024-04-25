@@ -133,11 +133,7 @@ where
         let topic = self.topic(schema);
         let status = self.status().to_string();
         let payload = serde_json::to_value(self.payload).unwrap(); // any command payload can be converted into JSON
-        GenericCommandState {
-            topic,
-            status,
-            payload,
-        }
+        GenericCommandState::new(topic, status, payload)
     }
 
     /// Return the MQTT message for this command

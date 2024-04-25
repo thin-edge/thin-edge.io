@@ -161,7 +161,8 @@ impl ExitHandlers {
                 Some(0) => {
                     match (
                         &self.on_success,
-                        self.json_stdout_excerpt(program, output.stdout),
+                        json_stdout_excerpt(output.stdout)
+                            .context(format!("Program `{program}` stdout")),
                     ) {
                         (None, Err(reason)) => GenericStateUpdate::failed(reason).into_json(),
                         (None, Ok(dynamic_update)) => dynamic_update,
@@ -175,12 +176,10 @@ impl ExitHandlers {
                     None => self
                         .state_update_on_unknown_exit_code(program, code as u8)
                         .into_json(),
-                    Some(error_state) => {
-                        match self.json_stdout_excerpt(program, output.stdout).ok() {
-                            None => error_state.into_json(),
-                            Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
-                        }
-                    }
+                    Some(error_state) => match json_stdout_excerpt(output.stdout).ok() {
+                        None => error_state.into_json(),
+                        Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
+                    },
                 },
             },
             Err(err) => self.state_update_on_launch_error(program, err).into_json(),
@@ -212,23 +211,6 @@ impl ExitHandlers {
         self.on_success
             .clone()
             .unwrap_or_else(GenericStateUpdate::successful)
-    }
-
-    fn json_stdout_excerpt(&self, program: &str, stdout: Vec<u8>) -> Result<Value, String> {
-        match String::from_utf8(stdout) {
-            Err(_) => Err(format!("{program} returned no UTF8 stdout")),
-            Ok(content) => match extract_script_output(content) {
-                None => Err(format!(
-                    "{program} returned no :::tedge::: content on stdout"
-                )),
-                Some(excerpt) => match serde_json::from_str(&excerpt) {
-                    Ok(json) => Ok(json),
-                    Err(err) => Err(format!(
-                        "{program} returned non JSON content on stdout: {err}"
-                    )),
-                },
-            },
-        }
     }
 
     fn state_update_on_launch_error(
@@ -265,6 +247,49 @@ impl ExitHandlers {
     }
 }
 
+/// Extract the json output of a script outcome
+pub fn extract_json_output(
+    program: &str,
+    outcome: std::io::Result<std::process::Output>,
+) -> Result<Value, String> {
+    json_output(outcome).context(format!("Program `{program}`"))
+}
+
+fn json_output(outcome: std::io::Result<std::process::Output>) -> Result<Value, String> {
+    let output = outcome.map_err(|err| format!("cannot be launched: {err}"))?;
+    let code = output.status.code().ok_or_else(|| {
+        format!(
+            "has been killed by SIG{}",
+            output.status.signal().unwrap_or(0) as u8
+        )
+    })?;
+    if code != 0 {
+        return Err(format!("failed with exit code {code}"));
+    };
+
+    json_stdout_excerpt(output.stdout).context("stdout")
+}
+
+fn json_stdout_excerpt(stdout: Vec<u8>) -> Result<Value, String> {
+    String::from_utf8(stdout)
+        .map_err(|_| "is not UTF8".to_string())
+        .map(extract_script_output)?
+        .ok_or_else(|| "contains no :::tedge::: content".to_string())
+        .and_then(|excerpt| {
+            serde_json::from_str(&excerpt).map_err(|err| format!("is not valid JSON: {err}"))
+        })
+}
+
+trait WithContext {
+    fn context(self, context: impl Display) -> Self;
+}
+
+impl<T> WithContext for Result<T, String> {
+    fn context(self, context: impl Display) -> Self {
+        self.map_err(|err| format!("{context} {err}"))
+    }
+}
+
 fn extract_script_output(stdout: String) -> Option<String> {
     if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
         if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
@@ -285,6 +310,31 @@ impl BgExitHandlers {
         Ok(BgExitHandlers {
             on_exec: on_exec.unwrap_or_else(GenericStateUpdate::successful),
         })
+    }
+}
+
+/// Define how to await the completion of a command
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AwaitHandlers {
+    pub timeout: Option<Duration>,
+    pub on_success: GenericStateUpdate,
+    pub on_error: Option<GenericStateUpdate>,
+    pub on_timeout: Option<GenericStateUpdate>,
+}
+
+impl AwaitHandlers {
+    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
+        if self.timeout.is_none() {
+            self.timeout = default.timeout
+        }
+        if self.on_timeout.is_none() {
+            self.on_timeout = default.on_timeout.clone()
+        }
+        if self.on_error.is_none() {
+            self.on_error = default.on_error.clone()
+        }
+
+        self
     }
 }
 
@@ -409,7 +459,7 @@ on_stdout = ["next"]
             state_update,
             json! ({
                 "status": "failed",
-                "reason": "sh returned no :::tedge::: content on stdout"
+                "reason": "Program `sh` stdout contains no :::tedge::: content"
             })
         )
     }

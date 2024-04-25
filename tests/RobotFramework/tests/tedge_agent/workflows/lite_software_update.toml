@@ -1,0 +1,15 @@
+operation = "lite_software_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/write-file.sh ${.payload.logfile}  install ${.payload.install}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

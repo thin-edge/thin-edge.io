@@ -1,0 +1,15 @@
+operation = "lite_config_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/write-file.sh ${.payload.logfile} config ${.payload.config}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
