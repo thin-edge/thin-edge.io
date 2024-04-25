@@ -127,7 +127,7 @@ Custom Setup
 Create Local Repository
     [Arguments]    ${packages_dir}=/setup/packages
     # Create local apt repo
-    Execute Command    apt-get install -y --no-install-recommends dpkg-dev
+    Execute Command    apt-get update && apt-get install -y --no-install-recommends dpkg-dev
     Execute Command    mkdir -p /opt/repository/local && find ${packages_dir} -type f -name "*.deb" -exec cp {} /opt/repository/local \\;
     ${NEW_VERSION}=    Execute Command    find ${packages_dir} -type f -name "tedge-mapper_*.deb" | sort -Vr | head -n1 | cut -d'_' -f 2    strip=True
     Set Suite Variable    $NEW_VERSION
