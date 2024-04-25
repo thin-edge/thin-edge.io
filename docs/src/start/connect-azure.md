@@ -149,6 +149,40 @@ Persisting tedge-mapper-az on reboot.
 tedge-mapper-az service successfully started and enabled!
 ```
 
+If your device does not have internet access and you want to create the bridge configuration, you can run a `tedge connect az` with the `--offline` flag.
+
+```sh
+sudo tedge connect az --offline
+```
+
+```text title="Output"
+Checking if systemd is available.
+
+Checking if configuration for requested bridge already exists.
+
+Validating the bridge certificates.
+
+Saving configuration for requested bridge.
+
+Restarting mosquitto service.
+
+Awaiting mosquitto to start. This may take up to 5 seconds.
+
+Enabling mosquitto service on reboots.
+
+Successfully created bridge connection!
+
+Offline mode. Skipping connection check.
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper-az service.
+
+Persisting tedge-mapper-az on reboot.
+
+tedge-mapper-az service successfully started and enabled!
+```
+
 ## Sending your first telemetry data {#send}
 
 Sending data to Azure is done using MQTT over topics prefixed with `az`.

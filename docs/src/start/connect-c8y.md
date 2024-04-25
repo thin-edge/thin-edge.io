@@ -248,6 +248,54 @@ Persisting tedge-agent on reboot.
 tedge-agent service successfully started and enabled!
 ```
 
+If your device does not have internet access and you want to create the bridge configuration, you can run a `tedge connect c8y` with the `--offline` flag.
+
+```sh
+sudo tedge connect c8y --offline
+```
+
+```text title="Output"
+Checking if systemd is available.
+
+Checking if configuration for requested bridge already exists.
+
+Validating the bridge certificates.
+
+Offline mode. Skipping device creation in Cumulocity cloud.
+
+Saving configuration for requested bridge.
+
+Restarting mosquitto service.
+
+Awaiting mosquitto to start. This may take up to 5 seconds.
+
+Enabling mosquitto service on reboots.
+
+Successfully created bridge connection!
+
+Offline mode. Skipping connection check.
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper-c8y service.
+
+Persisting tedge-mapper-c8y on reboot.
+
+tedge-mapper-c8y service successfully started and enabled!
+
+Enabling software management.
+
+Checking if tedge-agent is installed.
+
+Starting tedge-agent service.
+
+Persisting tedge-agent on reboot.
+
+tedge-agent service successfully started and enabled!
+```
+
+If the device certificate is trusted by Cumulocity IoT, the %%te%% instance will automatically connect to the cloud once connectivity is restored.
+
 ## Sending your first telemetry data
 
 Sending data to Cumulocity is done using MQTT over topics prefixed with `c8y`.
