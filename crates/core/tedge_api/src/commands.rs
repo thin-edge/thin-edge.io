@@ -1,11 +1,13 @@
 use crate::error::SoftwareError;
 use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicError;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::software::*;
 use crate::workflow::GenericCommandState;
 use download::DownloadInfo;
+use mqtt_channel::MqttError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
@@ -57,7 +59,7 @@ where
     }
 
     /// Return the MQTT topic for this command
-    fn topic(&self, schema: &MqttSchema) -> Topic {
+    pub fn topic(&self, schema: &MqttSchema) -> Topic {
         schema.topic_for(self.topic_id(), &self.channel())
     }
 
@@ -126,6 +128,32 @@ impl<Payload> Command<Payload>
 where
     Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
 {
+    /// Parse a command received from MQTT
+    pub fn parse(
+        schema: &MqttSchema,
+        message: MqttMessage,
+    ) -> Result<Option<Self>, CommandParsingError> {
+        let (target, channel) = schema.entity_channel_of(message.topic.as_ref())?;
+        let cmd_id = match channel {
+            Channel::Command { operation, cmd_id } if operation == Payload::operation_type() => {
+                cmd_id
+            }
+            Channel::Command { operation, .. } => {
+                return Err(CommandParsingError::InvalidCommandType {
+                    actual: operation.to_string(),
+                    expected: Payload::operation_type().to_string(),
+                })
+            }
+            _ => {
+                return Err(CommandParsingError::InvalidCommandTopic {
+                    topic: message.topic.name.clone(),
+                })
+            }
+        };
+
+        Ok(Self::try_from(target, cmd_id, message.payload())?)
+    }
+
     /// Return the Command received on a topic
     pub fn try_from(
         target: EntityTopicId,
@@ -168,6 +196,24 @@ where
             .with_qos(QoS::AtLeastOnce)
             .with_retain()
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CommandParsingError {
+    #[error(transparent)]
+    InvalidTopic(#[from] EntityTopicError),
+
+    #[error("Not a command topic: {topic}")]
+    InvalidCommandTopic { topic: String },
+
+    #[error("Not the expected command type: {actual} instead of {expected}")]
+    InvalidCommandType { actual: String, expected: String },
+
+    #[error(transparent)]
+    InvalidPayload(#[from] MqttError),
+
+    #[error(transparent)]
+    InvalidCommandPayload(#[from] serde_json::Error),
 }
 
 /// A command payload describing the current state of a command
