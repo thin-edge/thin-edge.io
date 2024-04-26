@@ -122,15 +122,15 @@ where
     }
 }
 
-impl<'a, Payload> Command<Payload>
+impl<Payload> Command<Payload>
 where
-    Payload: Jsonify<'a> + Deserialize<'a> + Serialize + CommandPayload,
+    Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
 {
     /// Return the Command received on a topic
     pub fn try_from(
         target: EntityTopicId,
         cmd_id: String,
-        bytes: &'a [u8],
+        bytes: &[u8],
     ) -> Result<Option<Self>, serde_json::Error> {
         if bytes.is_empty() {
             Ok(None)
@@ -207,17 +207,17 @@ pub trait CommandPayload {
 }
 
 /// All the messages are serialized using json.
-pub trait Jsonify<'a> {
-    fn from_json(json_str: &'a str) -> Result<Self, serde_json::Error>
+pub trait Jsonify {
+    fn from_json(json_str: &str) -> Result<Self, serde_json::Error>
     where
-        Self: Deserialize<'a>,
+        Self: DeserializeOwned,
     {
         serde_json::from_str(json_str)
     }
 
-    fn from_slice(bytes: &'a [u8]) -> Result<Self, serde_json::Error>
+    fn from_slice(bytes: &[u8]) -> Result<Self, serde_json::Error>
     where
-        Self: Deserialize<'a>,
+        Self: DeserializeOwned,
     {
         serde_json::from_slice(bytes)
     }
@@ -254,7 +254,7 @@ pub struct SoftwareListCommandPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareListCommandPayload {}
+impl Jsonify for SoftwareListCommandPayload {}
 
 impl CommandPayload for SoftwareListCommandPayload {
     fn operation_type() -> OperationType {
@@ -332,7 +332,7 @@ pub struct SoftwareUpdateCommandPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareUpdateCommandPayload {}
+impl Jsonify for SoftwareUpdateCommandPayload {}
 
 impl CommandPayload for SoftwareUpdateCommandPayload {
     fn operation_type() -> OperationType {
@@ -548,7 +548,7 @@ pub struct SoftwareCommandMetadata {
     pub types: Vec<SoftwareType>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareCommandMetadata {}
+impl Jsonify for SoftwareCommandMetadata {}
 
 /// Command to restart a device
 pub type RestartCommand = Command<RestartCommandPayload>;
@@ -573,7 +573,7 @@ impl RestartCommandPayload {
     }
 }
 
-impl<'a> Jsonify<'a> for RestartCommandPayload {}
+impl Jsonify for RestartCommandPayload {}
 
 impl CommandPayload for RestartCommandPayload {
     fn operation_type() -> OperationType {
@@ -660,7 +660,7 @@ pub struct LogMetadata {
     pub types: Vec<String>,
 }
 
-impl<'a> Jsonify<'a> for LogMetadata {}
+impl Jsonify for LogMetadata {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -681,7 +681,7 @@ pub struct LogUploadCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
+impl Jsonify for LogUploadCmdPayload {}
 
 impl CommandPayload for LogUploadCmdPayload {
     fn operation_type() -> OperationType {
@@ -706,7 +706,7 @@ pub struct ConfigMetadata {
     pub types: Vec<String>,
 }
 
-impl<'a> Jsonify<'a> for ConfigMetadata {}
+impl Jsonify for ConfigMetadata {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -723,7 +723,7 @@ pub struct ConfigSnapshotCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
+impl Jsonify for ConfigSnapshotCmdPayload {}
 
 impl CommandPayload for ConfigSnapshotCmdPayload {
     fn operation_type() -> OperationType {
@@ -772,7 +772,7 @@ pub struct ConfigUpdateCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
+impl Jsonify for ConfigUpdateCmdPayload {}
 
 impl CommandPayload for ConfigUpdateCmdPayload {
     fn operation_type() -> OperationType {
@@ -807,7 +807,7 @@ pub struct FirmwareInfo {
     pub remote_url: Option<String>,
 }
 
-impl<'a> Jsonify<'a> for FirmwareInfo {}
+impl Jsonify for FirmwareInfo {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -823,7 +823,7 @@ pub struct FirmwareUpdateCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for FirmwareUpdateCmdPayload {}
+impl Jsonify for FirmwareUpdateCmdPayload {}
 
 impl CommandPayload for FirmwareUpdateCmdPayload {
     fn operation_type() -> OperationType {
