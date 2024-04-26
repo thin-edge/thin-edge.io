@@ -85,6 +85,21 @@ where
             .with_retain()
             .with_qos(QoS::AtLeastOnce)
     }
+
+    /// Mark the command as executing
+    pub fn executing(&mut self) {
+        self.payload.executing();
+    }
+
+    /// Mark the command as successful
+    pub fn successful(&mut self) {
+        self.payload.successful();
+    }
+
+    /// Mark the command as failed
+    pub fn failed(&mut self, reason: impl Into<String>) {
+        self.payload.failed(reason);
+    }
 }
 
 impl<Payload> Command<Payload>
@@ -166,8 +181,27 @@ pub trait CommandPayload {
     fn set_status(&mut self, status: CommandStatus);
 
     /// Set the failure reason of the command
-    fn set_error(&mut self, reason: String) {
-        self.set_status(CommandStatus::Failed { reason });
+    fn set_error(&mut self, reason: impl Into<String>) {
+        self.set_status(CommandStatus::Failed {
+            reason: reason.into(),
+        });
+    }
+
+    /// Mark the command as executing
+    fn executing(&mut self) {
+        self.set_status(CommandStatus::Executing);
+    }
+
+    /// Mark the command as successful
+    fn successful(&mut self) {
+        self.set_status(CommandStatus::Successful);
+    }
+
+    /// Mark the command as failed
+    fn failed(&mut self, reason: impl Into<String>) {
+        self.set_status(CommandStatus::Failed {
+            reason: reason.into(),
+        });
     }
 }
 
@@ -654,6 +688,9 @@ pub enum OperationStatus {
     Executing,
 }
 
+/// Command to request a log file to be uploaded
+pub type LogUploadCmd = Command<LogUploadCmdPayload>;
+
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LogMetadata {
@@ -681,21 +718,22 @@ pub struct LogUploadCmdPayload {
 
 impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
 
-impl LogUploadCmdPayload {
-    pub fn executing(&mut self) {
-        self.status = CommandStatus::Executing;
+impl CommandPayload for LogUploadCmdPayload {
+    fn operation_type() -> OperationType {
+        OperationType::LogUpload
     }
 
-    pub fn successful(&mut self) {
-        self.status = CommandStatus::Successful;
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
     }
 
-    pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed {
-            reason: reason.into(),
-        };
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
     }
 }
+
+/// Command to request a configuration snapshot to be uploaded
+pub type ConfigSnapshotCmd = Command<ConfigSnapshotCmdPayload>;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -720,6 +758,20 @@ pub struct ConfigSnapshotCmdPayload {
 
 impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
 
+impl CommandPayload for ConfigSnapshotCmdPayload {
+    fn operation_type() -> OperationType {
+        OperationType::ConfigSnapshot
+    }
+
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
+    }
+
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
+    }
+}
+
 impl ConfigSnapshotCmdPayload {
     pub fn executing(&mut self, tedge_url: Option<String>) {
         self.status = CommandStatus::Executing;
@@ -732,13 +784,10 @@ impl ConfigSnapshotCmdPayload {
         self.status = CommandStatus::Successful;
         self.path = Some(path.into())
     }
-
-    pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed {
-            reason: reason.into(),
-        }
-    }
 }
+
+/// Command to request a configuration to be updated
+pub type ConfigUpdateCmd = Command<ConfigUpdateCmdPayload>;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -756,22 +805,29 @@ pub struct ConfigUpdateCmdPayload {
 
 impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
 
-impl ConfigUpdateCmdPayload {
-    pub fn executing(&mut self) {
-        self.status = CommandStatus::Executing;
+impl CommandPayload for ConfigUpdateCmdPayload {
+    fn operation_type() -> OperationType {
+        OperationType::ConfigUpdate
     }
 
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
+    }
+
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
+    }
+}
+
+impl ConfigUpdateCmdPayload {
     pub fn successful(&mut self, path: impl Into<String>) {
         self.status = CommandStatus::Successful;
         self.path = Some(path.into())
     }
-
-    pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed {
-            reason: reason.into(),
-        };
-    }
 }
+
+/// Command to update the device firmware
+pub type FirmwareUpdateCmd = Command<FirmwareUpdateCmdPayload>;
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -798,19 +854,17 @@ pub struct FirmwareUpdateCmdPayload {
 
 impl<'a> Jsonify<'a> for FirmwareUpdateCmdPayload {}
 
-impl FirmwareUpdateCmdPayload {
-    pub fn executing(&mut self) {
-        self.status = CommandStatus::Executing;
+impl CommandPayload for FirmwareUpdateCmdPayload {
+    fn operation_type() -> OperationType {
+        OperationType::FirmwareUpdate
     }
 
-    pub fn successful(&mut self) {
-        self.status = CommandStatus::Successful;
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
     }
 
-    pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed {
-            reason: reason.into(),
-        };
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
     }
 }
 

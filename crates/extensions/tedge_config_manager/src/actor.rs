@@ -15,6 +15,7 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
+use tedge_api::commands::CommandPayload;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
