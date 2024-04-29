@@ -18,6 +18,7 @@ use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_api::commands::CommandPayload;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogUploadCmdPayload;
 use tedge_api::Jsonify;

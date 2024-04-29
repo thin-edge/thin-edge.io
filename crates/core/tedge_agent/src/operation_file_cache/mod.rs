@@ -32,6 +32,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CommandPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
