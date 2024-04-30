@@ -14,6 +14,8 @@ pub mod service_monitor;
 #[cfg(test)]
 mod tests;
 
+pub(crate) const C8Y_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-c8y-bridge";
+
 #[derive(Debug, serde::Deserialize)]
 pub struct Capabilities {
     log_upload: bool,

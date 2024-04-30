@@ -340,7 +340,7 @@ impl CumulocityConverter {
                 let ancestors_external_ids =
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
 
-                if entity_topic_id.is_bridge_health_topic() {
+                if entity_topic_id == crate::C8Y_BRIDGE_TOPIC_ID {
                     return Ok(vec![]);
                 }
 

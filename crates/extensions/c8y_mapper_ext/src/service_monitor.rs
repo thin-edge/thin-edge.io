@@ -28,7 +28,8 @@ pub fn convert_health_status_message(
         return vec![];
     }
 
-    if entity.topic_id.is_bridge_health_topic() {
+    // the bridge itself is not registered as a service, only the mapper
+    if entity.topic_id == crate::C8Y_BRIDGE_TOPIC_ID {
         return vec![];
     }
 
@@ -127,6 +128,14 @@ mod tests {
         "c8y/s/us",
         r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,"up""down""#;
         "service-monitoring-double-quotes-health-message"
+    )]
+    #[test_case(
+        "test_device",
+        "te/device/main/service/my-bridge/status/health",
+        r#"{"pid":"1234","status":"up"}"#,
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:my-bridge,service,my-bridge,up"#;
+        "service-monitoring-service-with-bridge-in-name"
     )]
     fn translate_health_status_to_c8y_service_monitoring_message(
         device_name: &str,

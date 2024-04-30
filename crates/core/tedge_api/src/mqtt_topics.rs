@@ -390,12 +390,6 @@ impl EntityTopicId {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-
-    // FIXME: can also match "device/bridge//" or "/device/main/service/my_custom_bridge"
-    // should match ONLY the single mapper bridge
-    pub fn is_bridge_health_topic(&self) -> bool {
-        self.as_str().contains("bridge")
-    }
 }
 
 /// Contains a topic id of the service itself and the associated device.
