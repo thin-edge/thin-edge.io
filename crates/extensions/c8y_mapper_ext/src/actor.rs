@@ -14,11 +14,14 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
+use camino::Utf8Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ChannelError;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
@@ -45,6 +48,7 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use tokio::sync::Mutex;
 use tracing::error;
 use tracing::warn;
 
@@ -62,13 +66,34 @@ pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult] : Debug);
 type C8yMapperOutput = MqttMessage;
 
+#[derive(Clone)]
+struct MqttPublisher(Arc<Mutex<LoggingSender<MqttMessage>>>);
+
+impl MqttPublisher {
+    pub fn new(mqtt_publisher: LoggingSender<MqttMessage>) -> Self {
+        Self(Arc::new(Mutex::new(mqtt_publisher)))
+    }
+
+    pub async fn send(&self, message: MqttMessage) -> Result<(), ChannelError> {
+        self.0.lock().await.send(message).await
+    }
+}
+
 pub struct C8yMapperActor {
     converter: CumulocityConverter,
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
-    mqtt_publisher: LoggingSender<MqttMessage>,
+    mqtt_publisher: MqttPublisher,
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     c8y_bridge_service_name: String,
+}
+
+pub struct C8yMapperWorker {
+    // converter methods that handle download and upload state changes are mutable, so need to
+    // synchronize them with a mutex
+    converter: Mutex<CumulocityConverter>,
+    mqtt_publisher: MqttPublisher,
+    ops_dir: Arc<Utf8Path>,
 }
 
 #[async_trait]
@@ -97,25 +122,46 @@ impl Actor for C8yMapperActor {
             .send(SyncStart::new(SYNC_WINDOW, ()))
             .await?;
 
-        while let Some(event) = self.messages.recv().await {
-            match event {
-                C8yMapperInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message).await?;
+        let mut messages = self.messages;
+
+        let ops_dir = Arc::clone(&self.converter.config.ops_dir);
+        let worker = Arc::new(C8yMapperWorker {
+            converter: Mutex::new(self.converter),
+            mqtt_publisher: self.mqtt_publisher,
+            ops_dir,
+        });
+
+        while let Some(event) = messages.recv().await {
+            let worker = Arc::clone(&worker);
+
+            tokio::spawn(async move {
+                match event {
+                    C8yMapperInput::MqttMessage(message) => {
+                        // request message
+                        worker.process_mqtt_message(message).await?;
+                    }
+                    C8yMapperInput::FsWatchEvent(event) => {
+                        // request message
+                        worker.process_file_watch_event(event).await?;
+                    }
+                    C8yMapperInput::SyncComplete(_) => {
+                        // request message
+                        worker.process_sync_timeout().await?;
+                    }
+                    C8yMapperInput::IdUploadResult((cmd_id, result)) => {
+                        // immediate message
+                        worker.process_upload_result(cmd_id, result).await?;
+                    }
+                    C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
+                        // immediate message
+                        worker.process_download_result(cmd_id, result).await?;
+                    }
                 }
-                C8yMapperInput::FsWatchEvent(event) => {
-                    self.process_file_watch_event(event).await?;
-                }
-                C8yMapperInput::SyncComplete(_) => {
-                    self.process_sync_timeout().await?;
-                }
-                C8yMapperInput::IdUploadResult((cmd_id, result)) => {
-                    self.process_upload_result(cmd_id, result).await?;
-                }
-                C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
-                    self.process_download_result(cmd_id, result).await?;
-                }
-            }
+
+                Ok::<(), RuntimeError>(())
+            });
         }
+
         Ok(())
     }
 }
@@ -132,15 +178,17 @@ impl C8yMapperActor {
         Self {
             converter,
             messages,
-            mqtt_publisher,
+            mqtt_publisher: MqttPublisher::new(mqtt_publisher),
             timer_sender,
             bridge_status_messages,
             c8y_bridge_service_name,
         }
     }
+}
 
-    async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let converted_messages = self.converter.convert(&message).await;
+impl C8yMapperWorker {
+    async fn process_mqtt_message(&self, message: MqttMessage) -> Result<(), RuntimeError> {
+        let converted_messages = self.converter.lock().await.convert(&message).await;
 
         for converted_message in converted_messages.into_iter() {
             self.mqtt_publisher.send(converted_message).await?;
@@ -149,26 +197,21 @@ impl C8yMapperActor {
         Ok(())
     }
 
-    async fn process_file_watch_event(
-        &mut self,
-        file_event: FsWatchEvent,
-    ) -> Result<(), RuntimeError> {
+    async fn process_file_watch_event(&self, file_event: FsWatchEvent) -> Result<(), RuntimeError> {
         match file_event.clone() {
             FsWatchEvent::FileCreated(path)
             | FsWatchEvent::FileDeleted(path)
             | FsWatchEvent::Modified(path) => {
                 // Process inotify events only for the main device at the root operations directory
                 // directly under /etc/tedge/operations/c8y
-                if path.parent() == Some(self.converter.config.ops_dir.as_std_path()) {
-                    match process_inotify_events(
-                        self.converter.config.ops_dir.as_std_path(),
-                        &path,
-                        file_event,
-                    ) {
+                if path.parent() == Some(self.ops_dir.as_std_path()) {
+                    match process_inotify_events(self.ops_dir.as_std_path(), &path, file_event) {
                         Ok(Some(discovered_ops)) => {
                             self.mqtt_publisher
                                 .send(
                                     self.converter
+                                        .lock()
+                                        .await
                                         .process_operation_update_message(discovered_ops),
                                 )
                                 .await?;
@@ -186,9 +229,9 @@ impl C8yMapperActor {
         Ok(())
     }
 
-    pub async fn process_sync_timeout(&mut self) -> Result<(), RuntimeError> {
+    pub async fn process_sync_timeout(&self) -> Result<(), RuntimeError> {
         // Once the sync phase is complete, retrieve all sync messages from the converter and process them
-        let sync_messages = self.converter.sync_messages();
+        let sync_messages = self.converter.lock().await.sync_messages();
         for message in sync_messages {
             self.process_mqtt_message(message).await?;
         }
@@ -197,11 +240,18 @@ impl C8yMapperActor {
     }
 
     async fn process_upload_result(
-        &mut self,
+        &self,
         cmd_id: CmdId,
         upload_result: UploadResult,
     ) -> Result<(), RuntimeError> {
-        match self.converter.pending_upload_operations.remove(&cmd_id) {
+        let pending_upload = self
+            .converter
+            .lock()
+            .await
+            .pending_upload_operations
+            .remove(&cmd_id);
+
+        match pending_upload {
             Some(UploadContext::OperationData(queued_data)) => {
                 let payload = match queued_data.operation {
                     CumulocitySupportedOperations::C8yLogFileRequest
@@ -224,6 +274,8 @@ impl C8yMapperActor {
 
                 let messages = self
                     .converter
+                    .lock()
+                    .await
                     .upload_operation_log(
                         &queued_data.topic_id,
                         &cmd_id,
@@ -261,25 +313,32 @@ impl C8yMapperActor {
     }
 
     async fn process_download_result(
-        &mut self,
+        &self,
         cmd_id: CmdId,
         result: DownloadResult,
     ) -> Result<(), RuntimeError> {
         // download not from c8y_proxy, check if it was from FTS
-        let operation_result = if let Some(fts_download) = self
+        let fts_download_operation = self
             .converter
+            .lock()
+            .await
             .pending_fts_download_operations
-            .remove(&cmd_id)
-        {
+            .remove(&cmd_id);
+
+        let operation_result = if let Some(fts_download) = fts_download_operation {
             let cmd_id = cmd_id.clone();
             match fts_download.download_type {
                 FtsDownloadOperationType::ConfigDownload => {
                     self.converter
+                        .lock()
+                        .await
                         .handle_fts_config_download_result(cmd_id, result, fts_download)
                         .await
                 }
                 FtsDownloadOperationType::LogDownload => {
                     self.converter
+                        .lock()
+                        .await
                         .handle_fts_log_download_result(cmd_id, result, fts_download)
                         .await
                 }
