@@ -17,7 +17,10 @@ RUN apt-get -y update \
     nginx \
     netcat-openbsd \
     iputils-ping \
-    net-tools
+    net-tools \
+    # json tools (for tests)
+    jq \
+    jo
 
 # Install more recent version of mosquitto >= 2.0.18 from debian backports to avoid mosquitto following bugs:
 # The mosquitto repo can't be used as it does not included builds for arm64/aarch64 (only amd64 and armhf)
