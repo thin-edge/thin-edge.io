@@ -2445,7 +2445,7 @@ pub(crate) mod tests {
         let mut config = c8y_converter_config(&tmp_dir);
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
-        config.c8y_prefix = "custom-topic".into();
+        config.c8y_prefix = "custom-topic".try_into().unwrap();
 
         let (mut converter, _) = create_c8y_converter_from_config(config);
         let event_topic = "te/device/main///e/click_event";
@@ -2788,7 +2788,7 @@ pub(crate) mod tests {
             ChannelFilter::Command(OperationType::SoftwareUpdate),
         );
         let mqtt_message = MqttMessage::new(
-            &C8yDeviceControlTopic::topic(&"c8y".into()),
+            &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
             json!({
                 "id": "123456",
                 "c8y_SoftwareUpdate": [
@@ -2932,7 +2932,7 @@ pub(crate) mod tests {
         let output = converter.convert(&service_health_message).await;
         let service_creation_message = output
             .into_iter()
-            .find(|m| m.topic == C8yTopic::upstream_topic(&"c8y".into()))
+            .find(|m| m.topic == C8yTopic::upstream_topic(&"c8y".try_into().unwrap()))
             .expect("service creation message should be present");
 
         let mut smartrest_fields = service_creation_message.payload_str().unwrap().split(',');
@@ -3057,7 +3057,7 @@ pub(crate) mod tests {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
-        config.c8y_prefix = "custom-c8y-prefix".into();
+        config.c8y_prefix = "custom-c8y-prefix".try_into().unwrap();
 
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
@@ -3240,9 +3240,11 @@ pub(crate) mod tests {
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
-        let topics =
-            C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf(), &"c8y".into())
-                .unwrap();
+        let topics = C8yMapperConfig::default_internal_topic_filter(
+            &tmp_dir.to_path_buf(),
+            &"c8y".try_into().unwrap(),
+        )
+        .unwrap();
 
         C8yMapperConfig::new(
             tmp_dir.utf8_path().into(),
@@ -3263,7 +3265,7 @@ pub(crate) mod tests {
             MqttSchema::default(),
             true,
             true,
-            "c8y".into(),
+            "c8y".try_into().unwrap(),
             false,
             SoftwareManagementApiFlag::Advanced,
             true,

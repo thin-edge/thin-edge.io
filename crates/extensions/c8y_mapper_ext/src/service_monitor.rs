@@ -183,7 +183,7 @@ mod tests {
             entity,
             &ancestors_external_ids,
             &health_message,
-            &"c8y".into(),
+            &"c8y".try_into().unwrap(),
         );
         assert_eq!(msg[0], expected_message);
     }
