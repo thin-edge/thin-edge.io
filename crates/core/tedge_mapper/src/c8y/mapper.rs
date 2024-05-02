@@ -17,6 +17,7 @@ use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -73,11 +74,30 @@ impl TEdgeComponent for CumulocityMapper {
 
             tc.forward_from_local("#", local_prefix, "")?;
 
+            let mut cloud_config = rumqttc::MqttOptions::new(
+                tedge_config.device.id.try_read(&tedge_config)?,
+                tedge_config
+                    .c8y
+                    .mqtt
+                    .or_config_not_set()?
+                    .host()
+                    .to_string(),
+                8883,
+            );
+            // Cumulocity tells us not to not set clean session to false, so don't
+            // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
+            cloud_config.set_clean_session(true);
+            use_key_and_cert(
+                &mut cloud_config,
+                &tedge_config.c8y.root_cert_path,
+                &tedge_config,
+            )?;
+
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
                 c8y_mapper_config.bridge_service_name(),
                 tc,
-                &tedge_config.c8y.root_cert_path,
+                cloud_config,
             )
             .await;
             runtime.spawn(bridge_actor).await?;

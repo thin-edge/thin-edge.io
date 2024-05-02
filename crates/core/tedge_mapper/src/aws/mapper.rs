@@ -10,6 +10,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
@@ -34,11 +35,23 @@ impl TEdgeComponent for AwsMapper {
         if tedge_config.mqtt.bridge.built_in {
             let device_id = tedge_config.device.id.try_read(&tedge_config)?;
             let rules = built_in_bridge_rules(device_id)?;
+
+            let mut cloud_config = rumqttc::MqttOptions::new(
+                tedge_config.device.id.try_read(&tedge_config)?,
+                tedge_config.aws.url.or_config_not_set()?.to_string(),
+                8883,
+            );
+            cloud_config.set_clean_session(false);
+            use_key_and_cert(
+                &mut cloud_config,
+                &tedge_config.aws.root_cert_path,
+                &tedge_config,
+            )?;
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
-                "tedge-mapper-bridge-az".to_owned(),
+                "tedge-mapper-bridge-aws".to_owned(),
                 rules,
-                &tedge_config.az.root_cert_path,
+                cloud_config,
             )
             .await;
             runtime.spawn(bridge_actor).await?;
@@ -85,8 +98,7 @@ fn built_in_bridge_rules(remote_client_id: &str) -> Result<BridgeConfig, anyhow:
     bridge.forward_from_remote("cmd/#", local_prefix, device_id_prefix)?;
 
     // topic to interact with the shadow of the device
-    bridge.forward_from_local("shadow/#", local_prefix, things_prefix.clone())?;
-    bridge.forward_from_remote("shadow/#", local_prefix, things_prefix)?;
+    bridge.forward_bidirectionally("shadow/#", local_prefix, things_prefix.clone())?;
 
     // echo topic mapping to check the connection
     bridge.forward_from_local("", "aws/test-connection", conn_check.clone())?;

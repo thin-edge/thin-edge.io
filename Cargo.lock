@@ -3606,6 +3606,7 @@ dependencies = [
  "flockfile",
  "mqtt_channel",
  "reqwest",
+ "rumqttc",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -3885,14 +3886,20 @@ dependencies = [
 name = "tedge_mqtt_bridge"
 version = "1.0.1"
 dependencies = [
+ "anyhow",
  "async-trait",
  "certificate",
+ "env_logger",
  "futures",
+ "mockall",
  "mqtt_channel",
  "rumqttc",
+ "rumqttd",
+ "serde_json",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_test_utils",
  "thiserror",
  "tokio",
  "tracing",
@@ -4156,9 +4163,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.35.1"
+version = "1.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c89b4efa943be685f629b149f53829423f8f5531ea21249408e8e2f8671ec104"
+checksum = "1adbebffeca75fcfd058afa480fb6c0b81e165a0323f9c9d39c9697e37c46787"
 dependencies = [
  "backtrace",
  "bytes",

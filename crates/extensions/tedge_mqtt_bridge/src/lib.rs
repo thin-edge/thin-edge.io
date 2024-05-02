@@ -1,12 +1,13 @@
+mod config;
+mod health;
+mod topics;
+
 use async_trait::async_trait;
 use certificate::parse_root_certificate::create_tls_config;
 use futures::SinkExt;
 use futures::StreamExt;
-use rumqttc::matches;
-use rumqttc::valid_filter;
-use rumqttc::valid_topic;
 use rumqttc::AsyncClient;
-use rumqttc::ConnectionError;
+use rumqttc::ClientError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
@@ -16,11 +17,14 @@ use rumqttc::Outgoing;
 use rumqttc::PubAck;
 use rumqttc::PubRec;
 use rumqttc::Publish;
+use rumqttc::SubscribeFilter;
 use rumqttc::Transport;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::convert::Infallible;
-use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -29,11 +33,12 @@ use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tracing::error;
-use tracing::log::info;
+use tracing::debug;
 
 pub type MqttConfig = mqtt_channel::Config;
 
+use crate::health::BridgeHealth;
+use crate::health::BridgeHealthMonitor;
 pub use mqtt_channel::DebugPayload;
 pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;
@@ -43,169 +48,9 @@ use tedge_api::main_device_health_topic;
 use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
 
-#[derive(Default, Debug, Clone)]
-pub struct BridgeConfig {
-    local_to_remote: Vec<BridgeRule>,
-    remote_to_local: Vec<BridgeRule>,
-}
-
-#[derive(Debug, Clone)]
-pub struct BridgeRule {
-    topic_filter: Cow<'static, str>,
-    prefix_to_remove: Cow<'static, str>,
-    prefix_to_add: Cow<'static, str>,
-}
-
-fn prepend<'a>(target: Cow<'a, str>, prefix: &Cow<'a, str>) -> Cow<'a, str> {
-    match (prefix, target) {
-        (prefix, target) if prefix.is_empty() => target,
-        (prefix, target) if target.is_empty() => prefix.clone(),
-        (prefix, Cow::Borrowed(target)) => format!("{prefix}{target}").into(),
-        (prefix, Cow::Owned(mut target)) => {
-            target.insert_str(0, prefix.as_ref());
-            Cow::Owned(target)
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum InvalidBridgeRule {
-    #[error("{0:?} is not a valid MQTT bridge topic prefix as is missing a trailing slash")]
-    MissingTrailingSlash(Cow<'static, str>),
-
-    #[error(
-        "{0:?} is not a valid rule, at least one of the topic filter or both prefixes must be non-empty"
-    )]
-    Empty(BridgeRule),
-
-    #[error("{0:?} is not a valid MQTT bridge topic prefix because it contains '+' or '#'")]
-    InvalidTopicPrefix(String),
-
-    #[error("{0:?} is not a valid MQTT bridge topic filter")]
-    InvalidTopicFilter(String),
-}
-
-fn validate_topic(topic: &str) -> Result<(), InvalidBridgeRule> {
-    match valid_topic(topic) {
-        true => Ok(()),
-        false => Err(InvalidBridgeRule::InvalidTopicPrefix(topic.to_owned())),
-    }
-}
-
-fn validate_filter(topic: &str) -> Result<(), InvalidBridgeRule> {
-    match valid_filter(topic) {
-        true => Ok(()),
-        false => Err(InvalidBridgeRule::InvalidTopicFilter(topic.to_owned())),
-    }
-}
-
-impl BridgeRule {
-    fn try_new(
-        base_topic_filter: Cow<'static, str>,
-        prefix_to_remove: Cow<'static, str>,
-        prefix_to_add: Cow<'static, str>,
-    ) -> Result<Self, InvalidBridgeRule> {
-        let filter_is_empty = base_topic_filter.is_empty();
-        let mut r = Self {
-            topic_filter: prepend(base_topic_filter.clone(), &prefix_to_remove),
-            prefix_to_remove,
-            prefix_to_add,
-        };
-
-        validate_topic(&r.prefix_to_add)?;
-        validate_topic(&r.prefix_to_remove)?;
-        if filter_is_empty {
-            if r.prefix_to_add.is_empty() || r.prefix_to_remove.is_empty() {
-                r.topic_filter = base_topic_filter;
-                Err(InvalidBridgeRule::Empty(r))
-            } else {
-                Ok(r)
-            }
-        } else if !(r.prefix_to_remove.ends_with('/') || r.prefix_to_remove.is_empty()) {
-            Err(InvalidBridgeRule::MissingTrailingSlash(r.prefix_to_remove))
-        } else if !(r.prefix_to_add.ends_with('/') || r.prefix_to_add.is_empty()) {
-            Err(InvalidBridgeRule::MissingTrailingSlash(r.prefix_to_add))
-        } else {
-            validate_filter(&base_topic_filter)?;
-            Ok(r)
-        }
-    }
-
-    fn apply<'a>(&self, topic: &'a str) -> Option<Cow<'a, str>> {
-        matches(topic, &self.topic_filter).then(|| {
-            prepend(
-                topic.strip_prefix(&*self.prefix_to_remove).unwrap().into(),
-                &self.prefix_to_add,
-            )
-        })
-    }
-}
-
-impl BridgeConfig {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    // TODO forward bidirectional?
-    pub fn forward_from_local(
-        &mut self,
-        topic: impl Into<Cow<'static, str>>,
-        local_prefix: impl Into<Cow<'static, str>>,
-        remote_prefix: impl Into<Cow<'static, str>>,
-    ) -> Result<(), InvalidBridgeRule> {
-        self.local_to_remote.push(BridgeRule::try_new(
-            topic.into(),
-            local_prefix.into(),
-            remote_prefix.into(),
-        )?);
-        Ok(())
-    }
-
-    pub fn forward_from_remote(
-        &mut self,
-        topic: impl Into<Cow<'static, str>>,
-        local_prefix: impl Into<Cow<'static, str>>,
-        remote_prefix: impl Into<Cow<'static, str>>,
-    ) -> Result<(), InvalidBridgeRule> {
-        self.remote_to_local.push(BridgeRule::try_new(
-            topic.into(),
-            remote_prefix.into(),
-            local_prefix.into(),
-        )?);
-        Ok(())
-    }
-
-    pub fn local_subscriptions(&self) -> impl Iterator<Item = &str> {
-        self.local_to_remote
-            .iter()
-            .map(|rule| rule.topic_filter.as_ref())
-    }
-
-    pub fn remote_subscriptions(&self) -> impl Iterator<Item = &str> {
-        self.remote_to_local.iter().map(|rule| &*rule.topic_filter)
-    }
-
-    // TODO local and remote could get confused here
-    fn converters(self) -> [TopicConverter; 2] {
-        let Self {
-            local_to_remote,
-            remote_to_local,
-        } = self;
-
-        [
-            TopicConverter(local_to_remote),
-            TopicConverter(remote_to_local),
-        ]
-    }
-}
-
-struct TopicConverter(Vec<BridgeRule>);
-
-impl TopicConverter {
-    fn convert_topic<'a>(&'a self, topic: &'a str) -> Cow<'a, str> {
-        self.0.iter().find_map(|rule| rule.apply(topic)).unwrap()
-    }
-}
+use crate::topics::matches_ignore_dollar_prefix;
+use crate::topics::TopicConverter;
+pub use config::*;
 
 pub struct MqttBridgeActorBuilder {}
 
@@ -214,15 +59,8 @@ impl MqttBridgeActorBuilder {
         tedge_config: &TEdgeConfig,
         service_name: String,
         rules: BridgeConfig,
-        root_cert_path: impl AsRef<Path>,
+        mut cloud_config: MqttOptions,
     ) -> Self {
-        let tls_config = create_tls_config(
-            &root_cert_path,
-            &tedge_config.device.key_path,
-            &tedge_config.device.cert_path,
-        )
-        .unwrap();
-
         let mut local_config = MqttOptions::new(
             &service_name,
             &tedge_config.mqtt.client.host,
@@ -250,61 +88,53 @@ impl MqttBridgeActorBuilder {
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic,
-            BridgeHealth::DOWN_PAYLOAD,
+            Status::Down.json(),
             QoS::AtLeastOnce,
             true,
         ));
         local_config.set_clean_session(false);
-        let mut cloud_config = MqttOptions::new(
-            tedge_config.device.id.try_read(tedge_config).unwrap(),
-            tedge_config
-                .c8y
-                .mqtt
-                .or_config_not_set()
-                .unwrap()
-                .host()
-                .to_string(),
-            8883,
-        );
-        cloud_config.set_manual_acks(true);
-        // Cumulocity tells us not to use clean session, so don't
-        // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
-        cloud_config.set_clean_session(true);
 
-        cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+        cloud_config.set_manual_acks(true);
+
         let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, 10);
 
-        for topic in rules.local_subscriptions() {
-            local_client
-                .subscribe(topic, QoS::AtLeastOnce)
-                .await
-                .unwrap();
-        }
-        for topic in rules.remote_subscriptions() {
-            cloud_client
-                .subscribe(topic, QoS::AtLeastOnce)
-                .await
-                .unwrap();
-        }
+        let local_topics: Vec<_> = rules
+            .local_subscriptions()
+            .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
+            .collect();
+        let cloud_topics: Vec<_> = rules
+            .remote_subscriptions()
+            .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
+            .collect();
 
         let [msgs_local, msgs_cloud] = bidirectional_channel(10);
-        let [convert_local, convert_cloud] = rules.converters();
+        let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
+            rules.converters_and_bidirectional_topic_filters();
+        let (tx_status, monitor) =
+            BridgeHealthMonitor::new(local_client.clone(), health_topic, &msgs_cloud);
+        tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
             local_event_loop,
-            cloud_client,
+            cloud_client.clone(),
+            local_client.clone(),
             convert_local,
+            bidir_local,
             msgs_local,
-            None,
+            tx_status.clone(),
             "local",
+            local_topics,
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
             local_client,
+            cloud_client,
             convert_cloud,
+            bidir_cloud,
             msgs_cloud,
-            Some(health_topic),
+            tx_status,
             "cloud",
+            cloud_topics,
         ));
 
         Self {}
@@ -342,6 +172,10 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 
     pub fn recv(&mut self) -> futures::stream::Next<mpsc::Receiver<T>> {
         self.rx.next()
+    }
+
+    pub fn clone_sender(&self) -> mpsc::Sender<T> {
+        self.tx.clone()
     }
 }
 
@@ -446,40 +280,57 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 /// mosquitto-based predecessor. The payload is either `1` (healthy) or `0` (unhealthy). When the
 /// connection is created, the last-will message is set to send the `0` payload when the connection
 /// is dropped.
+#[allow(clippy::too_many_arguments)]
 async fn half_bridge(
     mut recv_event_loop: EventLoop,
     target: AsyncClient,
+    recv_client: AsyncClient,
     transformer: TopicConverter,
-    mut companion_bridge_half: BidirectionalChannelHalf<Option<Publish>>,
-    health_topic: Option<String>,
+    bidirectional_topic_filters: Vec<Cow<'static, str>>,
+    mut companion_bridge_half: BidirectionalChannelHalf<Option<(String, Publish)>>,
+    tx_health: mpsc::Sender<(&'static str, Status)>,
     name: &'static str,
+    topics: Vec<SubscribeFilter>,
 ) {
     let mut forward_pkid_to_received_msg = HashMap::new();
-    let mut bridge_health = BridgeHealth::new(name, health_topic, &target);
+    let mut bridge_health = BridgeHealth::new(name, tx_health);
+    let mut loop_breaker =
+        MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
 
     loop {
         let res = recv_event_loop.poll().await;
-        bridge_health.update(&res, &mut companion_bridge_half).await;
+        bridge_health.update(&res).await;
 
         let notification = match res {
             Ok(notification) => notification,
             Err(_) => continue,
         };
 
+        debug!("{name} received {notification:?}");
+
         match notification {
+            Event::Incoming(Incoming::ConnAck(_)) => {
+                recv_client.subscribe_many(topics.clone()).await.unwrap();
+            }
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
-                target
-                    .publish(
-                        transformer.convert_topic(&publish.topic),
-                        publish.qos,
-                        publish.retain,
-                        publish.payload.clone(),
-                    )
-                    .await
-                    .unwrap();
-                let publish = (publish.qos > QoS::AtMostOnce).then_some(publish);
-                companion_bridge_half.send(publish).await.unwrap();
+                if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
+                    let topic = transformer.convert_topic(&publish.topic);
+                    println!("{name} forwarding {publish:?} to {topic}");
+                    target
+                        .publish(
+                            topic.clone(),
+                            publish.qos,
+                            publish.retain,
+                            publish.payload.clone(),
+                        )
+                        .await
+                        .unwrap();
+                    companion_bridge_half
+                        .send(Some((topic.into_owned(), publish)))
+                        .await
+                        .unwrap();
+                }
             }
 
             // Forward acks from event loop to target
@@ -487,15 +338,16 @@ async fn half_bridge(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
-                if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
-                    target.ack(&msg).await.unwrap();
+                if let Some(msg) = forward_pkid_to_received_msg.get(&ack_pkid) {
+                    target.ack(msg).await.unwrap();
                 }
             }
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => match companion_bridge_half.recv().await {
                 // A message was forwarded by the other bridge half, note the packet id
-                Some(Some(msg)) => {
+                Some(Some((topic, msg))) => {
+                    loop_breaker.forward_on_topic(topic, &msg);
                     forward_pkid_to_received_msg.insert(pkid, msg);
                 }
 
@@ -510,62 +362,122 @@ async fn half_bridge(
     }
 }
 
-type NotificationRes = Result<Event, ConnectionError>;
-
-struct BridgeHealth<'a> {
-    name: &'static str,
-    health_topic: Option<String>,
-    target: &'a AsyncClient,
-    last_err: Option<String>,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Status {
+    Up,
+    Down,
 }
 
-impl<'a> BridgeHealth<'a> {
-    const UP_PAYLOAD: &'static str = "{\"status\":\"up\"}";
-    const DOWN_PAYLOAD: &'static str = "{\"status\":\"down\"}";
+impl Status {
+    fn json(self) -> &'static str {
+        match self {
+            Status::Up => r#"{"status":"up"}"#,
+            Status::Down => r#"{"status":"down"}"#,
+        }
+    }
+}
 
-    fn new(name: &'static str, health_topic: Option<String>, target: &'a AsyncClient) -> Self {
+fn overall_status(lhs: Option<Status>, rhs: &Option<Status>) -> Option<Status> {
+    match (lhs?, rhs.as_ref()?) {
+        (Status::Up, Status::Up) => Some(Status::Up),
+        _ => Some(Status::Down),
+    }
+}
+
+/// A tool to remove duplicate messages and avoid infinite loops
+struct MessageLoopBreaker<Ack, Clock> {
+    forwarded_messages: VecDeque<(Instant, Publish)>,
+    bidirectional_topics: Vec<Cow<'static, str>>,
+    client: Ack,
+    clock: Clock,
+}
+
+fn have_same_content(fwd_msg: &Publish, cmp: &Publish) -> bool {
+    fwd_msg.topic == cmp.topic
+        && fwd_msg.qos == cmp.qos
+        && fwd_msg.retain == cmp.retain
+        && fwd_msg.payload == cmp.payload
+}
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+trait MqttAck {
+    async fn ack(&self, publish: &Publish) -> Result<(), rumqttc::ClientError>;
+}
+
+#[async_trait::async_trait]
+impl MqttAck for AsyncClient {
+    async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
+        AsyncClient::ack(self, publish).await
+    }
+}
+
+struct SystemClock;
+
+#[cfg_attr(test, mockall::automock)]
+trait MonotonicClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+
+impl MonotonicClock for SystemClock {}
+
+impl<Ack: MqttAck> MessageLoopBreaker<Ack, SystemClock> {
+    fn new(recv_client: Ack, bidirectional_topics: Vec<Cow<'static, str>>) -> Self {
         Self {
-            name,
-            health_topic,
-            target,
-            last_err: Some("dummy error".into()),
-        }
-    }
-
-    async fn update(
-        &mut self,
-        result: &NotificationRes,
-        companion_bridge_half: &mut BidirectionalChannelHalf<Option<Publish>>,
-    ) {
-        let name = self.name;
-        let (err, health_payload) = match result {
-            Ok(event) => {
-                if let Event::Incoming(Incoming::ConnAck(_)) = event {
-                    info!("MQTT bridge connected to {name} broker")
-                }
-                (None, Self::UP_PAYLOAD)
-            }
-            Err(err) => (Some(err.to_string()), Self::DOWN_PAYLOAD),
-        };
-
-        if self.last_err != err {
-            if let Some(err) = &err {
-                error!("MQTT bridge failed to connect to {name} broker: {err}")
-            }
-            self.last_err = err;
-
-            if let Some(health_topic) = &self.health_topic {
-                self.target
-                    .publish(health_topic, QoS::AtLeastOnce, true, health_payload)
-                    .await
-                    .unwrap();
-                // Send a note that a message has been published to maintain synchronisation
-                // between the two bridge halves
-                companion_bridge_half.send(None).await.unwrap();
-            }
+            forwarded_messages: <_>::default(),
+            bidirectional_topics,
+            client: recv_client,
+            clock: SystemClock,
         }
     }
 }
+
+impl<Ack: MqttAck, Clock: MonotonicClock> MessageLoopBreaker<Ack, Clock> {
+    async fn ensure_not_looped(&mut self, received: Publish) -> Option<Publish> {
+        self.clean_old_messages();
+        if self
+            .forwarded_messages
+            .front()
+            .map_or(false, |(_, sent)| have_same_content(sent, &received))
+        {
+            self.client.ack(&received).await.unwrap();
+            self.forwarded_messages.pop_front();
+            None
+        } else {
+            Some(received)
+        }
+    }
+
+    fn forward_on_topic(&mut self, topic: impl Into<String> + AsRef<str>, publish: &Publish) {
+        if self.is_bidirectional(topic.as_ref()) {
+            let mut publish_with_topic = Publish::new(topic, publish.qos, publish.payload.clone());
+            publish_with_topic.retain = publish.retain;
+            self.forwarded_messages
+                .push_back((self.clock.now(), publish_with_topic));
+        }
+    }
+
+    fn is_bidirectional(&self, topic: &str) -> bool {
+        self.bidirectional_topics
+            .iter()
+            .any(|filter| matches_ignore_dollar_prefix(topic, filter))
+    }
+
+    fn clean_old_messages(&mut self) {
+        let deadline = self.clock.now() - Duration::from_secs(100);
+        while self
+            .forwarded_messages
+            .front()
+            .map(|&(time, _)| time < deadline)
+            == Some(true)
+        {
+            self.forwarded_messages.pop_front();
+        }
+    }
+}
+
 impl Builder<MqttBridgeActor> for MqttBridgeActorBuilder {
     type Error = Infallible;
 
@@ -601,6 +513,92 @@ impl Actor for MqttBridgeActor {
 mod tests {
     use super::*;
 
+    mod message_loop_breaker {
+        use crate::MessageLoopBreaker;
+        use crate::MockMonotonicClock;
+        use crate::MockMqttAck;
+        use rumqttc::Publish;
+        use rumqttc::QoS;
+        use std::time::Duration;
+        use std::time::Instant;
+
+        #[tokio::test]
+        async fn ignores_non_bidirectional_topics() {
+            let client = MockMqttAck::new();
+            let mut sut = MessageLoopBreaker::new(client, vec![]);
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            assert_eq!(
+                sut.ensure_not_looped(example_pub.clone()).await,
+                Some(example_pub)
+            );
+        }
+
+        #[tokio::test]
+        async fn skips_forwarded_messages() {
+            let mut client = MockMqttAck::new();
+            let _ = client.expect_ack().return_once(|_| Ok(()));
+            let mut sut = MessageLoopBreaker::new(client, vec!["test".into()]);
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            assert_eq!(sut.ensure_not_looped(example_pub).await, None);
+        }
+
+        #[tokio::test]
+        async fn allows_duplicate_messages_after_decloning() {
+            let mut client = MockMqttAck::new();
+            let _ack = client.expect_ack().return_once(|_| Ok(()));
+            let mut sut = MessageLoopBreaker::new(client, vec!["test".into()]);
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            sut.ensure_not_looped(example_pub.clone()).await;
+            assert_eq!(
+                sut.ensure_not_looped(example_pub.clone()).await,
+                Some(example_pub)
+            );
+        }
+
+        #[tokio::test]
+        async fn deduplicates_topics_that_start_with_a_dollar_sign() {
+            let mut client = MockMqttAck::new();
+            let _ack = client.expect_ack().return_once(|_| Ok(()));
+            let mut sut = MessageLoopBreaker::new(client, vec!["$aws/test".into()]);
+            let example_pub = Publish::new("$aws/test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("$aws/test", &example_pub);
+            assert_eq!(sut.ensure_not_looped(example_pub.clone()).await, None);
+        }
+
+        #[tokio::test]
+        async fn cleans_up_stale_messages() {
+            let client = MockMqttAck::new();
+            let mut clock = MockMonotonicClock::new();
+            let now = Instant::now();
+            let _now = clock.expect_now().times(1).return_once(move || now);
+            let mut sut = MessageLoopBreaker {
+                client,
+                bidirectional_topics: vec!["test".into()],
+                forwarded_messages: <_>::default(),
+                clock,
+            };
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            let _now = sut
+                .clock
+                .expect_now()
+                .times(1)
+                .return_once(move || now + Duration::from_secs(3600));
+            assert_eq!(
+                sut.ensure_not_looped(example_pub.clone()).await,
+                Some(example_pub)
+            );
+        }
+    }
+
     mod topic_converter {
         use super::*;
 
@@ -623,7 +621,7 @@ mod tests {
             let mut tc = BridgeConfig::new();
             tc.forward_from_local("s/us", "c8y/", "").unwrap();
             tc.forward_from_local("#", "c8y/", "secondary/").unwrap();
-            let [rules, _] = tc.converters();
+            let [(rules, _), _] = tc.converters_and_bidirectional_topic_filters();
             assert_eq!(rules.convert_topic("c8y/s/us"), "s/us");
             assert_eq!(rules.convert_topic("c8y/other"), "secondary/other");
         }
@@ -633,7 +631,7 @@ mod tests {
             let mut tc = BridgeConfig::new();
             tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
             tc.forward_from_remote("#", "c8y/", "secondary/").unwrap();
-            let [_, rules] = tc.converters();
+            let [_, (rules, _)] = tc.converters_and_bidirectional_topic_filters();
             assert_eq!(rules.convert_topic("s/ds"), "c8y/s/ds");
             assert_eq!(rules.convert_topic("secondary/other"), "c8y/other");
         }
@@ -692,128 +690,9 @@ mod tests {
         }
     }
 
-    mod bridge_rule {
-        use super::*;
-
-        #[test]
-        fn forward_topics_without_any_prefixes() {
-            let rule = BridgeRule::try_new("a/topic".into(), "".into(), "".into()).unwrap();
-            assert_eq!(rule.apply("a/topic"), Some("a/topic".into()))
-        }
-
-        #[test]
-        fn forwards_wildcard_topics() {
-            let rule = BridgeRule::try_new("a/#".into(), "".into(), "".into()).unwrap();
-            assert_eq!(rule.apply("a/topic"), Some("a/topic".into()));
-        }
-
-        #[test]
-        fn does_not_forward_non_matching_topics() {
-            let rule = BridgeRule::try_new("a/topic".into(), "".into(), "".into()).unwrap();
-            assert_eq!(rule.apply("different/topic"), None)
-        }
-
-        #[test]
-        fn removes_local_prefix() {
-            let rule = BridgeRule::try_new("topic".into(), "a/".into(), "".into()).unwrap();
-            assert_eq!(rule.apply("a/topic"), Some("topic".into()));
-        }
-
-        #[test]
-        fn prepends_remote_prefix() {
-            // TODO maybe debug warn if topic filter begins with prefix to remove
-            let rule = BridgeRule::try_new("topic".into(), "a/".into(), "b/".into()).unwrap();
-            assert_eq!(rule.apply("a/topic"), Some("b/topic".into()));
-        }
-
-        #[test]
-        fn does_not_clone_if_topic_is_unchanged() {
-            let rule = BridgeRule::try_new("a/topic".into(), "".into(), "".into()).unwrap();
-            assert!(matches!(rule.apply("a/topic"), Some(Cow::Borrowed(_))))
-        }
-
-        #[test]
-        fn does_not_clone_if_prefix_is_removed_but_not_added() {
-            let rule = BridgeRule::try_new("topic".into(), "a/".into(), "".into()).unwrap();
-            assert!(matches!(rule.apply("a/topic"), Some(Cow::Borrowed(_))))
-        }
-
-        #[test]
-        fn forwards_unfiltered_topic() {
-            let cloud_topic = "thinedge/devices/my-device/test-connection";
-            let rule =
-                BridgeRule::try_new("".into(), "aws/test-connection".into(), cloud_topic.into())
-                    .unwrap();
-            assert_eq!(rule.apply("aws/test-connection"), Some(cloud_topic.into()))
-        }
-
-        #[test]
-        fn allows_empty_input_prefix() {
-            let rule = BridgeRule::try_new("test/#".into(), "".into(), "output/".into()).unwrap();
-            assert_eq!(rule.apply("test/me"), Some("output/test/me".into()));
-        }
-
-        #[test]
-        fn allows_empty_output_prefix() {
-            let rule = BridgeRule::try_new("test/#".into(), "input/".into(), "".into()).unwrap();
-            assert_eq!(rule.apply("input/test/me"), Some("test/me".into()));
-        }
-
-        #[test]
-        fn rejects_invalid_input_topic() {
-            let err = BridgeRule::try_new("test/#".into(), "wildcard/#".into(), "output/".into())
-                .unwrap_err();
-            assert_eq!(err.to_string(), "\"wildcard/#\" is not a valid MQTT bridge topic prefix because it contains '+' or '#'");
-        }
-
-        #[test]
-        fn rejects_invalid_output_topic() {
-            let err = BridgeRule::try_new("test/#".into(), "input/".into(), "wildcard/+".into())
-                .unwrap_err();
-            assert_eq!(err.to_string(), "\"wildcard/+\" is not a valid MQTT bridge topic prefix because it contains '+' or '#'");
-        }
-
-        #[test]
-        fn rejects_input_prefix_missing_trailing_slash() {
-            let err =
-                BridgeRule::try_new("test/#".into(), "input".into(), "output/".into()).unwrap_err();
-            assert_eq!(
-                err.to_string(),
-                "\"input\" is not a valid MQTT bridge topic prefix as is missing a trailing slash"
-            );
-        }
-
-        #[test]
-        fn rejects_output_prefix_missing_trailing_slash() {
-            let err =
-                BridgeRule::try_new("test/#".into(), "input/".into(), "output".into()).unwrap_err();
-            assert_eq!(
-                err.to_string(),
-                "\"output\" is not a valid MQTT bridge topic prefix as is missing a trailing slash"
-            );
-        }
-
-        #[test]
-        fn rejects_empty_input_topic_with_empty_filter() {
-            let err = BridgeRule::try_new("".into(), "".into(), "a/".into()).unwrap_err();
-            assert_eq!(
-                err.to_string(),
-                r#"BridgeRule { topic_filter: "", prefix_to_remove: "", prefix_to_add: "a/" } is not a valid rule, at least one of the topic filter or both prefixes must be non-empty"#
-            )
-        }
-
-        #[test]
-        fn rejects_empty_output_topic_with_empty_filter() {
-            let err = BridgeRule::try_new("".into(), "a/".into(), "".into()).unwrap_err();
-            assert_eq!(
-                err.to_string(),
-                r#"BridgeRule { topic_filter: "", prefix_to_remove: "a/", prefix_to_add: "" } is not a valid rule, at least one of the topic filter or both prefixes must be non-empty"#
-            )
-        }
-    }
-
     mod prepend {
         use super::*;
+        use crate::topics::prepend;
 
         #[test]
         fn applies_nonempty_prefix_to_start_of_value() {
@@ -831,38 +710,6 @@ mod tests {
         #[test]
         fn leaves_value_unchanged_if_prefix_is_empty() {
             assert_eq!(prepend("test".into(), &"".into()), "test");
-        }
-    }
-
-    mod single_converter {
-        use super::*;
-        #[test]
-        fn applies_matching_topic() {
-            let converter = TopicConverter(vec![BridgeRule::try_new(
-                "topic".into(),
-                "a/".into(),
-                "b/".into(),
-            )
-            .unwrap()]);
-            assert_eq!(converter.convert_topic("a/topic"), "b/topic")
-        }
-
-        #[test]
-        fn applies_first_matching_topic_if_multiple_are_provided() {
-            let converter = TopicConverter(vec![
-                BridgeRule::try_new("topic".into(), "a/".into(), "b/".into()).unwrap(),
-                BridgeRule::try_new("#".into(), "a/".into(), "c/".into()).unwrap(),
-            ]);
-            assert_eq!(converter.convert_topic("a/topic"), "b/topic");
-        }
-
-        #[test]
-        fn does_not_apply_non_matching_topics() {
-            let converter = TopicConverter(vec![
-                BridgeRule::try_new("topic".into(), "x/".into(), "b/".into()).unwrap(),
-                BridgeRule::try_new("#".into(), "a/".into(), "c/".into()).unwrap(),
-            ]);
-            assert_eq!(converter.convert_topic("a/topic"), "c/topic");
         }
     }
 }

@@ -10,6 +10,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
@@ -35,11 +36,30 @@ impl TEdgeComponent for AzureMapper {
             let remote_clientid = tedge_config.device.id.try_read(&tedge_config)?;
             let rules = built_in_bridge_rules(remote_clientid)?;
 
+            let mut cloud_config = rumqttc::MqttOptions::new(
+                remote_clientid,
+                tedge_config.az.url.or_config_not_set()?.to_string(),
+                8883,
+            );
+            cloud_config.set_clean_session(false);
+            cloud_config.set_credentials(
+                format!(
+                    "{}/{remote_clientid}/?api-version=2018-06-30",
+                    tedge_config.az.url.or_config_not_set()?
+                ),
+                "",
+            );
+            use_key_and_cert(
+                &mut cloud_config,
+                &tedge_config.az.root_cert_path,
+                &tedge_config,
+            )?;
+
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
                 "tedge-mapper-bridge-az".to_owned(),
                 rules,
-                &tedge_config.az.root_cert_path,
+                cloud_config,
             )
             .await;
             runtime.spawn(bridge_actor).await?;
