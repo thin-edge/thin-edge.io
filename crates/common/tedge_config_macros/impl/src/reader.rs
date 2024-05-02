@@ -123,10 +123,12 @@ fn generate_structs(
         })
         .unzip();
 
-    Ok(quote! {
+    let doc_comment_attr =
+        (!doc_comment.is_empty()).then(|| quote_spanned!(name.span()=> #[doc = #doc_comment]));
+    Ok(quote_spanned! {name.span()=>
         #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
         #[non_exhaustive]
-        #[doc = #doc_comment]
+        #doc_comment_attr
         pub struct #name {
             #(
                 #(#attrs)*
@@ -140,7 +142,7 @@ fn generate_structs(
             pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>);
 
             impl From<#lr_names> for () {
-                fn from(_: #lr_names) -> () {}
+                fn from(_: #lr_names) {}
             }
 
             #lazy_reader_impls

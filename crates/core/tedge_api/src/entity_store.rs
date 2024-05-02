@@ -368,7 +368,7 @@ impl EntityStore {
     /// The last parent in the list for any entity would always be the main device.
     /// The list would be empty for the main device as it has no further parents.
     pub fn ancestors(&self, entity_topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
-        if self.entities.get(entity_topic_id).is_none() {
+        if !self.entities.contains_key(entity_topic_id) {
             return Err(Error::UnknownEntity(entity_topic_id.to_string()));
         }
 

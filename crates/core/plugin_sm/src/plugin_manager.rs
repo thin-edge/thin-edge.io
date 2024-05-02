@@ -72,7 +72,7 @@ impl Plugins for ExternalPlugins {
     }
 
     fn update_default(&mut self, new_default: &Option<SoftwareType>) -> Result<(), SoftwareError> {
-        self.default_plugin_type = new_default.to_owned();
+        new_default.clone_into(&mut self.default_plugin_type);
         Ok(())
     }
 

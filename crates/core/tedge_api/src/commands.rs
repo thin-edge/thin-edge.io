@@ -14,6 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use std::fmt;
 use time::OffsetDateTime;
 
 /// A command instance with its target and its current state of execution
@@ -665,8 +666,8 @@ fn default_failure_reason() -> String {
     "Unknown reason".to_string()
 }
 
-impl ToString for CommandStatus {
-    fn to_string(&self) -> String {
+impl fmt::Display for CommandStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let str = match self {
             CommandStatus::Init => "init",
             CommandStatus::Scheduled => "scheduled",
@@ -675,7 +676,7 @@ impl ToString for CommandStatus {
             CommandStatus::Failed { .. } => "failed",
             CommandStatus::Unknown => "unknown",
         };
-        str.to_string()
+        str.fmt(f)
     }
 }
 
