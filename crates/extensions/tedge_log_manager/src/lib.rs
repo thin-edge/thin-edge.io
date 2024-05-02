@@ -7,6 +7,7 @@ mod tests;
 
 pub use actor::*;
 pub use config::*;
+use log::error;
 use log_manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::Builder;
@@ -20,6 +21,8 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::LogUploadCmd;
+use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
@@ -33,7 +36,7 @@ use toml::toml;
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
     plugin_config: LogPluginConfig,
-    box_builder: SimpleMessageBoxBuilder<LogInput, MqttMessage>,
+    box_builder: SimpleMessageBoxBuilder<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
 }
 
@@ -48,8 +51,16 @@ impl LogManagerBuilder {
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
         let mut box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
-        mqtt.connect_source(NoConfig, &mut box_builder);
-        mqtt.connect_sink(Self::subscriptions(&config), &box_builder.get_sender());
+        mqtt.connect_mapped_source(
+            NoConfig,
+            &mut box_builder,
+            Self::mqtt_message_builder(&config),
+        );
+        box_builder.connect_mapped_source(
+            Self::subscriptions(&config),
+            mqtt,
+            Self::mqtt_message_parser(&config),
+        );
         fs_notify.connect_sink(
             LogManagerBuilder::watched_directory(&config),
             &box_builder.get_sender(),
@@ -100,6 +111,45 @@ impl LogManagerBuilder {
     /// List of MQTT topic filters the log actor has to subscribe to
     fn subscriptions(config: &LogManagerConfig) -> TopicFilter {
         config.logfile_request_topic.clone()
+    }
+
+    /// Extract a log actor request from an MQTT message
+    fn mqtt_message_parser(config: &LogManagerConfig) -> impl Fn(MqttMessage) -> Option<LogInput> {
+        let logfile_request_topic = config.logfile_request_topic.clone();
+        let mqtt_schema = config.mqtt_schema.clone();
+        move |message| {
+            if !logfile_request_topic.accept(&message) {
+                error!(
+                    "Received unexpected message on topic: {}",
+                    message.topic.name
+                );
+                return None;
+            }
+
+            LogUploadCmd::parse(&mqtt_schema, message)
+                .map_err(|err| error!("Incorrect log request payload: {}", err))
+                .unwrap_or(None)
+                .map(|cmd| cmd.into())
+        }
+    }
+
+    /// Build an MQTT message from a log actor response
+    fn mqtt_message_builder(
+        config: &LogManagerConfig,
+    ) -> impl Fn(LogOutput) -> Option<MqttMessage> {
+        let metadata_topic = config.logtype_reload_topic.clone();
+        let mqtt_schema = config.mqtt_schema.clone();
+        move |res| {
+            let msg = match res {
+                LogOutput::LogUploadCmd(state) => state.command_message(&mqtt_schema),
+                LogOutput::LogUploadCmdMetadata(metadata) => {
+                    MqttMessage::new(&metadata_topic, metadata.to_bytes())
+                        .with_retain()
+                        .with_qos(QoS::AtLeastOnce)
+                }
+            };
+            Some(msg)
+        }
     }
 
     /// Directory watched by the log actors for configuration changes

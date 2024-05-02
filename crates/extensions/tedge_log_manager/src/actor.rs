@@ -7,7 +7,6 @@ use log::error;
 use log::info;
 use log::warn;
 use log_manager::LogPluginConfig;
-use serde_json::json;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -18,8 +17,8 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogUploadCmd;
+use tedge_api::commands::LogUploadCmdMetadata;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_mqtt_ext::MqttMessage;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 
@@ -32,13 +31,14 @@ type MqttTopic = String;
 pub type LogUploadRequest = (MqttTopic, UploadRequest);
 pub type LogUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent, LogUploadResult] : Debug);
+fan_in_message_type!(LogInput[LogUploadCmd, FsWatchEvent, LogUploadResult] : Debug);
+fan_in_message_type!(LogOutput[LogUploadCmd, LogUploadCmdMetadata] : Debug);
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
     plugin_config: LogPluginConfig,
     pending_operations: HashMap<String, LogUploadCmd>,
-    messages: SimpleMessageBox<LogInput, MqttMessage>,
+    messages: SimpleMessageBox<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
 }
 
@@ -53,8 +53,8 @@ impl Actor for LogManagerActor {
 
         while let Some(event) = self.messages.recv().await {
             match event {
-                LogInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message).await?;
+                LogInput::LogUploadCmd(request) => {
+                    self.process_logfile_request(request).await?;
                 }
                 LogInput::FsWatchEvent(event) => {
                     self.process_file_watch_events(event).await?;
@@ -72,7 +72,7 @@ impl LogManagerActor {
     pub fn new(
         config: LogManagerConfig,
         plugin_config: LogPluginConfig,
-        messages: SimpleMessageBox<LogInput, MqttMessage>,
+        messages: SimpleMessageBox<LogInput, LogOutput>,
         upload_sender: DynSender<LogUploadRequest>,
     ) -> Self {
         Self {
@@ -82,25 +82,6 @@ impl LogManagerActor {
             messages,
             upload_sender,
         }
-    }
-
-    async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        if self.config.logfile_request_topic.accept(&message) {
-            match LogUploadCmd::parse(&self.config.mqtt_schema, message) {
-                Ok(Some(request)) => self.process_logfile_request(request).await?,
-                Ok(None) => {}
-                Err(err) => {
-                    error!("Incorrect log request payload: {}", err);
-                }
-            }
-        } else {
-            error!(
-                "Received unexpected message on topic: {}",
-                message.topic.name
-            );
-        }
-
-        Ok(())
     }
 
     pub async fn process_logfile_request(
@@ -130,7 +111,7 @@ impl LogManagerActor {
         mut request: LogUploadCmd,
     ) -> Result<(), ChannelError> {
         request.executing();
-        self.publish_command_status(&request).await
+        self.publish_command_status(request).await
     }
 
     pub async fn handle_logfile_request_operation(
@@ -140,7 +121,7 @@ impl LogManagerActor {
         if let Err(error) = self.generate_and_upload_logfile(&request).await {
             let error_message = format!("Failed to initiate log file upload: {error}");
             request.failed(&error_message);
-            self.publish_command_status(&request).await?;
+            self.publish_command_status(request).await?;
             error!("{}", error_message);
             return Ok(());
         }
@@ -208,13 +189,13 @@ impl LogManagerActor {
                     )
                 }
 
-                self.publish_command_status(&request).await?;
+                self.publish_command_status(request).await?;
             }
             Err(err) => {
                 let error_message = format!("Failed to upload log to file-transfer service: {err}");
                 request.failed(&error_message);
                 error!("{}", error_message);
-                self.publish_command_status(&request).await?;
+                self.publish_command_status(request).await?;
             }
         }
 
@@ -260,15 +241,15 @@ impl LogManagerActor {
 
     /// updates the log types
     async fn publish_supported_log_types(&mut self) -> Result<(), ChannelError> {
-        let mut config_types = self.plugin_config.get_all_file_types();
-        config_types.sort();
-        let payload = json!({ "types": config_types }).to_string();
-        let msg = MqttMessage::new(&self.config.logtype_reload_topic, payload).with_retain();
-        self.messages.send(msg).await
+        let mut types = self.plugin_config.get_all_file_types();
+        types.sort();
+        let metadata = LogUploadCmdMetadata { types };
+        self.messages
+            .send(LogOutput::LogUploadCmdMetadata(metadata))
+            .await
     }
 
-    async fn publish_command_status(&mut self, request: &LogUploadCmd) -> Result<(), ChannelError> {
-        let message = request.command_message(&self.config.mqtt_schema);
-        self.messages.send(message).await
+    async fn publish_command_status(&mut self, request: LogUploadCmd) -> Result<(), ChannelError> {
+        self.messages.send(LogOutput::LogUploadCmd(request)).await
     }
 }

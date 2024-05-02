@@ -743,6 +743,15 @@ impl CommandPayload for LogUploadCmdPayload {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LogUploadCmdMetadata {
+    #[serde(default)]
+    pub types: Vec<String>,
+}
+
+impl Jsonify for LogUploadCmdMetadata {}
+
 /// Command to request a configuration snapshot to be uploaded
 pub type ConfigSnapshotCmd = Command<ConfigSnapshotCmdPayload>;
 
