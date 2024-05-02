@@ -14,6 +14,7 @@ pub struct BridgeConfigAwsParams {
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
+    pub bridge_location: BridgeLocation,
 }
 
 impl From<BridgeConfigAwsParams> for BridgeConfig {
@@ -25,6 +26,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             remote_clientid,
             bridge_certfile,
             bridge_keyfile,
+            bridge_location,
         } = params;
 
         let user_name = remote_clientid.to_string();
@@ -73,8 +75,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
                 connection_check_pub_msg_topic,
                 connection_check_sub_msg_topic,
             ],
-            // TODO support configurability
-            bridge_location: BridgeLocation::Mosquitto,
+            bridge_location,
         }
     }
 }
@@ -90,6 +91,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         bridge_root_cert_path: "./test_root.pem".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        bridge_location: BridgeLocation::Mosquitto,
     };
 
     let bridge = BridgeConfig::from(params);

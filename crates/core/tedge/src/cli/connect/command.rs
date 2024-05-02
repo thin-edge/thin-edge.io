@@ -192,6 +192,10 @@ pub fn bridge_config(
     config: &TEdgeConfig,
     cloud: self::Cloud,
 ) -> Result<BridgeConfig, ConfigError> {
+    let bridge_location = match config.mqtt.bridge.built_in {
+        true => BridgeLocation::BuiltIn,
+        false => BridgeLocation::Mosquitto,
+    };
     match cloud {
         Cloud::Azure => {
             let params = BridgeConfigAzureParams {
@@ -204,6 +208,7 @@ pub fn bridge_config(
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
+                bridge_location,
             };
 
             Ok(BridgeConfig::from(params))
@@ -219,15 +224,12 @@ pub fn bridge_config(
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
+                bridge_location,
             };
 
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
-            let bridge_location = match config.mqtt.bridge.built_in {
-                true => BridgeLocation::BuiltIn,
-                false => BridgeLocation::Mosquitto,
-            };
             let params = BridgeConfigC8yParams {
                 mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
@@ -511,9 +513,8 @@ fn new_bridge(
             return Err(err);
         }
     } else {
-        println!("Deleting mosquitto bridge configuration in favour of built-in bridge");
+        println!("Deleting mosquitto bridge configuration in favour of built-in bridge\n");
         clean_up(config_location, bridge_config)?;
-        restart_mosquitto(bridge_config, service_manager, config_location)?;
     }
 
     if let Err(err) = service_manager_result {

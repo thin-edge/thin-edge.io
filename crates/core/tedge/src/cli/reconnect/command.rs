@@ -45,6 +45,7 @@ impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
             use_mapper: reconnect_cmd.use_mapper,
             use_agent: reconnect_cmd.use_agent,
             service_manager: reconnect_cmd.service_manager.clone(),
+            built_in_bridge: reconnect_cmd.config.mqtt.bridge.built_in,
         }
     }
 }
