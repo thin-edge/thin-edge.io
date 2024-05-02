@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
+use quote::quote_spanned;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
@@ -48,13 +49,15 @@ pub fn generate(
         }
     }
 
-    quote! {
+    let doc_comment_attr =
+        (!doc_comment.is_empty()).then(|| quote_spanned!(name.span()=> #[doc = #doc_comment]));
+    quote_spanned! {name.span()=>
         #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
         // We will add more configurations in the future, so this is
         // non_exhaustive (see
         // https://doc.rust-lang.org/reference/attributes/type_system.html)
         #[non_exhaustive]
-        #[doc = #doc_comment]
+        #doc_comment_attr
         pub struct #name {
             #(
                 // The fields are pub as that allows people to easily modify the
