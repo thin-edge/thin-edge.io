@@ -228,24 +228,6 @@ impl TedgeOperationConverterActor {
                 );
                 self.publish_command_state(new_state).await
             }
-            OperationAction::Restart {
-                on_exec,
-                on_success,
-                on_error,
-            } => {
-                let step = &state.status;
-                info!("Restarting in the context of {operation} operation {step} step");
-                let cmd = RestartCommand::with_context(
-                    target,
-                    cmd_id.clone(),
-                    state.clone(),
-                    on_exec,
-                    on_success,
-                    on_error,
-                );
-                self.restart_sender.send(cmd).await?;
-                Ok(())
-            }
             OperationAction::Script(script, handlers) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
@@ -452,10 +434,7 @@ impl TedgeOperationConverterActor {
         &mut self,
         response: RestartCommand,
     ) -> Result<(), RuntimeError> {
-        let new_state = match response.resume_context() {
-            None => response.into_generic_command(&self.mqtt_schema),
-            Some(context) => context,
-        };
+        let new_state = response.into_generic_command(&self.mqtt_schema);
         self.publish_command_state(new_state).await
     }
 

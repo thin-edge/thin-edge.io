@@ -140,30 +140,6 @@ impl TryFrom<TomlOperationState> for OperationAction {
                         .unwrap_or_else(|| "successful".to_string().into());
                     Ok(OperationAction::MoveTo(on_success.status))
                 }
-                "restart" => {
-                    // TODO impl a clean From<TomlExitHandlers> implementation
-                    let on_exec: GenericStateUpdate = input
-                        .handlers
-                        .on_exec
-                        .map(|u| u.into())
-                        .unwrap_or_else(|| "executing".to_string().into());
-                    let on_success: GenericStateUpdate = input
-                        .handlers
-                        .on_success
-                        .map(|u| u.into())
-                        .unwrap_or_else(|| "successful".to_string().into());
-                    let on_error: GenericStateUpdate = input
-                        .handlers
-                        .on_error
-                        .map(|u| u.into())
-                        .unwrap_or_else(|| "failed".to_string().into());
-
-                    Ok(OperationAction::Restart {
-                        on_exec: on_exec.status,
-                        on_success: on_success.status,
-                        on_error: on_error.status,
-                    })
-                }
                 "await-agent-restart" => {
                     let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
                     Ok(OperationAction::AwaitingAgentRestart(handlers))

@@ -148,12 +148,13 @@ and combined them with the builtin workflows implemented by the agent itself.
 
 Each workflow is defined using a TOML file stored in `/etc/tedge/operations`. Each specifies:
 - the command name that it should trigger on
-  such as `firmware_update` or `restart`- the list of states
+  such as `firmware_update` or `restart`
+- the list of states
 - for each state:
   - the state name as defined by the operation API
   - an action to process the command at this stage, e.g.
     - run a script
-    - restart the device
+    - trigger a sub operation
     - let the agent applies the builtin behavior
   - instructions on how to proceed given the successful or failed outcome of the action.
 
@@ -413,7 +414,7 @@ on_timeout = { status = "failed", reason = "timeout" }
 ```
 
 Some scripts cannot be directly controlled.
-This is notably the case for the restart builtin action and the background scripts.
+This is notably the case for the background scripts restarting the device.
 For those any timeout has to be set on the waiting state.
 
 ```toml
@@ -451,7 +452,6 @@ For some action, notably a device `restart`, the handlers are limited to one:
 
 Currently, here are the available actions:
 
-- `restart` triggers a reboot of the device
 - `await-agent-restart` awaits for **tedge-agent** to restart
 - `await-operation-completion` awaits for a sub-operation to reach a success, failure or timeout
 - `builtin` is used when a builtin operation is overwritten by a custom workflow and indicates that for that state
@@ -460,28 +460,6 @@ Currently, here are the available actions:
    but no specific behavior has to be added on a workflow extension point.
 - `cleanup` marks the terminal state of the workflow where the command has been fully processed
   and where the original requester is expected to clean up the command retained message storing its state.
-
-#### Restart
-
-A workflow can trigger a device restart, using the builtin __restart__ action.
-
-This action is controlled by three states:
-- the *on_exec* state to which the workflow moves before the reboot is triggered
-- the *on_success* state to which the workflow resumes after a successful device reboot
-- the *on_error* state to which the workflow resumes in case the reboot fails
-
-For instance, the following triggers a reboot from the `reboot_required` state
-and moves to `restarting` waiting for the device to restart
-and finally to either `successful_restart` or `failed_restart`,
-depending on the actual status of the reboot.
-
-```toml
-["device-restart"]
-action = "restart"
-on_exec = "waiting-for-restart"
-on_success = "successful_restart"
-on_error = "failed_restart"
-```
 
 #### Awaiting the agent to restart
 
