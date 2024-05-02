@@ -1,0 +1,2 @@
+{"payload":{"output_file":"/tmp/test-sub-sub.json","status":"dump_payload","x_ter":"some x value","y":"some y value","y_ter":"some y value"},"topic":"te/device/main///cmd/super_command/sub:gp_command:test-sub-sub"}
+{"payload":{"output_file":"/tmp/test-sub-sub.json","status":"dump_payload","x":"some x value","y":"some y value"},"topic":"te/device/main///cmd/gp_command/test-sub-sub"}
