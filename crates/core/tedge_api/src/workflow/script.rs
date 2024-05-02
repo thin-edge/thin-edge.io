@@ -139,10 +139,10 @@ impl ExitHandlers {
             self.timeout = default.timeout
         }
         if self.on_kill.is_none() {
-            self.on_kill = default.on_timeout.clone()
+            self.on_kill.clone_from(&default.on_timeout)
         }
         if self.on_error.is_none() {
-            self.on_error = default.on_error.clone()
+            self.on_error.clone_from(&default.on_error)
         }
 
         self
@@ -328,10 +328,10 @@ impl AwaitHandlers {
             self.timeout = default.timeout
         }
         if self.on_timeout.is_none() {
-            self.on_timeout = default.on_timeout.clone()
+            self.on_timeout.clone_from(&default.on_timeout)
         }
         if self.on_error.is_none() {
-            self.on_error = default.on_error.clone()
+            self.on_error.clone_from(&default.on_error)
         }
 
         self

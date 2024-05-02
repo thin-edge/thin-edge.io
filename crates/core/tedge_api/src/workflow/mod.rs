@@ -165,7 +165,7 @@ impl OperationWorkflow {
         mut states: HashMap<StateName, OperationAction>,
     ) -> Result<Self, WorkflowDefinitionError> {
         // The init state is required
-        if states.get("init").is_none() {
+        if !states.contains_key("init") {
             return Err(WorkflowDefinitionError::MissingState {
                 state: "init".to_string(),
             });
