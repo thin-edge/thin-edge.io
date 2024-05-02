@@ -165,7 +165,8 @@ pub trait MessageSink<M: Message> {
         cast: MessageMapper,
     ) where
         N: Message,
-        MS: Iterator<Item = M> + Send,
+        MS: IntoIterator<Item = M> + Send,
+        MS::IntoIter: Send,
         MessageMapper: Fn(N) -> MS,
         MessageMapper: 'static + Send + Sync,
     {
