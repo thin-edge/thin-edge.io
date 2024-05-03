@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
-use std::path::Path;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
@@ -26,7 +25,7 @@ impl TEdgeComponent for AwsMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        _config_dir: &Path,
+        _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;

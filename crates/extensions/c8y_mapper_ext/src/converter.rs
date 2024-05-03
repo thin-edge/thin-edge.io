@@ -48,7 +48,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
-use camino::Utf8Path;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
@@ -181,7 +180,7 @@ pub struct UploadOperationData {
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
-    pub config: C8yMapperConfig,
+    pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
     pub(crate) device_topic_id: EntityTopicId,
@@ -191,9 +190,6 @@ pub struct CumulocityConverter {
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
-    pub cfg_dir: PathBuf,
-    pub ops_dir: PathBuf,
-    pub tmp_dir: Arc<Utf8Path>,
     pub children: HashMap<String, Operations>,
     pub service_type: String,
     pub c8y_endpoint: C8yEndPoint,
@@ -233,16 +229,11 @@ impl CumulocityConverter {
         };
 
         let c8y_host = config.c8y_host.clone();
-        let cfg_dir = config.config_dir.clone();
 
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
-        let ops_dir = config.ops_dir.clone();
-
-        let tmp_dir = config.tmp_dir.clone();
-
-        let operations = Operations::try_new(ops_dir.clone())?;
-        let children = get_child_ops(ops_dir.clone())?;
+        let operations = Operations::try_new(&*config.ops_dir)?;
+        let children = get_child_ops(&*config.ops_dir)?;
 
         let alarm_converter = AlarmConverter::new();
 
@@ -267,7 +258,7 @@ impl CumulocityConverter {
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
             EARLY_MESSAGE_BUFFER_SIZE,
-            config.state_dir.clone(),
+            &*config.state_dir,
             config.clean_start,
         )
         .unwrap();
@@ -276,7 +267,7 @@ impl CumulocityConverter {
 
         Ok(CumulocityConverter {
             size_threshold,
-            config,
+            config: Arc::new(config),
             mapper_config,
             device_name: device_id,
             device_topic_id,
@@ -285,9 +276,6 @@ impl CumulocityConverter {
             operations,
             operation_logs,
             http_proxy,
-            cfg_dir,
-            ops_dir,
-            tmp_dir,
             children,
             mqtt_publisher,
             service_type,
@@ -1245,8 +1233,10 @@ impl CumulocityConverter {
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = self.parse_base_inventory_file()?;
 
-        let supported_operations_message =
-            self.create_supported_operations(&self.ops_dir, &self.config.c8y_prefix)?;
+        let supported_operations_message = self.create_supported_operations(
+            self.config.ops_dir.as_std_path(),
+            &self.config.c8y_prefix,
+        )?;
 
         let device_data_message = self.inventory_device_type_update_message()?;
 
@@ -1350,10 +1340,10 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let device = self.entity_store.try_get(target)?;
         let ops_dir = match device.r#type {
-            EntityType::MainDevice => self.ops_dir.clone(),
+            EntityType::MainDevice => self.config.ops_dir.clone(),
             EntityType::ChildDevice => {
                 let child_dir_name = device.external_id.as_ref();
-                self.ops_dir.clone().join(child_dir_name)
+                self.config.ops_dir.join(child_dir_name).into()
             }
             EntityType::Service => {
                 let target = &device.topic_id;
@@ -1362,14 +1352,14 @@ impl CumulocityConverter {
             }
         };
         let ops_file = ops_dir.join(c8y_operation_name);
-        create_directory_with_defaults(&ops_dir)?;
+        create_directory_with_defaults(&*ops_dir)?;
         create_file_with_defaults(ops_file, None)?;
 
-        let need_cloud_update = self.update_operations(&ops_dir)?;
+        let need_cloud_update = self.update_operations(ops_dir.as_std_path())?;
 
         if need_cloud_update {
             let device_operations =
-                self.create_supported_operations(&ops_dir, &self.config.c8y_prefix)?;
+                self.create_supported_operations(ops_dir.as_std_path(), &self.config.c8y_prefix)?;
             return Ok(vec![device_operations]);
         }
 
@@ -3255,10 +3245,10 @@ pub(crate) mod tests {
                 .unwrap();
 
         C8yMapperConfig::new(
-            tmp_dir.to_path_buf(),
-            tmp_dir.utf8_path_buf(),
+            tmp_dir.utf8_path().into(),
+            tmp_dir.utf8_path().into(),
             tmp_dir.utf8_path_buf().into(),
-            tmp_dir.utf8_path_buf().into(),
+            tmp_dir.utf8_path().into(),
             device_id,
             device_topic_id,
             device_type,
