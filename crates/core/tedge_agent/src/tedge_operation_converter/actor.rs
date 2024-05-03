@@ -20,12 +20,17 @@ use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
+use tedge_api::workflow::CommandId;
 use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
+use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::Jsonify;
@@ -119,37 +124,34 @@ impl TedgeOperationConverterActor {
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let (operation, cmd_id) = match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((_, Channel::Command { operation, cmd_id })) => (operation, cmd_id),
-
-            _ => {
-                log::error!("Unknown command channel: {}", message.topic.name);
-                return Ok(());
-            }
+        let Ok((_, operation, cmd_id)) = self.extract_command_identifiers(&message.topic.name)
+        else {
+            log::error!("Unknown command channel: {}", &message.topic.name);
+            return Ok(());
         };
 
-        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
-        match self.workflows.apply_external_update(&operation, &message) {
-            Ok(None) => {
-                if message.payload_bytes().is_empty() {
-                    log_file
-                        .log_step("", "The command has been fully processed")
-                        .await;
-                    self.persist_command_board().await?;
-                }
-            }
-            Ok(Some(state)) => {
+        let Ok(state) = GenericCommandState::from_command_message(&message) else {
+            log::error!("Invalid command payload: {}", &message.topic.name);
+            return Ok(());
+        };
+        let step = state.status.clone();
+
+        let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
+
+        match self.workflows.apply_external_update(&operation, state) {
+            Ok(None) => (),
+            Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
-                self.process_command_state_update(state).await?;
+                if new_state.is_init() {
+                    self.process_command_state_update(new_state).await?;
+                }
             }
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {
                 info!("Ignoring {operation} operation which is not registered");
             }
             Err(err) => {
                 error!("{operation} operation request cannot be processed: {err}");
-                log_file
-                    .log_step("Unknown", &format!("Error: {err}\n"))
-                    .await;
+                log_file.log_step(&step, &format!("Error: {err}\n")).await;
             }
         }
 
@@ -160,15 +162,12 @@ impl TedgeOperationConverterActor {
         &mut self,
         state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        let (target, operation, cmd_id) = match self.mqtt_schema.entity_channel_of(&state.topic) {
-            Ok((target, Channel::Command { operation, cmd_id })) => (target, operation, cmd_id),
-
-            _ => {
-                log::error!("Unknown command channel: {}", state.topic.name);
-                return Ok(());
-            }
+        let Ok((target, operation, cmd_id)) = self.extract_command_identifiers(&state.topic.name)
+        else {
+            log::error!("Unknown command channel: {}", state.topic.name);
+            return Ok(());
         };
-        let mut log_file = CommandLog::new(self.log_dir.clone(), &operation, &cmd_id).await;
+        let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
         let action = match self.workflows.get_action(&state) {
             Ok(action) => action,
@@ -180,7 +179,7 @@ impl TedgeOperationConverterActor {
             Err(err) => {
                 error!("{operation} operation request cannot be processed: {err}");
                 log_file
-                    .log_step("Unknown", &format!("Error: {err}\n"))
+                    .log_step(&state.status, &format!("Error: {err}\n"))
                     .await;
                 return Ok(());
             }
@@ -190,10 +189,18 @@ impl TedgeOperationConverterActor {
 
         match action {
             OperationAction::Clear => {
-                info!(
-                    "Waiting {} {operation} operation to be cleared",
-                    state.status
-                );
+                if let Some(invoking_command) = self.workflows.invoking_command_state(&state) {
+                    info!(
+                        "Resuming invoking command {}",
+                        invoking_command.topic.as_ref()
+                    );
+                    self.command_sender.send(invoking_command.clone()).await?;
+                } else {
+                    info!(
+                        "Waiting {} {operation} operation to be cleared",
+                        state.status
+                    );
+                }
                 Ok(())
             }
             OperationAction::MoveTo(next_step) => {
@@ -207,18 +214,18 @@ impl TedgeOperationConverterActor {
                 self.process_internal_operation(target, operation, cmd_id, state.payload)
                     .await
             }
-            OperationAction::AwaitingAgentRestart {
-                timeout,
-                on_timeout,
-                ..
-            } => {
+            OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
                 info!("{operation} operation {step} waiting for agent restart");
                 // The following sleep is expected to be interrupted by a restart
-                sleep(timeout + Duration::from_secs(60)).await;
+                sleep(handlers.timeout.unwrap_or_default() + Duration::from_secs(60)).await;
                 // As the sleep completes, it means the agent was not restarted
                 // hence the operation is moved to its `on_timeout` target state
-                let new_state = state.update(on_timeout);
+                let new_state = state.update(
+                    handlers
+                        .on_timeout
+                        .unwrap_or_else(GenericStateUpdate::timeout),
+                );
                 self.publish_command_state(new_state).await
             }
             OperationAction::Restart {
@@ -277,7 +284,111 @@ impl TedgeOperationConverterActor {
                 log_file.log_script_output(&output).await;
                 Ok(())
             }
+            OperationAction::Operation(sub_operation, input_script, input_excerpt, handlers) => {
+                let next_state = &handlers.on_exec.status;
+                info!(
+                    "Triggering {sub_operation} command, and moving {operation} operation to {next_state} state"
+                );
+
+                // Run the input script, if any, to generate the init state of the sub-operation
+                let generated_init_state = match input_script {
+                    None => GenericStateUpdate::empty_payload(),
+                    Some(script) => {
+                        let command = Execute::new(script.command.clone(), script.args);
+                        let output = self.script_runner.await_response(command).await?;
+                        log_file.log_script_output(&output).await;
+                        match extract_json_output(&script.command, output) {
+                            Ok(init_state) => init_state,
+                            Err(reason) => {
+                                let err_state = state.update(GenericStateUpdate::failed(reason));
+                                self.publish_command_state(err_state).await?;
+                                return Ok(());
+                            }
+                        }
+                    }
+                };
+
+                // Create the sub-operation init state with a reference to its invoking command
+                let sub_cmd_input = input_excerpt.extract_value_from(&state);
+                let sub_cmd_init_state = GenericCommandState::sub_command_init_state(
+                    &self.mqtt_schema,
+                    &self.device_topic_id,
+                    operation,
+                    cmd_id,
+                    sub_operation,
+                )
+                .update_with_json(generated_init_state)
+                .update_with_json(sub_cmd_input)
+                .update_with_json(GenericStateUpdate::init_payload());
+
+                // Persist the new state for this command
+                let new_state = state.update(handlers.on_exec);
+                self.publish_command_state(new_state).await?;
+
+                // Finally, init the sub-operation
+                self.mqtt_publisher
+                    .send(sub_cmd_init_state.into_message())
+                    .await?;
+                Ok(())
+            }
+            OperationAction::AwaitOperationCompletion(handlers, output_excerpt) => {
+                let step = &state.status;
+                info!("{operation} operation {step} waiting for sub-operation completion");
+
+                // Get the sub-operation state and resume this command when the sub-operation is in a terminal state
+                if let Some(sub_state) = self
+                    .workflows
+                    .sub_command_state(&state)
+                    .map(|s| s.to_owned())
+                {
+                    if sub_state.is_successful() {
+                        let sub_cmd_output = output_excerpt.extract_value_from(&sub_state);
+                        let new_state = state
+                            .update_with_json(sub_cmd_output)
+                            .update(handlers.on_success);
+                        self.publish_command_state(new_state).await?;
+                        self.publish_command_state(sub_state.clear()).await?;
+                    } else if sub_state.is_failed() {
+                        let new_state = state.update(handlers.on_error.unwrap_or_else(|| {
+                            GenericStateUpdate::failed("sub-operation failed".to_string())
+                        }));
+                        self.publish_command_state(new_state).await?;
+                        self.publish_command_state(sub_state.clear()).await?;
+                    } else {
+                        // Nothing specific has to be done: the current state has been persisted
+                        // and will be resumed on completion of the sub-operation
+                        // TODO: Register a timeout event
+                    }
+                };
+
+                Ok(())
+            }
         }
+    }
+
+    fn open_command_log(
+        &mut self,
+        state: &GenericCommandState,
+        operation: &OperationType,
+        cmd_id: &str,
+    ) -> CommandLog {
+        let (root_operation, root_cmd_id) = match self
+            .workflows
+            .root_invoking_command_state(state)
+            .map(|s| s.topic.as_ref())
+            .and_then(|root_topic| self.extract_command_identifiers(root_topic).ok())
+        {
+            None => (None, None),
+            Some((_, op, id)) => (Some(op.to_string()), Some(id)),
+        };
+
+        CommandLog::new(
+            self.log_dir.clone(),
+            operation.to_string(),
+            cmd_id.to_string(),
+            root_operation,
+            root_cmd_id,
+        )
     }
 
     async fn process_internal_operation(
@@ -356,7 +467,9 @@ impl TedgeOperationConverterActor {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
-        self.command_sender.send(new_state.clone()).await?;
+        if !new_state.is_cleared() {
+            self.command_sender.send(new_state.clone()).await?;
+        }
         self.mqtt_publisher.send(new_state.into_message()).await?;
         Ok(())
     }
@@ -396,33 +509,76 @@ impl TedgeOperationConverterActor {
 
         Ok(())
     }
+
+    fn extract_command_identifiers(
+        &self,
+        topic: impl AsRef<str>,
+    ) -> Result<(EntityTopicId, OperationType, CommandId), CommandTopicError> {
+        let (target, channel) = self.mqtt_schema.entity_channel_of(topic)?;
+        match channel {
+            Channel::Command { operation, cmd_id } => Ok((target, operation, cmd_id)),
+            _ => Err(CommandTopicError::InvalidCommandTopic),
+        }
+    }
 }
 
+#[derive(Debug, thiserror::Error)]
+enum CommandTopicError {
+    #[error(transparent)]
+    InvalidTopic(#[from] EntityTopicError),
+
+    #[error("Not a command topic")]
+    InvalidCommandTopic,
+}
+
+/// Log all command steps
 struct CommandLog {
+    /// Path to the command log file
     path: Utf8PathBuf,
+
+    /// operation name
+    operation: OperationName,
+
+    /// command id
+    cmd_id: CommandId,
+
+    /// The log file of the root command invoking this command
+    ///
+    /// None, if not open yet.
     file: Option<File>,
 }
 
 impl CommandLog {
-    pub async fn new(log_dir: Utf8PathBuf, operation: &OperationType, cmd_id: &str) -> Self {
-        let path = log_dir
-            .clone()
-            .join(format!("workflow-{}-{}.log", operation, cmd_id));
-        match File::options()
-            .append(true)
-            .create(true)
-            .open(path.clone())
-            .await
-        {
-            Ok(file) => CommandLog {
-                path,
-                file: Some(file),
-            },
-            Err(err) => {
-                error!("Fail to open log file {path}: {err}");
-                CommandLog { path, file: None }
-            }
+    pub fn new(
+        log_dir: Utf8PathBuf,
+        operation: OperationName,
+        cmd_id: CommandId,
+        root_operation: Option<OperationName>,
+        root_cmd_id: Option<CommandId>,
+    ) -> Self {
+        let root_operation = root_operation.unwrap_or(operation.clone());
+        let root_cmd_id = root_cmd_id.unwrap_or(cmd_id.clone());
+
+        let path = log_dir.join(format!("workflow-{}-{}.log", root_operation, root_cmd_id));
+        CommandLog {
+            path,
+            operation,
+            cmd_id,
+            file: None,
         }
+    }
+
+    async fn open(&mut self) -> Result<&mut File, std::io::Error> {
+        if self.file.is_none() {
+            self.file = Some(
+                File::options()
+                    .append(true)
+                    .create(true)
+                    .open(self.path.clone())
+                    .await?,
+            );
+        }
+        Ok(self.file.as_mut().unwrap())
     }
 
     async fn log_state_action(&mut self, state: &GenericCommandState, action: &OperationAction) {
@@ -441,9 +597,11 @@ Action: {action}
         let now = OffsetDateTime::now_utc()
             .format(&format_description::well_known::Rfc3339)
             .unwrap();
+        let operation = &self.operation;
+        let cmd_id = &self.cmd_id;
         let message = format!(
             r#"------------------------------------
-{step}: {now}
+{operation}/{cmd_id} status={step} time={now}
 {action}
 
 "#
@@ -463,19 +621,17 @@ Action: {action}
         &mut self,
         result: &Result<Output, std::io::Error>,
     ) -> Result<(), std::io::Error> {
-        if let Some(file) = self.file.as_mut() {
-            logged_command::LoggedCommand::log_outcome("", result, file).await?;
-            file.sync_all().await?;
-        }
+        let file = self.open().await?;
+        logged_command::LoggedCommand::log_outcome("", result, file).await?;
+        file.sync_all().await?;
         Ok(())
     }
 
     async fn write(&mut self, message: &str) -> Result<(), std::io::Error> {
-        if let Some(file) = self.file.as_mut() {
-            file.write_all(message.as_bytes()).await?;
-            file.flush().await?;
-            file.sync_all().await?;
-        }
+        let file = self.open().await?;
+        file.write_all(message.as_bytes()).await?;
+        file.flush().await?;
+        file.sync_all().await?;
         Ok(())
     }
 }

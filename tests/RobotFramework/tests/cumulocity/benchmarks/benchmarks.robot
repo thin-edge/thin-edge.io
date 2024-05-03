@@ -37,7 +37,7 @@ Suite Setup
     Device Should Exist                      ${DEVICE_SN}
 
     ThinEdgeIO.Transfer To Device    ${CURDIR}/benchmark.py         /usr/bin/
-    Execute Command    sudo apt-get install -y python3-minimal python3-paho-mqtt --no-install-recommends
+    Execute Command    sudo apt-get update && sudo apt-get install -y python3-minimal python3-paho-mqtt --no-install-recommends
     Execute Command    benchmark.py configure
 
 Test Setup

@@ -363,7 +363,7 @@ mod tests {
         let dir = TempTedgeDir::new();
         let nested_dir = dir.dir("nested");
 
-        let mut stream = fs_notify_stream(&[&nested_dir.path()]).unwrap();
+        let mut stream = fs_notify_stream(&[nested_dir.path()]).unwrap();
 
         // Test create
         let file = nested_dir.file("file");

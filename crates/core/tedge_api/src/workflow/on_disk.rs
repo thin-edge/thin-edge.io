@@ -57,11 +57,7 @@ impl TryFrom<OnDiskCommandBoardV1> for CommandBoard {
                         value: command.unix_timestamp,
                     }
                 })?;
-            let state = GenericCommandState {
-                topic,
-                status: command.status,
-                payload: command.payload,
-            };
+            let state = GenericCommandState::new(topic, command.status, command.payload);
             commands.insert(topic_name, (timestamp, state));
         }
         Ok(CommandBoard::new(commands))

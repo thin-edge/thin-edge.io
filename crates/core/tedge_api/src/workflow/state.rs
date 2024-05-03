@@ -1,4 +1,11 @@
+use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicId;
+use crate::mqtt_topics::MqttSchema;
+use crate::mqtt_topics::OperationType;
+use crate::workflow::CommandId;
 use crate::workflow::ExitHandlers;
+use crate::workflow::OperationName;
+use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS::AtLeastOnce;
@@ -7,6 +14,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::fmt::Display;
 
 /// Generic command state that can be used to manipulate any type of command payload.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -14,6 +23,7 @@ pub struct GenericCommandState {
     pub topic: Topic,
     pub status: String,
     pub payload: Value,
+    invoking_command_topic: Option<String>,
 }
 
 /// Update for a command state
@@ -23,28 +33,81 @@ pub struct GenericStateUpdate {
     pub reason: Option<String>,
 }
 
+const STATUS: &str = "status";
+const INIT: &str = "init";
+const SUCCESSFUL: &str = "successful";
+const FAILED: &str = "failed";
+const REASON: &str = "reason";
+
 impl GenericCommandState {
-    /// Extract a command state from a json payload
-    pub fn from_command_message(
-        message: &MqttMessage,
-    ) -> Result<Option<Self>, WorkflowExecutionError> {
-        let payload = message.payload_bytes();
-        if payload.is_empty() {
-            return Ok(None);
-        }
-        let topic = message.topic.clone();
-        let json: Value = serde_json::from_slice(payload)?;
-        let status = GenericCommandState::extract_text_property(&json, "status")
-            .ok_or(WorkflowExecutionError::MissingStatus)?;
-        Ok(Some(GenericCommandState {
+    pub fn new(topic: Topic, status: String, payload: Value) -> Self {
+        let invoking_command_topic = Self::infer_invoking_command_topic(topic.as_ref());
+        GenericCommandState {
             topic,
             status,
-            payload: json,
-        }))
+            payload,
+            invoking_command_topic,
+        }
+    }
+
+    /// Create an init state for a sub-operation
+    pub fn sub_command_init_state(
+        schema: &MqttSchema,
+        entity: &EntityTopicId,
+        operation: OperationType,
+        cmd_id: CommandId,
+        sub_operation: OperationName,
+    ) -> GenericCommandState {
+        let sub_cmd_id = Self::sub_command_id(&operation, &cmd_id);
+        let topic = schema.topic_for(
+            entity,
+            &Channel::Command {
+                operation: OperationType::Custom(sub_operation),
+                cmd_id: sub_cmd_id,
+            },
+        );
+        let invoking_command_topic =
+            schema.topic_for(entity, &Channel::Command { operation, cmd_id });
+        let status = INIT.to_string();
+        let payload = json!({
+            STATUS: status
+        });
+
+        GenericCommandState {
+            topic,
+            status,
+            payload,
+            invoking_command_topic: Some(invoking_command_topic.name),
+        }
+    }
+
+    /// Extract a command state from a json payload
+    pub fn from_command_message(message: &MqttMessage) -> Result<Self, WorkflowExecutionError> {
+        let topic = message.topic.clone();
+        let invoking_command_topic = Self::infer_invoking_command_topic(topic.as_ref());
+        let bytes = message.payload_bytes();
+        let (status, payload) = if bytes.is_empty() {
+            ("".to_string(), json!(null))
+        } else {
+            let json: Value = serde_json::from_slice(bytes)?;
+            let status = GenericCommandState::extract_text_property(&json, STATUS)
+                .ok_or(WorkflowExecutionError::MissingStatus)?;
+            (status.to_string(), json)
+        };
+
+        Ok(GenericCommandState {
+            topic,
+            status,
+            payload,
+            invoking_command_topic,
+        })
     }
 
     /// Build an MQTT message to publish the command state
     pub fn into_message(mut self) -> MqttMessage {
+        if self.is_cleared() {
+            return self.clear_message();
+        }
         GenericCommandState::inject_text_property(&mut self.payload, "status", &self.status);
         let topic = &self.topic;
         let payload = self.payload.to_string();
@@ -53,12 +116,20 @@ impl GenericCommandState {
             .with_qos(AtLeastOnce)
     }
 
+    /// Build an MQTT message to clear the command state
+    fn clear_message(&self) -> MqttMessage {
+        let topic = &self.topic;
+        MqttMessage::new(topic, "")
+            .with_retain()
+            .with_qos(AtLeastOnce)
+    }
+
     /// Update this state
     pub fn update(mut self, update: GenericStateUpdate) -> Self {
         let status = update.status;
-        GenericCommandState::inject_text_property(&mut self.payload, "status", &status);
+        GenericCommandState::inject_text_property(&mut self.payload, STATUS, &status);
         if let Some(reason) = &update.reason {
-            GenericCommandState::inject_text_property(&mut self.payload, "reason", reason)
+            GenericCommandState::inject_text_property(&mut self.payload, REASON, reason)
         };
 
         GenericCommandState { status, ..self }
@@ -71,9 +142,12 @@ impl GenericCommandState {
                 values.insert(k.to_string(), v.clone());
             }
         }
-        match GenericCommandState::extract_text_property(&self.payload, "status") {
+        match GenericCommandState::extract_text_property(&self.payload, STATUS) {
             None => self.fail_with("Unknown status".to_string()),
-            Some(status) => GenericCommandState { status, ..self },
+            Some(status) => GenericCommandState {
+                status: status.to_string(),
+                ..self
+            },
         }
     }
 
@@ -90,16 +164,16 @@ impl GenericCommandState {
 
     /// Update the command state with a new status describing the next state
     pub fn move_to(mut self, status: String) -> Self {
-        GenericCommandState::inject_text_property(&mut self.payload, "status", &status);
+        GenericCommandState::inject_text_property(&mut self.payload, STATUS, &status);
 
         GenericCommandState { status, ..self }
     }
 
     /// Update the command state to failed status with the given reason
     pub fn fail_with(mut self, reason: String) -> Self {
-        let status = "failed";
-        GenericCommandState::inject_text_property(&mut self.payload, "status", status);
-        GenericCommandState::inject_text_property(&mut self.payload, "reason", &reason);
+        let status = FAILED;
+        GenericCommandState::inject_text_property(&mut self.payload, STATUS, status);
+        GenericCommandState::inject_text_property(&mut self.payload, REASON, &reason);
 
         GenericCommandState {
             status: status.to_owned(),
@@ -107,17 +181,25 @@ impl GenericCommandState {
         }
     }
 
+    /// Mark the command as completed
+    pub fn clear(self) -> Self {
+        GenericCommandState {
+            status: "".to_string(),
+            payload: json!(null),
+            ..self
+        }
+    }
+
     /// Return the error reason if any
-    pub fn failure_reason(&self) -> Option<String> {
-        GenericCommandState::extract_text_property(&self.payload, "reason")
+    pub fn failure_reason(&self) -> Option<&str> {
+        GenericCommandState::extract_text_property(&self.payload, REASON)
     }
 
     /// Extract a text property from a Json object
-    fn extract_text_property(json: &Value, property: &str) -> Option<String> {
+    fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
         json.as_object()
             .and_then(|o| o.get(property))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
     }
 
     /// Inject a text property into a Json object
@@ -131,7 +213,7 @@ impl GenericCommandState {
     ///
     /// - The script command is first tokenized using shell escaping rules.
     ///   `/some/script.sh arg1 "arg 2" "arg 3"` -> ["/some/script.sh", "arg1", "arg 2", "arg 3"]
-    /// - Then each token matching `${x.y.z}` is substituted with the value of
+    /// - Then each token matching `${x.y.z}` is substituted with the value pointed by the JSON path.
     pub fn inject_parameters(&self, args: &[String]) -> Vec<String> {
         args.iter().map(|arg| self.inject_parameter(arg)).collect()
     }
@@ -141,74 +223,141 @@ impl GenericCommandState {
     /// `${.payload}` -> the whole message payload
     /// `${.payload.x}` -> the value of x if there is any in the payload
     /// `${.payload.unknown}` -> `${.payload.unknown}` unchanged
-    /// `Not a variable pattern` -> `Not a variable pattern` unchanged
+    /// `Not a path expression` -> `Not a path expression` unchanged
     pub fn inject_parameter(&self, script_parameter: &str) -> String {
-        script_parameter
-            .strip_prefix("${")
-            .and_then(|s| s.strip_suffix('}'))
-            .and_then(|path| self.extract(path))
+        Self::extract_path(script_parameter)
+            .and_then(|path| self.extract_value(path))
+            .map(|v| json_as_string(&v))
             .unwrap_or_else(|| script_parameter.to_string())
     }
 
-    fn extract(&self, path: &str) -> Option<String> {
+    /// Extract a path  from a `${ ... }` expression
+    ///
+    /// Return None if the input is not a path expression
+    pub fn extract_path(input: &str) -> Option<&str> {
+        input.strip_prefix("${").and_then(|s| s.strip_suffix('}'))
+    }
+
+    /// Extract the JSON value pointed by a path from this command state
+    ///
+    /// Return None if the path contains unknown fields.
+    pub fn extract_value(&self, path: &str) -> Option<Value> {
         match path {
-            "." => Some(
-                json!({
-                    "topic": self.topic.name,
-                    "payload": self.payload
-                })
-                .to_string(),
-            ),
-            ".topic" => Some(self.topic.name.clone()),
-            ".topic.target" => self.target(),
-            ".topic.operation" => self.operation(),
-            ".topic.cmd_id" => self.cmd_id(),
-            ".payload" => Some(self.payload.to_string()),
+            "." => Some(json!({
+                "topic": self.topic.name,
+                "payload": self.payload
+            })),
+            ".topic" => Some(self.topic.name.clone().into()),
+            ".topic.target" => self.target().map(|s| s.into()),
+            ".topic.operation" => self.operation().map(|s| s.into()),
+            ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
+            ".payload" => Some(self.payload.clone()),
             path => path
                 .strip_prefix(".payload.")
-                .and_then(|path| json_excerpt(&self.payload, path)),
+                .and_then(|path| json_excerpt(&self.payload, path))
+                .cloned(),
+        }
+    }
+
+    /// Return the topic that uniquely identifies the command
+    pub fn command_topic(&self) -> &String {
+        &self.topic.name
+    }
+
+    /// Return the topic of the invoking command, if any
+    pub fn invoking_command_topic(&self) -> Option<&str> {
+        self.invoking_command_topic.as_deref()
+    }
+
+    /// Infer the topic of the invoking command, given a sub command topic
+    fn infer_invoking_command_topic(sub_command_topic: &str) -> Option<String> {
+        let schema = MqttSchema::from_topic(sub_command_topic);
+        match schema.entity_channel_of(sub_command_topic) {
+            Ok((entity, Channel::Command { cmd_id, .. })) => {
+                Self::extract_invoking_command_id(&cmd_id).map(|(op, id)| {
+                    let channel = Channel::Command {
+                        operation: op.into(),
+                        cmd_id: id.into(),
+                    };
+                    schema.topic_for(&entity, &channel).as_ref().to_string()
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Build a sub command identifier from its invoking command identifier
+    ///
+    /// Using such a structure command id for sub commands is key
+    /// to retrieve the invoking command of a sub-operation from its state using [extract_invoking_command_id].
+    fn sub_command_id(operation: &impl Display, cmd_id: &impl Display) -> String {
+        format!("sub:{operation}:{cmd_id}")
+    }
+
+    /// Extract the invoking command identifier from a sub command identifier
+    ///
+    /// Return None if the given id is not a sub command identifier, i.e. if not generated with [sub_command_id].
+    fn extract_invoking_command_id(sub_cmd_id: &str) -> Option<(&str, &str)> {
+        match sub_cmd_id.split(':').collect::<Vec<&str>>()[..] {
+            ["sub", operation, cmd_id, ..] => Some((operation, cmd_id)),
+            _ => None,
         }
     }
 
     fn target(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, t1, t2, t3, t4, "cmd", _, _] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
-            _ => None,
-        }
+        MqttSchema::get_entity_id(&self.topic)
     }
 
     pub fn operation(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, _, _, _, _, "cmd", operation, _] => Some(operation.to_string()),
-            _ => None,
-        }
+        MqttSchema::get_operation_name(&self.topic)
     }
 
     pub fn cmd_id(&self) -> Option<String> {
-        match self.topic.name.split('/').collect::<Vec<&str>>()[..] {
-            [_, _, _, _, _, "cmd", _, cmd_id] => Some(cmd_id.to_string()),
-            _ => None,
-        }
+        MqttSchema::get_command_id(&self.topic)
     }
 
-    pub fn is_terminal(&self) -> bool {
-        matches!(self.status.as_str(), "successful" | "failed")
+    pub fn is_init(&self) -> bool {
+        matches!(self.status.as_str(), INIT)
+    }
+
+    pub fn is_successful(&self) -> bool {
+        matches!(self.status.as_str(), SUCCESSFUL)
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self.status.as_str(), FAILED)
+    }
+
+    pub fn is_cleared(&self) -> bool {
+        self.payload.is_null()
     }
 }
 
 impl GenericStateUpdate {
+    pub fn empty_payload() -> Value {
+        json!({})
+    }
+
+    pub fn init_payload() -> Value {
+        json!({STATUS: INIT})
+    }
+
     pub fn successful() -> Self {
         GenericStateUpdate {
-            status: "successful".to_string(),
+            status: SUCCESSFUL.to_string(),
             reason: None,
         }
     }
 
     pub fn failed(reason: String) -> Self {
         GenericStateUpdate {
-            status: "failed".to_string(),
+            status: FAILED.to_string(),
             reason: Some(reason),
         }
+    }
+
+    pub fn timeout() -> Self {
+        Self::failed("timeout".to_string())
     }
 
     pub fn into_json(self) -> Value {
@@ -224,10 +373,10 @@ impl GenericStateUpdate {
         match json.as_object_mut() {
             None => self.into_json(),
             Some(object) => {
-                object.insert("status".to_string(), self.status.into());
-                if object.get("reason").is_none() {
+                object.insert(STATUS.to_string(), self.status.into());
+                if object.get(REASON).is_none() {
                     if let Some(reason) = self.reason {
-                        object.insert("reason".to_string(), reason.into());
+                        object.insert(REASON.to_string(), reason.into());
                     }
                 }
                 json
@@ -255,20 +404,20 @@ impl From<GenericStateUpdate> for Value {
     fn from(update: GenericStateUpdate) -> Self {
         match update.reason {
             None => json!({
-                "status": update.status
+                STATUS: update.status
             }),
             Some(reason) => json!({
-                "status": update.status,
-                "reason": reason,
+                STATUS: update.status,
+                REASON: reason,
             }),
         }
     }
 }
 
-fn json_excerpt(value: &Value, path: &str) -> Option<String> {
+fn json_excerpt<'a>(value: &'a Value, path: &'a str) -> Option<&'a Value> {
     match path.split_once('.') {
-        None if path.is_empty() => Some(json_as_string(value)),
-        None => value.get(path).map(json_as_string),
+        None if path.is_empty() => Some(value),
+        None => value.get(path),
         Some((key, path)) => value.get(key).and_then(|value| json_excerpt(value, path)),
     }
 }
@@ -283,6 +432,104 @@ fn json_as_string(value: &Value) -> String {
     }
 }
 
+/// A set of values to be injected/extracted into/from a [GenericCommandState]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(try_from = "Option<Value>")]
+pub enum StateExcerpt {
+    /// A constant JSON value
+    Literal(Value),
+
+    /// A JSON path to the excerpt
+    ///
+    /// `"${.some.value.extracted.from.a.command.state}"`
+    PathExpr(String),
+
+    /// A map of named excerpts
+    ///
+    /// `{ x = "${.some.x.value}", y = "${.some.y.value}"`
+    ExcerptMap(HashMap<String, StateExcerpt>),
+
+    /// An array of excerpts
+    ///
+    /// `["${.some.x.value}", "${.some.y.value}"]`
+    ExcerptArray(Vec<StateExcerpt>),
+}
+
+impl StateExcerpt {
+    /// Extract a JSON value from the input state
+    pub fn extract_value_from(&self, input: &GenericCommandState) -> Value {
+        match self {
+            StateExcerpt::Literal(value) => value.clone(),
+            StateExcerpt::PathExpr(path) => input.extract_value(path).unwrap_or(Value::Null),
+            StateExcerpt::ExcerptMap(excerpts) => {
+                let mut values = serde_json::Map::new();
+                for (key, excerpt) in excerpts {
+                    let value = excerpt.extract_value_from(input);
+                    values.insert(key.to_string(), value);
+                }
+                Value::Object(values)
+            }
+            StateExcerpt::ExcerptArray(excerpts) => {
+                let mut values = Vec::new();
+                for excerpt in excerpts {
+                    let value = excerpt.extract_value_from(input);
+                    values.push(value);
+                }
+                Value::Array(values)
+            }
+        }
+    }
+}
+
+impl TryFrom<Option<Value>> for StateExcerpt {
+    type Error = StateExcerptError;
+
+    fn try_from(value: Option<Value>) -> Result<Self, Self::Error> {
+        match value {
+            None | Some(Value::Null) => {
+                // A mapping that change nothing
+                Ok(StateExcerpt::ExcerptMap(HashMap::new()))
+            }
+            Some(value) if value.is_object() => Ok(value.into()),
+            Some(value) => {
+                let kind = match &value {
+                    Value::Bool(_) => "bool",
+                    Value::Number(_) => "number",
+                    Value::String(_) => "string",
+                    Value::Array(_) => "array",
+                    _ => unreachable!(),
+                };
+                Err(StateExcerptError::NotAnObject {
+                    kind: kind.to_string(),
+                    value,
+                })
+            }
+        }
+    }
+}
+
+impl From<Value> for StateExcerpt {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Null => StateExcerpt::Literal(Value::Null),
+            Value::Bool(b) => StateExcerpt::Literal(Value::Bool(b)),
+            Value::Number(n) => StateExcerpt::Literal(Value::Number(n)),
+            Value::String(s) => match GenericCommandState::extract_path(&s) {
+                None => StateExcerpt::Literal(Value::String(s)),
+                Some(path) => StateExcerpt::PathExpr(path.to_string()),
+            },
+            Value::Array(a) => {
+                StateExcerpt::ExcerptArray(a.iter().map(|v| v.clone().into()).collect())
+            }
+            Value::Object(o) => StateExcerpt::ExcerptMap(
+                o.iter()
+                    .map(|(k, v)| (k.to_owned(), v.clone().into()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,9 +541,8 @@ mod tests {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
         let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
-        let cmd = GenericCommandState::from_command_message(&command)
-            .expect("parsing error")
-            .expect("no message");
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_init());
         assert_eq!(
             cmd,
             GenericCommandState {
@@ -308,7 +554,8 @@ mod tests {
                     "bar": {
                         "extra": [1,2,3]
                     }
-                })
+                }),
+                invoking_command_topic: None,
             }
         );
 
@@ -324,7 +571,8 @@ mod tests {
                     "bar": {
                         "extra": [1,2,3]
                     }
-                })
+                }),
+                invoking_command_topic: None,
             }
         );
 
@@ -341,7 +589,32 @@ mod tests {
                     "bar": {
                         "extra": [1,2,3]
                     }
-                })
+                }),
+                invoking_command_topic: None,
+            }
+        );
+    }
+
+    #[test]
+    fn retrieve_invoking_command() {
+        let topic = Topic::new_unchecked("te/device/main///cmd/do_it/sub:make_it:456");
+        let payload = r#"{ "status":"successful", "foo":42, "bar": { "extra": [1,2,3] }}"#;
+        let command = mqtt_channel::MqttMessage::new(&topic, payload);
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_successful());
+        assert_eq!(
+            cmd,
+            GenericCommandState {
+                topic: topic.clone(),
+                status: "successful".to_string(),
+                payload: json!({
+                    "status": "successful",
+                    "foo": 42,
+                    "bar": {
+                        "extra": [1,2,3]
+                    }
+                }),
+                invoking_command_topic: Some("te/device/main///cmd/make_it/456".to_string()),
             }
         );
     }
@@ -351,9 +624,8 @@ mod tests {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
         let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
-        let cmd = GenericCommandState::from_command_message(&command)
-            .expect("parsing error")
-            .expect("no message");
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_init());
 
         // Valid paths
         assert_eq!(
@@ -402,6 +674,14 @@ mod tests {
             cmd.inject_parameter("${.payload.bar.unknown}"),
             "${.payload.bar.unknown}"
         );
+    }
+
+    #[test]
+    fn parse_empty_payload() {
+        let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
+        let command = mqtt_channel::MqttMessage::new(&topic, "".to_string());
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_cleared())
     }
 
     trait JsonContent {

@@ -83,6 +83,15 @@ impl MqttSchema {
         MqttSchema { root }
     }
 
+    /// Build the schema to be used to decode a topic
+    pub fn from_topic(topic: impl AsRef<str>) -> Self {
+        let (root, _) = topic
+            .as_ref()
+            .split_once('/')
+            .unwrap_or((topic.as_ref(), ""));
+        Self::with_root(root.to_string())
+    }
+
     /// Get the topic addressing a given entity channel
     /// ```
     /// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityTopicId};
@@ -127,9 +136,9 @@ impl MqttSchema {
     /// ```
     pub fn entity_channel_of(
         &self,
-        topic: &mqtt_channel::Topic,
+        topic: impl AsRef<str>,
     ) -> Result<(EntityTopicId, Channel), EntityTopicError> {
-        self.parse(&topic.name)
+        self.parse(topic.as_ref())
     }
 
     /// Get the topic filter to subscribe to messages from specific entities and channels
@@ -188,9 +197,37 @@ impl MqttSchema {
     pub fn error_topic(&self) -> Topic {
         Topic::new_unchecked(&format!("{0}/errors", self.root))
     }
-}
 
-impl MqttSchema {
+    /// Extract the entity identifier from a topic
+    ///
+    /// Note this function is not related to a specific topic root prefix
+    pub fn get_entity_id(topic: impl AsRef<str>) -> Option<String> {
+        match topic.as_ref().split('/').collect::<Vec<&str>>()[..] {
+            [_, t1, t2, t3, t4, ..] => Some(format!("{t1}/{t2}/{t3}/{t4}")),
+            _ => None,
+        }
+    }
+
+    /// Extract the operation name from a command topic
+    ///
+    /// Note this function is not related to a specific topic root prefix
+    pub fn get_operation_name(topic: impl AsRef<str>) -> Option<String> {
+        match topic.as_ref().split('/').collect::<Vec<&str>>()[..] {
+            [_, _, _, _, _, "cmd", op, ..] => Some(op.to_string()),
+            _ => None,
+        }
+    }
+
+    /// Extract the command instance identifier from a command topic
+    ///
+    /// Note this function is not related to a specific topic root prefix
+    pub fn get_command_id(topic: impl AsRef<str>) -> Option<String> {
+        match topic.as_ref().split('/').collect::<Vec<&str>>()[..] {
+            [_, _, _, _, _, "cmd", _, id] => Some(id.to_string()),
+            _ => None,
+        }
+    }
+
     fn parse(&self, topic: &str) -> Result<(EntityTopicId, Channel), EntityTopicError> {
         let (root, topic) = topic.split_once('/').ok_or(EntityTopicError::Root {
             expected: self.root.to_string(),

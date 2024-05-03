@@ -17,9 +17,9 @@ pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::time::Duration;
 pub use supervisor::*;
 
+pub type OperationName = String;
 pub type StateName = String;
 pub type CommandId = String;
 
@@ -61,18 +61,19 @@ pub enum OperationAction {
     /// ```
     BuiltIn,
 
-    /// The command is delegated to a participant identified by its name
+    /// Await agent restart
+    ///
+    /// In practice, this command simply waits till a timeout.
+    /// If the timeout triggers, this step fails.
+    /// If the agent stops before the timeout and finds on restart a persisted state of `await-agent-restart`,
+    /// then this step is successful.
     ///
     /// ```toml
-    /// awaiting = "agent-restart"
+    /// action = "await-agent-restart"
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    AwaitingAgentRestart {
-        on_success: GenericStateUpdate,
-        timeout: Duration,
-        on_timeout: GenericStateUpdate,
-    },
+    AwaitingAgentRestart(AwaitHandlers),
 
     /// Restart the device
     ///
@@ -100,6 +101,32 @@ pub enum OperationAction {
     /// ```
     BgScript(ShellScript, BgExitHandlers),
 
+    /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
+    ///
+    /// ```toml
+    /// operation = "sub_operation"
+    /// input_script = "/path/to/sub_operation/input_scrip.sh ${.payload.x}" ${.payload.y}"
+    /// input.logfile = "${.payload.logfile}"
+    /// on_exec = "awaiting_sub_operation"
+    /// ```
+    Operation(
+        OperationName,
+        Option<ShellScript>,
+        StateExcerpt,
+        BgExitHandlers,
+    ),
+
+    /// Await the completion of a sub-operation
+    ///
+    /// The sub-operation is stored in the command state.
+    ///
+    /// ```toml
+    /// action = "await-operation-completion"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    AwaitOperationCompletion(AwaitHandlers, StateExcerpt),
+
     /// The command has been fully processed and needs to be cleared
     Clear,
 }
@@ -109,10 +136,20 @@ impl Display for OperationAction {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn => "builtin".to_string(),
-            OperationAction::AwaitingAgentRestart { .. } => "awaiting agent restart".to_string(),
+            OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
+            OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
+                None => format!("execute {operation} as sub-operation"),
+                Some(script) => format!(
+                    "execute {operation} as sub-operation, with input payload derived from: {}",
+                    script
+                ),
+            },
+            OperationAction::AwaitOperationCompletion { .. } => {
+                "await sub-operation completion".to_string()
+            }
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
         };
         f.write_str(&str)
@@ -128,7 +165,7 @@ impl OperationWorkflow {
         mut states: HashMap<StateName, OperationAction>,
     ) -> Result<Self, WorkflowDefinitionError> {
         // The init state is required
-        if states.get("init").is_none() {
+        if !states.contains_key("init") {
             return Err(WorkflowDefinitionError::MissingState {
                 state: "init".to_string(),
             });
@@ -208,26 +245,6 @@ impl OperationWorkflow {
         }
     }
 
-    /// Extract the current action to be performed on a command request
-    ///
-    /// Returns:
-    /// - `Ok(Some(action)` when the request is well-formed
-    /// - `Ok(None)` when the request is finalized, i.e. when the command topic hase been cleared
-    /// - `Err(error)` when the request is ill-formed
-    pub fn get_operation_current_action(
-        &self,
-        message: &MqttMessage,
-    ) -> Result<Option<(GenericCommandState, OperationAction)>, WorkflowExecutionError> {
-        match GenericCommandState::from_command_message(message) {
-            Ok(Some(command_state)) => {
-                let contextualized_action = self.get_action(&command_state)?;
-                Ok(Some((command_state, contextualized_action)))
-            }
-            Ok(None) => Ok(None),
-            Err(err) => Err(err),
-        }
-    }
-
     /// Return the action to be performed on a given state
     pub fn get_action(
         &self,
@@ -249,6 +266,15 @@ impl OperationAction {
             OperationAction::Script(script, handlers) => {
                 OperationAction::Script(script, handlers.with_default(default))
             }
+            OperationAction::AwaitingAgentRestart(handlers) => {
+                OperationAction::AwaitingAgentRestart(handlers.with_default(default))
+            }
+            OperationAction::AwaitOperationCompletion(handlers, state_excerpt) => {
+                OperationAction::AwaitOperationCompletion(
+                    handlers.with_default(default),
+                    state_excerpt,
+                )
+            }
             action => action,
         }
     }
@@ -262,6 +288,17 @@ impl OperationAction {
                 },
                 handlers.clone(),
             ),
+            OperationAction::Operation(command, Some(script), input, handlers) => {
+                OperationAction::Operation(
+                    command.clone(),
+                    Some(ShellScript {
+                        command: state.inject_parameter(&script.command),
+                        args: state.inject_parameters(&script.args),
+                    }),
+                    input.clone(),
+                    handlers.clone(),
+                )
+            }
             _ => self.clone(),
         }
     }

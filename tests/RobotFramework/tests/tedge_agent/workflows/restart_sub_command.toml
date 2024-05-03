@@ -1,0 +1,20 @@
+operation = "restart_sub_command"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+# Reboot the device using a restart command
+[executing]
+operation = "restart"
+on_exec = "awaiting_reboot"
+
+[awaiting_reboot]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

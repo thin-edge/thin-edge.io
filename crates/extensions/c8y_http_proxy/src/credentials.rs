@@ -46,11 +46,13 @@ impl Server for C8YJwtRetriever {
 }
 
 /// A JwtRetriever that simply always returns the same JWT token (possibly none)
+#[cfg(test)]
 pub(crate) struct ConstJwtRetriever {
     pub token: String,
 }
 
 #[async_trait]
+#[cfg(test)]
 impl Server for ConstJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;

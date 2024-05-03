@@ -75,7 +75,7 @@ Download the measurements report file
 
 Monitor the device
     # Install collectd
-    Execute Command    sudo apt-get install libmosquitto1 -y
+    Execute Command    sudo apt-get update && sudo apt-get install libmosquitto1 -y
     Execute Command    sudo apt-get install collectd-core -y
     # Configure collectd
     Execute Command    sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf; sudo systemctl restart collectd

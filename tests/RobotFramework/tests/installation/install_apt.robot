@@ -35,7 +35,7 @@ Custom Setup
     Create Local Repository
 
 Create Local Repository
-    Execute Command    apt-get install -y --no-install-recommends dpkg-dev
+    Execute Command    apt-get update && apt-get install -y --no-install-recommends dpkg-dev
     Execute Command    mkdir -p /opt/repository/local && find /setup -type f -name "*.deb" -exec cp {} /opt/repository/local \\;
     ${NEW_VERSION}=    Execute Command    find /setup -type f -name "tedge-mapper_*.deb" | sort -Vr | head -n1 | cut -d'_' -f 2    strip=True
     Set Suite Variable    $NEW_VERSION

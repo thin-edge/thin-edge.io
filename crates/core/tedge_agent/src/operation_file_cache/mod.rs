@@ -32,6 +32,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CommandPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -146,7 +147,7 @@ impl FileCacheActor {
 
         let (entity, Channel::Command { cmd_id, .. }) = self
             .mqtt_schema
-            .entity_channel_of(&Topic::new(&topic).unwrap())
+            .entity_channel_of(&topic)
             .expect("only topics targeting config update command should be inserted")
         else {
             return Ok(());

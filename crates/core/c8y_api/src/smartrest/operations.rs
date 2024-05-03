@@ -207,11 +207,10 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
                 Err(err) => return Err(OperationsError::FromIo(err)),
             };
 
-            details.name = path
-                .file_name()
+            path.file_name()
                 .and_then(|filename| filename.to_str())
                 .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
-                .to_owned();
+                .clone_into(&mut details.name);
 
             operations.add_operation(details);
         }
@@ -251,11 +250,10 @@ pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
         Err(err) => return Err(OperationsError::FromIo(err)),
     };
 
-    details.name = path
-        .file_name()
+    path.file_name()
         .and_then(|filename| filename.to_str())
         .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
-        .to_owned();
+        .clone_into(&mut details.name);
 
     Ok(details)
 }
