@@ -75,20 +75,6 @@ pub enum OperationAction {
     /// ```
     AwaitingAgentRestart(AwaitHandlers),
 
-    /// Restart the device
-    ///
-    /// ```toml
-    /// builtin_action = "restart"
-    /// on_exec = "<state>"
-    /// on_success = "<state>"
-    /// on_error = "<state>"
-    /// ```
-    Restart {
-        on_exec: StateName,
-        on_success: StateName,
-        on_error: StateName,
-    },
-
     /// A script has to be executed
     Script(ShellScript, ExitHandlers),
 
@@ -137,7 +123,6 @@ impl Display for OperationAction {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn => "builtin".to_string(),
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
-            OperationAction::Restart { .. } => "trigger device restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
             OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
