@@ -4,6 +4,7 @@ use miette::ensure;
 use miette::miette;
 use miette::Context;
 use serde::Deserialize;
+use std::io::BufRead;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -44,6 +45,7 @@ pub struct C8yRemoteAccessPluginOpt {
     connect_string: Option<String>,
 
     #[arg(long)]
+    // Use "-" to read the value from stdin.
     child: Option<String>,
 }
 
@@ -88,7 +90,17 @@ impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
 
 impl RemoteAccessConnect {
     fn deserialize_smartrest(message: &str) -> miette::Result<Self> {
-        let (id, command): (u16, Self) = deserialize_csv_record(message)
+        // Read value from stdin
+        let message = if message.eq("-") {
+            let mut line = String::new();
+            let stdin = std::io::stdin();
+            stdin.lock().read_line(&mut line).unwrap();
+            line.to_string()
+        } else {
+            message.to_string()
+        };
+
+        let (id, command): (u16, Self) = deserialize_csv_record(message.as_str())
             .context("Deserialising arguments of remote access connect message")?;
         ensure!(
             id == 530,
