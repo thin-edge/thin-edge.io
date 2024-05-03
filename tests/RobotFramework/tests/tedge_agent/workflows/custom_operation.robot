@@ -122,7 +122,7 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/gp_command.toml          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/super_command.toml       /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/inner_command.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_command.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/write-file.sh            /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart_sub_command.toml           /etc/tedge/operations/
