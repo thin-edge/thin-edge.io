@@ -11,6 +11,7 @@
 
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::topic::publish_topic_from_ancestors;
+use crate::smartrest::topic::C8yTopic;
 use mqtt_channel::MqttMessage;
 use tedge_config::TopicPrefix;
 
@@ -127,6 +128,23 @@ pub fn service_status_update_message(
         sanitize_for_smartrest(service_status, super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);
 
     MqttMessage::new(&topic, fields_to_csv_string(&["104", &service_status]))
+}
+
+/// Create a SmartREST message to set the response interval for c8y_RequiredAvailability.
+///
+/// The interval can be <=0, which means the device is in maintenance mode in the c8y context.
+/// Details: https://cumulocity.com/docs/device-integration/fragment-library/#device-availability
+pub fn set_required_availability_message(
+    c8y_topic: C8yTopic,
+    interval: i16,
+    prefix: &TopicPrefix,
+) -> MqttMessage {
+    let topic = c8y_topic.to_topic(prefix).unwrap();
+
+    MqttMessage::new(
+        &topic,
+        fields_to_csv_string(&["117", &interval.to_string()]),
+    )
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -51,6 +51,8 @@ pub struct C8yMapperConfig {
     pub software_management_api: SoftwareManagementApiFlag,
     pub software_management_with_types: bool,
     pub auto_log_upload: AutoLogUpload,
+    pub availability_enable: bool,
+    pub availability_period: i16,
 
     pub data_dir: DataDir,
     pub config_dir: Arc<Utf8Path>,
@@ -87,6 +89,8 @@ impl C8yMapperConfig {
         software_management_api: SoftwareManagementApiFlag,
         software_management_with_types: bool,
         auto_log_upload: AutoLogUpload,
+        availability_enable: bool,
+        availability_period: i16,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -115,6 +119,8 @@ impl C8yMapperConfig {
             software_management_api,
             software_management_with_types,
             auto_log_upload,
+            availability_enable,
+            availability_period,
 
             config_dir,
             logs_path,
@@ -217,6 +223,9 @@ impl C8yMapperConfig {
 
         let bridge_in_mapper = tedge_config.mqtt.bridge.built_in;
 
+        let availability_enable = tedge_config.c8y.availability.enable;
+        let availability_period = tedge_config.c8y.availability.period;
+
         Ok(C8yMapperConfig::new(
             config_dir,
             logs_path,
@@ -241,6 +250,8 @@ impl C8yMapperConfig {
             software_management_api,
             software_management_with_types,
             auto_log_upload,
+            availability_enable,
+            availability_period,
         ))
     }
 

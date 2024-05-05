@@ -1,6 +1,8 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
+use crate::availability::start_heartbeat_timer;
+use crate::availability::HeartbeatPayload;
 use crate::converter::UploadContext;
 use crate::converter::UploadOperationLog;
 use crate::operations::FtsDownloadOperationType;
@@ -33,6 +35,7 @@ use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::main_device_health_topic;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -50,8 +53,14 @@ use tracing::warn;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
-pub type SyncStart = SetTimeout<()>;
-pub type SyncComplete = Timeout<()>;
+pub type SyncStart = SetTimeout<TimeoutKind>;
+pub type SyncComplete = Timeout<TimeoutKind>;
+
+#[derive(Debug)]
+pub enum TimeoutKind {
+    Sync,
+    Heartbeat(HeartbeatPayload),
+}
 
 pub(crate) type CmdId = String;
 pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
@@ -94,8 +103,23 @@ impl Actor for C8yMapperActor {
 
         // Start the sync phase
         self.timer_sender
-            .send(SyncStart::new(SYNC_WINDOW, ()))
+            .send(SyncStart::new(SYNC_WINDOW, TimeoutKind::Sync))
             .await?;
+
+        // Start the heartbeat timer for the main device and its lead service "tedge-agent"
+        if self.converter.config.availability_enable {
+            if let Ok(interval) = self.converter.config.availability_period.try_into() {
+                if interval > 0 {
+                    start_heartbeat_timer(
+                        self.timer_sender.clone(),
+                        interval,
+                        EntityTopicId::default_main_device(),
+                        EntityTopicId::default_main_service("tedge-agent").unwrap(),
+                    )
+                    .await?;
+                }
+            }
+        }
 
         while let Some(event) = self.messages.recv().await {
             match event {
@@ -105,9 +129,14 @@ impl Actor for C8yMapperActor {
                 C8yMapperInput::FsWatchEvent(event) => {
                     self.process_file_watch_event(event).await?;
                 }
-                C8yMapperInput::SyncComplete(_) => {
-                    self.process_sync_timeout().await?;
-                }
+                C8yMapperInput::SyncComplete(event) => match event.event {
+                    TimeoutKind::Sync => {
+                        self.process_sync_timeout().await?;
+                    }
+                    TimeoutKind::Heartbeat(heartbeat_payload) => {
+                        self.process_heartbeat(heartbeat_payload).await?;
+                    }
+                },
                 C8yMapperInput::IdUploadResult((cmd_id, result)) => {
                     self.process_upload_result(cmd_id, result).await?;
                 }
@@ -302,6 +331,34 @@ impl C8yMapperActor {
 
         Ok(())
     }
+
+    async fn process_heartbeat(
+        &mut self,
+        heartbeat_payload: HeartbeatPayload,
+    ) -> Result<(), RuntimeError> {
+        if self.converter.config.availability_enable {
+            if let Ok(interval) = self.converter.config.availability_period.try_into() {
+                // Publish a heartbeat message
+                if let Some(message) = self
+                    .converter
+                    .create_heartbeat_message(&heartbeat_payload.service, &heartbeat_payload.device)
+                {
+                    self.mqtt_publisher.send(message).await?;
+                }
+
+                // Start a new timer
+                start_heartbeat_timer(
+                    self.timer_sender.clone(),
+                    interval,
+                    heartbeat_payload.device,
+                    heartbeat_payload.service,
+                )
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub struct C8yMapperBuilder {
@@ -406,6 +463,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.auth_proxy,
             uploader_sender.clone(),
             downloader_sender.clone(),
+            timer_sender.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 

@@ -6,10 +6,15 @@ use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdUploadRequest;
+use crate::actor::SyncStart;
+use crate::availability::get_child_lead_service_entity_topic_id;
+use crate::availability::start_heartbeat_timer;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
 use crate::operations::FtsDownloadOperationData;
+use crate::service_monitor::get_health_status_from_message;
+use crate::service_monitor::HealthStatus;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -24,6 +29,7 @@ use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
 use c8y_api::smartrest::inventory::service_creation_message;
+use c8y_api::smartrest::inventory::set_required_availability_message;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
@@ -230,6 +236,7 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
+    pub timer_sender: LoggingSender<SyncStart>,
     pub pending_upload_operations: HashMap<CmdId, UploadContext>,
 
     /// Used to store pending downloads from the FTS.
@@ -239,6 +246,9 @@ pub struct CumulocityConverter {
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
+
+    // Keep the service status for c8y_Availability monitoring
+    pub service_status: HashMap<EntityTopicId, HealthStatus>,
 }
 
 impl CumulocityConverter {
@@ -249,6 +259,7 @@ impl CumulocityConverter {
         auth_proxy: ProxyUrlGenerator,
         uploader_sender: LoggingSender<IdUploadRequest>,
         downloader_sender: LoggingSender<IdDownloadRequest>,
+        timer_sender: LoggingSender<SyncStart>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -317,10 +328,12 @@ impl CumulocityConverter {
             auth_proxy,
             uploader_sender,
             downloader_sender,
+            timer_sender,
             pending_upload_operations: HashMap::new(),
             pending_fts_download_operations: HashMap::new(),
             command_id,
             active_commands: HashSet::new(),
+            service_status: HashMap::new(),
         })
     }
 
@@ -338,6 +351,7 @@ impl CumulocityConverter {
             .get(entity_topic_id)
             .map(|e| &e.external_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))?;
+
         match input.r#type {
             EntityType::MainDevice => {
                 self.entity_store.update(input.clone())?;
@@ -584,12 +598,22 @@ impl CumulocityConverter {
             .expect("entity was registered");
 
         let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
-        Ok(convert_health_status_message(
+
+        let health_status = get_health_status_from_message(message);
+        let message = convert_health_status_message(
             entity_metadata,
             &ancestors_external_ids,
-            message,
+            &health_status,
             &self.config.c8y_prefix,
-        ))
+        );
+
+        // Keep the health status to hashmap to use availability monitoring
+        if !message.is_empty() {
+            let service_entity = entity_metadata.topic_id.clone();
+            self.service_status.insert(service_entity, health_status);
+        }
+
+        Ok(message)
     }
 
     async fn parse_c8y_devicecontrol_topic(
@@ -979,7 +1003,10 @@ impl CumulocityConverter {
         channel: Channel,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut registration_messages: Vec<MqttMessage> = vec![];
+        let mut converted_messages: Vec<MqttMessage> = vec![];
+        // Keep the newly registered entities to set c8y_RequiredAvailability for them
+        let mut new_entities: Vec<EntityTopicId> = vec![];
+
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
@@ -994,15 +1021,15 @@ impl CumulocityConverter {
                                 // Register and convert the entity registration first
                                 let mut c8y_message = self
                                     .try_convert_entity_registration(&pending_entity.reg_message)?;
-                                registration_messages.append(&mut c8y_message);
+                                converted_messages.append(&mut c8y_message);
+
+                                new_entities.push(pending_entity.reg_message.topic_id.clone());
 
                                 // Process all the cached data messages for that entity
                                 let mut cached_messages =
                                     self.process_cached_entity_data(pending_entity).await?;
-                                registration_messages.append(&mut cached_messages);
+                                converted_messages.append(&mut cached_messages);
                             }
-
-                            return Ok(registration_messages);
                         }
                         Ok(_) => {}
                     }
@@ -1028,9 +1055,10 @@ impl CumulocityConverter {
                                 },
                             };
                         for auto_registration_message in &auto_registration_messages {
-                            registration_messages.append(
+                            converted_messages.append(
                                 &mut self.register_and_convert_entity(auto_registration_message)?,
                             );
+                            new_entities.push(auto_registration_message.topic_id.clone());
                         }
                     } else {
                         // When an entity data message is received before the entity itself is registered,
@@ -1040,14 +1068,48 @@ impl CumulocityConverter {
                     }
                 }
             }
-        }
+        };
 
         let mut messages = self
             .try_convert_data_message(source, channel, message)
             .await?;
+        converted_messages.append(&mut messages);
 
-        registration_messages.append(&mut messages);
-        Ok(registration_messages)
+        // Heartbeat settings initialization for child devices
+        if self.config.availability_enable {
+            for new_entity in new_entities {
+                match self.entity_store.get(&new_entity) {
+                    Some(metadata) if metadata.r#type == EntityType::ChildDevice => {
+                        // Set c8y_RequiredAvailability to the new child device
+                        let set_required_availability_message = set_required_availability_message(
+                            C8yTopic::ChildSmartRestResponse(metadata.external_id.clone().into()),
+                            self.config.availability_period,
+                            &self.config.c8y_prefix,
+                        );
+                        converted_messages.push(set_required_availability_message);
+
+                        // Start the heartbeat timer only if the interval > 0
+                        if let Ok(interval) = self.config.availability_period.try_into() {
+                            if interval > 0 {
+                                let lead_service_entity =
+                                    get_child_lead_service_entity_topic_id(metadata);
+                                start_heartbeat_timer(
+                                    self.timer_sender.clone(),
+                                    interval,
+                                    new_entity.clone(),
+                                    lead_service_entity,
+                                )
+                                .await
+                                .unwrap(); // FIXME: Address RuntimeError
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(converted_messages)
     }
 
     async fn try_convert_data_message(
@@ -1289,6 +1351,16 @@ impl CumulocityConverter {
             device_data_message,
             pending_operations_message,
         ]);
+
+        if self.config.availability_enable {
+            let set_required_availability_message = set_required_availability_message(
+                C8yTopic::SmartRestResponse, // Only for the main device during initialization
+                self.config.availability_period,
+                &self.config.c8y_prefix,
+            );
+            messages.push(set_required_availability_message);
+        }
+
         Ok(messages)
     }
 
@@ -1777,6 +1849,33 @@ impl CumulocityConverter {
             messages,
             Some(command.into_generic_command(&self.mqtt_schema)),
         ))
+    }
+
+    // FIXME: Design issue
+    // The health status is supposed to be reported to "device/main/service/tedge-agent/status/health"
+    // How the lead service should look? "device/main/service/tedge-agent" or "device/main/service/tedge-agent/status/health"?
+    // As of now, it is implemented in the "device/main/service/tedge-agent" way.
+    pub fn create_heartbeat_message(
+        &mut self,
+        service: &EntityTopicId,
+        device: &EntityTopicId,
+    ) -> Option<MqttMessage> {
+        match self.service_status.get(service) {
+            Some(health_status) if health_status.status == "up" => {
+                match self.get_inventory_update_topic(device) {
+                    Ok(topic) => {
+                        return Some(MqttMessage::new(&topic, "{}"))
+                    },
+                    Err(_) => warn!("The device '{device}' is not registered in the entity store. Skip sending a heartbeat message")
+                }
+            }
+            Some(_) => {
+                debug!("The status of '{service}' is not 'up'. Skip sending a heartbeat message")
+            }
+            None => warn!("The status of '{service}' is not reported at all. Skip sending a heartbeat message"),
+        }
+
+        None
     }
 }
 
