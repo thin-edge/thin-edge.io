@@ -1,0 +1,18 @@
+# Example of an operation with 3 levels
+# gp_command -> super_command -> sub_command
+operation = "gp_command"
+
+[init]
+operation = "super_command"
+input.output_file = "${.payload.output_file}"
+on_exec = "awaiting_completion"
+
+[awaiting_completion]
+action = "await-operation-completion"
+on_success = "dump_payload"
+output.x = "${.payload.x_ter}"
+output.y = "${.payload.y_ter}"
+
+[dump_payload]
+script = "/etc/tedge/operations/write-file.sh ${.payload.output_file} ${.}"
+on_success = "successful"

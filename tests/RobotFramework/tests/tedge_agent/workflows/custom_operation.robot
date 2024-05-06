@@ -73,7 +73,6 @@ Invoke sub-operation from a super-command operation
     ${actual_log}      Execute Command    cat /tmp/test-42.json
     ${expected_log}    Get File    ${CURDIR}/super-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
-    # Remove all dates from the workflow log
     ${workflow_log}=  Execute Command    cat /var/log/tedge/agent/workflow-super_command-test-42.log
     Should Contain    ${workflow_log}    item=super_command/test-42 status=init
     Should Contain    ${workflow_log}    item=super_command/test-42 status=executing
@@ -88,6 +87,14 @@ Use scripts to create sub-operation init states
     Should Have MQTT Messages    te/device/main///cmd/lite_device_profile/test-42    message_pattern=.*successful.*   maximum=1
     ${actual_log}      Execute Command    cat /tmp/profile-42.log
     ${expected_log}    Get File    ${CURDIR}/lite_device_profile.expected.log
+    Should Be Equal    ${actual_log}    ${expected_log}
+
+Invoke sub-operation from a sub-operation
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub '{"status":"init", "output_file":"/tmp/test-sub-sub.json"}'
+    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/gp_command/test-sub-sub    message_pattern=.*successful.*   maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub ''
+    ${actual_log}      Execute Command    cat /tmp/test-sub-sub.json
+    ${expected_log}    Get File    ${CURDIR}/gp-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
 
 *** Keywords ***
@@ -113,8 +120,9 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/gp_command.toml          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/super_command.toml       /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/inner_command.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_command.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/write-file.sh            /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart_sub_command.toml           /etc/tedge/operations/

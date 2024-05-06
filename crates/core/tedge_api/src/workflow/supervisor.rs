@@ -282,3 +282,86 @@ impl CommandBoard {
         self.commands.remove(topic_name);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mqtt_channel::Topic;
+
+    #[test]
+    fn retrieve_invoking_command_hierarchy() {
+        let mut workflows = WorkflowSupervisor::default();
+
+        let level_1_op = OperationType::Custom("level_1".to_string());
+        let level_2_op = OperationType::Custom("level_2".to_string());
+        let level_3_op = OperationType::Custom("level_3".to_string());
+
+        workflows
+            .register_builtin_workflow(level_1_op.clone())
+            .unwrap();
+        workflows
+            .register_builtin_workflow(level_2_op.clone())
+            .unwrap();
+        workflows
+            .register_builtin_workflow(level_3_op.clone())
+            .unwrap();
+
+        // Start a level_1 operation
+        let level_1_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/foo///cmd/level_1/id_1"),
+            r#"{ "status":"init" }"#,
+        ))
+        .unwrap();
+        workflows
+            .apply_external_update(&level_1_op, level_1_cmd.clone())
+            .unwrap();
+
+        // A level 1 command has no invoking command nor root invoking command
+        assert!(workflows.invoking_command_state(&level_1_cmd).is_none());
+        assert!(workflows
+            .root_invoking_command_state(&level_1_cmd)
+            .is_none());
+
+        // Start a level_2 operation, sub-command of the previous level_1 command
+        let level_2_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/foo///cmd/level_2/sub:level_1:id_1"),
+            r#"{ "status":"init" }"#,
+        ))
+        .unwrap();
+        workflows
+            .apply_external_update(&level_2_op, level_2_cmd.clone())
+            .unwrap();
+
+        // The invoking command of the level_2 command, is the previous level_1 command
+        // The later is also the root invoking command
+        assert_eq!(
+            workflows.invoking_command_state(&level_2_cmd),
+            Some(&level_1_cmd)
+        );
+        assert_eq!(
+            workflows.root_invoking_command_state(&level_2_cmd),
+            Some(&level_1_cmd)
+        );
+
+        // Start a level_3 operation, sub-command of the previous level_2 command
+        let level_3_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/foo///cmd/level_3/sub:level_2:sub:level_1:id_1"),
+            r#"{ "status":"init" }"#,
+        ))
+        .unwrap();
+        workflows
+            .apply_external_update(&level_3_op, level_3_cmd.clone())
+            .unwrap();
+
+        // The invoking command of the level_3 command, is the previous level_2 command
+        // The root invoking command of the level_3 command, is the original level_1 command
+        assert_eq!(
+            workflows.invoking_command_state(&level_3_cmd),
+            Some(&level_2_cmd)
+        );
+        assert_eq!(
+            workflows.root_invoking_command_state(&level_2_cmd),
+            Some(&level_1_cmd)
+        );
+    }
+}

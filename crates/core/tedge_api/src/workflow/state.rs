@@ -298,10 +298,9 @@ impl GenericCommandState {
     ///
     /// Return None if the given id is not a sub command identifier, i.e. if not generated with [sub_command_id].
     fn extract_invoking_command_id(sub_cmd_id: &str) -> Option<(&str, &str)> {
-        match sub_cmd_id.split(':').collect::<Vec<&str>>()[..] {
-            ["sub", operation, cmd_id, ..] => Some((operation, cmd_id)),
-            _ => None,
-        }
+        sub_cmd_id
+            .strip_prefix("sub:")
+            .and_then(|op_id| op_id.split_once(':'))
     }
 
     fn target(&self) -> Option<String> {
@@ -615,6 +614,28 @@ mod tests {
                     }
                 }),
                 invoking_command_topic: Some("te/device/main///cmd/make_it/456".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn retrieve_invoking_command_of_sub_sub_command() {
+        let topic =
+            Topic::new_unchecked("te/device/main///cmd/child/sub:parent:sub:grand-parent:456");
+        let payload = r#"{ "status":"init" }"#;
+        let command = mqtt_channel::MqttMessage::new(&topic, payload);
+        let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert_eq!(
+            cmd,
+            GenericCommandState {
+                topic: topic.clone(),
+                status: "init".to_string(),
+                payload: json!({
+                    "status": "init"
+                }),
+                invoking_command_topic: Some(
+                    "te/device/main///cmd/parent/sub:grand-parent:456".to_string()
+                ),
             }
         );
     }
