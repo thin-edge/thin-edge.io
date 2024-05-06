@@ -368,6 +368,7 @@ impl TedgeOperationConverterActor {
             self.log_dir.clone(),
             operation.to_string(),
             cmd_id.to_string(),
+            state.invoking_operation_names(),
             root_operation,
             root_cmd_id,
         )
@@ -518,6 +519,9 @@ struct CommandLog {
     /// operation name
     operation: OperationName,
 
+    /// the chain of operations leading to this command
+    invoking_operations: Vec<OperationName>,
+
     /// command id
     cmd_id: CommandId,
 
@@ -532,6 +536,7 @@ impl CommandLog {
         log_dir: Utf8PathBuf,
         operation: OperationName,
         cmd_id: CommandId,
+        invoking_operations: Vec<OperationName>,
         root_operation: Option<OperationName>,
         root_cmd_id: Option<CommandId>,
     ) -> Self {
@@ -542,6 +547,7 @@ impl CommandLog {
         CommandLog {
             path,
             operation,
+            invoking_operations,
             cmd_id,
             file: None,
         }
@@ -560,13 +566,42 @@ impl CommandLog {
         Ok(self.file.as_mut().unwrap())
     }
 
+    async fn log_header(&mut self, topic: &str) {
+        let now = OffsetDateTime::now_utc()
+            .format(&format_description::well_known::Rfc3339)
+            .unwrap();
+        let cmd_id = &self.cmd_id;
+        let operation = &self.operation;
+        let header_message = format!(
+            r#"
+==================================================================
+Triggered {operation} workflow
+==================================================================
+
+topic:     {topic}
+operation: {operation}
+cmd_id:    {cmd_id}
+time:      {now}
+
+==================================================================
+"#
+        );
+        if let Err(err) = self.write(&header_message).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
     async fn log_state_action(&mut self, state: &GenericCommandState, action: &OperationAction) {
+        if state.is_init() && self.invoking_operations.is_empty() {
+            self.log_header(state.topic.name.as_str()).await;
+        }
         let step = &state.status;
         let state = &state.payload.to_string();
         let message = format!(
             r#"
-State: {state}
-Action: {action}
+State:    {state}
+
+Action:   {action}
 "#
         );
         self.log_step(step, &message).await
@@ -577,12 +612,16 @@ Action: {action}
             .format(&format_description::well_known::Rfc3339)
             .unwrap();
         let operation = &self.operation;
-        let cmd_id = &self.cmd_id;
-        let message = format!(
-            r#"------------------------------------
-{operation}/{cmd_id} status={step} time={now}
-{action}
+        let parent_operation = if self.invoking_operations.is_empty() {
+            operation.to_string()
+        } else {
+            format!("{} > {}", self.invoking_operations.join(" > "), operation)
+        };
 
+        let message = format!(
+            r#"
+----------------------[ {parent_operation} @ {step} | time={now} ]----------------------
+{action}
 "#
         );
         if let Err(err) = self.write(&message).await {

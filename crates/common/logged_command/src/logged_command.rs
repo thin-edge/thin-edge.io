@@ -227,21 +227,33 @@ impl LoggedCommand {
         match result.as_ref() {
             Ok(output) => {
                 if let Some(code) = &output.status.code() {
+                    let exit_code_msg = if *code == 0 { "OK" } else { "ERROR" };
                     logger
-                        .write_all(format!("exit status: {}\n\n", code).as_bytes())
+                        .write_all(format!("Exit status: {code} ({exit_code_msg})\n\n").as_bytes())
                         .await?
                 };
                 if let Some(signal) = &output.status.signal() {
                     logger
-                        .write_all(format!("killed by signal: {}\n\n", signal).as_bytes())
+                        .write_all(format!("Killed by signal: {signal}\n\n").as_bytes())
                         .await?
                 }
-                logger.write_all(b"stdout <<EOF\n").await?;
-                logger.write_all(&output.stdout).await?;
-                logger.write_all(b"EOF\n\n").await?;
-                logger.write_all(b"stderr <<EOF\n").await?;
-                logger.write_all(&output.stderr).await?;
-                logger.write_all(b"EOF\n").await?;
+                // Log stderr then stdout, so the flow reads chronologically
+                // as the stderr is used for log messages and the stdout is used for results
+                if !output.stderr.is_empty() {
+                    logger.write_all(b"stderr <<EOF\n").await?;
+                    logger.write_all(&output.stderr).await?;
+                    logger.write_all(b"EOF\n\n").await?;
+                } else {
+                    logger.write_all(b"stderr (EMPTY)\n\n").await?;
+                }
+
+                if !output.stdout.is_empty() {
+                    logger.write_all(b"stdout <<EOF\n").await?;
+                    logger.write_all(&output.stdout).await?;
+                    logger.write_all(b"EOF\n").await?;
+                } else {
+                    logger.write_all(b"stdout (EMPTY)\n").await?;
+                }
             }
             Err(err) => {
                 logger
@@ -310,13 +322,12 @@ mod tests {
         assert_eq!(
             log_content,
             r#"----- $ echo "Hello" "World!"
-exit status: 0
+Exit status: 0 (OK)
+
+stderr (EMPTY)
 
 stdout <<EOF
 Hello World!
-EOF
-
-stderr <<EOF
 EOF
 "#
         );
@@ -345,28 +356,26 @@ EOF
         assert_eq!(
             log_content,
             r#"----- $ ls "dummy-file"
-exit status: 2
-
-stdout <<EOF
-EOF
+Exit status: 2 (ERROR)
 
 stderr <<EOF
 ls: cannot access 'dummy-file': No such file or directory
 EOF
+
+stdout (EMPTY)
 "#
         );
         #[cfg(target_os = "macos")]
         assert_eq!(
             log_content,
             r#"----- $ ls "dummy-file"
-exit status: 1
-
-stdout <<EOF
-EOF
+Exit status: 1 (ERROR)
 
 stderr <<EOF
 ls: dummy-file: No such file or directory
 EOF
+
+stdout (EMPTY)
 "#
         );
         Ok(())
