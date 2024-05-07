@@ -55,9 +55,9 @@ The project uses different Yocto layers to build an image which contains:
 |Item|Description|
 |--|--|
 |Yocto Linux Distribution|Base operating system|
-|thin-edge.io|%%te%% and all of its components|
-|%%te%% mender workflow|A workflow definition to perform Operation System A/B updates, e.g. mender commit or rollback|
-|mender|mender binary configured in standalone mode|
+|%%te%%|%%te%% and all of its components|
+|%%te%% workflow|A workflow definition to perform Operation System A/B updates which interacts with the underlying technology, e.g. [RAUC](https://rauc.readthedocs.io/en/latest/) or [mender](https://github.com/mendersoftware/mender)|
+|dependencies|Dependencies of the underlying firmware update mechanism, e.g. [RAUC](https://rauc.readthedocs.io/en/latest/) or [mender](https://github.com/mendersoftware/mender)|
 
 ### Cloning the project
 
@@ -112,14 +112,16 @@ Using shared folders will help reduce the overall build times when building for 
 
 ### Building an image
 
+The following steps will build an image with %%te%% and [RAUC](https://rauc.readthedocs.io/en/latest/) installed to perform firmware (OS) updates.
+
 1. Build an image for your device (machine)
 
     ```sh tab={"label":"RaspberryPi-3"}
-    KAS_MACHINE=raspberrypi3-64 just build-demo
+    KAS_MACHINE=raspberrypi3-64 just build-project ./projects/tedge-rauc.yaml
     ```
 
     ```sh tab={"label":"RaspberryPi-4"}
-    KAS_MACHINE=raspberrypi4-64 just build-demo
+    KAS_MACHINE=raspberrypi4-64 just build-project ./projects/tedge-rauc.yaml
     ```
 
     The `KAS_MACHINE` is used to select the target device.
@@ -135,6 +137,10 @@ Using shared folders will help reduce the overall build times when building for 
     ```
 
 3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image.md) page
+
+:::tip
+Check out the project files under the `./projects` directory for other available project examples. If you don't find a project that fits your needs, then just create your own project definition.
+:::
 
 ### Building an image with a package manager
 
