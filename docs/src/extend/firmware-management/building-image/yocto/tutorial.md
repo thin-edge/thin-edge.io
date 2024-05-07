@@ -142,21 +142,9 @@ The following steps will build an image with %%te%% and [RAUC](https://rauc.read
 Check out the project files under the `./projects` directory for other available project examples. If you don't find a project that fits your needs, then just create your own project definition.
 :::
 
-### Building an image with a package manager
-
-By default the default image built does not include a packages manager (in an effort to keep the image as small as possible).
-
-If you would like to include a package manager such as APT, then use use `build-`
-
-1. Build an image for your device (machine)
-
-    ```sh tab={"label":"RaspberryPi-3"}
-    KAS_MACHINE=raspberrypi3-64 just build-project projects/demo-pm.yaml
-    ```
-
-    ```sh tab={"label":"RaspberryPi-4"}
-    KAS_MACHINE=raspberrypi4-64 just build-project projects/demo-pm.yaml
-    ```
+:::note
+The **tedge-rauc** project includes a package manager (apt) so that additional packages can be installed without having to do a full image update. If you don't want the image to include a package manager, you can customize the project yourself and remove the related configuration file.
+:::
 
 ## Tips
 
