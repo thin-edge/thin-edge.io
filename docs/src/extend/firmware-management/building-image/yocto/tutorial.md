@@ -32,6 +32,13 @@ Before being able to build your own image, you need to prepare an environment to
     sudo apt install file gawk wget git diffstat unzip texinfo gcc build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev xterm python3-subunit mesa-common-dev zstd liblz4-tool
     ```
 
+3. Install [git-lfs](https://git-lfs.com/) (this dependency will be removed in the next %%te%% release after 1.0.1)
+
+    ```sh tab={"label":"Ubuntu-20.04"}
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    sudo apt-get install git-lfs
+    ```
+
 :::note
 The large disk size might seem like a lot, but Yocto builds everything from scratch, and this takes time and disk space!
 :::
