@@ -29,7 +29,14 @@ Before being able to build your own image, you need to prepare an environment to
 2. Install essential packages
 
     ```sh tab={"label":"Ubuntu-20.04"}
-    sudo apt install file gawk wget git diffstat unzip texinfo gcc build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev pylint3 xterm python3-subunit mesa-common-dev zstd liblz4-tool
+    sudo apt install file gawk wget git diffstat unzip texinfo gcc build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev xterm python3-subunit mesa-common-dev zstd liblz4-tool
+    ```
+
+3. Install [git-lfs](https://git-lfs.com/) (this dependency will be removed in the next %%te%% release after 1.0.1)
+
+    ```sh tab={"label":"Ubuntu-20.04"}
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    sudo apt-get install git-lfs
     ```
 
 :::note
@@ -48,9 +55,9 @@ The project uses different Yocto layers to build an image which contains:
 |Item|Description|
 |--|--|
 |Yocto Linux Distribution|Base operating system|
-|thin-edge.io|%%te%% and all of its components|
-|%%te%% mender workflow|A workflow definition to perform Operation System A/B updates, e.g. mender commit or rollback|
-|mender|mender binary configured in standalone mode|
+|%%te%%|%%te%% and all of its components|
+|%%te%% workflow|A workflow definition to perform Operation System A/B updates which interacts with the underlying technology, e.g. [RAUC](https://rauc.readthedocs.io/en/latest/) or [mender](https://github.com/mendersoftware/mender)|
+|dependencies|Dependencies of the underlying firmware update mechanism, e.g. [RAUC](https://rauc.readthedocs.io/en/latest/) or [mender](https://github.com/mendersoftware/mender)|
 
 ### Cloning the project
 
@@ -105,14 +112,16 @@ Using shared folders will help reduce the overall build times when building for 
 
 ### Building an image
 
+The following steps will build an image with %%te%% and [RAUC](https://rauc.readthedocs.io/en/latest/) installed to perform firmware (OS) updates.
+
 1. Build an image for your device (machine)
 
     ```sh tab={"label":"RaspberryPi-3"}
-    KAS_MACHINE=raspberrypi3-64 just build-demo
+    KAS_MACHINE=raspberrypi3-64 just build-project ./projects/tedge-rauc.yaml
     ```
 
     ```sh tab={"label":"RaspberryPi-4"}
-    KAS_MACHINE=raspberrypi4-64 just build-demo
+    KAS_MACHINE=raspberrypi4-64 just build-project ./projects/tedge-rauc.yaml
     ```
 
     The `KAS_MACHINE` is used to select the target device.
@@ -129,21 +138,13 @@ Using shared folders will help reduce the overall build times when building for 
 
 3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image.md) page
 
-### Building an image with a package manager
+:::tip
+Check out the project files under the `./projects` directory for other available project examples. If you don't find a project that fits your needs, then just create your own project definition.
+:::
 
-By default the default image built does not include a packages manager (in an effort to keep the image as small as possible).
-
-If you would like to include a package manager such as APT, then use use `build-`
-
-1. Build an image for your device (machine)
-
-    ```sh tab={"label":"RaspberryPi-3"}
-    KAS_MACHINE=raspberrypi3-64 just build-project projects/demo-pm.yaml
-    ```
-
-    ```sh tab={"label":"RaspberryPi-4"}
-    KAS_MACHINE=raspberrypi4-64 just build-project projects/demo-pm.yaml
-    ```
+:::note
+The **tedge-rauc** project includes a package manager (apt) so that additional packages can be installed without having to do a full image update. If you don't want the image to include a package manager, you can customize the project yourself and remove the related configuration file.
+:::
 
 ## Tips
 
