@@ -1898,13 +1898,12 @@ async fn custom_operation_without_timeout_successful() {
 
     // assert the signterm is handled
     let expected_content = "command \"511,test-device,c8y_Command\"
-exit status: 0
+Exit status: 0 (OK)
+
+stderr (EMPTY)
 
 stdout <<EOF
 Executed successfully without timeout
-EOF
-
-stderr <<EOF
 EOF
 ";
 
@@ -1957,13 +1956,12 @@ async fn custom_operation_with_timeout_successful() {
 
     // assert the signterm is handled
     let expected_content = "command \"511,test-device,c8y_Command\"
-exit status: 0
+Exit status: 0 (OK)
+
+stderr (EMPTY)
 
 stdout <<EOF
 Successfully Executed
-EOF
-
-stderr <<EOF
 EOF
 ";
 
@@ -2021,15 +2019,16 @@ async fn custom_operation_timeout_sigterm() {
 
     // assert the signterm is handled
     let expected_content = "command \"511,test-device,c8y_Command\"
-exit status: 124
+Exit status: 124 (ERROR)
+
+stderr <<EOF
+operation failed due to timeout: duration=1sEOF
 
 stdout <<EOF
 main 1
 received SIGTERM
 EOF
-
-stderr <<EOF
-operation failed due to timeout: duration=1sEOF";
+";
 
     assert_command_exec_log_content(cfg_dir, expected_content);
 }
@@ -2086,16 +2085,16 @@ async fn custom_operation_timeout_sigkill() {
 
     // assert the signterm is handled
     let expected_content = "command \"511,test-device,c8y_Command\"
-killed by signal: 9
+Killed by signal: 9
+
+stderr <<EOF
+operation failed due to timeout: duration=1sEOF
 
 stdout <<EOF
 main 1
 ignore SIGTERM
 main 2
 EOF
-
-stderr <<EOF
-operation failed due to timeout: duration=1sEOF
 ";
 
     assert_command_exec_log_content(cfg_dir, expected_content);

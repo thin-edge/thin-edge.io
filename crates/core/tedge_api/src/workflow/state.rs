@@ -269,6 +269,14 @@ impl GenericCommandState {
         self.invoking_command_topic.as_deref()
     }
 
+    /// Return the chain of operations leading to this command (excluding the operation itself)
+    pub fn invoking_operation_names(&self) -> Vec<String> {
+        match self.cmd_id() {
+            None => Vec::new(),
+            Some(id) => Self::extract_invoking_operation_names(&id),
+        }
+    }
+
     /// Infer the topic of the invoking command, given a sub command topic
     fn infer_invoking_command_topic(sub_command_topic: &str) -> Option<String> {
         let schema = MqttSchema::from_topic(sub_command_topic);
@@ -301,6 +309,20 @@ impl GenericCommandState {
         sub_cmd_id
             .strip_prefix("sub:")
             .and_then(|op_id| op_id.split_once(':'))
+    }
+
+    /// Extract the invoking operation names from a command identifier
+    ///
+    /// Convert sub:firmware_update:sub:device_profile:robot-123
+    /// into ["device_profile", "firmware_update"]
+    fn extract_invoking_operation_names(mut cmd_id: &str) -> Vec<String> {
+        let mut operations = Vec::new();
+        while let Some((op, sub_cmd_id)) = Self::extract_invoking_command_id(cmd_id) {
+            operations.push(op.to_string());
+            cmd_id = sub_cmd_id;
+        }
+        operations.reverse();
+        operations
     }
 
     fn target(&self) -> Option<String> {
