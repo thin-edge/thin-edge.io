@@ -163,6 +163,41 @@ tedge-mapper-aws service successfully started and enabled!
 
 ```
 
+If your device does not have internet access and you want to create the bridge configuration, you can run a `tedge connect aws` with the `--offline` flag.
+
+```sh
+sudo tedge connect aws --offline
+```
+
+```text title="Output"
+Checking if systemd is available.
+
+Checking if configuration for requested bridge already exists.
+
+Validating the bridge certificates.
+
+Saving configuration for requested bridge.
+
+Restarting mosquitto service.
+
+Awaiting mosquitto to start. This may take up to 5 seconds.
+
+Enabling mosquitto service on reboots.
+
+Successfully created bridge connection!
+
+Offline mode. Skipping connection check.
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper-aws service.
+
+Persisting tedge-mapper-aws on reboot.
+
+tedge-mapper-aws service successfully started and enabled!
+
+```
+
 ## Sending your first telemetry data {#send}
 
 Using the AWS mapper, you can publish measurement telemetry data to AWS by publishing on the `te/device/main///m/` topic:

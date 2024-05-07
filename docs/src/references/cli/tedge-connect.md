@@ -40,6 +40,9 @@ OPTIONS:
 
         --test
             Test connection to AWS
+        
+        --offline
+            Ignore connection registration and connection check
 ```
 
 ## Azure
@@ -59,6 +62,9 @@ OPTIONS:
 
         --test
             Test connection to Azure
+
+        --offline
+            Ignore connection registration and connection check
 ```
 
 ## Cumulocity
@@ -78,4 +84,7 @@ OPTIONS:
 
         --test
             Test connection to Cumulocity
+        
+        --offline
+            Ignore connection registration and connection check
 ```
