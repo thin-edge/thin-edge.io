@@ -51,6 +51,7 @@ url = { workspace = true }
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 capture-logger = { workspace = true }
+mockito = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }

@@ -329,11 +329,12 @@ impl C8yMapperWorker {
             let cmd_id = cmd_id.clone();
             match fts_download.download_type {
                 FtsDownloadOperationType::ConfigDownload => {
-                    self.converter
-                        .lock()
-                        .await
-                        .handle_fts_config_download_result(cmd_id, result, fts_download)
-                        .await
+                    // self.converter
+                    //     .lock()
+                    //     .await
+                    //     .handle_fts_config_download_result(cmd_id, result, fts_download)
+                    //     .await
+                    Ok(vec![])
                 }
                 FtsDownloadOperationType::LogDownload => {
                     self.converter

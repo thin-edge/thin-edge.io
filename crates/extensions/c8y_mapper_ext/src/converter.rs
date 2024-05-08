@@ -3416,6 +3416,7 @@ pub(crate) mod tests {
             SoftwareManagementApiFlag::Advanced,
             true,
             AutoLogUpload::Never,
+            None,
         )
     }
 

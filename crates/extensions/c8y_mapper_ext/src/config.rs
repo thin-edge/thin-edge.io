@@ -51,6 +51,7 @@ pub struct C8yMapperConfig {
     pub software_management_api: SoftwareManagementApiFlag,
     pub software_management_with_types: bool,
     pub auto_log_upload: AutoLogUpload,
+    pub identity: Option<tedge_api::download::Identity>,
 
     pub data_dir: DataDir,
     pub config_dir: Arc<Utf8Path>,
@@ -87,6 +88,7 @@ impl C8yMapperConfig {
         software_management_api: SoftwareManagementApiFlag,
         software_management_with_types: bool,
         auto_log_upload: AutoLogUpload,
+        identity: Option<tedge_api::download::Identity>,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -115,6 +117,7 @@ impl C8yMapperConfig {
             software_management_api,
             software_management_with_types,
             auto_log_upload,
+            identity,
 
             config_dir,
             logs_path,
@@ -178,6 +181,7 @@ impl C8yMapperConfig {
         let software_management_with_types = tedge_config.c8y.software_management.with_types;
 
         let auto_log_upload = tedge_config.c8y.operations.auto_log_upload.clone();
+        let identity = tedge_config.http.client.auth.identity()?;
 
         // Add feature topic filters
         for cmd in [
@@ -241,6 +245,7 @@ impl C8yMapperConfig {
             software_management_api,
             software_management_with_types,
             auto_log_upload,
+            identity,
         ))
     }
 
@@ -298,6 +303,9 @@ pub enum C8yMapperConfigBuildError {
 
     #[error(transparent)]
     FromTopicIdError(#[from] TopicIdError),
+
+    #[error(transparent)]
+    OtherError(#[from] anyhow::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
