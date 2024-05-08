@@ -85,6 +85,23 @@ impl CumulocityConverter {
     }
 }
 
+fn get_smartrest_response_for_upload_result(
+    upload_result: tedge_uploader_ext::UploadResult,
+    binary_url: &str,
+    operation: c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations,
+) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+    match upload_result {
+        Ok(_) => c8y_api::smartrest::smartrest_serializer::succeed_static_operation(
+            operation,
+            Some(binary_url),
+        ),
+        Err(err) => c8y_api::smartrest::smartrest_serializer::fail_operation(
+            operation,
+            &format!("Upload failed with {err}"),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tests::skip_init_messages;

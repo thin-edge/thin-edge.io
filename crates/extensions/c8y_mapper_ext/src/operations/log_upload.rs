@@ -2,7 +2,6 @@ use super::FtsDownloadOperationData;
 use super::FtsDownloadOperationType;
 use crate::actor::CmdId;
 use crate::converter::CumulocityConverter;
-use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use anyhow::Context;
@@ -220,33 +219,38 @@ impl CumulocityConverter {
             Utf8PathBuf::try_from(download_response.file_path).map_err(|e| e.into_io_error())?;
         let event_type = response.log_type.clone();
 
-        let binary_upload_event_url = self
+        let (binary_upload_event_url, upload_result) = self
             .upload_file(
                 &topic_id,
                 &file_path,
                 None,
                 Some(mime::TEXT_PLAIN),
                 &cmd_id,
-                event_type,
+                event_type.clone(),
                 None,
             )
             .await?;
 
-        self.pending_upload_operations.insert(
-            cmd_id,
-            UploadOperationData {
-                topic_id,
-                file_dir: fts_download.file_dir,
-                smartrest_topic,
-                clear_cmd_topic: fts_download.message.topic,
-                c8y_binary_url: binary_upload_event_url.to_string(),
-                operation: CumulocitySupportedOperations::C8yLogFileRequest,
-                command: fts_download.command,
-            }
-            .into(),
+        let smartrest_response = super::get_smartrest_response_for_upload_result(
+            upload_result,
+            binary_upload_event_url.as_str(),
+            CumulocitySupportedOperations::C8yLogFileRequest,
         );
 
-        Ok(vec![])
+        let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_response);
+        let clear_local_cmd = MqttMessage::new(&fts_download.message.topic, "")
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce);
+
+        self.upload_operation_log(
+            &topic_id,
+            &cmd_id,
+            &CumulocitySupportedOperations::C8yLogFileRequest.into(),
+            fts_download.command,
+        )
+        .await?;
+
+        Ok(vec![c8y_notification, clear_local_cmd])
     }
 
     /// Converts a log_upload metadata message to
