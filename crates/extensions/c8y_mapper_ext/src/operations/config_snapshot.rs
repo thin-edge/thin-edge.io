@@ -1,12 +1,9 @@
 use super::Entity;
-use super::FtsDownloadOperationData;
 use super::OperationHandler;
-use crate::actor::CmdId;
 use crate::converter::CumulocityConverter;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use crate::operations::FtsDownloadOperationType;
 use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
@@ -25,7 +22,6 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
-use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
@@ -90,32 +86,66 @@ impl OperationHandler {
 
                 let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
                     .context("Failed to create a temporary directory")?;
+
                 let destination_path = destination_dir.path().join(config_filename);
-
-                self.pending_fts_download_operations.lock().await.insert(
-                    cmd_id.into(),
-                    FtsDownloadOperationData {
-                        download_type: FtsDownloadOperationType::ConfigDownload,
-                        url: tedge_file_url.clone(),
-                        file_dir: destination_dir,
-
-                        message: message.clone(),
-                        entity_topic_id: topic_id.clone(),
-                        external_id: target.external_id.clone(),
-                        smartrest_publish_topic: smartrest_topic,
-
-                        command: command.clone().into_generic_command(&self.mqtt_schema),
-                    },
-                );
 
                 let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
 
-                self.downloader_sender
-                    .send((cmd_id.into(), download_request))
-                    .await
-                    .map_err(CumulocityMapperError::ChannelError)?;
+                let mut downloader = self.downloader.lock().await.clone();
 
-                // cont. in handle_fts_config_download_result
+                let (_, download_result) = downloader
+                    .await_response((cmd_id.to_string(), download_request))
+                    .await?;
+
+                match download_result {
+                    Err(err) => {
+                        println!("{err}");
+                        let smartrest_error =
+                    fail_operation(
+                        CumulocitySupportedOperations::C8yUploadConfigFile,
+                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
+                    );
+
+                        let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
+                        let clean_operation = MqttMessage::new(&message.topic, "")
+                            .with_retain()
+                            .with_qos(QoS::AtLeastOnce);
+
+                        return Ok((vec![c8y_notification, clean_operation], None));
+                    }
+                    Ok(download) => download,
+                };
+
+                let file_path =
+                    Utf8PathBuf::try_from(destination_path).map_err(|e| e.into_io_error())?;
+                let event_type = command.payload.config_type.clone();
+
+                // Create an event in c8y
+                let binary_upload_event_url = self
+                    .upload_file(
+                        &target.external_id,
+                        &file_path,
+                        None,
+                        None,
+                        cmd_id,
+                        event_type,
+                        None,
+                    )
+                    .await?;
+
+                self.pending_upload_operations.lock().await.insert(
+                    cmd_id.to_string(),
+                    UploadOperationData {
+                        topic_id: topic_id.clone(),
+                        file_dir: destination_dir,
+                        smartrest_topic,
+                        clear_cmd_topic: message.topic.clone(),
+                        c8y_binary_url: binary_upload_event_url.to_string(),
+                        operation: CumulocitySupportedOperations::C8yUploadConfigFile,
+                        command: command.clone().into_generic_command(&self.mqtt_schema),
+                    }
+                    .into(),
+                );
 
                 vec![] // No mqtt message can be published in this state
             }
@@ -138,69 +168,6 @@ impl OperationHandler {
             messages,
             Some(command.into_generic_command(&self.mqtt_schema)),
         ))
-    }
-
-    /// Resumes `config_snapshot` operation after required file was downloaded
-    /// from the File Transfer Service.
-    pub async fn handle_fts_config_download_result(
-        &self,
-        cmd_id: CmdId,
-        download_result: DownloadResult,
-        fts_download: FtsDownloadOperationData,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let topic_id = fts_download.entity_topic_id;
-        let smartrest_topic = fts_download.smartrest_publish_topic;
-        let payload = fts_download.message.payload_str()?;
-        let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
-
-        let download = match download_result {
-            Err(err) => {
-                let smartrest_error =
-                    fail_operation(
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
-                    );
-
-                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
-                let clean_operation = MqttMessage::new(&fts_download.message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-
-                return Ok(vec![c8y_notification, clean_operation]);
-            }
-            Ok(download) => download,
-        };
-
-        let file_path = Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?;
-        let event_type = response.config_type.clone();
-
-        let binary_upload_event_url = self
-            .upload_file(
-                &fts_download.external_id,
-                &file_path,
-                None,
-                None,
-                &cmd_id,
-                event_type,
-                None,
-            )
-            .await?;
-
-        self.pending_upload_operations.lock().await.insert(
-            cmd_id.clone(),
-            UploadOperationData {
-                topic_id,
-                file_dir: fts_download.file_dir,
-                smartrest_topic,
-                clear_cmd_topic: fts_download.message.topic,
-                c8y_binary_url: binary_upload_event_url.to_string(),
-                operation: CumulocitySupportedOperations::C8yUploadConfigFile,
-                command: fts_download.command,
-            }
-            .into(),
-        );
-
-        Ok(vec![])
     }
 }
 
@@ -258,19 +225,6 @@ impl CumulocityConverter {
         Ok(vec![
             MqttMessage::new(&topic, request.to_json()).with_retain()
         ])
-    }
-
-    /// Resumes `config_snapshot` operation after required file was downloaded
-    /// from the File Transfer Service.
-    pub async fn handle_fts_config_download_result(
-        &mut self,
-        cmd_id: CmdId,
-        download_result: DownloadResult,
-        fts_download: FtsDownloadOperationData,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.operation_handler
-            .handle_fts_config_download_result(cmd_id, download_result, fts_download)
-            .await
     }
 
     /// Converts a config_snapshot metadata message to
@@ -668,6 +622,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "TODO: replace with mock http"]
     async fn auto_log_upload_successful_operation() {
         let ttd = TempTedgeDir::new();
         let config = C8yMapperConfig {

@@ -5,12 +5,12 @@ use super::error::CumulocityMapperError;
 use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
+use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
 use crate::operations;
-use crate::operations::FtsDownloadOperationData;
 use crate::operations::LockSender;
 use crate::operations::OperationHandler;
 use anyhow::anyhow;
@@ -62,6 +62,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
@@ -225,14 +226,10 @@ pub struct CumulocityConverter {
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
+
     pub uploader_sender: LoggingSender<IdUploadRequest>,
-    pub downloader_sender: LoggingSender<IdDownloadRequest>,
 
     pub pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
-
-    /// Used to store pending downloads from the FTS.
-    // Using a separate field to not mix downloads from FTS and HTTP proxy
-    pub pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
@@ -248,8 +245,7 @@ impl CumulocityConverter {
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
         uploader_sender: LoggingSender<IdUploadRequest>,
-        downloader_sender: LoggingSender<IdDownloadRequest>,
-        pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
+        downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
         pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
@@ -306,14 +302,15 @@ impl CumulocityConverter {
             tmp_dir: config.tmp_dir.clone(),
             mqtt_schema: mqtt_schema.clone(),
             c8y_prefix: prefix.clone(),
+            mqtt_publisher: LockSender::new(mqtt_publisher.clone()),
+
+            downloader: Arc::new(Mutex::new(downloader)),
             uploader_sender: operations::LockSender::new(uploader_sender.clone()),
-            downloader_sender: operations::LockSender::new(downloader_sender.clone()),
+
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
             http_proxy: Arc::new(Mutex::new(http_proxy.clone())),
-            pending_fts_download_operations: Arc::clone(&pending_fts_download_operations),
             pending_upload_operations: Arc::clone(&pending_upload_operations),
-            mqtt_publisher: LockSender::new(mqtt_publisher.clone()),
         });
 
         Ok(CumulocityConverter {
@@ -335,9 +332,7 @@ impl CumulocityConverter {
             entity_store,
             auth_proxy,
             uploader_sender: uploader_sender.clone(),
-            downloader_sender: downloader_sender.clone(),
             pending_upload_operations,
-            pending_fts_download_operations,
             command_id,
             active_commands: HashSet::new(),
             operation_handler,
@@ -1852,6 +1847,7 @@ pub(crate) mod tests {
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
+    use tedge_actors::ClientMessageBox;
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
@@ -3461,10 +3457,9 @@ pub(crate) mod tests {
         let uploader_sender =
             LoggingSender::new("UL".into(), uploader_builder.build().sender_clone());
 
-        let downloader_builder: SimpleMessageBoxBuilder<IdDownloadResult, IdDownloadRequest> =
-            SimpleMessageBoxBuilder::new("DL", 5);
-        let downloader_sender =
-            LoggingSender::new("DL".into(), downloader_builder.build().sender_clone());
+        let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+            FakeServerBox::builder();
+        let downloader = ClientMessageBox::new(&mut downloader_builder);
 
         let converter = CumulocityConverter::new(
             config,
@@ -3472,8 +3467,7 @@ pub(crate) mod tests {
             http_proxy,
             auth_proxy,
             uploader_sender,
-            downloader_sender,
-            Arc::new(Mutex::new(HashMap::new())),
+            downloader,
             Arc::new(Mutex::new(HashMap::new())),
         )
         .unwrap();

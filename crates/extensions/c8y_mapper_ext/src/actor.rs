@@ -3,8 +3,6 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::converter::UploadContext;
 use crate::converter::UploadOperationLog;
-use crate::operations::FtsDownloadOperationData;
-use crate::operations::FtsDownloadOperationType;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
@@ -22,6 +20,7 @@ use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
@@ -81,7 +80,7 @@ impl From<PublishMessage> for MqttMessage {
     }
 }
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult, PublishMessage] : Debug);
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, PublishMessage] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -92,7 +91,6 @@ pub struct C8yMapperActor {
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 
-    pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
     pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
 }
 
@@ -140,9 +138,6 @@ impl Actor for C8yMapperActor {
                 C8yMapperInput::IdUploadResult((cmd_id, result)) => {
                     self.process_upload_result(cmd_id, result).await?;
                 }
-                C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
-                    self.process_download_result(cmd_id, result).await?;
-                }
                 C8yMapperInput::PublishMessage(message) => {
                     self.mqtt_publisher.send(message.0).await?;
                 }
@@ -160,7 +155,6 @@ impl C8yMapperActor {
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
-        pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
         pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
     ) -> Self {
         Self {
@@ -170,7 +164,6 @@ impl C8yMapperActor {
             timer_sender,
             bridge_status_messages,
             message_handlers,
-            pending_fts_download_operations,
             pending_upload_operations,
         }
     }
@@ -412,51 +405,6 @@ impl C8yMapperActor {
             Err(err) => fail_operation(operation, &format!("Upload failed with {err}")),
         }
     }
-
-    async fn process_download_result(
-        &mut self,
-        cmd_id: CmdId,
-        result: DownloadResult,
-    ) -> Result<(), RuntimeError> {
-        // download not from c8y_proxy, check if it was from FTS
-        let fts_download = self
-            .pending_fts_download_operations
-            .lock()
-            .await
-            .remove(&cmd_id);
-
-        let operation_result = if let Some(fts_download) = fts_download {
-            let cmd_id = cmd_id.clone();
-            match fts_download.download_type {
-                FtsDownloadOperationType::ConfigDownload => {
-                    self.converter
-                        .handle_fts_config_download_result(cmd_id, result, fts_download)
-                        .await
-                }
-                FtsDownloadOperationType::LogDownload => {
-                    self.converter
-                        .handle_fts_log_download_result(cmd_id, result, fts_download)
-                        .await
-                }
-            }
-        } else {
-            error!("Received a download result for the unknown command ID: {cmd_id}");
-            return Ok(());
-        };
-
-        match operation_result {
-            Ok(converted_messages) => {
-                for converted_message in converted_messages.into_iter() {
-                    self.mqtt_publisher.send(converted_message).await?
-                }
-            }
-            Err(err) => {
-                error!("Error occurred while processing a download result. {err}")
-            }
-        }
-
-        Ok(())
-    }
 }
 
 pub struct C8yMapperBuilder {
@@ -466,7 +414,7 @@ pub struct C8yMapperBuilder {
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
     upload_sender: DynSender<IdUploadRequest>,
-    download_sender: DynSender<IdDownloadRequest>,
+    downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
@@ -493,8 +441,11 @@ impl C8yMapperBuilder {
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
         let http_proxy = C8YHttpProxy::new(http);
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
+
         let upload_sender = uploader.connect_client(box_builder.get_sender().sender_clone());
-        let download_sender = downloader.connect_client(box_builder.get_sender().sender_clone());
+
+        let downloader = ClientMessageBox::new(downloader);
+
         fs_watcher.connect_sink(
             config.ops_dir.as_std_path().to_path_buf(),
             &box_builder.get_sender(),
@@ -522,7 +473,7 @@ impl C8yMapperBuilder {
             http_proxy,
             timer_sender,
             upload_sender,
-            download_sender,
+            downloader,
             auth_proxy,
             bridge_monitor_builder,
             message_handlers,
@@ -572,10 +523,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
         let uploader_sender =
             LoggingSender::new("C8yMapper => Uploader".into(), self.upload_sender);
-        let downloader_sender =
-            LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
 
-        let pending_fts_download_operations = Arc::new(Mutex::new(HashMap::new()));
         let pending_upload_operations = Arc::new(Mutex::new(HashMap::new()));
 
         let converter = CumulocityConverter::new(
@@ -584,8 +532,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.http_proxy,
             self.auth_proxy,
             uploader_sender.clone(),
-            downloader_sender.clone(),
-            Arc::clone(&pending_fts_download_operations),
+            self.downloader,
             Arc::clone(&pending_upload_operations),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
@@ -600,7 +547,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             timer_sender,
             bridge_monitor_box,
             self.message_handlers,
-            pending_fts_download_operations,
             pending_upload_operations,
         ))
     }
