@@ -57,6 +57,60 @@ const HEALTH: &str = "te/device/main/#";
 
 // TODO acknowledgement with lost connection bridge, check we acknowledge the correct message
 #[tokio::test]
+async fn bridge_many_messages() {
+    std::env::set_var("RUST_LOG", "tedge_mqtt_bridge=info");
+    let _ = env_logger::try_init();
+    let local_broker_port = free_port().await;
+    let cloud_broker_port = free_port().await;
+    let (local, mut ev_local) = new_broker_and_client("local", local_broker_port);
+    let (cloud, mut ev_cloud) = new_broker_and_client("cloud", cloud_broker_port);
+
+    // We can't easily restart rumqttd, so instead, we'll connect via a proxy
+    // that we can interrupt the connection of
+    let cloud_proxy = Proxy::start(cloud_broker_port).await;
+
+    let mut rules = BridgeConfig::new();
+    rules.forward_from_local("s/us", "c8y/", "").unwrap();
+    rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
+
+    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+
+    local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
+
+    wait_until_health_status_is("up", &mut ev_local)
+        .await
+        .unwrap();
+
+    local.unsubscribe(HEALTH).await.unwrap();
+    local.subscribe("c8y/s/ds", QoS::AtLeastOnce).await.unwrap();
+    await_subscription(&mut ev_local).await;
+
+    let poll_local = EventPoller::run_in_bg(ev_local);
+
+    // Verify messages are forwarded from cloud to local
+    for _ in 1..10000 {
+        local
+            .publish(
+                "c8y/s/us",
+                QoS::AtMostOnce,
+                false,
+                "a,fake,smartrest,message",
+            )
+            .await
+            .unwrap();
+    }
+
+    let _ev_cloud = EventPoller::run_in_bg(ev_cloud);
+    let mut local = poll_local.stop_polling().await;
+    cloud
+        .publish("s/ds", QoS::AtLeastOnce, false, "test")
+        .await
+        .unwrap();
+
+    next_received_message(&mut local).await.unwrap();
+}
+
+#[tokio::test]
 async fn bridge_reconnects_successfully_after_cloud_connection_interrupted() {
     std::env::set_var("RUST_LOG", "tedge_mqtt_bridge=info");
     let _ = env_logger::try_init();
@@ -128,6 +182,7 @@ async fn wait_until_health_status_is(
         let health = next_received_message(event_loop).await.with_context(|| {
             format!("expecting health message waiting for status to be {status:?}")
         })?;
+        dbg!(&health);
         if !(health.topic.starts_with("te/device/main/service")
             && health.topic.ends_with("status/health"))
         {

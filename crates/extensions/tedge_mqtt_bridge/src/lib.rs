@@ -33,7 +33,7 @@ use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tracing::debug;
+use tracing::info;
 
 pub type MqttConfig = mqtt_channel::Config;
 
@@ -127,12 +127,12 @@ impl MqttBridgeActorBuilder {
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
-            local_client,
-            cloud_client,
+            local_client.clone(),
+            cloud_client.clone(),
             convert_cloud,
             bidir_cloud,
             msgs_cloud,
-            tx_status,
+            tx_status.clone(),
             "cloud",
             cloud_topics,
         ));
@@ -306,17 +306,20 @@ async fn half_bridge(
             Err(_) => continue,
         };
 
-        debug!("{name} received {notification:?}");
-
         match notification {
             Event::Incoming(Incoming::ConnAck(_)) => {
-                recv_client.subscribe_many(topics.clone()).await.unwrap();
+                info!("Bridge cloud connection {name:?} subscribing to {topics:?}");
+                let recv_client = recv_client.clone();
+                let topics = topics.clone();
+                // We have to subscribe to this asynchronously (i.e. in a task) since we might at
+                // this point have filled our cloud event loop with outgoing messages
+                tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
             }
+
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     let topic = transformer.convert_topic(&publish.topic);
-                    println!("{name} forwarding {publish:?} to {topic}");
                     target
                         .publish(
                             topic.clone(),
@@ -338,8 +341,9 @@ async fn half_bridge(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
-                if let Some(msg) = forward_pkid_to_received_msg.get(&ack_pkid) {
-                    target.ack(msg).await.unwrap();
+                if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
+                    let target = target.clone();
+                    tokio::spawn(async move { target.ack(&msg).await.unwrap() });
                 }
             }
 
