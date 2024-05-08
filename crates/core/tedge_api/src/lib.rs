@@ -17,6 +17,7 @@ pub use commands::OperationStatus;
 pub use commands::RestartCommand;
 pub use commands::SoftwareListCommand;
 pub use commands::SoftwareUpdateCommand;
+pub use download;
 pub use download::*;
 pub use entity_store::EntityStore;
 pub use error::*;

@@ -10,7 +10,6 @@ use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
 use reqwest::header;
-use reqwest::Identity;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
@@ -26,6 +25,8 @@ use std::time::Duration;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
+
+pub type Identity = reqwest::Identity;
 
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;
