@@ -1,8 +1,5 @@
 use super::Entity;
-use super::FtsDownloadOperationData;
-use super::FtsDownloadOperationType;
 use super::OperationHandler;
-use crate::actor::CmdId;
 use crate::converter::CumulocityConverter;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
@@ -27,7 +24,6 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
-use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
@@ -98,28 +94,62 @@ impl OperationHandler {
                     .context("Failed to create a temporary directory")?;
                 let destination_path = destination_dir.path().join(log_filename);
 
-                self.pending_fts_download_operations.lock().await.insert(
-                    cmd_id.into(),
-                    FtsDownloadOperationData {
-                        download_type: FtsDownloadOperationType::LogDownload,
-                        url: tedge_file_url.clone(),
-                        file_dir: destination_dir,
-
-                        message: message.clone(),
-                        entity_topic_id: target.topic_id.clone(),
-                        smartrest_publish_topic: smartrest_topic,
-                        external_id: target.external_id.clone(),
-
-                        command: command.clone().into_generic_command(&self.mqtt_schema),
-                    },
-                );
-
                 let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
+                let mut downloader = self.downloader.lock().await.clone();
 
-                self.downloader_sender
-                    .send((cmd_id.into(), download_request))
+                let (_, download_result) = downloader
+                    .await_response((cmd_id.into(), download_request))
                     .await
                     .map_err(CumulocityMapperError::ChannelError)?;
+
+                let download_response = match download_result {
+                    Err(err) => {
+                        let smartrest_error = fail_operation(
+                            CumulocitySupportedOperations::C8yLogFileRequest,
+                            &format!(
+                        "tedge-mapper-c8y failed to download log from file transfer service: {err}",
+                    ),
+                        );
+
+                        let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
+                        let clean_operation = MqttMessage::new(&message.topic, "")
+                            .with_retain()
+                            .with_qos(QoS::AtLeastOnce);
+                        return Ok((vec![c8y_notification, clean_operation], None));
+                    }
+                    Ok(download) => download,
+                };
+
+                let file_path = Utf8PathBuf::try_from(download_response.file_path)
+                    .map_err(|e| e.into_io_error())?;
+                let response = &LogUploadCmdPayload::from_json(message.payload_str()?)?;
+                let event_type = response.log_type.clone();
+
+                let binary_upload_event_url = self
+                    .upload_file(
+                        &target.external_id,
+                        &file_path,
+                        None,
+                        Some(mime::TEXT_PLAIN),
+                        cmd_id,
+                        event_type,
+                        None,
+                    )
+                    .await?;
+
+                self.pending_upload_operations.lock().await.insert(
+                    cmd_id.to_string(),
+                    UploadOperationData {
+                        topic_id: target.topic_id,
+                        file_dir: destination_dir,
+                        smartrest_topic,
+                        clear_cmd_topic: message.topic.clone(),
+                        c8y_binary_url: binary_upload_event_url.to_string(),
+                        operation: CumulocitySupportedOperations::C8yLogFileRequest,
+                        command: command.clone().into_generic_command(&self.mqtt_schema),
+                    }
+                    .into(),
+                );
 
                 // cont. in handle_fts_log_download
 
@@ -144,70 +174,6 @@ impl OperationHandler {
             messages,
             Some(command.into_generic_command(&self.mqtt_schema)),
         ))
-    }
-
-    /// Resumes `log_upload` operation after required file was downloaded from
-    /// the File Transfer Service.
-    pub async fn handle_fts_log_download_result(
-        &self,
-        cmd_id: CmdId,
-        download_result: DownloadResult,
-        fts_download: FtsDownloadOperationData,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let topic_id = fts_download.entity_topic_id;
-        let smartrest_topic = fts_download.smartrest_publish_topic;
-        let payload = fts_download.message.payload_str()?;
-        let response = &LogUploadCmdPayload::from_json(payload)?;
-
-        let download_response = match download_result {
-            Err(err) => {
-                let smartrest_error = fail_operation(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                    &format!(
-                        "tedge-mapper-c8y failed to download log from file transfer service: {err}",
-                    ),
-                );
-
-                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
-                let clean_operation = MqttMessage::new(&fts_download.command.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-                return Ok(vec![c8y_notification, clean_operation]);
-            }
-            Ok(download) => download,
-        };
-
-        let file_path =
-            Utf8PathBuf::try_from(download_response.file_path).map_err(|e| e.into_io_error())?;
-        let event_type = response.log_type.clone();
-
-        let binary_upload_event_url = self
-            .upload_file(
-                &fts_download.external_id,
-                &file_path,
-                None,
-                Some(mime::TEXT_PLAIN),
-                &cmd_id,
-                event_type,
-                None,
-            )
-            .await?;
-
-        self.pending_upload_operations.lock().await.insert(
-            cmd_id,
-            UploadOperationData {
-                topic_id,
-                file_dir: fts_download.file_dir,
-                smartrest_topic,
-                clear_cmd_topic: fts_download.message.topic,
-                c8y_binary_url: binary_upload_event_url.to_string(),
-                operation: CumulocitySupportedOperations::C8yLogFileRequest,
-                command: fts_download.command,
-            }
-            .into(),
-        );
-
-        Ok(vec![])
     }
 }
 
@@ -252,19 +218,6 @@ impl CumulocityConverter {
         Ok(vec![
             MqttMessage::new(&topic, request.to_json()).with_retain()
         ])
-    }
-
-    /// Resumes `log_upload` operation after required file was downloaded from
-    /// the File Transfer Service.
-    pub async fn handle_fts_log_download_result(
-        &mut self,
-        cmd_id: CmdId,
-        download_result: DownloadResult,
-        fts_download: FtsDownloadOperationData,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.operation_handler
-            .handle_fts_log_download_result(cmd_id, download_result, fts_download)
-            .await
     }
 
     /// Converts a log_upload metadata message to

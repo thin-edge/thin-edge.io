@@ -13,7 +13,7 @@
 //!   (MQTT, Smartrest)
 //! - implementations of operations
 
-use crate::actor::{CmdId, IdDownloadRequest, IdUploadRequest};
+use crate::actor::{CmdId, IdDownloadRequest, IdDownloadResult, IdUploadRequest};
 use crate::converter::UploadContext;
 use crate::error::ConversionError;
 use crate::{converter::CumulocityConverter, Capabilities};
@@ -23,12 +23,11 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tedge_actors::Sender;
 use tedge_actors::{ChannelError, LoggingSender};
+use tedge_actors::{ClientMessageBox, Sender};
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::{EntityTopicId, MqttSchema, OperationType};
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_config::AutoLogUpload;
 use tedge_mqtt_ext::{MqttMessage, Topic};
@@ -71,11 +70,11 @@ pub struct OperationHandler {
     pub auth_proxy: ProxyUrlGenerator,
 
     pub uploader_sender: LockSender<IdUploadRequest>,
-    pub downloader_sender: LockSender<IdDownloadRequest>,
     pub mqtt_publisher: LockSender<MqttMessage>,
 
     pub pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
-    pub pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
+
+    pub downloader: Arc<Mutex<ClientMessageBox<IdDownloadRequest, IdDownloadResult>>>,
 }
 
 impl OperationHandler {
@@ -167,37 +166,6 @@ pub struct Entity {
     pub topic_id: EntityTopicId,
     pub external_id: EntityExternalId,
     pub smartrest_publish_topic: Topic,
-}
-
-/// Represents a pending download performed by the downloader from the FTS.
-///
-/// Functions which download files from the tedge File Transfer Service as part of handling
-/// operations (e.g. when performing `log_upload` or `config_snapshot`, the relevant file is
-/// uploaded into FTS) will use this type for communicating with the Downloader actor.
-pub struct FtsDownloadOperationData {
-    pub download_type: FtsDownloadOperationType,
-    pub url: String,
-
-    // used to automatically remove the temporary file after operation is finished
-    pub file_dir: tempfile::TempDir,
-
-    // TODO: remove this message field since command is available
-    // the message that triggered the operation
-    pub message: MqttMessage,
-
-    pub entity_topic_id: EntityTopicId,
-    pub external_id: EntityExternalId,
-    pub smartrest_publish_topic: Topic,
-
-    pub command: GenericCommandState,
-}
-
-/// Used to denote as type of what operation was the file downloaded from the FTS.
-///
-/// Used to dispatch download result to the correct operation handler.
-pub enum FtsDownloadOperationType {
-    LogDownload,
-    ConfigDownload,
 }
 
 impl CumulocityConverter {
