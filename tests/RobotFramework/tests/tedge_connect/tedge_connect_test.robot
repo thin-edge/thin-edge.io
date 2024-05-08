@@ -33,6 +33,7 @@ tedge_connect_test_sm_services
     Should Contain    ${output}    Successfully created bridge connection!
     Should Contain    ${output}    tedge-agent service successfully started and enabled!
     Should Contain    ${output}    tedge-mapper-c8y service successfully started and enabled!
+    Should Not Contain  ${output}    Warning:    message=Warning should not be displayed if the port does not match. Issue #2863
 
 tedge_disconnect_test_sm_services
     ${output}=    Execute Command    sudo tedge disconnect c8y
