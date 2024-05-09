@@ -2,18 +2,6 @@ use crate::BridgeRule;
 use rumqttc::matches;
 use std::borrow::Cow;
 
-pub fn prepend<'a>(target: Cow<'a, str>, prefix: &Cow<'a, str>) -> Cow<'a, str> {
-    match (prefix, target) {
-        (prefix, target) if prefix.is_empty() => target,
-        (prefix, target) if target.is_empty() => prefix.clone(),
-        (prefix, Cow::Borrowed(target)) => format!("{prefix}{target}").into(),
-        (prefix, Cow::Owned(mut target)) => {
-            target.insert_str(0, prefix.as_ref());
-            Cow::Owned(target)
-        }
-    }
-}
-
 pub fn matches_ignore_dollar_prefix(topic: &str, filter: &str) -> bool {
     match (&topic[..1], &filter[..1]) {
         ("$", "$") => matches(&topic[1..], &filter[1..]),

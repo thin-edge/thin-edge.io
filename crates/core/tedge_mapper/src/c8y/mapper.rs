@@ -74,15 +74,11 @@ impl TEdgeComponent for CumulocityMapper {
 
             tc.forward_from_local("#", local_prefix, "")?;
 
-            let mut cloud_config = rumqttc::MqttOptions::new(
+            let c8y = tedge_config.c8y.mqtt.or_config_not_set()?;
+            let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 tedge_config.device.id.try_read(&tedge_config)?,
-                tedge_config
-                    .c8y
-                    .mqtt
-                    .or_config_not_set()?
-                    .host()
-                    .to_string(),
-                8883,
+                c8y.host().to_string(),
+                c8y.port().into(),
             );
             // Cumulocity tells us not to not set clean session to false, so don't
             // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session

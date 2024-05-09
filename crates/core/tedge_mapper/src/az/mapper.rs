@@ -36,7 +36,7 @@ impl TEdgeComponent for AzureMapper {
             let remote_clientid = tedge_config.device.id.try_read(&tedge_config)?;
             let rules = built_in_bridge_rules(remote_clientid)?;
 
-            let mut cloud_config = rumqttc::MqttOptions::new(
+            let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 remote_clientid,
                 tedge_config.az.url.or_config_not_set()?.to_string(),
                 8883,

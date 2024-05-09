@@ -3606,7 +3606,6 @@ dependencies = [
  "flockfile",
  "mqtt_channel",
  "reqwest",
- "rumqttc",
  "tedge_actors",
  "tedge_api",
  "tedge_config",

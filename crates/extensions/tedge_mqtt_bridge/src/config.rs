@@ -1,5 +1,4 @@
 use crate::topics::matches_ignore_dollar_prefix;
-use crate::topics::prepend;
 use crate::topics::TopicConverter;
 use certificate::parse_root_certificate::create_tls_config;
 use rumqttc::valid_filter;
@@ -32,6 +31,29 @@ pub struct BridgeConfig {
 }
 
 #[derive(Debug, Clone)]
+/// A rule for forwarding MQTT messages from one broker to another
+///
+/// A rule has three parts, a filter, a prefix to add and a prefix to remove. For instance, the rule
+/// `filter: "s/us", prefix_to_remove: "c8y/", prefix_to_add: ""`, will map the topic `c8y/s/us`
+/// to `s/us`. The filter can contain wildcards, or be empty (in which case the prefix to remove is
+/// the sole local topic that will be remapped).
+///
+/// ```
+/// use tedge_mqtt_bridge::BridgeRule;
+///
+/// let outgoing_c8y = BridgeRule::try_new("s/us".into(), "c8y/".into(), "".into()).unwrap();
+/// assert_eq!(outgoing_c8y.apply("c8y/s/us").unwrap(), "s/us");
+///
+/// let single_topic = BridgeRule::try_new("".into(), "my/input/topic".into(), "different/output/topic".into()).unwrap();
+/// assert_eq!(single_topic.apply("my/input/topic").unwrap(), "different/output/topic");
+///
+/// let wildcard = BridgeRule::try_new("test/#".into(), "a/".into(), "b/".into()).unwrap();
+/// assert_eq!(wildcard.apply("a/test/me").unwrap(), "b/test/me");
+/// ```
+///
+/// This bridge rule logic is based on mosquitto's rule (see the `topic` section of the
+/// [mosquitto.conf man page](https://mosquitto.org/man/mosquitto-conf-5.html) for details on what
+/// is supported).
 pub struct BridgeRule {
     topic_filter: Cow<'static, str>,
     prefix_to_remove: Cow<'static, str>,
@@ -40,7 +62,7 @@ pub struct BridgeRule {
 
 #[derive(Debug, thiserror::Error)]
 pub enum InvalidBridgeRule {
-    #[error("{0:?} is not a valid MQTT bridge topic prefix as is missing a trailing slash")]
+    #[error("{0:?} is not a valid MQTT bridge topic prefix as it is missing a trailing slash")]
     MissingTrailingSlash(Cow<'static, str>),
 
     #[error(
@@ -70,14 +92,14 @@ fn validate_filter(topic: &str) -> Result<(), InvalidBridgeRule> {
 }
 
 impl BridgeRule {
-    fn try_new(
+    pub fn try_new(
         base_topic_filter: Cow<'static, str>,
         prefix_to_remove: Cow<'static, str>,
         prefix_to_add: Cow<'static, str>,
     ) -> Result<Self, InvalidBridgeRule> {
         let filter_is_empty = base_topic_filter.is_empty();
         let mut r = Self {
-            topic_filter: prepend(base_topic_filter.clone(), &prefix_to_remove),
+            topic_filter: prefix_to_remove.clone() + base_topic_filter.clone(),
             prefix_to_remove,
             prefix_to_add,
         };
@@ -103,10 +125,7 @@ impl BridgeRule {
 
     pub fn apply<'a>(&self, topic: &'a str) -> Option<Cow<'a, str>> {
         matches_ignore_dollar_prefix(topic, &self.topic_filter).then(|| {
-            prepend(
-                topic.strip_prefix(&*self.prefix_to_remove).unwrap().into(),
-                &self.prefix_to_add,
-            )
+            self.prefix_to_add.clone() + topic.strip_prefix(&*self.prefix_to_remove).unwrap()
         })
     }
 }
@@ -158,8 +177,8 @@ impl BridgeConfig {
         let local_prefix = local_prefix.into();
         let remote_prefix = remote_prefix.into();
         self.bidirectional_topics.push((
-            prepend(topic.clone(), &local_prefix),
-            prepend(topic.clone(), &remote_prefix),
+            local_prefix.clone() + topic.clone(),
+            remote_prefix.clone() + topic.clone(),
         ));
         self.forward_from_local(topic.clone(), local_prefix.clone(), remote_prefix.clone())?;
         self.forward_from_remote(topic, local_prefix, remote_prefix)?;
@@ -275,14 +294,14 @@ mod tests {
         }
 
         #[test]
-        fn rejects_invalid_input_topic() {
+        fn rejects_invalid_input_prefix() {
             let err = BridgeRule::try_new("test/#".into(), "wildcard/#".into(), "output/".into())
                 .unwrap_err();
             assert_eq!(err.to_string(), "\"wildcard/#\" is not a valid MQTT bridge topic prefix because it contains '+' or '#'");
         }
 
         #[test]
-        fn rejects_invalid_output_topic() {
+        fn rejects_invalid_output_prefix() {
             let err = BridgeRule::try_new("test/#".into(), "input/".into(), "wildcard/+".into())
                 .unwrap_err();
             assert_eq!(err.to_string(), "\"wildcard/+\" is not a valid MQTT bridge topic prefix because it contains '+' or '#'");
@@ -294,7 +313,7 @@ mod tests {
                 BridgeRule::try_new("test/#".into(), "input".into(), "output/".into()).unwrap_err();
             assert_eq!(
                 err.to_string(),
-                "\"input\" is not a valid MQTT bridge topic prefix as is missing a trailing slash"
+                "\"input\" is not a valid MQTT bridge topic prefix as it is missing a trailing slash"
             );
         }
 
@@ -304,12 +323,12 @@ mod tests {
                 BridgeRule::try_new("test/#".into(), "input/".into(), "output".into()).unwrap_err();
             assert_eq!(
                 err.to_string(),
-                "\"output\" is not a valid MQTT bridge topic prefix as is missing a trailing slash"
+                "\"output\" is not a valid MQTT bridge topic prefix as it is missing a trailing slash"
             );
         }
 
         #[test]
-        fn rejects_empty_input_topic_with_empty_filter() {
+        fn rejects_empty_input_prefix_with_empty_filter() {
             let err = BridgeRule::try_new("".into(), "".into(), "a/".into()).unwrap_err();
             assert_eq!(
                 err.to_string(),
@@ -318,7 +337,7 @@ mod tests {
         }
 
         #[test]
-        fn rejects_empty_output_topic_with_empty_filter() {
+        fn rejects_empty_output_prefix_with_empty_filter() {
             let err = BridgeRule::try_new("".into(), "a/".into(), "".into()).unwrap_err();
             assert_eq!(
                 err.to_string(),
@@ -327,7 +346,7 @@ mod tests {
         }
     }
 
-    mod single_converter {
+    mod topic_converter {
         use super::*;
         #[test]
         fn applies_matching_topic() {

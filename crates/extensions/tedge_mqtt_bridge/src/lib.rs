@@ -12,7 +12,7 @@ use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::LastWill;
-use rumqttc::MqttOptions;
+pub use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::PubAck;
 use rumqttc::PubRec;
@@ -691,29 +691,6 @@ mod tests {
                 tc.remote_subscriptions().collect::<Vec<_>>(),
                 ["s/ds", "s/dat"]
             );
-        }
-    }
-
-    mod prepend {
-        use super::*;
-        use crate::topics::prepend;
-
-        #[test]
-        fn applies_nonempty_prefix_to_start_of_value() {
-            assert_eq!(prepend("tested".into(), &"being ".into()), "being tested");
-        }
-
-        #[test]
-        fn does_not_clone_if_prefix_is_empty() {
-            assert!(matches!(
-                prepend("test".into(), &"".into()),
-                Cow::Borrowed(_)
-            ));
-        }
-
-        #[test]
-        fn leaves_value_unchanged_if_prefix_is_empty() {
-            assert_eq!(prepend("test".into(), &"".into()), "test");
         }
     }
 }

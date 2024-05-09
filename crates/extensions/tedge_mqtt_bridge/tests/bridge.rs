@@ -63,7 +63,7 @@ async fn bridge_many_messages() {
     let local_broker_port = free_port().await;
     let cloud_broker_port = free_port().await;
     let (local, mut ev_local) = new_broker_and_client("local", local_broker_port);
-    let (cloud, mut ev_cloud) = new_broker_and_client("cloud", cloud_broker_port);
+    let (cloud, ev_cloud) = new_broker_and_client("cloud", cloud_broker_port);
 
     // We can't easily restart rumqttd, so instead, we'll connect via a proxy
     // that we can interrupt the connection of
@@ -425,7 +425,8 @@ impl EventPoller {
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    // Not quite sure why I need
+                    // Not quite sure why I need to use biased here,
+                    // but it doesn't poll the event loop if we don't
                     biased;
                     _ = event_loop.poll() => (),
                     res = &mut rx_stop_polling => {
