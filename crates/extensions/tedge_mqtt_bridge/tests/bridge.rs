@@ -174,38 +174,6 @@ async fn bridge_reconnects_successfully_after_cloud_connection_interrupted() {
     assert_eq!(from_utf8(&msg.payload).unwrap(), "a,different,message");
 }
 
-async fn wait_until_health_status_is(
-    status: &str,
-    event_loop: &mut EventLoop,
-) -> anyhow::Result<()> {
-    loop {
-        let health = next_received_message(event_loop).await.with_context(|| {
-            format!("expecting health message waiting for status to be {status:?}")
-        })?;
-        dbg!(&health);
-        if !(health.topic.starts_with("te/device/main/service")
-            && health.topic.ends_with("status/health"))
-        {
-            warn!(
-                "Unexpected message on topic {} when looking for health status messages",
-                health.topic
-            );
-        }
-        let payload = from_utf8(&health.payload).context("decoding health payload")?;
-        let json: serde_json::Value = serde_json::from_str(payload)?;
-        match (status, json["status"].as_str()) {
-            ("up", Some("up")) | ("down", Some("down")) => break Ok(()),
-            (_, Some("up" | "down")) => continue,
-            (_, Some(status)) => {
-                break Err(anyhow!(
-                    "Unknown health status {status:?} in tedge-json: {payload}"
-                ))
-            }
-            (_, None) => break Err(anyhow!("Health status missing from payload: {payload}")),
-        }
-    }
-}
-
 #[tokio::test]
 async fn bridge_reconnects_successfully_after_local_connection_interrupted() {
     std::env::set_var("RUST_LOG", "tedge_mqtt_bridge=info");
@@ -271,8 +239,8 @@ async fn bridge_reconnects_successfully_after_local_connection_interrupted() {
 async fn bidirectional_forwarding_avoids_infinite_loop() {
     let local_port = free_port().await;
     let cloud_port = free_port().await;
-    new_broker_and_client("local", local_port);
-    new_broker_and_client("cloud", cloud_port);
+    let (local_client, mut local_ev_loop) = new_broker_and_client("local", local_port);
+    let (cloud_client, mut cloud_ev_loop) = new_broker_and_client("cloud", cloud_port);
     let mut rules = BridgeConfig::new();
     rules
         // The cloud prefix in practice is `$aws/things/<device-id>`, but rumqttd doesn't
@@ -282,29 +250,30 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
 
     start_mqtt_bridge(local_port, cloud_port, rules).await;
 
-    let (local_client, mut local_ev_loop) = AsyncClient::new(
-        MqttOptions::new("test-client-local", "localhost", local_port),
-        10,
-    );
+    local_client
+        .subscribe(HEALTH, QoS::AtLeastOnce)
+        .await
+        .unwrap();
+
+    wait_until_health_status_is("up", &mut local_ev_loop)
+        .await
+        .unwrap();
+
+    local_client.unsubscribe(HEALTH).await.unwrap();
+
     local_client
         .subscribe("aws/#", QoS::AtLeastOnce)
         .await
         .unwrap();
-    loop {
-        if let Ok(Event::Incoming(Incoming::SubAck(_))) = local_ev_loop.poll().await {
-            break;
-        }
-    }
+    await_subscription(&mut local_ev_loop).await;
 
-    let (client, mut ev_loop) = AsyncClient::new(
-        MqttOptions::new("test-client-cloud", "localhost", cloud_port),
-        10,
-    );
-    client
+    cloud_client
         .subscribe("aws/things/my-device/shadow/#", QoS::AtLeastOnce)
         .await
         .unwrap();
-    client
+    await_subscription(&mut cloud_ev_loop).await;
+
+    cloud_client
         .publish(
             "aws/things/my-device/shadow/request",
             QoS::AtMostOnce,
@@ -316,7 +285,7 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
 
     let cloud = tokio::spawn(async move {
         loop {
-            match ev_loop.poll().await.unwrap() {
+            match cloud_ev_loop.poll().await.unwrap() {
                 // Ignore the initial request message
                 Event::Incoming(Incoming::Publish(Publish { pkid: 1, .. })) => (),
                 Event::Incoming(Incoming::Publish(publish)) => {
@@ -334,7 +303,12 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
     });
 
     loop {
-        match local_ev_loop.poll().await.unwrap() {
+        match timeout(DEFAULT_TIMEOUT, local_ev_loop.poll())
+            .await
+            .context("Timed out waiting for local client to receive forwarded message")
+            .unwrap()
+            .unwrap()
+        {
             Event::Incoming(Incoming::Publish(publish)) => {
                 assert_eq!(publish.topic, "aws/shadow/request");
                 assert_eq!(from_utf8(&publish.payload).unwrap(), "test message");
@@ -354,6 +328,37 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
     }
 
     timeout(DEFAULT_TIMEOUT, cloud).await.unwrap().unwrap();
+}
+
+async fn wait_until_health_status_is(
+    status: &str,
+    event_loop: &mut EventLoop,
+) -> anyhow::Result<()> {
+    loop {
+        let health = next_received_message(event_loop).await.with_context(|| {
+            format!("expecting health message waiting for status to be {status:?}")
+        })?;
+        if !(health.topic.starts_with("te/device/main/service")
+            && health.topic.ends_with("status/health"))
+        {
+            warn!(
+                "Unexpected message on topic {} when looking for health status messages",
+                health.topic
+            );
+        }
+        let payload = from_utf8(&health.payload).context("decoding health payload")?;
+        let json: serde_json::Value = serde_json::from_str(payload)?;
+        match (status, json["status"].as_str()) {
+            ("up", Some("up")) | ("down", Some("down")) => break Ok(()),
+            (_, Some("up" | "down")) => continue,
+            (_, Some(status)) => {
+                break Err(anyhow!(
+                    "Unknown health status {status:?} in tedge-json: {payload}"
+                ))
+            }
+            (_, None) => break Err(anyhow!("Health status missing from payload: {payload}")),
+        }
+    }
 }
 
 /// A TCP proxy that allows the connection to be dropped upon request

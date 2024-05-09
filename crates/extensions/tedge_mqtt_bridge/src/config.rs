@@ -216,6 +216,54 @@ impl BridgeConfig {
 mod tests {
     use super::*;
 
+    mod use_key_and_cert {
+        use super::use_key_and_cert;
+        use rumqttc::MqttOptions;
+        use rumqttc::Transport;
+        use tedge_config::TEdgeConfig;
+        use tedge_config::TEdgeConfigLocation;
+
+        #[test]
+        fn sets_certs_in_the_provided_mqtt_config() {
+            let mut opts = MqttOptions::new("dummy-device", "localhost", 1883);
+            let device_cert = rcgen::generate_simple_self_signed(["dummy-device".into()]).unwrap();
+            let c8y_cert = rcgen::generate_simple_self_signed(["dummy-c8y".into()]).unwrap();
+
+            let ttd = tedge_test_utils::fs::TempTedgeDir::new();
+            let certs_dir = ttd.path().join("device-certs");
+            std::fs::create_dir(&certs_dir).unwrap();
+            std::fs::write(
+                certs_dir.join("tedge-certificate.pem"),
+                device_cert.serialize_pem().unwrap(),
+            )
+            .unwrap();
+            std::fs::write(
+                certs_dir.join("tedge-private-key.pem"),
+                device_cert.serialize_private_key_pem(),
+            )
+            .unwrap();
+
+            let root_cert_path = ttd.path().join("cloud-certs/c8y.pem");
+            std::fs::create_dir(root_cert_path.parent().unwrap()).unwrap();
+            std::fs::write(&root_cert_path, c8y_cert.serialize_pem().unwrap()).unwrap();
+            let tedge_config =
+                TEdgeConfig::try_new(TEdgeConfigLocation::from_custom_root(ttd.path())).unwrap();
+
+            use_key_and_cert(&mut opts, &root_cert_path, &tedge_config).unwrap();
+
+            let Transport::Tls(tls) = opts.transport() else {
+                panic!("Transport should be type TLS")
+            };
+            let rumqttc::TlsConfiguration::Rustls(config) = tls else {
+                panic!("{tls:?} is not Rustls")
+            };
+            assert!(
+                config.client_auth_cert_resolver.has_certs(),
+                "Should have certs"
+            );
+        }
+    }
+
     mod bridge_rule {
         use super::*;
 
@@ -375,6 +423,29 @@ mod tests {
                 BridgeRule::try_new("#".into(), "a/".into(), "c/".into()).unwrap(),
             ]);
             assert_eq!(converter.convert_topic("a/topic"), "c/topic");
+        }
+    }
+
+    mod validate_filter {
+        use crate::config::validate_filter;
+
+        #[test]
+        fn accepts_wildcard_filters() {
+            validate_filter("test/#").unwrap();
+        }
+
+        #[test]
+        fn accepts_single_topics() {
+            validate_filter("valid/topic").unwrap();
+        }
+
+        #[test]
+        fn includes_supplied_value_in_error_message() {
+            let err = validate_filter("invalid/#/filter").unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                "\"invalid/#/filter\" is not a valid MQTT bridge topic filter"
+            );
         }
     }
 }

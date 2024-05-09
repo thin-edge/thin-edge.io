@@ -54,9 +54,9 @@ pub enum DeviceStatus {
 impl Command for ConnectCommand {
     fn description(&self) -> String {
         if self.is_test_connection {
-            format!("test connection to {} cloud.", self.cloud.as_str())
+            format!("test connection to {} cloud.", self.cloud)
         } else {
-            format!("connect {} cloud.", self.cloud.as_str())
+            format!("connect to {} cloud.", self.cloud)
         }
     }
 
@@ -68,8 +68,8 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
-            if self.check_if_bridge_exists(&bridge_config) {
-                return match self.check_connection(config) {
+            return if self.check_if_bridge_exists(&bridge_config) {
+                match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
                         println!("Connection check to {} cloud is successful.\n", cloud);
@@ -77,13 +77,13 @@ impl Command for ConnectCommand {
                     }
                     Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
                     Err(err) => Err(err.into()),
-                };
+                }
             } else {
-                return Err((ConnectError::DeviceNotConnected {
-                    cloud: self.cloud.as_str().into(),
+                Err((ConnectError::DeviceNotConnected {
+                    cloud: self.cloud.to_string(),
                 })
-                .into());
-            }
+                .into())
+            };
         }
 
         let device_type = &config.device.ty;
@@ -119,7 +119,7 @@ impl Command for ConnectCommand {
                 _ => {
                     println!(
                         "Warning: Bridge has been configured, but {} connection check failed.\n",
-                        self.cloud.as_str()
+                        self.cloud
                     );
                 }
             }
@@ -139,7 +139,6 @@ impl Command for ConnectCommand {
                         .c8y
                         .mqtt
                         .or_none()
-                        .cloned()
                         .map(|u| u.to_string())
                         .unwrap_or_default(),
                 );

@@ -410,6 +410,7 @@ trait MqttAck {
 }
 
 #[async_trait::async_trait]
+#[mutants::skip]
 impl MqttAck for AsyncClient {
     async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
         AsyncClient::ack(self, publish).await
@@ -469,6 +470,7 @@ impl<Ack: MqttAck, Clock: MonotonicClock> MessageLoopBreaker<Ack, Clock> {
             .any(|filter| matches_ignore_dollar_prefix(topic, filter))
     }
 
+    #[mutants::skip]
     fn clean_old_messages(&mut self) {
         let deadline = self.clock.now() - Duration::from_secs(100);
         while self
@@ -503,6 +505,7 @@ impl RuntimeRequestSink for MqttBridgeActorBuilder {
 pub struct MqttBridgeActor {}
 
 #[async_trait]
+#[mutants::skip]
 impl Actor for MqttBridgeActor {
     fn name(&self) -> &str {
         "MQTT-Bridge"
@@ -691,6 +694,46 @@ mod tests {
                 tc.remote_subscriptions().collect::<Vec<_>>(),
                 ["s/ds", "s/dat"]
             );
+        }
+    }
+
+    mod have_same_content {
+        use crate::have_same_content;
+        use rumqttc::Publish;
+        use rumqttc::QoS;
+
+        #[test]
+        fn accepts_identical_messages() {
+            let msg = Publish::new("test", QoS::AtLeastOnce, "a test");
+            assert!(have_same_content(&msg, &msg));
+        }
+
+        #[test]
+        fn rejects_messages_with_different_topics() {
+            let msg = Publish::new("test", QoS::AtLeastOnce, "a test");
+            let msg2 = Publish::new("not/the/same", QoS::AtLeastOnce, "a test");
+            assert!(!have_same_content(&msg, &msg2));
+        }
+        #[test]
+        fn rejects_messages_with_different_qos() {
+            let msg = Publish::new("test", QoS::ExactlyOnce, "a test");
+            let msg2 = Publish::new("test", QoS::AtLeastOnce, "a test");
+            assert!(!have_same_content(&msg, &msg2));
+        }
+
+        #[test]
+        fn rejects_messages_with_different_payloads() {
+            let msg = Publish::new("test", QoS::ExactlyOnce, "a test");
+            let msg2 = Publish::new("test", QoS::AtLeastOnce, "not the same");
+            assert!(!have_same_content(&msg, &msg2));
+        }
+
+        #[test]
+        fn rejects_messages_with_different_retain_values() {
+            let mut msg = Publish::new("test", QoS::ExactlyOnce, "a test");
+            msg.retain = true;
+            let msg2 = Publish::new("test", QoS::AtLeastOnce, "a test");
+            assert!(!have_same_content(&msg, &msg2));
         }
     }
 }
