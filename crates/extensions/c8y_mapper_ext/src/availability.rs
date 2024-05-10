@@ -13,7 +13,7 @@ use tracing::warn;
 ///
 /// `device` should hold the EntityTopicId of the device for availability monitoring
 /// `service` should hold the EntityTopicId of the device's lead service.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HeartbeatPayload {
     pub device: EntityTopicId,
     pub service: EntityTopicId,
@@ -41,7 +41,7 @@ pub async fn start_heartbeat_timer(
 }
 
 pub fn get_child_lead_service_entity_topic_id(entity_metadata: &EntityMetadata) -> EntityTopicId {
-    let child_xid = entity_metadata.external_id.as_ref();
+    let device_name = entity_metadata.topic_id.default_device_name().unwrap(); // FIXME: Remove unwrap or always safe?
 
     // TODO: key is leadService or lead_service?
     match entity_metadata.other.get("leadService") {
@@ -53,15 +53,15 @@ pub fn get_child_lead_service_entity_topic_id(entity_metadata: &EntityMetadata) 
                     // FIXME: if the given 'leadSerivice' is invalid topic ID,
                     // should it use tedge-agent automatically or return an error?
                     warn!("Given leadService {service_entity} is invalid. Using tedge-agent as default");
-                    default_child_lead_service(child_xid)
+                    default_child_lead_service(device_name)
                 }
             }
         }
-        None => default_child_lead_service(child_xid),
+        None => default_child_lead_service(device_name),
     }
 }
 
 fn default_child_lead_service(child: &str) -> EntityTopicId {
     EntityTopicId::default_child_service(child, "tedge-agent")
-        .expect("Call this function only if the child ID is surely valid")
+        .expect("Call this function only if the child name is surely valid")
 }
