@@ -27,9 +27,13 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     Copy Configuration Files
     Execute Command    apt-get update && apt-get install -y jq jo
+    # setup repos so that packages can be installed from them
+    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
+    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/community/setup.deb.sh' | sudo -E bash
     Restart Service    tedge-agent
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/device_profile.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/firmware_update.toml      /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/device_profile.sh         /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge_operator_helper.sh         /etc/tedge/operations/
