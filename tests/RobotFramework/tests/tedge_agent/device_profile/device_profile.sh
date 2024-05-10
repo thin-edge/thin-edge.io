@@ -31,13 +31,13 @@ EXAMPLE_PAYLOAD=$(
             "modules": [
               {
                 "name": "c8y-command-plugin",
-                "url": "",
-                "version": "latest"
+                "version": "latest",
+                "action": "install"
               },
               {
                 "name": "jq",
-                "url": "",
-                "version": "latest"
+                "version": "latest",
+                "action": "install"
               }
             ]
           }

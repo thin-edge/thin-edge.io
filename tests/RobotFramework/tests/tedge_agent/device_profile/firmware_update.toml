@@ -23,11 +23,38 @@ on_error = { status = "failed", reason = "fail to restart"}
 
 [verify]
 script = "/usr/bin/sleep 1"
+on_success = "agent_update"
+
+# Update the agent (as the image in the agent might be older)
+[agent_update]
+operation = "software_update"
+input_script = "/etc/tedge/operations/tedge_operator_helper.sh update_agent"
+on_exec = "waiting_for_agent_update"
+
+[waiting_for_agent_update]
+action = "await-operation-completion"
 on_success = "commit"
+on_error = { status = "rollback" }
 
 [commit]
 script = "/usr/bin/sleep 1"
 on_success = "successful"
+
+[rollback]
+script = "/usr/bin/sleep 1"
+on_success = "restart_rollback"
+on_error = "restart_rollback"
+
+[restart_rollback]
+operation = "restart"
+on_exec = "waiting_restart_after_rollback"
+on_success = "waiting_restart_after_rollback"
+on_error = { status = "failed", reason = "Failed to restart device" }
+
+[waiting_restart_after_rollback]
+script = "/usr/bin/sleep 1"
+on_success = "failed"
+on_error = { status = "failed", reason = "Failed to restart device" }
 
 [successful]
 action = "cleanup"
