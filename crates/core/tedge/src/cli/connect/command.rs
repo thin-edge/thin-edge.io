@@ -139,7 +139,7 @@ impl Command for ConnectCommand {
                         .c8y
                         .mqtt
                         .or_none()
-                        .map(|u| u.to_string())
+                        .map(|u| u.host().to_string())
                         .unwrap_or_default(),
                 );
             }
