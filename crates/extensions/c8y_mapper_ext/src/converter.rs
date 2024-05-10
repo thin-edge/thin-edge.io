@@ -1070,11 +1070,6 @@ impl CumulocityConverter {
             }
         };
 
-        let mut messages = self
-            .try_convert_data_message(source, channel, message)
-            .await?;
-        converted_messages.append(&mut messages);
-
         // Heartbeat settings initialization for child devices
         if self.config.availability_enable {
             for new_entity in new_entities {
@@ -1108,6 +1103,11 @@ impl CumulocityConverter {
                 }
             }
         }
+
+        let mut messages = self
+            .try_convert_data_message(source, channel, message)
+            .await?;
+        converted_messages.append(&mut messages);
 
         Ok(converted_messages)
     }
@@ -1903,6 +1903,8 @@ pub(crate) mod tests {
     use crate::actor::IdDownloadResult;
     use crate::actor::IdUploadRequest;
     use crate::actor::IdUploadResult;
+    use crate::actor::SyncComplete;
+    use crate::actor::SyncStart;
     use crate::config::C8yMapperConfig;
     use crate::error::ConversionError;
     use crate::Capabilities;
@@ -3515,6 +3517,8 @@ pub(crate) mod tests {
             SoftwareManagementApiFlag::Advanced,
             true,
             AutoLogUpload::Never,
+            false,
+            -10,
         )
     }
 
@@ -3546,6 +3550,10 @@ pub(crate) mod tests {
         let downloader_sender =
             LoggingSender::new("DL".into(), downloader_builder.build().sender_clone());
 
+        let timer_builder: SimpleMessageBoxBuilder<SyncComplete, SyncStart> =
+            SimpleMessageBoxBuilder::new("Timer", 5);
+        let timer_sender = LoggingSender::new("Timer".into(), timer_builder.build().sender_clone());
+
         let converter = CumulocityConverter::new(
             config,
             mqtt_publisher,
@@ -3553,6 +3561,7 @@ pub(crate) mod tests {
             auth_proxy,
             uploader_sender,
             downloader_sender,
+            timer_sender,
         )
         .unwrap();
 
