@@ -131,6 +131,9 @@ pub enum ConversionError {
 
     #[error("The provided entity: {0} was not found and could not be auto-registered either, because it is disabled")]
     AutoRegistrationDisabled(String),
+
+    #[error(transparent)]
+    ChannelError(#[from] tedge_actors::ChannelError),
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -8,6 +8,7 @@ use crate::workflow::OperationName;
 use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS::AtLeastOnce;
 use mqtt_channel::Topic;
@@ -17,7 +18,6 @@ use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::PathBuf;
 
 pub const OP_LOG_PATH_KEY: &str = "logPath";
 
@@ -159,11 +159,11 @@ impl GenericCommandState {
         self.update_with_json(json!({ key: val }))
     }
 
-    pub fn get_log_path(&self) -> Option<PathBuf> {
+    pub fn get_log_path(&self) -> Option<Utf8PathBuf> {
         self.payload
             .get(OP_LOG_PATH_KEY)
             .and_then(|v| v.as_str())
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
     }
 
     pub fn set_log_path<P: AsRef<Utf8Path>>(self, path: P) -> Self {

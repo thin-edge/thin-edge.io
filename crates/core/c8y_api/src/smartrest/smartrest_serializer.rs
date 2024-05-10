@@ -6,6 +6,7 @@ use mqtt_channel::MqttMessage;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareModule;
 use tedge_config::TopicPrefix;
@@ -98,6 +99,19 @@ impl From<CumulocitySupportedOperations> for &'static str {
             CumulocitySupportedOperations::C8yUploadConfigFile => "c8y_UploadConfigFile",
             CumulocitySupportedOperations::C8yDownloadConfigFile => "c8y_DownloadConfigFile",
             CumulocitySupportedOperations::C8yFirmware => "c8y_Firmware",
+        }
+    }
+}
+
+impl From<CumulocitySupportedOperations> for OperationType {
+    fn from(value: CumulocitySupportedOperations) -> Self {
+        match value {
+            CumulocitySupportedOperations::C8ySoftwareUpdate => OperationType::ConfigSnapshot,
+            CumulocitySupportedOperations::C8yLogFileRequest => OperationType::LogUpload,
+            CumulocitySupportedOperations::C8yRestartRequest => OperationType::Restart,
+            CumulocitySupportedOperations::C8yUploadConfigFile => OperationType::ConfigSnapshot,
+            CumulocitySupportedOperations::C8yDownloadConfigFile => OperationType::ConfigUpdate,
+            CumulocitySupportedOperations::C8yFirmware => OperationType::FirmwareUpdate,
         }
     }
 }

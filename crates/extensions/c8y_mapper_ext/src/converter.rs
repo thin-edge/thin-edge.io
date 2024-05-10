@@ -48,6 +48,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
+use camino::Utf8Path;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
@@ -92,17 +93,23 @@ use tedge_config::TEdgeConfigError;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_uploader_ext::ContentType;
+use tedge_uploader_ext::FormData;
+use tedge_uploader_ext::Mime;
+use tedge_uploader_ext::UploadRequest;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
+use time::OffsetDateTime;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
 use tracing::warn;
+use url::Url;
 
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
@@ -171,13 +178,36 @@ impl CumulocityConverter {
 }
 
 pub struct UploadOperationData {
+    pub topic_id: EntityTopicId,
     pub smartrest_topic: Topic,
     pub clear_cmd_topic: Topic,
     pub c8y_binary_url: String,
     pub operation: CumulocitySupportedOperations,
+    pub command: GenericCommandState,
 
     // used to automatically remove the temporary file after operation is finished
     pub file_dir: tempfile::TempDir,
+}
+
+pub struct UploadOperationLog {
+    pub final_messages: Vec<MqttMessage>,
+}
+
+pub enum UploadContext {
+    OperationData(UploadOperationData),
+    OperationLog(UploadOperationLog),
+}
+
+impl From<UploadOperationData> for UploadContext {
+    fn from(value: UploadOperationData) -> Self {
+        UploadContext::OperationData(value)
+    }
+}
+
+impl From<UploadOperationLog> for UploadContext {
+    fn from(value: UploadOperationLog) -> Self {
+        UploadContext::OperationLog(value)
+    }
 }
 
 pub struct CumulocityConverter {
@@ -200,7 +230,7 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
-    pub pending_upload_operations: HashMap<CmdId, UploadOperationData>,
+    pub pending_upload_operations: HashMap<CmdId, UploadContext>,
 
     /// Used to store pending downloads from the FTS.
     // Using a separate field to not mix downloads from FTS and HTTP proxy
@@ -1111,12 +1141,11 @@ impl CumulocityConverter {
                 };
 
                 match res {
-                    Ok((messages, command)) => {
-                        if let Some(command) = command {
-                            self.upload_operation_log(cmd_id, operation, command).await;
-                        }
-                        Ok(messages)
-                    }
+                    // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
+                    Ok((messages, Some(command))) if !messages.is_empty() => Ok(self
+                        .upload_operation_log(&source, cmd_id, operation, command, messages)
+                        .await),
+                    Ok((messages, _)) => Ok(messages),
                     Err(e) => Err(e),
                 }
             }
@@ -1585,38 +1614,96 @@ impl CumulocityConverter {
         ))
     }
 
-    async fn upload_operation_log(
+    pub async fn upload_operation_log(
         &mut self,
+        target: &EntityTopicId,
         cmd_id: &str,
         op_type: &OperationType,
         command: GenericCommandState,
-    ) {
+        final_messages: Vec<MqttMessage>,
+    ) -> Vec<MqttMessage> {
         if command.is_finished()
             && command.get_log_path().is_some()
             && (self.config.auto_log_upload == AutoLogUpload::Always
                 || (self.config.auto_log_upload == AutoLogUpload::OnFailure && command.is_failed()))
         {
             let log_path = command.get_log_path().unwrap();
-            match tokio::fs::read_to_string(&log_path).await {
-                Ok(log_content) => {
-                    if let Err(err) = self
-                        .http_proxy
-                        .upload_log_binary(
-                            &op_type.to_string(),
-                            &log_content,
-                            self.device_name.clone(),
-                        )
-                        .await
-                    {
-                        error!("Log log upload failed for {} with {}", cmd_id, err);
-                    }
+            let event_type = format!("{}_op_log", op_type);
+            let event_text = format!("{} operation log", &op_type);
+            match self
+                .upload_file(
+                    target,
+                    &log_path,
+                    None,
+                    None,
+                    cmd_id,
+                    event_type,
+                    Some(event_text),
+                )
+                .await
+            {
+                Ok(_) => {
+                    self.pending_upload_operations
+                        .insert(cmd_id.into(), UploadOperationLog { final_messages }.into());
+                    return vec![];
                 }
-                Err(err) => error!(
-                    "Failed to read operation log file at {:?} due to: {}",
-                    &log_path, err
-                ),
+                Err(err) => {
+                    error!("Operation log upload failed due to {}", err);
+                }
             }
         }
+        final_messages
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn upload_file(
+        &mut self,
+        topic_id: &EntityTopicId,
+        file_path: &Utf8Path,
+        file_name: Option<String>,
+        mime_type: Option<Mime>,
+        cmd_id: &str,
+        event_type: String,
+        event_text: Option<String>,
+    ) -> Result<Url, ConversionError> {
+        let target = self.entity_store.try_get(topic_id)?;
+        let xid = target.external_id.as_ref();
+
+        let create_event = CreateEvent {
+            event_type: event_type.clone(),
+            time: OffsetDateTime::now_utc(),
+            text: event_text.unwrap_or(event_type),
+            extras: HashMap::new(),
+            device_id: xid.into(),
+        };
+        let event_response_id = self.http_proxy.send_event(create_event).await?;
+        let binary_upload_event_url = self
+            .c8y_endpoint
+            .get_url_for_event_binary_upload_unchecked(&event_response_id);
+
+        let proxy_url = self.auth_proxy.proxy_url(binary_upload_event_url.clone());
+
+        let file_name = file_name.unwrap_or_else(|| {
+            format!(
+                "{xid}_{filename}",
+                filename = file_path.file_name().unwrap_or(cmd_id)
+            )
+        });
+        let form_data = if let Some(mime) = mime_type {
+            FormData::new(file_name).set_mime(mime)
+        } else {
+            FormData::new(file_name)
+        };
+        // The method must be POST, otherwise file name won't be supported.
+        let upload_request = UploadRequest::new(proxy_url.as_str(), file_path)
+            .post()
+            .with_content_type(ContentType::FormData(form_data));
+
+        self.uploader_sender
+            .send((cmd_id.into(), upload_request))
+            .await?;
+
+        Ok(binary_upload_event_url)
     }
 
     async fn publish_software_list(

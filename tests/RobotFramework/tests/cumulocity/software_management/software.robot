@@ -146,7 +146,7 @@ Validate operation log uploaded
     ${log_checksum}=    Execute Command    md5sum '${operation_log_file}' | cut -d' ' -f1    strip=${True}
     ${events}=    Cumulocity.Device Should Have Event/s
     ...    minimum=1
-    ...    type=software_update
+    ...    type=software_update_op_log
     ...    with_attachment=${True}
     ${contents}=    Cumulocity.Event Should Have An Attachment
     ...    ${events[0]["id"]}
@@ -158,4 +158,4 @@ Validate operation log not uploaded
     ${events}=    Cumulocity.Device Should Have Event/s
     ...    minimum=0
     ...    maximum=0
-    ...    type=software_update
+    ...    type=software_update_op_log

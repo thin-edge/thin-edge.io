@@ -10,9 +10,7 @@ use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8PathBuf;
-use std::collections::HashMap;
 use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmd;
@@ -30,10 +28,6 @@ use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_uploader_ext::ContentType;
-use tedge_uploader_ext::FormData;
-use tedge_uploader_ext::UploadRequest;
-use time::OffsetDateTime;
 use tracing::log::warn;
 
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
@@ -160,6 +154,7 @@ impl CumulocityConverter {
 
                         message: message.clone(),
                         entity_topic_id: topic_id.clone(),
+                        command: command.clone().into_generic_command(&self.mqtt_schema),
                     },
                 );
 
@@ -203,10 +198,8 @@ impl CumulocityConverter {
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let target = self.entity_store.try_get(&fts_download.entity_topic_id)?;
-        let xid = target.external_id.as_ref();
-        let smartrest_topic =
-            self.smartrest_publish_topic_for_entity(&fts_download.entity_topic_id)?;
+        let topic_id = fts_download.entity_topic_id;
+        let smartrest_topic = self.smartrest_publish_topic_for_entity(&topic_id)?;
         let payload = fts_download.message.payload_str()?;
         let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
 
@@ -228,50 +221,26 @@ impl CumulocityConverter {
             Ok(download) => download,
         };
 
-        // Create an event in c8y
-        let create_event = CreateEvent {
-            event_type: response.config_type.clone(),
-            time: OffsetDateTime::now_utc(),
-            text: response.config_type.clone(),
-            extras: HashMap::new(),
-            device_id: xid.to_string(),
-        };
-        let event_response_id = self.http_proxy.send_event(create_event).await?;
+        let file_path = Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?;
+        let event_type = response.config_type.clone();
 
         let binary_upload_event_url = self
-            .c8y_endpoint
-            .get_url_for_event_binary_upload_unchecked(&event_response_id);
-
-        let file_path = Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?;
-
-        // The method must be POST, otherwise file name won't be supported.
-        let upload_request = UploadRequest::new(
-            self.auth_proxy
-                .proxy_url(binary_upload_event_url.clone())
-                .as_str(),
-            &file_path,
-        )
-        .post()
-        .with_content_type(ContentType::FormData(FormData::new(format!(
-            "{xid}_{filename}",
-            filename = file_path.file_name().unwrap_or("filename")
-        ))));
+            .upload_file(&topic_id, &file_path, None, None, &cmd_id, event_type, None)
+            .await?;
 
         self.pending_upload_operations.insert(
             cmd_id.clone(),
             UploadOperationData {
+                topic_id,
                 file_dir: fts_download.file_dir,
                 smartrest_topic,
                 clear_cmd_topic: fts_download.message.topic,
                 c8y_binary_url: binary_upload_event_url.to_string(),
                 operation: CumulocitySupportedOperations::C8yUploadConfigFile,
-            },
+                command: fts_download.command,
+            }
+            .into(),
         );
-
-        self.uploader_sender
-            .send((cmd_id, upload_request))
-            .await
-            .map_err(CumulocityMapperError::ChannelError)?;
 
         Ok(vec![])
     }
@@ -295,15 +264,19 @@ impl CumulocityConverter {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::C8yMapperConfig;
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::spawn_dummy_c8y_http_proxy;
+    use crate::tests::test_mapper_config;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
+    use tedge_config::AutoLogUpload;
     use tedge_downloader_ext::DownloadResponse;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -653,5 +626,143 @@ mod tests {
             )],
         )
             .await;
+    }
+
+    #[tokio::test]
+    async fn auto_log_upload_successful_operation() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            auto_log_upload: AutoLogUpload::Always,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        spawn_dummy_c8y_http_proxy(test_handle.c8y_http_box);
+
+        let mut mqtt = test_handle.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = test_handle.ul_box.with_timeout(TEST_TIMEOUT_MS);
+        let mut dl = test_handle.dl_box.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        let test_log = ttd.file("test.log");
+        // Simulate config_snapshot command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
+            json!({
+            "status": "successful",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            "type": "path/type/A",
+            "logPath": test_log.path()
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Downloader gets a download request
+        let download_request = dl.recv().await.expect("timeout");
+        // simulate downloader returns result
+        dl.send((
+            download_request.0,
+            Ok(DownloadResponse {
+                url: download_request.1.url,
+                file_path: download_request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
+        // Uploader gets the upload request for the config file
+        let request = ul.recv().await.expect("timeout");
+        // Simulate Uploader returns a result
+        ul.send((
+            request.0,
+            Ok(UploadResponse {
+                url: request.1.url,
+                file_path: request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
+        // Uploader gets the upload request for the log path
+        let request = ul.recv().await.expect("timeout");
+        assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
+        assert_eq!(request.1.file_path, test_log.utf8_path());
+
+        // Simulate Uploader returns a result
+        ul.send((
+            request.0,
+            Ok(UploadResponse {
+                url: request.1.url,
+                file_path: request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
+        // Expect `503` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(
+            &mut mqtt,
+            [
+                ("c8y/s/us", "503,c8y_UploadConfigFile,https://test.c8y.io/event/events/dummy-event-id-1234/binaries"), 
+                ("te/device/main///cmd/config_snapshot/c8y-mapper-1234", ""),
+            ],
+        )
+            .await;
+    }
+
+    #[tokio::test]
+    async fn auto_log_upload_failed_operation() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            auto_log_upload: AutoLogUpload::Always,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        spawn_dummy_c8y_http_proxy(test_handle.c8y_http_box);
+
+        let mut mqtt = test_handle.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = test_handle.ul_box.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        let test_log = ttd.file("test.log");
+        // Simulate config_snapshot command with "failed" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
+            json!({
+                "status": "failed",
+                "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-c8y-mapper-1234",
+                "type": "typeA",
+                "reason": "Something went wrong",
+                "logPath": test_log.path(),
+            }).to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Uploader gets the upload request for the log path
+        let request = ul.recv().await.expect("timeout");
+        assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
+        assert_eq!(request.1.file_path, test_log.utf8_path());
+
+        // Simulate Uploader returns a result
+        ul.send((
+            request.0,
+            Ok(UploadResponse {
+                url: request.1.url,
+                file_path: request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
+        // Expect `502` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(
+            &mut mqtt,
+            [("c8y/s/us", "502,c8y_UploadConfigFile,Something went wrong")],
+        )
+        .await;
     }
 }

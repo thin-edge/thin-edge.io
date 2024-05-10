@@ -10,9 +10,7 @@ use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8PathBuf;
-use std::collections::HashMap;
 use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogMetadata;
@@ -32,10 +30,6 @@ use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_uploader_ext::ContentType;
-use tedge_uploader_ext::FormData;
-use tedge_uploader_ext::UploadRequest;
-use time::OffsetDateTime;
 use tracing::debug;
 use tracing::log::error;
 use tracing::log::warn;
@@ -154,6 +148,8 @@ impl CumulocityConverter {
 
                         message: message.clone(),
                         entity_topic_id: topic_id.clone(),
+
+                        command: command.clone().into_generic_command(&self.mqtt_schema),
                     },
                 );
 
@@ -198,11 +194,9 @@ impl CumulocityConverter {
         fts_download: FtsDownloadOperationData,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let topic_id = fts_download.entity_topic_id;
-        let target = self.entity_store.try_get(&topic_id)?;
         let smartrest_topic = self.smartrest_publish_topic_for_entity(&topic_id)?;
         let payload = fts_download.message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
-        let xid = target.external_id.as_ref();
 
         let download_response = match download_result {
             Err(err) => {
@@ -214,7 +208,7 @@ impl CumulocityConverter {
                 );
 
                 let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
-                let clean_operation = MqttMessage::new(&fts_download.message.topic, "")
+                let clean_operation = MqttMessage::new(&fts_download.command.topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
                 return Ok(vec![c8y_notification, clean_operation]);
@@ -222,54 +216,34 @@ impl CumulocityConverter {
             Ok(download) => download,
         };
 
-        // Create an event in c8y
-        let create_event = CreateEvent {
-            event_type: response.log_type.clone(),
-            time: OffsetDateTime::now_utc(),
-            text: response.log_type.clone(),
-            extras: HashMap::new(),
-            device_id: xid.to_string(),
-        };
-        let event_response_id = self.http_proxy.send_event(create_event).await?;
-
-        let binary_upload_event_url = self
-            .c8y_endpoint
-            .get_url_for_event_binary_upload_unchecked(&event_response_id);
-
         let file_path =
             Utf8PathBuf::try_from(download_response.file_path).map_err(|e| e.into_io_error())?;
+        let event_type = response.log_type.clone();
 
-        // The method must be POST, otherwise file name won't be supported.
-        // Mime must be text/*, otherwise c8y UI doesn't give a preview of the content.
-        let upload_request = UploadRequest::new(
-            self.auth_proxy
-                .proxy_url(binary_upload_event_url.clone())
-                .as_str(),
-            &file_path,
-        )
-        .post()
-        .with_content_type(ContentType::FormData(
-            FormData::new(format!(
-                "{xid}_{filename}",
-                filename = file_path.file_name().unwrap_or("filename")
-            ))
-            .text_plain(),
-        ));
-
-        self.uploader_sender
-            .send((cmd_id.clone(), upload_request))
-            .await
-            .map_err(CumulocityMapperError::ChannelError)?;
+        let binary_upload_event_url = self
+            .upload_file(
+                &topic_id,
+                &file_path,
+                None,
+                Some(mime::TEXT_PLAIN),
+                &cmd_id,
+                event_type,
+                None,
+            )
+            .await?;
 
         self.pending_upload_operations.insert(
             cmd_id,
             UploadOperationData {
+                topic_id,
                 file_dir: fts_download.file_dir,
                 smartrest_topic,
                 clear_cmd_topic: fts_download.message.topic,
                 c8y_binary_url: binary_upload_event_url.to_string(),
                 operation: CumulocitySupportedOperations::C8yLogFileRequest,
-            },
+                command: fts_download.command,
+            }
+            .into(),
         );
 
         Ok(vec![])
