@@ -6,6 +6,7 @@ use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
+use crate::actor::TimeoutKind;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -101,7 +102,7 @@ async fn child_device_registration_mapping() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -115,10 +116,13 @@ async fn child_device_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:child1,Child1,RaspberryPi",
-        )],
+        [
+            (
+                "c8y/s/us",
+                "101,test-device:device:child1,Child1,RaspberryPi",
+            ),
+            ("c8y/s/us/test-device:device:child1", "117,30"),
+        ],
     )
     .await;
 
@@ -131,10 +135,13 @@ async fn child_device_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:child1",
-            "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child",
-        )],
+        [
+            (
+                "c8y/s/us/test-device:device:child1",
+                "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child",
+            ),
+            ("c8y/s/us/test-device:device:child2", "117,30"),
+        ],
     )
     .await;
 
@@ -147,10 +154,13 @@ async fn child_device_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:child1/test-device:device:child2",
-            "101,child3,child3,thin-edge.io-child",
-        )],
+        [
+            (
+                "c8y/s/us/test-device:device:child1/test-device:device:child2",
+                "101,child3,child3,thin-edge.io-child",
+            ),
+            ("c8y/s/us/child3", "117,30"),
+        ],
     )
     .await;
 }
@@ -161,7 +171,7 @@ async fn custom_topic_scheme_registration_mapping() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -176,7 +186,10 @@ async fn custom_topic_scheme_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "101,test-device:custom,Child1,RaspberryPi")],
+        [
+            ("c8y/s/us", "101,test-device:custom,Child1,RaspberryPi"),
+            ("c8y/s/us/test-device:custom", "117,30"),
+        ],
     )
     .await;
 
@@ -189,10 +202,13 @@ async fn custom_topic_scheme_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:custom:child1,Child1,RaspberryPi",
-        )],
+        [
+            (
+                "c8y/s/us",
+                "101,test-device:custom:child1,Child1,RaspberryPi",
+            ),
+            ("c8y/s/us/test-device:custom:child1", "117,30"),
+        ],
     )
     .await;
 
@@ -220,7 +236,7 @@ async fn service_registration_mapping() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -239,7 +255,7 @@ async fn service_registration_mapping() {
     .await
     .unwrap();
 
-    mqtt.skip(2).await; // Skip mappings of above child device creation messages
+    mqtt.skip(4).await; // Skip mappings of above child device creation messages and 117 messages
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/collectd"),
@@ -577,7 +593,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -602,7 +618,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -614,32 +630,14 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     .await
     .unwrap();
 
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({
-                "@type":"child-device",
-                "@id":"test-device:device:external_sensor",
-                "name": "external_sensor"
-            }),
-        )],
-    )
-    .await;
-    // Expect child device creation and converted temperature alarm messages
+    validate_child_device_auto_registration_messages(&mut mqtt, "external_sensor").await;
+
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-            ),
-            (
-                "c8y/s/us/test-device:device:external_sensor",
-                "303,temperature_high,Temperature high",
-            ),
-        ],
+        [(
+            "c8y/s/us/test-device:device:external_sensor",
+            "303,temperature_high,Temperature high",
+        )],
     )
     .await;
 }
@@ -650,7 +648,7 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -701,7 +699,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -725,25 +723,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     .await
     .unwrap();
 
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
-        )],
-    )
-    .await;
-
-    // Expect child device creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-        )],
-    )
-    .await;
+    validate_child_device_auto_registration_messages(&mut mqtt, "external_sensor").await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -776,7 +756,7 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -819,7 +799,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -839,7 +819,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     .await
     .unwrap();
 
-    mqtt.skip(2).await; //Skip child device creation message
+    validate_child_device_auto_registration_messages(&mut mqtt, "external_sensor").await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -868,7 +848,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -887,7 +867,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     .await
     .unwrap();
 
-    mqtt.skip(2).await; //Skip child device creation message
+    validate_child_device_auto_registration_messages(&mut mqtt, "external_sensor").await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -916,7 +896,7 @@ async fn c8y_mapper_alarm_with_custom_message() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -958,7 +938,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -970,7 +950,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     .await
     .unwrap();
 
-    mqtt.skip(2).await; //Skip child device creation message
+    validate_child_device_auto_registration_messages(&mut mqtt, "external_sensor").await;
 
     // Expect converted alarm SmartREST message
     assert_received_contains_str(
@@ -989,7 +969,7 @@ async fn c8y_mapper_alarm_empty_payload() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1011,7 +991,7 @@ async fn c8y_mapper_alarm_empty_json_payload() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1038,7 +1018,7 @@ async fn c8y_mapper_child_event() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1056,25 +1036,7 @@ async fn c8y_mapper_child_event() {
     .await
     .unwrap();
 
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
-        )],
-    )
-    .await;
-
-    // Expect child device creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-        )],
-    )
-    .await;
+    validate_child_device_auto_registration_messages(&mut mqtt, "external_sensor").await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -1100,7 +1062,7 @@ async fn c8y_mapper_child_service_event() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1161,6 +1123,13 @@ async fn c8y_mapper_child_service_event() {
     )
     .await;
 
+    // Expect child device c8y_RequiredAvailability SmartREST message
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us/test-device:device:external_sensor", "117,30")],
+    )
+    .await;
+
     // Expect converted event message
     assert_received_includes_json(
         &mut mqtt,
@@ -1185,7 +1154,7 @@ async fn c8y_mapper_main_service_event() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1252,7 +1221,7 @@ async fn c8y_mapper_child_service_alarm() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1314,6 +1283,13 @@ async fn c8y_mapper_child_service_alarm() {
     )
     .await;
 
+    // Expect child device c8y_RequiredAvailability SmartREST message
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us/test-device:device:external_sensor", "117,30")],
+    )
+    .await;
+
     // Expect converted alarm for the main device service
     assert_received_contains_str(
         &mut mqtt,
@@ -1330,7 +1306,7 @@ async fn c8y_mapper_main_service_alarm() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1391,7 +1367,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1629,29 +1605,15 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     .await
     .expect("Send failed");
 
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/child1//",
-            json!({"@type":"child-device", "@id": "test-device:device:child1", "name": "child1"}),
-        )],
-    )
-    .await;
+    validate_child_device_auto_registration_messages(&mut mqtt, "child1").await;
 
     // Expect an update list of capabilities with agent capabilities
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            ),
-            (
-                "c8y/s/us/test-device:device:child1",
-                "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
-            ),
-        ],
+        [(
+            "c8y/s/us/test-device:device:child1",
+            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
+        )],
     )
     .await;
 }
@@ -1707,7 +1669,9 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
         &mut mqtt,
         [
             ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
+            ("c8y/s/us/child1", "117,30"),
             ("c8y/s/us/child1", "101,child11,child11,thin-edge.io-child"),
+            ("c8y/s/us/child11", "117,30"),
         ],
     )
     .await;
@@ -2158,7 +2122,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2200,10 +2164,12 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
                 "c8y/s/us",
                 "101,immediate_child,immediate_child,thin-edge.io-child",
             ),
+            ("c8y/s/us/immediate_child", "117,30"),
             (
                 "c8y/s/us/immediate_child",
                 "101,nested_child,nested_child,thin-edge.io-child",
             ),
+            ("c8y/s/us/nested_child", "117,30"),
             (
                 "c8y/s/us/nested_child",
                 "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
@@ -2219,7 +2185,7 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2260,13 +2226,16 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
                 "c8y/s/us",
                 "101,immediate_child,immediate_child,thin-edge.io-child",
             ),
+            ("c8y/s/us/immediate_child", "117,30"),
             (
                 "c8y/s/us/immediate_child",
                 "101,nested_child,nested_child,thin-edge.io-child",
             ),
+            ("c8y/s/us/nested_child", "117,30"),
         ],
     )
     .await;
+
     // Expect nested child device creating an event
     assert_received_includes_json(
         &mut mqtt,
@@ -2289,7 +2258,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2335,7 +2304,8 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
         .await
         .unwrap();
 
-    mqtt.skip(3).await;
+    // Skip 101 and 117 messages for immediate_child. 101, 117, and 102 messages for nested_child
+    mqtt.skip(5).await;
 
     // Expect child device service creating minor temperature alarm messages
     assert_received_contains_str(
@@ -2354,7 +2324,7 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    trigger_sync_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2400,7 +2370,8 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     .await
     .unwrap();
 
-    mqtt.skip(3).await;
+    // Skip 101 and 117 messages for immediate_child. 101, 117, and 102 messages for nested_child
+    mqtt.skip(5).await;
 
     // Expect nested child device service creating the event messages
     assert_received_includes_json(
@@ -2483,9 +2454,9 @@ fn create_thin_edge_child_operations(cfg_dir: &TempTedgeDir, child_id: &str, ops
     }
 }
 
-async fn trigger_timeout(timer: &mut FakeServerBox<SyncStart, SyncComplete>) {
+async fn trigger_sync_timeout(timer: &mut FakeServerBox<SyncStart, SyncComplete>) {
     timer.recv().await.unwrap();
-    timer.send(Timeout::new(())).await.unwrap();
+    timer.send(Timeout::new(TimeoutKind::Sync)).await.unwrap();
 }
 
 pub(crate) async fn spawn_c8y_mapper_actor(
@@ -2623,6 +2594,8 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         SoftwareManagementApiFlag::Advanced,
         true,
         AutoLogUpload::Never,
+        true,
+        30,
     )
 }
 
@@ -2639,6 +2612,38 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
                 &json!({"type":"test-device-type"}).to_string(),
             ),
             ("c8y/s/us", "500"),
+            ("c8y/s/us", "117,30"),
+        ],
+    )
+    .await;
+}
+
+/// Validate all child device initial messages created by auto-registration
+pub(crate) async fn validate_child_device_auto_registration_messages(
+    mqtt: &mut impl MessageReceiver<MqttMessage>,
+    child_name: &str,
+) {
+    let child_xid = format!("test-device:device:{child_name}");
+
+    // Auto-registration message
+    assert_received_includes_json(
+        mqtt,
+        [(
+            format!("te/device/{child_name}//"),
+            json!({"@type":"child-device", "@id":child_xid}),
+        )],
+    )
+    .await;
+
+    // SmartREST initial messages
+    assert_received_contains_str(
+        mqtt,
+        [
+            (
+                "c8y/s/us",
+                format!("101,{child_xid},{child_name},thin-edge.io-child").as_str(),
+            ),
+            (format!("c8y/s/us/{child_xid}").as_str(), "117,30"),
         ],
     )
     .await;

@@ -366,7 +366,8 @@ mod tests {
         .await
         .expect("Send failed");
 
-        mqtt.skip(4).await; //Skip entity registration, mapping, supported ops and supported log types messages
+        validate_child_device_auto_registration_messages(&mut mqtt, "DeviceSerial").await;
+        mqtt.skip(2).await; //Skip supported ops and supported log types messages
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
@@ -455,23 +456,11 @@ mod tests {
         .await
         .expect("Send failed");
 
-        // Expect auto-registration message
-        assert_received_includes_json(
-            &mut mqtt,
-            [(
-                "te/device/child1//",
-                json!({"@type":"child-device","@id":"test-device:device:child1"}),
-            )],
-        )
-        .await;
+        validate_child_device_auto_registration_messages(&mut mqtt, "child1").await;
 
         assert_received_contains_str(
             &mut mqtt,
             [
-                (
-                    "c8y/s/us",
-                    "101,test-device:device:child1,child1,thin-edge.io-child",
-                ),
                 (
                     "c8y/s/us/test-device:device:child1",
                     "114,c8y_LogfileRequest",
@@ -587,24 +576,7 @@ mod tests {
             .await
             .expect("Send failed");
 
-        // Expect auto-registration message
-        assert_received_includes_json(
-            &mut mqtt,
-            [(
-                "te/device/child1//",
-                json!({"@type":"child-device","@id":"test-device:device:child1"}),
-            )],
-        )
-        .await;
-
-        assert_received_contains_str(
-            &mut mqtt,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            )],
-        )
-        .await;
+        validate_child_device_auto_registration_messages(&mut mqtt, "child1").await;
 
         // Expect `501` smartrest message on `c8y/s/us/child1`.
         assert_received_contains_str(
@@ -746,7 +718,7 @@ mod tests {
             .await
             .expect("Send failed");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        validate_child_device_auto_registration_messages(&mut mqtt, "child1").await;
 
         // Downloader gets a download request
         let download_request = dl.recv().await.expect("timeout");

@@ -144,6 +144,7 @@ mod tests {
         let (entity_topic_id, _) = mqtt_schema.entity_channel_of(&topic).unwrap();
 
         let health_message = MqttMessage::new(&topic, health_payload.as_bytes().to_owned());
+        let health_status = get_health_status_from_message(&health_message);
         let expected_message = MqttMessage::new(
             &Topic::new_unchecked(c8y_monitor_topic),
             c8y_monitor_payload.as_bytes(),
@@ -185,7 +186,7 @@ mod tests {
         let msg = convert_health_status_message(
             entity,
             &ancestors_external_ids,
-            &health_message,
+            &health_status,
             &"c8y".try_into().unwrap(),
         );
         assert_eq!(msg[0], expected_message);
