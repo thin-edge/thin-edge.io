@@ -25,7 +25,7 @@ Library             ThinEdgeIO
 Suite Setup         Setup
 Suite Teardown      Get Logs
 
-Force Tags          theme:cli    theme:configuration
+Test Tags          theme:cli    theme:configuration
 
 
 *** Test Cases ***

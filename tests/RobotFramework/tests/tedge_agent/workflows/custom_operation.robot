@@ -4,7 +4,7 @@ Library             ThinEdgeIO
 Library             Cumulocity
 Library             OperatingSystem
 
-Force Tags          theme:tedge_agent
+Test Tags          theme:tedge_agent
 Suite Setup         Custom Setup
 Test Setup          Custom Test Setup
 Test Teardown       Get Logs

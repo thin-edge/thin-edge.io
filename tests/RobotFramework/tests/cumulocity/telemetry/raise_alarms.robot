@@ -6,7 +6,7 @@ Library         Cumulocity
 Test Setup     Custom Setup
 Test Teardown    Get Logs
 
-Force Tags      theme:telemetry    theme:c8y    theme:alarms
+Test Tags      theme:telemetry    theme:c8y    theme:alarms
 
 
 *** Test Cases ***

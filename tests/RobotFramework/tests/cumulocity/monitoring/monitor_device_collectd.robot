@@ -24,7 +24,7 @@ Library         Cumulocity
 Suite Setup     Custom Setup
 Test Teardown    Get Logs
 
-Force Tags      theme:monitoring    theme:c8y    theme:collectd
+Test Tags      theme:monitoring    theme:c8y    theme:collectd
 
 *** Test Cases ***
 
