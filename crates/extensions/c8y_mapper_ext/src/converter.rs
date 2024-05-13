@@ -1086,16 +1086,18 @@ impl CumulocityConverter {
                         // Start the heartbeat timer only if the interval > 0
                         if let Ok(interval) = self.config.availability_period.try_into() {
                             if interval > 0 {
-                                let lead_service_entity =
-                                    get_child_lead_service_entity_topic_id(metadata);
-                                start_heartbeat_timer(
-                                    self.timer_sender.clone(),
-                                    interval,
-                                    new_entity.clone(),
-                                    lead_service_entity,
-                                )
-                                .await
-                                .unwrap(); // FIXME: Address RuntimeError
+                                if let Some(lead_service_entity) =
+                                    get_child_lead_service_entity_topic_id(metadata)
+                                {
+                                    start_heartbeat_timer(
+                                        self.timer_sender.clone(),
+                                        interval,
+                                        new_entity.clone(),
+                                        lead_service_entity,
+                                    )
+                                    .await
+                                    .unwrap(); // FIXME: Address RuntimeError
+                                }
                             }
                         }
                     }
