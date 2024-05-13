@@ -25,6 +25,7 @@ use std::time::SystemTime;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
+use tedge_actors::test_helpers::WithTimeout;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
@@ -2401,6 +2402,24 @@ async fn main_device_sends_heartbeat() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // The heartbeat timer for the main device should be set during initialization
+    let heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
+    let expected_heartbeat = HeartbeatPayload {
+        device: EntityTopicId::default_main_device(),
+        service: EntityTopicId::default_main_service("tedge-agent").unwrap(),
+    };
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = heartbeat_timer_request.event {
+        assert_eq!(heartbeat_timer_request.duration.as_secs(), 30 * 60);
+        assert_eq!(heartbeat_payload, expected_heartbeat);
+    } else {
+        panic!("wrong type");
+    }
+
     // Register tedge-agent service and health status is reported to "up"
     let health_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/tedge-agent/status/health"),
@@ -2409,39 +2428,64 @@ async fn main_device_sends_heartbeat() {
     mqtt.send(health_message).await.unwrap();
     mqtt.skip(3).await; // Skip service registration messages
 
-    // Validate the timer
-    let timer_request = timer.recv().await.expect("No timer set");
-    let expected_heartbeat_payload = HeartbeatPayload {
-        device: EntityTopicId::default_main_device(),
-        service: EntityTopicId::default_main_service("tedge-agent").unwrap(),
-    };
-    if let TimeoutKind::Heartbeat(heartbeat_payload) = timer_request.event {
-        assert_eq!(timer_request.duration.as_secs(), 30 * 60);
-        assert_eq!(heartbeat_payload, expected_heartbeat_payload);
-    } else {
-        panic!("wrong type");
-    }
-
-    // Simulate the heartbeat timer fired
-    timer
+    // Simulate the heartbeat timer fires
+    let _ = timer
         .send(Timeout::new(TimeoutKind::Heartbeat(
-            expected_heartbeat_payload.clone(),
+            expected_heartbeat.clone(),
         )))
-        .await
-        .unwrap();
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await;
 
-    // Heartbeat message
+    // Heartbeat message should be published
     assert_received_includes_json(
         &mut mqtt,
         [("c8y/inventory/managedObjects/update/test-device", json!({}))],
     )
     .await;
 
-    // Check the new timer is set
-    let timer_request = timer.recv().await.expect("No timer set");
-    if let TimeoutKind::Heartbeat(heartbeat_payload) = timer_request.event {
-        assert_eq!(timer_request.duration.as_secs(), 30 * 60);
-        assert_eq!(heartbeat_payload, expected_heartbeat_payload);
+    // New heartbeat timer should be set
+    let new_heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = new_heartbeat_timer_request.event {
+        assert_eq!(new_heartbeat_timer_request.duration.as_secs(), 30 * 60);
+        assert_eq!(heartbeat_payload, expected_heartbeat);
+    } else {
+        panic!("wrong type");
+    }
+
+    // Now the tedge-agent status is down
+    let health_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/tedge-agent/status/health"),
+        r#"{"pid":"1234","status":"down"}"#,
+    );
+    mqtt.send(health_message).await.unwrap();
+
+    // Simulate the heartbeat timer fires
+    let _ = timer
+        .send(Timeout::new(TimeoutKind::Heartbeat(
+            expected_heartbeat.clone(),
+        )))
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await;
+
+    // Heartbeat message should not be published
+    mqtt.skip(1).await; // New 102 status message
+    assert_eq!(mqtt.recv().await, None);
+
+    // New heartbeat timer should be set
+    let new_heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = new_heartbeat_timer_request.event {
+        assert_eq!(new_heartbeat_timer_request.duration.as_secs(), 30 * 60);
+        assert_eq!(heartbeat_payload, expected_heartbeat);
     } else {
         panic!("wrong type");
     }
@@ -2458,26 +2502,32 @@ async fn child_device_sends_heartbeat() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     skip_init_messages(&mut mqtt).await;
+    let _skip_main_device_heartbeat_request = timer.recv().with_timeout(TEST_TIMEOUT_MS).await;
 
-    // Register tedge-agent service and health status is reported to "up"
+    // Register tedge-agent service for a child device and health status is reported to "up"
     let health_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child1/service/tedge-agent/status/health"),
         r#"{"pid":"1234","status":"up"}"#,
     );
     mqtt.send(health_message).await.unwrap();
 
-    mqtt.skip(6).await; // Skip service registration messages. FIXME: Improve
+    // Skip child1 metadata, 101, tedge-agent metadata, 102, 117 for child1, and another 102 messages
+    mqtt.skip(6).await;
 
-    // Validate the timer
-    let _main_device_timer_request = timer.recv().await.expect("No timer set");
-    let child_timer_request = timer.recv().await.expect("No timer set");
+    // The heartbeat timer for the child device should be set after its entity registration
+    let child_heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
 
-    let expected_heartbeat_payload = HeartbeatPayload {
+    let expected_heartbeat = HeartbeatPayload {
         device: EntityTopicId::default_child_device("child1").unwrap(),
         service: EntityTopicId::default_child_service("child1", "tedge-agent").unwrap(),
     };
-    if let TimeoutKind::Heartbeat(heartbeat_payload) = child_timer_request.event {
-        assert_eq!(heartbeat_payload, expected_heartbeat_payload);
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = child_heartbeat_timer_request.event {
+        assert_eq!(heartbeat_payload, expected_heartbeat);
     } else {
         panic!("wrong type");
     }
@@ -2485,12 +2535,129 @@ async fn child_device_sends_heartbeat() {
     // Simulate the heartbeat timer fired
     timer
         .send(Timeout::new(TimeoutKind::Heartbeat(
-            expected_heartbeat_payload,
+            expected_heartbeat.clone(),
         )))
         .await
         .unwrap();
 
-    // Heartbeat message
+    // Simulate the heartbeat timer fires
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "c8y/inventory/managedObjects/update/test-device:device:child1",
+            json!({}),
+        )],
+    )
+    .await;
+
+    // New heartbeat timer should be set
+    let new_heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = new_heartbeat_timer_request.event {
+        assert_eq!(new_heartbeat_timer_request.duration.as_secs(), 30 * 60);
+        assert_eq!(heartbeat_payload, expected_heartbeat);
+    } else {
+        panic!("wrong type");
+    }
+
+    // Now the tedge-agent status is down
+    let health_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1/service/tedge-agent/status/health"),
+        r#"{"pid":"1234","status":"down"}"#,
+    );
+    mqtt.send(health_message).await.unwrap();
+
+    // Simulate the heartbeat timer fires
+    let _ = timer
+        .send(Timeout::new(TimeoutKind::Heartbeat(
+            expected_heartbeat.clone(),
+        )))
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await;
+
+    // Heartbeat message should not be published
+    mqtt.skip(1).await; // New 102 status message
+    assert_eq!(mqtt.recv().await, None);
+
+    // New heartbeat timer should be set
+    let new_heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = new_heartbeat_timer_request.event {
+        assert_eq!(new_heartbeat_timer_request.duration.as_secs(), 30 * 60);
+        assert_eq!(heartbeat_payload, expected_heartbeat);
+    } else {
+        panic!("wrong type");
+    }
+}
+
+#[tokio::test]
+async fn child_device_sends_heartbeat_based_on_lead_service_status() {
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+
+    // Complete sync phase so that alarm mapping starts
+    trigger_sync_timeout(&mut timer).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+    let _skip_main_device_heartbeat_request = timer.recv().with_timeout(TEST_TIMEOUT_MS).await;
+
+    // Register a child device with "leadService"
+    let child_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        json!({
+            "@type":"child-device",
+            "leadService": "device/child1/service/foo",
+        })
+        .to_string(),
+    );
+    mqtt.send(child_message).await.expect("Send failed");
+    mqtt.skip(2).await; // 101 and 117 for child1
+
+    // Register "foo" service for a child device and health status is reported to "up"
+    let health_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1/service/foo/status/health"),
+        r#"{"pid":"1234","status":"up"}"#,
+    );
+    mqtt.send(health_message).await.unwrap();
+    mqtt.skip(3).await; // Skip the service "foo" metadata, and two 102 messages
+
+    // The heartbeat timer for the child device should be set after its entity registration
+    let child_heartbeat_timer_request = timer
+        .recv()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let expected_heartbeat = HeartbeatPayload {
+        device: EntityTopicId::default_child_device("child1").unwrap(),
+        service: EntityTopicId::default_child_service("child1", "foo").unwrap(),
+    };
+    if let TimeoutKind::Heartbeat(heartbeat_payload) = child_heartbeat_timer_request.event {
+        assert_eq!(heartbeat_payload, expected_heartbeat);
+    } else {
+        panic!("wrong type");
+    }
+
+    // Simulate the heartbeat timer fired
+    timer
+        .send(Timeout::new(TimeoutKind::Heartbeat(
+            expected_heartbeat.clone(),
+        )))
+        .await
+        .unwrap();
+
+    // Simulate the heartbeat timer fires
     assert_received_includes_json(
         &mut mqtt,
         [(
