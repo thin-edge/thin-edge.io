@@ -8,7 +8,7 @@ Library             String
 Suite Setup         Custom Setup
 Test Teardown       Get Logs    name=${PARENT_SN}
 
-Force Tags          theme:firmware    theme:childdevices
+Test Tags          theme:firmware    theme:childdevices
 
 
 *** Variables ***

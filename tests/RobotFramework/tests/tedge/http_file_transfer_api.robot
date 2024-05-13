@@ -9,7 +9,7 @@ Library             ThinEdgeIO
 Suite Setup         Custom Setup
 Suite Teardown      Custom Teardown
 
-Force Tags          theme:cli    theme:configuration    theme:childdevices
+Test Tags          theme:cli    theme:configuration    theme:childdevices
 
 
 *** Variables ***

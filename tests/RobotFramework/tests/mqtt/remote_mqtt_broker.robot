@@ -6,7 +6,7 @@ Library             Cumulocity
 Suite Setup         Custom Setup
 Suite Teardown      Custom Teardown
 
-Force Tags          theme:mqtt    theme:c8y    adapter:docker
+Test Tags          theme:mqtt    theme:c8y    adapter:docker
 
 
 *** Variables ***

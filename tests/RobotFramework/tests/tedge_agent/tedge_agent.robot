@@ -14,7 +14,7 @@ Library             Collections
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs    name=${PARENT_SN}
 
-Force Tags          theme:tedge_agent
+Test Tags          theme:tedge_agent
 
 
 *** Variables ***
