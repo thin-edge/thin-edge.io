@@ -124,7 +124,7 @@ impl SystemConfig {
                 Ok(config)
             }
             Err(_) => {
-                println!("The system config file '{}' doesn't exist. Use '/bin/systemctl' as a service manager.\n", config_path);
+                println!("The system config file '{}' doesn't exist. Using '/bin/systemctl' as the default service manager\n", config_path);
                 Ok(Self::default())
             }
         }
