@@ -344,7 +344,7 @@ impl GenericCommandState {
         operations
     }
 
-    fn target(&self) -> Option<String> {
+    pub fn target(&self) -> Option<String> {
         MqttSchema::get_entity_id(&self.topic)
     }
 

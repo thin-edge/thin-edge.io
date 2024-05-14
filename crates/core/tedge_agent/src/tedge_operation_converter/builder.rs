@@ -1,8 +1,10 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::state_repository::state::AgentStateRepository;
 use crate::tedge_operation_converter::actor::AgentInput;
+use crate::tedge_operation_converter::actor::InternalCommandState;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use crate::tedge_operation_converter::config::OperationConfig;
+use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use log::error;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
@@ -24,9 +26,10 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
+use tedge_api::SoftwareListCommand;
+use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
@@ -35,9 +38,8 @@ pub struct TedgeOperationConverterBuilder {
     config: OperationConfig,
     workflows: WorkflowSupervisor,
     input_receiver: UnboundedLoggingReceiver<AgentInput>,
-    software_sender: LoggingSender<SoftwareCommand>,
-    restart_sender: LoggingSender<RestartCommand>,
-    command_sender: DynSender<GenericCommandState>,
+    command_dispatcher: CommandDispatcher,
+    command_sender: DynSender<InternalCommandState>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -63,14 +65,20 @@ impl TedgeOperationConverterBuilder {
         );
         let input_sender: DynSender<AgentInput> = input_sender.into();
 
-        let software_sender = software_actor.get_sender();
+        let mut command_dispatcher = CommandDispatcher::default();
+        let command_sender = input_sender.sender_clone();
+
+        let software_list_sender: DynSender<SoftwareListCommand> =
+            software_actor.get_sender().sender_clone();
+        let software_update_sender: DynSender<SoftwareUpdateCommand> =
+            software_actor.get_sender().sender_clone();
         software_actor.connect_sink(NoConfig, &input_sender);
-        let software_sender = LoggingSender::new("SoftwareSender".into(), software_sender);
+        command_dispatcher.add_operation_manager(software_list_sender);
+        command_dispatcher.add_operation_manager(software_update_sender);
 
         let restart_sender = restart_actor.get_sender();
         restart_actor.connect_sink(NoConfig, &input_sender);
-        let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
-        let command_sender = input_sender.sender_clone();
+        command_dispatcher.add_operation_manager(restart_sender);
 
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
@@ -92,8 +100,7 @@ impl TedgeOperationConverterBuilder {
             config,
             workflows,
             input_receiver,
-            software_sender,
-            restart_sender,
+            command_dispatcher,
             command_sender,
             mqtt_publisher,
             signal_sender,
@@ -137,8 +144,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
             state_repository: repository,
             log_dir: self.config.log_dir,
             input_receiver: self.input_receiver,
-            software_sender: self.software_sender,
-            restart_sender: self.restart_sender,
+            command_dispatcher: self.command_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
             script_runner: self.script_runner,
