@@ -4,6 +4,8 @@ use miette::ensure;
 use miette::miette;
 use miette::Context;
 use serde::Deserialize;
+use std::io::stdin;
+use std::io::BufRead;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -44,6 +46,9 @@ pub struct C8yRemoteAccessPluginOpt {
     connect_string: Option<String>,
 
     #[arg(long)]
+    /// Specifies that this remote access command is a child process,
+    /// taking the SmartREST input as an argument
+    // Use "-" to read the value from stdin.
     child: Option<String>,
 }
 
@@ -78,7 +83,8 @@ impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
             C8yRemoteAccessPluginOpt {
                 child: Some(message),
                 ..
-            } => RemoteAccessConnect::deserialize_smartrest(&message).map(Command::Connect),
+            } => RemoteAccessConnect::deserialize_smartrest(&message, stdin().lock())
+                .map(Command::Connect),
             _ => Err(miette!(
                 "Expected one argument to the remote access plugin process"
             )),
@@ -87,8 +93,17 @@ impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
 }
 
 impl RemoteAccessConnect {
-    fn deserialize_smartrest(message: &str) -> miette::Result<Self> {
-        let (id, command): (u16, Self) = deserialize_csv_record(message)
+    fn deserialize_smartrest(message: &str, mut stdin: impl BufRead) -> miette::Result<Self> {
+        // Read value from stdin
+        let message = if message.eq("-") {
+            let mut line = String::new();
+            stdin.read_line(&mut line).unwrap();
+            line
+        } else {
+            message.to_string()
+        };
+
+        let (id, command): (u16, Self) = deserialize_csv_record(message.as_str())
             .context("Deserialising arguments of remote access connect message")?;
         ensure!(
             id == 530,
@@ -108,6 +123,7 @@ impl RemoteAccessConnect {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
     use std::iter;
 
     use super::*;
@@ -167,7 +183,7 @@ mod tests {
         };
 
         assert_eq!(
-            RemoteAccessConnect::deserialize_smartrest(input).unwrap(),
+            RemoteAccessConnect::deserialize_smartrest(input, Cursor::new("")).unwrap(),
             expected
         );
     }
@@ -176,15 +192,31 @@ mod tests {
     fn rejects_input_if_it_is_not_a_530_message() {
         let input = "71,abcdef";
 
-        RemoteAccessConnect::deserialize_smartrest(input).unwrap_err();
+        RemoteAccessConnect::deserialize_smartrest(input, Cursor::new("")).unwrap_err();
     }
 
     #[test]
     fn generates_the_target_address_by_combining_the_specified_host_and_port() {
         let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
 
-        let command = RemoteAccessConnect::deserialize_smartrest(input).unwrap();
+        let command = RemoteAccessConnect::deserialize_smartrest(input, Cursor::new("")).unwrap();
 
         assert_eq!(command.target_address(), "127.0.0.1:22");
+    }
+
+    #[test]
+    fn parses_command_from_a_530_message_via_stdin() {
+        let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
+        let expected = RemoteAccessConnect {
+            device_id: "jrh-rc-test0".into(),
+            host: "127.0.0.1".into(),
+            port: 22,
+            key: "cd8fc847-f4f2-4712-8dd7-31496aef0a7d".into(),
+        };
+
+        assert_eq!(
+            RemoteAccessConnect::deserialize_smartrest("-", Cursor::new(input)).unwrap(),
+            expected
+        );
     }
 }
