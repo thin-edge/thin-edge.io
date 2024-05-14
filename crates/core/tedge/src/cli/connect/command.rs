@@ -24,6 +24,7 @@ use tedge_config::*;
 use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;
 use tedge_utils::paths::DraftFile;
+use tracing::warn;
 use which::which;
 
 use crate::bridge::AWS_CONFIG_FILENAME;
@@ -565,8 +566,9 @@ fn restart_mosquitto(
         &bridge_config.bridge_certfile,
         &bridge_config.bridge_keyfile,
     ] {
-        // TODO maybe ignore errors here
-        tedge_utils::file::change_user_and_group(path.as_ref(), user, group).unwrap();
+        if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
+            warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
+        }
     }
 
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
