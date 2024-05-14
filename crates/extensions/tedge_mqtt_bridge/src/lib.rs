@@ -410,7 +410,7 @@ trait MqttAck {
 }
 
 #[async_trait::async_trait]
-#[mutants::skip]
+#[mutants::skip] // missed: replace <impl MqttAck for AsyncClient>::ack -> Result<(), ClientError> with Ok(())
 impl MqttAck for AsyncClient {
     async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
         AsyncClient::ack(self, publish).await
@@ -505,8 +505,8 @@ impl RuntimeRequestSink for MqttBridgeActorBuilder {
 pub struct MqttBridgeActor {}
 
 #[async_trait]
-#[mutants::skip]
 impl Actor for MqttBridgeActor {
+    #[mutants::skip]
     fn name(&self) -> &str {
         "MQTT-Bridge"
     }
