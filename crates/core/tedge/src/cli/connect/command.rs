@@ -54,9 +54,9 @@ pub enum DeviceStatus {
 impl Command for ConnectCommand {
     fn description(&self) -> String {
         if self.is_test_connection {
-            format!("test connection to {} cloud.", self.cloud.as_str())
+            format!("test connection to {} cloud.", self.cloud)
         } else {
-            format!("connect {} cloud.", self.cloud.as_str())
+            format!("connect to {} cloud.", self.cloud)
         }
     }
 
@@ -68,8 +68,8 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
-            if self.check_if_bridge_exists(&bridge_config) {
-                return match self.check_connection(config) {
+            return if self.check_if_bridge_exists(&bridge_config) {
+                match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
                         println!("Connection check to {} cloud is successful.\n", cloud);
@@ -77,13 +77,13 @@ impl Command for ConnectCommand {
                     }
                     Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
                     Err(err) => Err(err.into()),
-                };
+                }
             } else {
-                return Err((ConnectError::DeviceNotConnected {
-                    cloud: self.cloud.as_str().into(),
+                Err((ConnectError::DeviceNotConnected {
+                    cloud: self.cloud.to_string(),
                 })
-                .into());
-            }
+                .into())
+            };
         }
 
         let device_type = &config.device.ty;
@@ -119,7 +119,7 @@ impl Command for ConnectCommand {
                 _ => {
                     println!(
                         "Warning: Bridge has been configured, but {} connection check failed.\n",
-                        self.cloud.as_str()
+                        self.cloud
                     );
                 }
             }
@@ -191,6 +191,10 @@ pub fn bridge_config(
     config: &TEdgeConfig,
     cloud: self::Cloud,
 ) -> Result<BridgeConfig, ConfigError> {
+    let bridge_location = match config.mqtt.bridge.built_in {
+        true => BridgeLocation::BuiltIn,
+        false => BridgeLocation::Mosquitto,
+    };
     match cloud {
         Cloud::Azure => {
             let params = BridgeConfigAzureParams {
@@ -203,6 +207,7 @@ pub fn bridge_config(
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
+                bridge_location,
             };
 
             Ok(BridgeConfig::from(params))
@@ -218,15 +223,12 @@ pub fn bridge_config(
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
+                bridge_location,
             };
 
             Ok(BridgeConfig::from(params))
         }
         Cloud::C8y => {
-            let bridge_location = match config.mqtt.bridge.built_in {
-                true => BridgeLocation::BuiltIn,
-                false => BridgeLocation::Mosquitto,
-            };
             let params = BridgeConfigC8yParams {
                 mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
@@ -510,9 +512,8 @@ fn new_bridge(
             return Err(err);
         }
     } else {
-        println!("Deleting mosquitto bridge configuration in favour of built-in bridge");
+        println!("Deleting mosquitto bridge configuration in favour of built-in bridge\n");
         clean_up(config_location, bridge_config)?;
-        restart_mosquitto(bridge_config, service_manager, config_location)?;
     }
 
     if let Err(err) = service_manager_result {

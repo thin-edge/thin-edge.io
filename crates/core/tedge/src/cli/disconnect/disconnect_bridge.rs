@@ -16,6 +16,7 @@ pub struct DisconnectBridgeCommand {
     pub use_mapper: bool,
     pub use_agent: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
+    pub built_in_bridge: bool,
 }
 
 impl Command for DisconnectBridgeCommand {
@@ -84,8 +85,12 @@ impl DisconnectBridgeCommand {
             // If bridge config file was not found we assume that the bridge doesn't exist,
             // We finish early returning exit code 0.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                println!("Bridge doesn't exist. Operation finished!");
-                Err(DisconnectBridgeError::BridgeFileDoesNotExist)
+                if self.built_in_bridge {
+                    Ok(())
+                } else {
+                    println!("Bridge doesn't exist. Operation finished!");
+                    Err(DisconnectBridgeError::BridgeFileDoesNotExist)
+                }
             }
 
             Err(e) => Err(DisconnectBridgeError::FileOperationFailed(

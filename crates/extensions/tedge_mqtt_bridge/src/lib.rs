@@ -1,22 +1,30 @@
+mod config;
+mod health;
+mod topics;
+
 use async_trait::async_trait;
 use certificate::parse_root_certificate::create_tls_config;
 use futures::SinkExt;
 use futures::StreamExt;
 use rumqttc::AsyncClient;
-use rumqttc::ConnectionError;
+use rumqttc::ClientError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::LastWill;
-use rumqttc::MqttOptions;
+pub use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::PubAck;
 use rumqttc::PubRec;
 use rumqttc::Publish;
+use rumqttc::SubscribeFilter;
 use rumqttc::Transport;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::convert::Infallible;
+use std::time::Duration;
+use std::time::Instant;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -25,20 +33,24 @@ use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tracing::error;
-use tracing::log::info;
+use tracing::info;
 
 pub type MqttConfig = mqtt_channel::Config;
 
+use crate::health::BridgeHealth;
+use crate::health::BridgeHealthMonitor;
 pub use mqtt_channel::DebugPayload;
 pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;
 pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
-pub use mqtt_channel::TopicFilter;
 use tedge_api::main_device_health_topic;
 use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
+
+use crate::topics::matches_ignore_dollar_prefix;
+use crate::topics::TopicConverter;
+pub use config::*;
 
 pub struct MqttBridgeActorBuilder {}
 
@@ -46,16 +58,9 @@ impl MqttBridgeActorBuilder {
     pub async fn new(
         tedge_config: &TEdgeConfig,
         service_name: String,
-        cloud_topics: &[impl AsRef<str>],
+        rules: BridgeConfig,
+        mut cloud_config: MqttOptions,
     ) -> Self {
-        let tls_config = create_tls_config(
-            &tedge_config.c8y.root_cert_path,
-            &tedge_config.device.key_path,
-            &tedge_config.device.cert_path,
-        )
-        .unwrap();
-
-        let prefix = tedge_config.c8y.bridge.topic_prefix.clone();
         let mut local_config = MqttOptions::new(
             &service_name,
             &tedge_config.mqtt.client.host,
@@ -83,55 +88,53 @@ impl MqttBridgeActorBuilder {
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic,
-            BridgeHealth::DOWN_PAYLOAD,
+            Status::Down.json(),
             QoS::AtLeastOnce,
             true,
         ));
-        let mut cloud_config = MqttOptions::new(
-            tedge_config.device.id.try_read(tedge_config).unwrap(),
-            tedge_config
-                .c8y
-                .mqtt
-                .or_config_not_set()
-                .unwrap()
-                .host()
-                .to_string(),
-            8883,
-        );
+        local_config.set_clean_session(false);
+
         cloud_config.set_manual_acks(true);
 
-        cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
-        let topic_prefix = format!("{prefix}/");
         let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, 10);
 
-        local_client
-            .subscribe(format!("{topic_prefix}#"), QoS::AtLeastOnce)
-            .await
-            .unwrap();
-        for topic in cloud_topics {
-            cloud_client
-                .subscribe(topic.as_ref(), QoS::AtLeastOnce)
-                .await
-                .unwrap();
-        }
+        let local_topics: Vec<_> = rules
+            .local_subscriptions()
+            .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
+            .collect();
+        let cloud_topics: Vec<_> = rules
+            .remote_subscriptions()
+            .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
+            .collect();
 
         let [msgs_local, msgs_cloud] = bidirectional_channel(10);
+        let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
+            rules.converters_and_bidirectional_topic_filters();
+        let (tx_status, monitor) =
+            BridgeHealthMonitor::new(local_client.clone(), health_topic, &msgs_cloud);
+        tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
             local_event_loop,
-            cloud_client,
-            move |topic| topic.strip_prefix(&topic_prefix).unwrap().into(),
+            cloud_client.clone(),
+            local_client.clone(),
+            convert_local,
+            bidir_local,
             msgs_local,
-            None,
+            tx_status.clone(),
             "local",
+            local_topics,
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
-            local_client,
-            move |topic| format!("{prefix}/{topic}").into(),
+            local_client.clone(),
+            cloud_client.clone(),
+            convert_cloud,
+            bidir_cloud,
             msgs_cloud,
-            Some(health_topic),
+            tx_status.clone(),
             "cloud",
+            cloud_topics,
         ));
 
         Self {}
@@ -169,6 +172,10 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 
     pub fn recv(&mut self) -> futures::stream::Next<mpsc::Receiver<T>> {
         self.rx.next()
+    }
+
+    pub fn clone_sender(&self) -> mpsc::Sender<T> {
+        self.tx.clone()
     }
 }
 
@@ -273,20 +280,26 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 /// mosquitto-based predecessor. The payload is either `1` (healthy) or `0` (unhealthy). When the
 /// connection is created, the last-will message is set to send the `0` payload when the connection
 /// is dropped.
-async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
+#[allow(clippy::too_many_arguments)]
+async fn half_bridge(
     mut recv_event_loop: EventLoop,
     target: AsyncClient,
-    transform_topic: F,
-    mut companion_bridge_half: BidirectionalChannelHalf<Option<Publish>>,
-    health_topic: Option<String>,
+    recv_client: AsyncClient,
+    transformer: TopicConverter,
+    bidirectional_topic_filters: Vec<Cow<'static, str>>,
+    mut companion_bridge_half: BidirectionalChannelHalf<Option<(String, Publish)>>,
+    tx_health: mpsc::Sender<(&'static str, Status)>,
     name: &'static str,
+    topics: Vec<SubscribeFilter>,
 ) {
     let mut forward_pkid_to_received_msg = HashMap::new();
-    let mut bridge_health = BridgeHealth::new(name, health_topic, &target);
+    let mut bridge_health = BridgeHealth::new(name, tx_health);
+    let mut loop_breaker =
+        MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
 
     loop {
         let res = recv_event_loop.poll().await;
-        bridge_health.update(&res, &mut companion_bridge_half).await;
+        bridge_health.update(&res).await;
 
         let notification = match res {
             Ok(notification) => notification,
@@ -294,19 +307,33 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
         };
 
         match notification {
+            Event::Incoming(Incoming::ConnAck(_)) => {
+                info!("Bridge cloud connection {name:?} subscribing to {topics:?}");
+                let recv_client = recv_client.clone();
+                let topics = topics.clone();
+                // We have to subscribe to this asynchronously (i.e. in a task) since we might at
+                // this point have filled our cloud event loop with outgoing messages
+                tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
+            }
+
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
-                target
-                    .publish(
-                        transform_topic(&publish.topic),
-                        publish.qos,
-                        publish.retain,
-                        publish.payload.clone(),
-                    )
-                    .await
-                    .unwrap();
-                let publish = (publish.qos > QoS::AtMostOnce).then_some(publish);
-                companion_bridge_half.send(publish).await.unwrap();
+                if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
+                    let topic = transformer.convert_topic(&publish.topic);
+                    target
+                        .publish(
+                            topic.clone(),
+                            publish.qos,
+                            publish.retain,
+                            publish.payload.clone(),
+                        )
+                        .await
+                        .unwrap();
+                    companion_bridge_half
+                        .send(Some((topic.into_owned(), publish)))
+                        .await
+                        .unwrap();
+                }
             }
 
             // Forward acks from event loop to target
@@ -315,14 +342,16 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
                 if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
-                    target.ack(&msg).await.unwrap();
+                    let target = target.clone();
+                    tokio::spawn(async move { target.ack(&msg).await.unwrap() });
                 }
             }
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => match companion_bridge_half.recv().await {
                 // A message was forwarded by the other bridge half, note the packet id
-                Some(Some(msg)) => {
+                Some(Some((topic, msg))) => {
+                    loop_breaker.forward_on_topic(topic, &msg);
                     forward_pkid_to_received_msg.insert(pkid, msg);
                 }
 
@@ -337,62 +366,124 @@ async fn half_bridge<F: for<'a> Fn(&'a str) -> Cow<'a, str>>(
     }
 }
 
-type NotificationRes = Result<Event, ConnectionError>;
-
-struct BridgeHealth<'a> {
-    name: &'static str,
-    health_topic: Option<String>,
-    target: &'a AsyncClient,
-    last_err: Option<String>,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Status {
+    Up,
+    Down,
 }
 
-impl<'a> BridgeHealth<'a> {
-    const UP_PAYLOAD: &'static str = "{\"status\":\"up\"}";
-    const DOWN_PAYLOAD: &'static str = "{\"status\":\"down\"}";
+impl Status {
+    fn json(self) -> &'static str {
+        match self {
+            Status::Up => r#"{"status":"up"}"#,
+            Status::Down => r#"{"status":"down"}"#,
+        }
+    }
+}
 
-    fn new(name: &'static str, health_topic: Option<String>, target: &'a AsyncClient) -> Self {
+fn overall_status(lhs: Option<Status>, rhs: &Option<Status>) -> Option<Status> {
+    match (lhs?, rhs.as_ref()?) {
+        (Status::Up, Status::Up) => Some(Status::Up),
+        _ => Some(Status::Down),
+    }
+}
+
+/// A tool to remove duplicate messages and avoid infinite loops
+struct MessageLoopBreaker<Ack, Clock> {
+    forwarded_messages: VecDeque<(Instant, Publish)>,
+    bidirectional_topics: Vec<Cow<'static, str>>,
+    client: Ack,
+    clock: Clock,
+}
+
+fn have_same_content(fwd_msg: &Publish, cmp: &Publish) -> bool {
+    fwd_msg.topic == cmp.topic
+        && fwd_msg.qos == cmp.qos
+        && fwd_msg.retain == cmp.retain
+        && fwd_msg.payload == cmp.payload
+}
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+trait MqttAck {
+    async fn ack(&self, publish: &Publish) -> Result<(), rumqttc::ClientError>;
+}
+
+#[async_trait::async_trait]
+#[mutants::skip] // missed: replace <impl MqttAck for AsyncClient>::ack -> Result<(), ClientError> with Ok(())
+impl MqttAck for AsyncClient {
+    async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
+        AsyncClient::ack(self, publish).await
+    }
+}
+
+struct SystemClock;
+
+#[cfg_attr(test, mockall::automock)]
+trait MonotonicClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+
+impl MonotonicClock for SystemClock {}
+
+impl<Ack: MqttAck> MessageLoopBreaker<Ack, SystemClock> {
+    fn new(recv_client: Ack, bidirectional_topics: Vec<Cow<'static, str>>) -> Self {
         Self {
-            name,
-            health_topic,
-            target,
-            last_err: Some("dummy error".into()),
-        }
-    }
-
-    async fn update(
-        &mut self,
-        result: &NotificationRes,
-        companion_bridge_half: &mut BidirectionalChannelHalf<Option<Publish>>,
-    ) {
-        let name = self.name;
-        let (err, health_payload) = match result {
-            Ok(event) => {
-                if let Event::Incoming(Incoming::ConnAck(_)) = event {
-                    info!("MQTT bridge connected to {name} broker")
-                }
-                (None, Self::UP_PAYLOAD)
-            }
-            Err(err) => (Some(err.to_string()), Self::DOWN_PAYLOAD),
-        };
-
-        if self.last_err != err {
-            if let Some(err) = &err {
-                error!("MQTT bridge failed to connect to {name} broker: {err}")
-            }
-            self.last_err = err;
-
-            if let Some(health_topic) = &self.health_topic {
-                self.target
-                    .publish(health_topic, QoS::AtLeastOnce, true, health_payload)
-                    .await
-                    .unwrap();
-                // Send a note that a message has been published to maintain synchronisation
-                // between the two bridge halves
-                companion_bridge_half.send(None).await.unwrap();
-            }
+            forwarded_messages: <_>::default(),
+            bidirectional_topics,
+            client: recv_client,
+            clock: SystemClock,
         }
     }
 }
+
+impl<Ack: MqttAck, Clock: MonotonicClock> MessageLoopBreaker<Ack, Clock> {
+    async fn ensure_not_looped(&mut self, received: Publish) -> Option<Publish> {
+        self.clean_old_messages();
+        if self
+            .forwarded_messages
+            .front()
+            .map_or(false, |(_, sent)| have_same_content(sent, &received))
+        {
+            self.client.ack(&received).await.unwrap();
+            self.forwarded_messages.pop_front();
+            None
+        } else {
+            Some(received)
+        }
+    }
+
+    fn forward_on_topic(&mut self, topic: impl Into<String> + AsRef<str>, publish: &Publish) {
+        if self.is_bidirectional(topic.as_ref()) {
+            let mut publish_with_topic = Publish::new(topic, publish.qos, publish.payload.clone());
+            publish_with_topic.retain = publish.retain;
+            self.forwarded_messages
+                .push_back((self.clock.now(), publish_with_topic));
+        }
+    }
+
+    fn is_bidirectional(&self, topic: &str) -> bool {
+        self.bidirectional_topics
+            .iter()
+            .any(|filter| matches_ignore_dollar_prefix(topic, filter))
+    }
+
+    #[mutants::skip]
+    fn clean_old_messages(&mut self) {
+        let deadline = self.clock.now() - Duration::from_secs(100);
+        while self
+            .forwarded_messages
+            .front()
+            .map(|&(time, _)| time < deadline)
+            == Some(true)
+        {
+            self.forwarded_messages.pop_front();
+        }
+    }
+}
+
 impl Builder<MqttBridgeActor> for MqttBridgeActorBuilder {
     type Error = Infallible;
 
@@ -415,11 +506,234 @@ pub struct MqttBridgeActor {}
 
 #[async_trait]
 impl Actor for MqttBridgeActor {
+    #[mutants::skip]
     fn name(&self) -> &str {
         "MQTT-Bridge"
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod message_loop_breaker {
+        use crate::MessageLoopBreaker;
+        use crate::MockMonotonicClock;
+        use crate::MockMqttAck;
+        use rumqttc::Publish;
+        use rumqttc::QoS;
+        use std::time::Duration;
+        use std::time::Instant;
+
+        #[tokio::test]
+        async fn ignores_non_bidirectional_topics() {
+            let client = MockMqttAck::new();
+            let mut sut = MessageLoopBreaker::new(client, vec![]);
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            assert_eq!(
+                sut.ensure_not_looped(example_pub.clone()).await,
+                Some(example_pub)
+            );
+        }
+
+        #[tokio::test]
+        async fn skips_forwarded_messages() {
+            let mut client = MockMqttAck::new();
+            let _ = client.expect_ack().return_once(|_| Ok(()));
+            let mut sut = MessageLoopBreaker::new(client, vec!["test".into()]);
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            assert_eq!(sut.ensure_not_looped(example_pub).await, None);
+        }
+
+        #[tokio::test]
+        async fn allows_duplicate_messages_after_decloning() {
+            let mut client = MockMqttAck::new();
+            let _ack = client.expect_ack().return_once(|_| Ok(()));
+            let mut sut = MessageLoopBreaker::new(client, vec!["test".into()]);
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            sut.ensure_not_looped(example_pub.clone()).await;
+            assert_eq!(
+                sut.ensure_not_looped(example_pub.clone()).await,
+                Some(example_pub)
+            );
+        }
+
+        #[tokio::test]
+        async fn deduplicates_topics_that_start_with_a_dollar_sign() {
+            let mut client = MockMqttAck::new();
+            let _ack = client.expect_ack().return_once(|_| Ok(()));
+            let mut sut = MessageLoopBreaker::new(client, vec!["$aws/test".into()]);
+            let example_pub = Publish::new("$aws/test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("$aws/test", &example_pub);
+            assert_eq!(sut.ensure_not_looped(example_pub.clone()).await, None);
+        }
+
+        #[tokio::test]
+        async fn cleans_up_stale_messages() {
+            let client = MockMqttAck::new();
+            let mut clock = MockMonotonicClock::new();
+            let now = Instant::now();
+            let _now = clock.expect_now().times(1).return_once(move || now);
+            let mut sut = MessageLoopBreaker {
+                client,
+                bidirectional_topics: vec!["test".into()],
+                forwarded_messages: <_>::default(),
+                clock,
+            };
+            let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
+
+            sut.forward_on_topic("test", &example_pub);
+            let _now = sut
+                .clock
+                .expect_now()
+                .times(1)
+                .return_once(move || now + Duration::from_secs(3600));
+            assert_eq!(
+                sut.ensure_not_looped(example_pub.clone()).await,
+                Some(example_pub)
+            );
+        }
+    }
+
+    mod topic_converter {
+        use super::*;
+
+        #[test]
+        fn includes_local_rules_in_subscription_topics() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_local("s/us", "c8y/", "").unwrap();
+            assert_eq!(tc.local_subscriptions().collect::<Vec<_>>(), ["c8y/s/us"]);
+        }
+
+        #[test]
+        fn includes_remote_rules_in_subscription_topics() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
+            assert_eq!(tc.remote_subscriptions().collect::<Vec<_>>(), ["s/ds"]);
+        }
+
+        #[test]
+        fn applies_local_rules_in_order() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_local("s/us", "c8y/", "").unwrap();
+            tc.forward_from_local("#", "c8y/", "secondary/").unwrap();
+            let [(rules, _), _] = tc.converters_and_bidirectional_topic_filters();
+            assert_eq!(rules.convert_topic("c8y/s/us"), "s/us");
+            assert_eq!(rules.convert_topic("c8y/other"), "secondary/other");
+        }
+
+        #[test]
+        fn applies_remote_rules_in_order() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
+            tc.forward_from_remote("#", "c8y/", "secondary/").unwrap();
+            let [_, (rules, _)] = tc.converters_and_bidirectional_topic_filters();
+            assert_eq!(rules.convert_topic("s/ds"), "c8y/s/ds");
+            assert_eq!(rules.convert_topic("secondary/other"), "c8y/other");
+        }
+
+        #[test]
+        fn does_not_create_local_subscription_for_remote_rule() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
+            assert_eq!(tc.local_subscriptions().count(), 0);
+        }
+
+        #[test]
+        fn does_not_create_remote_subscription_for_local_rule() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_local("s/us", "c8y/", "").unwrap();
+            assert_eq!(tc.remote_subscriptions().count(), 0);
+        }
+
+        #[test]
+        fn creates_multiple_subscriptions_when_multiple_local_rules_are_added() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_local("s/us", "c8y/", "").unwrap();
+            tc.forward_from_local("s/uat", "c8y/", "").unwrap();
+            assert_eq!(
+                tc.local_subscriptions().collect::<Vec<_>>(),
+                ["c8y/s/us", "c8y/s/uat"]
+            );
+        }
+
+        #[test]
+        fn creates_multiple_subscriptions_when_multiple_remote_rules_are_added() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
+            tc.forward_from_remote("s/dat", "c8y/", "").unwrap();
+            assert_eq!(
+                tc.remote_subscriptions().collect::<Vec<_>>(),
+                ["s/ds", "s/dat"]
+            );
+        }
+
+        #[test]
+        fn creates_multiple_subscriptions_when_rules_are_added_in_both_directions() {
+            let mut tc = BridgeConfig::new();
+            tc.forward_from_local("s/us", "c8y/", "").unwrap();
+            tc.forward_from_local("s/uat", "c8y/", "").unwrap();
+            tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
+            tc.forward_from_remote("s/dat", "c8y/", "").unwrap();
+            assert_eq!(
+                tc.local_subscriptions().collect::<Vec<_>>(),
+                ["c8y/s/us", "c8y/s/uat"]
+            );
+            assert_eq!(
+                tc.remote_subscriptions().collect::<Vec<_>>(),
+                ["s/ds", "s/dat"]
+            );
+        }
+    }
+
+    mod have_same_content {
+        use crate::have_same_content;
+        use rumqttc::Publish;
+        use rumqttc::QoS;
+
+        #[test]
+        fn accepts_identical_messages() {
+            let msg = Publish::new("test", QoS::AtLeastOnce, "a test");
+            assert!(have_same_content(&msg, &msg));
+        }
+
+        #[test]
+        fn rejects_messages_with_different_topics() {
+            let msg = Publish::new("test", QoS::AtLeastOnce, "a test");
+            let msg2 = Publish::new("not/the/same", QoS::AtLeastOnce, "a test");
+            assert!(!have_same_content(&msg, &msg2));
+        }
+        #[test]
+        fn rejects_messages_with_different_qos() {
+            let msg = Publish::new("test", QoS::ExactlyOnce, "a test");
+            let msg2 = Publish::new("test", QoS::AtLeastOnce, "a test");
+            assert!(!have_same_content(&msg, &msg2));
+        }
+
+        #[test]
+        fn rejects_messages_with_different_payloads() {
+            let msg = Publish::new("test", QoS::ExactlyOnce, "a test");
+            let msg2 = Publish::new("test", QoS::AtLeastOnce, "not the same");
+            assert!(!have_same_content(&msg, &msg2));
+        }
+
+        #[test]
+        fn rejects_messages_with_different_retain_values() {
+            let mut msg = Publish::new("test", QoS::ExactlyOnce, "a test");
+            msg.retain = true;
+            let msg2 = Publish::new("test", QoS::AtLeastOnce, "a test");
+            assert!(!have_same_content(&msg, &msg2));
+        }
     }
 }

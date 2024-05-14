@@ -109,15 +109,16 @@ mod tests {
     #[test]
     fn convert_c8y_topic_to_str() {
         assert_eq!(
-            &C8yTopic::SmartRestRequest.with_prefix(&"c8y".into()),
+            &C8yTopic::SmartRestRequest.with_prefix(&"c8y".try_into().unwrap()),
             "c8y/s/ds"
         );
         assert_eq!(
-            &C8yTopic::SmartRestResponse.with_prefix(&"c8y".into()),
+            &C8yTopic::SmartRestResponse.with_prefix(&"c8y".try_into().unwrap()),
             "c8y/s/us"
         );
         assert_eq!(
-            &C8yTopic::ChildSmartRestResponse("child-id".into()).with_prefix(&"custom".into()),
+            &C8yTopic::ChildSmartRestResponse("child-id".into())
+                .with_prefix(&"custom".try_into().unwrap()),
             "custom/s/us/child-id"
         );
     }
@@ -125,11 +126,11 @@ mod tests {
     #[test]
     fn topic_methods() {
         assert_eq!(
-            C8yTopic::upstream_topic(&"c8y-local".into()),
+            C8yTopic::upstream_topic(&"c8y-local".try_into().unwrap()),
             Topic::new_unchecked("c8y-local/s/us")
         );
         assert_eq!(
-            C8yTopic::downstream_topic(&"custom-topic".into()),
+            C8yTopic::downstream_topic(&"custom-topic".try_into().unwrap()),
             Topic::new_unchecked("custom-topic/s/ds")
         )
     }
@@ -139,7 +140,8 @@ mod tests {
     #[test_case(& ["child1", "main"], "c8y2/s/us/child1")]
     #[test_case(& ["child3", "child2", "child1", "main"], "c8y2/s/us/child1/child2/child3")]
     fn topic_from_ancestors(ancestors: &[&str], topic: &str) {
-        let nested_child_topic = publish_topic_from_ancestors(ancestors, &"c8y2".into());
+        let nested_child_topic =
+            publish_topic_from_ancestors(ancestors, &"c8y2".try_into().unwrap());
         assert_eq!(nested_child_topic, Topic::new_unchecked(topic));
     }
 }

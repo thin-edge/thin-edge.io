@@ -10,6 +10,9 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::use_key_and_cert;
+use tedge_mqtt_bridge::BridgeConfig;
+use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
@@ -29,6 +32,38 @@ impl TEdgeComponent for AzureMapper {
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
+        if tedge_config.mqtt.bridge.built_in {
+            let remote_clientid = tedge_config.device.id.try_read(&tedge_config)?;
+            let rules = built_in_bridge_rules(remote_clientid)?;
+
+            let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
+                remote_clientid,
+                tedge_config.az.url.or_config_not_set()?.to_string(),
+                8883,
+            );
+            cloud_config.set_clean_session(false);
+            cloud_config.set_credentials(
+                format!(
+                    "{}/{remote_clientid}/?api-version=2018-06-30",
+                    tedge_config.az.url.or_config_not_set()?
+                ),
+                "",
+            );
+            use_key_and_cert(
+                &mut cloud_config,
+                &tedge_config.az.root_cert_path,
+                &tedge_config,
+            )?;
+
+            let bridge_actor = MqttBridgeActorBuilder::new(
+                &tedge_config,
+                "tedge-mapper-bridge-az".to_owned(),
+                rules,
+                cloud_config,
+            )
+            .await;
+            runtime.spawn(bridge_actor).await?;
+        }
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
             tedge_config.az.mapper.timestamp,
@@ -55,4 +90,28 @@ fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
         }
     }
     topics
+}
+
+fn built_in_bridge_rules(remote_clientid: &str) -> anyhow::Result<BridgeConfig> {
+    let local_prefix = "az/";
+    let iothub_prefix = "$iothub/";
+    let device_id_prefix = format!("devices/{remote_clientid}/");
+    let mut bridge = BridgeConfig::new();
+    bridge.forward_from_local("messages/events/#", local_prefix, device_id_prefix.clone())?;
+    bridge.forward_from_remote("messages/devicebound/#", local_prefix, device_id_prefix)?;
+    // Direct methods (request/response)
+    bridge.forward_from_local("methods/res/#", local_prefix, iothub_prefix)?;
+    bridge.forward_from_remote("methods/POST/#", local_prefix, iothub_prefix)?;
+
+    // Digital twin
+    bridge.forward_from_local("twin/GET/#", local_prefix, iothub_prefix)?;
+    bridge.forward_from_local("twin/PATCH/#", local_prefix, iothub_prefix)?;
+    bridge.forward_from_remote("twin/res/#", local_prefix, iothub_prefix)?;
+
+    Ok(bridge)
+}
+
+#[test]
+fn bridge_rules_are_valid() {
+    built_in_bridge_rules("test-device-id").unwrap();
 }

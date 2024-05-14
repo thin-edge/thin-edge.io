@@ -10,6 +10,7 @@ use crate::TemplatesSet;
 use crate::HTTPS_PORT;
 use crate::MQTT_TLS_PORT;
 use anyhow::anyhow;
+use anyhow::ensure;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::create_tls_config;
@@ -20,7 +21,6 @@ use doku::Type;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::borrow::Cow;
-use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Formatter;
 use std::io::Read;
@@ -460,11 +460,10 @@ define_tedge_config! {
                 local_cleansession: AutoFlag,
             },
 
-            // TODO validation
             /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
             /// forwarded by to Cumulocity on the `s/us` topic
-            #[tedge_config(example = "c8y", default(value = "c8y"))]
+            #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
             #[doku(skip)] // Hide the configuration in `tedge config list --doc`
             topic_prefix: TopicPrefix,
         },
@@ -836,6 +835,10 @@ define_tedge_config! {
 
 }
 
+fn c8y_topic_prefix() -> TopicPrefix {
+    TopicPrefix::try_new("c8y").unwrap()
+}
+
 impl ReadableKey {
     // This is designed to be a simple way of controlling whether values appear in the output of
     // `tedge config list`. Ideally this would be integrated into [define_tedge_config], see
@@ -852,9 +855,9 @@ impl ReadableKey {
     }
 }
 
-// TODO doc comment
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]
-#[serde(from = "String", into = "Arc<str>")]
+#[serde(try_from = "Cow<'_, str>", into = "Arc<str>")]
+/// A valid MQTT topic prefix, used to customise the c8y/ topic prefix
 pub struct TopicPrefix(Arc<str>);
 
 impl Document for TopicPrefix {
@@ -863,24 +866,41 @@ impl Document for TopicPrefix {
     }
 }
 
-// TODO actual validation
-// TODO make sure we don't allow c8y-internal either, or az, or aws as those are all used
-impl From<String> for TopicPrefix {
-    fn from(value: String) -> Self {
-        Self(value.into())
+#[derive(thiserror::Error, Debug)]
+#[error("{0}")]
+pub struct InvalidTopicPrefix(#[from] anyhow::Error);
+
+impl<'a> TryFrom<Cow<'a, str>> for TopicPrefix {
+    type Error = InvalidTopicPrefix;
+    fn try_from(value: Cow<'a, str>) -> Result<Self, Self::Error> {
+        Self::try_new(&value).map_err(InvalidTopicPrefix)
     }
 }
 
-impl From<&str> for TopicPrefix {
-    fn from(value: &str) -> Self {
-        Self(value.into())
+impl TryFrom<&str> for TopicPrefix {
+    type Error = InvalidTopicPrefix;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_new(value).map_err(InvalidTopicPrefix)
+    }
+}
+
+impl TopicPrefix {
+    fn try_new(value: &str) -> Result<Self, anyhow::Error> {
+        ensure!(!value.is_empty(), "Topic prefix must not be empty");
+        ensure!(!value.contains('#'), "Topic prefix cannot contain '#'");
+        ensure!(!value.contains('+'), "Topic prefix cannot contain '+'");
+        ensure!(
+            value != "c8y-internal",
+            "Topic prefix cannot be c8y-internal"
+        );
+        Ok(Self(value.into()))
     }
 }
 
 impl FromStr for TopicPrefix {
-    type Err = Infallible;
+    type Err = InvalidTopicPrefix;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(s.into())
+        Self::try_new(s).map_err(InvalidTopicPrefix)
     }
 }
 
@@ -890,7 +910,6 @@ impl From<TopicPrefix> for Arc<str> {
     }
 }
 
-// TODO is deref actually right here
 impl Deref for TopicPrefix {
     type Target = str;
     fn deref(&self) -> &Self::Target {

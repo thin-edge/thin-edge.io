@@ -374,7 +374,7 @@ async fn mapper_publishes_software_update_request() {
 
     // Simulate c8y_SoftwareUpdate JSON over MQTT request
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(&"c8y".into()),
+        &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
         json!({
             "id": "123456",
             "c8y_SoftwareUpdate": [
@@ -533,7 +533,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
     // Publish a c8y_SoftwareUpdate via JSON over MQTT that contains a wrong action `remove`, that is not known by c8y.
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(&"c8y".into()),
+        &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
         json!({
             "id": "123456",
             "c8y_SoftwareUpdate": [
@@ -1429,7 +1429,7 @@ async fn mapper_handles_multiple_modules_in_update_list_sm_requests() {
 
     // Publish multiple modules software update via JSON over MQTT.
     mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(&"c8y".into()),
+        &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
         json!({
             "id": "123456",
             "c8y_SoftwareUpdate": [
@@ -1877,7 +1877,7 @@ async fn custom_operation_without_timeout_successful() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".into()),
+        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -1938,7 +1938,7 @@ async fn custom_operation_with_timeout_successful() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".into()),
+        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -1998,7 +1998,7 @@ async fn custom_operation_timeout_sigterm() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".into()),
+        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -2064,7 +2064,7 @@ async fn custom_operation_timeout_sigkill() {
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".into()),
+        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
         "511,test-device,c8y_Command",
     ))
     .await
@@ -2512,8 +2512,11 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     let mqtt_schema = MqttSchema::default();
     let auth_proxy_addr = "127.0.0.1".into();
     let auth_proxy_port = 8001;
-    let mut topics =
-        C8yMapperConfig::default_internal_topic_filter(config_dir.path(), &"c8y".into()).unwrap();
+    let mut topics = C8yMapperConfig::default_internal_topic_filter(
+        config_dir.path(),
+        &"c8y".try_into().unwrap(),
+    )
+    .unwrap();
     topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
         &mqtt_schema,
     ));
@@ -2542,7 +2545,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         MqttSchema::default(),
         true,
         true,
-        "c8y".into(),
+        "c8y".try_into().unwrap(),
         false,
         SoftwareManagementApiFlag::Advanced,
         true,

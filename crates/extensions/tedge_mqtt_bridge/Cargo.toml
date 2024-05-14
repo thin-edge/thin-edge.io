@@ -14,16 +14,27 @@ repository = { workspace = true }
 default = []
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 certificate = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
+mutants = { workspace = true }
 rumqttc = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["macros"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+mockall = { workspace = true }
+rcgen = { workspace = true }
+rumqttd = { workspace = true }
+serde_json = { workspace = true }
+tedge_test_utils = { workspace = true }
 
 [lints]
 workspace = true

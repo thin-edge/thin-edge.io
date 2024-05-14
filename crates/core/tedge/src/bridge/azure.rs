@@ -14,6 +14,7 @@ pub struct BridgeConfigAzureParams {
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
+    pub bridge_location: BridgeLocation,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -25,6 +26,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             remote_clientid,
             bridge_certfile,
             bridge_keyfile,
+            bridge_location,
         } = params;
 
         let address = mqtt_host.clone();
@@ -66,15 +68,14 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 pub_msg_topic,
                 sub_msg_topic,
                 // Direct methods (request/response)
-                r##"methods/POST/# in 1 az/ $iothub/"##.into(),
-                r##"methods/res/# out 1 az/ $iothub/"##.into(),
+                "methods/POST/# in 1 az/ $iothub/".into(),
+                "methods/res/# out 1 az/ $iothub/".into(),
                 // Digital twin
-                r##"twin/res/# in 1 az/ $iothub/"##.into(),
-                r##"twin/GET/# out 1 az/ $iothub/"##.into(),
-                r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
+                "twin/res/# in 1 az/ $iothub/".into(),
+                "twin/GET/# out 1 az/ $iothub/".into(),
+                "twin/PATCH/# out 1 az/ $iothub/".into(),
             ],
-            // TODO support configurability
-            bridge_location: BridgeLocation::Mosquitto,
+            bridge_location,
         }
     }
 }
@@ -90,6 +91,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_root_cert_path: "./test_root.pem".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
+        bridge_location: BridgeLocation::Mosquitto,
     };
 
     let bridge = BridgeConfig::from(params);
@@ -108,13 +110,13 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         use_mapper: true,
         use_agent: false,
         topics: vec![
-            r#"messages/events/# out 1 az/ devices/alpha/"#.into(),
-            r##"messages/devicebound/# in 1 az/ devices/alpha/"##.into(),
-            r##"methods/POST/# in 1 az/ $iothub/"##.into(),
-            r##"methods/res/# out 1 az/ $iothub/"##.into(),
-            r##"twin/res/# in 1 az/ $iothub/"##.into(),
-            r##"twin/GET/# out 1 az/ $iothub/"##.into(),
-            r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
+            "messages/events/# out 1 az/ devices/alpha/".into(),
+            "messages/devicebound/# in 1 az/ devices/alpha/".into(),
+            "methods/POST/# in 1 az/ $iothub/".into(),
+            "methods/res/# out 1 az/ $iothub/".into(),
+            "twin/res/# in 1 az/ $iothub/".into(),
+            "twin/GET/# out 1 az/ $iothub/".into(),
+            "twin/PATCH/# out 1 az/ $iothub/".into(),
         ],
         try_private: false,
         start_type: "automatic".into(),

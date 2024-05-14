@@ -120,7 +120,6 @@ impl C8yMapperConfig {
         }
     }
 
-    // TODO don't allocate string
     pub fn bridge_service_name(&self) -> String {
         if self.bridge_in_mapper {
             format!("tedge-mapper-bridge-{}", self.c8y_prefix)

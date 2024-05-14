@@ -530,7 +530,7 @@ async fn required_init_state_recreated_on_startup() -> Result<(), DynError> {
     // Assert that the startup succeeds and the plugin requests for pending operations
     mqtt_message_box
         .assert_received([MqttMessage::new(
-            &C8yTopic::upstream_topic(&"c8y".into()),
+            &C8yTopic::upstream_topic(&"c8y".try_into().unwrap()),
             "500",
         )])
         .await;
@@ -555,7 +555,7 @@ async fn required_init_state_recreated_on_startup() -> Result<(), DynError> {
     // Assert that the startup succeeds again and the mapper requests for pending operations
     mqtt_message_box
         .assert_received([MqttMessage::new(
-            &C8yTopic::upstream_topic(&"c8y".into()),
+            &C8yTopic::upstream_topic(&"c8y".try_into().unwrap()),
             "500",
         )])
         .await;
@@ -643,7 +643,7 @@ async fn spawn_firmware_manager(
         tmp_dir.utf8_path_buf().into(),
         timeout_sec,
         C8Y_HOST.into(),
-        "c8y".into(),
+        "c8y".try_into().unwrap(),
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

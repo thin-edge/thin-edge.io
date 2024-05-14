@@ -17,10 +17,6 @@ impl Cloud {
         }
     }
 
-    pub fn as_str(self) -> &'static str {
-        self.into()
-    }
-
     pub fn bridge_config_filename(&self) -> &str {
         match self {
             Self::C8y => crate::bridge::C8Y_CONFIG_FILENAME,

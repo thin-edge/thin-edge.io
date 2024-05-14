@@ -10,6 +10,9 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::use_key_and_cert;
+use tedge_mqtt_bridge::BridgeConfig;
+use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
 const AWS_MAPPER_NAME: &str = "tedge-mapper-aws";
@@ -29,6 +32,30 @@ impl TEdgeComponent for AwsMapper {
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
+        if tedge_config.mqtt.bridge.built_in {
+            let device_id = tedge_config.device.id.try_read(&tedge_config)?;
+            let rules = built_in_bridge_rules(device_id)?;
+
+            let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
+                tedge_config.device.id.try_read(&tedge_config)?,
+                tedge_config.aws.url.or_config_not_set()?.to_string(),
+                8883,
+            );
+            cloud_config.set_clean_session(false);
+            use_key_and_cert(
+                &mut cloud_config,
+                &tedge_config.aws.root_cert_path,
+                &tedge_config,
+            )?;
+            let bridge_actor = MqttBridgeActorBuilder::new(
+                &tedge_config,
+                "tedge-mapper-bridge-aws".to_owned(),
+                rules,
+                cloud_config,
+            )
+            .await;
+            runtime.spawn(bridge_actor).await?;
+        }
         let clock = Box::new(WallClock);
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let aws_converter = AwsConverter::new(
@@ -57,4 +84,30 @@ fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
         }
     }
     topics
+}
+
+fn built_in_bridge_rules(remote_client_id: &str) -> Result<BridgeConfig, anyhow::Error> {
+    let local_prefix = "aws/";
+    let device_id_prefix = format!("thinedge/{remote_client_id}/");
+    let things_prefix = format!("$aws/things/{remote_client_id}/");
+    let conn_check = format!("thinedge/devices/{remote_client_id}/test-connection");
+    let mut bridge = BridgeConfig::new();
+
+    // telemetry/command topics for use by the user
+    bridge.forward_from_local("td/#", local_prefix, device_id_prefix.clone())?;
+    bridge.forward_from_remote("cmd/#", local_prefix, device_id_prefix)?;
+
+    // topic to interact with the shadow of the device
+    bridge.forward_bidirectionally("shadow/#", local_prefix, things_prefix.clone())?;
+
+    // echo topic mapping to check the connection
+    bridge.forward_from_local("", "aws/test-connection", conn_check.clone())?;
+    bridge.forward_from_remote("", "aws/connection-success", conn_check)?;
+
+    Ok(bridge)
+}
+
+#[test]
+fn bridge_rules_are_valid() {
+    built_in_bridge_rules("test-device-id").unwrap();
 }
