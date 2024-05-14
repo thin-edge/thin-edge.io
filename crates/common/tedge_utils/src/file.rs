@@ -22,6 +22,9 @@ pub enum FileError {
     #[error("Failed to change owner: {name:?}.")]
     MetaDataError { name: String, from: std::io::Error },
 
+    #[error("Failed to change permissions of file: {name:?}.")]
+    ChangeModeError { name: String, from: std::io::Error },
+
     #[error("User not found: {user:?}.")]
     UserNotFound { user: String },
 
@@ -380,7 +383,7 @@ pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(),
     let gid = get_metadata(Path::new(file))?.gid();
 
     // if user and group are same as existing, then do not change
-    if (ud != uid) && (gd != gid) {
+    if (ud != uid) || (gd != gid) {
         chown(file, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd))).map_err(|e| {
             FileError::MetaDataError {
                 name: file.display().to_string(),
@@ -431,15 +434,22 @@ fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
 }
 
 fn change_mode(file: &Path, mode: u32) -> Result<(), FileError> {
-    let mut perm = get_metadata(Path::new(file))?.permissions();
-    perm.set_mode(mode);
+    let mut permissions = get_metadata(Path::new(file))?.permissions();
 
-    fs::set_permissions(file, perm).map_err(|e| FileError::MetaDataError {
-        name: file.display().to_string(),
-        from: e,
-    })?;
-
-    Ok(())
+    if permissions.mode() & 0o777 != mode {
+        permissions.set_mode(mode);
+        debug!("Setting mode of {} to {mode:0o}", file.display());
+        fs::set_permissions(file, permissions).map_err(|e| FileError::ChangeModeError {
+            name: file.display().to_string(),
+            from: e,
+        })
+    } else {
+        debug!(
+            "Not changing mode of {} as it is already {mode:0o}",
+            file.display()
+        );
+        Ok(())
+    }
 }
 
 /// Return metadata when the given path exists and accessible by user
