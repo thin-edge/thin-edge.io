@@ -19,6 +19,7 @@ camino = { workspace = true }
 clock = { workspace = true }
 json-writer = { workspace = true }
 logged_command = { workspace = true }
+mime = { workspace = true }
 plugin_sm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -44,6 +45,7 @@ tokio = { workspace = true, features = [
 ] }
 toml = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 assert-json-diff = { workspace = true }

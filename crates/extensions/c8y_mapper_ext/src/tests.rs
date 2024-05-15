@@ -36,6 +36,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
+use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchEvent;
@@ -2488,7 +2489,7 @@ async fn trigger_timeout(timer: &mut FakeServerBox<SyncStart, SyncComplete>) {
 }
 
 pub(crate) async fn spawn_c8y_mapper_actor(
-    config_dir: &TempTedgeDir,
+    tmp_dir: &TempTedgeDir,
     init: bool,
 ) -> (
     SimpleMessageBox<MqttMessage, MqttMessage>,
@@ -2498,58 +2499,36 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     FakeServerBox<IdUploadRequest, IdUploadResult>,
     FakeServerBox<IdDownloadRequest, IdDownloadResult>,
 ) {
-    if init {
-        config_dir.dir("operations").dir("c8y");
-        config_dir.dir(".tedge-mapper-c8y");
-    }
-
-    let device_name = "test-device".into();
-    let device_topic_id = EntityTopicId::default_main_device();
-    let device_type = "test-device-type".into();
-    let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
-    let c8y_host = "test.c8y.io".into();
-    let tedge_http_host = "localhost:8888".into();
-    let mqtt_schema = MqttSchema::default();
-    let auth_proxy_addr = "127.0.0.1".into();
-    let auth_proxy_port = 8001;
-    let mut topics = C8yMapperConfig::default_internal_topic_filter(
-        config_dir.path(),
-        &"c8y".try_into().unwrap(),
+    let handle =
+        spawn_c8y_mapper_actor_with_config(tmp_dir, test_mapper_config(tmp_dir), init).await;
+    (
+        handle.mqtt_box,
+        handle.c8y_http_box,
+        handle.fs_box,
+        handle.timer_box,
+        handle.ul_box,
+        handle.dl_box,
     )
-    .unwrap();
-    topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
-        &mqtt_schema,
-    ));
-    topics.add_all(crate::operations::config_snapshot::topic_filter(
-        &mqtt_schema,
-    ));
-    topics.add_all(crate::operations::config_update::topic_filter(&mqtt_schema));
-    topics.add_all(C8yMapperConfig::default_external_topic_filter());
+}
 
-    let config = C8yMapperConfig::new(
-        config_dir.utf8_path().into(),
-        config_dir.utf8_path().into(),
-        config_dir.utf8_path_buf().into(),
-        config_dir.utf8_path().into(),
-        device_name,
-        device_topic_id,
-        device_type,
-        config.service.clone(),
-        c8y_host,
-        tedge_http_host,
-        topics,
-        Capabilities::default(),
-        auth_proxy_addr,
-        auth_proxy_port,
-        Protocol::Http,
-        MqttSchema::default(),
-        true,
-        true,
-        "c8y".try_into().unwrap(),
-        false,
-        SoftwareManagementApiFlag::Advanced,
-        true,
-    );
+pub(crate) struct TestHandle {
+    pub mqtt_box: SimpleMessageBox<MqttMessage, MqttMessage>,
+    pub c8y_http_box: FakeServerBox<C8YRestRequest, C8YRestResult>,
+    pub fs_box: SimpleMessageBox<NoMessage, FsWatchEvent>,
+    pub timer_box: FakeServerBox<SyncStart, SyncComplete>,
+    pub ul_box: FakeServerBox<IdUploadRequest, IdUploadResult>,
+    pub dl_box: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
+}
+
+pub(crate) async fn spawn_c8y_mapper_actor_with_config(
+    tmp_dir: &TempTedgeDir,
+    config: C8yMapperConfig,
+    init: bool,
+) -> TestHandle {
+    if init {
+        tmp_dir.dir("operations").dir("c8y");
+        tmp_dir.dir(".tedge-mapper-c8y");
+    }
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
@@ -2588,13 +2567,62 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     );
     service_monitor_box.send(bridge_status_msg).await.unwrap();
 
-    (
-        mqtt_builder.build(),
-        c8y_proxy_builder.build(),
-        fs_watcher_builder.build(),
-        timer_builder.build(),
-        uploader_builder.build(),
-        downloader_builder.build(),
+    TestHandle {
+        mqtt_box: mqtt_builder.build(),
+        c8y_http_box: c8y_proxy_builder.build(),
+        fs_box: fs_watcher_builder.build(),
+        timer_box: timer_builder.build(),
+        ul_box: uploader_builder.build(),
+        dl_box: downloader_builder.build(),
+    }
+}
+
+pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
+    let device_name = "test-device".into();
+    let device_topic_id = EntityTopicId::default_main_device();
+    let device_type = "test-device-type".into();
+    let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
+    let c8y_host = "test.c8y.io".into();
+    let tedge_http_host = "localhost:8888".into();
+    let mqtt_schema = MqttSchema::default();
+    let auth_proxy_addr = "127.0.0.1".into();
+    let auth_proxy_port = 8001;
+    let mut topics =
+        C8yMapperConfig::default_internal_topic_filter(tmp_dir.path(), &"c8y".try_into().unwrap())
+            .unwrap();
+    topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
+        &mqtt_schema,
+    ));
+    topics.add_all(crate::operations::config_snapshot::topic_filter(
+        &mqtt_schema,
+    ));
+    topics.add_all(crate::operations::config_update::topic_filter(&mqtt_schema));
+    topics.add_all(C8yMapperConfig::default_external_topic_filter());
+
+    C8yMapperConfig::new(
+        tmp_dir.utf8_path().into(),
+        tmp_dir.utf8_path().into(),
+        tmp_dir.utf8_path_buf().into(),
+        tmp_dir.utf8_path().into(),
+        device_name,
+        device_topic_id,
+        device_type,
+        config.service.clone(),
+        c8y_host,
+        tedge_http_host,
+        topics,
+        Capabilities::default(),
+        auth_proxy_addr,
+        auth_proxy_port,
+        Protocol::Http,
+        MqttSchema::default(),
+        true,
+        true,
+        "c8y".try_into().unwrap(),
+        false,
+        SoftwareManagementApiFlag::Advanced,
+        true,
+        AutoLogUpload::Never,
     )
 }
 

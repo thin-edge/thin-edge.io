@@ -708,6 +708,7 @@ dependencies = [
  "clock",
  "json-writer",
  "logged_command",
+ "mime",
  "plugin_sm",
  "proptest",
  "rand",
@@ -731,6 +732,7 @@ dependencies = [
  "tokio",
  "toml 0.7.8",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -3804,6 +3806,7 @@ name = "tedge_downloader_ext"
 version = "1.0.1"
 dependencies = [
  "async-trait",
+ "camino",
  "download",
  "log",
  "mockito",

@@ -7,6 +7,8 @@ use crate::workflow::ExitHandlers;
 use crate::workflow::OperationName;
 use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS::AtLeastOnce;
 use mqtt_channel::Topic;
@@ -16,6 +18,8 @@ use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
+
+pub const OP_LOG_PATH_KEY: &str = "logPath";
 
 /// Generic command state that can be used to manipulate any type of command payload.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -149,6 +153,21 @@ impl GenericCommandState {
                 ..self
             },
         }
+    }
+
+    pub fn update_with_key_value(self, key: &str, val: &str) -> Self {
+        self.update_with_json(json!({ key: val }))
+    }
+
+    pub fn get_log_path(&self) -> Option<Utf8PathBuf> {
+        self.payload
+            .get(OP_LOG_PATH_KEY)
+            .and_then(|v| v.as_str())
+            .map(Utf8PathBuf::from)
+    }
+
+    pub fn set_log_path<P: AsRef<Utf8Path>>(self, path: P) -> Self {
+        self.update_with_key_value(OP_LOG_PATH_KEY, path.as_ref().as_str())
     }
 
     /// Update the command state with the outcome of a script
@@ -347,6 +366,10 @@ impl GenericCommandState {
 
     pub fn is_failed(&self) -> bool {
         matches!(self.status.as_str(), FAILED)
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.is_successful() || self.is_failed()
     }
 
     pub fn is_cleared(&self) -> bool {

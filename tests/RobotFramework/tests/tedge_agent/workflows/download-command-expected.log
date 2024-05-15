@@ -1,3 +1,3 @@
 schedule download command target=device/main//
 launch download url=https://from/there file=/put/it/here
-check download command outcome={"payload":{"file":"/put/it/here","status":"downloaded","tmp":"/tmp/download/robot-123","url":"https://from/there"},"topic":"te/device/main///cmd/download/robot-123"}
+check download command outcome={"payload":{"file":"/put/it/here","logPath":"/var/log/tedge/agent/workflow-download-robot-123.log","status":"downloaded","tmp":"/tmp/download/robot-123","url":"https://from/there"},"topic":"te/device/main///cmd/download/robot-123"}

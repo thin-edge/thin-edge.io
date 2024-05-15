@@ -13,6 +13,8 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
+use std::path::Path;
+use std::path::PathBuf;
 use time::OffsetDateTime;
 
 /// A command instance with its target and its current state of execution
@@ -247,6 +249,9 @@ pub struct SoftwareListCommandPayload {
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub current_software_list: Vec<SoftwareList>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl<'a> Jsonify<'a> for SoftwareListCommandPayload {}
@@ -310,7 +315,7 @@ impl SoftwareListCommand {
 /// Command to install/remove software packages on a device
 pub type SoftwareUpdateCommand = Command<SoftwareUpdateCommandPayload>;
 
-/// Payload of a [SoftwareListCommand]
+/// Payload of a [SoftwareUpdateCommand]
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareUpdateCommandPayload {
@@ -322,6 +327,9 @@ pub struct SoftwareUpdateCommandPayload {
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<SoftwareRequestResponseSoftwareList>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl<'a> Jsonify<'a> for SoftwareUpdateCommandPayload {}
@@ -430,6 +438,10 @@ impl SoftwareUpdateCommand {
                     .filter_map(|update| update.into())
                     .collect::<Vec<SoftwareModuleItem>>(),
             })
+    }
+
+    pub fn set_log_path(&mut self, path: &Path) {
+        self.payload.log_path = Some(path.into())
     }
 }
 
@@ -546,11 +558,17 @@ pub type RestartCommand = Command<RestartCommandPayload>;
 pub struct RestartCommandPayload {
     #[serde(flatten)]
     pub status: CommandStatus,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl RestartCommandPayload {
     pub fn new(status: CommandStatus) -> Self {
-        RestartCommandPayload { status }
+        RestartCommandPayload {
+            status,
+            log_path: None,
+        }
     }
 }
 
@@ -586,6 +604,23 @@ pub enum CommandStatus {
     /// Unknown status used by a custom workflow
     #[serde(other)]
     Unknown,
+}
+
+impl CommandStatus {
+    pub fn is_terminal_status(&self) -> bool {
+        matches!(
+            self,
+            CommandStatus::Successful | CommandStatus::Failed { reason: _ }
+        )
+    }
+
+    pub fn is_successful(&self) -> bool {
+        *self == CommandStatus::Successful
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self, CommandStatus::Failed { reason: _ })
+    }
 }
 
 fn default_failure_reason() -> String {
@@ -641,6 +676,8 @@ pub struct LogUploadCmdPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_text: Option<String>,
     pub lines: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
@@ -681,6 +718,8 @@ pub struct ConfigSnapshotCmdPayload {
     pub config_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
@@ -728,6 +767,8 @@ pub struct ConfigUpdateCmdPayload {
     pub config_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
@@ -777,6 +818,8 @@ pub struct FirmwareUpdateCmdPayload {
     pub remote_url: String,
     pub name: String,
     pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<PathBuf>,
 }
 
 impl<'a> Jsonify<'a> for FirmwareUpdateCmdPayload {}
@@ -804,6 +847,7 @@ mod tests {
         let request = SoftwareListCommandPayload {
             status: CommandStatus::Init,
             current_software_list: vec![],
+            log_path: None,
         };
         let expected_json = r#"{"status":"init"}"#;
 
@@ -856,6 +900,7 @@ mod tests {
             status: CommandStatus::Init,
             update_list: vec![debian_list, docker_list],
             failures: vec![],
+            log_path: None,
         };
 
         let expected_json = r#"{"status":"init","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
@@ -873,6 +918,7 @@ mod tests {
         let request = SoftwareListCommandPayload {
             status: CommandStatus::Unknown,
             current_software_list: vec![],
+            log_path: None,
         };
 
         // The `CommandStatus::Unknown` variant is used when the status is unknown.

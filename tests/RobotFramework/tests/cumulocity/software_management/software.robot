@@ -69,6 +69,44 @@ Manual software_update operation request
     ...    expected_status=failed
     ...    c8y_fragment=c8y_SoftwareUpdate
 
+Operation log uploaded automatically with auto_log_upload setting as on-failure
+    Execute Command    tedge config set c8y.operations.auto_log_upload on-failure
+    Restart Service    tedge-mapper-c8y
+
+    # Validate that the operation log is NOT uploaded for a successful operation
+    ${OPERATION}=    Install Software        c8y-remote-access-plugin
+    Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
+    Validate operation log not uploaded
+
+    # Validate that the operation log is uploaded for a failed operation
+    ${OPERATION}=    Install Software    non-existent-package
+    Operation Should Be FAILED    ${OPERATION}    timeout=60
+    Validate operation log uploaded
+
+Operation log uploaded automatically with auto_log_upload setting as always
+    Execute Command    tedge config set c8y.operations.auto_log_upload always
+    Restart Service    tedge-mapper-c8y
+
+    # Validate that the operation log is uploaded for a successful operation as well
+    ${OPERATION}=    Install Software        c8y-remote-access-plugin
+    Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
+    Validate operation log uploaded
+
+    # Validate that the operation log is uploaded for a failed operation
+    ${OPERATION}=    Install Software    non-existent-package
+    Operation Should Be FAILED    ${OPERATION}    timeout=60
+    Validate operation log uploaded
+
+Operation log uploaded automatically with default auto_log_upload setting as never
+    # Validate that the operation log is NOT uploaded for a successful operation
+    ${OPERATION}=    Install Software        c8y-remote-access-plugin
+    Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
+    Validate operation log not uploaded
+
+    # Validate that the operation log is NOT uploaded for a failed operation either
+    ${OPERATION}=    Install Software    non-existent-package
+    Operation Should Be FAILED    ${OPERATION}    timeout=60
+    Validate operation log not uploaded
 
 *** Keywords ***
 
@@ -101,3 +139,23 @@ Publish and Verify Local Command
         # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
         Should Have MQTT Messages    c8y/s/ds    message_pattern=^(501|502|503),${c8y_fragment}.*    minimum=0    maximum=0
     END
+
+Validate operation log uploaded
+    # Find the latest workflow log for software update operation
+    ${operation_log_file}=    Execute Command    ls -t /var/log/tedge/agent/workflow-software_update-* | head -n 1    strip=${True}
+    ${log_checksum}=    Execute Command    md5sum '${operation_log_file}' | cut -d' ' -f1    strip=${True}
+    ${events}=    Cumulocity.Device Should Have Event/s
+    ...    minimum=1
+    ...    type=software_update_op_log
+    ...    with_attachment=${True}
+    ${contents}=    Cumulocity.Event Should Have An Attachment
+    ...    ${events[0]["id"]}
+    ...    encoding=utf8
+    ...    expected_pattern=.*wait for the requester to finalize the command.*
+    Log    ${contents}
+
+Validate operation log not uploaded
+    ${events}=    Cumulocity.Device Should Have Event/s
+    ...    minimum=0
+    ...    maximum=0
+    ...    type=software_update_op_log
