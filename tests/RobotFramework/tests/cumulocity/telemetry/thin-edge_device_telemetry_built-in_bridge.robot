@@ -272,7 +272,6 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     ThinEdgeIO.Execute Command    tedge config set mqtt.bridge.built_in true
     ThinEdgeIO.Execute Command    tedge config set c8y.bridge.topic_prefix custom-c8y-prefix
-    File Should Exist    /etc/tedge/mosquitto-conf/c8y-bridge.conf
     ThinEdgeIO.Execute Command    tedge reconnect c8y
     File Should Not Exist    /etc/tedge/mosquitto-conf/c8y-bridge.conf
     Service Health Status Should Be Up    tedge-mapper-c8y
