@@ -69,7 +69,10 @@ Manual software_update operation request
     ...    expected_status=failed
     ...    c8y_fragment=c8y_SoftwareUpdate
 
-Operation log uploaded automatically with default auto_log_upload setting as onFailure
+Operation log uploaded automatically with auto_log_upload setting as on-failure
+    Execute Command    tedge config set c8y.operations.auto_log_upload on-failure
+    Restart Service    tedge-mapper-c8y
+
     # Validate that the operation log is NOT uploaded for a successful operation
     ${OPERATION}=    Install Software        c8y-remote-access-plugin
     Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
@@ -80,7 +83,7 @@ Operation log uploaded automatically with default auto_log_upload setting as onF
     Operation Should Be FAILED    ${OPERATION}    timeout=60
     Validate operation log uploaded
 
-Operation log uploaded automatically with default auto_log_upload setting as always
+Operation log uploaded automatically with auto_log_upload setting as always
     Execute Command    tedge config set c8y.operations.auto_log_upload always
     Restart Service    tedge-mapper-c8y
 
@@ -95,9 +98,6 @@ Operation log uploaded automatically with default auto_log_upload setting as alw
     Validate operation log uploaded
 
 Operation log uploaded automatically with default auto_log_upload setting as never
-    Execute Command    tedge config set c8y.operations.auto_log_upload never
-    Restart Service    tedge-mapper-c8y
-
     # Validate that the operation log is NOT uploaded for a successful operation
     ${OPERATION}=    Install Software        c8y-remote-access-plugin
     Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60

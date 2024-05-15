@@ -491,7 +491,7 @@ define_tedge_config! {
 
         operations: {
             /// Auto-upload the operation log once it finishes.
-            #[tedge_config(example = "always", example = "never", example = "on-failure", default(variable = "AutoLogUpload::OnFailure"))]
+            #[tedge_config(example = "always", example = "never", example = "on-failure", default(variable = "AutoLogUpload::Never"))]
             auto_log_upload: AutoLogUpload,
         }
     },
