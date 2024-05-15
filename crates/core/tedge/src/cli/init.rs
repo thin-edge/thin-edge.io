@@ -76,29 +76,26 @@ impl TEdgeInitCmd {
         }
 
         let config_dir = self.context.config_location.tedge_config_root_path.clone();
-        let permissions = |mode| {
+        let permissions = {
             PermissionEntry::new(
                 Some(self.user.clone()),
                 Some(self.group.clone()),
-                Some(mode),
+                Some(0o775),
             )
         };
-        create_directory(&config_dir, permissions(0o775))?;
-        create_directory(config_dir.join("mosquitto-conf"), permissions(0o775))?;
-        create_directory(config_dir.join("operations"), permissions(0o775))?;
-        create_directory(
-            config_dir.join("operations").join("c8y"),
-            permissions(0o755),
-        )?;
-        create_directory(config_dir.join("plugins"), permissions(0o775))?;
-        create_directory(config_dir.join("sm-plugins"), permissions(0o755))?;
-        create_directory(config_dir.join("device-certs"), permissions(0o775))?;
+        create_directory(&config_dir, &permissions)?;
+        create_directory(config_dir.join("mosquitto-conf"), &permissions)?;
+        create_directory(config_dir.join("operations"), &permissions)?;
+        create_directory(config_dir.join("operations").join("c8y"), &permissions)?;
+        create_directory(config_dir.join("plugins"), &permissions)?;
+        create_directory(config_dir.join("sm-plugins"), &permissions)?;
+        create_directory(config_dir.join("device-certs"), &permissions)?;
+        create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions)?;
 
         let config = self.context.load_config()?;
 
-        create_directory(&config.logs.path, permissions(0o775))?;
-        create_directory(&config.data.path, permissions(0o775))?;
-        create_directory(config_dir.join(".tedge-mapper-c8y"), permissions(0o775))?;
+        create_directory(&config.logs.path, &permissions)?;
+        create_directory(&config.data.path, &permissions)?;
 
         let entity_store_file = config_dir
             .join(".tedge-mapper-c8y")

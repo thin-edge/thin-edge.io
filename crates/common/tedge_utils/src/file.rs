@@ -68,13 +68,13 @@ pub enum FileError {
 
 pub fn create_directory<P: AsRef<Path>>(
     dir: P,
-    permissions: PermissionEntry,
+    permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
     permissions.create_directory(dir.as_ref())
 }
 /// Create the directory owned by the user running this API with default directory permissions
 pub fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
-    create_directory(dir, PermissionEntry::default())
+    create_directory(dir, &PermissionEntry::default())
 }
 
 pub fn create_directory_with_user_group(
