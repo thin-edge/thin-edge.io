@@ -549,18 +549,7 @@ fn new_bridge(
     Ok(())
 }
 
-fn restart_mosquitto(
-    bridge_config: &BridgeConfig,
-    service_manager: &dyn SystemServiceManager,
-    config_location: &TEdgeConfigLocation,
-) -> Result<(), ConnectError> {
-    println!("Restarting mosquitto service.\n");
-
-    if let Err(err) = service_manager.stop_service(SystemService::Mosquitto) {
-        clean_up(config_location, bridge_config)?;
-        return Err(err.into());
-    }
-
+pub fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
     let (user, group) = match bridge_config.bridge_location {
         BridgeLocation::BuiltIn => ("tedge", "tedge"),
         BridgeLocation::Mosquitto => (crate::BROKER_USER, crate::BROKER_GROUP),
@@ -576,6 +565,21 @@ fn restart_mosquitto(
             warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
         }
     }
+}
+
+fn restart_mosquitto(
+    bridge_config: &BridgeConfig,
+    service_manager: &dyn SystemServiceManager,
+    config_location: &TEdgeConfigLocation,
+) -> Result<(), ConnectError> {
+    println!("Restarting mosquitto service.\n");
+
+    if let Err(err) = service_manager.stop_service(SystemService::Mosquitto) {
+        clean_up(config_location, bridge_config)?;
+        return Err(err.into());
+    }
+
+    chown_certificate_and_key(bridge_config);
 
     if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
@@ -603,7 +607,7 @@ fn enable_software_management(
 
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
-fn clean_up(
+pub fn clean_up(
     config_location: &TEdgeConfigLocation,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {

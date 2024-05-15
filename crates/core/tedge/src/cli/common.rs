@@ -1,6 +1,6 @@
 use tedge_config::system_services::SystemService;
 
-#[derive(Copy, Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr)]
+#[derive(Copy, Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr, PartialEq, Eq)]
 pub enum Cloud {
     #[strum(serialize = "Cumulocity")]
     C8y,
