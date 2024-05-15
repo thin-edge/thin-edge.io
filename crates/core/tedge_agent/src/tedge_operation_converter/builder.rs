@@ -1,11 +1,14 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::state_repository::state::AgentStateRepository;
 use crate::tedge_operation_converter::actor::AgentInput;
+use crate::tedge_operation_converter::actor::BuiltinCommandState;
 use crate::tedge_operation_converter::actor::InternalCommandState;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use crate::tedge_operation_converter::config::OperationConfig;
 use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use log::error;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -21,15 +24,18 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::UnboundedLoggingReceiver;
+use tedge_api::commands::Command;
+use tedge_api::commands::CommandPayload;
+use tedge_api::commands::SoftwareListCommandPayload;
+use tedge_api::commands::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::WorkflowSupervisor;
+use tedge_api::Jsonify;
 use tedge_api::RestartCommand;
-use tedge_api::SoftwareListCommand;
-use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
@@ -68,17 +74,24 @@ impl TedgeOperationConverterBuilder {
         let mut command_dispatcher = CommandDispatcher::default();
         let command_sender = input_sender.sender_clone();
 
-        let software_list_sender: DynSender<SoftwareListCommand> =
-            software_actor.get_sender().sender_clone();
-        let software_update_sender: DynSender<SoftwareUpdateCommand> =
-            software_actor.get_sender().sender_clone();
-        software_actor.connect_sink(NoConfig, &input_sender);
-        command_dispatcher.add_operation_manager(software_list_sender);
-        command_dispatcher.add_operation_manager(software_update_sender);
+        software_actor.connect_mapped_sink(
+            NoConfig,
+            &input_sender,
+            SoftwareCommand::into_generic_commands(&config.mqtt_schema),
+        );
+        command_dispatcher.add_operation_manager::<SoftwareListCommandPayload>(
+            software_actor.get_sender().sender_clone(),
+        );
+        command_dispatcher.add_operation_manager::<SoftwareUpdateCommandPayload>(
+            software_actor.get_sender().sender_clone(),
+        );
 
-        let restart_sender = restart_actor.get_sender();
-        restart_actor.connect_sink(NoConfig, &input_sender);
-        command_dispatcher.add_operation_manager(restart_sender);
+        restart_actor.connect_mapped_sink(
+            NoConfig,
+            &input_sender,
+            Self::into_generic_command(&config.mqtt_schema),
+        );
+        command_dispatcher.add_operation_manager(restart_actor.get_sender());
 
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
@@ -118,6 +131,13 @@ impl TedgeOperationConverterBuilder {
 
     pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
         mqtt_schema.topics(EntityFilter::Entity(device_topic_id), AnyCommand)
+    }
+
+    fn into_generic_command<Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload>(
+        mqtt_schema: &MqttSchema,
+    ) -> impl Fn(Command<Payload>) -> Option<BuiltinCommandState> {
+        let mqtt_schema = mqtt_schema.clone();
+        move |cmd| Some(BuiltinCommandState(cmd.into_generic_command(&mqtt_schema)))
     }
 }
 

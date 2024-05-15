@@ -4,6 +4,9 @@ use crate::software_manager::error::SoftwareManagerError;
 use crate::software_manager::error::SoftwareManagerError::NoPlugins;
 use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
+use crate::tedge_operation_converter::actor::AgentInput;
+use crate::tedge_operation_converter::actor::BuiltinCommandMetadata;
+use crate::tedge_operation_converter::actor::BuiltinCommandState;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use plugin_sm::operation_logs::LogKind;
@@ -27,6 +30,9 @@ use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::Jsonify;
 use tedge_api::SoftwareType;
 use tedge_config::TEdgeConfigError;
 use tracing::error;
@@ -34,6 +40,36 @@ use tracing::info;
 use tracing::warn;
 
 fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand, SoftwareCommandMetadata] : Debug, Eq, PartialEq, Deserialize, Serialize);
+
+impl SoftwareCommand {
+    pub fn into_generic_commands(
+        mqtt_schema: &MqttSchema,
+    ) -> impl Fn(SoftwareCommand) -> Vec<AgentInput> {
+        let mqtt_schema = mqtt_schema.clone();
+        move |cmd| match cmd {
+            SoftwareCommand::SoftwareUpdateCommand(cmd) => {
+                vec![BuiltinCommandState(cmd.into_generic_command(&mqtt_schema)).into()]
+            }
+            SoftwareCommand::SoftwareListCommand(cmd) => {
+                vec![BuiltinCommandState(cmd.into_generic_command(&mqtt_schema)).into()]
+            }
+            SoftwareCommand::SoftwareCommandMetadata(metadata) => {
+                vec![
+                    BuiltinCommandMetadata {
+                        operation: OperationType::SoftwareList,
+                        metadata: metadata.to_value(),
+                    }
+                    .into(),
+                    BuiltinCommandMetadata {
+                        operation: OperationType::SoftwareUpdate,
+                        metadata: metadata.to_value(),
+                    }
+                    .into(),
+                ]
+            }
+        }
+    }
+}
 
 /// Actor which performs software operations.
 ///

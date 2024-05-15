@@ -1,4 +1,3 @@
-use crate::software_manager::actor::SoftwareCommand;
 use crate::state_repository::state::AgentStateRepository;
 use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use async_trait::async_trait;
@@ -16,10 +15,6 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::UnboundedLoggingReceiver;
-use tedge_api::commands::RestartCommand;
-use tedge_api::commands::SoftwareCommandMetadata;
-use tedge_api::commands::SoftwareListCommand;
-use tedge_api::commands::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -34,7 +29,6 @@ use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
-use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
@@ -49,7 +43,18 @@ use tokio::time::sleep;
 #[derive(Debug)]
 pub struct InternalCommandState(GenericCommandState);
 
-fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, SoftwareCommand, RestartCommand] : Debug);
+/// A new state for a builtin command
+#[derive(Debug)]
+pub struct BuiltinCommandState(pub(crate) GenericCommandState);
+
+/// Metadata for a builtin operation
+#[derive(Debug)]
+pub struct BuiltinCommandMetadata {
+    pub operation: OperationType,
+    pub metadata: serde_json::Value,
+}
+
+fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, BuiltinCommandState, BuiltinCommandMetadata] : Debug);
 
 pub struct TedgeOperationConverterActor {
     pub(crate) mqtt_schema: MqttSchema,
@@ -82,18 +87,15 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::InternalCommandState(InternalCommandState(command_state)) => {
                     self.process_command_state_update(command_state).await?;
                 }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareListCommand(res)) => {
-                    self.process_software_list_response(res).await?;
+                AgentInput::BuiltinCommandState(BuiltinCommandState(new_state)) => {
+                    self.publish_command_state(new_state).await?;
                 }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareUpdateCommand(res)) => {
-                    self.process_software_update_response(res).await?;
-                }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareCommandMetadata(payload)) => {
-                    self.publish_software_operation_capabilities(payload)
+                AgentInput::BuiltinCommandMetadata(BuiltinCommandMetadata {
+                    operation,
+                    metadata,
+                }) => {
+                    self.publish_operation_capability(operation, metadata)
                         .await?;
-                }
-                AgentInput::RestartCommand(cmd) => {
-                    self.process_restart_response(cmd).await?;
                 }
             }
         }
@@ -112,19 +114,18 @@ impl TedgeOperationConverterActor {
         Ok(())
     }
 
-    async fn publish_software_operation_capabilities(
+    async fn publish_operation_capability(
         &mut self,
-        payload: SoftwareCommandMetadata,
+        operation: OperationType,
+        payload: serde_json::Value,
     ) -> Result<(), RuntimeError> {
-        for operation in [OperationType::SoftwareList, OperationType::SoftwareUpdate] {
-            let meta_topic = self
-                .mqtt_schema
-                .capability_topic_for(&self.device_topic_id, operation);
-            let message = MqttMessage::new(&meta_topic, payload.to_json())
-                .with_retain()
-                .with_qos(QoS::AtLeastOnce);
-            self.mqtt_publisher.send(message).await?;
-        }
+        let meta_topic = self
+            .mqtt_schema
+            .capability_topic_for(&self.device_topic_id, operation);
+        let message = MqttMessage::new(&meta_topic, payload.to_string())
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce);
+        self.mqtt_publisher.send(message).await?;
         Ok(())
     }
 
@@ -377,30 +378,6 @@ impl TedgeOperationConverterActor {
             root_operation,
             root_cmd_id,
         )
-    }
-
-    async fn process_software_list_response(
-        &mut self,
-        response: SoftwareListCommand,
-    ) -> Result<(), RuntimeError> {
-        let new_state = response.into_generic_command(&self.mqtt_schema);
-        self.publish_command_state(new_state).await
-    }
-
-    async fn process_software_update_response(
-        &mut self,
-        response: SoftwareUpdateCommand,
-    ) -> Result<(), RuntimeError> {
-        let new_state = response.into_generic_command(&self.mqtt_schema);
-        self.publish_command_state(new_state).await
-    }
-
-    async fn process_restart_response(
-        &mut self,
-        response: RestartCommand,
-    ) -> Result<(), RuntimeError> {
-        let new_state = response.into_generic_command(&self.mqtt_schema);
-        self.publish_command_state(new_state).await
     }
 
     async fn publish_command_state(

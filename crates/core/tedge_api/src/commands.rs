@@ -14,6 +14,7 @@ use mqtt_channel::Topic;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -266,6 +267,13 @@ pub trait Jsonify {
         Self: DeserializeOwned,
     {
         serde_json::from_slice(bytes)
+    }
+
+    fn to_value(&self) -> Value
+    where
+        Self: Serialize,
+    {
+        serde_json::to_value(self).unwrap() // all thin-edge data can be serialized to json
     }
 
     fn to_json(&self) -> String
