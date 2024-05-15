@@ -19,7 +19,5 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
-    Stop Service    tedge-mapper-c8y
-    Stop Service    tedge-agent
-    Should Have MQTT Messages    te/device/main/service/mosquitto-c8y-bridge/status/health
+    Should Have MQTT Messages    te/device/main/service/tedge-mapper-bridge-c8y/status/health
     Sleep    1s    wait just in case that the server responds to already sent messages

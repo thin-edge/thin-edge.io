@@ -51,5 +51,7 @@ Suite Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    ${DEVICE_SN}
 
+    Execute Command    tedge config set mqtt.bridge.built_in
+
     # Print which mosquitto version is being used
     Execute Command    mosquitto --help | head -1

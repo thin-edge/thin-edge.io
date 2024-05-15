@@ -16,6 +16,7 @@ Stop tedge-mapper-az
 
 Update the service file
     Execute Command    cmd=sudo sed -i '10iWatchdogSec=30' /lib/systemd/system/tedge-mapper-az.service
+    Execute Command    cmd=sudo sed -i "s/\\\\[Service\\\\]/\\\\0\\\\nEnvironment=\"TEDGE_MQTT_BRIDGE_BUILT_IN=false\"/" /lib/systemd/system/tedge-mapper-az.service
 
 Reload systemd files
     Execute Command    sudo systemctl daemon-reload

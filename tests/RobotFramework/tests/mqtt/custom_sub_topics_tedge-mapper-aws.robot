@@ -28,6 +28,7 @@ Publish measurements to unsubscribed topic
 Custom Setup
     Setup
     Execute Command    sudo tedge config set aws.topics "te/+/+/+/+/e/+"
+    Execute Command    sudo tedge config set mqtt.bridge.built_in false
     Execute Command    sudo systemctl start tedge-mapper-aws.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-aws
 

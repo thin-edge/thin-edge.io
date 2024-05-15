@@ -14,6 +14,7 @@ Watchdog does not kill mapper if it responds
     Execute Command    sudo systemctl stop tedge-mapper-aws.service
     Execute Command    sudo systemctl stop tedge-watchdog.service
     Execute Command    cmd=sudo sed -i '10iWatchdogSec=5' /lib/systemd/system/tedge-mapper-aws.service
+    Execute Command    cmd=sudo sed -i "s/\\\\[Service\\\\]/\\\\0\\\\nEnvironment=\"TEDGE_MQTT_BRIDGE_BUILT_IN=false\"/" /lib/systemd/system/tedge-mapper-aws.service
     Execute Command    sudo systemctl daemon-reload
     Execute Command    sudo systemctl start tedge-mapper-aws.service
     Execute Command    sudo systemctl start tedge-watchdog.service
