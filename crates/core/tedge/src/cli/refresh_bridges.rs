@@ -47,12 +47,17 @@ impl Command for RefreshBridgesCmd {
         for cloud in [Cloud::Aws, Cloud::Azure, Cloud::C8y] {
             // (attempt to) reassert ownership of the certificate and key
             // This is necessary when upgrading from the mosquitto bridge to the built-in bridge
-            let bridge_config = super::connect::bridge_config(&self.config, cloud)?;
-            super::connect::chown_certificate_and_key(&bridge_config);
+            if let Ok(bridge_config) = super::connect::bridge_config(&self.config, cloud) {
+                super::connect::chown_certificate_and_key(&bridge_config);
 
-            if bridge_config.bridge_location == BridgeLocation::BuiltIn && clouds.contains(&cloud) {
-                println!("Deleting mosquitto bridge configuration in favour of built-in bridge\n");
-                super::connect::clean_up(&self.config_location, &bridge_config)?;
+                if bridge_config.bridge_location == BridgeLocation::BuiltIn
+                    && clouds.contains(&cloud)
+                {
+                    println!(
+                        "Deleting mosquitto bridge configuration in favour of built-in bridge\n"
+                    );
+                    super::connect::clean_up(&self.config_location, &bridge_config)?;
+                }
             }
         }
 
