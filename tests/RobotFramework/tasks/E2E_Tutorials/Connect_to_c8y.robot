@@ -2,10 +2,13 @@
 
 *** Settings ***
 Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+# Library    ThinEdgeIO
+Library    SSHLibrary
 Library    String
 Library    Cumulocity
-Suite Teardown         Get Logs
+# Test Setup           Setup
+# Suite Teardown         Get Logs
+Suite Teardown        Close Connection
 
 *** Variables ***
 
@@ -15,10 +18,8 @@ ${DEVICE_SN}
 *** Tasks ***
 
 Install thin-edge.io on your device
-    ${device_sn}=    Setup       skip_bootstrap=True
+    ${device_sn}=    Setup       #skip_bootstrap=True
     Set Suite Variable    $DEVICE_SN    ${device_sn}
-    Uninstall tedge with purge
-    Clear previous downloaded files if any
     Install thin-edge.io
 
 Set the URL of your Cumulocity IoT tenant
@@ -39,7 +40,8 @@ Create the certificate
     Should Contain    ${output}    Thumbprint:
 
 tedge cert upload c8y command
-    Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
+    ${output}    Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
+    Should Contain    ${output}    Certificate uploaded successfully.
     Sleep    3s    # Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
 
 Connect the device
@@ -86,13 +88,9 @@ Monitor the device
 
 *** Keywords ***
 
-Uninstall tedge with purge
-    Execute Command    wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
-    Execute Command    chmod a+x uninstall-thin-edge_io.sh
-    Execute Command    ./uninstall-thin-edge_io.sh purge
-
-Clear previous downloaded files if any
-    Execute Command    rm -f *.deb; rm -f uninstall-thin-edge_io.sh
-
 Install thin-edge.io
     Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
+
+Setup
+   Open Connection    ${SSH_CONFIG}[hostname]
+   Login    ${SSH_CONFIG}[username]    ${SSH_CONFIG}[password]
