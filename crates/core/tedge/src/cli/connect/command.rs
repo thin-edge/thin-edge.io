@@ -502,12 +502,18 @@ fn new_bridge(
         }
     }
 
+    if let Err(err) =
+        write_generic_mosquitto_config_to_file(config_location, common_mosquitto_config)
+    {
+        // We want to preserve previous errors and therefore discard result of this function.
+        let _ = clean_up(config_location, bridge_config);
+        return Err(err);
+    }
+
     if bridge_config.bridge_location == BridgeLocation::Mosquitto {
         println!("Saving configuration for requested bridge.\n");
 
-        if let Err(err) =
-            write_bridge_config_to_file(config_location, bridge_config, common_mosquitto_config)
-        {
+        if let Err(err) = write_bridge_config_to_file(config_location, bridge_config) {
             // We want to preserve previous errors and therefore discard result of this function.
             let _ = clean_up(config_location, bridge_config);
             return Err(err);
@@ -619,9 +625,8 @@ fn bridge_config_exists(
     Ok(())
 }
 
-fn write_bridge_config_to_file(
+fn write_generic_mosquitto_config_to_file(
     config_location: &TEdgeConfigLocation,
-    bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
 ) -> Result<(), ConnectError> {
     let dir_path = config_location
@@ -636,6 +641,20 @@ fn write_bridge_config_to_file(
     let mut common_draft = DraftFile::new(common_config_path)?.with_mode(0o644);
     common_mosquitto_config.serialize(&mut common_draft)?;
     common_draft.persist()?;
+
+    Ok(())
+}
+
+fn write_bridge_config_to_file(
+    config_location: &TEdgeConfigLocation,
+    bridge_config: &BridgeConfig,
+) -> Result<(), ConnectError> {
+    let dir_path = config_location
+        .tedge_config_root_path
+        .join(TEDGE_BRIDGE_CONF_DIR_PATH);
+
+    // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
+    create_directories(dir_path)?;
 
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
     let mut config_draft = DraftFile::new(config_path)?.with_mode(0o644);
