@@ -18,6 +18,11 @@ use tedge_actors::SimpleMessageBox;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogUploadCmd;
 use tedge_api::commands::LogUploadCmdMetadata;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandMetadata;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
@@ -33,6 +38,21 @@ pub type LogUploadResult = (MqttTopic, UploadResult);
 
 fan_in_message_type!(LogInput[LogUploadCmd, FsWatchEvent, LogUploadResult] : Debug);
 fan_in_message_type!(LogOutput[LogUploadCmd, LogUploadCmdMetadata] : Debug);
+
+impl LogOutput {
+    pub fn into_generic_command(self) -> Option<GenericCommandData> {
+        match self {
+            LogOutput::LogUploadCmd(cmd) => Some(GenericCommandState::from(cmd).into()),
+            LogOutput::LogUploadCmdMetadata(metadata) => Some(
+                GenericCommandMetadata {
+                    operation: OperationType::LogUpload.to_string(),
+                    payload: metadata.to_value(),
+                }
+                .into(),
+            ),
+        }
+    }
+}
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
@@ -89,7 +109,7 @@ impl LogManagerActor {
         request: LogUploadCmd,
     ) -> Result<(), ChannelError> {
         match request.status() {
-            CommandStatus::Init => {
+            CommandStatus::Init | CommandStatus::Scheduled => {
                 info!("Log request received: {request:?}");
                 self.start_executing_logfile_request(request).await?;
             }
@@ -97,10 +117,7 @@ impl LogManagerActor {
                 debug!("Executing log request: {request:?}");
                 self.handle_logfile_request_operation(request).await?;
             }
-            CommandStatus::Scheduled
-            | CommandStatus::Unknown
-            | CommandStatus::Successful
-            | CommandStatus::Failed { .. } => {}
+            CommandStatus::Unknown | CommandStatus::Successful | CommandStatus::Failed { .. } => {}
         }
 
         Ok(())

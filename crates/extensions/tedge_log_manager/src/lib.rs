@@ -14,6 +14,7 @@ use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -22,6 +23,10 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::commands::LogUploadCmd;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::OperationName;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
@@ -43,24 +48,13 @@ pub struct LogManagerBuilder {
 impl LogManagerBuilder {
     pub async fn try_new(
         config: LogManagerConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {
         Self::init(&config).await?;
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
-        let mut box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
-        mqtt.connect_mapped_source(
-            NoConfig,
-            &mut box_builder,
-            Self::mqtt_message_builder(&config),
-        );
-        box_builder.connect_mapped_source(
-            Self::subscriptions(&config),
-            mqtt,
-            Self::mqtt_message_parser(&config),
-        );
+        let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
         fs_notify.connect_sink(
             LogManagerBuilder::watched_directory(&config),
             &box_builder.get_sender(),
@@ -74,6 +68,22 @@ impl LogManagerBuilder {
             box_builder,
             upload_sender,
         })
+    }
+
+    pub fn connect_mqtt(
+        &mut self,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
+    ) {
+        mqtt.connect_mapped_source(
+            NoConfig,
+            &mut self.box_builder,
+            Self::mqtt_message_builder(&self.config),
+        );
+        self.box_builder.connect_mapped_source(
+            Self::subscriptions(&self.config),
+            mqtt,
+            Self::mqtt_message_parser(&self.config),
+        );
     }
 
     pub async fn init(config: &LogManagerConfig) -> Result<(), FileError> {
@@ -176,5 +186,27 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
             message_box,
             self.upload_sender,
         ))
+    }
+}
+
+impl MessageSource<GenericCommandData, NoConfig> for LogManagerBuilder {
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<GenericCommandData>) {
+        self.box_builder
+            .connect_mapped_sink(config, &peer.get_sender(), |msg: LogOutput| {
+                msg.into_generic_command()
+            })
+    }
+}
+
+impl IntoIterator for &LogManagerBuilder {
+    type Item = (OperationName, DynSender<GenericCommandState>);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let sender =
+            MappingSender::new(self.box_builder.get_sender(), |cmd: GenericCommandState| {
+                LogUploadCmd::try_from(cmd).map(LogInput::LogUploadCmd).ok()
+            });
+        vec![(OperationType::LogUpload.to_string(), sender.into())].into_iter()
     }
 }

@@ -323,15 +323,14 @@ impl Agent {
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;
-            Some(
-                LogManagerBuilder::try_new(
-                    log_manager_config,
-                    &mut mqtt_actor_builder,
-                    &mut fs_watch_actor_builder,
-                    &mut uploader_actor_builder,
-                )
-                .await?,
+            let mut log_actor = LogManagerBuilder::try_new(
+                log_manager_config,
+                &mut fs_watch_actor_builder,
+                &mut uploader_actor_builder,
             )
+            .await?;
+            converter_actor_builder.register_builtin_operation(&mut log_actor);
+            Some(log_actor)
         } else {
             None
         };
