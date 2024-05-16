@@ -37,11 +37,13 @@ impl Command for RefreshBridgesCmd {
         let common_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&self.config);
         common_mosquitto_config.save(&self.config_location)?;
 
-        for cloud in &clouds {
-            println!("Refreshing bridge {cloud}");
+        if !self.config.mqtt.bridge.built_in {
+            for cloud in &clouds {
+                println!("Refreshing bridge {cloud}");
 
-            let bridge_config = super::connect::bridge_config(&self.config, *cloud)?;
-            refresh_bridge(&bridge_config, &self.config_location)?;
+                let bridge_config = super::connect::bridge_config(&self.config, *cloud)?;
+                refresh_bridge(&bridge_config, &self.config_location)?;
+            }
         }
 
         for cloud in [Cloud::Aws, Cloud::Azure, Cloud::C8y] {
@@ -54,8 +56,8 @@ impl Command for RefreshBridgesCmd {
                     && clouds.contains(&cloud)
                 {
                     println!(
-                        "Deleting mosquitto bridge configuration in favour of built-in bridge\n"
-                    );
+                    "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
+                );
                     super::connect::clean_up(&self.config_location, &bridge_config)?;
                 }
             }

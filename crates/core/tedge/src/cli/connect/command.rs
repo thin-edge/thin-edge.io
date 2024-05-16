@@ -612,7 +612,11 @@ pub fn clean_up(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    std::fs::remove_file(path).or_else(ok_if_not_found)?;
+    std::fs::write(
+        path,
+        "# This file is left empty as the built-in bridge is enabled",
+    )
+    .or_else(ok_if_not_found)?;
     Ok(())
 }
 
