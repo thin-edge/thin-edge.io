@@ -1,4 +1,3 @@
-use crate::software_manager::actor::SoftwareCommand;
 use crate::state_repository::state::AgentStateRepository;
 use crate::tedge_operation_converter::actor::AgentInput;
 use crate::tedge_operation_converter::actor::InternalCommandState;
@@ -21,8 +20,6 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::UnboundedLoggingReceiver;
-use tedge_api::commands::SoftwareListCommandPayload;
-use tedge_api::commands::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -51,8 +48,6 @@ impl TedgeOperationConverterBuilder {
     pub fn new(
         config: OperationConfig,
         workflows: WorkflowSupervisor,
-        software_actor: &mut (impl MessageSink<SoftwareCommand>
-                  + MessageSource<SoftwareCommand, NoConfig>),
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
     ) -> Self {
@@ -66,20 +61,8 @@ impl TedgeOperationConverterBuilder {
         );
         let input_sender: DynSender<AgentInput> = input_sender.into();
 
-        let mut command_dispatcher = CommandDispatcher::default();
+        let command_dispatcher = CommandDispatcher::default();
         let command_sender = input_sender.sender_clone();
-
-        software_actor.connect_mapped_sink(
-            NoConfig,
-            &input_sender,
-            SoftwareCommand::into_generic_commands(&config.mqtt_schema),
-        );
-        command_dispatcher.add_operation_manager::<SoftwareListCommandPayload>(
-            software_actor.get_sender().sender_clone(),
-        );
-        command_dispatcher.add_operation_manager::<SoftwareUpdateCommandPayload>(
-            software_actor.get_sender().sender_clone(),
-        );
 
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(

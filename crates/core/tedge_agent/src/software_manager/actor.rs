@@ -27,10 +27,10 @@ use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
-use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareType;
 use tedge_config::TEdgeConfigError;
@@ -41,16 +41,13 @@ use tracing::warn;
 fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand, SoftwareCommandMetadata] : Debug, Eq, PartialEq, Deserialize, Serialize);
 
 impl SoftwareCommand {
-    pub fn into_generic_commands(
-        mqtt_schema: &MqttSchema,
-    ) -> impl Fn(SoftwareCommand) -> Vec<GenericCommandData> {
-        let mqtt_schema = mqtt_schema.clone();
-        move |cmd| match cmd {
+    pub fn into_generic_commands(self) -> Vec<GenericCommandData> {
+        match self {
             SoftwareCommand::SoftwareUpdateCommand(cmd) => {
-                vec![cmd.into_generic_command(&mqtt_schema).into()]
+                vec![GenericCommandState::from(cmd).into()]
             }
             SoftwareCommand::SoftwareListCommand(cmd) => {
-                vec![cmd.into_generic_command(&mqtt_schema).into()]
+                vec![GenericCommandState::from(cmd).into()]
             }
             SoftwareCommand::SoftwareCommandMetadata(metadata) => {
                 vec![
