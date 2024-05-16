@@ -1,6 +1,9 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
+use crate::availability::create_c8y_heartbeat_message;
+use crate::availability::default_main_lead_service_topic;
+use crate::availability::insert_new_health_status_entry;
 use crate::availability::start_heartbeat_timer;
 use crate::availability::HeartbeatPayload;
 use crate::converter::UploadContext;
@@ -35,7 +38,6 @@ use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::main_device_health_topic;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -106,15 +108,18 @@ impl Actor for C8yMapperActor {
             .send(SyncStart::new(SYNC_WINDOW, TimeoutKind::Sync))
             .await?;
 
+        // TODO: Move to function
         // Start the heartbeat timer for the main device and its lead service "tedge-agent"
         if self.converter.config.availability_enable {
             if let Ok(interval) = self.converter.config.availability_period.try_into() {
                 if interval > 0 {
+                    let topic = default_main_lead_service_topic(&self.converter.device_topic_id);
+                    insert_new_health_status_entry(&mut self.converter.health_status, &topic);
                     start_heartbeat_timer(
                         self.timer_sender.clone(),
                         interval,
-                        EntityTopicId::default_main_device(),
-                        EntityTopicId::default_main_service("tedge-agent").unwrap(),
+                        self.converter.device_topic_id.clone(),
+                        topic,
                     )
                     .await?;
                 }
@@ -336,25 +341,27 @@ impl C8yMapperActor {
         &mut self,
         heartbeat_payload: HeartbeatPayload,
     ) -> Result<(), RuntimeError> {
-        if self.converter.config.availability_enable {
-            if let Ok(interval) = self.converter.config.availability_period.try_into() {
-                // Publish a heartbeat message
-                if let Some(message) = self
-                    .converter
-                    .create_heartbeat_message(&heartbeat_payload.service, &heartbeat_payload.device)
-                {
+        if let Some(interval) = self.converter.get_availability_period_if_enabled() {
+            if let Ok(inventory_update_topic) = self
+                .converter
+                .get_inventory_update_topic(&heartbeat_payload.device)
+            {
+                if let Some(message) = create_c8y_heartbeat_message(
+                    &self.converter.health_status,
+                    &inventory_update_topic,
+                    &heartbeat_payload,
+                ) {
                     self.mqtt_publisher.send(message).await?;
                 }
-
-                // Start a new timer
-                start_heartbeat_timer(
-                    self.timer_sender.clone(),
-                    interval,
-                    heartbeat_payload.device,
-                    heartbeat_payload.service,
-                )
-                .await?;
             }
+
+            start_heartbeat_timer(
+                self.timer_sender.clone(),
+                interval,
+                heartbeat_payload.device,
+                heartbeat_payload.health,
+            )
+            .await?;
         }
 
         Ok(())

@@ -1,33 +1,91 @@
 use crate::actor::SyncStart;
 use crate::actor::TimeoutKind;
-use std::str::FromStr;
+use crate::service_monitor::get_health_status_from_message;
+use crate::service_monitor::HealthStatus;
+use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::LoggingSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_api::entity_store::EntityMetadata;
+use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tracing::warn;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::ServiceTopicId;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
+use tracing::debug;
+use tracing::info;
+
+// TODO: Find better name
+type TopicWithoutPrefix = String;
 
 /// The timer payload for TimeoutKind::Heartbeat.
 ///
 /// `device` should hold the EntityTopicId of the device for availability monitoring
-/// `service` should hold the EntityTopicId of the device's lead service.
+/// `health` should hold the Topic of the device's lead service.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HeartbeatPayload {
     pub device: EntityTopicId,
-    pub service: EntityTopicId,
+    pub health: TopicWithoutPrefix,
+}
+pub fn create_c8y_heartbeat_message(
+    map: &HashMap<TopicWithoutPrefix, HealthStatus>,
+    c8y_topic: &Topic,
+    heartbeat: &HeartbeatPayload,
+) -> Option<MqttMessage> {
+    let health_topic_name = heartbeat.health.clone();
+
+    match map.get(&health_topic_name) {
+        Some(health_status) if health_status.status == "up" => {
+            Some(MqttMessage::new(c8y_topic, "{}"))
+        }
+        _ => {
+            debug!("Heartbeat message is not sent because the reported status is not 'up'");
+            None
+        }
+    }
+}
+
+pub async fn set_heartbeat_timer(
+    period: i16,
+    map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
+    metadata: &EntityMetadata,
+    timer_sender: LoggingSender<SyncStart>,
+) {
+    if period < 0 {
+        return;
+    }
+
+    let interval: u64 = period.try_into().unwrap();
+    if let Some(topic) = get_lead_service_topic(metadata) {
+        insert_new_health_status_entry(map, &topic);
+
+        start_heartbeat_timer(
+            timer_sender.clone(),
+            interval,
+            metadata.topic_id.clone(),
+            topic,
+        )
+        .await
+        .unwrap(); // FIXME: Address RuntimeError
+    } else {
+        info!(
+            "Couldn't start a timer for device availability heartbeat for the device '{}'",
+            metadata.topic_id
+        );
+    }
 }
 
 pub async fn start_heartbeat_timer(
     mut timer_sender: LoggingSender<SyncStart>,
     interval: u64,
     device_entity: EntityTopicId,
-    service_entity: EntityTopicId,
+    health_topic: TopicWithoutPrefix,
 ) -> Result<(), RuntimeError> {
     let heartbeat_payload = HeartbeatPayload {
         device: device_entity,
-        service: service_entity,
+        health: health_topic,
     };
 
     timer_sender
@@ -40,89 +98,122 @@ pub async fn start_heartbeat_timer(
     Ok(())
 }
 
-// FIXME: How to support custom topic scheme?
-// Test 'custom_topic_scheme_registration_mapping' is failing
-// because the new entity topic ID is "custom///"
-// What is the default service of "custom///"? "custom//service/tedge-agent"? Error?
-pub fn get_child_lead_service_entity_topic_id(
-    entity_metadata: &EntityMetadata,
-) -> Option<EntityTopicId> {
-    if let Some(maybe_service_entity_topic_id) = entity_metadata.other.get("leadService") {
-        if let Some(service_entity) = maybe_service_entity_topic_id.as_str() {
-            if let Ok(entity_id) = EntityTopicId::from_str(service_entity) {
-                return Some(entity_id);
-            }
+pub fn get_lead_service_topic(entity: &EntityMetadata) -> Option<TopicWithoutPrefix> {
+    match entity.other.get("@health") {
+        Some(maybe_topic_name) => match maybe_topic_name.as_str() {
+            Some(topic_name) if Topic::new(topic_name).is_ok() => Some(topic_name.to_string()),
+            _ => None,
+        },
+        None => entity
+            .topic_id
+            .to_default_service_topic_id("tedge-agent")
+            .map(|service_topic| get_status_health_topic_id(service_topic.entity())),
+    }
+}
+
+pub fn get_status_health_topic_id(topic_id: &EntityTopicId) -> TopicWithoutPrefix {
+    format!(
+        "{id}/{channel}",
+        id = topic_id.as_str(),
+        channel = Channel::Health
+    )
+}
+
+pub fn default_main_lead_service_topic(entity: &EntityTopicId) -> TopicWithoutPrefix {
+    let service_topic_id = entity
+        .to_default_service_topic_id("tedge-agent")
+        .unwrap_or(ServiceTopicId::new(entity.clone()));
+
+    get_status_health_topic_id(service_topic_id.entity())
+}
+
+pub fn insert_new_health_status_entry(
+    map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
+    topic: &TopicWithoutPrefix,
+) {
+    map.insert(topic.clone(), HealthStatus::default());
+}
+
+/// When the given message's topic name is already registered to the given map as a key,
+/// this function updates the entry according to the new health status.
+pub fn record_health_status(
+    mqtt_schema: &MqttSchema,
+    map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
+    message: &MqttMessage,
+) {
+    if MqttSchema::from_topic(&message.topic).root == mqtt_schema.root {
+        let health_topic = message.topic.name.strip_prefix("te/").unwrap(); // FIXME
+        if map.get(health_topic).is_some() {
+            let status = get_health_status_from_message(message);
+            map.insert(health_topic.to_string(), status);
         }
     }
-
-    if let Some(device_name) = entity_metadata.topic_id.default_device_name() {
-        warn!("Given 'leadService' is malformed. Using the default tedge-agent service topic scheme instead");
-        return Some(default_child_lead_service(device_name));
-    }
-
-    None
 }
-
-fn default_child_lead_service(child: &str) -> EntityTopicId {
-    EntityTopicId::default_child_service(child, "tedge-agent")
-        .expect("Call this function only if the child name is surely valid")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
     use tedge_api::entity_store::EntityMetadata;
+    use test_case::test_case;
 
-    #[test]
-    fn get_custom_lead_service_entity_topic_id() {
-        let mut metadata = EntityMetadata::child_device("child1".into()).unwrap();
-        metadata
-            .other
-            .insert("leadService".into(), json!("device/child1/service/foo"));
-        let entity = get_child_lead_service_entity_topic_id(&metadata).unwrap();
-        assert_eq!(
-            entity,
-            EntityTopicId::default_child_service("child1", "foo").unwrap()
+    #[test_case("te/device/main/service/tedge-agent/status/health", "up")]
+    #[test_case("te/custom/topic", "up")]
+    #[test_case("te/device/main/service/tedge-agent/status/health", "down")]
+    #[test_case("te/custom/topic", "down")]
+    #[test_case("te/device/main/service/tedge-agent/status/health", "any")]
+    #[test_case("te/custom/topic", "any")]
+    fn add_a_new_health_status_record(topic_name: &str, status: &str) {
+        let mqtt_schema = MqttSchema::default();
+        let mut map: HashMap<String, HealthStatus> = HashMap::new();
+        let topic_without_prefix = topic_name.strip_prefix("te/").unwrap().to_string();
+        insert_new_health_status_entry(&mut map, &topic_without_prefix);
+
+        let message = MqttMessage::new(
+            &Topic::new_unchecked(topic_name),
+            json!({"status": status}).to_string(),
         );
+        record_health_status(&mqtt_schema, &mut map, &message);
+        dbg!(&message);
+        dbg!(&map);
+        let recorded = map.get(topic_name.strip_prefix("te/").unwrap()).unwrap();
+        assert_eq!(recorded.status, status);
+    }
+
+    #[test_case("te/device/main/service/tedge-agent/status/health", "up")]
+    #[test_case("te/custom/topic", "up")]
+    fn not_add_a_new_health_status_record(topic_name: &str, status: &str) {
+        let mqtt_schema = MqttSchema::default();
+        let mut map: HashMap<String, HealthStatus> = HashMap::new();
+        let topic = Topic::new_unchecked(topic_name);
+
+        let message = MqttMessage::new(&topic, json!({"status": status}).to_string());
+        record_health_status(&mqtt_schema, &mut map, &message);
+        assert!(map.get(topic_name).is_none());
+    }
+
+    #[test_case("device/child1/service/tedge-agent/status/health")]
+    #[test_case("any/valid/mqtt/topic")]
+    fn get_custom_lead_service_topic(topic_name: &str) {
+        let mut metadata = EntityMetadata::child_device("child1".into()).unwrap();
+        metadata.other.insert("@health".into(), json!(topic_name));
+        let topic = get_lead_service_topic(&metadata).unwrap();
+        assert_eq!(topic, topic_name);
     }
 
     #[test]
-    fn get_default_lead_service_entity_topic_id_with_invalid_lead_service_value() {
-        let mut metadata = EntityMetadata::child_device("child1".into()).unwrap();
-        metadata
-            .other
-            .insert("leadService".into(), json!("device/child1/too/many/args"));
-        let entity = get_child_lead_service_entity_topic_id(&metadata).unwrap();
-        assert_eq!(
-            entity,
-            EntityTopicId::default_child_service("child1", "tedge-agent").unwrap()
-        );
-    }
-
-    #[test]
-    fn get_default_lead_service_entity_topic_id_without_lead_service_declaration() {
+    fn get_default_lead_service_topic_without_lead_service_declaration() {
         let metadata = EntityMetadata::child_device("child1".into()).unwrap();
-        let entity = get_child_lead_service_entity_topic_id(&metadata).unwrap();
-        assert_eq!(
-            entity,
-            EntityTopicId::default_child_service("child1", "tedge-agent").unwrap()
-        );
+        let topic = get_lead_service_topic(&metadata).unwrap();
+        assert_eq!(topic, "device/child1/service/tedge-agent/status/health");
     }
 
     #[test]
-    fn no_lead_service_entity_topic_id_without_device_name() {
-        let mut metadata = EntityMetadata::child_device("".into()).unwrap();
-        metadata.topic_id = EntityTopicId::from_str("custom///").unwrap();
-        let entity = get_child_lead_service_entity_topic_id(&metadata);
-        assert_eq!(entity, None);
-    }
-
-    #[test]
-    fn nos_lead_service_entity_topic_id_without_device_name() {
-        let mut metadata = EntityMetadata::child_device("".into()).unwrap();
-        metadata.topic_id = EntityTopicId::from_str("custom/child1//").unwrap();
-        let entity = get_child_lead_service_entity_topic_id(&metadata);
-        assert_eq!(entity, None);
+    fn get_none_with_invalid_lead_service_topic() {
+        let mut metadata = EntityMetadata::child_device("child1".into()).unwrap();
+        metadata
+            .other
+            .insert("@health".into(), json!("invalid/mqtt/+/topic/#"));
+        let topic = get_lead_service_topic(&metadata);
+        assert_eq!(topic, None);
     }
 }

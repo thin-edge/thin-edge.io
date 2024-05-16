@@ -7,8 +7,8 @@ use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdUploadRequest;
 use crate::actor::SyncStart;
-use crate::availability::get_child_lead_service_entity_topic_id;
-use crate::availability::start_heartbeat_timer;
+use crate::availability::record_health_status;
+use crate::availability::set_heartbeat_timer;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
@@ -247,8 +247,8 @@ pub struct CumulocityConverter {
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
 
-    // Keep the service status for c8y_Availability monitoring
-    pub service_status: HashMap<EntityTopicId, HealthStatus>,
+    // Keep the service statuses with topic name as a key for c8y_Availability monitoring
+    pub health_status: HashMap<String, HealthStatus>,
 }
 
 impl CumulocityConverter {
@@ -333,7 +333,7 @@ impl CumulocityConverter {
             pending_fts_download_operations: HashMap::new(),
             command_id,
             active_commands: HashSet::new(),
-            service_status: HashMap::new(),
+            health_status: HashMap::new(),
         })
     }
 
@@ -598,22 +598,14 @@ impl CumulocityConverter {
             .expect("entity was registered");
 
         let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
-
         let health_status = get_health_status_from_message(message);
-        let message = convert_health_status_message(
+
+        Ok(convert_health_status_message(
             entity_metadata,
             &ancestors_external_ids,
             &health_status,
             &self.config.c8y_prefix,
-        );
-
-        // Keep the health status to hashmap to use availability monitoring
-        if !message.is_empty() {
-            let service_entity = entity_metadata.topic_id.clone();
-            self.service_status.insert(service_entity, health_status);
-        }
-
-        Ok(message)
+        ))
     }
 
     async fn parse_c8y_devicecontrol_topic(
@@ -991,6 +983,9 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         debug!("Mapping message on topic: {}", message.topic.name);
         trace!("Message content: {:?}", message.payload_str());
+
+        record_health_status(&self.mqtt_schema, &mut self.health_status, message);
+
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
             Err(_) => self.try_convert_tedge_and_c8y_topics(message).await,
@@ -1004,12 +999,15 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut converted_messages: Vec<MqttMessage> = vec![];
-        // Keep the newly registered entities to set c8y_RequiredAvailability for them
-        let mut new_entities: Vec<EntityTopicId> = vec![];
+        // Keep the affected device entities to set c8y_RequiredAvailability for them
+        let mut updated_entities: Vec<EntityTopicId> = vec![];
 
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
+                    if register_message.topic_id == self.device_topic_id {
+                        updated_entities.push(self.device_topic_id.clone());
+                    }
                     match self.entity_store.update(register_message.clone()) {
                         Err(e) => {
                             error!("Entity registration failed: {e}");
@@ -1023,7 +1021,7 @@ impl CumulocityConverter {
                                     .try_convert_entity_registration(&pending_entity.reg_message)?;
                                 converted_messages.append(&mut c8y_message);
 
-                                new_entities.push(pending_entity.reg_message.topic_id.clone());
+                                updated_entities.push(pending_entity.reg_message.topic_id.clone());
 
                                 // Process all the cached data messages for that entity
                                 let mut cached_messages =
@@ -1033,6 +1031,8 @@ impl CumulocityConverter {
                         }
                         Ok(_) => {}
                     }
+                } else {
+                    dbg!(&message);
                 }
             }
             _ => {
@@ -1058,7 +1058,7 @@ impl CumulocityConverter {
                             converted_messages.append(
                                 &mut self.register_and_convert_entity(auto_registration_message)?,
                             );
-                            new_entities.push(auto_registration_message.topic_id.clone());
+                            updated_entities.push(auto_registration_message.topic_id.clone());
                         }
                     } else {
                         // When an entity data message is received before the entity itself is registered,
@@ -1070,41 +1070,8 @@ impl CumulocityConverter {
             }
         };
 
-        // Heartbeat settings initialization for child devices
-        if self.config.availability_enable {
-            for new_entity in new_entities {
-                match self.entity_store.get(&new_entity) {
-                    Some(metadata) if metadata.r#type == EntityType::ChildDevice => {
-                        // Set c8y_RequiredAvailability to the new child device
-                        let set_required_availability_message = set_required_availability_message(
-                            C8yTopic::ChildSmartRestResponse(metadata.external_id.clone().into()),
-                            self.config.availability_period,
-                            &self.config.c8y_prefix,
-                        );
-                        converted_messages.push(set_required_availability_message);
-
-                        // Start the heartbeat timer only if the interval > 0
-                        if let Ok(interval) = self.config.availability_period.try_into() {
-                            if interval > 0 {
-                                if let Some(lead_service_entity) =
-                                    get_child_lead_service_entity_topic_id(metadata)
-                                {
-                                    start_heartbeat_timer(
-                                        self.timer_sender.clone(),
-                                        interval,
-                                        new_entity.clone(),
-                                        lead_service_entity,
-                                    )
-                                    .await
-                                    .unwrap(); // FIXME: Address RuntimeError
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
+        let mut availability_message = self.convert_availability_message(updated_entities).await;
+        converted_messages.append(&mut availability_message);
 
         let mut messages = self
             .try_convert_data_message(source, channel, message)
@@ -1112,6 +1079,45 @@ impl CumulocityConverter {
         converted_messages.append(&mut messages);
 
         Ok(converted_messages)
+    }
+
+    async fn convert_availability_message(
+        &mut self,
+        entities: Vec<EntityTopicId>,
+    ) -> Vec<MqttMessage> {
+        if !self.config.availability_enable {
+            return vec![];
+        }
+
+        for entity in entities {
+            match self.entity_store.get(&entity) {
+                Some(metadata)
+                    if metadata.r#type == EntityType::MainDevice
+                        || metadata.r#type == EntityType::ChildDevice =>
+                {
+                    set_heartbeat_timer(
+                        self.config.availability_period,
+                        &mut self.health_status,
+                        metadata,
+                        self.timer_sender.clone(),
+                    )
+                    .await;
+
+                    if metadata.r#type == EntityType::ChildDevice {
+                        // Set c8y_RequiredAvailability to the new child device
+                        let set_required_availability_message = set_required_availability_message(
+                            C8yTopic::ChildSmartRestResponse(metadata.external_id.clone().into()),
+                            self.config.availability_period,
+                            &self.config.c8y_prefix,
+                        );
+                        return vec![set_required_availability_message];
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        vec![]
     }
 
     async fn try_convert_data_message(
@@ -1315,6 +1321,7 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        dbg!(&message);
         let messages = match &message.topic {
             topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
                 self.alarm_converter.process_internal_alarm(message);
@@ -1356,7 +1363,7 @@ impl CumulocityConverter {
 
         if self.config.availability_enable {
             let set_required_availability_message = set_required_availability_message(
-                C8yTopic::SmartRestResponse, // Only for the main device during initialization
+                C8yTopic::SmartRestResponse,
                 self.config.availability_period,
                 &self.config.c8y_prefix,
             );
@@ -1853,34 +1860,17 @@ impl CumulocityConverter {
         ))
     }
 
-    // FIXME: Design issue
-    // The health status is supposed to be reported to "device/main/service/tedge-agent/status/health"
-    // How the lead service should look? "device/main/service/tedge-agent" or "device/main/service/tedge-agent/status/health"?
-    // As of now, it is implemented in the "device/main/service/tedge-agent" way.
-    pub fn create_heartbeat_message(
-        &mut self,
-        service: &EntityTopicId,
-        device: &EntityTopicId,
-    ) -> Option<MqttMessage> {
-        match self.service_status.get(service) {
-            Some(health_status) if health_status.status == "up" => {
-                match self.get_inventory_update_topic(device) {
-                    Ok(topic) => {
-                        return Some(MqttMessage::new(&topic, "{}"))
-                    },
-                    Err(_) => warn!("The device '{device}' is not registered in the entity store. Skip sending a heartbeat message")
+    pub fn get_availability_period_if_enabled(&self) -> Option<u64> {
+        if self.config.availability_enable {
+            if let Ok(period) = self.config.availability_period.try_into() {
+                if period > 0 {
+                    return Some(period);
                 }
             }
-            Some(_) => {
-                debug!("The status of '{service}' is not 'up'. Skip sending a heartbeat message")
-            }
-            None => warn!("The status of '{service}' is not reported at all. Skip sending a heartbeat message"),
         }
-
         None
     }
 }
-
 /// Lists all the locally available child devices linked to this parent device.
 ///
 /// The set of all locally available child devices is defined as any directory
