@@ -154,11 +154,11 @@ where
             }
         };
 
-        Ok(Self::try_from(target, cmd_id, message.payload())?)
+        Ok(Self::try_from_bytes(target, cmd_id, message.payload())?)
     }
 
     /// Return the Command received on a topic
-    pub fn try_from(
+    pub fn try_from_bytes(
         target: EntityTopicId,
         cmd_id: String,
         bytes: &[u8],

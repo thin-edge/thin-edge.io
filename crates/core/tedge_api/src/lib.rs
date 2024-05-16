@@ -98,7 +98,7 @@ mod tests {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
         let json_request = r#"{ "status": "init" }"#.as_bytes();
-        let request = SoftwareListCommand::try_from(device, cmd_id, json_request);
+        let request = SoftwareListCommand::try_from_bytes(device, cmd_id, json_request);
 
         assert!(request.is_ok());
         let request = request.unwrap();
@@ -113,7 +113,7 @@ mod tests {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
         let payload = "".as_bytes();
-        let request = SoftwareListCommand::try_from(device, cmd_id, payload);
+        let request = SoftwareListCommand::try_from_bytes(device, cmd_id, payload);
 
         assert!(request.is_ok());
         assert!(request.unwrap().is_none());
@@ -207,7 +207,8 @@ mod tests {
                 ]}
             ]}"#;
 
-        let response = SoftwareListCommand::try_from(device, cmd_id, json_response.as_bytes());
+        let response =
+            SoftwareListCommand::try_from_bytes(device, cmd_id, json_response.as_bytes());
         assert!(response.is_ok());
         let response = response.unwrap();
         assert!(response.is_some());
@@ -282,7 +283,8 @@ mod tests {
             "status": "failed",
             "reason": "Request timed-out"
         }"#;
-        let response = SoftwareListCommand::try_from(device, cmd_id, json_response.as_bytes());
+        let response =
+            SoftwareListCommand::try_from_bytes(device, cmd_id, json_response.as_bytes());
         assert!(response.is_ok());
         let response = response.unwrap();
         assert!(response.is_some());
@@ -585,10 +587,13 @@ mod tests {
                 cmd_id: "123".to_string()
             }
         );
-        let request =
-            SoftwareUpdateCommand::try_from(device, "123".to_string(), json_request.as_bytes())
-                .expect("Failed to deserialize")
-                .expect("Some command");
+        let request = SoftwareUpdateCommand::try_from_bytes(
+            device,
+            "123".to_string(),
+            json_request.as_bytes(),
+        )
+        .expect("Failed to deserialize")
+        .expect("Some command");
 
         assert_eq!(
             request.modules_types(),
@@ -662,9 +667,10 @@ mod tests {
         let json_response = r#"{
                 "status": "executing"
             }"#;
-        let response = SoftwareUpdateCommand::try_from(device, cmd_id, json_response.as_bytes())
-            .expect("Failed to deserialize")
-            .expect("some command");
+        let response =
+            SoftwareUpdateCommand::try_from_bytes(device, cmd_id, json_response.as_bytes())
+                .expect("Failed to deserialize")
+                .expect("some command");
         assert_eq!(response.cmd_id, "123".to_string());
         assert_eq!(response.status(), CommandStatus::Executing);
     }
@@ -709,9 +715,10 @@ mod tests {
                 }
             ]
         }"#;
-        let request = SoftwareUpdateCommand::try_from(device, cmd_id, json_request.as_bytes())
-            .expect("Failed to deserialize")
-            .expect("Some command");
+        let request =
+            SoftwareUpdateCommand::try_from_bytes(device, cmd_id, json_request.as_bytes())
+                .expect("Failed to deserialize")
+                .expect("Some command");
         let response = request.with_status(CommandStatus::Successful);
 
         let expected_json = r#"{
@@ -795,9 +802,10 @@ mod tests {
                 }
             ]
         }"#;
-        let request = SoftwareUpdateCommand::try_from(device, cmd_id, json_request.as_bytes())
-            .expect("Failed to deserialize")
-            .expect("Some command");
+        let request =
+            SoftwareUpdateCommand::try_from_bytes(device, cmd_id, json_request.as_bytes())
+                .expect("Failed to deserialize")
+                .expect("Some command");
         let mut response = request.with_error(
             "2 errors: fail to install [ collectd ] fail to remove [ mongodb ]".to_string(),
         );

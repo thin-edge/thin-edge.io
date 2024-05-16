@@ -103,15 +103,17 @@ impl CumulocityConverter {
             return Ok((vec![], None));
         }
 
-        let command =
-            match LogUploadCmd::try_from(topic_id.clone(), cmd_id.into(), message.payload_bytes())?
-            {
-                Some(command) => command,
-                None => {
-                    // The command has been fully processed
-                    return Ok((vec![], None));
-                }
-            };
+        let command = match LogUploadCmd::try_from_bytes(
+            topic_id.clone(),
+            cmd_id.into(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok((vec![], None));
+            }
+        };
 
         let target = self.entity_store.try_get(topic_id)?;
         let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
