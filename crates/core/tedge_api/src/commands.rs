@@ -5,8 +5,10 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::software::*;
+use crate::workflow::GenericCommandData;
 use crate::workflow::GenericCommandState;
 use download::DownloadInfo;
+use log::error;
 use mqtt_channel::MqttError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
@@ -177,7 +179,7 @@ where
     pub fn into_generic_command(self, schema: &MqttSchema) -> GenericCommandState {
         let topic = self.topic(schema);
         let status = self.status().to_string();
-        let payload = serde_json::to_value(self.payload).unwrap(); // any command payload can be converted into JSON
+        let payload = self.payload.to_value();
         GenericCommandState::new(topic, status, payload)
     }
 
@@ -196,6 +198,49 @@ where
         MqttMessage::new(&topic, vec![])
             .with_qos(QoS::AtLeastOnce)
             .with_retain()
+    }
+}
+
+impl<Payload> From<Command<Payload>> for GenericCommandState
+where
+    Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
+{
+    fn from(value: Command<Payload>) -> Self {
+        // FIXME A Command payload should know its root topic
+        let schema = MqttSchema::default();
+        value.into_generic_command(&schema)
+    }
+}
+
+impl<Payload> From<Command<Payload>> for GenericCommandData
+where
+    Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
+{
+    fn from(value: Command<Payload>) -> Self {
+        GenericCommandData::State(value.into())
+    }
+}
+
+impl<Payload> TryFrom<GenericCommandState> for Command<Payload>
+where
+    Payload: DeserializeOwned + CommandPayload,
+{
+    type Error = String;
+
+    fn try_from(value: GenericCommandState) -> Result<Self, Self::Error> {
+        let Some(target) = value.target().and_then(|t| t.parse().ok()) else {
+            return Err(format!("Not an operation topic: {}", value.topic.as_ref()));
+        };
+        let Some(cmd_id) = value.cmd_id() else {
+            return Err(format!("Not an operation topic: {}", value.topic.as_ref()));
+        };
+
+        Command::<Payload>::try_from_json(target, cmd_id, value.payload).map_err(|err| {
+            format!(
+                "Incorrect {operation} request payload: {err}",
+                operation = Payload::operation_type()
+            )
+        })
     }
 }
 

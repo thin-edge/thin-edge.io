@@ -1,14 +1,11 @@
 use crate::software_manager::actor::SoftwareCommand;
 use crate::state_repository::state::AgentStateRepository;
 use crate::tedge_operation_converter::actor::AgentInput;
-use crate::tedge_operation_converter::actor::BuiltinCommandState;
 use crate::tedge_operation_converter::actor::InternalCommandState;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use crate::tedge_operation_converter::config::OperationConfig;
 use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use log::error;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -24,18 +21,16 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::UnboundedLoggingReceiver;
-use tedge_api::commands::Command;
-use tedge_api::commands::CommandPayload;
 use tedge_api::commands::SoftwareListCommandPayload;
 use tedge_api::commands::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowSupervisor;
-use tedge_api::Jsonify;
-use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
@@ -43,6 +38,7 @@ use tedge_script_ext::Execute;
 pub struct TedgeOperationConverterBuilder {
     config: OperationConfig,
     workflows: WorkflowSupervisor,
+    input_sender: DynSender<AgentInput>,
     input_receiver: UnboundedLoggingReceiver<AgentInput>,
     command_dispatcher: CommandDispatcher,
     command_sender: DynSender<InternalCommandState>,
@@ -54,10 +50,9 @@ pub struct TedgeOperationConverterBuilder {
 impl TedgeOperationConverterBuilder {
     pub fn new(
         config: OperationConfig,
-        mut workflows: WorkflowSupervisor,
+        workflows: WorkflowSupervisor,
         software_actor: &mut (impl MessageSink<SoftwareCommand>
                   + MessageSource<SoftwareCommand, NoConfig>),
-        restart_actor: &mut (impl MessageSink<RestartCommand> + MessageSource<RestartCommand, NoConfig>),
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
     ) -> Self {
@@ -86,13 +81,6 @@ impl TedgeOperationConverterBuilder {
             software_actor.get_sender().sender_clone(),
         );
 
-        restart_actor.connect_mapped_sink(
-            NoConfig,
-            &input_sender,
-            Self::into_generic_command(&config.mqtt_schema),
-        );
-        command_dispatcher.add_operation_manager(restart_actor.get_sender());
-
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
             Self::subscriptions(&config.mqtt_schema, &config.device_topic_id),
@@ -102,16 +90,10 @@ impl TedgeOperationConverterBuilder {
 
         let script_runner = ClientMessageBox::new(script_runner);
 
-        for capability in Self::capabilities() {
-            let operation = capability.to_string();
-            if let Err(err) = workflows.register_builtin_workflow(capability) {
-                error!("Fail to register built-in workflow for {operation} operation: {err}");
-            }
-        }
-
         Self {
             config,
             workflows,
+            input_sender,
             input_receiver,
             command_dispatcher,
             command_sender,
@@ -121,23 +103,22 @@ impl TedgeOperationConverterBuilder {
         }
     }
 
-    pub fn capabilities() -> Vec<OperationType> {
-        vec![
-            OperationType::Restart,
-            OperationType::SoftwareList,
-            OperationType::SoftwareUpdate,
-        ]
+    /// Register an actor to handle a builtin operation
+    pub fn register_builtin_operation<OperationActor>(&mut self, actor: &mut OperationActor)
+    where
+        OperationActor: MessageSource<GenericCommandData, NoConfig>,
+        for<'a> &'a OperationActor:
+            IntoIterator<Item = (OperationName, DynSender<GenericCommandState>)>,
+    {
+        actor.connect_sink(NoConfig, &self.input_sender);
+        for (operation, sender) in actor.into_iter() {
+            self.command_dispatcher
+                .register_operation_handler(operation, sender)
+        }
     }
 
     pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
         mqtt_schema.topics(EntityFilter::Entity(device_topic_id), AnyCommand)
-    }
-
-    fn into_generic_command<Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload>(
-        mqtt_schema: &MqttSchema,
-    ) -> impl Fn(Command<Payload>) -> Option<BuiltinCommandState> {
-        let mqtt_schema = mqtt_schema.clone();
-        move |cmd| Some(BuiltinCommandState(cmd.into_generic_command(&mqtt_schema)))
     }
 }
 
@@ -154,7 +135,16 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
         Ok(self.build())
     }
 
-    fn build(self) -> TedgeOperationConverterActor {
+    fn build(mut self) -> TedgeOperationConverterActor {
+        for capability in self.command_dispatcher.capabilities() {
+            if let Err(err) = self
+                .workflows
+                .register_builtin_workflow(capability.as_str().into())
+            {
+                error!("Fail to register built-in workflow for {capability} operation: {err}");
+            }
+        }
+
         let repository =
             AgentStateRepository::new(self.config.state_dir, self.config.config_dir, "workflows");
         TedgeOperationConverterActor {

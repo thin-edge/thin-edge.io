@@ -46,6 +46,20 @@ impl CommandDispatcher {
         );
         self.senders.insert(operation, sender.into());
     }
+
+    /// Register where to send commands of a given type
+    pub fn register_operation_handler(
+        &mut self,
+        operation: OperationName,
+        sender: DynSender<GenericCommandState>,
+    ) {
+        self.senders.insert(operation, sender);
+    }
+
+    /// List the operations for which a builtin handler has been registered
+    pub fn capabilities(&self) -> Vec<&OperationName> {
+        self.senders.keys().collect()
+    }
 }
 
 struct CommandSender<Payload> {

@@ -21,6 +21,31 @@ use std::fmt::Display;
 
 pub const OP_LOG_PATH_KEY: &str = "logPath";
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum GenericCommandData {
+    State(GenericCommandState),
+    Metadata(GenericCommandMetadata),
+}
+
+impl From<GenericCommandState> for GenericCommandData {
+    fn from(value: GenericCommandState) -> Self {
+        GenericCommandData::State(value)
+    }
+}
+
+impl From<GenericCommandMetadata> for GenericCommandData {
+    fn from(value: GenericCommandMetadata) -> Self {
+        GenericCommandData::Metadata(value)
+    }
+}
+
+/// Generic command metadata.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GenericCommandMetadata {
+    pub operation: OperationName,
+    pub payload: Value,
+}
+
 /// Generic command state that can be used to manipulate any type of command payload.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct GenericCommandState {

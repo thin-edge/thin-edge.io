@@ -23,6 +23,8 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
@@ -43,18 +45,7 @@ use tokio::time::sleep;
 #[derive(Debug)]
 pub struct InternalCommandState(GenericCommandState);
 
-/// A new state for a builtin command
-#[derive(Debug)]
-pub struct BuiltinCommandState(pub(crate) GenericCommandState);
-
-/// Metadata for a builtin operation
-#[derive(Debug)]
-pub struct BuiltinCommandMetadata {
-    pub operation: OperationType,
-    pub metadata: serde_json::Value,
-}
-
-fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, BuiltinCommandState, BuiltinCommandMetadata] : Debug);
+fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData] : Debug);
 
 pub struct TedgeOperationConverterActor {
     pub(crate) mqtt_schema: MqttSchema,
@@ -87,14 +78,13 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::InternalCommandState(InternalCommandState(command_state)) => {
                     self.process_command_state_update(command_state).await?;
                 }
-                AgentInput::BuiltinCommandState(BuiltinCommandState(new_state)) => {
+                AgentInput::GenericCommandData(GenericCommandData::State(new_state)) => {
                     self.publish_command_state(new_state).await?;
                 }
-                AgentInput::BuiltinCommandMetadata(BuiltinCommandMetadata {
-                    operation,
-                    metadata,
-                }) => {
-                    self.publish_operation_capability(operation, metadata)
+                AgentInput::GenericCommandData(GenericCommandData::Metadata(
+                    GenericCommandMetadata { operation, payload },
+                )) => {
+                    self.publish_operation_capability(operation, payload)
                         .await?;
                 }
             }
@@ -116,9 +106,10 @@ impl TedgeOperationConverterActor {
 
     async fn publish_operation_capability(
         &mut self,
-        operation: OperationType,
+        operation: OperationName,
         payload: serde_json::Value,
     ) -> Result<(), RuntimeError> {
+        let operation = operation.parse().unwrap();
         let meta_topic = self
             .mqtt_schema
             .capability_topic_for(&self.device_topic_id, operation);

@@ -249,14 +249,14 @@ impl Agent {
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
         // Converter actor
-        let converter_actor_builder = TedgeOperationConverterBuilder::new(
+        let mut converter_actor_builder = TedgeOperationConverterBuilder::new(
             self.config.operation_config,
             workflows,
             &mut software_update_builder,
-            &mut restart_actor_builder,
             &mut mqtt_actor_builder,
             &mut script_runner,
         );
+        converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
 
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
