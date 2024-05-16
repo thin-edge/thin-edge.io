@@ -190,14 +190,6 @@ impl CumulocityConverter {
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
-                self.upload_operation_log(
-                    topic_id,
-                    cmd_id,
-                    &CumulocitySupportedOperations::C8yUploadConfigFile.into(),
-                    command.clone().into_generic_command(&self.mqtt_schema),
-                )
-                .await?;
-
                 vec![c8y_notification, clear_local_cmd]
             }
             CommandStatus::Failed { reason } => {
@@ -253,7 +245,6 @@ mod tests {
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_config::AutoLogUpload;
-    use tedge_downloader_ext::DownloadResponse;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
     use tedge_mqtt_ext::MqttMessage;
@@ -567,7 +558,7 @@ mod tests {
             .await
             .expect("Send failed");
 
-        // Uploader gets a download request and assert them
+        // Uploader gets an upload request and assert them
         let request = ul.recv().await.expect("timeout");
         assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
         assert_eq!(
@@ -598,8 +589,18 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "TODO: replace with mock http"]
     async fn auto_log_upload_successful_operation() {
+        let mut fts_server = mockito::Server::new();
+        let _mock = fts_server
+            .mock(
+                "GET",
+                "/tedge/file-transfer/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            )
+            .with_body("hello")
+            .create_async()
+            .await;
+        let host_port = fts_server.host_with_port();
+
         let ttd = TempTedgeDir::new();
         let config = C8yMapperConfig {
             auto_log_upload: AutoLogUpload::Always,
@@ -610,7 +611,6 @@ mod tests {
 
         let mut mqtt = test_handle.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
         let mut ul = test_handle.ul_box.with_timeout(TEST_TIMEOUT_MS);
-        let mut dl = test_handle.dl_box.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
 
@@ -620,7 +620,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            "tedgeUrl": format!("http://{host_port}/tedge/file-transfer/test-device/config_snapshot/path:type:A-c8y-mapper-1234"),
             "type": "path/type/A",
             "logPath": test_log.path()
         })
@@ -628,19 +628,6 @@ mod tests {
         ))
             .await
             .expect("Send failed");
-
-        // Downloader gets a download request
-        let download_request = dl.recv().await.expect("timeout");
-        // simulate downloader returns result
-        dl.send((
-            download_request.0,
-            Ok(DownloadResponse {
-                url: download_request.1.url,
-                file_path: download_request.1.file_path,
-            }),
-        ))
-        .await
-        .unwrap();
 
         // Uploader gets the upload request for the config file
         let request = ul.recv().await.expect("timeout");

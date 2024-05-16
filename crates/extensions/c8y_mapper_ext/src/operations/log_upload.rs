@@ -242,14 +242,6 @@ impl CumulocityConverter {
             .with_retain()
             .with_qos(QoS::AtLeastOnce);
 
-        self.upload_operation_log(
-            &topic_id,
-            &cmd_id,
-            &CumulocitySupportedOperations::C8yLogFileRequest.into(),
-            fts_download.command,
-        )
-        .await?;
-
         Ok(vec![c8y_notification, clear_local_cmd])
     }
 

@@ -1127,8 +1127,11 @@ impl CumulocityConverter {
                             .await
                     }
                     OperationType::ConfigSnapshot => {
-                        self.handle_config_snapshot_state_change(&source, cmd_id, message)
-                            .await
+                        dbg!("calling config snapshot handler");
+                        dbg!(
+                            self.handle_config_snapshot_state_change(&source, cmd_id, message)
+                                .await
+                        )
                     }
                     OperationType::ConfigUpdate => {
                         self.handle_config_update_state_change(&source, cmd_id, message)
