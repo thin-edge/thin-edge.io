@@ -520,7 +520,7 @@ fn new_bridge(
         }
     } else {
         println!("Deleting mosquitto bridge configuration in favour of built-in bridge\n");
-        clean_up(config_location, bridge_config)?;
+        use_built_in_bridge(config_location, bridge_config)?;
     }
 
     if let Err(err) = service_manager_result {
@@ -608,6 +608,15 @@ fn enable_software_management(
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
 pub fn clean_up(
+    config_location: &TEdgeConfigLocation,
+    bridge_config: &BridgeConfig,
+) -> Result<(), ConnectError> {
+    let path = get_bridge_config_file_path(config_location, bridge_config);
+    std::fs::remove_file(path).or_else(ok_if_not_found)?;
+    Ok(())
+}
+
+pub fn use_built_in_bridge(
     config_location: &TEdgeConfigLocation,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {

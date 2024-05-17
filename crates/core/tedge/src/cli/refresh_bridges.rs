@@ -58,7 +58,7 @@ impl Command for RefreshBridgesCmd {
                     println!(
                     "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
                 );
-                    super::connect::clean_up(&self.config_location, &bridge_config)?;
+                    super::connect::use_built_in_bridge(&self.config_location, &bridge_config)?;
                 }
             }
         }
