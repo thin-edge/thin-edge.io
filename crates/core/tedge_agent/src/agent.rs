@@ -297,16 +297,15 @@ impl Agent {
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_update_enabled: self.config.capabilities.config_update,
                 })?;
-                Some(
-                    ConfigManagerBuilder::try_new(
-                        manager_config,
-                        &mut mqtt_actor_builder,
-                        &mut fs_watch_actor_builder,
-                        &mut downloader_actor_builder,
-                        &mut uploader_actor_builder,
-                    )
-                    .await?,
+                let mut config_manager = ConfigManagerBuilder::try_new(
+                    manager_config,
+                    &mut fs_watch_actor_builder,
+                    &mut downloader_actor_builder,
+                    &mut uploader_actor_builder,
                 )
+                .await?;
+                converter_actor_builder.register_builtin_operation(&mut config_manager);
+                Some(config_manager)
             } else if self.config.capabilities.config_update {
                 warn!("Config_snapshot operation must be enabled to run config_update!");
                 None

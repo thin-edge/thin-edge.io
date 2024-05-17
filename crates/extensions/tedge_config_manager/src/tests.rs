@@ -105,15 +105,16 @@ async fn new_config_manager_builder(
     let mut uploader_builder: FakeServerBoxBuilder<ConfigUploadRequest, ConfigUploadResult> =
         FakeServerBoxBuilder::default();
 
-    let config_builder = ConfigManagerBuilder::try_new(
+    let mut config_builder = ConfigManagerBuilder::try_new(
         config,
-        &mut mqtt_builder,
         &mut fs_watcher_builder,
         &mut downloader_builder,
         &mut uploader_builder,
     )
     .await
     .unwrap();
+
+    config_builder.connect_mqtt(&mut mqtt_builder);
 
     (
         config_builder,

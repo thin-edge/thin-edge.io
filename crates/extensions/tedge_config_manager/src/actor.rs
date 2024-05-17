@@ -117,7 +117,7 @@ impl ConfigManagerActor {
     ) -> Result<(), ChannelError> {
         match request {
             ConfigOperation::Snapshot(topic, request) => match request.status {
-                CommandStatus::Init => {
+                CommandStatus::Init | CommandStatus::Scheduled => {
                     info!("Config Snapshot received: {request:?}");
                     self.start_executing_config_request(ConfigOperation::Snapshot(topic, request))
                         .await?;
@@ -126,13 +126,12 @@ impl ConfigManagerActor {
                     debug!("Executing log request: {request:?}");
                     self.handle_config_snapshot_request(topic, request).await?;
                 }
-                CommandStatus::Scheduled
-                | CommandStatus::Unknown
+                CommandStatus::Unknown
                 | CommandStatus::Successful
                 | CommandStatus::Failed { .. } => {}
             },
             ConfigOperation::Update(topic, request) => match request.status {
-                CommandStatus::Init => {
+                CommandStatus::Init | CommandStatus::Scheduled => {
                     info!("Config Update received: {request:?}");
                     self.start_executing_config_request(ConfigOperation::Update(topic, request))
                         .await?;
@@ -141,8 +140,7 @@ impl ConfigManagerActor {
                     debug!("Executing log request: {request:?}");
                     self.handle_config_update_request(topic, request).await?;
                 }
-                CommandStatus::Scheduled
-                | CommandStatus::Unknown
+                CommandStatus::Unknown
                 | CommandStatus::Successful
                 | CommandStatus::Failed { .. } => {}
             },

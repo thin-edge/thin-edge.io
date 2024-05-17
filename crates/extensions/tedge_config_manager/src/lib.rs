@@ -8,11 +8,13 @@ mod tests;
 use actor::*;
 pub use config::*;
 use log::error;
+use serde_json::json;
 use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -20,6 +22,15 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::ConfigSnapshotCmd;
+use tedge_api::commands::ConfigUpdateCmd;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandMetadata;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::OperationName;
+use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -44,7 +55,6 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerBuilder {
     pub async fn try_new(
         config: ConfigManagerConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,
@@ -52,14 +62,7 @@ impl ConfigManagerBuilder {
         Self::init(&config).await?;
 
         let plugin_config = PluginConfig::new(config.plugin_config_path.as_path());
-        let mut box_builder = SimpleMessageBoxBuilder::new("Tedge-Config-Manager", 16);
-
-        mqtt.connect_source(NoConfig, &mut box_builder);
-        box_builder.connect_mapped_source(
-            Self::subscriptions(&config),
-            mqtt,
-            Self::mqtt_message_parser(&config),
-        );
+        let box_builder = SimpleMessageBoxBuilder::new("Tedge-Config-Manager", 16);
 
         let download_sender =
             downloader_actor.connect_client(box_builder.get_sender().sender_clone());
@@ -78,6 +81,18 @@ impl ConfigManagerBuilder {
             download_sender,
             upload_sender,
         })
+    }
+
+    pub fn connect_mqtt(
+        &mut self,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
+    ) {
+        mqtt.connect_source(NoConfig, &mut self.box_builder);
+        self.box_builder.connect_mapped_source(
+            Self::subscriptions(&self.config),
+            mqtt,
+            Self::mqtt_message_parser(&self.config),
+        );
     }
 
     pub async fn init(config: &ConfigManagerConfig) -> Result<(), FileError> {
@@ -178,4 +193,73 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
             self.upload_sender,
         ))
     }
+}
+
+impl MessageSource<GenericCommandData, NoConfig> for ConfigManagerBuilder {
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<GenericCommandData>) {
+        self.box_builder.connect_mapped_sink(
+            config,
+            &peer.get_sender(),
+            |data: ConfigOperationData| match data {
+                ConfigOperationData::State(ConfigOperation::Snapshot(topic, payload)) => Some(
+                    GenericCommandState::new(topic, payload.status.to_string(), payload.to_value())
+                        .into(),
+                ),
+                ConfigOperationData::State(ConfigOperation::Update(topic, payload)) => Some(
+                    GenericCommandState::new(topic, payload.status.to_string(), payload.to_value())
+                        .into(),
+                ),
+                ConfigOperationData::Metadata { topic, types } => {
+                    let Some(operation) = MqttSchema::get_operation_name(topic.as_ref()) else {
+                        return None;
+                    };
+                    Some(GenericCommandData::Metadata(GenericCommandMetadata {
+                        operation,
+                        payload: json!( {
+                            "types": types
+                        }),
+                    }))
+                }
+            },
+        )
+    }
+}
+
+impl IntoIterator for &ConfigManagerBuilder {
+    type Item = (OperationName, DynSender<GenericCommandState>);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut operation_senders = vec![(
+            OperationType::ConfigSnapshot.to_string(),
+            MappingSender::new(
+                self.box_builder.get_sender(),
+                generic_command_into_snapshot_request,
+            )
+            .into(),
+        )];
+        if self.config.config_update_enabled {
+            operation_senders.push((
+                OperationType::ConfigUpdate.to_string(),
+                MappingSender::new(
+                    self.box_builder.get_sender(),
+                    generic_command_into_update_request,
+                )
+                .into(),
+            ));
+        }
+        operation_senders.into_iter()
+    }
+}
+
+fn generic_command_into_snapshot_request(cmd: GenericCommandState) -> Option<ConfigInput> {
+    let topic = cmd.topic.clone();
+    let cmd = ConfigSnapshotCmd::try_from(cmd).ok()?;
+    Some(ConfigOperation::Snapshot(topic, cmd.payload).into())
+}
+
+fn generic_command_into_update_request(cmd: GenericCommandState) -> Option<ConfigInput> {
+    let topic = cmd.topic.clone();
+    let cmd = ConfigUpdateCmd::try_from(cmd).ok()?;
+    Some(ConfigOperation::Update(topic, cmd.payload).into())
 }
