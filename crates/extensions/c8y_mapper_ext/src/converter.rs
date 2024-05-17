@@ -128,7 +128,7 @@ impl CumulocityConverter {
         &self,
         messages_or_err: Result<Vec<MqttMessage>, ConversionError>,
     ) -> Vec<MqttMessage> {
-        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
+        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(dbg!(error))])
     }
 
     pub fn wrap_error(&self, message_or_err: Result<MqttMessage, ConversionError>) -> MqttMessage {
@@ -329,23 +329,23 @@ impl CumulocityConverter {
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
 
                 if entity_topic_id.is_bridge_health_topic() {
-                    return Ok(vec![]);
+                    Ok(vec![])
+                } else {
+                    let service_creation_message = service_creation_message(
+                        external_id.as_ref(),
+                        display_name.unwrap_or_else(|| {
+                            entity_topic_id
+                                .default_service_name()
+                                .unwrap_or(external_id.as_ref())
+                        }),
+                        display_type.unwrap_or(&self.service_type),
+                        "up",
+                        &ancestors_external_ids,
+                        &self.config.c8y_prefix,
+                    )
+                    .context("Could not create service creation message")?;
+                    Ok(vec![service_creation_message])
                 }
-
-                let service_creation_message = service_creation_message(
-                    external_id.as_ref(),
-                    display_name.unwrap_or_else(|| {
-                        entity_topic_id
-                            .default_service_name()
-                            .unwrap_or(external_id.as_ref())
-                    }),
-                    display_type.unwrap_or(&self.service_type),
-                    "up",
-                    &ancestors_external_ids,
-                    &self.config.c8y_prefix,
-                )
-                .context("Could not create service creation message")?;
-                Ok(vec![service_creation_message])
             }
         }
     }

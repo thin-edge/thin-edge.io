@@ -52,6 +52,8 @@ impl<T> BridgeHealthMonitor<T> {
             let status = statuses.values().fold(Some(Status::Up), overall_status);
             if last_status != status {
                 last_status = status;
+
+                // TODO could this deadlock?
                 self.target
                     .publish(&self.topic, QoS::AtLeastOnce, true, status.unwrap().json())
                     .await

@@ -74,7 +74,36 @@ impl TEdgeComponent for CumulocityMapper {
                 tc.forward_from_remote(topic, local_prefix.clone(), "")?;
             }
 
-            tc.forward_from_local("#", local_prefix, "")?;
+            // Templates
+            tc.forward_from_local("s/ut/#", local_prefix.clone(), "")?;
+
+            // Static templates
+            tc.forward_from_local("s/us", local_prefix.clone(), "")?;
+            tc.forward_from_local("s/us/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
+
+            // SmartREST2
+            tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("t/uc/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("q/uc/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("c/uc/#", local_prefix.clone(), "")?;
+
+            // c8y JSON
+            tc.forward_from_local(
+                "inventory/managedObjects/update/#",
+                local_prefix.clone(),
+                "",
+            )?;
+            tc.forward_from_local(
+                "measurement/measurements/create/#",
+                local_prefix.clone(),
+                "",
+            )?;
+            tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
 
             let c8y = tedge_config.c8y.mqtt.or_config_not_set()?;
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
@@ -213,5 +242,44 @@ impl TEdgeComponent for CumulocityMapper {
 }
 
 pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Config, anyhow::Error> {
-    Ok(tedge_config.mqtt_config()?)
+    let main_device_xid: EntityExternalId = tedge_config.device.id.try_read(tedge_config)?.into();
+    let service_type = &tedge_config.service.ty;
+    let service_type = if service_type.is_empty() {
+        "service".to_string()
+    } else {
+        service_type.to_string()
+    };
+
+    // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
+
+    // there is one mapper instance per cloud per thin-edge instance, perhaps we should use some
+    // predefined topic id instead of trying to derive it from current device?
+    let entity_topic_id: EntityTopicId = tedge_config
+        .mqtt
+        .device_topic_id
+        .clone()
+        .parse()
+        .context("Invalid device_topic_id")?;
+
+    let mapper_service_topic_id = entity_topic_id
+        .default_service_for_device(CUMULOCITY_MAPPER_NAME)
+        .context("Can't derive service name if device topic id not in default scheme")?;
+
+    let mapper_service_external_id =
+        CumulocityConverter::map_to_c8y_external_id(&mapper_service_topic_id, &main_device_xid);
+
+    let last_will_message = c8y_api::smartrest::inventory::service_creation_message(
+        mapper_service_external_id.as_ref(),
+        CUMULOCITY_MAPPER_NAME,
+        service_type.as_str(),
+        "down",
+        &[],
+        &tedge_config.c8y.bridge.topic_prefix,
+    )?;
+
+    let mqtt_config = tedge_config
+        .mqtt_config()?
+        .with_session_name("last_will_c8y_mapper")
+        .with_last_will_message(last_will_message);
+    Ok(mqtt_config)
 }

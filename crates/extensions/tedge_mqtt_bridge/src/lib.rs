@@ -320,20 +320,21 @@ async fn half_bridge(
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
-                    let topic = transformer.convert_topic(&publish.topic);
-                    target
-                        .publish(
-                            topic.clone(),
-                            publish.qos,
-                            publish.retain,
-                            publish.payload.clone(),
-                        )
-                        .await
-                        .unwrap();
-                    companion_bridge_half
-                        .send(Some((topic.into_owned(), publish)))
-                        .await
-                        .unwrap();
+                    if let Some(topic) = transformer.convert_topic(&publish.topic) {
+                        target
+                            .publish(
+                                topic.clone(),
+                                publish.qos,
+                                publish.retain,
+                                publish.payload.clone(),
+                            )
+                            .await
+                            .unwrap();
+                        companion_bridge_half
+                            .send(Some((topic.into_owned(), publish)))
+                            .await
+                            .unwrap();
+                    }
                 }
             }
 
@@ -376,6 +377,7 @@ enum Status {
 impl Status {
     fn json(self) -> &'static str {
         match self {
+            // TODO Robot test that I make it to Cumulocity
             Status::Up => r#"{"status":"up"}"#,
             Status::Down => r#"{"status":"down"}"#,
         }
@@ -630,8 +632,11 @@ mod tests {
             tc.forward_from_local("s/us", "c8y/", "").unwrap();
             tc.forward_from_local("#", "c8y/", "secondary/").unwrap();
             let [(rules, _), _] = tc.converters_and_bidirectional_topic_filters();
-            assert_eq!(rules.convert_topic("c8y/s/us"), "s/us");
-            assert_eq!(rules.convert_topic("c8y/other"), "secondary/other");
+            assert_eq!(rules.convert_topic("c8y/s/us"), Some("s/us".into()));
+            assert_eq!(
+                rules.convert_topic("c8y/other"),
+                Some("secondary/other".into())
+            );
         }
 
         #[test]
@@ -640,8 +645,11 @@ mod tests {
             tc.forward_from_remote("s/ds", "c8y/", "").unwrap();
             tc.forward_from_remote("#", "c8y/", "secondary/").unwrap();
             let [_, (rules, _)] = tc.converters_and_bidirectional_topic_filters();
-            assert_eq!(rules.convert_topic("s/ds"), "c8y/s/ds");
-            assert_eq!(rules.convert_topic("secondary/other"), "c8y/other");
+            assert_eq!(rules.convert_topic("s/ds"), Some("c8y/s/ds".into()));
+            assert_eq!(
+                rules.convert_topic("secondary/other"),
+                Some("c8y/other".into())
+            );
         }
 
         #[test]
