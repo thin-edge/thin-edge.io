@@ -26,6 +26,7 @@ use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
@@ -47,7 +48,6 @@ pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
 pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
 fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, ConfigDownloadResult, ConfigUploadResult] : Debug);
-fan_in_message_type!(ConfigOutput[MqttMessage, ConfigDownloadRequest, ConfigUploadRequest]: Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
@@ -111,44 +111,7 @@ impl ConfigManagerActor {
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         match ConfigOperation::request_from_message(&self.config, &message) {
-            Ok(Some(ConfigOperation::Snapshot(request))) => match request.status {
-                CommandStatus::Init => {
-                    info!("Config Snapshot received: {request:?}");
-                    self.start_executing_config_request(
-                        &message.topic,
-                        ConfigOperation::Snapshot(request),
-                    )
-                    .await?;
-                }
-                CommandStatus::Executing => {
-                    debug!("Executing log request: {request:?}");
-                    self.handle_config_snapshot_request(&message.topic, request)
-                        .await?;
-                }
-                CommandStatus::Scheduled
-                | CommandStatus::Unknown
-                | CommandStatus::Successful
-                | CommandStatus::Failed { .. } => {}
-            },
-            Ok(Some(ConfigOperation::Update(request))) => match request.status {
-                CommandStatus::Init => {
-                    info!("Config Update received: {request:?}");
-                    self.start_executing_config_request(
-                        &message.topic,
-                        ConfigOperation::Update(request),
-                    )
-                    .await?;
-                }
-                CommandStatus::Executing => {
-                    debug!("Executing log request: {request:?}");
-                    self.handle_config_update_request(&message.topic, request)
-                        .await?;
-                }
-                CommandStatus::Scheduled
-                | CommandStatus::Unknown
-                | CommandStatus::Successful
-                | CommandStatus::Failed { .. } => {}
-            },
+            Ok(Some(request)) => self.process_operation_request(request).await?,
             Ok(None) => {}
             Err(ConfigManagementError::InvalidTopicError) => {
                 error!(
@@ -163,13 +126,51 @@ impl ConfigManagerActor {
         Ok(())
     }
 
+    async fn process_operation_request(
+        &mut self,
+        request: ConfigOperation,
+    ) -> Result<(), ChannelError> {
+        match request {
+            ConfigOperation::Snapshot(topic, request) => match request.status {
+                CommandStatus::Init => {
+                    info!("Config Snapshot received: {request:?}");
+                    self.start_executing_config_request(ConfigOperation::Snapshot(topic, request))
+                        .await?;
+                }
+                CommandStatus::Executing => {
+                    debug!("Executing log request: {request:?}");
+                    self.handle_config_snapshot_request(topic, request).await?;
+                }
+                CommandStatus::Scheduled
+                | CommandStatus::Unknown
+                | CommandStatus::Successful
+                | CommandStatus::Failed { .. } => {}
+            },
+            ConfigOperation::Update(topic, request) => match request.status {
+                CommandStatus::Init => {
+                    info!("Config Update received: {request:?}");
+                    self.start_executing_config_request(ConfigOperation::Update(topic, request))
+                        .await?;
+                }
+                CommandStatus::Executing => {
+                    debug!("Executing log request: {request:?}");
+                    self.handle_config_update_request(topic, request).await?;
+                }
+                CommandStatus::Scheduled
+                | CommandStatus::Unknown
+                | CommandStatus::Successful
+                | CommandStatus::Failed { .. } => {}
+            },
+        }
+        Ok(())
+    }
+
     async fn start_executing_config_request(
         &mut self,
-        topic: &Topic,
         mut operation: ConfigOperation,
     ) -> Result<(), ChannelError> {
         match operation {
-            ConfigOperation::Snapshot(ref mut request) => {
+            ConfigOperation::Snapshot(ref topic, ref mut request) => {
                 match &request.tedge_url {
                     Some(_) => request.executing(None),
                     None => {
@@ -185,25 +186,27 @@ impl ConfigManagerActor {
                     }
                 };
             }
-            ConfigOperation::Update(ref mut request) => {
+            ConfigOperation::Update(_, ref mut request, ..) => {
                 request.executing();
             }
         }
-        self.publish_command_status(topic, &operation).await
+        self.publish_command_status(operation).await
     }
 
     async fn handle_config_snapshot_request(
         &mut self,
-        topic: &Topic,
+        topic: Topic,
         mut request: ConfigSnapshotCmdPayload,
     ) -> Result<(), ChannelError> {
         match self
-            .execute_config_snapshot_request(topic, &mut request)
+            .execute_config_snapshot_request(&topic, &mut request)
             .await
         {
             Ok(_) => {
-                self.pending_operations
-                    .insert(topic.name.clone(), ConfigOperation::Snapshot(request));
+                self.pending_operations.insert(
+                    topic.name.clone(),
+                    ConfigOperation::Snapshot(topic, request),
+                );
             }
             Err(error) => {
                 let error_message = format!(
@@ -211,7 +214,7 @@ impl ConfigManagerActor {
                 );
                 request.failed(&error_message);
                 error!("{}", error_message);
-                self.publish_command_status(topic, &ConfigOperation::Snapshot(request))
+                self.publish_command_status(ConfigOperation::Snapshot(topic, request))
                     .await?;
             }
         }
@@ -292,9 +295,9 @@ impl ConfigManagerActor {
         topic: &str,
         result: UploadResult,
     ) -> Result<(), ChannelError> {
-        if let Some(ConfigOperation::Snapshot(mut request)) = self.pending_operations.remove(topic)
+        if let Some(ConfigOperation::Snapshot(topic, mut request)) =
+            self.pending_operations.remove(topic)
         {
-            let topic = Topic::new_unchecked(topic);
             match result {
                 Ok(response) => {
                     request.successful(response.file_path.as_str());
@@ -302,7 +305,7 @@ impl ConfigManagerActor {
                         "Config Snapshot request processed for config type: {}.",
                         request.config_type
                     );
-                    self.publish_command_status(&topic, &ConfigOperation::Snapshot(request))
+                    self.publish_command_status(ConfigOperation::Snapshot(topic, request))
                         .await?;
                 }
                 Err(err) => {
@@ -312,7 +315,7 @@ impl ConfigManagerActor {
                     );
                     request.failed(&error_message);
                     error!("{}", error_message);
-                    self.publish_command_status(&topic, &ConfigOperation::Snapshot(request))
+                    self.publish_command_status(ConfigOperation::Snapshot(topic, request))
                         .await?;
                 }
             }
@@ -323,13 +326,13 @@ impl ConfigManagerActor {
 
     async fn handle_config_update_request(
         &mut self,
-        topic: &Topic,
+        topic: Topic,
         mut request: ConfigUpdateCmdPayload,
     ) -> Result<(), ChannelError> {
-        match self.execute_config_update_request(topic, &request).await {
+        match self.execute_config_update_request(&topic, &request).await {
             Ok(_) => {
                 self.pending_operations
-                    .insert(topic.name.clone(), ConfigOperation::Update(request));
+                    .insert(topic.name.clone(), ConfigOperation::Update(topic, request));
             }
             Err(error) => {
                 let error_message = format!(
@@ -338,7 +341,7 @@ impl ConfigManagerActor {
                 );
                 request.failed(&error_message);
                 error!("{}", error_message);
-                self.publish_command_status(topic, &ConfigOperation::Update(request))
+                self.publish_command_status(ConfigOperation::Update(topic, request))
                     .await?;
             }
         }
@@ -383,12 +386,11 @@ impl ConfigManagerActor {
         topic: &str,
         result: DownloadResult,
     ) -> Result<(), ConfigManagementError> {
-        let Some(ConfigOperation::Update(mut request)) = self.pending_operations.remove(topic)
+        let Some(ConfigOperation::Update(topic, mut request)) =
+            self.pending_operations.remove(topic)
         else {
             return Ok(());
         };
-
-        let topic = Topic::new_unchecked(topic);
 
         let response = match result {
             Ok(response) => response,
@@ -396,7 +398,7 @@ impl ConfigManagerActor {
                 let error_message = format!("config-manager failed downloading a file: {err}",);
                 request.failed(&error_message);
                 error!("{}", error_message);
-                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                self.publish_command_status(ConfigOperation::Update(topic, request))
                     .await?;
                 return Ok(());
             }
@@ -413,7 +415,7 @@ impl ConfigManagerActor {
 
                 request.failed(&error_message);
                 error!("{}", error_message);
-                self.publish_command_status(&topic, &ConfigOperation::Update(request))
+                self.publish_command_status(ConfigOperation::Update(topic, request))
                     .await?;
                 return Ok(());
             }
@@ -424,7 +426,7 @@ impl ConfigManagerActor {
             "Config Update request processed for config type: {}.",
             request.config_type
         );
-        self.publish_command_status(&topic, &ConfigOperation::Update(request))
+        self.publish_command_status(ConfigOperation::Update(topic, request))
             .await?;
 
         Ok(())
@@ -522,10 +524,9 @@ impl ConfigManagerActor {
 
     async fn publish_command_status(
         &mut self,
-        topic: &Topic,
-        operation: &ConfigOperation,
+        operation: ConfigOperation,
     ) -> Result<(), ChannelError> {
-        match operation.request_into_message(topic) {
+        match operation.request_into_message() {
             Ok(message) => self.mqtt_publisher.send(message).await?,
             Err(err) => error!("Fail to build a message {:?}: {err}", operation),
         }
@@ -535,8 +536,8 @@ impl ConfigManagerActor {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ConfigOperation {
-    Snapshot(ConfigSnapshotCmdPayload),
-    Update(ConfigUpdateCmdPayload),
+    Snapshot(Topic, ConfigSnapshotCmdPayload),
+    Update(Topic, ConfigUpdateCmdPayload),
 }
 
 impl ConfigOperation {
@@ -548,10 +549,12 @@ impl ConfigOperation {
             Ok(None)
         } else if config.config_snapshot_topic.accept(message) {
             Ok(Some(ConfigOperation::Snapshot(
+                message.topic.clone(),
                 ConfigSnapshotCmdPayload::from_json(message.payload_str()?)?,
             )))
         } else if config.config_update_topic.accept(message) {
             Ok(Some(ConfigOperation::Update(
+                message.topic.clone(),
                 ConfigUpdateCmdPayload::from_json(message.payload_str()?)?,
             )))
         } else {
@@ -559,13 +562,17 @@ impl ConfigOperation {
         }
     }
 
-    fn request_into_message(&self, topic: &Topic) -> Result<MqttMessage, ConfigManagementError> {
+    fn request_into_message(&self) -> Result<MqttMessage, ConfigManagementError> {
         match self {
-            ConfigOperation::Snapshot(request) => {
-                Ok(MqttMessage::new(topic, request.to_json()).with_retain())
+            ConfigOperation::Snapshot(topic, request) => {
+                Ok(MqttMessage::new(topic, request.to_json())
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce))
             }
-            ConfigOperation::Update(request) => {
-                Ok(MqttMessage::new(topic, request.to_json()).with_retain())
+            ConfigOperation::Update(topic, request) => {
+                Ok(MqttMessage::new(topic, request.to_json())
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce))
             }
         }
     }
