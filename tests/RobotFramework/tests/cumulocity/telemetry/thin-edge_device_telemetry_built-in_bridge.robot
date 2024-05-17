@@ -24,6 +24,7 @@ Bridge stops if mapper stops running
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomMeasurement    series=temperature
     Log    ${measurements}
     Execute Command    systemctl stop tedge-mapper-c8y
+    Service Health Status Should Be Down    tedge-mapper-bridge-custom-c8y-prefix
     Execute Command    tedge mqtt pub ${C8Y_TOPIC_PREFIX}/s/us '200,CustomMeasurement,temperature,25'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomMeasurement    series=temperature
     Log    ${measurements}

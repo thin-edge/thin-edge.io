@@ -68,6 +68,21 @@ pub fn service_creation_message(
     ancestors: &[String],
     prefix: &TopicPrefix,
 ) -> Result<MqttMessage, InvalidValueError> {
+    Ok(MqttMessage::new(
+        &publish_topic_from_ancestors(ancestors, prefix),
+        service_creation_message_payload(service_id, service_name, service_type, service_status)?,
+    ))
+}
+
+/// Create a SmartREST message for creating a service on device.
+/// The provided ancestors list must contain all the parents of the given service
+/// starting from its immediate parent device.
+pub fn service_creation_message_payload(
+    service_id: &str,
+    service_name: &str,
+    service_type: &str,
+    service_status: &str,
+) -> Result<String, InvalidValueError> {
     // TODO: most of this noise can be eliminated by implementing `Serialize`/`Deserialize` for smartrest format
     if service_id.is_empty() {
         return Err(InvalidValueError {
@@ -94,16 +109,13 @@ pub fn service_creation_message(
         });
     }
 
-    Ok(MqttMessage::new(
-        &publish_topic_from_ancestors(ancestors, prefix),
-        fields_to_csv_string(&[
-            "102",
-            service_id,
-            service_type,
-            service_name,
-            service_status,
-        ]),
-    ))
+    Ok(fields_to_csv_string(&[
+        "102",
+        service_id,
+        service_type,
+        service_name,
+        service_status,
+    ]))
 }
 
 /// Create a SmartREST message for updating service status.
