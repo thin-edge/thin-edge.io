@@ -513,11 +513,12 @@ impl ConfigManagerActor {
     async fn publish_supported_config_types(&mut self) -> Result<(), ChannelError> {
         let mut config_types = self.plugin_config.get_all_file_types();
         config_types.sort();
-        let payload = json!({ "types": config_types }).to_string();
         for topic in self.config.config_reload_topics.patterns.iter() {
-            let message =
-                MqttMessage::new(&Topic::new_unchecked(topic), payload.clone()).with_retain();
-            self.mqtt_publisher.send(message).await?;
+            let metadata = ConfigOperationData::Metadata {
+                topic: Topic::new_unchecked(topic),
+                types: config_types.clone(),
+            };
+            self.mqtt_publisher.send(metadata.into()).await?;
         }
         Ok(())
     }
@@ -526,11 +527,15 @@ impl ConfigManagerActor {
         &mut self,
         operation: ConfigOperation,
     ) -> Result<(), ChannelError> {
-        match operation.request_into_message() {
-            Ok(message) => self.mqtt_publisher.send(message).await?,
-            Err(err) => error!("Fail to build a message {:?}: {err}", operation),
-        }
-        Ok(())
+        self.publish_operation_data(ConfigOperationData::State(operation))
+            .await
+    }
+
+    async fn publish_operation_data(
+        &mut self,
+        data: ConfigOperationData,
+    ) -> Result<(), ChannelError> {
+        self.mqtt_publisher.send(data.into()).await
     }
 }
 
@@ -562,17 +567,33 @@ impl ConfigOperation {
         }
     }
 
-    fn request_into_message(&self) -> Result<MqttMessage, ConfigManagementError> {
+    fn request_into_message(&self) -> MqttMessage {
         match self {
-            ConfigOperation::Snapshot(topic, request) => {
-                Ok(MqttMessage::new(topic, request.to_json())
+            ConfigOperation::Snapshot(topic, request) => MqttMessage::new(topic, request.to_json())
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce),
+            ConfigOperation::Update(topic, request) => MqttMessage::new(topic, request.to_json())
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ConfigOperationData {
+    State(ConfigOperation),
+    Metadata { topic: Topic, types: Vec<String> },
+}
+
+impl From<ConfigOperationData> for MqttMessage {
+    fn from(value: ConfigOperationData) -> Self {
+        match value {
+            ConfigOperationData::State(cmd) => cmd.request_into_message(),
+            ConfigOperationData::Metadata { topic, types } => {
+                let payload = json!({ "types": types }).to_string();
+                MqttMessage::new(&topic, payload)
                     .with_retain()
-                    .with_qos(QoS::AtLeastOnce))
-            }
-            ConfigOperation::Update(topic, request) => {
-                Ok(MqttMessage::new(topic, request.to_json())
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce))
+                    .with_qos(QoS::AtLeastOnce)
             }
         }
     }
