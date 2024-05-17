@@ -404,7 +404,7 @@ mod tests {
                 "b/".into(),
             )
             .unwrap()]);
-            assert_eq!(converter.convert_topic("a/topic"), "b/topic")
+            assert_eq!(converter.convert_topic("a/topic"), Some("b/topic".into()))
         }
 
         #[test]
@@ -413,7 +413,7 @@ mod tests {
                 BridgeRule::try_new("topic".into(), "a/".into(), "b/".into()).unwrap(),
                 BridgeRule::try_new("#".into(), "a/".into(), "c/".into()).unwrap(),
             ]);
-            assert_eq!(converter.convert_topic("a/topic"), "b/topic");
+            assert_eq!(converter.convert_topic("a/topic"), Some("b/topic".into()));
         }
 
         #[test]
@@ -422,7 +422,7 @@ mod tests {
                 BridgeRule::try_new("topic".into(), "x/".into(), "b/".into()).unwrap(),
                 BridgeRule::try_new("#".into(), "a/".into(), "c/".into()).unwrap(),
             ]);
-            assert_eq!(converter.convert_topic("a/topic"), "c/topic");
+            assert_eq!(converter.convert_topic("a/topic"), Some("c/topic".into()));
         }
     }
 

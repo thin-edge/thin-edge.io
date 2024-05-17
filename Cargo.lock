@@ -3893,6 +3893,7 @@ version = "1.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "c8y_api",
  "certificate",
  "env_logger",
  "futures",
