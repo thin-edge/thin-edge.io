@@ -18,6 +18,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_config::ReadError;
 use tedge_config::SudoCommandBuilder;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::PermissionEntry;
 
@@ -35,7 +36,7 @@ pub struct ConfigManagerConfig {
     pub plugin_config_path: PathBuf,
     pub tmp_path: Arc<Utf8Path>,
     pub mqtt_schema: MqttSchema,
-    pub config_reload_topics: TopicFilter,
+    pub config_reload_topics: Vec<Topic>,
     pub config_update_topic: TopicFilter,
     pub config_snapshot_topic: TopicFilter,
     pub tedge_http_host: Arc<str>,
@@ -66,12 +67,7 @@ impl ConfigManagerConfig {
 
         let config_reload_topics = [OperationType::ConfigSnapshot, OperationType::ConfigUpdate]
             .into_iter()
-            .map(|cmd| {
-                mqtt_topic_root.topics(
-                    EntityFilter::Entity(&mqtt_device_topic_id),
-                    ChannelFilter::CommandMetadata(cmd),
-                )
-            })
+            .map(|cmd| mqtt_topic_root.capability_topic_for(&mqtt_device_topic_id, cmd))
             .collect();
 
         let config_update_topic = mqtt_topic_root.topics(

@@ -513,9 +513,9 @@ impl ConfigManagerActor {
     async fn publish_supported_config_types(&mut self) -> Result<(), ChannelError> {
         let mut config_types = self.plugin_config.get_all_file_types();
         config_types.sort();
-        for topic in self.config.config_reload_topics.patterns.iter() {
+        for topic in self.config.config_reload_topics.iter() {
             let metadata = ConfigOperationData::Metadata {
-                topic: Topic::new_unchecked(topic),
+                topic: topic.clone(),
                 types: config_types.clone(),
             };
             self.mqtt_publisher.send(metadata.into()).await?;

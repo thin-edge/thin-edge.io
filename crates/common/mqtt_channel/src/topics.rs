@@ -41,8 +41,8 @@ impl Topic {
 /// An MQTT topic filter
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TopicFilter {
-    pub patterns: Vec<String>,
-    pub qos: QoS,
+    patterns: Vec<String>,
+    qos: QoS,
 }
 
 impl Default for TopicFilter {

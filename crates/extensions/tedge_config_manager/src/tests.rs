@@ -80,12 +80,13 @@ async fn new_config_manager_builder(
         config_dir: temp_dir.to_path_buf(),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-configuration-plugin.toml"),
-        config_reload_topics: vec![
+        config_reload_topics: [
             "te/device/main///cmd/config_snapshot",
             "te/device/main///cmd/config_update",
         ]
-        .try_into()
-        .expect("Infallible"),
+        .into_iter()
+        .map(Topic::new_unchecked)
+        .collect(),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
         use_tedge_write: TedgeWriteStatus::Disabled,
         mqtt_schema: MqttSchema::new(),
