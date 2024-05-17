@@ -47,14 +47,14 @@ pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
 pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
 pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, ConfigDownloadResult, ConfigUploadResult] : Debug);
+fan_in_message_type!(ConfigInput[ConfigOperation, FsWatchEvent, ConfigDownloadResult, ConfigUploadResult] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
     plugin_config: PluginConfig,
     pending_operations: HashMap<String, ConfigOperation>,
     input_receiver: LoggingReceiver<ConfigInput>,
-    mqtt_publisher: LoggingSender<MqttMessage>,
+    output_sender: LoggingSender<ConfigOperationData>,
     download_sender: DynSender<ConfigDownloadRequest>,
     upload_sender: DynSender<ConfigUploadRequest>,
 }
@@ -70,7 +70,9 @@ impl Actor for ConfigManagerActor {
 
         while let Some(event) = self.input_receiver.recv().await {
             let result = match event {
-                ConfigInput::MqttMessage(message) => self.process_mqtt_message(message).await,
+                ConfigInput::ConfigOperation(request) => {
+                    self.process_operation_request(request).await
+                }
                 ConfigInput::FsWatchEvent(event) => self.process_file_watch_events(event).await,
                 ConfigInput::ConfigDownloadResult((topic, result)) => {
                     Ok(self.process_downloaded_config(&topic, result).await?)
@@ -94,7 +96,7 @@ impl ConfigManagerActor {
         config: ConfigManagerConfig,
         plugin_config: PluginConfig,
         input_receiver: LoggingReceiver<ConfigInput>,
-        mqtt_publisher: LoggingSender<MqttMessage>,
+        output_sender: LoggingSender<ConfigOperationData>,
         download_sender: DynSender<ConfigDownloadRequest>,
         upload_sender: DynSender<ConfigUploadRequest>,
     ) -> Self {
@@ -103,27 +105,10 @@ impl ConfigManagerActor {
             plugin_config,
             pending_operations: HashMap::new(),
             input_receiver,
-            mqtt_publisher,
+            output_sender,
             download_sender,
             upload_sender,
         }
-    }
-
-    async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        match ConfigOperation::request_from_message(&self.config, &message) {
-            Ok(Some(request)) => self.process_operation_request(request).await?,
-            Ok(None) => {}
-            Err(ConfigManagementError::InvalidTopicError) => {
-                error!(
-                    "Received unexpected message on topic: {}",
-                    message.topic.name
-                );
-            }
-            Err(err) => {
-                error!("Incorrect log request payload: {}", err);
-            }
-        }
-        Ok(())
     }
 
     async fn process_operation_request(
@@ -518,7 +503,7 @@ impl ConfigManagerActor {
                 topic: topic.clone(),
                 types: config_types.clone(),
             };
-            self.mqtt_publisher.send(metadata.into()).await?;
+            self.output_sender.send(metadata).await?;
         }
         Ok(())
     }
@@ -527,15 +512,8 @@ impl ConfigManagerActor {
         &mut self,
         operation: ConfigOperation,
     ) -> Result<(), ChannelError> {
-        self.publish_operation_data(ConfigOperationData::State(operation))
-            .await
-    }
-
-    async fn publish_operation_data(
-        &mut self,
-        data: ConfigOperationData,
-    ) -> Result<(), ChannelError> {
-        self.mqtt_publisher.send(data.into()).await
+        let state = ConfigOperationData::State(operation);
+        self.output_sender.send(state).await
     }
 }
 
@@ -546,7 +524,7 @@ pub enum ConfigOperation {
 }
 
 impl ConfigOperation {
-    fn request_from_message(
+    pub(crate) fn request_from_message(
         config: &ConfigManagerConfig,
         message: &MqttMessage,
     ) -> Result<Option<Self>, ConfigManagementError> {
