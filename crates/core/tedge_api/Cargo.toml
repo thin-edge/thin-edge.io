@@ -16,6 +16,7 @@ download = { workspace = true }
 json-writer = { workspace = true }
 log = { workspace = true }
 mqtt_channel = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shell-words = { workspace = true }
@@ -35,7 +36,6 @@ assert_matches = { workspace = true }
 clock = { workspace = true }
 maplit = { workspace = true }
 mockall = { workspace = true }
-regex = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 time = { workspace = true, features = ["macros"] }

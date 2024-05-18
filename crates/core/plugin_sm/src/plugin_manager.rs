@@ -207,6 +207,8 @@ impl ExternalPlugins {
                             &path,
                             self.sudo.clone(),
                             config.software.plugin.max_packages,
+                            config.software.plugin.exclude.or_none().cloned(),
+                            config.software.plugin.include.or_none().cloned(),
                             identity,
                         );
                         self.plugin_map.insert(plugin_name.into(), plugin);
