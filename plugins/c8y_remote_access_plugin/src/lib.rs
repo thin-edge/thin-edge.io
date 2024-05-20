@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::path::PathBuf;
 use std::process::Stdio;
 
 use camino::Utf8Path;
@@ -16,7 +15,6 @@ use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
-use toml::Table;
 use url::Url;
 
 pub use crate::input::C8yRemoteAccessPluginOpt;
@@ -95,9 +93,12 @@ static SUCCESS_MESSAGE: &str = "CONNECTED";
 struct Unreachable<E: std::error::Error + 'static>(#[source] E, &'static str);
 
 async fn spawn_child(command: String, config_dir: &Utf8Path) -> miette::Result<()> {
-    let exec_path = get_executable_path(config_dir).await?;
+    let exec_path = std::env::current_exe()
+        .into_diagnostic()
+        .with_context(|| "Could not get current process executable")?;
 
     let mut command = tokio::process::Command::new(exec_path)
+        .args(["--config-dir", config_dir.as_str()])
         .arg("--child")
         .arg(command)
         .stdout(Stdio::piped())
@@ -209,28 +210,6 @@ fn build_proxy_url(
     .parse()
     .into_diagnostic()
     .context("Creating websocket URL")
-}
-
-async fn get_executable_path(config_dir: &Utf8Path) -> miette::Result<PathBuf> {
-    let operation_path = supported_operation_path(config_dir);
-
-    let content = tokio::fs::read_to_string(&operation_path)
-        .await
-        .into_diagnostic()
-        .with_context(|| {
-            format!("The operation file {operation_path} does not exist or is not readable.")
-        })?;
-
-    let operation: Table = content
-        .parse()
-        .into_diagnostic()
-        .with_context(|| format!("Failed to parse {operation_path} file"))?;
-
-    Ok(PathBuf::from(
-        operation["exec"]["command"]
-            .as_str()
-            .ok_or_else(|| miette!("Failed to read command from {operation_path} file"))?,
-    ))
 }
 
 #[cfg(test)]
