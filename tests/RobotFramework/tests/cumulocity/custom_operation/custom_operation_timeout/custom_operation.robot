@@ -30,6 +30,4 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist                      ${DEVICE_SN}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/customop_handler.*    /etc/tedge/operations/
-    ThinEdgeIO.Restart Service    tedge-mapper-c8y
-    ThinEdgeIO.Disconnect Then Connect Mapper    c8y
-    
+
