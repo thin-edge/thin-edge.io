@@ -2418,6 +2418,50 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     .await;
 }
 
+#[tokio::test]
+async fn mapper_processes_operations_concurrently() {
+    let num_operations = 100;
+
+    let mut fts_server = mockito::Server::new();
+    let mock = fts_server
+        .mock(
+            "GET",
+            "/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-1234",
+        )
+        // make each download block so it doesn't complete before we submit all operations
+        .with_chunked_body(|_w| {
+            std::thread::sleep(Duration::from_secs(5));
+            Ok(())
+        })
+        .expect(num_operations)
+        .create_async()
+        .await;
+    let host_port = fts_server.host_with_port();
+
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+
+    // simulate many successful operations that needs to be handled by the mapper
+    for i in 0..num_operations {
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked(&format!("te/device/main///cmd/config_snapshot/c8y-mapper-{i}")),
+            json!({
+            "status": "successful",
+            "tedgeUrl": format!("http://{host_port}/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-1234"),
+            "type": "path/type/A",
+        })
+                .to_string(),
+        ))
+            .await.unwrap();
+    }
+
+    mock.assert();
+}
+
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
     let paths = fs::read_dir(cfg_dir.to_path_buf().join("agent")).unwrap();
     for path in paths {
