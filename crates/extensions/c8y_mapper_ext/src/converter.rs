@@ -6,10 +6,15 @@ use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdUploadRequest;
+use crate::actor::SyncStart;
+use crate::availability::record_health_status;
+use crate::availability::set_heartbeat_timer;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
 use crate::operations::FtsDownloadOperationData;
+use crate::service_monitor::get_health_status_from_message;
+use crate::service_monitor::HealthStatus;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -24,6 +29,7 @@ use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
 use c8y_api::smartrest::inventory::service_creation_message;
+use c8y_api::smartrest::inventory::set_required_availability_message;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
@@ -230,6 +236,7 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
+    pub timer_sender: LoggingSender<SyncStart>,
     pub pending_upload_operations: HashMap<CmdId, UploadContext>,
 
     /// Used to store pending downloads from the FTS.
@@ -239,6 +246,9 @@ pub struct CumulocityConverter {
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
+
+    // Keep the service statuses with topic name as a key for c8y_Availability monitoring
+    pub health_status: HashMap<String, HealthStatus>,
 }
 
 impl CumulocityConverter {
@@ -249,6 +259,7 @@ impl CumulocityConverter {
         auth_proxy: ProxyUrlGenerator,
         uploader_sender: LoggingSender<IdUploadRequest>,
         downloader_sender: LoggingSender<IdDownloadRequest>,
+        timer_sender: LoggingSender<SyncStart>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -317,10 +328,12 @@ impl CumulocityConverter {
             auth_proxy,
             uploader_sender,
             downloader_sender,
+            timer_sender,
             pending_upload_operations: HashMap::new(),
             pending_fts_download_operations: HashMap::new(),
             command_id,
             active_commands: HashSet::new(),
+            health_status: HashMap::new(),
         })
     }
 
@@ -338,6 +351,7 @@ impl CumulocityConverter {
             .get(entity_topic_id)
             .map(|e| &e.external_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))?;
+
         match input.r#type {
             EntityType::MainDevice => {
                 self.entity_store.update(input.clone())?;
@@ -584,10 +598,12 @@ impl CumulocityConverter {
             .expect("entity was registered");
 
         let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
+        let health_status = get_health_status_from_message(message);
+
         Ok(convert_health_status_message(
             entity_metadata,
             &ancestors_external_ids,
-            message,
+            &health_status,
             &self.config.c8y_prefix,
         ))
     }
@@ -967,6 +983,9 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         debug!("Mapping message on topic: {}", message.topic.name);
         trace!("Message content: {:?}", message.payload_str());
+
+        record_health_status(&self.mqtt_schema, &mut self.health_status, message);
+
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
             Err(_) => self.try_convert_tedge_and_c8y_topics(message).await,
@@ -979,10 +998,16 @@ impl CumulocityConverter {
         channel: Channel,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut registration_messages: Vec<MqttMessage> = vec![];
+        let mut converted_messages: Vec<MqttMessage> = vec![];
+        // Keep the affected device entities to set c8y_RequiredAvailability for them
+        let mut updated_entities: Vec<EntityTopicId> = vec![];
+
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
+                    if register_message.topic_id == self.device_topic_id {
+                        updated_entities.push(self.device_topic_id.clone());
+                    }
                     match self.entity_store.update(register_message.clone()) {
                         Err(e) => {
                             error!("Entity registration failed: {e}");
@@ -994,18 +1019,20 @@ impl CumulocityConverter {
                                 // Register and convert the entity registration first
                                 let mut c8y_message = self
                                     .try_convert_entity_registration(&pending_entity.reg_message)?;
-                                registration_messages.append(&mut c8y_message);
+                                converted_messages.append(&mut c8y_message);
+
+                                updated_entities.push(pending_entity.reg_message.topic_id.clone());
 
                                 // Process all the cached data messages for that entity
                                 let mut cached_messages =
                                     self.process_cached_entity_data(pending_entity).await?;
-                                registration_messages.append(&mut cached_messages);
+                                converted_messages.append(&mut cached_messages);
                             }
-
-                            return Ok(registration_messages);
                         }
                         Ok(_) => {}
                     }
+                } else {
+                    dbg!(&message);
                 }
             }
             _ => {
@@ -1028,9 +1055,10 @@ impl CumulocityConverter {
                                 },
                             };
                         for auto_registration_message in &auto_registration_messages {
-                            registration_messages.append(
+                            converted_messages.append(
                                 &mut self.register_and_convert_entity(auto_registration_message)?,
                             );
+                            updated_entities.push(auto_registration_message.topic_id.clone());
                         }
                     } else {
                         // When an entity data message is received before the entity itself is registered,
@@ -1040,14 +1068,56 @@ impl CumulocityConverter {
                     }
                 }
             }
-        }
+        };
+
+        let mut availability_message = self.convert_availability_message(updated_entities).await;
+        converted_messages.append(&mut availability_message);
 
         let mut messages = self
             .try_convert_data_message(source, channel, message)
             .await?;
+        converted_messages.append(&mut messages);
 
-        registration_messages.append(&mut messages);
-        Ok(registration_messages)
+        Ok(converted_messages)
+    }
+
+    async fn convert_availability_message(
+        &mut self,
+        entities: Vec<EntityTopicId>,
+    ) -> Vec<MqttMessage> {
+        if !self.config.availability_enable {
+            return vec![];
+        }
+
+        for entity in entities {
+            match self.entity_store.get(&entity) {
+                Some(metadata)
+                    if metadata.r#type == EntityType::MainDevice
+                        || metadata.r#type == EntityType::ChildDevice =>
+                {
+                    set_heartbeat_timer(
+                        self.config.availability_period,
+                        &mut self.health_status,
+                        metadata,
+                        self.timer_sender.clone(),
+                    )
+                    .await;
+
+                    if metadata.r#type == EntityType::ChildDevice {
+                        // Set c8y_RequiredAvailability to the new child device
+                        let set_required_availability_message = set_required_availability_message(
+                            C8yTopic::ChildSmartRestResponse(metadata.external_id.clone().into()),
+                            self.config.availability_period,
+                            &self.config.c8y_prefix,
+                        );
+                        return vec![set_required_availability_message];
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        vec![]
     }
 
     async fn try_convert_data_message(
@@ -1251,6 +1321,7 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        dbg!(&message);
         let messages = match &message.topic {
             topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
                 self.alarm_converter.process_internal_alarm(message);
@@ -1289,6 +1360,16 @@ impl CumulocityConverter {
             device_data_message,
             pending_operations_message,
         ]);
+
+        if self.config.availability_enable {
+            let set_required_availability_message = set_required_availability_message(
+                C8yTopic::SmartRestResponse,
+                self.config.availability_period,
+                &self.config.c8y_prefix,
+            );
+            messages.push(set_required_availability_message);
+        }
+
         Ok(messages)
     }
 
@@ -1778,8 +1859,18 @@ impl CumulocityConverter {
             Some(command.into_generic_command(&self.mqtt_schema)),
         ))
     }
-}
 
+    pub fn get_availability_period_if_enabled(&self) -> Option<u64> {
+        if self.config.availability_enable {
+            if let Ok(period) = self.config.availability_period.try_into() {
+                if period > 0 {
+                    return Some(period);
+                }
+            }
+        }
+        None
+    }
+}
 /// Lists all the locally available child devices linked to this parent device.
 ///
 /// The set of all locally available child devices is defined as any directory
@@ -1804,6 +1895,8 @@ pub(crate) mod tests {
     use crate::actor::IdDownloadResult;
     use crate::actor::IdUploadRequest;
     use crate::actor::IdUploadResult;
+    use crate::actor::SyncComplete;
+    use crate::actor::SyncStart;
     use crate::config::C8yMapperConfig;
     use crate::error::ConversionError;
     use crate::Capabilities;
@@ -3416,6 +3509,8 @@ pub(crate) mod tests {
             SoftwareManagementApiFlag::Advanced,
             true,
             AutoLogUpload::Never,
+            false,
+            -10,
         )
     }
 
@@ -3447,6 +3542,10 @@ pub(crate) mod tests {
         let downloader_sender =
             LoggingSender::new("DL".into(), downloader_builder.build().sender_clone());
 
+        let timer_builder: SimpleMessageBoxBuilder<SyncComplete, SyncStart> =
+            SimpleMessageBoxBuilder::new("Timer", 5);
+        let timer_sender = LoggingSender::new("Timer".into(), timer_builder.build().sender_clone());
+
         let converter = CumulocityConverter::new(
             config,
             mqtt_publisher,
@@ -3454,6 +3553,7 @@ pub(crate) mod tests {
             auth_proxy,
             uploader_sender,
             downloader_sender,
+            timer_sender,
         )
         .unwrap();
 

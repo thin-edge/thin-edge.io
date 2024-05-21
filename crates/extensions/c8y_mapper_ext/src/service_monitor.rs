@@ -17,10 +17,21 @@ fn default_status() -> String {
     "unknown".to_string()
 }
 
+pub fn get_health_status_from_message(message: &MqttMessage) -> HealthStatus {
+    let mut health_status: HealthStatus =
+        serde_json::from_slice(message.payload()).unwrap_or_default();
+
+    if health_status.status.is_empty() {
+        health_status.status = "unknown".into();
+    }
+
+    health_status
+}
+
 pub fn convert_health_status_message(
     entity: &EntityMetadata,
     ancestors_external_ids: &[String],
-    message: &MqttMessage,
+    health_status: &HealthStatus,
     prefix: &TopicPrefix,
 ) -> Vec<MqttMessage> {
     // TODO: introduce type to remove entity type guards
@@ -30,14 +41,6 @@ pub fn convert_health_status_message(
 
     if entity.topic_id.is_bridge_health_topic() {
         return vec![];
-    }
-
-    let HealthStatus {
-        status: mut health_status,
-    } = serde_json::from_slice(message.payload()).unwrap_or_default();
-
-    if health_status.is_empty() {
-        health_status = "unknown".into();
     }
 
     let display_name = entity
@@ -54,8 +57,8 @@ pub fn convert_health_status_message(
         .expect("display type should be inserted for every service in the converter");
 
     let Ok(status_message) =
-        // smartrest::inventory::service_status_update_message(&external_ids, &health_status);
-        smartrest::inventory::service_creation_message(entity.external_id.as_ref(), display_name, display_type, &health_status, ancestors_external_ids, prefix) else {
+        // 102 does not only create a service, but also updates the registered service status.
+        smartrest::inventory::service_creation_message(entity.external_id.as_ref(), display_name, display_type, &health_status.status, ancestors_external_ids, prefix) else {
         error!("Can't create 102 for service status update");
         return vec![];
     };
@@ -141,6 +144,7 @@ mod tests {
         let (entity_topic_id, _) = mqtt_schema.entity_channel_of(&topic).unwrap();
 
         let health_message = MqttMessage::new(&topic, health_payload.as_bytes().to_owned());
+        let health_status = get_health_status_from_message(&health_message);
         let expected_message = MqttMessage::new(
             &Topic::new_unchecked(c8y_monitor_topic),
             c8y_monitor_payload.as_bytes(),
@@ -182,7 +186,7 @@ mod tests {
         let msg = convert_health_status_message(
             entity,
             &ancestors_external_ids,
-            &health_message,
+            &health_status,
             &"c8y".try_into().unwrap(),
         );
         assert_eq!(msg[0], expected_message);

@@ -89,6 +89,7 @@ impl CumulocityConverter {
 mod tests {
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::validate_child_device_auto_registration_messages;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Sender;
@@ -175,7 +176,7 @@ mod tests {
         .await
         .expect("Send failed");
 
-        mqtt.skip(2).await; // Skip the mapped child device registration message
+        validate_child_device_auto_registration_messages(&mut mqtt, "child1").await;
 
         // Validate SmartREST message is published
         assert_received_contains_str(
