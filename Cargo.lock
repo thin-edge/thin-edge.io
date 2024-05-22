@@ -250,7 +250,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "aws_mapper_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "axum_tls"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "az_mapper_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -455,7 +455,7 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "batcher"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -539,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-firmware-plugin"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "c8y_firmware_manager",
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-remote-access-plugin"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-compat",
  "async-tungstenite",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_api"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_auth_proxy"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -642,7 +642,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_firmware_manager"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_http_proxy"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -694,7 +694,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_mapper_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "certificate"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -834,7 +834,7 @@ checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
 
 [[package]]
 name = "clock"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "mockall",
  "time",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "collectd_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1143,7 +1143,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "download"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "axum_tls",
@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "json-writer"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1849,7 +1849,7 @@ checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
 
 [[package]]
 name = "log_manager"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "easy_reader",
  "filetime",
@@ -1866,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "logged_command"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "log",
@@ -2099,7 +2099,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_channel"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2119,7 +2119,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_tests"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "fastrand 1.9.0",
@@ -2499,7 +2499,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "plugin_sm"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3479,7 +3479,7 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -3528,7 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-agent"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3582,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-apt-plugin"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3598,7 +3598,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-mapper"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3634,7 +3634,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-watchdog"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3654,7 +3654,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-write"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3670,7 +3670,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_actors"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "env_logger",
@@ -3682,7 +3682,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_api"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3710,7 +3710,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3742,7 +3742,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config_macros"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "camino",
  "doku",
@@ -3756,7 +3756,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config_macros-impl"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "darling 0.20.3",
  "heck",
@@ -3767,7 +3767,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config_macros-macro"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3777,7 +3777,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config_manager"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3803,7 +3803,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_downloader_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "camino",
@@ -3821,7 +3821,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_file_system_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "log",
@@ -3834,7 +3834,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_health_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3851,7 +3851,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_http_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -3868,7 +3868,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_log_manager"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3893,7 +3893,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mqtt_bridge"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3918,7 +3918,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mqtt_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "assert-json-diff",
  "async-trait",
@@ -3933,7 +3933,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_script_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "nix",
@@ -3944,7 +3944,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_signal_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "signal-hook",
@@ -3955,7 +3955,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_test_utils"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -3965,7 +3965,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_timer_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3974,7 +3974,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_uploader_ext"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "camino",
@@ -3989,7 +3989,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4515,7 +4515,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "upload"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "axum",
