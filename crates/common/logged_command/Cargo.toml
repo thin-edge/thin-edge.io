@@ -9,9 +9,12 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+camino = { workspace = true }
 log = { workspace = true }
 nix = { workspace = true }
 shell-words = { workspace = true }
+tedge_api = { workspace = true }
+time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = [
     "fs",
     "io-util",

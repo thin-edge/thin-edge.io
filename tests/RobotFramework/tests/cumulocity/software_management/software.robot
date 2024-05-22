@@ -115,6 +115,13 @@ Operation log uploaded automatically with default auto_log_upload setting as nev
     Operation Should Be FAILED    ${OPERATION}    timeout=60
     Validate operation log not uploaded
 
+Workflow log includes plugin output
+    ${OPERATION}=    Install Software        c8y-remote-access-plugin
+    Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
+    ${operation_log_file}=    Execute Command    ls -t /var/log/tedge/agent/workflow-software_update-* | head -n 1    strip=${True}
+    ${log_output}=     Execute Command    cat ${operation_log_file}
+    Should Contain    ${log_output}    Executing command: "apt-get" "--quiet" "--yes" "update"
+
 *** Keywords ***
 
 Custom Setup

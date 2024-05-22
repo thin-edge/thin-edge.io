@@ -1,3 +1,5 @@
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use log::error;
 use nix::unistd::Pid;
 use std::ffi::OsStr;
@@ -5,6 +7,12 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
+use tedge_api::workflow::CommandId;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::OperationAction;
+use tedge_api::workflow::OperationName;
+use time::format_description;
+use time::OffsetDateTime;
 use tokio::fs::File;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
@@ -27,7 +35,7 @@ pub struct LoggingChild {
 impl LoggingChild {
     pub async fn wait_for_output_with_timeout(
         self,
-        logger: &mut BufWriter<File>,
+        command_log: &mut CommandLog,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
     ) -> Result<Output, std::io::Error> {
@@ -36,7 +44,7 @@ impl LoggingChild {
         let mut status = CmdStatus::Successful;
         tokio::select! {
             outcome = self.inner_child.wait_with_output() => {
-               Self::update_and_log_outcome(cmd_line, outcome, logger, graceful_timeout, &status).await
+               Self::update_and_log_outcome(cmd_line, outcome, command_log, graceful_timeout, &status).await
             }
             _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout) => {
                 Err(std::io::Error::new(std::io::ErrorKind::Other,"failed to kill the process: {cmd_line}"))
@@ -46,20 +54,21 @@ impl LoggingChild {
 
     pub async fn wait_with_output(
         self,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Output, std::io::Error> {
         let outcome = self.inner_child.wait_with_output().await;
-        if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
-            error!("Fail to log the command execution: {}", err);
+        if let Some(command_log) = command_log {
+            command_log
+                .log_command_and_output(&self.command_line, &outcome)
+                .await;
         }
-
         outcome
     }
 
     async fn update_and_log_outcome(
         command_line: String,
         outcome: Result<Output, std::io::Error>,
-        logger: &mut BufWriter<File>,
+        command_log: &mut CommandLog,
         timeout: Duration,
         status: &CmdStatus,
     ) -> Result<Output, std::io::Error> {
@@ -69,9 +78,9 @@ impl LoggingChild {
                 outcome.map(|outcome| update_stderr_message(outcome, timeout))?
             }
         };
-        if let Err(err) = LoggedCommand::log_outcome(&command_line, &outcome, logger).await {
-            error!("Fail to log the command execution: {}", err);
-        }
+        command_log
+            .log_command_and_output(&command_line, &outcome)
+            .await;
         outcome
     }
 
@@ -195,13 +204,16 @@ impl LoggedCommand {
     ///
     /// If the function fails to log the execution of the command,
     /// this is logged with `log::error!` without changing the return value.
-    pub async fn execute(mut self, logger: &mut BufWriter<File>) -> Result<Output, std::io::Error> {
+    pub async fn execute(
+        mut self,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<Output, std::io::Error> {
         let outcome = self.command.output().await;
-
-        if let Err(err) = LoggedCommand::log_outcome(&self.to_string(), &outcome, logger).await {
-            error!("Fail to log the command execution: {}", err);
+        if let Some(command_log) = command_log {
+            command_log
+                .log_command_and_output(&self.to_string(), &outcome)
+                .await;
         }
-
         outcome
     }
 
@@ -295,28 +307,200 @@ impl From<std::process::Command> for LoggedCommand {
     }
 }
 
+/// Log all command steps
+pub struct CommandLog {
+    /// Path to the command log file
+    pub path: Utf8PathBuf,
+
+    /// operation name
+    pub operation: OperationName,
+
+    /// the chain of operations leading to this command
+    pub invoking_operations: Vec<OperationName>,
+
+    /// command id
+    pub cmd_id: CommandId,
+
+    /// The log file of the root command invoking this command
+    ///
+    /// None, if not open yet.
+    pub file: Option<File>,
+}
+
+impl CommandLog {
+    pub fn new(
+        log_dir: Utf8PathBuf,
+        operation: OperationName,
+        cmd_id: CommandId,
+        invoking_operations: Vec<OperationName>,
+        root_operation: Option<OperationName>,
+        root_cmd_id: Option<CommandId>,
+    ) -> Self {
+        let root_operation = root_operation.unwrap_or(operation.clone());
+        let root_cmd_id = root_cmd_id.unwrap_or(cmd_id.clone());
+
+        let path = log_dir.join(format!("workflow-{}-{}.log", root_operation, root_cmd_id));
+        CommandLog {
+            path,
+            operation,
+            invoking_operations,
+            cmd_id,
+            file: None,
+        }
+    }
+
+    pub fn from_log_path(
+        path: impl AsRef<Utf8Path>,
+        operation: OperationName,
+        cmd_id: CommandId,
+    ) -> Self {
+        Self {
+            path: path.as_ref().into(),
+            operation,
+            cmd_id,
+            invoking_operations: vec![],
+            file: None,
+        }
+    }
+
+    pub async fn open(&mut self) -> Result<&mut File, std::io::Error> {
+        if self.file.is_none() {
+            self.file = Some(
+                File::options()
+                    .append(true)
+                    .create(true)
+                    .open(self.path.clone())
+                    .await?,
+            );
+        }
+        Ok(self.file.as_mut().unwrap())
+    }
+
+    pub async fn log_header(&mut self, topic: &str) {
+        let now = OffsetDateTime::now_utc()
+            .format(&format_description::well_known::Rfc3339)
+            .unwrap();
+        let cmd_id = &self.cmd_id;
+        let operation = &self.operation;
+        let header_message = format!(
+            r#"
+==================================================================
+Triggered {operation} workflow
+==================================================================
+
+topic:     {topic}
+operation: {operation}
+cmd_id:    {cmd_id}
+time:      {now}
+
+==================================================================
+"#
+        );
+        if let Err(err) = self.write(&header_message).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    pub async fn log_state_action(
+        &mut self,
+        state: &GenericCommandState,
+        action: &OperationAction,
+    ) {
+        if state.is_init() && self.invoking_operations.is_empty() {
+            self.log_header(state.topic.name.as_str()).await;
+        }
+        let step = &state.status;
+        let state = &state.payload.to_string();
+        let message = format!(
+            r#"
+State:    {state}
+
+Action:   {action}
+"#
+        );
+        self.log_step(step, &message).await
+    }
+
+    pub async fn log_step(&mut self, step: &str, action: &str) {
+        let now = OffsetDateTime::now_utc()
+            .format(&format_description::well_known::Rfc3339)
+            .unwrap();
+        let operation = &self.operation;
+        let parent_operation = if self.invoking_operations.is_empty() {
+            operation.to_string()
+        } else {
+            format!("{} > {}", self.invoking_operations.join(" > "), operation)
+        };
+
+        let message = format!(
+            r#"
+----------------------[ {parent_operation} @ {step} | time={now} ]----------------------
+{action}
+"#
+        );
+        if let Err(err) = self.write(&message).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    pub async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
+        self.log_command_and_output("", result).await
+    }
+
+    pub async fn log_command_and_output(
+        &mut self,
+        command_line: &str,
+        result: &Result<Output, std::io::Error>,
+    ) {
+        if let Err(err) = self.write_script_output(command_line, result).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    pub async fn write_script_output(
+        &mut self,
+        command_line: &str,
+        result: &Result<Output, std::io::Error>,
+    ) -> Result<(), std::io::Error> {
+        let file = self.open().await?;
+        let mut writer = BufWriter::new(file);
+        LoggedCommand::log_outcome(command_line, result, &mut writer).await?;
+        Ok(())
+    }
+
+    pub async fn write(&mut self, message: impl AsRef<[u8]>) -> Result<(), std::io::Error> {
+        let file = self.open().await?;
+        file.write_all(message.as_ref()).await?;
+        file.flush().await?;
+        file.sync_all().await?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
-    use tokio::fs::File;
 
     #[tokio::test]
     async fn on_execute_are_logged_command_line_exit_status_stdout_and_stderr(
     ) -> Result<(), anyhow::Error> {
         // Prepare a log file
         let tmp_dir = TempTedgeDir::new();
-        let tmp_file = tmp_dir.file("operation.log");
-        let log_file_path = tmp_file.path();
-        let log_file = File::create(&log_file_path).await?;
-        let mut logger = BufWriter::new(log_file);
+        let workflow_log = tmp_dir.file("workflow.log");
+        let log_file_path = workflow_log.path();
+        let mut command_log = CommandLog::from_log_path(
+            workflow_log.utf8_path(),
+            "software_update".into(),
+            "123".into(),
+        );
 
         // Prepare a command
         let mut command = LoggedCommand::new("echo").unwrap();
         command.arg("Hello").arg("World!");
 
         // Execute the command with logging
-        let _ = command.execute(&mut logger).await;
+        let _ = command.execute(Some(&mut command_log)).await;
 
         let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
         assert_eq!(
@@ -338,17 +522,20 @@ EOF
     async fn on_execute_with_error_stderr_is_logged() -> Result<(), anyhow::Error> {
         // Prepare a log file
         let tmp_dir = TempTedgeDir::new();
-        let tmp_file = tmp_dir.file("operation.log");
-        let log_file_path = tmp_file.path();
-        let log_file = File::create(&log_file_path).await?;
-        let mut logger = BufWriter::new(log_file);
+        let workflow_log = tmp_dir.file("workflow.log");
+        let log_file_path = workflow_log.path();
+        let mut command_log = CommandLog::from_log_path(
+            workflow_log.utf8_path(),
+            "software_update".into(),
+            "123".into(),
+        );
 
         // Prepare a command that triggers some content on stderr
         let mut command = LoggedCommand::new("ls").unwrap();
         command.arg("dummy-file");
 
         // Execute the command with logging
-        let _ = command.execute(&mut logger).await;
+        let _ = command.execute(Some(&mut command_log)).await;
 
         // On expect the errors to be logged
         let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
@@ -385,16 +572,19 @@ stdout (EMPTY)
     async fn on_execution_error_are_logged_command_line_and_error() -> Result<(), anyhow::Error> {
         // Prepare a log file
         let tmp_dir = TempTedgeDir::new();
-        let tmp_file = tmp_dir.file("operation.log");
-        let log_file_path = tmp_file.path();
-        let log_file = File::create(&log_file_path).await?;
-        let mut logger = BufWriter::new(log_file);
+        let workflow_log = tmp_dir.file("workflow.log");
+        let log_file_path = workflow_log.path();
+        let mut command_log = CommandLog::from_log_path(
+            workflow_log.utf8_path(),
+            "software_update".into(),
+            "123".into(),
+        );
 
         // Prepare a command that cannot be executed
         let command = LoggedCommand::new("dummy-command").unwrap();
 
         // Execute the command with logging
-        let _ = command.execute(&mut logger).await;
+        let _ = command.execute(Some(&mut command_log)).await;
 
         // The fact that the command cannot be executed must be logged
         let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;

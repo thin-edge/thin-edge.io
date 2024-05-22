@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
 use log::info;
+use logged_command::CommandLog;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -28,16 +29,11 @@ use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
-use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
-use time::format_description;
-use time::OffsetDateTime;
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
 /// A generic command state that is published by the [TedgeOperationConverterActor]
@@ -445,147 +441,4 @@ enum CommandTopicError {
 
     #[error("Not a command topic")]
     InvalidCommandTopic,
-}
-
-/// Log all command steps
-struct CommandLog {
-    /// Path to the command log file
-    path: Utf8PathBuf,
-
-    /// operation name
-    operation: OperationName,
-
-    /// the chain of operations leading to this command
-    invoking_operations: Vec<OperationName>,
-
-    /// command id
-    cmd_id: CommandId,
-
-    /// The log file of the root command invoking this command
-    ///
-    /// None, if not open yet.
-    file: Option<File>,
-}
-
-impl CommandLog {
-    pub fn new(
-        log_dir: Utf8PathBuf,
-        operation: OperationName,
-        cmd_id: CommandId,
-        invoking_operations: Vec<OperationName>,
-        root_operation: Option<OperationName>,
-        root_cmd_id: Option<CommandId>,
-    ) -> Self {
-        let root_operation = root_operation.unwrap_or(operation.clone());
-        let root_cmd_id = root_cmd_id.unwrap_or(cmd_id.clone());
-
-        let path = log_dir.join(format!("workflow-{}-{}.log", root_operation, root_cmd_id));
-        CommandLog {
-            path,
-            operation,
-            invoking_operations,
-            cmd_id,
-            file: None,
-        }
-    }
-
-    async fn open(&mut self) -> Result<&mut File, std::io::Error> {
-        if self.file.is_none() {
-            self.file = Some(
-                File::options()
-                    .append(true)
-                    .create(true)
-                    .open(self.path.clone())
-                    .await?,
-            );
-        }
-        Ok(self.file.as_mut().unwrap())
-    }
-
-    async fn log_header(&mut self, topic: &str) {
-        let now = OffsetDateTime::now_utc()
-            .format(&format_description::well_known::Rfc3339)
-            .unwrap();
-        let cmd_id = &self.cmd_id;
-        let operation = &self.operation;
-        let header_message = format!(
-            r#"
-==================================================================
-Triggered {operation} workflow
-==================================================================
-
-topic:     {topic}
-operation: {operation}
-cmd_id:    {cmd_id}
-time:      {now}
-
-==================================================================
-"#
-        );
-        if let Err(err) = self.write(&header_message).await {
-            error!("Fail to log to {}: {err}", self.path)
-        }
-    }
-
-    async fn log_state_action(&mut self, state: &GenericCommandState, action: &OperationAction) {
-        if state.is_init() && self.invoking_operations.is_empty() {
-            self.log_header(state.topic.name.as_str()).await;
-        }
-        let step = &state.status;
-        let state = &state.payload.to_string();
-        let message = format!(
-            r#"
-State:    {state}
-
-Action:   {action}
-"#
-        );
-        self.log_step(step, &message).await
-    }
-
-    async fn log_step(&mut self, step: &str, action: &str) {
-        let now = OffsetDateTime::now_utc()
-            .format(&format_description::well_known::Rfc3339)
-            .unwrap();
-        let operation = &self.operation;
-        let parent_operation = if self.invoking_operations.is_empty() {
-            operation.to_string()
-        } else {
-            format!("{} > {}", self.invoking_operations.join(" > "), operation)
-        };
-
-        let message = format!(
-            r#"
-----------------------[ {parent_operation} @ {step} | time={now} ]----------------------
-{action}
-"#
-        );
-        if let Err(err) = self.write(&message).await {
-            error!("Fail to log to {}: {err}", self.path)
-        }
-    }
-
-    async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
-        if let Err(err) = self.write_script_output(result).await {
-            error!("Fail to log to {}: {err}", self.path)
-        }
-    }
-
-    async fn write_script_output(
-        &mut self,
-        result: &Result<Output, std::io::Error>,
-    ) -> Result<(), std::io::Error> {
-        let file = self.open().await?;
-        logged_command::LoggedCommand::log_outcome("", result, file).await?;
-        file.sync_all().await?;
-        Ok(())
-    }
-
-    async fn write(&mut self, message: &str) -> Result<(), std::io::Error> {
-        let file = self.open().await?;
-        file.write_all(message.as_bytes()).await?;
-        file.flush().await?;
-        file.sync_all().await?;
-        Ok(())
-    }
 }

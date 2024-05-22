@@ -49,6 +49,7 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8Path;
+use logged_command::CommandLog;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
@@ -270,7 +271,7 @@ impl CumulocityConverter {
         let alarm_converter = AlarmConverter::new();
 
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
-        let operation_logs = OperationLogs::try_new(log_dir.into())?;
+        let operation_logs = OperationLogs::try_new(log_dir)?;
 
         let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_id);
 
@@ -816,6 +817,7 @@ impl CumulocityConverter {
     ) -> Result<(), CumulocityMapperError> {
         let command = command.to_owned();
         let payload = payload.to_string();
+        let cmd_id = self.command_id.new_id();
 
         let mut logged =
             LoggedCommand::new(&command).map_err(|e| CumulocityMapperError::ExecuteFailed {
@@ -835,12 +837,14 @@ impl CumulocityConverter {
                     operation_name: operation_name.to_string(),
                 });
 
-        let mut log_file = self
+        let log_file = self
             .operation_logs
             .new_log_file(plugin_sm::operation_logs::LogKind::Operation(
                 operation_name.to_string(),
             ))
             .await?;
+        let mut command_log =
+            CommandLog::from_log_path(log_file.path(), operation_name.clone(), cmd_id);
 
         match maybe_child_process {
             Ok(child_process) => {
@@ -850,7 +854,6 @@ impl CumulocityConverter {
 
                 tokio::spawn(async move {
                     let op_name = op_name.as_str();
-                    let logger = log_file.buffer();
 
                     // mqtt client publishes executing
                     let topic = C8yTopic::SmartRestResponse.to_topic(&c8y_prefix).unwrap();
@@ -865,7 +868,11 @@ impl CumulocityConverter {
                     // execute the command and wait until it finishes
                     // mqtt client publishes failed or successful depending on the exit code
                     if let Ok(output) = child_process
-                        .wait_for_output_with_timeout(logger, graceful_timeout, forceful_timeout)
+                        .wait_for_output_with_timeout(
+                            &mut command_log,
+                            graceful_timeout,
+                            forceful_timeout,
+                        )
                         .await
                     {
                         match output.status.code() {

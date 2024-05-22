@@ -1859,10 +1859,13 @@ name = "logged_command"
 version = "1.1.1"
 dependencies = [
  "anyhow",
+ "camino",
  "log",
  "nix",
  "shell-words",
+ "tedge_api",
  "tedge_test_utils",
+ "time",
  "tokio",
 ]
 
@@ -2493,6 +2496,7 @@ version = "1.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "camino",
  "csv",
  "download",
  "logged_command",
