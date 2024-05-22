@@ -4,8 +4,8 @@ use crate::service_monitor::get_health_status_from_message;
 use crate::service_monitor::HealthStatus;
 use std::collections::HashMap;
 use std::time::Duration;
+use tedge_actors::ChannelError;
 use tedge_actors::LoggingSender;
-use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::mqtt_topics::Channel;
@@ -17,7 +17,6 @@ use tedge_mqtt_ext::Topic;
 use tracing::debug;
 use tracing::info;
 
-// TODO: Find better name
 type TopicWithoutPrefix = String;
 
 /// The timer payload for TimeoutKind::Heartbeat.
@@ -29,6 +28,7 @@ pub struct HeartbeatPayload {
     pub device: EntityTopicId,
     pub health: TopicWithoutPrefix,
 }
+
 pub fn create_c8y_heartbeat_message(
     map: &HashMap<TopicWithoutPrefix, HealthStatus>,
     c8y_topic: &Topic,
@@ -41,7 +41,7 @@ pub fn create_c8y_heartbeat_message(
             Some(MqttMessage::new(c8y_topic, "{}"))
         }
         _ => {
-            debug!("Heartbeat message is not sent because the reported status is not 'up'");
+            debug!("Heartbeat message is not generated because the status of '{health_topic_name}' is not 'up'");
             None
         }
     }
@@ -52,28 +52,30 @@ pub async fn set_heartbeat_timer(
     map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
     metadata: &EntityMetadata,
     timer_sender: LoggingSender<SyncStart>,
-) {
+) -> Result<(), ChannelError> {
     if period < 0 {
-        return;
+        return Ok(());
     }
 
-    let interval: u64 = period.try_into().unwrap();
-    if let Some(topic) = get_lead_service_topic(metadata) {
-        insert_new_health_status_entry(map, &topic);
-
-        start_heartbeat_timer(
-            timer_sender.clone(),
-            interval,
-            metadata.topic_id.clone(),
-            topic,
-        )
-        .await
-        .unwrap(); // FIXME: Address RuntimeError
-    } else {
-        info!(
-            "Couldn't start a timer for device availability heartbeat for the device '{}'",
+    let interval: u64 = period.try_into().unwrap(); // Already checked if it's positive number
+    match get_lead_service_topic(metadata) {
+        Ok(topic) => {
+            insert_new_health_status_entry(map, &topic);
+            start_heartbeat_timer(
+                timer_sender.clone(),
+                interval,
+                metadata.topic_id.clone(),
+                topic,
+            )
+            .await
+        }
+        Err(err) => {
+            info!(
+            "Failed to set a timer for the device '{}' to send its availability heartbeat due to: {err}",
             metadata.topic_id
         );
+            Ok(())
+        }
     }
 }
 
@@ -82,7 +84,7 @@ pub async fn start_heartbeat_timer(
     interval: u64,
     device_entity: EntityTopicId,
     health_topic: TopicWithoutPrefix,
-) -> Result<(), RuntimeError> {
+) -> Result<(), ChannelError> {
     let heartbeat_payload = HeartbeatPayload {
         device: device_entity,
         health: health_topic,
@@ -98,16 +100,17 @@ pub async fn start_heartbeat_timer(
     Ok(())
 }
 
-pub fn get_lead_service_topic(entity: &EntityMetadata) -> Option<TopicWithoutPrefix> {
+pub fn get_lead_service_topic(entity: &EntityMetadata) -> Result<TopicWithoutPrefix, String> {
     match entity.other.get("@health") {
         Some(maybe_topic_name) => match maybe_topic_name.as_str() {
-            Some(topic_name) if Topic::new(topic_name).is_ok() => Some(topic_name.to_string()),
-            _ => None,
+            Some(topic_name) if Topic::new(topic_name).is_ok() => Ok(topic_name.to_string()),
+            _ => Err("'@health' has an invalid MQTT topic: {topic_name}".into()),
         },
         None => entity
             .topic_id
             .to_default_service_topic_id("tedge-agent")
-            .map(|service_topic| get_status_health_topic_id(service_topic.entity())),
+            .map(|service_topic| get_status_health_topic_id(service_topic.entity()))
+            .ok_or("The device's topic ID is not in this format 'device/DEVICE_NAME//'".into()),
     }
 }
 
@@ -142,10 +145,12 @@ pub fn record_health_status(
     message: &MqttMessage,
 ) {
     if MqttSchema::from_topic(&message.topic).root == mqtt_schema.root {
-        let health_topic = message.topic.name.strip_prefix("te/").unwrap(); // FIXME
-        if map.get(health_topic).is_some() {
-            let status = get_health_status_from_message(message);
-            map.insert(health_topic.to_string(), status);
+        let prefix = format!("{root}/", root = mqtt_schema.root);
+        if let Some(health_topic) = message.topic.name.strip_prefix(&prefix) {
+            if map.contains_key(health_topic) {
+                let status = get_health_status_from_message(message);
+                map.insert(health_topic.to_string(), status);
+            }
         }
     }
 }
@@ -213,7 +218,7 @@ mod tests {
         metadata
             .other
             .insert("@health".into(), json!("invalid/mqtt/+/topic/#"));
-        let topic = get_lead_service_topic(&metadata);
-        assert_eq!(topic, None);
+        let result = get_lead_service_topic(&metadata);
+        assert!(result.is_err());
     }
 }

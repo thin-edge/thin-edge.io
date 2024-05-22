@@ -68,6 +68,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_actors::ChannelError;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
@@ -1070,7 +1071,7 @@ impl CumulocityConverter {
             }
         };
 
-        let mut availability_message = self.convert_availability_message(updated_entities).await;
+        let mut availability_message = self.convert_availability_message(updated_entities).await?;
         converted_messages.append(&mut availability_message);
 
         let mut messages = self
@@ -1084,9 +1085,9 @@ impl CumulocityConverter {
     async fn convert_availability_message(
         &mut self,
         entities: Vec<EntityTopicId>,
-    ) -> Vec<MqttMessage> {
+    ) -> Result<Vec<MqttMessage>, ChannelError> {
         if !self.config.availability_enable {
-            return vec![];
+            return Ok(vec![]);
         }
 
         for entity in entities {
@@ -1101,7 +1102,7 @@ impl CumulocityConverter {
                         metadata,
                         self.timer_sender.clone(),
                     )
-                    .await;
+                    .await?;
 
                     if metadata.r#type == EntityType::ChildDevice {
                         // Set c8y_RequiredAvailability to the new child device
@@ -1110,14 +1111,14 @@ impl CumulocityConverter {
                             self.config.availability_period,
                             &self.config.c8y_prefix,
                         );
-                        return vec![set_required_availability_message];
+                        return Ok(vec![set_required_availability_message]);
                     }
                 }
                 _ => {}
             }
         }
 
-        vec![]
+        Ok(vec![])
     }
 
     async fn try_convert_data_message(
