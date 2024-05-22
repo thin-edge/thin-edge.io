@@ -188,7 +188,7 @@ mod tests {
 
         let message = MqttMessage::new(&topic, json!({"status": status}).to_string());
         record_health_status(&mqtt_schema, &mut map, &message);
-        assert!(map.get(topic_name).is_none());
+        assert!(!map.contains_key(topic_name));
     }
 
     #[test_case("device/child1/service/tedge-agent/status/health")]
