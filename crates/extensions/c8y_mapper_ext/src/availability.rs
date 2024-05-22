@@ -17,7 +17,7 @@ use tedge_mqtt_ext::Topic;
 use tracing::debug;
 use tracing::info;
 
-type TopicWithoutPrefix = String;
+pub type TopicWithoutPrefix = String;
 
 /// The timer payload for TimeoutKind::Heartbeat.
 ///
@@ -47,9 +47,10 @@ pub fn create_c8y_heartbeat_message(
     }
 }
 
-pub async fn set_heartbeat_timer(
+pub async fn set_heartbeat_timer_from_metadata(
     period: i16,
-    map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
+    status_map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
+    timer_map: &mut HashMap<EntityTopicId, TopicWithoutPrefix>,
     metadata: &EntityMetadata,
     timer_sender: LoggingSender<SyncStart>,
 ) -> Result<(), ChannelError> {
@@ -58,25 +59,46 @@ pub async fn set_heartbeat_timer(
     }
 
     let interval: u64 = period.try_into().unwrap(); // Already checked if it's positive number
+    let topic_id = metadata.topic_id.clone();
     match get_lead_service_topic(metadata) {
-        Ok(topic) => {
-            insert_new_health_status_entry(map, &topic);
-            start_heartbeat_timer(
-                timer_sender.clone(),
+        Ok(health_topic) => {
+            set_heartbeat_timer(
                 interval,
-                metadata.topic_id.clone(),
-                topic,
+                status_map,
+                timer_map,
+                &topic_id,
+                health_topic,
+                timer_sender,
             )
-            .await
+            .await?;
         }
         Err(err) => {
-            info!(
-            "Failed to set a timer for the device '{}' to send its availability heartbeat due to: {err}",
-            metadata.topic_id
-        );
-            Ok(())
+            info!("Failed to set a timer for the device '{topic_id}' to send its availability heartbeat due to: {err}");
         }
     }
+
+    Ok(())
+}
+
+pub async fn set_heartbeat_timer(
+    interval: u64,
+    status_map: &mut HashMap<TopicWithoutPrefix, HealthStatus>,
+    timer_map: &mut HashMap<EntityTopicId, TopicWithoutPrefix>,
+    topic_id: &EntityTopicId,
+    health_topic: TopicWithoutPrefix,
+    timer_sender: LoggingSender<SyncStart>,
+) -> Result<(), ChannelError> {
+    insert_new_health_status_entry(status_map, &health_topic);
+    start_heartbeat_timer(
+        timer_sender.clone(),
+        interval,
+        topic_id.clone(),
+        health_topic.clone(),
+    )
+    .await?;
+    update_active_heartbeat_timer_map(timer_map, topic_id, &health_topic);
+
+    Ok(())
 }
 
 pub async fn start_heartbeat_timer(
@@ -154,6 +176,15 @@ pub fn record_health_status(
         }
     }
 }
+
+pub fn update_active_heartbeat_timer_map(
+    map: &mut HashMap<EntityTopicId, TopicWithoutPrefix>,
+    key: &EntityTopicId,
+    value: &TopicWithoutPrefix,
+) {
+    map.insert(key.clone(), value.clone());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

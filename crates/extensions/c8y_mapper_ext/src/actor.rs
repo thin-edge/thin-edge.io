@@ -3,7 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::availability::create_c8y_heartbeat_message;
 use crate::availability::default_main_lead_service_topic;
-use crate::availability::insert_new_health_status_entry;
+use crate::availability::set_heartbeat_timer;
 use crate::availability::start_heartbeat_timer;
 use crate::availability::HeartbeatPayload;
 use crate::converter::UploadContext;
@@ -50,6 +50,7 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use tracing::debug;
 use tracing::error;
 use tracing::warn;
 
@@ -323,13 +324,16 @@ impl C8yMapperActor {
 
     async fn start_initial_heartbeat_timer(&mut self) -> Result<(), RuntimeError> {
         if let Some(interval) = self.converter.get_availability_period_if_enabled() {
-            let topic = default_main_lead_service_topic(&self.converter.device_topic_id);
-            insert_new_health_status_entry(&mut self.converter.health_status, &topic);
-            start_heartbeat_timer(
-                self.timer_sender.clone(),
+            let topic_id = &self.converter.device_topic_id;
+            let health_topic = default_main_lead_service_topic(topic_id);
+
+            set_heartbeat_timer(
                 interval,
-                self.converter.device_topic_id.clone(),
-                topic,
+                &mut self.converter.health_status,
+                &mut self.converter.active_heartbeat_timer,
+                topic_id,
+                health_topic,
+                self.timer_sender.clone(),
             )
             .await?;
         }
@@ -341,27 +345,38 @@ impl C8yMapperActor {
         &mut self,
         heartbeat_payload: HeartbeatPayload,
     ) -> Result<(), RuntimeError> {
-        if let Some(interval) = self.converter.get_availability_period_if_enabled() {
-            if let Ok(inventory_update_topic) = self
-                .converter
-                .get_inventory_update_topic(&heartbeat_payload.device)
-            {
-                if let Some(message) = create_c8y_heartbeat_message(
-                    &self.converter.health_status,
-                    &inventory_update_topic,
-                    &heartbeat_payload,
-                ) {
-                    self.mqtt_publisher.send(message).await?;
+        match self
+            .converter
+            .active_heartbeat_timer
+            .get(&heartbeat_payload.device)
+        {
+            Some(health_topic) if health_topic == &heartbeat_payload.health => {
+                if let Some(interval) = self.converter.get_availability_period_if_enabled() {
+                    if let Ok(inventory_update_topic) = self
+                        .converter
+                        .get_inventory_update_topic(&heartbeat_payload.device)
+                    {
+                        if let Some(message) = create_c8y_heartbeat_message(
+                            &self.converter.health_status,
+                            &inventory_update_topic,
+                            &heartbeat_payload,
+                        ) {
+                            self.mqtt_publisher.send(message).await?;
+                        }
+                    }
+
+                    start_heartbeat_timer(
+                        self.timer_sender.clone(),
+                        interval,
+                        heartbeat_payload.device,
+                        heartbeat_payload.health,
+                    )
+                    .await?;
                 }
             }
-
-            start_heartbeat_timer(
-                self.timer_sender.clone(),
-                interval,
-                heartbeat_payload.device,
-                heartbeat_payload.health,
-            )
-            .await?;
+            _ => {
+                debug!("Ignored inactive timer: {heartbeat_payload:?}");
+            }
         }
 
         Ok(())

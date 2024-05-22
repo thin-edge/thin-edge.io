@@ -8,7 +8,8 @@ use crate::actor::IdDownloadRequest;
 use crate::actor::IdUploadRequest;
 use crate::actor::SyncStart;
 use crate::availability::record_health_status;
-use crate::availability::set_heartbeat_timer;
+use crate::availability::set_heartbeat_timer_from_metadata;
+use crate::availability::TopicWithoutPrefix;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
@@ -249,7 +250,9 @@ pub struct CumulocityConverter {
     pub active_commands: HashSet<CmdId>,
 
     // Keep the service statuses with topic name as a key for c8y_Availability monitoring
-    pub health_status: HashMap<String, HealthStatus>,
+    pub health_status: HashMap<TopicWithoutPrefix, HealthStatus>,
+    // Keep the entity topic ID - health endpoint map to track which heartbeat timer is active
+    pub active_heartbeat_timer: HashMap<EntityTopicId, TopicWithoutPrefix>,
 }
 
 impl CumulocityConverter {
@@ -335,6 +338,7 @@ impl CumulocityConverter {
             command_id,
             active_commands: HashSet::new(),
             health_status: HashMap::new(),
+            active_heartbeat_timer: HashMap::new(),
         })
     }
 
@@ -1096,9 +1100,10 @@ impl CumulocityConverter {
                     if metadata.r#type == EntityType::MainDevice
                         || metadata.r#type == EntityType::ChildDevice =>
                 {
-                    set_heartbeat_timer(
+                    set_heartbeat_timer_from_metadata(
                         self.config.availability_period,
                         &mut self.health_status,
+                        &mut self.active_heartbeat_timer,
                         metadata,
                         self.timer_sender.clone(),
                     )
