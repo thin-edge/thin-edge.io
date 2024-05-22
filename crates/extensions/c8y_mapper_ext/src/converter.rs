@@ -1042,9 +1042,10 @@ impl CumulocityConverter {
             }
         }
 
-        let mut messages = self
+        let result = self
             .try_convert_data_message(source, channel, message)
-            .await?;
+            .await;
+        let mut messages = self.wrap_errors(result);
 
         registration_messages.append(&mut messages);
         Ok(registration_messages)
@@ -1805,12 +1806,10 @@ pub(crate) mod tests {
     use crate::actor::IdUploadRequest;
     use crate::actor::IdUploadResult;
     use crate::config::C8yMapperConfig;
-    use crate::error::ConversionError;
     use crate::Capabilities;
     use anyhow::Result;
     use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
-    use assert_matches::assert_matches;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::C8yTopic;
@@ -1846,7 +1845,6 @@ pub(crate) mod tests {
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
-    use tedge_utils::size_threshold::SizeThresholdExceededError;
     use test_case::test_case;
 
     #[tokio::test]
@@ -2309,6 +2307,71 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn auto_registration_succeeds_even_on_bad_input() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let topic = Topic::new_unchecked("te/device/child1///m/");
+        // First convert invalid Thin Edge JSON message.
+        let invalid_measurement = MqttMessage::new(&topic, "invalid measurement");
+        let messages = converter.convert(&invalid_measurement).await;
+        assert_messages_matching(
+            &messages,
+            [
+                (
+                    "te/device/child1//",
+                    json!({
+                        "@id":"test-device:device:child1",
+                        "@type":"child-device",
+                        "name":"child1",
+                    })
+                    .into(),
+                ),
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child".into(),
+                ),
+                (
+                    "te/errors",
+                    "Invalid JSON: expected value at line 1 column 1: `invalid measurement\n`"
+                        .into(),
+                ),
+            ],
+        );
+
+        // Second convert valid Thin Edge JSON message.
+        let valid_measurement = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///m/"),
+            json!({
+                "temp": 50.0,
+                "time": "2021-11-16T17:45:40.571760714+01:00"
+            })
+            .to_string(),
+        );
+
+        let messages = converter.convert(&valid_measurement).await;
+        assert_messages_matching(
+            &messages,
+            [(
+                "c8y/measurement/measurements/create",
+                json!({
+                "externalSource": {
+                    "externalId":"test-device:device:child1",
+                    "type":"c8y_Serial"},
+                    "temp":{
+                        "temp":{
+                            "value": 50.0
+                        }
+                    },
+                    "time":"2021-11-16T17:45:40.571760714+01:00",
+                    "type":"ThinEdgeMeasurement"
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
     async fn convert_two_measurement_messages_given_different_child_id() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
@@ -2492,15 +2555,9 @@ pub(crate) mod tests {
         let alarm_payload = json!({ "text": big_alarm_text }).to_string();
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        assert_matches!(
-            converter.try_convert(&alarm_message).await,
-            Err(ConversionError::SizeThresholdExceeded(
-                SizeThresholdExceededError {
-                    size: _,
-                    threshold: _
-                }
-            ))
-        );
+        let messages = converter.try_convert(&alarm_message).await.unwrap();
+        let payload = messages[0].payload_str().unwrap();
+        assert!(payload.ends_with("greater than the threshold size of 16184."));
         Ok(())
     }
 
@@ -2743,7 +2800,8 @@ pub(crate) mod tests {
 
         let result = converter.convert(&big_measurement_message).await;
 
-        let payload = result[0].payload_str().unwrap();
+        // Skipping the first two auto-registration messages and validating the third mapped message
+        let payload = result[2].payload_str().unwrap();
         assert!(payload.starts_with(
             r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/child1///m/ after translation is"#
         ));
