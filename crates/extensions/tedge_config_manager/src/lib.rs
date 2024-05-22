@@ -210,9 +210,7 @@ impl MessageSource<GenericCommandData, NoConfig> for ConfigManagerBuilder {
                         .into(),
                 ),
                 ConfigOperationData::Metadata { topic, types } => {
-                    let Some(operation) = MqttSchema::get_operation_name(topic.as_ref()) else {
-                        return None;
-                    };
+                    let operation = MqttSchema::get_operation_name(topic.as_ref())?;
                     Some(GenericCommandData::Metadata(GenericCommandMetadata {
                         operation,
                         payload: json!( {
