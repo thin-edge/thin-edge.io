@@ -67,6 +67,8 @@ mod tests {
             &dummy_plugin_path,
             SudoCommandBuilder::enabled(false),
             config.software.plugin.max_packages,
+            None,
+            None,
             config.http.client.auth.identity()?,
         );
         assert_eq!(plugin.name, "test");
@@ -85,6 +87,8 @@ mod tests {
             dummy_plugin_path,
             SudoCommandBuilder::enabled(false),
             100,
+            None,
+            None,
             None,
         );
 
@@ -115,6 +119,8 @@ mod tests {
             dummy_plugin_path,
             SudoCommandBuilder::enabled(false),
             100,
+            None,
+            None,
             None,
         );
 
@@ -151,6 +157,8 @@ mod tests {
             dummy_plugin_path,
             SudoCommandBuilder::enabled(false),
             100,
+            None,
+            None,
             None,
         );
 

@@ -751,7 +751,15 @@ define_tedge_config! {
 
             /// The maximum number of software packages reported for each type of software package
             #[tedge_config(example = "1000", default(value = 1000u32))]
-            max_packages: u32
+            max_packages: u32,
+
+            /// The filtering criterion, in form of regex, that is used to filter packages list output
+            #[tedge_config(example = "^(tedge|c8y).*")]
+            include: String,
+
+            /// The filtering criterion, in form of regex, that is used to filter out packages from the output list
+            #[tedge_config(example = "^(glibc|lib|kernel-|iptables-module).*")]
+            exclude: String,
         }
     },
 
@@ -1160,6 +1168,8 @@ mod tests {
     #[test_case::test_case("mqtt.external.certfile")]
     #[test_case::test_case("mqtt.external.keyfile")]
     #[test_case::test_case("software.plugin.default")]
+    #[test_case::test_case("software.plugin.exclude")]
+    #[test_case::test_case("software.plugin.include")]
     #[test_case::test_case("software.plugin.max_packages")]
     #[test_case::test_case("tmp.path")]
     #[test_case::test_case("logs.path")]

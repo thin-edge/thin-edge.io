@@ -367,8 +367,14 @@ For each type of software package supported on the device must be provided a spe
 
 `tedge-agent` behavior on `software_update` commands can be configured with `tedge config`.
 
-- `software.plugin.default` set the default software plugin to be used for software management on the device. 
-- `software.plugin.max_packages` set the maximum number of software packages reported for each type of software package.
+- `software.plugin.default` sets the default software plugin to be used for software management on the device. 
+- `software.plugin.max_packages` sets the maximum number of software packages reported for each type of software package.
+- `software.plugin.exclude` sets the filtering criterion that excludes software packages from the output list if they match the pattern.
+- `software.plugin.include` sets the filtering criterion that includes software packages in the output list if they match the pattern.
+
+:::info
+Include pattern takes precedence over exclude pattern, so when both are used at the same time, the software list will exclude packages according to the pattern but keep the exceptions covered by the include pattern.
+:::
 
 ## Custom implementation
 
