@@ -155,7 +155,7 @@ pub fn create_full_tedge_dir_structure() {
         .file("c8y-log-plugin.toml")
         .with_toml_content(toml::toml! {
             files = [
-                {type = "software-management", path = "/var/log/tedge/agent/software-*" }
+                {type = "software-management", path = "/var/log/tedge/agent/workflow-software_*" }
             ]
         });
     ttd.dir("contrib").dir("collectd").file("collectd.conf");

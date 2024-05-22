@@ -149,7 +149,10 @@ async fn default_plugin_config() {
         read_to_string(tempdir.path().join("tedge-log-plugin.toml")).unwrap();
     let plugin_config_toml: Table = from_str(&plugin_config_content).unwrap();
 
-    let agent_logs_path = format!("{}/agent/software-*", tempdir.path().to_string_lossy());
+    let agent_logs_path = format!(
+        "{}/agent/workflow-software_*",
+        tempdir.path().to_string_lossy()
+    );
     let expected_config = toml! {
         [[files]]
         type = "software-management"

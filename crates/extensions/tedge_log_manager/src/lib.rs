@@ -106,7 +106,7 @@ impl LogManagerBuilder {
         }
 
         // creating tedge-log-plugin.toml
-        let agent_logs_path = format!("{}/agent/software-*", config.log_dir);
+        let agent_logs_path = format!("{}/agent/workflow-software_*", config.log_dir);
         let example_config = toml! {
             [[files]]
             type = "software-management"

@@ -17,7 +17,7 @@ an example toml file would be:
 
 ```toml title="file: /etc/tedge/plugins/tedge-log-plugin.toml"
 files = [
-  { type = "software-management", path = "/var/log/tedge/agent/software-*" },
+  { type = "software-management", path = "/var/log/tedge/agent/workflow-software_*" },
   { type = "mosquitto", path = "/var/log/mosquitto/mosquitto.log" }
 ]
 ```

@@ -128,6 +128,12 @@ Default plugin configuration
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Support Log File Types    software-management
 
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation    ${start_timestamp}    ${end_timestamp}    log_type=software-management
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Log Operation Attachment File Contains    ${operation}    expected_pattern=.*software_list @ successful
+
 *** Keywords ***
 Setup LogFiles
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-log-plugin.toml    /etc/tedge/plugins/tedge-log-plugin.toml
@@ -198,6 +204,25 @@ Log File Contents Should Be Equal
     ...    encoding=${encoding}
     ${event}=    Cumulocity.Event Attachment Should Have File Info    ${event_id}    name=${expected_filename}    mime_type=${expected_mime_type}
     RETURN    ${contents}
+
+Create Log Request Operation
+    [Arguments]    ${start_timestamp}    ${end_timestamp}    ${log_type}    ${search_text}=${EMPTY}    ${maximum_lines}=1000
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Cumulocity.Create Operation
+    ...    description=Log file request
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"${log_type}","searchText":"${search_text}","maximumLines":${maximum_lines}}}
+    RETURN    ${operation}
+
+Log Operation Attachment File Contains
+    [Arguments]    ${operation}    ${expected_pattern}
+    ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
+    ${event_id}=    Set Variable    ${event_url_parts}[-2]
+    ${contents}=    Cumulocity.Event Should Have An Attachment
+    ...    ${event_id}
+    ...    expected_pattern=${expected_pattern}
+    ...    encoding=utf-8
+
 
 Disable log upload capability of tedge-agent
     [Arguments]    ${device_sn}=${DEVICE_SN}
