@@ -108,23 +108,7 @@ impl Actor for C8yMapperActor {
             .send(SyncStart::new(SYNC_WINDOW, TimeoutKind::Sync))
             .await?;
 
-        // TODO: Move to function
-        // Start the heartbeat timer for the main device and its lead service "tedge-agent"
-        if self.converter.config.availability_enable {
-            if let Ok(interval) = self.converter.config.availability_period.try_into() {
-                if interval > 0 {
-                    let topic = default_main_lead_service_topic(&self.converter.device_topic_id);
-                    insert_new_health_status_entry(&mut self.converter.health_status, &topic);
-                    start_heartbeat_timer(
-                        self.timer_sender.clone(),
-                        interval,
-                        self.converter.device_topic_id.clone(),
-                        topic,
-                    )
-                    .await?;
-                }
-            }
-        }
+        self.start_initial_heartbeat_timer().await?;
 
         while let Some(event) = self.messages.recv().await {
             match event {
@@ -332,6 +316,22 @@ impl C8yMapperActor {
             Err(err) => {
                 error!("Error occurred while processing a download result. {err}")
             }
+        }
+
+        Ok(())
+    }
+
+    async fn start_initial_heartbeat_timer(&mut self) -> Result<(), RuntimeError> {
+        if let Some(interval) = self.converter.get_availability_period_if_enabled() {
+            let topic = default_main_lead_service_topic(&self.converter.device_topic_id);
+            insert_new_health_status_entry(&mut self.converter.health_status, &topic);
+            start_heartbeat_timer(
+                self.timer_sender.clone(),
+                interval,
+                self.converter.device_topic_id.clone(),
+                topic,
+            )
+            .await?;
         }
 
         Ok(())
