@@ -280,6 +280,14 @@ Nested child device service support sending alarm
     ${alarm}=    Device Should Have Alarm/s    type=test_alarm    expected_text=temperature alarm   severity=CRITICAL    minimum=1    maximum=1  
     Log    ${alarm}
 
+Child device registered even on bad input
+    ${nested_child}=    Get Random Name
+    Execute Command    tedge mqtt pub te/device/${nested_child}///e/event_001 'bad json'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:${nested_child}
+
+    Execute Command    tedge mqtt pub te/device/${nested_child}///e/event_001 '{"text": "test event"}'
+    Device Should Have Event/s    expected_text=test event    type=event_001    minimum=1    maximum=1
+
 *** Keywords ***
 
 Custom Setup
