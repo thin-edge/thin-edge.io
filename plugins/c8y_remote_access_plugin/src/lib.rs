@@ -93,9 +93,9 @@ static SUCCESS_MESSAGE: &str = "CONNECTED";
 struct Unreachable<E: std::error::Error + 'static>(#[source] E, &'static str);
 
 async fn spawn_child(command: String, config_dir: &Utf8Path) -> miette::Result<()> {
-    let exec_path = std::env::current_exe()
-        .into_diagnostic()
-        .with_context(|| "Could not get current process executable")?;
+    let exec_path = std::env::args()
+        .next()
+        .ok_or(miette!("Could not get current process executable"))?;
 
     let mut command = tokio::process::Command::new(exec_path)
         .args(["--config-dir", config_dir.as_str()])
