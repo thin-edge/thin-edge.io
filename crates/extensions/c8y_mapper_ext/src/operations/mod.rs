@@ -13,21 +13,24 @@
 //!   (MQTT, Smartrest)
 //! - implementations of operations
 
-use crate::actor::{IdDownloadRequest, IdUploadRequest};
+use crate::actor::{CmdId, IdDownloadRequest, IdUploadRequest};
+use crate::converter::UploadContext;
 use crate::error::ConversionError;
 use crate::{converter::CumulocityConverter, Capabilities};
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tedge_actors::Sender;
 use tedge_actors::{ChannelError, LoggingSender};
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::entity_store::EntityExternalId;
-use tedge_api::mqtt_topics::{EntityTopicId, MqttSchema};
+use tedge_api::mqtt_topics::{EntityTopicId, MqttSchema, OperationType};
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
+use tedge_config::AutoLogUpload;
 use tedge_mqtt_ext::{MqttMessage, Topic};
 use tokio::sync::Mutex;
 use tracing::error;
@@ -54,15 +57,10 @@ mod upload;
 /// concurrently, so we need an object separate from [`CumulocityConverter`], where many `&mut self`
 /// methods prevent us from concurrent data access. Instead, this object has all necessary data for
 /// operation handling, and `&self` methods so it can be run concurrently.
-///
-/// Unfortunately, we still have dependencies on [`CumulocityConverter`] and
-/// [`C8yMapperActor`](crate::actor::C8yMapperActor): cumulocity converter starts the operation
-/// response handling flow in its `&mut self` convert method, and the main actor invokes the
-/// lifecycle methods and also uses some state that lives in the converter. These parts will have to
-/// be decoupled.
 #[derive(Clone)]
 pub struct OperationHandler {
     pub capabilities: Capabilities,
+    pub auto_log_upload: AutoLogUpload,
     pub tedge_http_host: Arc<str>,
     pub tmp_dir: Arc<Utf8Path>,
     pub mqtt_schema: MqttSchema,
@@ -74,6 +72,76 @@ pub struct OperationHandler {
 
     pub uploader_sender: LockSender<IdUploadRequest>,
     pub downloader_sender: LockSender<IdDownloadRequest>,
+    pub mqtt_publisher: LockSender<MqttMessage>,
+
+    pub pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
+    pub pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
+}
+
+impl OperationHandler {
+    pub async fn handle_operation(
+        self: Arc<Self>,
+        operation: OperationType,
+        entity: Entity,
+        cmd_id: &str,
+        message: &MqttMessage,
+    ) {
+        let handler = self.clone();
+        let cmd_id = cmd_id.to_string();
+        let message = message.clone();
+        tokio::spawn(async move {
+            let external_id = entity.external_id.clone();
+
+            let res = match operation {
+                // old handling in converter
+                OperationType::Restart
+                | OperationType::SoftwareList
+                | OperationType::SoftwareUpdate => Ok((vec![], None)),
+
+                OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
+
+                OperationType::LogUpload => {
+                    handler
+                        .handle_log_upload_state_change(entity, &cmd_id, &message)
+                        .await
+                }
+                OperationType::ConfigSnapshot => {
+                    handler
+                        .handle_config_snapshot_state_change(entity, &cmd_id, &message)
+                        .await
+                }
+                OperationType::ConfigUpdate => {
+                    handler
+                        .handle_config_update_state_change(entity, &cmd_id, &message)
+                        .await
+                }
+                OperationType::FirmwareUpdate => {
+                    handler
+                        .handle_firmware_update_state_change(entity, &cmd_id, &message)
+                        .await
+                }
+            };
+
+            match res {
+                // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
+                Ok((messages, Some(command))) if !messages.is_empty() => {
+                    let messages = self
+                        .upload_operation_log(&external_id, &cmd_id, &operation, command, messages)
+                        .await;
+
+                    for message in messages {
+                        self.mqtt_publisher.send(message).await.unwrap();
+                    }
+                }
+                Ok((messages, _)) => {
+                    for message in messages {
+                        self.mqtt_publisher.send(message).await.unwrap();
+                    }
+                }
+                Err(e) => error!("{e}"),
+            }
+        });
+    }
 }
 
 /// A sender providing a shared `send` method.
