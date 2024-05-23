@@ -13,19 +13,77 @@
 //!   (MQTT, Smartrest)
 //! - implementations of operations
 
-use crate::converter::CumulocityConverter;
+use crate::actor::{IdDownloadRequest, IdUploadRequest};
 use crate::error::ConversionError;
+use crate::{converter::CumulocityConverter, Capabilities};
+use c8y_api::http_proxy::C8yEndPoint;
+use c8y_auth_proxy::url::ProxyUrlGenerator;
+use c8y_http_proxy::handle::C8YHttpProxy;
+use camino::Utf8Path;
+use std::sync::Arc;
+use tedge_actors::LoggingSender;
 use tedge_api::commands::ConfigMetadata;
-use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::entity_store::EntityExternalId;
+use tedge_api::mqtt_topics::{EntityTopicId, MqttSchema};
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
-use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::{MqttMessage, Topic};
 use tracing::error;
 
 pub mod config_snapshot;
 pub mod config_update;
 pub mod firmware_update;
 pub mod log_upload;
+mod upload;
+
+/// Handles non-generic operations.
+///
+/// Handling an operation usually consists of 3 steps:
+///
+/// 1. Receive a smartrest message which is an operation request, convert it to thin-edge message,
+///    and publish on local MQTT (done by the converter).
+/// 2. Various local thin-edge components/services execute the operation, and when they're done,
+///    they publish an MQTT message with 'status: successful/error'
+/// 3. The cumulocity mapper needs to do some additional steps, like downloading/uploading files via
+///    HTTP, or talking to C8y via HTTP proxy, before it can send operation response via the bridge
+///    and then clear the local MQTT operation topic.
+///
+/// This struct concerns itself with performing step 3. We need to handle multiple operations
+/// concurrently, so we need an object separate from [`CumulocityConverter`], where many `&mut self`
+/// methods prevent us from concurrent data access. Instead, this object has all necessary data for
+/// operation handling, and `&self` methods so it can be run concurrently.
+///
+/// Unfortunately, we still have dependencies on [`CumulocityConverter`] and
+/// [`C8yMapperActor`](crate::actor::C8yMapperActor): cumulocity converter starts the operation
+/// response handling flow in its `&mut self` convert method, and the main actor invokes the
+/// lifecycle methods and also uses some state that lives in the converter. These parts will have to
+/// be decoupled.
+#[derive(Clone)]
+pub struct OperationHandler {
+    pub capabilities: Capabilities,
+    pub tedge_http_host: Arc<str>,
+    pub tmp_dir: Arc<Utf8Path>,
+    pub mqtt_schema: MqttSchema,
+    pub c8y_prefix: tedge_config::TopicPrefix,
+
+    pub http_proxy: C8YHttpProxy,
+    pub c8y_endpoint: C8yEndPoint,
+    pub auth_proxy: ProxyUrlGenerator,
+
+    pub uploader_sender: LoggingSender<IdUploadRequest>,
+    pub downloader_sender: LoggingSender<IdDownloadRequest>,
+}
+
+/// A subset of entity-related information necessary to handle an operation.
+///
+/// Because the operation may take time and other operations may run concurrently, we don't want to
+/// query the entity store.
+#[derive(Clone, Debug)]
+pub struct Entity {
+    pub topic_id: EntityTopicId,
+    pub external_id: EntityExternalId,
+    pub smartrest_publish_topic: Topic,
+}
 
 /// Represents a pending download performed by the downloader from the FTS.
 ///
@@ -44,6 +102,8 @@ pub struct FtsDownloadOperationData {
     pub message: MqttMessage,
 
     pub entity_topic_id: EntityTopicId,
+    pub external_id: EntityExternalId,
+    pub smartrest_publish_topic: Topic,
 
     pub command: GenericCommandState,
 }

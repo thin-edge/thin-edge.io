@@ -10,6 +10,7 @@ use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
 use crate::operations::FtsDownloadOperationData;
+use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -48,7 +49,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
-use camino::Utf8Path;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
@@ -93,23 +93,17 @@ use tedge_config::TEdgeConfigError;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tedge_uploader_ext::ContentType;
-use tedge_uploader_ext::FormData;
-use tedge_uploader_ext::Mime;
-use tedge_uploader_ext::UploadRequest;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
-use time::OffsetDateTime;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
 use tracing::warn;
-use url::Url;
 
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
@@ -239,6 +233,8 @@ pub struct CumulocityConverter {
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
+
+    pub operation_handler: OperationHandler,
 }
 
 impl CumulocityConverter {
@@ -297,6 +293,19 @@ impl CumulocityConverter {
 
         let command_id = IdGenerator::new(REQUESTER_NAME);
 
+        let operation_handler = OperationHandler {
+            capabilities: config.capabilities,
+            tedge_http_host: config.tedge_http_host.clone(),
+            tmp_dir: config.tmp_dir.clone(),
+            mqtt_schema: mqtt_schema.clone(),
+            c8y_prefix: prefix.clone(),
+            uploader_sender: uploader_sender.clone(),
+            downloader_sender: downloader_sender.clone(),
+            c8y_endpoint: c8y_endpoint.clone(),
+            auth_proxy: auth_proxy.clone(),
+            http_proxy: http_proxy.clone(),
+        };
+
         Ok(CumulocityConverter {
             size_threshold,
             config: Arc::new(config),
@@ -312,15 +321,16 @@ impl CumulocityConverter {
             mqtt_publisher,
             service_type,
             c8y_endpoint,
-            mqtt_schema,
+            mqtt_schema: mqtt_schema.clone(),
             entity_store,
             auth_proxy,
-            uploader_sender,
-            downloader_sender,
+            uploader_sender: uploader_sender.clone(),
+            downloader_sender: downloader_sender.clone(),
             pending_upload_operations: HashMap::new(),
             pending_fts_download_operations: HashMap::new(),
             command_id,
             active_commands: HashSet::new(),
+            operation_handler,
         })
     }
 
@@ -1195,6 +1205,15 @@ impl CumulocityConverter {
 
             Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
+
+                let entity = self.entity_store.try_get(&source)?;
+                let entity = crate::operations::Entity {
+                    topic_id: entity.topic_id.clone(),
+                    external_id: entity.external_id.clone(),
+                    smartrest_publish_topic: self
+                        .smartrest_publish_topic_for_entity(&entity.topic_id)?,
+                };
+
                 let res = match operation {
                     OperationType::Restart => {
                         self.publish_restart_operation_status(&source, cmd_id, message)
@@ -1208,19 +1227,33 @@ impl CumulocityConverter {
                             .await
                     }
                     OperationType::LogUpload => {
-                        self.handle_log_upload_state_change(&source, cmd_id, message)
+                        self.operation_handler
+                            .handle_log_upload_state_change(
+                                entity,
+                                cmd_id,
+                                message,
+                                &mut self.pending_fts_download_operations,
+                            )
                             .await
                     }
                     OperationType::ConfigSnapshot => {
-                        self.handle_config_snapshot_state_change(&source, cmd_id, message)
+                        self.operation_handler
+                            .handle_config_snapshot_state_change(
+                                entity,
+                                cmd_id,
+                                message,
+                                &mut self.pending_fts_download_operations,
+                            )
                             .await
                     }
                     OperationType::ConfigUpdate => {
-                        self.handle_config_update_state_change(&source, cmd_id, message)
+                        self.operation_handler
+                            .handle_config_update_state_change(entity, cmd_id, message)
                             .await
                     }
                     OperationType::FirmwareUpdate => {
-                        self.handle_firmware_update_state_change(&source, cmd_id, message)
+                        self.operation_handler
+                            .handle_firmware_update_state_change(entity, cmd_id, message)
                             .await
                     }
                     _ => Ok((vec![], None)),
@@ -1666,12 +1699,26 @@ impl CumulocityConverter {
             && (self.config.auto_log_upload == AutoLogUpload::Always
                 || (self.config.auto_log_upload == AutoLogUpload::OnFailure && command.is_failed()))
         {
+            let external_id = match self.entity_store.try_get(target) {
+                // shouldn't happen, because the entity is already registered, if this is called then it's arguably a
+                // bug
+
+                // TODO: we should be to statically guarantee that an entity is registered so we avoid handling error
+                // cases like this that won't happen in practice
+                Err(err) => {
+                    error!("Operation log upload failed due to {err}");
+                    return vec![];
+                }
+                Ok(entity) => &entity.external_id,
+            };
+
             let log_path = command.get_log_path().unwrap();
             let event_type = format!("{}_op_log", op_type);
             let event_text = format!("{} operation log", &op_type);
             match self
+                .operation_handler
                 .upload_file(
-                    target,
+                    external_id,
                     &log_path,
                     None,
                     None,
@@ -1692,57 +1739,6 @@ impl CumulocityConverter {
             }
         }
         final_messages
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn upload_file(
-        &mut self,
-        topic_id: &EntityTopicId,
-        file_path: &Utf8Path,
-        file_name: Option<String>,
-        mime_type: Option<Mime>,
-        cmd_id: &str,
-        event_type: String,
-        event_text: Option<String>,
-    ) -> Result<Url, ConversionError> {
-        let target = self.entity_store.try_get(topic_id)?;
-        let xid = target.external_id.as_ref();
-
-        let create_event = CreateEvent {
-            event_type: event_type.clone(),
-            time: OffsetDateTime::now_utc(),
-            text: event_text.unwrap_or(event_type),
-            extras: HashMap::new(),
-            device_id: xid.into(),
-        };
-        let event_response_id = self.http_proxy.send_event(create_event).await?;
-        let binary_upload_event_url = self
-            .c8y_endpoint
-            .get_url_for_event_binary_upload_unchecked(&event_response_id);
-
-        let proxy_url = self.auth_proxy.proxy_url(binary_upload_event_url.clone());
-
-        let file_name = file_name.unwrap_or_else(|| {
-            format!(
-                "{xid}_{filename}",
-                filename = file_path.file_name().unwrap_or(cmd_id)
-            )
-        });
-        let form_data = if let Some(mime) = mime_type {
-            FormData::new(file_name).set_mime(mime)
-        } else {
-            FormData::new(file_name)
-        };
-        // The method must be POST, otherwise file name won't be supported.
-        let upload_request = UploadRequest::new(proxy_url.as_str(), file_path)
-            .post()
-            .with_content_type(ContentType::FormData(form_data));
-
-        self.uploader_sender
-            .send((cmd_id.into(), upload_request))
-            .await?;
-
-        Ok(binary_upload_event_url)
     }
 
     async fn publish_software_list(
