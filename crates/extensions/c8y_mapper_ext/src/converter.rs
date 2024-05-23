@@ -9,6 +9,7 @@ use crate::actor::IdUploadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
+use crate::operations;
 use crate::operations::FtsDownloadOperationData;
 use crate::operations::OperationHandler;
 use anyhow::anyhow;
@@ -98,6 +99,7 @@ use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
@@ -299,11 +301,11 @@ impl CumulocityConverter {
             tmp_dir: config.tmp_dir.clone(),
             mqtt_schema: mqtt_schema.clone(),
             c8y_prefix: prefix.clone(),
-            uploader_sender: uploader_sender.clone(),
-            downloader_sender: downloader_sender.clone(),
+            uploader_sender: operations::LockSender::new(uploader_sender.clone()),
+            downloader_sender: operations::LockSender::new(downloader_sender.clone()),
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
-            http_proxy: http_proxy.clone(),
+            http_proxy: Arc::new(Mutex::new(http_proxy.clone())),
         };
 
         Ok(CumulocityConverter {
@@ -1207,7 +1209,7 @@ impl CumulocityConverter {
                 self.active_commands.insert(cmd_id.clone());
 
                 let entity = self.entity_store.try_get(&source)?;
-                let entity = crate::operations::Entity {
+                let entity = operations::Entity {
                     topic_id: entity.topic_id.clone(),
                     external_id: entity.external_id.clone(),
                     smartrest_publish_topic: self

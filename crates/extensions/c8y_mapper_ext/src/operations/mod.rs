@@ -21,13 +21,15 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
-use tedge_actors::LoggingSender;
+use tedge_actors::Sender;
+use tedge_actors::{ChannelError, LoggingSender};
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::{EntityTopicId, MqttSchema};
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::{MqttMessage, Topic};
+use tokio::sync::Mutex;
 use tracing::error;
 
 pub mod config_snapshot;
@@ -66,12 +68,26 @@ pub struct OperationHandler {
     pub mqtt_schema: MqttSchema,
     pub c8y_prefix: tedge_config::TopicPrefix,
 
-    pub http_proxy: C8YHttpProxy,
+    pub http_proxy: Arc<Mutex<C8YHttpProxy>>,
     pub c8y_endpoint: C8yEndPoint,
     pub auth_proxy: ProxyUrlGenerator,
 
-    pub uploader_sender: LoggingSender<IdUploadRequest>,
-    pub downloader_sender: LoggingSender<IdDownloadRequest>,
+    pub uploader_sender: LockSender<IdUploadRequest>,
+    pub downloader_sender: LockSender<IdDownloadRequest>,
+}
+
+/// A sender providing a shared `send` method.
+#[derive(Clone)]
+pub struct LockSender<T: tedge_actors::Message>(Arc<Mutex<LoggingSender<T>>>);
+
+impl<T: tedge_actors::Message> LockSender<T> {
+    pub fn new(sender: LoggingSender<T>) -> Self {
+        Self(Arc::new(Mutex::new(sender)))
+    }
+
+    pub async fn send(&self, message: T) -> Result<(), ChannelError> {
+        self.0.lock().await.send(message).await
+    }
 }
 
 /// A subset of entity-related information necessary to handle an operation.

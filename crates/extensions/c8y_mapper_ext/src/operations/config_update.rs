@@ -49,7 +49,7 @@ impl OperationHandler {
     /// - "successful", it converts the message to SmartREST "Successful".
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_config_update_state_change(
-        &mut self,
+        &self,
         target: Entity,
         cmd_id: &str,
         message: &MqttMessage,
@@ -119,7 +119,7 @@ impl CumulocityConverter {
     /// Upon receiving a SmartREST c8y_DownloadConfigFile request, convert it to a message on the
     /// command channel.
     pub async fn convert_config_update_request(
-        &mut self,
+        &self,
         device_xid: String,
         cmd_id: String,
         config_download_request: C8yDownloadConfigFile,

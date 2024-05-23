@@ -15,7 +15,6 @@ use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
-use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmd;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
@@ -40,7 +39,7 @@ impl OperationHandler {
     /// - "successful", it uploads a config snapshot to c8y and converts the message to SmartREST "Successful".
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_config_snapshot_state_change(
-        &mut self,
+        &self,
         entity: Entity,
         cmd_id: &str,
         message: &MqttMessage,
@@ -147,7 +146,7 @@ impl OperationHandler {
     /// Resumes `config_snapshot` operation after required file was downloaded
     /// from the File Transfer Service.
     pub async fn handle_fts_config_download_result(
-        &mut self,
+        &self,
         cmd_id: CmdId,
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,

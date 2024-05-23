@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8Path;
 use mime::Mime;
-use tedge_actors::Sender;
+use std::collections::HashMap;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_uploader_ext::{ContentType, FormData, UploadRequest};
 use time::OffsetDateTime;
@@ -16,7 +14,7 @@ use super::OperationHandler;
 impl OperationHandler {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn upload_file(
-        &mut self,
+        &self,
         external_id: &EntityExternalId,
         file_path: &Utf8Path,
         file_name: Option<String>,
@@ -32,7 +30,14 @@ impl OperationHandler {
             extras: HashMap::new(),
             device_id: external_id.into(),
         };
-        let event_response_id = self.http_proxy.send_event(create_event).await?;
+
+        let event_response_id = self
+            .http_proxy
+            .lock()
+            .await
+            .send_event(create_event)
+            .await?;
+
         let binary_upload_event_url = self
             .c8y_endpoint
             .get_url_for_event_binary_upload_unchecked(&event_response_id);

@@ -34,7 +34,7 @@ impl OperationHandler {
     /// - "successful", it converts the message to SmartREST "Successful" and update the current installed firmware.
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_firmware_update_state_change(
-        &mut self,
+        &self,
         target: Entity,
         cmd_id: &str,
         message: &MqttMessage,
