@@ -50,7 +50,6 @@ c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
 c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 camino = "1.1"
 cap = "0.1"
-capture-logger = "0.1"
 certificate = { path = "crates/common/certificate" }
 clap = { version = "4.4", features = ["cargo", "derive"] }
 clock = { path = "crates/common/clock" }

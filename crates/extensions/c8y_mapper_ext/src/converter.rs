@@ -335,9 +335,8 @@ impl CumulocityConverter {
         let entity_topic_id = &input.topic_id;
         let external_id = self
             .entity_store
-            .get(entity_topic_id)
-            .map(|e| &e.external_id)
-            .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))?;
+            .try_get(entity_topic_id)
+            .map(|e| &e.external_id)?;
         match input.r#type {
             EntityType::MainDevice => {
                 self.entity_store.update(input.clone())?;
@@ -979,76 +978,109 @@ impl CumulocityConverter {
         channel: Channel,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut registration_messages: Vec<MqttMessage> = vec![];
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                    match self.entity_store.update(register_message.clone()) {
-                        Err(e) => {
-                            error!("Entity registration failed: {e}");
-                        }
-                        Ok((affected_entities, pending_entities))
-                            if !affected_entities.is_empty() =>
-                        {
-                            for pending_entity in pending_entities {
-                                // Register and convert the entity registration first
-                                let mut c8y_message = self
-                                    .try_convert_entity_registration(&pending_entity.reg_message)?;
-                                registration_messages.append(&mut c8y_message);
-
-                                // Process all the cached data messages for that entity
-                                let mut cached_messages =
-                                    self.process_cached_entity_data(pending_entity).await?;
-                                registration_messages.append(&mut cached_messages);
-                            }
-
-                            return Ok(registration_messages);
-                        }
-                        Ok(_) => {}
-                    }
+                    return self
+                        .try_register_entity_with_pending_children(register_message)
+                        .await;
                 }
+                Err(anyhow!(
+                    "Invalid entity registration message received on topic: {}",
+                    message.topic.name
+                )
+                .into())
             }
             _ => {
-                // if device is unregistered register using auto-registration
+                let mut converted_messages: Vec<MqttMessage> = vec![];
+                // if the target entity is unregistered, try to register it first using auto-registration
                 if self.entity_store.get(&source).is_none() {
-                    if self.config.enable_auto_register {
-                        let auto_registration_messages =
-                            match self.entity_store.auto_register_entity(&source) {
-                                Ok(auto_registration_messages) => auto_registration_messages,
-                                Err(e) => match e {
-                                    Error::NonDefaultTopicScheme(eid) => {
-                                        debug!("{}", Error::NonDefaultTopicScheme(eid.clone()));
-                                        return Ok(vec![self.new_error_message(
-                                            ConversionError::FromEntityStoreError(
-                                                entity_store::Error::NonDefaultTopicScheme(eid),
-                                            ),
-                                        )]);
-                                    }
-                                    e => return Err(e.into()),
-                                },
-                            };
-                        for auto_registration_message in &auto_registration_messages {
-                            registration_messages.append(
-                                &mut self.register_and_convert_entity(auto_registration_message)?,
-                            );
-                        }
-                    } else {
-                        // When an entity data message is received before the entity itself is registered,
-                        // cache it in the unregistered entity store to be processed after the entity is registered
+                    // On receipt of an unregistered entity data message with custom topic scheme OR
+                    // one with default topic scheme itself when auto registration disabled,
+                    // since it is received before the entity itself is registered,
+                    // cache it in the unregistered entity store to be processed after the entity is registered
+                    if !(self.config.enable_auto_register && source.matches_default_topic_scheme())
+                    {
                         self.entity_store.cache_early_data_message(message.clone());
                         return Ok(vec![]);
                     }
+
+                    let auto_registered_entities = self.try_auto_register_entity(&source)?;
+                    converted_messages =
+                        self.try_convert_auto_registered_entities(auto_registered_entities)?;
                 }
+
+                let result = self
+                    .try_convert_data_message(source, channel, message)
+                    .await;
+                let mut messages = self.wrap_errors(result);
+
+                converted_messages.append(&mut messages);
+                Ok(converted_messages)
             }
         }
+    }
 
-        let result = self
-            .try_convert_data_message(source, channel, message)
-            .await;
-        let mut messages = self.wrap_errors(result);
+    async fn try_register_entity_with_pending_children(
+        &mut self,
+        register_message: EntityRegistrationMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let mut mapped_messages = vec![];
+        match self.entity_store.update(register_message.clone()) {
+            Err(e) => {
+                error!("Entity registration failed: {e}");
+            }
+            Ok((affected_entities, pending_entities)) if !affected_entities.is_empty() => {
+                for pending_entity in pending_entities {
+                    // Register and convert the entity registration first
+                    let mut c8y_message =
+                        self.try_convert_entity_registration(&pending_entity.reg_message)?;
+                    mapped_messages.append(&mut c8y_message);
 
-        registration_messages.append(&mut messages);
-        Ok(registration_messages)
+                    // Process all the cached data messages for that entity
+                    let mut cached_messages =
+                        self.process_cached_entity_data(pending_entity).await?;
+                    mapped_messages.append(&mut cached_messages);
+                }
+
+                return Ok(mapped_messages);
+            }
+            Ok(_) => {}
+        }
+        Ok(mapped_messages)
+    }
+
+    fn try_auto_register_entity(
+        &mut self,
+        source: &EntityTopicId,
+    ) -> Result<Vec<EntityRegistrationMessage>, ConversionError> {
+        let auto_registered_entities = self.entity_store.auto_register_entity(source)?;
+        for auto_registered_entity in &auto_registered_entities {
+            if auto_registered_entity.r#type == EntityType::ChildDevice {
+                self.children.insert(
+                    self.entity_store
+                        .get(source)
+                        .expect("Entity should have been auto registered in the previous step")
+                        .external_id
+                        .as_ref()
+                        .into(),
+                    Operations::default(),
+                );
+            }
+        }
+        Ok(auto_registered_entities)
+    }
+
+    fn try_convert_auto_registered_entities(
+        &mut self,
+        entities: Vec<EntityRegistrationMessage>,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let mut converted_messages: Vec<MqttMessage> = vec![];
+        for entity in entities {
+            // Append the entity registration message itself and its converted c8y form
+            converted_messages.append(&mut self.try_convert_auto_registered_entity(&entity)?);
+        }
+        Ok(converted_messages)
     }
 
     async fn try_convert_data_message(
@@ -1190,24 +1222,12 @@ impl CumulocityConverter {
         }
     }
 
-    pub fn register_and_convert_entity(
+    /// Return the MQTT representation of the entity registration message itself
+    /// along with its converted c8y equivalent.
+    fn try_convert_auto_registered_entity(
         &mut self,
         registration_message: &EntityRegistrationMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let entity_topic_id = &registration_message.topic_id;
-        self.entity_store.update(registration_message.clone())?;
-        if registration_message.r#type == EntityType::ChildDevice {
-            self.children.insert(
-                self.entity_store
-                    .get(entity_topic_id)
-                    .expect("Should have been registered in the previous step")
-                    .external_id
-                    .as_ref()
-                    .into(),
-                Operations::default(),
-            );
-        }
-
         let mut registration_messages = vec![];
         registration_messages.push(self.convert_entity_registration_message(registration_message));
         let mut c8y_message = self.try_convert_entity_registration(registration_message)?;
@@ -3232,28 +3252,6 @@ pub(crate) mod tests {
                 )],
             );
         }
-    }
-
-    #[tokio::test]
-    async fn try_auto_registration_on_custom_topic() -> Result<(), anyhow::Error> {
-        use capture_logger::begin_capture;
-        use capture_logger::pop_captured;
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        let alarm_topic = "te/custom/child2///m/";
-        let alarm_payload = json!({ "text": "" }).to_string();
-        let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
-        begin_capture();
-        let res = converter.try_convert(&alarm_message).await.unwrap();
-        let expected_err_msg = MqttMessage::new(&Topic::new_unchecked("te/errors"), "Auto registration of the entity with topic id custom/child2// failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.");
-        assert_eq!(res[0], expected_err_msg);
-        let expected_log = "Auto registration of the entity with topic id custom/child2// failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.";
-        // skip other log messages
-        pop_captured().unwrap().message();
-        pop_captured().unwrap().message();
-        assert_eq!(pop_captured().unwrap().message(), expected_log);
-        Ok(())
     }
 
     #[tokio::test]
