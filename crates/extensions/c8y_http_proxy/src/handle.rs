@@ -18,6 +18,7 @@ use tedge_utils::file::PermissionEntry;
 use super::messages::DownloadFile;
 
 /// Handle to the C8YHttpProxy
+#[derive(Clone)]
 pub struct C8YHttpProxy {
     c8y: ClientMessageBox<C8YRestRequest, C8YRestResult>,
 }

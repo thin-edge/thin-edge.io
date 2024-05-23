@@ -1,6 +1,9 @@
+use super::Entity;
 use super::FtsDownloadOperationData;
+use super::OperationHandler;
 use crate::actor::CmdId;
 use crate::converter::CumulocityConverter;
+use crate::converter::UploadContext;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
@@ -11,6 +14,7 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
+use std::collections::HashMap;
 use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmd;
@@ -29,6 +33,181 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
+
+impl OperationHandler {
+    /// Address received ThinEdge config_snapshot command. If its status is
+    /// - "executing", it converts the message to SmartREST "Executing".
+    /// - "successful", it uploads a config snapshot to c8y and converts the message to SmartREST "Successful".
+    /// - "failed", it converts the message to SmartREST "Failed".
+    pub async fn handle_config_snapshot_state_change(
+        &mut self,
+        entity: Entity,
+        cmd_id: &str,
+        message: &MqttMessage,
+        pending_fts_download_operations: &mut HashMap<CmdId, FtsDownloadOperationData>,
+    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+        if !self.capabilities.config_snapshot {
+            warn!(
+                "Received a config_snapshot command, however, config_snapshot feature is disabled"
+            );
+            return Ok((vec![], None));
+        }
+        let target = entity;
+        let topic_id = &target.topic_id;
+
+        let command = match ConfigSnapshotCmd::try_from_bytes(
+            topic_id.clone(),
+            cmd_id.into(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok((vec![], None));
+            }
+        };
+
+        let smartrest_topic = target.smartrest_publish_topic;
+
+        let messages = match command.status() {
+            CommandStatus::Executing => {
+                let smartrest_operation_status =
+                    set_operation_executing(CumulocitySupportedOperations::C8yUploadConfigFile);
+                vec![MqttMessage::new(
+                    &smartrest_topic,
+                    smartrest_operation_status,
+                )]
+            }
+            CommandStatus::Successful => {
+                // Send a request to the Downloader to download the file asynchronously from FTS
+                let config_filename = format!(
+                    "{}-{}",
+                    command.payload.config_type.replace('/', ":"),
+                    cmd_id
+                );
+
+                let tedge_file_url = format!(
+                    "http://{}/tedge/file-transfer/{external_id}/config_snapshot/{config_filename}",
+                    &self.tedge_http_host,
+                    external_id = target.external_id.as_ref()
+                );
+
+                let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
+                    .context("Failed to create a temporary directory")?;
+                let destination_path = destination_dir.path().join(config_filename);
+
+                pending_fts_download_operations.insert(
+                    cmd_id.into(),
+                    FtsDownloadOperationData {
+                        download_type: FtsDownloadOperationType::ConfigDownload,
+                        url: tedge_file_url.clone(),
+                        file_dir: destination_dir,
+
+                        message: message.clone(),
+                        entity_topic_id: topic_id.clone(),
+                        external_id: target.external_id.clone(),
+                        smartrest_publish_topic: smartrest_topic,
+
+                        command: command.clone().into_generic_command(&self.mqtt_schema),
+                    },
+                );
+
+                let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
+
+                self.downloader_sender
+                    .send((cmd_id.into(), download_request))
+                    .await
+                    .map_err(CumulocityMapperError::ChannelError)?;
+
+                // cont. in handle_fts_config_download_result
+
+                vec![] // No mqtt message can be published in this state
+            }
+            CommandStatus::Failed { reason } => {
+                let smartrest_operation_status =
+                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, &reason);
+                let c8y_notification =
+                    MqttMessage::new(&smartrest_topic, smartrest_operation_status);
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce);
+                vec![c8y_notification, clear_local_cmd]
+            }
+            _ => {
+                vec![] // Do nothing as other components might handle those states
+            }
+        };
+
+        Ok((
+            messages,
+            Some(command.into_generic_command(&self.mqtt_schema)),
+        ))
+    }
+
+    /// Resumes `config_snapshot` operation after required file was downloaded
+    /// from the File Transfer Service.
+    pub async fn handle_fts_config_download_result(
+        &mut self,
+        cmd_id: CmdId,
+        download_result: DownloadResult,
+        fts_download: FtsDownloadOperationData,
+        pending_upload_operations: &mut HashMap<CmdId, UploadContext>,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let topic_id = fts_download.entity_topic_id;
+        let smartrest_topic = fts_download.smartrest_publish_topic;
+        let payload = fts_download.message.payload_str()?;
+        let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
+
+        let download = match download_result {
+            Err(err) => {
+                let smartrest_error =
+                    fail_operation(
+                        CumulocitySupportedOperations::C8yUploadConfigFile,
+                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
+                    );
+
+                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
+                let clean_operation = MqttMessage::new(&fts_download.message.topic, "")
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce);
+
+                return Ok(vec![c8y_notification, clean_operation]);
+            }
+            Ok(download) => download,
+        };
+
+        let file_path = Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?;
+        let event_type = response.config_type.clone();
+
+        let binary_upload_event_url = self
+            .upload_file(
+                &fts_download.external_id,
+                &file_path,
+                None,
+                None,
+                &cmd_id,
+                event_type,
+                None,
+            )
+            .await?;
+
+        pending_upload_operations.insert(
+            cmd_id.clone(),
+            UploadOperationData {
+                topic_id,
+                file_dir: fts_download.file_dir,
+                smartrest_topic,
+                clear_cmd_topic: fts_download.message.topic,
+                c8y_binary_url: binary_upload_event_url.to_string(),
+                operation: CumulocitySupportedOperations::C8yUploadConfigFile,
+                command: fts_download.command,
+            }
+            .into(),
+        );
+
+        Ok(vec![])
+    }
+}
 
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     [
@@ -86,110 +265,6 @@ impl CumulocityConverter {
         ])
     }
 
-    /// Address received ThinEdge config_snapshot command. If its status is
-    /// - "executing", it converts the message to SmartREST "Executing".
-    /// - "successful", it uploads a config snapshot to c8y and converts the message to SmartREST "Successful".
-    /// - "failed", it converts the message to SmartREST "Failed".
-    pub async fn handle_config_snapshot_state_change(
-        &mut self,
-        topic_id: &EntityTopicId,
-        cmd_id: &str,
-        message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        if !self.config.capabilities.config_snapshot {
-            warn!(
-                "Received a config_snapshot command, however, config_snapshot feature is disabled"
-            );
-            return Ok((vec![], None));
-        }
-
-        let command = match ConfigSnapshotCmd::try_from_bytes(
-            topic_id.clone(),
-            cmd_id.into(),
-            message.payload_bytes(),
-        )? {
-            Some(command) => command,
-            None => {
-                // The command has been fully processed
-                return Ok((vec![], None));
-            }
-        };
-
-        let target = self.entity_store.try_get(topic_id)?;
-        let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_operation_status =
-                    set_operation_executing(CumulocitySupportedOperations::C8yUploadConfigFile);
-                vec![MqttMessage::new(
-                    &smartrest_topic,
-                    smartrest_operation_status,
-                )]
-            }
-            CommandStatus::Successful => {
-                // Send a request to the Downloader to download the file asynchronously from FTS
-                let config_filename = format!(
-                    "{}-{}",
-                    command.payload.config_type.replace('/', ":"),
-                    cmd_id
-                );
-
-                let tedge_file_url = format!(
-                    "http://{}/tedge/file-transfer/{external_id}/config_snapshot/{config_filename}",
-                    &self.config.tedge_http_host,
-                    external_id = target.external_id.as_ref()
-                );
-
-                let destination_dir = tempfile::tempdir_in(self.config.tmp_dir.as_std_path())
-                    .context("Failed to create a temporary directory")?;
-                let destination_path = destination_dir.path().join(config_filename);
-
-                self.pending_fts_download_operations.insert(
-                    cmd_id.into(),
-                    FtsDownloadOperationData {
-                        download_type: FtsDownloadOperationType::ConfigDownload,
-                        url: tedge_file_url.clone(),
-                        file_dir: destination_dir,
-
-                        message: message.clone(),
-                        entity_topic_id: topic_id.clone(),
-                        command: command.clone().into_generic_command(&self.mqtt_schema),
-                    },
-                );
-
-                let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
-
-                self.downloader_sender
-                    .send((cmd_id.into(), download_request))
-                    .await
-                    .map_err(CumulocityMapperError::ChannelError)?;
-
-                // cont. in handle_fts_config_download_result
-
-                vec![] // No mqtt message can be published in this state
-            }
-            CommandStatus::Failed { reason } => {
-                let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, &reason);
-                let c8y_notification =
-                    MqttMessage::new(&smartrest_topic, smartrest_operation_status);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-                vec![c8y_notification, clear_local_cmd]
-            }
-            _ => {
-                vec![] // Do nothing as other components might handle those states
-            }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
-    }
-
     /// Resumes `config_snapshot` operation after required file was downloaded
     /// from the File Transfer Service.
     pub async fn handle_fts_config_download_result(
@@ -198,51 +273,14 @@ impl CumulocityConverter {
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let topic_id = fts_download.entity_topic_id;
-        let smartrest_topic = self.smartrest_publish_topic_for_entity(&topic_id)?;
-        let payload = fts_download.message.payload_str()?;
-        let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
-
-        let download = match download_result {
-            Err(err) => {
-                let smartrest_error =
-                    fail_operation(
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
-                    );
-
-                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
-                let clean_operation = MqttMessage::new(&fts_download.message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-
-                return Ok(vec![c8y_notification, clean_operation]);
-            }
-            Ok(download) => download,
-        };
-
-        let file_path = Utf8PathBuf::try_from(download.file_path).map_err(|e| e.into_io_error())?;
-        let event_type = response.config_type.clone();
-
-        let binary_upload_event_url = self
-            .upload_file(&topic_id, &file_path, None, None, &cmd_id, event_type, None)
-            .await?;
-
-        self.pending_upload_operations.insert(
-            cmd_id.clone(),
-            UploadOperationData {
-                topic_id,
-                file_dir: fts_download.file_dir,
-                smartrest_topic,
-                clear_cmd_topic: fts_download.message.topic,
-                c8y_binary_url: binary_upload_event_url.to_string(),
-                operation: CumulocitySupportedOperations::C8yUploadConfigFile,
-                command: fts_download.command,
-            }
-            .into(),
-        );
-
-        Ok(vec![])
+        self.operation_handler
+            .handle_fts_config_download_result(
+                cmd_id,
+                download_result,
+                fts_download,
+                &mut self.pending_upload_operations,
+            )
+            .await
     }
 
     /// Converts a config_snapshot metadata message to
