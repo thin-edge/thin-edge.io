@@ -183,7 +183,7 @@ impl C8yMapperConfig {
         let software_management_api = tedge_config.c8y.software_management.api.clone();
         let software_management_with_types = tedge_config.c8y.software_management.with_types;
 
-        let auto_log_upload = tedge_config.c8y.operations.auto_log_upload.clone();
+        let auto_log_upload = tedge_config.c8y.operations.auto_log_upload;
 
         // Add feature topic filters
         for cmd in [

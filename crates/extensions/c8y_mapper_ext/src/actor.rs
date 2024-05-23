@@ -3,6 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::converter::UploadContext;
 use crate::converter::UploadOperationLog;
+use crate::operations::FtsDownloadOperationData;
 use crate::operations::FtsDownloadOperationType;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
@@ -16,6 +17,7 @@ use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -49,6 +51,7 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use tokio::sync::Mutex;
 use tracing::error;
 use tracing::warn;
 
@@ -88,6 +91,9 @@ pub struct C8yMapperActor {
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+
+    pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
+    pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
 }
 
 #[async_trait]
@@ -154,6 +160,8 @@ impl C8yMapperActor {
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+        pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
+        pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
     ) -> Self {
         Self {
             converter,
@@ -162,6 +170,8 @@ impl C8yMapperActor {
             timer_sender,
             bridge_status_messages,
             message_handlers,
+            pending_fts_download_operations,
+            pending_upload_operations,
         }
     }
 
@@ -343,7 +353,8 @@ impl C8yMapperActor {
         cmd_id: CmdId,
         upload_result: UploadResult,
     ) -> Result<(), RuntimeError> {
-        match self.converter.pending_upload_operations.remove(&cmd_id) {
+        let pending_upload = self.pending_upload_operations.lock().await.remove(&cmd_id);
+        match pending_upload {
             Some(UploadContext::OperationData(queued_data)) => {
                 let payload = match queued_data.operation {
                     CumulocitySupportedOperations::C8yLogFileRequest
@@ -408,11 +419,13 @@ impl C8yMapperActor {
         result: DownloadResult,
     ) -> Result<(), RuntimeError> {
         // download not from c8y_proxy, check if it was from FTS
-        let operation_result = if let Some(fts_download) = self
-            .converter
+        let fts_download = self
             .pending_fts_download_operations
-            .remove(&cmd_id)
-        {
+            .lock()
+            .await
+            .remove(&cmd_id);
+
+        let operation_result = if let Some(fts_download) = fts_download {
             let cmd_id = cmd_id.clone();
             match fts_download.download_type {
                 FtsDownloadOperationType::ConfigDownload => {
@@ -562,6 +575,9 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         let downloader_sender =
             LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
 
+        let pending_fts_download_operations = Arc::new(Mutex::new(HashMap::new()));
+        let pending_upload_operations = Arc::new(Mutex::new(HashMap::new()));
+
         let converter = CumulocityConverter::new(
             self.config,
             mqtt_publisher.clone(),
@@ -569,6 +585,8 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.auth_proxy,
             uploader_sender.clone(),
             downloader_sender.clone(),
+            Arc::clone(&pending_fts_download_operations),
+            Arc::clone(&pending_upload_operations),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
@@ -582,6 +600,8 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             timer_sender,
             bridge_monitor_box,
             self.message_handlers,
+            pending_fts_download_operations,
+            pending_upload_operations,
         ))
     }
 }

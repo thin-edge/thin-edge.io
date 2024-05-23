@@ -4,7 +4,6 @@ use super::FtsDownloadOperationType;
 use super::OperationHandler;
 use crate::actor::CmdId;
 use crate::converter::CumulocityConverter;
-use crate::converter::UploadContext;
 use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
@@ -14,7 +13,6 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
-use std::collections::HashMap;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmd;
@@ -56,7 +54,6 @@ impl OperationHandler {
         target: Entity,
         cmd_id: &str,
         message: &MqttMessage,
-        pending_fts_download_operations: &mut HashMap<CmdId, FtsDownloadOperationData>,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
         if !self.capabilities.log_upload {
             warn!("Received a log_upload command, however, log_upload feature is disabled");
@@ -101,7 +98,7 @@ impl OperationHandler {
                     .context("Failed to create a temporary directory")?;
                 let destination_path = destination_dir.path().join(log_filename);
 
-                pending_fts_download_operations.insert(
+                self.pending_fts_download_operations.lock().await.insert(
                     cmd_id.into(),
                     FtsDownloadOperationData {
                         download_type: FtsDownloadOperationType::LogDownload,
@@ -156,7 +153,6 @@ impl OperationHandler {
         cmd_id: CmdId,
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
-        pending_upload_operations: &mut HashMap<CmdId, UploadContext>,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let topic_id = fts_download.entity_topic_id;
         let smartrest_topic = fts_download.smartrest_publish_topic;
@@ -197,7 +193,7 @@ impl OperationHandler {
             )
             .await?;
 
-        pending_upload_operations.insert(
+        self.pending_upload_operations.lock().await.insert(
             cmd_id,
             UploadOperationData {
                 topic_id,
@@ -267,12 +263,7 @@ impl CumulocityConverter {
         fts_download: FtsDownloadOperationData,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         self.operation_handler
-            .handle_fts_log_download_result(
-                cmd_id,
-                download_result,
-                fts_download,
-                &mut self.pending_upload_operations,
-            )
+            .handle_fts_log_download_result(cmd_id, download_result, fts_download)
             .await
     }
 

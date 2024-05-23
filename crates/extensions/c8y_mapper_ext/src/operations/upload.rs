@@ -2,12 +2,17 @@ use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8Path;
 use mime::Mime;
 use std::collections::HashMap;
-use tedge_api::entity_store::EntityExternalId;
+use tedge_api::{
+    entity_store::EntityExternalId, mqtt_topics::OperationType, workflow::GenericCommandState,
+};
+use tedge_config::AutoLogUpload;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_uploader_ext::{ContentType, FormData, UploadRequest};
 use time::OffsetDateTime;
+use tracing::error;
 use url::Url;
 
-use crate::error::ConversionError;
+use crate::{converter::UploadOperationLog, error::ConversionError};
 
 use super::OperationHandler;
 
@@ -66,5 +71,48 @@ impl OperationHandler {
             .await?;
 
         Ok(binary_upload_event_url)
+    }
+
+    pub async fn upload_operation_log(
+        &self,
+        external_id: &EntityExternalId,
+        cmd_id: &str,
+        op_type: &OperationType,
+        command: GenericCommandState,
+        final_messages: Vec<MqttMessage>,
+    ) -> Vec<MqttMessage> {
+        if command.is_finished()
+            && command.get_log_path().is_some()
+            && (self.auto_log_upload == AutoLogUpload::Always
+                || (self.auto_log_upload == AutoLogUpload::OnFailure && command.is_failed()))
+        {
+            let log_path = command.get_log_path().unwrap();
+            let event_type = format!("{}_op_log", op_type);
+            let event_text = format!("{} operation log", &op_type);
+            match self
+                .upload_file(
+                    external_id,
+                    &log_path,
+                    None,
+                    None,
+                    cmd_id,
+                    event_type,
+                    Some(event_text),
+                )
+                .await
+            {
+                Ok(_) => {
+                    self.pending_upload_operations
+                        .lock()
+                        .await
+                        .insert(cmd_id.into(), UploadOperationLog { final_messages }.into());
+                    return vec![];
+                }
+                Err(err) => {
+                    error!("Operation log upload failed due to {}", err);
+                }
+            }
+        }
+        final_messages
     }
 }

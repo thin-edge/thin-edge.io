@@ -11,6 +11,7 @@ use crate::error::ConversionError;
 use crate::json;
 use crate::operations;
 use crate::operations::FtsDownloadOperationData;
+use crate::operations::LockSender;
 use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -226,17 +227,18 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
-    pub pending_upload_operations: HashMap<CmdId, UploadContext>,
+
+    pub pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
 
     /// Used to store pending downloads from the FTS.
     // Using a separate field to not mix downloads from FTS and HTTP proxy
-    pub pending_fts_download_operations: HashMap<CmdId, FtsDownloadOperationData>,
+    pub pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
 
-    pub operation_handler: OperationHandler,
+    pub operation_handler: Arc<OperationHandler>,
 }
 
 impl CumulocityConverter {
@@ -247,6 +249,8 @@ impl CumulocityConverter {
         auth_proxy: ProxyUrlGenerator,
         uploader_sender: LoggingSender<IdUploadRequest>,
         downloader_sender: LoggingSender<IdDownloadRequest>,
+        pending_fts_download_operations: Arc<Mutex<HashMap<CmdId, FtsDownloadOperationData>>>,
+        pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -295,8 +299,9 @@ impl CumulocityConverter {
 
         let command_id = IdGenerator::new(REQUESTER_NAME);
 
-        let operation_handler = OperationHandler {
+        let operation_handler = Arc::new(OperationHandler {
             capabilities: config.capabilities,
+            auto_log_upload: config.auto_log_upload,
             tedge_http_host: config.tedge_http_host.clone(),
             tmp_dir: config.tmp_dir.clone(),
             mqtt_schema: mqtt_schema.clone(),
@@ -306,7 +311,10 @@ impl CumulocityConverter {
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
             http_proxy: Arc::new(Mutex::new(http_proxy.clone())),
-        };
+            pending_fts_download_operations: Arc::clone(&pending_fts_download_operations),
+            pending_upload_operations: Arc::clone(&pending_upload_operations),
+            mqtt_publisher: LockSender::new(mqtt_publisher.clone()),
+        });
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -328,8 +336,8 @@ impl CumulocityConverter {
             auth_proxy,
             uploader_sender: uploader_sender.clone(),
             downloader_sender: downloader_sender.clone(),
-            pending_upload_operations: HashMap::new(),
-            pending_fts_download_operations: HashMap::new(),
+            pending_upload_operations,
+            pending_fts_download_operations,
             command_id,
             active_commands: HashSet::new(),
             operation_handler,
@@ -1228,35 +1236,16 @@ impl CumulocityConverter {
                         self.publish_software_update_status(&source, cmd_id, message)
                             .await
                     }
-                    OperationType::LogUpload => {
-                        self.operation_handler
-                            .handle_log_upload_state_change(
-                                entity,
-                                cmd_id,
-                                message,
-                                &mut self.pending_fts_download_operations,
-                            )
-                            .await
-                    }
-                    OperationType::ConfigSnapshot => {
-                        self.operation_handler
-                            .handle_config_snapshot_state_change(
-                                entity,
-                                cmd_id,
-                                message,
-                                &mut self.pending_fts_download_operations,
-                            )
-                            .await
-                    }
-                    OperationType::ConfigUpdate => {
-                        self.operation_handler
-                            .handle_config_update_state_change(entity, cmd_id, message)
-                            .await
-                    }
-                    OperationType::FirmwareUpdate => {
-                        self.operation_handler
-                            .handle_firmware_update_state_change(entity, cmd_id, message)
-                            .await
+                    OperationType::LogUpload
+                    | OperationType::ConfigSnapshot
+                    | OperationType::ConfigUpdate
+                    | OperationType::FirmwareUpdate => {
+                        let operation_handler = Arc::clone(&self.operation_handler);
+
+                        operation_handler
+                            .handle_operation(operation.clone(), entity, cmd_id, message)
+                            .await;
+                        Ok((vec![], None))
                     }
                     _ => Ok((vec![], None)),
                 };
@@ -1732,6 +1721,8 @@ impl CumulocityConverter {
             {
                 Ok(_) => {
                     self.pending_upload_operations
+                        .lock()
+                        .await
                         .insert(cmd_id.into(), UploadOperationLog { final_messages }.into());
                     return vec![];
                 }
@@ -1855,7 +1846,9 @@ pub(crate) mod tests {
     use c8y_http_proxy::messages::C8YRestResult;
     use serde_json::json;
     use serde_json::Value;
+    use std::collections::HashMap;
     use std::str::FromStr;
+    use std::sync::Arc;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -1881,6 +1874,7 @@ pub(crate) mod tests {
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
+    use tokio::sync::Mutex;
 
     #[tokio::test]
     async fn test_sync_alarms() {
@@ -3479,6 +3473,8 @@ pub(crate) mod tests {
             auth_proxy,
             uploader_sender,
             downloader_sender,
+            Arc::new(Mutex::new(HashMap::new())),
+            Arc::new(Mutex::new(HashMap::new())),
         )
         .unwrap();
 
