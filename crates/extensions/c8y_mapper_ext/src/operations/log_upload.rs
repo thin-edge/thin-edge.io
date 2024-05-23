@@ -15,7 +15,6 @@ use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
-use tedge_actors::Sender;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmd;
@@ -53,7 +52,7 @@ impl OperationHandler {
     /// - "successful", it creates an event in c8y, then creates an UploadRequest for the uploader actor.
     /// - "failed", it converts the message to SmartREST "Failed" with that event URL.
     pub async fn handle_log_upload_state_change(
-        &mut self,
+        &self,
         target: Entity,
         cmd_id: &str,
         message: &MqttMessage,
@@ -153,7 +152,7 @@ impl OperationHandler {
     /// Resumes `log_upload` operation after required file was downloaded from
     /// the File Transfer Service.
     pub async fn handle_fts_log_download_result(
-        &mut self,
+        &self,
         cmd_id: CmdId,
         download_result: DownloadResult,
         fts_download: FtsDownloadOperationData,
@@ -322,6 +321,7 @@ mod tests {
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::MessageReceiver;
+    use tedge_actors::Sender;
     use tedge_downloader_ext::DownloadResponse;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
