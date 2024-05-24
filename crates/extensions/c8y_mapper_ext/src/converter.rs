@@ -359,7 +359,8 @@ impl CumulocityConverter {
                 let ancestors_external_ids =
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
 
-                if entity_topic_id.is_bridge_health_topic() {
+                if self.config.bridge_in_mapper && entity_topic_id.is_bridge_health_topic() {
+                    // Skip service creation for the mapper-inbuilt bridge, as it is part of the mapper service itself
                     return Ok(vec![]);
                 }
 
