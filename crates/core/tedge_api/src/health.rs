@@ -13,6 +13,9 @@ use tedge_utils::timestamp::TimeFormat;
 
 pub const MQTT_BRIDGE_UP_PAYLOAD: &str = "1";
 pub const MQTT_BRIDGE_DOWN_PAYLOAD: &str = "0";
+pub const UP_STATUS: &str = "up";
+pub const DOWN_STATUS: &str = "down";
+pub const UNKNOWN_STATUS: &str = "unknown";
 
 // FIXME: doesn't account for custom topic root, use MQTT scheme API here
 pub fn main_device_health_topic(service: &str) -> String {

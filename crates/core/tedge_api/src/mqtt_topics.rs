@@ -624,6 +624,10 @@ impl Channel {
     pub fn is_measurement(&self) -> bool {
         matches!(self, Channel::Measurement { .. })
     }
+
+    pub fn is_health(&self) -> bool {
+        matches!(self, Channel::Health)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

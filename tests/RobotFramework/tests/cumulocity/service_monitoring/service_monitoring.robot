@@ -31,6 +31,31 @@ Test bridge service status up
     External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-c8y-bridge    show_info=False
     Cumulocity.Managed Object Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
 
+Test mosquitto bridge service status mapping
+    Execute Command    tedge mqtt pub --retain te/device/main/service/mosquitto-xyz-bridge/status/health '0'
+    External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-xyz-bridge    show_info=False
+    Cumulocity.Managed Object Should Have Fragment Values    status\=down        timeout=${TIMEOUT}
+
+    Execute Command    tedge mqtt pub --retain te/device/main/service/mosquitto-xyz-bridge/status/health '1'
+    Cumulocity.Managed Object Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
+
+    Execute Command    tedge mqtt pub --retain te/device/main/service/mosquitto-xyz-bridge/status/health 'invalid payload'
+    Cumulocity.Managed Object Should Have Fragment Values    status\=unknown        timeout=${TIMEOUT}
+
+Test non-mosquitto-bridge service status mapping
+    Execute Command    tedge mqtt pub --retain te/device/main/service/some-service/status/health '{"status":"down"}'
+    External Identity Should Exist    ${DEVICE_SN}:device:main:service:some-service    show_info=False
+    Cumulocity.Managed Object Should Have Fragment Values    status\=down        timeout=${TIMEOUT}
+
+    Execute Command    tedge mqtt pub --retain te/device/main/service/some-service/status/health 'invalid payload'
+    Cumulocity.Managed Object Should Have Fragment Values    status\=unknown        timeout=${TIMEOUT}
+
+    Execute Command    tedge mqtt pub --retain te/device/main/service/some-service/status/health '{"status":"up"}'
+    Cumulocity.Managed Object Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
+
+    Execute Command    tedge mqtt pub --retain te/device/main/service/some-service/status/health '{"status":"unknown"}'
+    Cumulocity.Managed Object Should Have Fragment Values    status\=unknown        timeout=${TIMEOUT}
+
 Test if all c8y services are down
     [Template]     Check if a service is down
     tedge-mapper-c8y
