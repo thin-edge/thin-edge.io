@@ -27,6 +27,10 @@ Test if all c8y services are up
     tedge-agent
     c8y-firmware-plugin
 
+Test bridge service status up
+    External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-c8y-bridge    show_info=False
+    Cumulocity.Managed Object Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
+
 Test if all c8y services are down
     [Template]     Check if a service is down
     tedge-mapper-c8y
