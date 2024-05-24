@@ -99,6 +99,7 @@ Default plugin configuration
 
     # Agent restart should recreate the default plugin configuration
     Stop Service    tedge-agent
+    Service Should Be Stopped    tedge-agent
     ${timestamp}=        Get Unix Timestamp
     Start Service    tedge-agent
     Service Should Be Running    tedge-agent
