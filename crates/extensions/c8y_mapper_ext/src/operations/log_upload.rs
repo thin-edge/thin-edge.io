@@ -1,7 +1,6 @@
 use super::Entity;
 use super::OperationHandler;
 use crate::converter::CumulocityConverter;
-use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use anyhow::Context;
@@ -125,35 +124,38 @@ impl OperationHandler {
                 let response = &LogUploadCmdPayload::from_json(message.payload_str()?)?;
                 let event_type = response.log_type.clone();
 
-                let binary_upload_event_url = self
+                let (binary_upload_event_url, upload_result) = self
                     .upload_file(
                         &target.external_id,
                         &file_path,
                         None,
                         Some(mime::TEXT_PLAIN),
                         cmd_id,
-                        event_type,
+                        event_type.clone(),
                         None,
                     )
                     .await?;
 
-                self.pending_upload_operations.lock().await.insert(
-                    cmd_id.to_string(),
-                    UploadOperationData {
-                        topic_id: target.topic_id,
-                        file_dir: destination_dir,
-                        smartrest_topic,
-                        clear_cmd_topic: message.topic.clone(),
-                        c8y_binary_url: binary_upload_event_url.to_string(),
-                        operation: CumulocitySupportedOperations::C8yLogFileRequest,
-                        command: command.clone().into_generic_command(&self.mqtt_schema),
-                    }
-                    .into(),
+                let smartrest_response = super::get_smartrest_response_for_upload_result(
+                    upload_result,
+                    binary_upload_event_url.as_str(),
+                    CumulocitySupportedOperations::C8yLogFileRequest,
                 );
 
-                // cont. in handle_fts_log_download
+                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_response);
+                let clear_local_cmd = MqttMessage::new(&message.topic, "")
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce);
 
-                vec![] // No mqtt message can be published in this state
+                self.upload_operation_log(
+                    &target.external_id,
+                    cmd_id,
+                    &CumulocitySupportedOperations::C8yLogFileRequest.into(),
+                    command.clone().into_generic_command(&self.mqtt_schema),
+                )
+                .await?;
+
+                vec![c8y_notification, clear_local_cmd]
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
