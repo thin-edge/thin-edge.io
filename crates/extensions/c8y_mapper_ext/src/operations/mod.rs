@@ -13,24 +13,31 @@
 //!   (MQTT, Smartrest)
 //! - implementations of operations
 
-use crate::actor::{CmdId, IdDownloadRequest, IdDownloadResult, IdUploadRequest};
-use crate::converter::UploadContext;
+use crate::actor::IdDownloadRequest;
+use crate::actor::IdDownloadResult;
+use crate::actor::IdUploadRequest;
+use crate::actor::IdUploadResult;
+use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
-use crate::{converter::CumulocityConverter, Capabilities};
+use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tedge_actors::{ChannelError, LoggingSender};
-use tedge_actors::{ClientMessageBox, Sender};
+use tedge_actors::ChannelError;
+use tedge_actors::ClientMessageBox;
+use tedge_actors::LoggingSender;
+use tedge_actors::Sender;
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::entity_store::EntityExternalId;
-use tedge_api::mqtt_topics::{EntityTopicId, MqttSchema, OperationType};
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
 use tedge_config::AutoLogUpload;
-use tedge_mqtt_ext::{MqttMessage, Topic};
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tokio::sync::Mutex;
 use tracing::error;
 
@@ -69,12 +76,9 @@ pub struct OperationHandler {
     pub c8y_endpoint: C8yEndPoint,
     pub auth_proxy: ProxyUrlGenerator,
 
-    pub uploader_sender: LockSender<IdUploadRequest>,
-    pub mqtt_publisher: LockSender<MqttMessage>,
-
-    pub pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
-
     pub downloader: Arc<Mutex<ClientMessageBox<IdDownloadRequest, IdDownloadResult>>>,
+    pub uploader: Arc<Mutex<ClientMessageBox<IdUploadRequest, IdUploadResult>>>,
+    pub mqtt_publisher: LockSender<MqttMessage>,
 }
 
 impl OperationHandler {
@@ -124,9 +128,12 @@ impl OperationHandler {
             match res {
                 // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
                 Ok((messages, Some(command))) if !messages.is_empty() => {
-                    let messages = self
-                        .upload_operation_log(&external_id, &cmd_id, &operation, command, messages)
-                        .await;
+                    if let Err(e) = self
+                        .upload_operation_log(&external_id, &cmd_id, &operation, command)
+                        .await
+                    {
+                        error!("failed to upload operation logs: {e}");
+                    }
 
                     for message in messages {
                         self.mqtt_publisher.send(message).await.unwrap();
@@ -194,6 +201,23 @@ impl CumulocityConverter {
         messages.push(MqttMessage::new(&sm_topic, payload));
 
         Ok(messages)
+    }
+}
+
+fn get_smartrest_response_for_upload_result(
+    upload_result: tedge_uploader_ext::UploadResult,
+    binary_url: &str,
+    operation: c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations,
+) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+    match upload_result {
+        Ok(_) => c8y_api::smartrest::smartrest_serializer::succeed_static_operation(
+            operation,
+            Some(binary_url),
+        ),
+        Err(err) => c8y_api::smartrest::smartrest_serializer::fail_operation(
+            operation,
+            &format!("Upload failed with {err}"),
+        ),
     }
 }
 

@@ -6,7 +6,6 @@ use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
-use crate::actor::IdUploadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
@@ -90,12 +89,13 @@ use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
-use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
@@ -227,10 +227,6 @@ pub struct CumulocityConverter {
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
 
-    pub uploader_sender: LoggingSender<IdUploadRequest>,
-
-    pub pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
-
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
@@ -244,9 +240,8 @@ impl CumulocityConverter {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
-        uploader_sender: LoggingSender<IdUploadRequest>,
+        uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
-        pending_upload_operations: Arc<Mutex<HashMap<CmdId, UploadContext>>>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -305,12 +300,11 @@ impl CumulocityConverter {
             mqtt_publisher: LockSender::new(mqtt_publisher.clone()),
 
             downloader: Arc::new(Mutex::new(downloader)),
-            uploader_sender: operations::LockSender::new(uploader_sender.clone()),
+            uploader: Arc::new(Mutex::new(uploader)),
 
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
             http_proxy: Arc::new(Mutex::new(http_proxy.clone())),
-            pending_upload_operations: Arc::clone(&pending_upload_operations),
         });
 
         Ok(CumulocityConverter {
@@ -331,8 +325,6 @@ impl CumulocityConverter {
             mqtt_schema: mqtt_schema.clone(),
             entity_store,
             auth_proxy,
-            uploader_sender: uploader_sender.clone(),
-            pending_upload_operations,
             command_id,
             active_commands: HashSet::new(),
             operation_handler,
@@ -1212,9 +1204,10 @@ impl CumulocityConverter {
                 self.active_commands.insert(cmd_id.clone());
 
                 let entity = self.entity_store.try_get(&source)?;
+                let external_id = entity.external_id.clone();
                 let entity = operations::Entity {
                     topic_id: entity.topic_id.clone(),
-                    external_id: entity.external_id.clone(),
+                    external_id: external_id.clone(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(&entity.topic_id)?,
                 };
@@ -1246,10 +1239,12 @@ impl CumulocityConverter {
                 };
 
                 match res {
-                    // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
-                    Ok((messages, Some(command))) if !messages.is_empty() => Ok(self
-                        .upload_operation_log(&source, cmd_id, operation, command, messages)
-                        .await),
+                    Ok((messages, Some(command))) if !messages.is_empty() => {
+                        self.operation_handler
+                            .upload_operation_log(&external_id, cmd_id, operation, command)
+                            .await?;
+                        Ok(messages)
+                    }
                     Ok((messages, _)) => Ok(messages),
                     Err(e) => Err(e),
                 }
@@ -1672,63 +1667,6 @@ impl CumulocityConverter {
         ))
     }
 
-    pub async fn upload_operation_log(
-        &mut self,
-        target: &EntityTopicId,
-        cmd_id: &str,
-        op_type: &OperationType,
-        command: GenericCommandState,
-        final_messages: Vec<MqttMessage>,
-    ) -> Vec<MqttMessage> {
-        if command.is_finished()
-            && command.get_log_path().is_some()
-            && (self.config.auto_log_upload == AutoLogUpload::Always
-                || (self.config.auto_log_upload == AutoLogUpload::OnFailure && command.is_failed()))
-        {
-            let external_id = match self.entity_store.try_get(target) {
-                // shouldn't happen, because the entity is already registered, if this is called then it's arguably a
-                // bug
-
-                // TODO: we should be to statically guarantee that an entity is registered so we avoid handling error
-                // cases like this that won't happen in practice
-                Err(err) => {
-                    error!("Operation log upload failed due to {err}");
-                    return vec![];
-                }
-                Ok(entity) => &entity.external_id,
-            };
-
-            let log_path = command.get_log_path().unwrap();
-            let event_type = format!("{}_op_log", op_type);
-            let event_text = format!("{} operation log", &op_type);
-            match self
-                .operation_handler
-                .upload_file(
-                    external_id,
-                    &log_path,
-                    None,
-                    None,
-                    cmd_id,
-                    event_type,
-                    Some(event_text),
-                )
-                .await
-            {
-                Ok(_) => {
-                    self.pending_upload_operations
-                        .lock()
-                        .await
-                        .insert(cmd_id.into(), UploadOperationLog { final_messages }.into());
-                    return vec![];
-                }
-                Err(err) => {
-                    error!("Operation log upload failed due to {}", err);
-                }
-            }
-        }
-        final_messages
-    }
-
     async fn publish_software_list(
         &mut self,
         target: &EntityTopicId,
@@ -1841,9 +1779,9 @@ pub(crate) mod tests {
     use c8y_http_proxy::messages::C8YRestResult;
     use serde_json::json;
     use serde_json::Value;
-    use std::collections::HashMap;
+
     use std::str::FromStr;
-    use std::sync::Arc;
+
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -1870,7 +1808,6 @@ pub(crate) mod tests {
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
-    use tokio::sync::Mutex;
 
     #[tokio::test]
     async fn test_sync_alarms() {
@@ -3452,10 +3389,9 @@ pub(crate) mod tests {
         let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
 
-        let uploader_builder: SimpleMessageBoxBuilder<IdUploadResult, IdUploadRequest> =
-            SimpleMessageBoxBuilder::new("UL", 5);
-        let uploader_sender =
-            LoggingSender::new("UL".into(), uploader_builder.build().sender_clone());
+        let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
+            FakeServerBox::builder();
+        let uploader = ClientMessageBox::new(&mut uploader_builder);
 
         let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
             FakeServerBox::builder();
@@ -3466,9 +3402,8 @@ pub(crate) mod tests {
             mqtt_publisher,
             http_proxy,
             auth_proxy,
-            uploader_sender,
+            uploader,
             downloader,
-            Arc::new(Mutex::new(HashMap::new())),
         )
         .unwrap();
 
