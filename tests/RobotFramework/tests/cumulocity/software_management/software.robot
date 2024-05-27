@@ -69,6 +69,13 @@ Manual software_update operation request
     ...    expected_status=failed
     ...    c8y_fragment=c8y_SoftwareUpdate
 
+Manual software_update operation request with empty url
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/software_update/local-3333
+    ...    payload={"status":"init","updateList":[{"type":"apt","modules":[{"name":"tedge","version":"latest","url":"","action":"install"}]}]}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_SoftwareUpdate
+
 Operation log uploaded automatically with auto_log_upload setting as on-failure
     Execute Command    tedge config set c8y.operations.auto_log_upload on-failure
     Restart Service    tedge-mapper-c8y
