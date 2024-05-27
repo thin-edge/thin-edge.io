@@ -59,6 +59,11 @@ impl SoftwareModule {
             Some(version) if version.is_empty() => self.version = None,
             _ => {}
         };
+
+        match &self.url {
+            Some(url) if url.is_empty() => self.url = None,
+            _ => {}
+        };
     }
 }
 
