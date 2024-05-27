@@ -359,11 +359,6 @@ impl CumulocityConverter {
                 let ancestors_external_ids =
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
 
-                if self.config.bridge_in_mapper && entity_topic_id.is_bridge_health_topic() {
-                    // Skip service creation for the mapper-inbuilt bridge, as it is part of the mapper service itself
-                    return Ok(vec![]);
-                }
-
                 let service_creation_message = service_creation_message(
                     external_id.as_ref(),
                     display_name.unwrap_or_else(|| {
@@ -1007,8 +1002,8 @@ impl CumulocityConverter {
                     }
 
                     let auto_registered_entities = self.try_auto_register_entity(&source)?;
-                    converted_messages =
-                        self.try_convert_auto_registered_entities(auto_registered_entities)?;
+                    converted_messages = self
+                        .try_convert_auto_registered_entities(auto_registered_entities, &channel)?;
                 }
 
                 let result = self
@@ -1075,11 +1070,13 @@ impl CumulocityConverter {
     fn try_convert_auto_registered_entities(
         &mut self,
         entities: Vec<EntityRegistrationMessage>,
+        channel: &Channel,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut converted_messages: Vec<MqttMessage> = vec![];
         for entity in entities {
             // Append the entity registration message itself and its converted c8y form
-            converted_messages.append(&mut self.try_convert_auto_registered_entity(&entity)?);
+            converted_messages
+                .append(&mut self.try_convert_auto_registered_entity(&entity, channel)?);
         }
         Ok(converted_messages)
     }
@@ -1228,9 +1225,19 @@ impl CumulocityConverter {
     fn try_convert_auto_registered_entity(
         &mut self,
         registration_message: &EntityRegistrationMessage,
+        channel: &Channel,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut registration_messages = vec![];
         registration_messages.push(self.convert_entity_registration_message(registration_message));
+        if registration_message.r#type == EntityType::Service && channel.is_health() {
+            // If the auto-registration is done on a health status message,
+            // no need to map it to a C8y service creation message here,
+            // as the status message itself is mapped into a service creation message
+            // in try_convert_data_message called after this auto-registration.
+            // This avoids redundant service status creation/mapping
+            return Ok(registration_messages);
+        }
+
         let mut c8y_message = self.try_convert_entity_registration(registration_message)?;
         registration_messages.append(&mut c8y_message);
 
