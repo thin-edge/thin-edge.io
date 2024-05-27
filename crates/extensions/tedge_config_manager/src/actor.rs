@@ -123,7 +123,7 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 CommandStatus::Executing => {
-                    debug!("Executing log request: {request:?}");
+                    info!("Executing Config Snapshot request: {request:?}");
                     self.handle_config_snapshot_request(topic, request).await?;
                 }
                 CommandStatus::Unknown
@@ -137,7 +137,7 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 CommandStatus::Executing => {
-                    debug!("Executing log request: {request:?}");
+                    info!("Executing Config Update request: {request:?}");
                     self.handle_config_update_request(topic, request).await?;
                 }
                 CommandStatus::Unknown
@@ -161,10 +161,7 @@ impl ConfigManagerActor {
                             .create_tedge_url_for_config_operation(topic, &request.config_type)
                         {
                             Ok(tedge_url) => request.executing(Some(tedge_url)),
-                            Err(err) => {
-                                error!("Failed to create tedgeUrl: {}", err);
-                                return Ok(());
-                            }
+                            Err(err) => request.failed(format!("Failed to create tedgeUrl: {err}")),
                         };
                     }
                 };
