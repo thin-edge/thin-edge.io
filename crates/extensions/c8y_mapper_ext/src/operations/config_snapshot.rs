@@ -9,6 +9,7 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
+use std::borrow::Cow;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmd;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
@@ -77,11 +78,18 @@ impl OperationHandler {
                     cmd_id
                 );
 
-                let tedge_file_url = format!(
-                    "http://{}/tedge/file-transfer/{external_id}/config_snapshot/{config_filename}",
-                    &self.tedge_http_host,
-                    external_id = target.external_id.as_ref()
-                );
+                // look mum, no copying!
+                let tedge_file_url = match command.payload.tedge_url {
+                    Some(ref tedge_file_url) => Cow::Borrowed(tedge_file_url),
+                    None => {
+                        let tedge_file_url = format!(
+                        "http://{}/tedge/file-transfer/{external_id}/config_snapshot/{config_filename}",
+                        &self.tedge_http_host,
+                        external_id = target.external_id.as_ref()
+                    );
+                        Cow::Owned(tedge_file_url)
+                    }
+                };
 
                 let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
                     .context("Failed to create a temporary directory")?;

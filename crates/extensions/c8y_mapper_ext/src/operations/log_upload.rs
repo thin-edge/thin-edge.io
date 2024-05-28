@@ -26,7 +26,6 @@ use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
-use tracing::debug;
 use tracing::log::error;
 use tracing::log::warn;
 
@@ -54,7 +53,6 @@ impl OperationHandler {
             warn!("Received a log_upload command, however, log_upload feature is disabled");
             return Ok((vec![], None));
         }
-        debug!("Handling log_upload command");
 
         let command = match LogUploadCmd::try_from_bytes(
             target.topic_id.clone(),
@@ -83,17 +81,13 @@ impl OperationHandler {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);
 
-                let tedge_file_url = format!(
-                    "http://{}/tedge/file-transfer/{external_id}/log_upload/{log_filename}",
-                    &self.tedge_http_host,
-                    external_id = target.external_id.as_ref()
-                );
+                let tedge_file_url = &command.payload.tedge_url;
 
                 let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
                     .context("Failed to create a temporary directory")?;
                 let destination_path = destination_dir.path().join(log_filename);
 
-                let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
+                let download_request = DownloadRequest::new(tedge_file_url, &destination_path);
                 let mut downloader = self.downloader.lock().await.clone();
 
                 let (_, download_result) = downloader
