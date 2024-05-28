@@ -26,7 +26,6 @@ use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
-use tracing::debug;
 use tracing::log::error;
 use tracing::log::warn;
 
@@ -37,6 +36,50 @@ pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     ]
     .into_iter()
     .collect()
+}
+
+impl CumulocityConverter {
+    /// Convert c8y_LogfileRequest operation to a ThinEdge log_upload command
+    pub fn convert_log_upload_request(
+        &self,
+        device_xid: String,
+        cmd_id: String,
+        log_request: C8yLogfileRequest,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let target = self
+            .entity_store
+            .try_get_by_external_id(&device_xid.into())?;
+
+        let channel = Channel::Command {
+            operation: OperationType::LogUpload,
+            cmd_id: cmd_id.clone(),
+        };
+        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
+
+        let tedge_url = format!(
+            "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
+            &self.config.tedge_http_host,
+            target.external_id.as_ref(),
+            log_request.log_file,
+            cmd_id
+        );
+
+        let request = LogUploadCmdPayload {
+            status: CommandStatus::Init,
+            tedge_url,
+            log_type: log_request.log_file,
+            date_from: log_request.date_from,
+            date_to: log_request.date_to,
+            search_text: Some(log_request.search_text).filter(|s| !s.is_empty()),
+            lines: log_request.maximum_lines,
+            log_path: None,
+        };
+
+        // Command messages must be retained
+        Ok(vec![
+            MqttMessage::new(&topic, request.to_json()).with_retain()
+        ])
+    }
 }
 
 impl OperationHandler {
@@ -54,7 +97,6 @@ impl OperationHandler {
             warn!("Received a log_upload command, however, log_upload feature is disabled");
             return Ok((vec![], None));
         }
-        debug!("Handling log_upload command");
 
         let command = match LogUploadCmd::try_from_bytes(
             target.topic_id.clone(),
@@ -83,20 +125,16 @@ impl OperationHandler {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);
 
-                let tedge_file_url = format!(
-                    "http://{}/tedge/file-transfer/{external_id}/log_upload/{log_filename}",
-                    &self.tedge_http_host,
-                    external_id = target.external_id.as_ref()
-                );
+                let tedge_file_url = &command.payload.tedge_url;
 
                 let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
                     .context("Failed to create a temporary directory")?;
                 let destination_path = destination_dir.path().join(log_filename);
 
-                let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
-                let mut downloader = self.downloader.lock().await.clone();
-
-                let (_, download_result) = downloader
+                let download_request = DownloadRequest::new(tedge_file_url, &destination_path);
+                let (_, download_result) = self
+                    .downloader
+                    .clone()
                     .await_response((cmd_id.into(), download_request))
                     .await
                     .map_err(CumulocityMapperError::ChannelError)?;
@@ -180,48 +218,6 @@ impl OperationHandler {
 }
 
 impl CumulocityConverter {
-    /// Convert c8y_LogfileRequest operation to a ThinEdge log_upload command
-    pub fn convert_log_upload_request(
-        &self,
-        device_xid: String,
-        cmd_id: String,
-        log_request: C8yLogfileRequest,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let target = self
-            .entity_store
-            .try_get_by_external_id(&device_xid.into())?;
-
-        let channel = Channel::Command {
-            operation: OperationType::LogUpload,
-            cmd_id: cmd_id.clone(),
-        };
-        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
-
-        let tedge_url = format!(
-            "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
-            &self.config.tedge_http_host,
-            target.external_id.as_ref(),
-            log_request.log_file,
-            cmd_id
-        );
-
-        let request = LogUploadCmdPayload {
-            status: CommandStatus::Init,
-            tedge_url,
-            log_type: log_request.log_file,
-            date_from: log_request.date_from,
-            date_to: log_request.date_to,
-            search_text: Some(log_request.search_text).filter(|s| !s.is_empty()),
-            lines: log_request.maximum_lines,
-            log_path: None,
-        };
-
-        // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
-    }
-
     /// Converts a log_upload metadata message to
     /// - supported operation "c8y_LogfileRequest"
     /// - supported log types

@@ -10,7 +10,6 @@ use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
 use crate::operations;
-use crate::operations::LockSender;
 use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -101,7 +100,6 @@ use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
@@ -297,14 +295,14 @@ impl CumulocityConverter {
             tmp_dir: config.tmp_dir.clone(),
             mqtt_schema: mqtt_schema.clone(),
             c8y_prefix: prefix.clone(),
-            mqtt_publisher: LockSender::new(mqtt_publisher.clone()),
+            mqtt_publisher: mqtt_publisher.clone(),
 
-            downloader: Arc::new(Mutex::new(downloader)),
-            uploader: Arc::new(Mutex::new(uploader)),
+            downloader,
+            uploader,
 
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
-            http_proxy: Arc::new(Mutex::new(http_proxy.clone())),
+            http_proxy: http_proxy.clone(),
         });
 
         Ok(CumulocityConverter {
@@ -1228,10 +1226,13 @@ impl CumulocityConverter {
                     | OperationType::ConfigSnapshot
                     | OperationType::ConfigUpdate
                     | OperationType::FirmwareUpdate => {
-                        let operation_handler = Arc::clone(&self.operation_handler);
-
-                        operation_handler
-                            .handle_operation(operation.clone(), entity, cmd_id, message)
+                        self.operation_handler
+                            .handle_operation(
+                                operation.clone(),
+                                entity,
+                                cmd_id.as_str().into(),
+                                message.clone(),
+                            )
                             .await;
                         Ok((vec![], None))
                     }

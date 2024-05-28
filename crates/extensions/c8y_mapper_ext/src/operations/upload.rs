@@ -37,7 +37,7 @@ impl OperationHandler {
             device_id: external_id.into(),
         };
 
-        let mut c8y_http_proxy = self.http_proxy.lock().await.clone();
+        let mut c8y_http_proxy = self.http_proxy.clone();
         let event_response_id = c8y_http_proxy.send_event(create_event).await?;
 
         let binary_upload_event_url = self
@@ -63,9 +63,9 @@ impl OperationHandler {
             .post()
             .with_content_type(ContentType::FormData(form_data));
 
-        let mut uploader = self.uploader.lock().await;
-
-        let (_, download_result) = uploader
+        let (_, download_result) = self
+            .uploader
+            .clone()
             .await_response((cmd_id.into(), upload_request))
             .await?;
 

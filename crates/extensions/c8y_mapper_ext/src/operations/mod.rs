@@ -25,7 +25,6 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
-use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
@@ -38,7 +37,6 @@ use tedge_api::Jsonify;
 use tedge_config::AutoLogUpload;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tokio::sync::Mutex;
 use tracing::error;
 
 pub mod config_snapshot;
@@ -47,14 +45,14 @@ pub mod firmware_update;
 pub mod log_upload;
 mod upload;
 
-/// Handles non-generic operations.
+/// Handles operations.
 ///
 /// Handling an operation usually consists of 3 steps:
 ///
 /// 1. Receive a smartrest message which is an operation request, convert it to thin-edge message,
 ///    and publish on local MQTT (done by the converter).
 /// 2. Various local thin-edge components/services execute the operation, and when they're done,
-///    they publish an MQTT message with 'status: successful/error'
+///    they publish an MQTT message with 'status: successful/failed'
 /// 3. The cumulocity mapper needs to do some additional steps, like downloading/uploading files via
 ///    HTTP, or talking to C8y via HTTP proxy, before it can send operation response via the bridge
 ///    and then clear the local MQTT operation topic.
@@ -72,29 +70,26 @@ pub struct OperationHandler {
     pub mqtt_schema: MqttSchema,
     pub c8y_prefix: tedge_config::TopicPrefix,
 
-    pub http_proxy: Arc<Mutex<C8YHttpProxy>>,
+    pub http_proxy: C8YHttpProxy,
     pub c8y_endpoint: C8yEndPoint,
     pub auth_proxy: ProxyUrlGenerator,
 
-    pub downloader: Arc<Mutex<ClientMessageBox<IdDownloadRequest, IdDownloadResult>>>,
-    pub uploader: Arc<Mutex<ClientMessageBox<IdUploadRequest, IdUploadResult>>>,
-    pub mqtt_publisher: LockSender<MqttMessage>,
+    pub downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+    pub uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
+    pub mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
 impl OperationHandler {
     pub async fn handle_operation(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         operation: OperationType,
         entity: Entity,
-        cmd_id: &str,
-        message: &MqttMessage,
+        cmd_id: Arc<str>,
+        message: MqttMessage,
     ) {
         let handler = self.clone();
-        let cmd_id = cmd_id.to_string();
-        let message = message.clone();
+        let external_id = entity.external_id.clone();
         tokio::spawn(async move {
-            let external_id = entity.external_id.clone();
-
             let res = match operation {
                 // old handling in converter
                 OperationType::Restart
@@ -125,10 +120,11 @@ impl OperationHandler {
                 }
             };
 
+            let mut mqtt_publisher = handler.mqtt_publisher.clone();
             match res {
                 // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
                 Ok((messages, Some(command))) if !messages.is_empty() => {
-                    if let Err(e) = self
+                    if let Err(e) = handler
                         .upload_operation_log(&external_id, &cmd_id, &operation, command)
                         .await
                     {
@@ -136,31 +132,17 @@ impl OperationHandler {
                     }
 
                     for message in messages {
-                        self.mqtt_publisher.send(message).await.unwrap();
+                        mqtt_publisher.send(message).await.unwrap();
                     }
                 }
                 Ok((messages, _)) => {
                     for message in messages {
-                        self.mqtt_publisher.send(message).await.unwrap();
+                        mqtt_publisher.send(message).await.unwrap();
                     }
                 }
                 Err(e) => error!("{e}"),
             }
         });
-    }
-}
-
-/// A sender providing a shared `send` method.
-#[derive(Clone)]
-pub struct LockSender<T: tedge_actors::Message>(Arc<Mutex<LoggingSender<T>>>);
-
-impl<T: tedge_actors::Message> LockSender<T> {
-    pub fn new(sender: LoggingSender<T>) -> Self {
-        Self(Arc::new(Mutex::new(sender)))
-    }
-
-    pub async fn send(&self, message: T) -> Result<(), ChannelError> {
-        self.0.lock().await.send(message).await
     }
 }
 

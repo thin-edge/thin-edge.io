@@ -70,6 +70,7 @@ impl From<PublishMessage> for MqttMessage {
 }
 
 fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, PublishMessage] : Debug);
+
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -331,7 +332,7 @@ pub struct C8yMapperBuilder {
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
-    uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
+    uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,

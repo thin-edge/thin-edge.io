@@ -2576,6 +2576,22 @@ async fn mapper_processes_operations_concurrently() {
     // simulate many successful operations that needs to be handled by the mapper
     for i in 0..num_operations {
         mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked(&format!("te/device/main///cmd/log_upload/c8y-mapper-{i}")),
+            json!({
+            "status": "successful",
+            "tedgeUrl": format!("http://{host_port}/tedge/file-transfer/test-device/log_upload/c8y-mapper-1234"),
+            "type": "mosquitto",
+            "dateFrom": "2023-11-28T16:33:50+01:00",
+            "dateTo": "2023-11-29T16:33:50+01:00",
+            "searchText": "ERROR",
+            "lines": 1000
+
+        })
+                .to_string(),
+        ))
+            .await.unwrap();
+
+        mqtt.send(MqttMessage::new(
             &Topic::new_unchecked(&format!("te/device/main///cmd/config_snapshot/c8y-mapper-{i}")),
             json!({
             "status": "successful",
@@ -2587,7 +2603,7 @@ async fn mapper_processes_operations_concurrently() {
             .await.unwrap();
     }
 
-    for _ in 0..num_operations {
+    for _ in 0..(num_operations * 2) {
         dl.recv()
             .await
             .expect("there should be one DownloadRequest per operation");
