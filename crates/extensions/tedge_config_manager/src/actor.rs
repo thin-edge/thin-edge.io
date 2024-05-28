@@ -167,6 +167,10 @@ impl ConfigManagerActor {
                 };
             }
             ConfigOperation::Update(_, ref mut request, ..) => {
+                // FIXME: using the remote url for the tedge url bypasses the operation file cache
+                if request.tedge_url.is_none() {
+                    request.tedge_url = Some(request.remote_url.clone());
+                };
                 request.executing();
             }
         }

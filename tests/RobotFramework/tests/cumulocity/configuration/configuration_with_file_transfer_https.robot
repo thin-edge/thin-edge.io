@@ -56,7 +56,7 @@ Configuration operation fails when configuration-plugin does not supply client c
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
     ...  device=${CHILD_SN}
-    ...  failure_reason=config-manager failed downloading a file:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...  failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8001/c8y/inventory/binaries/.+received fatal alert: CertificateRequired
     ...  external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration snapshot fails when mapper does not supply client certificate
