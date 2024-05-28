@@ -25,7 +25,6 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
-use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
@@ -76,9 +75,9 @@ pub struct OperationHandler {
     pub c8y_endpoint: C8yEndPoint,
     pub auth_proxy: ProxyUrlGenerator,
 
-    pub downloader: Arc<Mutex<ClientMessageBox<IdDownloadRequest, IdDownloadResult>>>,
-    pub uploader: Arc<Mutex<ClientMessageBox<IdUploadRequest, IdUploadResult>>>,
-    pub mqtt_publisher: LockSender<MqttMessage>,
+    pub downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+    pub uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
+    pub mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
 impl OperationHandler {
@@ -93,6 +92,7 @@ impl OperationHandler {
         let cmd_id = cmd_id.to_string();
         let message = message.clone();
         tokio::spawn(async move {
+            let mut mqtt_publisher = self.mqtt_publisher.clone();
             let external_id = entity.external_id.clone();
 
             let res = match operation {
@@ -136,31 +136,17 @@ impl OperationHandler {
                     }
 
                     for message in messages {
-                        self.mqtt_publisher.send(message).await.unwrap();
+                        mqtt_publisher.send(message).await.unwrap();
                     }
                 }
                 Ok((messages, _)) => {
                     for message in messages {
-                        self.mqtt_publisher.send(message).await.unwrap();
+                        mqtt_publisher.send(message).await.unwrap();
                     }
                 }
                 Err(e) => error!("{e}"),
             }
         });
-    }
-}
-
-/// A sender providing a shared `send` method.
-#[derive(Clone)]
-pub struct LockSender<T: tedge_actors::Message>(Arc<Mutex<LoggingSender<T>>>);
-
-impl<T: tedge_actors::Message> LockSender<T> {
-    pub fn new(sender: LoggingSender<T>) -> Self {
-        Self(Arc::new(Mutex::new(sender)))
-    }
-
-    pub async fn send(&self, message: T) -> Result<(), ChannelError> {
-        self.0.lock().await.send(message).await
     }
 }
 

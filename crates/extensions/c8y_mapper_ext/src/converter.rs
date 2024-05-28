@@ -10,7 +10,6 @@ use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
 use crate::operations;
-use crate::operations::LockSender;
 use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -298,10 +297,10 @@ impl CumulocityConverter {
             tmp_dir: config.tmp_dir.clone(),
             mqtt_schema: mqtt_schema.clone(),
             c8y_prefix: prefix.clone(),
-            mqtt_publisher: LockSender::new(mqtt_publisher.clone()),
+            mqtt_publisher: mqtt_publisher.clone(),
 
-            downloader: Arc::new(Mutex::new(downloader)),
-            uploader: Arc::new(Mutex::new(uploader)),
+            downloader,
+            uploader,
 
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),

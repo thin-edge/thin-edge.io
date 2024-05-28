@@ -88,9 +88,9 @@ impl OperationHandler {
                 let destination_path = destination_dir.path().join(log_filename);
 
                 let download_request = DownloadRequest::new(tedge_file_url, &destination_path);
-                let mut downloader = self.downloader.lock().await.clone();
-
-                let (_, download_result) = downloader
+                let (_, download_result) = self
+                    .downloader
+                    .clone()
                     .await_response((cmd_id.into(), download_request))
                     .await
                     .map_err(CumulocityMapperError::ChannelError)?;

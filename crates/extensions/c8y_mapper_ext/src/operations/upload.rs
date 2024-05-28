@@ -63,9 +63,9 @@ impl OperationHandler {
             .post()
             .with_content_type(ContentType::FormData(form_data));
 
-        let mut uploader = self.uploader.lock().await;
-
-        let (_, download_result) = uploader
+        let (_, download_result) = self
+            .uploader
+            .clone()
             .await_response((cmd_id.into(), upload_request))
             .await?;
 

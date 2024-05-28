@@ -98,9 +98,9 @@ impl OperationHandler {
 
                 let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
 
-                let mut downloader = self.downloader.lock().await.clone();
-
-                let (_, download_result) = downloader
+                let (_, download_result) = self
+                    .downloader
+                    .clone()
                     .await_response((cmd_id.to_string(), download_request))
                     .await?;
 
