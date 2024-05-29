@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
 use logged_command::LoggedCommand;
+use regex::Regex;
 use reqwest::Identity;
 use serde::Deserialize;
 use std::error::Error;
@@ -239,6 +240,8 @@ pub struct ExternalPluginCommand {
     pub path: PathBuf,
     pub sudo: SudoCommandBuilder,
     pub max_packages: u32,
+    exclude: Option<String>,
+    include: Option<String>,
     identity: Option<Identity>,
 }
 
@@ -248,6 +251,8 @@ impl ExternalPluginCommand {
         path: impl Into<PathBuf>,
         sudo: SudoCommandBuilder,
         max_packages: u32,
+        exclude: Option<String>,
+        include: Option<String>,
         identity: Option<Identity>,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
@@ -255,6 +260,8 @@ impl ExternalPluginCommand {
             path: path.into(),
             sudo,
             max_packages,
+            exclude,
+            include,
             identity,
         }
     }
@@ -461,13 +468,37 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
+            let filtered_output = match (&self.exclude, &self.include) {
+                (None, None) => output.stdout,
+                _ => {
+                    // If no exclude pattern is given, exclude everything (except what matches the include pattern)
+                    let exclude_filter =
+                        Regex::new(self.exclude.as_ref().unwrap_or(&r".*".to_string()))?;
+                    // If no include pattern is given, include nothing (except what doesn't match the exclude pattern)
+                    let include_filter =
+                        Regex::new(self.include.as_ref().unwrap_or(&r"^$".to_string()))?;
+
+                    output
+                        .stdout
+                        .split_inclusive(|c| *c == b'\n')
+                        .filter_map(|line| std::str::from_utf8(line).ok())
+                        .filter(|line| {
+                            line.split_once('\t').is_some_and(|(name, _)| {
+                                include_filter.is_match(name) || !exclude_filter.is_match(name)
+                            })
+                        })
+                        .flat_map(|line| line.as_bytes().to_vec())
+                        .collect()
+                }
+            };
+
             // If max_packages is set to an invalid value, use 0 which represents all
             // of the content, don't bother filtering the content when all of it will
             // be included anyway
             let max_packages = usize::try_from(self.max_packages).unwrap_or(0);
             let last_char = match max_packages {
                 0 => 0,
-                _ => String::from_utf8(output.stdout.as_slice().to_vec())
+                _ => String::from_utf8(filtered_output.as_slice().to_vec())
                     .unwrap_or_default()
                     .char_indices()
                     .filter(|(_, c)| *c == '\n')
@@ -479,8 +510,8 @@ impl Plugin for ExternalPluginCommand {
             Ok(deserialize_module_info(
                 self.name.clone(),
                 match last_char {
-                    0 => &output.stdout[..],
-                    _ => &output.stdout[..=last_char],
+                    0 => &filtered_output[..],
+                    _ => &filtered_output[..=last_char],
                 },
             )?)
         } else {

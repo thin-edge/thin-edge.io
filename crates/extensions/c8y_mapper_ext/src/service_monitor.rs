@@ -3,9 +3,18 @@ use serde::Deserialize;
 use serde::Serialize;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::DOWN_STATUS;
+use tedge_api::MQTT_BRIDGE_DOWN_PAYLOAD;
+use tedge_api::MQTT_BRIDGE_UP_PAYLOAD;
+use tedge_api::UNKNOWN_STATUS;
+use tedge_api::UP_STATUS;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
+
+pub const MOSQUITTO_BRIDGE_PREFIX: &str = "mosquitto-";
+pub const MOSQUITTO_BRIDGE_SUFFIX: &str = "-bridge";
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct HealthStatus {
@@ -15,6 +24,28 @@ pub struct HealthStatus {
 
 fn default_status() -> String {
     "unknown".to_string()
+}
+
+impl HealthStatus {
+    fn from_mosquitto_bridge_payload_str(payload: &str) -> Self {
+        let status = match payload {
+            MQTT_BRIDGE_UP_PAYLOAD => UP_STATUS,
+            MQTT_BRIDGE_DOWN_PAYLOAD => DOWN_STATUS,
+            _ => UNKNOWN_STATUS,
+        };
+        HealthStatus {
+            status: status.into(),
+        }
+    }
+}
+
+fn entity_is_mosquitto_bridge_service(entity_topic_id: &EntityTopicId) -> bool {
+    entity_topic_id
+        .default_service_name()
+        .filter(|name| {
+            name.starts_with(MOSQUITTO_BRIDGE_PREFIX) && name.ends_with(MOSQUITTO_BRIDGE_SUFFIX)
+        })
+        .is_some()
 }
 
 pub fn convert_health_status_message(
@@ -28,13 +59,16 @@ pub fn convert_health_status_message(
         return vec![];
     }
 
-    if entity.topic_id.is_bridge_health_topic() {
-        return vec![];
-    }
-
     let HealthStatus {
         status: mut health_status,
-    } = serde_json::from_slice(message.payload()).unwrap_or_default();
+    } = if entity_is_mosquitto_bridge_service(&entity.topic_id) {
+        message
+            .payload_str()
+            .map(HealthStatus::from_mosquitto_bridge_payload_str)
+            .unwrap_or_default()
+    } else {
+        serde_json::from_slice(message.payload()).unwrap_or_default()
+    };
 
     if health_status.is_empty() {
         health_status = "unknown".into();
@@ -127,6 +161,30 @@ mod tests {
         "c8y/s/us",
         r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,"up""down""#;
         "service-monitoring-double-quotes-health-message"
+    )]
+    #[test_case(
+        "test_device",
+        "te/device/main/service/mosquitto-xyz-bridge/status/health",
+        "1",
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:mosquitto-xyz-bridge,service,mosquitto-xyz-bridge,up"#;
+        "service-monitoring-mosquitto-bridge-up-status"
+    )]
+    #[test_case(
+        "test_device",
+        "te/device/main/service/mosquitto-xyz-bridge/status/health",
+        "0",
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:mosquitto-xyz-bridge,service,mosquitto-xyz-bridge,down"#;
+        "service-monitoring-mosquitto-bridge-down-status"
+    )]
+    #[test_case(
+        "test_device",
+        "te/device/main/service/mosquitto-xyz-bridge/status/health",
+        "invalid payload",
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:mosquitto-xyz-bridge,service,mosquitto-xyz-bridge,unknown"#;
+        "service-monitoring-mosquitto-bridge-unknown-status"
     )]
     fn translate_health_status_to_c8y_service_monitoring_message(
         device_name: &str,

@@ -100,6 +100,9 @@ pub enum SoftwareError {
 
     #[error("CSV error: {reason:?}")]
     FromCSV { reason: String },
+
+    #[error("Regex error: {reason:?}")]
+    RegexError { reason: String },
 }
 
 impl From<serde_json::Error> for SoftwareError {
@@ -121,6 +124,14 @@ impl From<std::io::Error> for SoftwareError {
 impl From<csv::Error> for SoftwareError {
     fn from(err: csv::Error) -> Self {
         SoftwareError::FromCSV {
+            reason: format!("{}", err),
+        }
+    }
+}
+
+impl From<regex::Error> for SoftwareError {
+    fn from(err: regex::Error) -> Self {
+        SoftwareError::RegexError {
             reason: format!("{}", err),
         }
     }

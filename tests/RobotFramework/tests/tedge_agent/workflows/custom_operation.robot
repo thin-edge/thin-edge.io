@@ -3,6 +3,7 @@ Resource            ../../../resources/common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
 Library             OperatingSystem
+Library             JSONLibrary
 
 Test Tags          theme:tedge_agent
 Suite Setup         Custom Setup

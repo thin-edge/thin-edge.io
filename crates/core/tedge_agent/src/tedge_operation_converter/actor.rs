@@ -143,7 +143,8 @@ impl TedgeOperationConverterActor {
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
                 if new_state.is_init() {
-                    self.process_command_state_update(new_state).await?;
+                    self.process_command_state_update(new_state.set_log_path(&log_file.path))
+                        .await?;
                 }
             }
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {

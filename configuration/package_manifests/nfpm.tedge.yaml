@@ -19,6 +19,22 @@ homepage: "https://thin-edge.io"
 license: "Apache-2.0"
 
 overrides:
+  #
+  # General note about declared dependencies
+  # Ref: https://github.com/thin-edge/thin-edge.io/issues/2882
+  #
+  # Don't depend on adduser for any linux packages (deb, rpm or apk)
+  # as it is generally included out of the box on such systems.
+  # In Yocto distributions, adduser is provided by busy-box, so even if the
+  # distribution includes apt-get, the adduser will not appear in the dpkg package list,
+  # thus preventing the tedge package from being installed.
+  # Even if we wanted to add a dependency for rpm, each RHEL/CentOS
+  # variant has another name for the package which provides adduser
+  # Don't use dependency as different operating systems:
+  # E.g.
+  # * shadow-utils (fedora)
+  # * shadow (opensuse)
+
   apk:
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge/apk/preinst
@@ -30,14 +46,6 @@ overrides:
       - mosquitto
 
   rpm:
-    # Note: Don't depend on adduser for rpm or apk packages
-    # as it is generally included out of the box on such systems.
-    # Even if we wanted to add a dependency for rpm, each RHEL/CentOS
-    # variant has another name for the package which provides adduser
-    # Don't use dependency as different operating systems:
-    # E.g.
-    # * shadow-utils (fedora)
-    # * shadow (opensuse)
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge/rpm/preinst
       postinstall: configuration/package_scripts/_generated/tedge/rpm/postinst
@@ -52,9 +60,7 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge/deb/postinst
       preremove: configuration/package_scripts/_generated/tedge/deb/prerm
       postremove: configuration/package_scripts/_generated/tedge/deb/postrm
-
     depends:
-      - adduser
       - mosquitto
 
 deb:

@@ -97,6 +97,7 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
             status: CommandStatus::Scheduled,
             update_list: vec![debian_list],
             failures: vec![],
+            log_path: None,
         },
     };
     converter_box.send(command.into()).await?;

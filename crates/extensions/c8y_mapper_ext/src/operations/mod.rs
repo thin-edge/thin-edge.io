@@ -17,6 +17,7 @@ use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
@@ -38,10 +39,13 @@ pub struct FtsDownloadOperationData {
     // used to automatically remove the temporary file after operation is finished
     pub file_dir: tempfile::TempDir,
 
+    // TODO: remove this message field since command is available
     // the message that triggered the operation
     pub message: MqttMessage,
 
     pub entity_topic_id: EntityTopicId,
+
+    pub command: GenericCommandState,
 }
 
 /// Used to denote as type of what operation was the file downloaded from the FTS.

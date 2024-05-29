@@ -74,6 +74,51 @@ sm-plugins download files from Cumulocity
     ${downloaded}=    Execute Command    cat /tmp/dummy3/installed_dummy-software
     Should Be Equal    ${downloaded}    Testing a thing
 
+Filter packages list using include pattern
+    Execute Command    sudo tedge config set software.plugin.include "^dummy1-[0-1]00[2-4]$"
+    Execute Command    sudo tedge config set software.plugin.max_packages 0
+    Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0002", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0003", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0004", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-1002", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-1003", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-1004", "version": "1.0.0", "softwareType": "dummy1"}
+    Length Should Be    ${software}    6
+
+Filter packages list using exclude pattern
+    Execute Command    sudo tedge config set software.plugin.exclude "^dummy[1-2]-\\d+(0|2|4|6|8)$"
+    Execute Command    sudo tedge config set software.plugin.max_packages 0
+    Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0001", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0003", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0005", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-1499", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-0003", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-0005", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-1499", "version": "1.0.0", "softwareType": "dummy2"}
+    Length Should Be    ${software}    1500
+
+Filter packages list using both patterns
+    Execute Command    sudo tedge config set software.plugin.exclude "^(dummy1.*)"
+    Execute Command    sudo tedge config set software.plugin.include "^(dummy1-\\d(|3|6|9)00)$"
+    Execute Command    sudo tedge config set software.plugin.max_packages 0
+    Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
+    ${software}=    Device Should Have Installed Software
+    ...    {"name": "dummy1-0300", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0600", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-0900", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy1-1300", "version": "1.0.0", "softwareType": "dummy1"}
+    ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
+    ...    {"name": "dummy2-1500", "version": "1.0.0", "softwareType": "dummy2"}
+    Length Should Be    ${software}    1504
+
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}

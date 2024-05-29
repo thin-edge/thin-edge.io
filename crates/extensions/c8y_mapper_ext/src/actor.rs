@@ -1,6 +1,8 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
+use crate::converter::UploadContext;
+use crate::converter::UploadOperationLog;
 use crate::operations::FtsDownloadOperationType;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
@@ -200,8 +202,7 @@ impl C8yMapperActor {
         upload_result: UploadResult,
     ) -> Result<(), RuntimeError> {
         match self.converter.pending_upload_operations.remove(&cmd_id) {
-            None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
-            Some(queued_data) => {
+            Some(UploadContext::OperationData(queued_data)) => {
                 let payload = match queued_data.operation {
                     CumulocitySupportedOperations::C8yLogFileRequest
                     | CumulocitySupportedOperations::C8yUploadConfigFile => self
@@ -220,11 +221,29 @@ impl C8yMapperActor {
                 let clear_local_cmd = MqttMessage::new(&queued_data.clear_cmd_topic, "")
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
-                for converted_message in [c8y_notification, clear_local_cmd] {
-                    self.mqtt_publisher.send(converted_message).await?
+
+                let messages = self
+                    .converter
+                    .upload_operation_log(
+                        &queued_data.topic_id,
+                        &cmd_id,
+                        &queued_data.operation.into(),
+                        queued_data.command,
+                        vec![c8y_notification, clear_local_cmd],
+                    )
+                    .await;
+                for message in messages {
+                    self.mqtt_publisher.send(message).await?
                 }
             }
-        };
+            Some(UploadContext::OperationLog(UploadOperationLog { final_messages })) => {
+                for message in final_messages {
+                    self.mqtt_publisher.send(message).await?
+                }
+                return Ok(());
+            }
+            None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
+        }
 
         Ok(())
     }
