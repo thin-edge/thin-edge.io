@@ -406,13 +406,14 @@ impl SoftwareUpdateCommand {
             .find(|&items| items.plugin_type == module_type)
         {
             for item in items.modules.iter() {
-                let module = SoftwareModule {
-                    module_type: Some(module_type.to_string()),
-                    name: item.name.clone(),
-                    version: item.version.clone(),
-                    url: item.url.clone(),
-                    file_path: None,
-                };
+                let module = SoftwareModule::new(
+                    Some(module_type.to_string()),
+                    item.name.clone(),
+                    item.version.clone(),
+                    item.url.clone(),
+                    None,
+                );
+
                 match item.action {
                     None => {}
                     Some(SoftwareModuleAction::Install) => {

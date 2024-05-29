@@ -79,6 +79,10 @@ impl DownloadInfo {
     pub fn url(&self) -> &str {
         self.url.as_str()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.url.trim().is_empty()
+    }
 }
 
 /// Possible authentication schemes
