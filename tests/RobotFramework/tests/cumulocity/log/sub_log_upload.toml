@@ -1,0 +1,26 @@
+# Trigger log_upload as a sub operation workflow
+operation = "sub_log_upload"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "log_upload"
+input.tedgeUrl = "${.payload.tedgeUrl}"
+input.type = "${.payload.type}"
+input.dateFrom = "${.payload.dateFrom}"
+input.dateTo = "${.payload.dateTo}"
+input.searchText = "${.payload.searchText}"
+input.lines = "${.payload.lines}"
+on_exec = "awaiting_upload"
+
+[awaiting_upload]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
