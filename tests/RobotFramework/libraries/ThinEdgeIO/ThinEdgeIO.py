@@ -18,13 +18,10 @@ from robot.api.deco import keyword, library
 from DeviceLibrary import DeviceLibrary, DeviceAdapter
 from Cumulocity import Cumulocity, retry
 
-
 relativetime_ = Union[datetime, str]
-
 
 devices_lib = DeviceLibrary()
 c8y_lib = Cumulocity()
-
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s %(module)s -%(levelname)s- %(message)s"
@@ -56,11 +53,11 @@ class ThinEdgeIO(DeviceLibrary):
     """ThinEdgeIO Library"""
 
     def __init__(
-        self,
-        image: str = DeviceLibrary.DEFAULT_IMAGE,
-        adapter: str = None,
-        bootstrap_script: str = DeviceLibrary.DEFAULT_BOOTSTRAP_SCRIPT,
-        **kwargs,
+            self,
+            image: str = DeviceLibrary.DEFAULT_IMAGE,
+            adapter: str = None,
+            bootstrap_script: str = DeviceLibrary.DEFAULT_BOOTSTRAP_SCRIPT,
+            **kwargs,
     ):
         super().__init__(
             image=image, adapter=adapter, bootstrap_script=bootstrap_script, **kwargs
@@ -147,7 +144,7 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Get Logs")
     def get_logs(
-        self, name: str = None, date_from: Union[datetime, float] = None, show=True
+            self, name: str = None, date_from: Union[datetime, float] = None, show=True
     ):
         """Get device logs (override base class method to add additional debug info)
 
@@ -224,11 +221,14 @@ class ThinEdgeIO(DeviceLibrary):
         # This is fragile and should be improved upon once a more suitable/robust method of logging and querying
         # the mqtt messages is found.
         token_replace_pattern = re.compile(r"\{.+$")
+
         def _hide(line: str) -> str:
             if C8Y_TOKEN_TOPIC in line and "71," in line:
-                line_sensitive = token_replace_pattern.sub(f"(redacted log entry): Received token: topic={C8Y_TOKEN_TOPIC}, message=71,<redacted>", line)
+                line_sensitive = token_replace_pattern.sub(
+                    f"(redacted log entry): Received token: topic={C8Y_TOKEN_TOPIC}, message=71,<redacted>", line)
                 return line_sensitive
             return line
+
         return _hide
 
     def log_operations(self, mo_id: str, status: str = None):
@@ -250,7 +250,7 @@ class ThinEdgeIO(DeviceLibrary):
                 log_method = (
                     log.info
                     if operation.status
-                    in (operation.Status.SUCCESSFUL, operation.Status.FAILED)
+                       in (operation.Status.SUCCESSFUL, operation.Status.FAILED)
                     else log.warning
                 )
                 log_method(
@@ -429,12 +429,12 @@ class ThinEdgeIO(DeviceLibrary):
     # Assert presence of a topic (with timeout)
     #
     def mqtt_match_messages(
-        self,
-        topic: str,
-        message_pattern: str = None,
-        date_from: relativetime_ = None,
-        date_to: relativetime_ = None,
-        **kwargs,
+            self,
+            topic: str,
+            message_pattern: str = None,
+            date_from: relativetime_ = None,
+            date_to: relativetime_ = None,
+            **kwargs,
     ) -> List[Dict[str, Any]]:
         """Match mqtt messages using different types of filters
 
@@ -464,7 +464,7 @@ class ThinEdgeIO(DeviceLibrary):
                 message = json.loads(line)
                 if "message" in message:
                     if message_pattern_re is None or message_pattern_re.match(
-                        message["message"]["payload"]
+                            message["message"]["payload"]
                     ):
                         messages.append(message)
             except Exception as ex:
@@ -477,7 +477,7 @@ class ThinEdgeIO(DeviceLibrary):
             item
             for item in messages
             if not topic
-            or (topic and mqtt_topic_match(mqtt_matcher, item["message"]["topic"]))
+               or (topic and mqtt_topic_match(mqtt_matcher, item["message"]["topic"]))
         ]
         return matching
 
@@ -501,7 +501,7 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Service Health Status Should Be Equal")
     def assert_service_health_status_equal(
-        self, service: str, status: str, device: str = "main"
+            self, service: str, status: str, device: str = "main"
     ) -> Dict[str, Any]:
         return self._assert_health_status(service, status=status, device=device)
 
@@ -541,11 +541,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Setup")
     def setup(
-        self,
-        skip_bootstrap: bool = None,
-        cleanup: bool = None,
-        adapter: str = None,
-        wait_for_healthy: bool = True,
+            self,
+            skip_bootstrap: bool = None,
+            cleanup: bool = None,
+            adapter: str = None,
+            wait_for_healthy: bool = True,
     ) -> str:
         serial_sn = super().setup(skip_bootstrap, cleanup, adapter)
 
@@ -554,15 +554,15 @@ class ThinEdgeIO(DeviceLibrary):
         return serial_sn
 
     def _assert_mqtt_topic_messages(
-        self,
-        topic: str,
-        date_from: relativetime_ = None,
-        date_to: relativetime_ = None,
-        minimum: int = 1,
-        maximum: int = None,
-        message_pattern: str = None,
-        message_contains: str = None,
-        **kwargs,
+            self,
+            topic: str,
+            date_from: relativetime_ = None,
+            date_to: relativetime_ = None,
+            minimum: int = 1,
+            maximum: int = None,
+            message_pattern: str = None,
+            message_contains: str = None,
+            **kwargs,
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
         if message_contains:
@@ -583,13 +583,13 @@ class ThinEdgeIO(DeviceLibrary):
 
         if minimum is not None:
             assert (
-                len(messages) >= minimum
-            ), f"Matching messages is less than minimum.\nwanted: {minimum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
+                    len(messages) >= minimum
+            ), f"Matching messages on topic '{topic}' is less than minimum.\nwanted: {minimum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
 
         if maximum is not None:
             assert (
-                len(messages) <= maximum
-            ), f"Matching messages is greater than maximum.\nwanted: {maximum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
+                    len(messages) <= maximum
+            ), f"Matching messages on topic '{topic}' is greater than maximum.\nwanted: {maximum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
 
         return messages
 
@@ -613,15 +613,15 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Should Have MQTT Messages")
     def mqtt_should_have_topic(
-        self,
-        topic: str,
-        date_from: relativetime_ = None,
-        date_to: relativetime_ = None,
-        message_pattern: str = None,
-        message_contains: str = None,
-        minimum: int = 1,
-        maximum: int = None,
-        **kwargs,
+            self,
+            topic: str,
+            date_from: relativetime_ = None,
+            date_to: relativetime_ = None,
+            message_pattern: str = None,
+            message_contains: str = None,
+            minimum: int = 1,
+            maximum: int = None,
+            **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         Check for the presence of a topic
@@ -660,11 +660,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Register Child Device")
     def register_child(
-        self,
-        parent_name: str,
-        child_name: str,
-        supported_operations: Union[List[str], str] = None,
-        name: str = None,
+            self,
+            parent_name: str,
+            child_name: str,
+            supported_operations: Union[List[str], str] = None,
+            name: str = None,
     ):
         """
         Register a child device to a parent along with a given list of supported operations
@@ -700,7 +700,7 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
     @keyword("Set Restart Timeout")
-    def set_restart_timeout(self, value: Union[str,int], **kwargs):
+    def set_restart_timeout(self, value: Union[str, int], **kwargs):
         """Set the restart timeout interval in seconds for how long thin-edge.io
         should wait to for a device restart to happen.
 
@@ -714,7 +714,7 @@ class ThinEdgeIO(DeviceLibrary):
             command = "sed -i -e '/reboot_timeout_seconds/d' /etc/tedge/system.toml"
         else:
             command = f"sed -i -e '/reboot_timeout_seconds/d' -e '/reboot =/a reboot_timeout_seconds = {value}' /etc/tedge/system.toml",
-        self.execute_command(command, **kwargs,)
+        self.execute_command(command, **kwargs, )
 
     @keyword("Escape Pattern")
     def regexp_escape(self, pattern: str, is_json: bool = False):
@@ -732,6 +732,7 @@ class ThinEdgeIO(DeviceLibrary):
             return value.replace("\\", "\\\\")
 
         return value
+
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
