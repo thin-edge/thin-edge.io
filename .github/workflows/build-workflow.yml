@@ -269,6 +269,7 @@ jobs:
     if: |
       always() &&
       github.event_name != 'pull_request_target' &&
+      (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
     needs: [check-build, test]
@@ -323,6 +324,7 @@ jobs:
     if: |
       always() &&
       github.event_name != 'pull_request_target' &&
+      (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
     needs: [check-build, test]
