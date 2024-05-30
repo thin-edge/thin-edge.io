@@ -101,5 +101,3 @@ https://docs.cocogitto.io/guide/
 
    * You can rewrite non-conventional commits, but it would change the git commit hash. See https://docs.cocogitto.io/guide/#rewrite-non-compliant-commits
 
-
-      
