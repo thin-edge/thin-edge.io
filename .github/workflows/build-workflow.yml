@@ -248,7 +248,7 @@ jobs:
       github.event_name != 'pull_request_target' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
-    needs: [test]
+    needs: [build, test]
     strategy:
       fail-fast: false
       matrix:
@@ -302,7 +302,7 @@ jobs:
       github.event_name != 'pull_request_target' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-20.04
-    needs: [test]
+    needs: [build, test]
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: 1
     permissions:
