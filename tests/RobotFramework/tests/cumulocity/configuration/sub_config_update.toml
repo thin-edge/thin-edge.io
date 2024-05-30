@@ -1,0 +1,23 @@
+# Trigger config_update as a sub operation workflow
+operation = "sub_config_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "config_update"
+input.remoteUrl = "${.payload.remoteUrl}"
+input.tedgeUrl = "${.payload.tedgeUrl}"
+input.type = "${.payload.type}"
+on_exec = "awaiting_update"
+
+[awaiting_update]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
