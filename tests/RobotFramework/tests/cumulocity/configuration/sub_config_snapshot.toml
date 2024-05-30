@@ -1,0 +1,22 @@
+# Trigger config_snapshot as a sub operation workflow
+operation = "sub_config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "config_snapshot"
+input.tedgeUrl = "${.payload.tedgeUrl}"
+input.type = "${.payload.type}"
+on_exec = "awaiting_snapshot"
+
+[awaiting_snapshot]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
