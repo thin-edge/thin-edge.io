@@ -62,6 +62,7 @@ Publish health status message for main device service
 *** Keywords ***
 Custom Setup
     Setup
+    Execute Command    tedge config set mqtt.bridge.built_in false
     Execute Command    sudo systemctl start tedge-mapper-aws.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-aws
 

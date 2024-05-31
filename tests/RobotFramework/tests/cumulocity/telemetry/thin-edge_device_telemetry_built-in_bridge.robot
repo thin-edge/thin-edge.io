@@ -16,11 +16,15 @@ Thin-edge devices support sending simple measurements
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=ThinEdgeMeasurement    value=temperature    series=temperature
     Log    ${measurements}
 
+Built-in bridge reports health status
+    Service Health Status Should Be Up    tedge-mapper-bridge-custom-c8y-prefix
+
 Bridge stops if mapper stops running
     Execute Command    tedge mqtt pub ${C8Y_TOPIC_PREFIX}/s/us '200,CustomMeasurement,temperature,25'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomMeasurement    series=temperature
     Log    ${measurements}
     Execute Command    systemctl stop tedge-mapper-c8y
+    Service Health Status Should Be Down    tedge-mapper-bridge-custom-c8y-prefix
     Execute Command    tedge mqtt pub ${C8Y_TOPIC_PREFIX}/s/us '200,CustomMeasurement,temperature,25'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomMeasurement    series=temperature
     Log    ${measurements}
@@ -272,9 +276,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     ThinEdgeIO.Execute Command    tedge config set mqtt.bridge.built_in true
     ThinEdgeIO.Execute Command    tedge config set c8y.bridge.topic_prefix custom-c8y-prefix
-    File Should Exist    /etc/tedge/mosquitto-conf/c8y-bridge.conf
     ThinEdgeIO.Execute Command    tedge reconnect c8y
-    File Should Not Exist    /etc/tedge/mosquitto-conf/c8y-bridge.conf
     Service Health Status Should Be Up    tedge-mapper-c8y
     ${output}=    Execute Command    sudo tedge connect c8y --test
     Should Contain    ${output}    Connection check to c8y cloud is successful.

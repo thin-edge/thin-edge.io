@@ -25,6 +25,7 @@ Publish measurements to unsubscribed topic
 Custom Setup
     Setup
     Execute Command    sudo tedge config set az.topics te/+/+/+/+/e/+
+    Execute Command    sudo tedge config set mqtt.bridge.built_in false
     Execute Command    sudo systemctl restart tedge-mapper-az.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-az
 

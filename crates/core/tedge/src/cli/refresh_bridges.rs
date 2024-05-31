@@ -9,6 +9,7 @@ use tedge_config::TEdgeConfigLocation;
 use super::common::Cloud;
 use super::connect::ConnectError;
 use crate::bridge::BridgeConfig;
+use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::command::BuildContext;
@@ -28,7 +29,7 @@ impl Command for RefreshBridgesCmd {
     fn execute(&self) -> anyhow::Result<()> {
         let clouds = established_bridges(&self.config_location);
 
-        if clouds.is_empty() {
+        if clouds.is_empty() && !self.config.mqtt.bridge.built_in {
             println!("No bridges to refresh.");
             return Ok(());
         }
@@ -36,11 +37,30 @@ impl Command for RefreshBridgesCmd {
         let common_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&self.config);
         common_mosquitto_config.save(&self.config_location)?;
 
-        for cloud in clouds {
-            println!("Refreshing bridge {cloud}");
+        if !self.config.mqtt.bridge.built_in {
+            for cloud in &clouds {
+                println!("Refreshing bridge {cloud}");
 
-            let bridge_config = super::connect::bridge_config(&self.config, cloud)?;
-            refresh_bridge(&bridge_config, &self.config_location)?;
+                let bridge_config = super::connect::bridge_config(&self.config, *cloud)?;
+                refresh_bridge(&bridge_config, &self.config_location)?;
+            }
+        }
+
+        for cloud in [Cloud::Aws, Cloud::Azure, Cloud::C8y] {
+            // (attempt to) reassert ownership of the certificate and key
+            // This is necessary when upgrading from the mosquitto bridge to the built-in bridge
+            if let Ok(bridge_config) = super::connect::bridge_config(&self.config, cloud) {
+                super::connect::chown_certificate_and_key(&bridge_config);
+
+                if bridge_config.bridge_location == BridgeLocation::BuiltIn
+                    && clouds.contains(&cloud)
+                {
+                    println!(
+                    "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
+                );
+                    super::connect::use_built_in_bridge(&self.config_location, &bridge_config)?;
+                }
+            }
         }
 
         println!("Restarting mosquitto service.\n");

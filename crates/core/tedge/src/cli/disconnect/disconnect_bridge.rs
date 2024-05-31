@@ -85,12 +85,8 @@ impl DisconnectBridgeCommand {
             // If bridge config file was not found we assume that the bridge doesn't exist,
             // We finish early returning exit code 0.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                if self.built_in_bridge {
-                    Ok(())
-                } else {
-                    println!("Bridge doesn't exist. Operation finished!");
-                    Err(DisconnectBridgeError::BridgeFileDoesNotExist)
-                }
+                println!("Bridge doesn't exist. Operation finished!");
+                Err(DisconnectBridgeError::BridgeFileDoesNotExist)
             }
 
             Err(e) => Err(DisconnectBridgeError::FileOperationFailed(
