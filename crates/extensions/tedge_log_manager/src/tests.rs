@@ -19,6 +19,7 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -94,6 +95,7 @@ async fn new_log_manager_builder(
     UploaderMessageBox,
 ) {
     let config = LogManagerConfig {
+        mqtt_schema: MqttSchema::default(),
         config_dir: temp_dir.to_path_buf(),
         tmp_dir: temp_dir.to_path_buf(),
         log_dir: temp_dir.to_path_buf().try_into().unwrap(),
@@ -110,14 +112,12 @@ async fn new_log_manager_builder(
     let mut uploader_builder: FakeServerBoxBuilder<LogUploadRequest, LogUploadResult> =
         FakeServerBoxBuilder::default();
 
-    let log_builder = LogManagerBuilder::try_new(
-        config,
-        &mut mqtt_builder,
-        &mut fs_watcher_builder,
-        &mut uploader_builder,
-    )
-    .await
-    .unwrap();
+    let mut log_builder =
+        LogManagerBuilder::try_new(config, &mut fs_watcher_builder, &mut uploader_builder)
+            .await
+            .unwrap();
+
+    log_builder.connect_mqtt(&mut mqtt_builder);
 
     (
         log_builder,

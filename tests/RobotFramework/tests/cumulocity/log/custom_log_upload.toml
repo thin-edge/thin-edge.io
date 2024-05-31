@@ -1,0 +1,22 @@
+# Custom log upload operation
+# - ignore all parameters but the target url
+# - upload example.log to the target url
+operation = "log_upload"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "curl -X PUT --data-binary '@/var/log/example/example.log' ${.payload.tedgeUrl}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

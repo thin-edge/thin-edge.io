@@ -216,9 +216,8 @@ impl OperationWorkflow {
         target: &EntityTopicId,
     ) -> Option<MqttMessage> {
         match self.operation {
-            // Need to treat SoftwareList and SoftwareUpdate as exceptions as they require software types in the payload
-            OperationType::SoftwareList | OperationType::SoftwareUpdate => None,
-            _ => {
+            // Custom operations (and restart) have a generic empty capability message
+            OperationType::Custom(_) | OperationType::Restart => {
                 let meta_topic = schema.capability_topic_for(target, self.operation.clone());
                 let payload = "{}".to_string();
                 Some(
@@ -227,6 +226,9 @@ impl OperationWorkflow {
                         .with_qos(QoS::AtLeastOnce),
                 )
             }
+            // Builtin operations dynamically publish their capability message,
+            // notably to include a list of supported types.
+            _ => None,
         }
     }
 

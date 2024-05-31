@@ -1,5 +1,5 @@
-use crate::software_manager::actor::SoftwareCommand;
 use crate::state_repository::state::AgentStateRepository;
+use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
@@ -15,10 +15,6 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::UnboundedLoggingReceiver;
-use tedge_api::commands::RestartCommand;
-use tedge_api::commands::SoftwareCommandMetadata;
-use tedge_api::commands::SoftwareListCommand;
-use tedge_api::commands::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -27,13 +23,14 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
-use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
@@ -43,7 +40,12 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
-fan_in_message_type!(AgentInput[MqttMessage, GenericCommandState, SoftwareCommand, RestartCommand] : Debug);
+/// A generic command state that is published by the [TedgeOperationConverterActor]
+/// to itself for further processing .i.e. after a state update
+#[derive(Debug)]
+pub struct InternalCommandState(GenericCommandState);
+
+fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData] : Debug);
 
 pub struct TedgeOperationConverterActor {
     pub(crate) mqtt_schema: MqttSchema,
@@ -52,9 +54,8 @@ pub struct TedgeOperationConverterActor {
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
-    pub(crate) software_sender: LoggingSender<SoftwareCommand>,
-    pub(crate) restart_sender: LoggingSender<RestartCommand>,
-    pub(crate) command_sender: DynSender<GenericCommandState>,
+    pub(crate) command_dispatcher: CommandDispatcher,
+    pub(crate) command_sender: DynSender<InternalCommandState>,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
 }
@@ -74,21 +75,17 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await?;
                 }
-                AgentInput::GenericCommandState(command_state) => {
+                AgentInput::InternalCommandState(InternalCommandState(command_state)) => {
                     self.process_command_state_update(command_state).await?;
                 }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareListCommand(res)) => {
-                    self.process_software_list_response(res).await?;
+                AgentInput::GenericCommandData(GenericCommandData::State(new_state)) => {
+                    self.publish_command_state(new_state).await?;
                 }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareUpdateCommand(res)) => {
-                    self.process_software_update_response(res).await?;
-                }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareCommandMetadata(payload)) => {
-                    self.publish_software_operation_capabilities(payload)
+                AgentInput::GenericCommandData(GenericCommandData::Metadata(
+                    GenericCommandMetadata { operation, payload },
+                )) => {
+                    self.publish_operation_capability(operation, payload)
                         .await?;
-                }
-                AgentInput::RestartCommand(cmd) => {
-                    self.process_restart_response(cmd).await?;
                 }
             }
         }
@@ -107,25 +104,24 @@ impl TedgeOperationConverterActor {
         Ok(())
     }
 
-    async fn publish_software_operation_capabilities(
+    async fn publish_operation_capability(
         &mut self,
-        payload: SoftwareCommandMetadata,
+        operation: OperationName,
+        payload: serde_json::Value,
     ) -> Result<(), RuntimeError> {
-        for operation in [OperationType::SoftwareList, OperationType::SoftwareUpdate] {
-            let meta_topic = self
-                .mqtt_schema
-                .capability_topic_for(&self.device_topic_id, operation);
-            let message = MqttMessage::new(&meta_topic, payload.to_json())
-                .with_retain()
-                .with_qos(QoS::AtLeastOnce);
-            self.mqtt_publisher.send(message).await?;
-        }
+        let operation = operation.parse().unwrap();
+        let meta_topic = self
+            .mqtt_schema
+            .capability_topic_for(&self.device_topic_id, operation);
+        let message = MqttMessage::new(&meta_topic, payload.to_string())
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce);
+        self.mqtt_publisher.send(message).await?;
         Ok(())
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let Ok((_, operation, cmd_id)) = self.extract_command_identifiers(&message.topic.name)
-        else {
+        let Ok((operation, cmd_id)) = self.extract_command_identifiers(&message.topic.name) else {
             log::error!("Unknown command channel: {}", &message.topic.name);
             return Ok(());
         };
@@ -163,8 +159,7 @@ impl TedgeOperationConverterActor {
         &mut self,
         state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        let Ok((target, operation, cmd_id)) = self.extract_command_identifiers(&state.topic.name)
-        else {
+        let Ok((operation, cmd_id)) = self.extract_command_identifiers(&state.topic.name) else {
             log::error!("Unknown command channel: {}", state.topic.name);
             return Ok(());
         };
@@ -195,7 +190,9 @@ impl TedgeOperationConverterActor {
                         "Resuming invoking command {}",
                         invoking_command.topic.as_ref()
                     );
-                    self.command_sender.send(invoking_command.clone()).await?;
+                    self.command_sender
+                        .send(InternalCommandState(invoking_command.clone()))
+                        .await?;
                 } else {
                     info!(
                         "Waiting {} {operation} operation to be cleared",
@@ -212,8 +209,7 @@ impl TedgeOperationConverterActor {
             OperationAction::BuiltIn => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
-                self.process_internal_operation(target, operation, cmd_id, state.payload)
-                    .await
+                Ok(self.command_dispatcher.send(state).await?)
             }
             OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
@@ -362,7 +358,7 @@ impl TedgeOperationConverterActor {
             .and_then(|root_topic| self.extract_command_identifiers(root_topic).ok())
         {
             None => (None, None),
-            Some((_, op, id)) => (Some(op.to_string()), Some(id)),
+            Some((op, id)) => (Some(op.to_string()), Some(id)),
         };
 
         CommandLog::new(
@@ -375,71 +371,6 @@ impl TedgeOperationConverterActor {
         )
     }
 
-    async fn process_internal_operation(
-        &mut self,
-        target: EntityTopicId,
-        operation: OperationType,
-        cmd_id: String,
-        message: serde_json::Value,
-    ) -> Result<(), RuntimeError> {
-        match operation {
-            OperationType::SoftwareList => {
-                match SoftwareListCommand::try_from_json(target, cmd_id, message) {
-                    Ok(cmd) => {
-                        self.software_sender.send(cmd.into()).await?;
-                    }
-                    Err(err) => error!("Incorrect software_list request payload: {err}"),
-                }
-            }
-
-            OperationType::SoftwareUpdate => {
-                match SoftwareUpdateCommand::try_from_json(target, cmd_id, message) {
-                    Ok(cmd) => {
-                        self.software_sender.send(cmd.into()).await?;
-                    }
-                    Err(err) => error!("Incorrect software_update request payload: {err}"),
-                }
-            }
-
-            OperationType::Restart => {
-                match RestartCommand::try_from_json(target, cmd_id, message) {
-                    Ok(cmd) => {
-                        self.restart_sender.send(cmd).await?;
-                    }
-                    Err(err) => error!("Incorrect restart request payload: {err}"),
-                }
-            }
-
-            // Command not managed by the agent
-            _ => {}
-        }
-        Ok(())
-    }
-
-    async fn process_software_list_response(
-        &mut self,
-        response: SoftwareListCommand,
-    ) -> Result<(), RuntimeError> {
-        let new_state = response.into_generic_command(&self.mqtt_schema);
-        self.publish_command_state(new_state).await
-    }
-
-    async fn process_software_update_response(
-        &mut self,
-        response: SoftwareUpdateCommand,
-    ) -> Result<(), RuntimeError> {
-        let new_state = response.into_generic_command(&self.mqtt_schema);
-        self.publish_command_state(new_state).await
-    }
-
-    async fn process_restart_response(
-        &mut self,
-        response: RestartCommand,
-    ) -> Result<(), RuntimeError> {
-        let new_state = response.into_generic_command(&self.mqtt_schema);
-        self.publish_command_state(new_state).await
-    }
-
     async fn publish_command_state(
         &mut self,
         new_state: GenericCommandState,
@@ -449,7 +380,9 @@ impl TedgeOperationConverterActor {
         }
         self.persist_command_board().await?;
         if !new_state.is_cleared() {
-            self.command_sender.send(new_state.clone()).await?;
+            self.command_sender
+                .send(InternalCommandState(new_state.clone()))
+                .await?;
         }
         self.mqtt_publisher.send(new_state.into_message()).await?;
         Ok(())
@@ -463,7 +396,9 @@ impl TedgeOperationConverterActor {
                 for (timestamp, command) in self.workflows.pending_commands().iter() {
                     if let Some(resumed_command) = self.workflows.resume_command(timestamp, command)
                     {
-                        self.command_sender.send(resumed_command).await?;
+                        self.command_sender
+                            .send(InternalCommandState(resumed_command))
+                            .await?;
                     }
                 }
             }
@@ -494,10 +429,10 @@ impl TedgeOperationConverterActor {
     fn extract_command_identifiers(
         &self,
         topic: impl AsRef<str>,
-    ) -> Result<(EntityTopicId, OperationType, CommandId), CommandTopicError> {
-        let (target, channel) = self.mqtt_schema.entity_channel_of(topic)?;
+    ) -> Result<(OperationType, CommandId), CommandTopicError> {
+        let (_, channel) = self.mqtt_schema.entity_channel_of(topic)?;
         match channel {
-            Channel::Command { operation, cmd_id } => Ok((target, operation, cmd_id)),
+            Channel::Command { operation, cmd_id } => Ok((operation, cmd_id)),
             _ => Err(CommandTopicError::InvalidCommandTopic),
         }
     }

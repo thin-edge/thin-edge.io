@@ -27,6 +27,11 @@ use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandMetadata;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::Jsonify;
 use tedge_api::SoftwareType;
 use tedge_config::TEdgeConfigError;
 use tracing::error;
@@ -34,6 +39,33 @@ use tracing::info;
 use tracing::warn;
 
 fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand, SoftwareCommandMetadata] : Debug, Eq, PartialEq, Deserialize, Serialize);
+
+impl SoftwareCommand {
+    pub fn into_generic_commands(self) -> Vec<GenericCommandData> {
+        match self {
+            SoftwareCommand::SoftwareUpdateCommand(cmd) => {
+                vec![GenericCommandState::from(cmd).into()]
+            }
+            SoftwareCommand::SoftwareListCommand(cmd) => {
+                vec![GenericCommandState::from(cmd).into()]
+            }
+            SoftwareCommand::SoftwareCommandMetadata(metadata) => {
+                vec![
+                    GenericCommandMetadata {
+                        operation: OperationType::SoftwareList.to_string(),
+                        payload: metadata.to_value(),
+                    }
+                    .into(),
+                    GenericCommandMetadata {
+                        operation: OperationType::SoftwareUpdate.to_string(),
+                        payload: metadata.to_value(),
+                    }
+                    .into(),
+                ]
+            }
+        }
+    }
+}
 
 /// Actor which performs software operations.
 ///

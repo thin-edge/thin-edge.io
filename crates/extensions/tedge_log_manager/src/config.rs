@@ -16,6 +16,7 @@ pub const DEFAULT_PLUGIN_CONFIG_DIR_NAME: &str = "plugins/";
 /// Configuration of the Configuration Manager
 #[derive(Clone, Debug)]
 pub struct LogManagerConfig {
+    pub mqtt_schema: MqttSchema,
     pub config_dir: PathBuf,
     pub tmp_dir: PathBuf,
     pub log_dir: Utf8PathBuf,
@@ -57,6 +58,7 @@ impl LogManagerConfig {
         );
 
         Ok(Self {
+            mqtt_schema,
             config_dir,
             tmp_dir,
             log_dir,

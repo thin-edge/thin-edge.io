@@ -165,7 +165,8 @@ pub trait MessageSink<M: Message> {
         cast: MessageMapper,
     ) where
         N: Message,
-        MS: Iterator<Item = M> + Send,
+        MS: IntoIterator<Item = M> + Send,
+        MS::IntoIter: Send,
         MessageMapper: Fn(N) -> MS,
         MessageMapper: 'static + Send + Sync,
     {
@@ -193,6 +194,26 @@ pub trait MessageSource<M: Message, Config> {
     /// A peer can subscribe to a subset of the messages produced by this source.
     /// This subset of messages expected by the peer is defined by the `config` parameter.
     fn connect_sink(&mut self, config: Config, peer: &impl MessageSink<M>);
+
+    /// Connect a peer actor that will consume transformed messages produced by this actor.
+    ///
+    /// The transformation function will be applied to the messages sent by the source,
+    /// to convert them in a sequence, possibly empty, of messages forwarded to the sink.
+    fn connect_mapped_sink<N, NS, MessageMapper>(
+        &mut self,
+        config: Config,
+        peer: &impl MessageSink<N>,
+        cast: MessageMapper,
+    ) where
+        N: Message,
+        NS: IntoIterator<Item = N> + Send,
+        NS::IntoIter: Send,
+        MessageMapper: Fn(M) -> NS,
+        MessageMapper: 'static + Send + Sync,
+    {
+        let sender: DynSender<M> = MappingSender::new(peer.get_sender(), cast).into();
+        self.connect_sink(config, &sender)
+    }
 }
 
 /// The [Builder] of an [Actor](crate::Actor) must implement this trait

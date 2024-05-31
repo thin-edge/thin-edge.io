@@ -82,7 +82,7 @@ pub struct C8ySoftwareModuleItem {
     pub url: Option<DownloadInfo>,
 }
 
-impl<'a> Jsonify<'a> for C8ySoftwareModuleItem {}
+impl Jsonify for C8ySoftwareModuleItem {}
 
 impl From<SoftwareModule> for C8ySoftwareModuleItem {
     fn from(module: SoftwareModule) -> Self {
@@ -108,7 +108,7 @@ pub struct C8yUpdateSoftwareListResponse {
     c8y_software_list: Option<Vec<C8ySoftwareModuleItem>>,
 }
 
-impl<'a> Jsonify<'a> for C8yUpdateSoftwareListResponse {}
+impl Jsonify for C8yUpdateSoftwareListResponse {}
 
 impl From<&SoftwareListCommand> for C8yUpdateSoftwareListResponse {
     fn from(list: &SoftwareListCommand) -> Self {
@@ -163,7 +163,7 @@ impl From<ThinEdgeEvent> for C8yCreateEvent {
     }
 }
 
-impl<'a> Jsonify<'a> for C8yCreateEvent {}
+impl Jsonify for C8yCreateEvent {}
 
 fn update_the_external_source_event(extras: &mut HashMap<String, Value>, source: &str) {
     let mut value = serde_json::Map::new();

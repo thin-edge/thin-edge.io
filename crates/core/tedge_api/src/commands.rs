@@ -1,17 +1,22 @@
 use crate::error::SoftwareError;
 use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicError;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::software::*;
+use crate::workflow::GenericCommandData;
 use crate::workflow::GenericCommandState;
 use download::DownloadInfo;
+use log::error;
+use mqtt_channel::MqttError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -57,7 +62,7 @@ where
     }
 
     /// Return the MQTT topic for this command
-    fn topic(&self, schema: &MqttSchema) -> Topic {
+    pub fn topic(&self, schema: &MqttSchema) -> Topic {
         schema.topic_for(self.topic_id(), &self.channel())
     }
 
@@ -122,15 +127,41 @@ where
     }
 }
 
-impl<'a, Payload> Command<Payload>
+impl<Payload> Command<Payload>
 where
-    Payload: Jsonify<'a> + Deserialize<'a> + Serialize + CommandPayload,
+    Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
 {
+    /// Parse a command received from MQTT
+    pub fn parse(
+        schema: &MqttSchema,
+        message: MqttMessage,
+    ) -> Result<Option<Self>, CommandParsingError> {
+        let (target, channel) = schema.entity_channel_of(message.topic.as_ref())?;
+        let cmd_id = match channel {
+            Channel::Command { operation, cmd_id } if operation == Payload::operation_type() => {
+                cmd_id
+            }
+            Channel::Command { operation, .. } => {
+                return Err(CommandParsingError::InvalidCommandType {
+                    actual: operation.to_string(),
+                    expected: Payload::operation_type().to_string(),
+                })
+            }
+            _ => {
+                return Err(CommandParsingError::InvalidCommandTopic {
+                    topic: message.topic.name.clone(),
+                })
+            }
+        };
+
+        Ok(Self::try_from_bytes(target, cmd_id, message.payload())?)
+    }
+
     /// Return the Command received on a topic
-    pub fn try_from(
+    pub fn try_from_bytes(
         target: EntityTopicId,
         cmd_id: String,
-        bytes: &'a [u8],
+        bytes: &[u8],
     ) -> Result<Option<Self>, serde_json::Error> {
         if bytes.is_empty() {
             Ok(None)
@@ -148,7 +179,7 @@ where
     pub fn into_generic_command(self, schema: &MqttSchema) -> GenericCommandState {
         let topic = self.topic(schema);
         let status = self.status().to_string();
-        let payload = serde_json::to_value(self.payload).unwrap(); // any command payload can be converted into JSON
+        let payload = self.payload.to_value();
         GenericCommandState::new(topic, status, payload)
     }
 
@@ -168,6 +199,67 @@ where
             .with_qos(QoS::AtLeastOnce)
             .with_retain()
     }
+}
+
+impl<Payload> From<Command<Payload>> for GenericCommandState
+where
+    Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
+{
+    fn from(value: Command<Payload>) -> Self {
+        // FIXME A Command payload should know its root topic
+        let schema = MqttSchema::default();
+        value.into_generic_command(&schema)
+    }
+}
+
+impl<Payload> From<Command<Payload>> for GenericCommandData
+where
+    Payload: Jsonify + DeserializeOwned + Serialize + CommandPayload,
+{
+    fn from(value: Command<Payload>) -> Self {
+        GenericCommandData::State(value.into())
+    }
+}
+
+impl<Payload> TryFrom<GenericCommandState> for Command<Payload>
+where
+    Payload: DeserializeOwned + CommandPayload,
+{
+    type Error = String;
+
+    fn try_from(value: GenericCommandState) -> Result<Self, Self::Error> {
+        let Some(target) = value.target().and_then(|t| t.parse().ok()) else {
+            return Err(format!("Not an operation topic: {}", value.topic.as_ref()));
+        };
+        let Some(cmd_id) = value.cmd_id() else {
+            return Err(format!("Not an operation topic: {}", value.topic.as_ref()));
+        };
+
+        Command::<Payload>::try_from_json(target, cmd_id, value.payload).map_err(|err| {
+            format!(
+                "Incorrect {operation} request payload: {err}",
+                operation = Payload::operation_type()
+            )
+        })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CommandParsingError {
+    #[error(transparent)]
+    InvalidTopic(#[from] EntityTopicError),
+
+    #[error("Not a command topic: {topic}")]
+    InvalidCommandTopic { topic: String },
+
+    #[error("Not the expected command type: {actual} instead of {expected}")]
+    InvalidCommandType { actual: String, expected: String },
+
+    #[error(transparent)]
+    InvalidPayload(#[from] MqttError),
+
+    #[error(transparent)]
+    InvalidCommandPayload(#[from] serde_json::Error),
 }
 
 /// A command payload describing the current state of a command
@@ -207,19 +299,26 @@ pub trait CommandPayload {
 }
 
 /// All the messages are serialized using json.
-pub trait Jsonify<'a> {
-    fn from_json(json_str: &'a str) -> Result<Self, serde_json::Error>
+pub trait Jsonify {
+    fn from_json(json_str: &str) -> Result<Self, serde_json::Error>
     where
-        Self: Deserialize<'a>,
+        Self: DeserializeOwned,
     {
         serde_json::from_str(json_str)
     }
 
-    fn from_slice(bytes: &'a [u8]) -> Result<Self, serde_json::Error>
+    fn from_slice(bytes: &[u8]) -> Result<Self, serde_json::Error>
     where
-        Self: Deserialize<'a>,
+        Self: DeserializeOwned,
     {
         serde_json::from_slice(bytes)
+    }
+
+    fn to_value(&self) -> Value
+    where
+        Self: Serialize,
+    {
+        serde_json::to_value(self).unwrap() // all thin-edge data can be serialized to json
     }
 
     fn to_json(&self) -> String
@@ -254,7 +353,7 @@ pub struct SoftwareListCommandPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareListCommandPayload {}
+impl Jsonify for SoftwareListCommandPayload {}
 
 impl CommandPayload for SoftwareListCommandPayload {
     fn operation_type() -> OperationType {
@@ -332,7 +431,7 @@ pub struct SoftwareUpdateCommandPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareUpdateCommandPayload {}
+impl Jsonify for SoftwareUpdateCommandPayload {}
 
 impl CommandPayload for SoftwareUpdateCommandPayload {
     fn operation_type() -> OperationType {
@@ -548,7 +647,7 @@ pub struct SoftwareCommandMetadata {
     pub types: Vec<SoftwareType>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareCommandMetadata {}
+impl Jsonify for SoftwareCommandMetadata {}
 
 /// Command to restart a device
 pub type RestartCommand = Command<RestartCommandPayload>;
@@ -573,7 +672,7 @@ impl RestartCommandPayload {
     }
 }
 
-impl<'a> Jsonify<'a> for RestartCommandPayload {}
+impl Jsonify for RestartCommandPayload {}
 
 impl CommandPayload for RestartCommandPayload {
     fn operation_type() -> OperationType {
@@ -660,7 +759,7 @@ pub struct LogMetadata {
     pub types: Vec<String>,
 }
 
-impl<'a> Jsonify<'a> for LogMetadata {}
+impl Jsonify for LogMetadata {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -681,7 +780,7 @@ pub struct LogUploadCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
+impl Jsonify for LogUploadCmdPayload {}
 
 impl CommandPayload for LogUploadCmdPayload {
     fn operation_type() -> OperationType {
@@ -697,6 +796,15 @@ impl CommandPayload for LogUploadCmdPayload {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LogUploadCmdMetadata {
+    #[serde(default)]
+    pub types: Vec<String>,
+}
+
+impl Jsonify for LogUploadCmdMetadata {}
+
 /// Command to request a configuration snapshot to be uploaded
 pub type ConfigSnapshotCmd = Command<ConfigSnapshotCmdPayload>;
 
@@ -706,7 +814,7 @@ pub struct ConfigMetadata {
     pub types: Vec<String>,
 }
 
-impl<'a> Jsonify<'a> for ConfigMetadata {}
+impl Jsonify for ConfigMetadata {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -723,7 +831,7 @@ pub struct ConfigSnapshotCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
+impl Jsonify for ConfigSnapshotCmdPayload {}
 
 impl CommandPayload for ConfigSnapshotCmdPayload {
     fn operation_type() -> OperationType {
@@ -772,7 +880,7 @@ pub struct ConfigUpdateCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
+impl Jsonify for ConfigUpdateCmdPayload {}
 
 impl CommandPayload for ConfigUpdateCmdPayload {
     fn operation_type() -> OperationType {
@@ -807,7 +915,7 @@ pub struct FirmwareInfo {
     pub remote_url: Option<String>,
 }
 
-impl<'a> Jsonify<'a> for FirmwareInfo {}
+impl Jsonify for FirmwareInfo {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -823,7 +931,7 @@ pub struct FirmwareUpdateCmdPayload {
     pub log_path: Option<PathBuf>,
 }
 
-impl<'a> Jsonify<'a> for FirmwareUpdateCmdPayload {}
+impl Jsonify for FirmwareUpdateCmdPayload {}
 
 impl CommandPayload for FirmwareUpdateCmdPayload {
     fn operation_type() -> OperationType {

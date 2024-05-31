@@ -108,6 +108,30 @@ Manual config_snapshot operation request
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
 
+Trigger config_snapshot operation from another operation
+    Set Device Context    ${PARENT_SN}
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/sub_config_snapshot/sub-1111
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111","type":"tedge-configuration-plugin"}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_UploadConfigFile
+    ${snapshot}    Execute Command    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111
+    ${config}      Get File    ${CURDIR}/tedge-configuration-plugin.toml
+    Should Be Equal    ${snapshot}     ${config}
+
+Trigger custom config_snapshot operation
+    [Teardown]    Restore config operations
+    Set Device Context    ${PARENT_SN}
+    Customize config operations
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/config_snapshot/custom-1111
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111","type":"tedge-configuration-plugin"}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_UploadConfigFile
+    ${snapshot}    Execute Command    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111
+    ${config}      Get File    ${CURDIR}/tedge-configuration-plugin.toml
+    Should Be Equal    ${snapshot}     ${config}
+
 Config_snapshot operation request with the tedgeUrl created by agent
     Set Device Context    ${PARENT_SN}
     ${timestamp}=    Get Unix Timestamp
@@ -133,6 +157,34 @@ Manual config_update operation request
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=failed
     ...    c8y_fragment=c8y_DownloadConfigFile
+
+Trigger config_update operation from another workflow
+    Set Device Context    ${PARENT_SN}
+
+    Execute Command     curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222"
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/sub_config_update/sub-2222
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","type":"CONFIG1"}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_DownloadConfigFile
+
+    ${update}           Execute Command    cat /etc/config1.json
+    Should Be Equal     ${update}     new content for CONFIG1
+
+Trigger custom config_update operation
+    [Teardown]    Restore config operations
+    Set Device Context    ${PARENT_SN}
+    Customize config operations
+
+    Execute Command     curl -X PUT --data-binary 'updated config' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222"
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/config_update/custom-2222
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222","remoteUrl":"","type":"/tmp/config_update_target"}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_DownloadConfigFile
+
+    ${update}           Execute Command    cat /tmp/config_update_target
+    Should Be Equal     ${update}     updated config
 
 Config update request not processed when operation is disabled for tedge-agent
     [Teardown]    Enable config update capability of tedge-agent
@@ -388,6 +440,18 @@ Update configuration plugin config via local filesystem move (same directory)
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
 
+Customize config operations
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_snapshot.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_update.toml    /etc/tedge/operations/
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
+
+Restore config operations
+    Execute Command    rm -f /etc/tedge/operations/custom_config_snapshot.toml
+    Execute Command    rm -f /etc/tedge/operations/custom_config_update.toml
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
+
 #
 # Setup
 #
@@ -401,6 +465,8 @@ Suite Setup
     Set Suite Variable    $PARENT_IP    ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.address ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
+    Execute Command    sudo tedge config set c8y.proxy.bind.address ${parent_ip}
+    Execute Command    sudo tedge config set c8y.proxy.client.host ${parent_ip}
     Execute Command    sudo tedge config set http.client.host ${parent_ip}
     Restart Service    tedge-agent
 
@@ -421,6 +487,7 @@ Setup Child Device
     Execute Command    sudo tedge config set mqtt.client.host ${parent_ip}
     Execute Command    sudo tedge config set mqtt.client.port 1883
     Execute Command    sudo tedge config set http.client.host ${parent_ip}
+    Execute Command    sudo tedge config set c8y.proxy.client.host ${parent_ip}
     Execute Command    sudo tedge config set mqtt.topic_root te
     Execute Command    sudo tedge config set mqtt.device_topic_id device/${child_sn}//
 
@@ -432,6 +499,8 @@ Setup Child Device
     RETURN    ${child_sn}
 
 Test Setup
+    Customize Operation Workflows    ${PARENT_SN}
+    Customize Operation Workflows    ${CHILD_SN}
     Copy Configuration Files    ${PARENT_SN}
     Copy Configuration Files    ${CHILD_SN}
 
@@ -447,6 +516,13 @@ Copy Configuration Files
     Execute Command    chgrp tedge /etc/ && chmod g+w /etc/
     # Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
+
+Customize Operation Workflows
+    [Arguments]    ${device}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_config_snapshot.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_config_update.toml    /etc/tedge/operations/
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Publish and Verify Local Command
     [Arguments]    ${topic}    ${payload}    ${expected_status}=successful    ${c8y_fragment}=

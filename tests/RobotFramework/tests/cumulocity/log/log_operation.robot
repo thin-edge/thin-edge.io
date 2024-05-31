@@ -41,6 +41,26 @@ Manual log_upload operation request
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_LogfileRequest
 
+Trigger log_upload operation from another operation
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%SZ
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/sub_log_upload/example-1234
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"repeated","lines":3}
+    ${log_excerpt}     Execute Command    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234
+    Should Be Equal    ${log_excerpt}     filename: example.log\n13 repeated line\n14 repeated line\n15 repeated line\n
+
+Trigger custom log_upload operation
+    [Teardown]    Restore log_upload operation
+    Customize log_upload operation
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/log_upload/custom-1234
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234","type":"example","searchText":"first","lines":10}
+    ...    c8y_fragment=c8y_LogfileRequest
+    ${log_excerpt}     Execute Command    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234
+    ${expected_log}    Get File    ${CURDIR}/example.log
+    Should Be Equal    ${log_excerpt}     ${expected_log}
+
 Log file request limits maximum number of lines with text filter
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -119,11 +139,27 @@ Setup LogFiles
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
+Customize Operation Workflows
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_log_upload.toml    /etc/tedge/operations/
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
+
+Customize log_upload operation
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_log_upload.toml    /etc/tedge/operations/custom_log_upload.toml
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
+
+Restore log_upload operation
+    Execute Command    rm -f /etc/tedge/operations/custom_log_upload.toml
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
+
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
 
+    Customize Operation Workflows
     Setup LogFiles
 
 Publish and Verify Local Command

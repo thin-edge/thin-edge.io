@@ -249,14 +249,14 @@ impl Agent {
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
         // Converter actor
-        let converter_actor_builder = TedgeOperationConverterBuilder::new(
+        let mut converter_actor_builder = TedgeOperationConverterBuilder::new(
             self.config.operation_config,
             workflows,
-            &mut software_update_builder,
-            &mut restart_actor_builder,
             &mut mqtt_actor_builder,
             &mut script_runner,
         );
+        converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
+        converter_actor_builder.register_builtin_operation(&mut software_update_builder);
 
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
@@ -297,16 +297,15 @@ impl Agent {
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_update_enabled: self.config.capabilities.config_update,
                 })?;
-                Some(
-                    ConfigManagerBuilder::try_new(
-                        manager_config,
-                        &mut mqtt_actor_builder,
-                        &mut fs_watch_actor_builder,
-                        &mut downloader_actor_builder,
-                        &mut uploader_actor_builder,
-                    )
-                    .await?,
+                let mut config_manager = ConfigManagerBuilder::try_new(
+                    manager_config,
+                    &mut fs_watch_actor_builder,
+                    &mut downloader_actor_builder,
+                    &mut uploader_actor_builder,
                 )
+                .await?;
+                converter_actor_builder.register_builtin_operation(&mut config_manager);
+                Some(config_manager)
             } else if self.config.capabilities.config_update {
                 warn!("Config_snapshot operation must be enabled to run config_update!");
                 None
@@ -323,15 +322,14 @@ impl Agent {
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: self.config.mqtt_device_topic_id.clone(),
             })?;
-            Some(
-                LogManagerBuilder::try_new(
-                    log_manager_config,
-                    &mut mqtt_actor_builder,
-                    &mut fs_watch_actor_builder,
-                    &mut uploader_actor_builder,
-                )
-                .await?,
+            let mut log_actor = LogManagerBuilder::try_new(
+                log_manager_config,
+                &mut fs_watch_actor_builder,
+                &mut uploader_actor_builder,
             )
+            .await?;
+            converter_actor_builder.register_builtin_operation(&mut log_actor);
+            Some(log_actor)
         } else {
             None
         };

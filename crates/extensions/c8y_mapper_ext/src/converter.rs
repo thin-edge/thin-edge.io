@@ -1478,7 +1478,7 @@ impl CumulocityConverter {
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        let command = match RestartCommand::try_from(
+        let command = match RestartCommand::try_from_bytes(
             target.clone(),
             cmd_id.to_owned(),
             message.payload_bytes(),
@@ -1587,7 +1587,7 @@ impl CumulocityConverter {
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        let command = match SoftwareUpdateCommand::try_from(
+        let command = match SoftwareUpdateCommand::try_from_bytes(
             target.clone(),
             cmd_id.to_string(),
             message.payload_bytes(),
@@ -1741,7 +1741,7 @@ impl CumulocityConverter {
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        let command = match SoftwareListCommand::try_from(
+        let command = match SoftwareListCommand::try_from_bytes(
             target.clone(),
             cmd_id.to_owned(),
             message.payload_bytes(),

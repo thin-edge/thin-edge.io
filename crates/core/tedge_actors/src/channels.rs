@@ -146,7 +146,8 @@ impl<M, N, NS, F> Sender<M> for MappingSender<F, N>
 where
     M: Message,
     N: Message,
-    NS: Iterator<Item = N> + Send,
+    NS: IntoIterator<Item = N> + Send,
+    NS::IntoIter: Send,
     F: Fn(M) -> NS,
     F: 'static + Sync + Send,
 {

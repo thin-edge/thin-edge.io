@@ -103,7 +103,7 @@ impl CumulocityConverter {
             return Ok((vec![], None));
         }
 
-        let command = match ConfigSnapshotCmd::try_from(
+        let command = match ConfigSnapshotCmd::try_from_bytes(
             topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),

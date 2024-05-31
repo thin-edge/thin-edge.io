@@ -10,7 +10,12 @@ use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
+use tedge_actors::DynSender;
+use tedge_actors::MappingSender;
 use tedge_actors::MessageReceiver;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RequestEnvelope;
 use tedge_actors::Sender;
@@ -27,6 +32,10 @@ use tedge_api::commands::SoftwareRequestResponseSoftwareList;
 use tedge_api::commands::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandData;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -324,10 +333,8 @@ struct TestHandler {
 }
 
 async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHandler, DynError> {
-    let mut software_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
-        SimpleMessageBoxBuilder::new("Software", 5);
-    let mut restart_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
-        SimpleMessageBoxBuilder::new("Restart", 5);
+    let mut software_builder = SoftwareActor(SimpleMessageBoxBuilder::new("Software", 5));
+    let mut restart_builder = RestartActor(SimpleMessageBoxBuilder::new("Restart", 5));
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut script_builder: SimpleMessageBoxBuilder<
@@ -346,17 +353,17 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         config_dir: tmp_path.into(),
         state_dir: tmp_path.into(),
     };
-    let converter_actor_builder = TedgeOperationConverterBuilder::new(
+    let mut converter_actor_builder = TedgeOperationConverterBuilder::new(
         config,
         workflows,
-        &mut software_builder,
-        &mut restart_builder,
         &mut mqtt_builder,
         &mut script_builder,
     );
+    converter_actor_builder.register_builtin_operation(&mut restart_builder);
+    converter_actor_builder.register_builtin_operation(&mut software_builder);
 
-    let software_box = software_builder.build().with_timeout(TEST_TIMEOUT_MS);
-    let restart_box = restart_builder.build().with_timeout(TEST_TIMEOUT_MS);
+    let software_box = software_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
+    let restart_box = restart_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     let converter_actor = converter_actor_builder.build();
@@ -387,4 +394,69 @@ async fn skip_capability_messages(mqtt: &mut impl MessageReceiver<MqttMessage>, 
         ],
     )
     .await;
+}
+
+// FIXME: find a way to avoid repeating ourselves with fake and actual restart actors
+struct RestartActor(SimpleMessageBoxBuilder<RestartCommand, RestartCommand>);
+
+impl MessageSource<GenericCommandData, NoConfig> for RestartActor {
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<GenericCommandData>) {
+        self.0.connect_sink(config, &peer.get_sender())
+    }
+}
+
+impl IntoIterator for &RestartActor {
+    type Item = (OperationName, DynSender<GenericCommandState>);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let sender = MappingSender::new(self.0.get_sender(), |msg: GenericCommandState| {
+            msg.try_into().ok()
+        });
+        vec![(OperationType::Restart.to_string(), sender.into())].into_iter()
+    }
+}
+
+// FIXME: find a way to avoid repeating ourselves with fake and actual software actors
+struct SoftwareActor(SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand>);
+
+impl MessageSource<GenericCommandData, NoConfig> for SoftwareActor {
+    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<GenericCommandData>) {
+        self.0
+            .connect_mapped_sink(config, &peer.get_sender(), |msg: SoftwareCommand| {
+                msg.into_generic_commands()
+            })
+    }
+}
+
+impl IntoIterator for &SoftwareActor {
+    type Item = (OperationName, DynSender<GenericCommandState>);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let software_list_sender =
+            MappingSender::new(self.0.get_sender(), |msg: GenericCommandState| {
+                SoftwareListCommand::try_from(msg)
+                    .map(SoftwareCommand::SoftwareListCommand)
+                    .ok()
+            });
+        let software_update_sender =
+            MappingSender::new(self.0.get_sender(), |msg: GenericCommandState| {
+                SoftwareUpdateCommand::try_from(msg)
+                    .map(SoftwareCommand::SoftwareUpdateCommand)
+                    .ok()
+            })
+            .into();
+        vec![
+            (
+                OperationType::SoftwareList.to_string(),
+                software_list_sender.into(),
+            ),
+            (
+                OperationType::SoftwareUpdate.to_string(),
+                software_update_sender,
+            ),
+        ]
+        .into_iter()
+    }
 }

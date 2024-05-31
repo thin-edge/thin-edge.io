@@ -80,12 +80,13 @@ async fn new_config_manager_builder(
         config_dir: temp_dir.to_path_buf(),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-configuration-plugin.toml"),
-        config_reload_topics: vec![
+        config_reload_topics: [
             "te/device/main///cmd/config_snapshot",
             "te/device/main///cmd/config_update",
         ]
-        .try_into()
-        .expect("Infallible"),
+        .into_iter()
+        .map(Topic::new_unchecked)
+        .collect(),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
         use_tedge_write: TedgeWriteStatus::Disabled,
         mqtt_schema: MqttSchema::new(),
@@ -104,15 +105,16 @@ async fn new_config_manager_builder(
     let mut uploader_builder: FakeServerBoxBuilder<ConfigUploadRequest, ConfigUploadResult> =
         FakeServerBoxBuilder::default();
 
-    let config_builder = ConfigManagerBuilder::try_new(
+    let mut config_builder = ConfigManagerBuilder::try_new(
         config,
-        &mut mqtt_builder,
         &mut fs_watcher_builder,
         &mut downloader_builder,
         &mut uploader_builder,
     )
     .await
     .unwrap();
+
+    config_builder.connect_mqtt(&mut mqtt_builder);
 
     (
         config_builder,

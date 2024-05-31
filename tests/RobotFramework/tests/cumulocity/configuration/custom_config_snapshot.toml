@@ -1,0 +1,22 @@
+# Custom config_snapshot operation
+# - ignore all parameters but the target url
+# - upload tedge-configuration-plugin.toml to the target url
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "curl -X PUT --data-binary '@/etc/tedge/plugins/tedge-configuration-plugin.toml' ${.payload.tedgeUrl}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
