@@ -1,8 +1,9 @@
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
-use crate::operation_workflows::builder::WorkflowActorBuilder;
-use crate::operation_workflows::config::OperationConfig;
+use crate::operation_workflows::load_operation_workflows;
+use crate::operation_workflows::OperationConfig;
+use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
@@ -17,12 +18,9 @@ use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
-use log::error;
 use reqwest::Identity;
-use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::Arc;
 use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
@@ -37,8 +35,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
-use tedge_api::workflow::OperationWorkflow;
-use tedge_api::workflow::WorkflowSupervisor;
 use tedge_config::TEdgeConfigReaderService;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
@@ -236,7 +232,7 @@ impl Agent {
         let mut runtime = Runtime::new();
 
         // Operation workflows
-        let workflows = self.load_operation_workflows().await?;
+        let workflows = load_operation_workflows(&self.config.operations_dir).await?;
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
 
         // Restart actor
@@ -380,46 +376,6 @@ impl Agent {
 
         Ok(())
     }
-
-    async fn load_operation_workflows(&self) -> Result<WorkflowSupervisor, anyhow::Error> {
-        let dir_path = &self.config.operations_dir;
-        let mut workflows = WorkflowSupervisor::default();
-        for entry in std::fs::read_dir(dir_path)?.flatten() {
-            let file = entry.path();
-            if file.extension() == Some(OsStr::new("toml")) {
-                match read_operation_workflow(&file)
-                    .await
-                    .and_then(|workflow| load_operation_workflow(&mut workflows, workflow))
-                {
-                    Ok(cmd) => {
-                        info!("Using operation workflow definition from {file:?} for '{cmd}' operation");
-                    }
-                    Err(err) => {
-                        error!("Ignoring operation workflow definition from {file:?}: {err:?}")
-                    }
-                };
-            }
-        }
-        Ok(workflows)
-    }
-}
-
-async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyhow::Error> {
-    let bytes = tokio::fs::read(path)
-        .await
-        .context("Reading file content")?;
-    let input = std::str::from_utf8(&bytes).context("Expecting UTF8 content")?;
-    let workflow = toml::from_str::<OperationWorkflow>(input).context("Parsing TOML content")?;
-    Ok(workflow)
-}
-
-fn load_operation_workflow(
-    workflows: &mut WorkflowSupervisor,
-    workflow: OperationWorkflow,
-) -> Result<String, anyhow::Error> {
-    let name = workflow.operation.to_string();
-    workflows.register_custom_workflow(workflow)?;
-    Ok(name)
 }
 
 pub fn create_tedge_to_te_converter(
