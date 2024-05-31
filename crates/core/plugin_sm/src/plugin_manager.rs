@@ -1,7 +1,6 @@
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::Plugin;
 use crate::plugin::LIST;
-use logged_command::CommandLog;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
@@ -12,6 +11,7 @@ use std::process::Stdio;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
+use tedge_api::CommandLog;
 use tedge_api::SoftwareError;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;

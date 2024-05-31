@@ -14,7 +14,6 @@ async-trait = { workspace = true }
 camino = { workspace = true }
 csv = { workspace = true }
 download = { workspace = true }
-logged_command = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

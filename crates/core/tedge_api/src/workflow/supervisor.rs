@@ -1,5 +1,5 @@
 use crate::workflow::*;
-use log::info;
+use ::log::info;
 use on_disk::OnDiskCommandBoard;
 use serde::Serialize;
 

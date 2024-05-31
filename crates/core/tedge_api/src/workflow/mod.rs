@@ -1,4 +1,5 @@
 pub mod error;
+pub(crate) mod log;
 mod on_disk;
 pub mod script;
 pub mod state;
