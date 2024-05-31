@@ -1,22 +1,23 @@
 *** Settings ***
+
 Resource              ../../../../resources/common.resource
 Library               ThinEdgeIO    adapter=${ADAPTER}
 Library               Cumulocity
-Test Setup            Setup    skip_bootstrap=True   
+Suite Setup            Setup    skip_bootstrap=True   
 Suite Teardown        Get Logs
 
+
 *** Variables ***
+
 ${ADAPTER}            ssh
-${REMOTE_FILE}        output.txt
-${LOCAL_FILE}         output1.txt
-${UNINSTALL_SCRIPT}   ./uninstall-thin-edge_io.sh
+
 
 *** Tasks ***
+
 Install/Update of thinedge curl
    ${log}   Execute Command    curl -fsSL https://thin-edge.io/install.sh | sh -s
    Verify ThinEdgeIO is installed
    Uninstall ThinEdgeIO
-
    
 Install/Update of thinedge wget
    ${log}    Execute Command    wget -O - https://thin-edge.io/install.sh | sh -s
@@ -50,7 +51,6 @@ Manual repository setup and installation running with sudo
    Uninstall ThinEdgeIO
    Remove created repository
 
-
 Manual repository setup and installation running as root
    ${OUTPUT}    Execute Command    sudo su -c "whoami && curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.deb.sh' | bash && apt update && apt-get install -y tedge-full"
    Should Contain    ${OUTPUT}    root
@@ -64,6 +64,7 @@ Install via tarball
    Verify ThinEdgeIO is installed
    Uninstall ThinEdgeIO
 
+
 *** Keywords ***
 
 Verify ThinEdgeIO is installed
@@ -72,6 +73,7 @@ Verify ThinEdgeIO is installed
    Log    ThinEdgeIO was successfully installed
 
 Uninstall ThinEdgeIO
+   Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
    Execute Command    chmod a+x uninstall-thin-edge_io.sh
    Execute Command    ./uninstall-thin-edge_io.sh purge
    Log    Succesfull uninstalled with purge
