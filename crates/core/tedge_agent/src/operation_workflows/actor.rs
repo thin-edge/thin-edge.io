@@ -1,5 +1,5 @@
+use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::state_repository::state::AgentStateRepository;
-use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;

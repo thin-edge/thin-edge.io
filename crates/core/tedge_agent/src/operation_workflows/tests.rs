@@ -1,6 +1,6 @@
+use crate::operation_workflows::builder::TedgeOperationConverterBuilder;
+use crate::operation_workflows::config::OperationConfig;
 use crate::software_manager::actor::SoftwareCommand;
-use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
-use crate::tedge_operation_converter::config::OperationConfig;
 use camino::Utf8Path;
 use serde_json::json;
 use std::process::Output;

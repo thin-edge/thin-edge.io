@@ -23,10 +23,10 @@ use tracing::log::warn;
 mod agent;
 mod file_transfer_server;
 mod operation_file_cache;
+mod operation_workflows;
 mod restart_manager;
 mod software_manager;
 mod state_repository;
-mod tedge_operation_converter;
 mod tedge_to_te_converter;
 
 #[derive(Debug, Clone, clap::Parser)]

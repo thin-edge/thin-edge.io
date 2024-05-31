@@ -1,9 +1,9 @@
+use crate::operation_workflows::actor::AgentInput;
+use crate::operation_workflows::actor::InternalCommandState;
+use crate::operation_workflows::actor::TedgeOperationConverterActor;
+use crate::operation_workflows::config::OperationConfig;
+use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::state_repository::state::AgentStateRepository;
-use crate::tedge_operation_converter::actor::AgentInput;
-use crate::tedge_operation_converter::actor::InternalCommandState;
-use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
-use crate::tedge_operation_converter::config::OperationConfig;
-use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use log::error;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
