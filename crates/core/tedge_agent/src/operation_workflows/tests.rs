@@ -1,4 +1,4 @@
-use crate::operation_workflows::builder::TedgeOperationConverterBuilder;
+use crate::operation_workflows::builder::WorkflowActorBuilder;
 use crate::operation_workflows::config::OperationConfig;
 use crate::software_manager::actor::SoftwareCommand;
 use camino::Utf8Path;
@@ -367,12 +367,8 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         config_dir: tmp_path.into(),
         state_dir: tmp_path.into(),
     };
-    let mut converter_actor_builder = TedgeOperationConverterBuilder::new(
-        config,
-        workflows,
-        &mut mqtt_builder,
-        &mut script_builder,
-    );
+    let mut converter_actor_builder =
+        WorkflowActorBuilder::new(config, workflows, &mut mqtt_builder, &mut script_builder);
     converter_actor_builder.register_builtin_operation(&mut restart_builder);
     converter_actor_builder.register_builtin_operation(&mut software_builder);
 

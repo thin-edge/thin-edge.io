@@ -1,7 +1,7 @@
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
-use crate::operation_workflows::builder::TedgeOperationConverterBuilder;
+use crate::operation_workflows::builder::WorkflowActorBuilder;
 use crate::operation_workflows::config::OperationConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
@@ -249,7 +249,7 @@ impl Agent {
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
         // Converter actor
-        let mut converter_actor_builder = TedgeOperationConverterBuilder::new(
+        let mut converter_actor_builder = WorkflowActorBuilder::new(
             self.config.operation_config,
             workflows,
             &mut mqtt_actor_builder,

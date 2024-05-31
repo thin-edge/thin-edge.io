@@ -44,7 +44,7 @@ pub struct InternalCommandState(GenericCommandState);
 
 fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData] : Debug);
 
-pub struct TedgeOperationConverterActor {
+pub struct WorkflowActor {
     pub(crate) mqtt_schema: MqttSchema,
     pub(crate) device_topic_id: EntityTopicId,
     pub(crate) workflows: WorkflowSupervisor,
@@ -58,9 +58,9 @@ pub struct TedgeOperationConverterActor {
 }
 
 #[async_trait]
-impl Actor for TedgeOperationConverterActor {
+impl Actor for WorkflowActor {
     fn name(&self) -> &str {
-        "TedgeOperationConverter"
+        "WorkflowActor"
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
@@ -90,7 +90,7 @@ impl Actor for TedgeOperationConverterActor {
     }
 }
 
-impl TedgeOperationConverterActor {
+impl WorkflowActor {
     async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
         for capability in self
             .workflows
