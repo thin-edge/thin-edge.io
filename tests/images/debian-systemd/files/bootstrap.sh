@@ -19,6 +19,7 @@ FLAGS
     --connect/--no-connect                  Connect the mapper. Provide the type of mapper via '--mapper <name>'. Default True
     --mapper <name>                         Name of the mapper to use when connecting (if user has specified the --connect option).
                                             Defaults to 'c8y'. Currently only c8y works.
+    --bridge-type <mosquitto|builtin>       Which bridge type to use. mosquitto or builtin
 
     DEVICE FLAGS
     --device-id <name>                      Use a specific device-id. A prefix will be added to the device id
@@ -116,6 +117,7 @@ INSTALL_METHOD="${INSTALL_METHOD:-}"
 INSTALL_SOURCEDIR=${INSTALL_SOURCEDIR:-.}
 MAX_CONNECT_ATTEMPTS=${MAX_CONNECT_ATTEMPTS:-2}
 TEDGE_MAPPER=${TEDGE_MAPPER:-c8y}
+BRIDGE_TYPE=${BRIDGE_TYPE:-mosquitto}
 ARCH=${ARCH:-}
 USE_RANDOM_ID=${USE_RANDOM_ID:-0}
 SHOULD_PROMPT=${SHOULD_PROMPT:-1}
@@ -300,6 +302,12 @@ do
         # Preferred mapper
         --mapper)
             TEDGE_MAPPER="$2"
+            shift
+            ;;
+
+        # Which bridge type to use. mosquitto or builtin
+        --bridge-type)
+            BRIDGE_TYPE="$2"
             shift
             ;;
         
@@ -895,6 +903,30 @@ bootstrap_c8y() {
 connect_mappers() {
     # retry connection attempts
     sudo tedge disconnect "$TEDGE_MAPPER" || true
+
+    # Only set the bridge type setting if it is supported (as it is a relatively new setting)
+    if tedge config get mqtt.bridge.built_in >/dev/null 2>&1; then
+        current_built_in_value=$(tedge config get mqtt.bridge.built_in)
+        desired_built_in_value=
+
+        case "$BRIDGE_TYPE" in
+            builtin|built_in)
+                desired_built_in_value=true
+                ;;
+            mosquitto)
+                desired_built_in_value=false
+                ;;
+            *)
+                echo "FAIL: Invalid bridge-type setting. got=$BRIDGE_TYPE, expected one of [builtin, mosquitto]"
+                exit 1
+                ;;
+        esac
+
+        if [ -n "$desired_built_in_value" ] && [ "$current_built_in_value" != "$desired_built_in_value" ]; then
+            echo "Setting mqtt.bridge.built_in to $desired_built_in_value"
+            sudo tedge config set mqtt.bridge.built_in "$desired_built_in_value"
+        fi
+    fi
 
     CONNECT_ATTEMPT=0
     while true; do
