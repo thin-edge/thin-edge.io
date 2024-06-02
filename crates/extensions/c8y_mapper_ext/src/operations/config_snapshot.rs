@@ -27,6 +27,63 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
+pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
+    [
+        mqtt_schema.topics(
+            EntityFilter::AnyEntity,
+            ChannelFilter::Command(OperationType::ConfigSnapshot),
+        ),
+        mqtt_schema.topics(
+            EntityFilter::AnyEntity,
+            ChannelFilter::CommandMetadata(OperationType::ConfigSnapshot),
+        ),
+    ]
+    .into_iter()
+    .collect()
+}
+
+impl CumulocityConverter {
+    /// Convert c8y_UploadConfigFile JSON over MQTT operation to ThinEdge config_snapshot command
+    pub fn convert_config_snapshot_request(
+        &self,
+        device_xid: String,
+        cmd_id: String,
+        config_upload_request: C8yUploadConfigFile,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let target = self
+            .entity_store
+            .try_get_by_external_id(&device_xid.into())?;
+
+        let channel = Channel::Command {
+            operation: OperationType::ConfigSnapshot,
+            cmd_id: cmd_id.clone(),
+        };
+        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
+
+        // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
+        let tedge_url = format!(
+            "http://{}/tedge/file-transfer/{}/config_snapshot/{}-{}",
+            &self.config.tedge_http_host,
+            target.external_id.as_ref(),
+            config_upload_request.config_type.replace('/', ":"),
+            cmd_id
+        );
+
+        let request = ConfigSnapshotCmdPayload {
+            status: CommandStatus::Init,
+            tedge_url: Some(tedge_url),
+            config_type: config_upload_request.config_type,
+            path: None,
+            log_path: None,
+        };
+
+        // Command messages must be retained
+        Ok(vec![
+            MqttMessage::new(&topic, request.to_json()).with_retain()
+        ])
+    }
+}
+
 impl OperationHandler {
     /// Address received ThinEdge config_snapshot command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
@@ -174,62 +231,7 @@ impl OperationHandler {
     }
 }
 
-pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
-    [
-        mqtt_schema.topics(
-            EntityFilter::AnyEntity,
-            ChannelFilter::Command(OperationType::ConfigSnapshot),
-        ),
-        mqtt_schema.topics(
-            EntityFilter::AnyEntity,
-            ChannelFilter::CommandMetadata(OperationType::ConfigSnapshot),
-        ),
-    ]
-    .into_iter()
-    .collect()
-}
-
 impl CumulocityConverter {
-    /// Convert c8y_UploadConfigFile JSON over MQTT operation to ThinEdge config_snapshot command
-    pub fn convert_config_snapshot_request(
-        &self,
-        device_xid: String,
-        cmd_id: String,
-        config_upload_request: C8yUploadConfigFile,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let target = self
-            .entity_store
-            .try_get_by_external_id(&device_xid.into())?;
-
-        let channel = Channel::Command {
-            operation: OperationType::ConfigSnapshot,
-            cmd_id: cmd_id.clone(),
-        };
-        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
-
-        // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
-        let tedge_url = format!(
-            "http://{}/tedge/file-transfer/{}/config_snapshot/{}-{}",
-            &self.config.tedge_http_host,
-            target.external_id.as_ref(),
-            config_upload_request.config_type.replace('/', ":"),
-            cmd_id
-        );
-
-        let request = ConfigSnapshotCmdPayload {
-            status: CommandStatus::Init,
-            tedge_url: Some(tedge_url),
-            config_type: config_upload_request.config_type,
-            path: None,
-            log_path: None,
-        };
-
-        // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
-    }
-
     /// Converts a config_snapshot metadata message to
     /// - supported operation "c8y_UploadConfigFile"
     /// - supported config types
