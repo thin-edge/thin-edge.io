@@ -151,14 +151,6 @@ impl OperationHandler {
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
-                self.upload_operation_log(
-                    &target.external_id,
-                    cmd_id,
-                    &CumulocitySupportedOperations::C8yUploadConfigFile.into(),
-                    command.clone().into_generic_command(&self.mqtt_schema),
-                )
-                .await?;
-
                 vec![c8y_notification, clear_local_cmd]
             }
             CommandStatus::Failed { reason } => {
