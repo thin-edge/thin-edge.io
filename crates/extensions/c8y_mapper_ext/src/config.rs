@@ -304,9 +304,6 @@ pub enum C8yMapperConfigBuildError {
 
     #[error(transparent)]
     FromTopicIdError(#[from] TopicIdError),
-
-    #[error(transparent)]
-    OtherError(#[from] anyhow::Error),
 }
 
 #[derive(thiserror::Error, Debug)]

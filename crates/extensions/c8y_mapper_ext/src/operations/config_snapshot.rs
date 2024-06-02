@@ -106,7 +106,6 @@ impl OperationHandler {
 
                 match download_result {
                     Err(err) => {
-                        println!("{err}");
                         let smartrest_error =
                     fail_operation(
                         CumulocitySupportedOperations::C8yUploadConfigFile,
@@ -127,7 +126,7 @@ impl OperationHandler {
                     Utf8PathBuf::try_from(destination_path).map_err(|e| e.into_io_error())?;
                 let event_type = command.payload.config_type.clone();
 
-                // Create an event in c8y
+                // Upload the file to C8y
                 let (c8y_binary_url, upload_result) = self
                     .upload_file(
                         &target.external_id,
@@ -615,7 +614,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "TODO: replace with mock http"]
     async fn auto_log_upload_successful_operation() {
         let ttd = TempTedgeDir::new();
         let config = C8yMapperConfig {

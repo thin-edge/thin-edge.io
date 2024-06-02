@@ -101,7 +101,6 @@ use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
@@ -304,7 +303,7 @@ impl CumulocityConverter {
 
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
-            http_proxy: Arc::new(Mutex::new(http_proxy.clone())),
+            http_proxy: http_proxy.clone(),
         });
 
         Ok(CumulocityConverter {

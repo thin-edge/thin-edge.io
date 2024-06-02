@@ -37,7 +37,7 @@ impl OperationHandler {
             device_id: external_id.into(),
         };
 
-        let mut c8y_http_proxy = self.http_proxy.lock().await.clone();
+        let mut c8y_http_proxy = self.http_proxy.clone();
         let event_response_id = c8y_http_proxy.send_event(create_event).await?;
 
         let binary_upload_event_url = self

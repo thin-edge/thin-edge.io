@@ -49,7 +49,7 @@ pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult] : Debug);
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -101,8 +101,6 @@ impl Actor for C8yMapperActor {
                 C8yMapperInput::SyncComplete(_) => {
                     self.process_sync_timeout().await?;
                 }
-                C8yMapperInput::IdUploadResult(_) => {}
-                C8yMapperInput::IdDownloadResult(_) => {}
             }
         }
         Ok(())
@@ -191,7 +189,7 @@ pub struct C8yMapperBuilder {
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
-    uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
+    uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
