@@ -84,7 +84,6 @@ json-writer = { path = "crates/common/json_writer" }
 lazy_static = "1.4"
 log = "0.4"
 log_manager = { path = "crates/common/log_manager" }
-logged_command = { path = "crates/common/logged_command" }
 maplit = "1.0"
 miette = { version = "5.5.0", features = ["fancy"] }
 mime = "0.3.17"

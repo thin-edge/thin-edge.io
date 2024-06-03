@@ -75,7 +75,9 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
                 log_path: Some(
                     tmp_dir
                         .path()
-                        .join("workflow-software_list-some-cmd-id.log"),
+                        .join("workflow-software_list-some-cmd-id.log")
+                        .try_into()
+                        .unwrap(),
                 ),
             },
         }])
@@ -122,7 +124,13 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
                 status: CommandStatus::Scheduled,
                 update_list: vec![debian_list],
                 failures: vec![],
-                log_path: Some(tmp_dir.path().join("workflow-software_update-1234.log")),
+                log_path: Some(
+                    tmp_dir
+                        .path()
+                        .join("workflow-software_update-1234.log")
+                        .try_into()
+                        .unwrap(),
+                ),
             },
         }])
         .await;
@@ -156,7 +164,13 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
             cmd_id: "random".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Scheduled,
-                log_path: Some(tmp_dir.path().join("workflow-restart-random.log")),
+                log_path: Some(
+                    tmp_dir
+                        .path()
+                        .join("workflow-restart-random.log")
+                        .try_into()
+                        .unwrap(),
+                ),
             },
         }])
         .await;

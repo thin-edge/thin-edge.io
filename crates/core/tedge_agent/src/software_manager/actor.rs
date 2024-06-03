@@ -6,8 +6,6 @@ use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use plugin_sm::operation_logs::LogKind;
-use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
 use serde::Deserialize;
@@ -31,6 +29,7 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
+use tedge_api::CommandLog;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareType;
 use tedge_config::TEdgeConfigError;
@@ -101,9 +100,6 @@ impl Actor for SoftwareManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
-            .map_err(SoftwareManagerError::FromOperationsLogs)?;
-
         let mut plugins = ExternalPlugins::open(
             &self.config.sm_plugins_dir,
             self.config.default_plugin_type.clone(),
@@ -137,7 +133,7 @@ impl Actor for SoftwareManagerActor {
 
         while let Some(request) = input_receiver.recv().await {
             tokio::select! {
-                _ = self.handle_request(request, &mut plugins, &operation_logs) => {
+                _ = self.handle_request(request, &mut plugins) => {
                     if let Err(SoftwareManagerError::NotRunningLatestVersion) = Self::detect_self_update() {
                         warn!("Tedge-agent is no more running the latest-version => a restart is required");
                         // Make sure the operation status is properly reported before the restart
@@ -186,12 +182,11 @@ impl SoftwareManagerActor {
         &mut self,
         request: SoftwareCommand,
         plugins: &mut ExternalPlugins,
-        operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         match request {
             SoftwareCommand::SoftwareUpdateCommand(request) => {
                 match self
-                    .handle_software_update_operation(request, plugins, operation_logs)
+                    .handle_software_update_operation(request, plugins)
                     .await
                 {
                     Ok(()) => {}
@@ -199,10 +194,7 @@ impl SoftwareManagerActor {
                 }
             }
             SoftwareCommand::SoftwareListCommand(request) => {
-                if let Err(err) = self
-                    .handle_software_list_operation(request, plugins, operation_logs)
-                    .await
-                {
+                if let Err(err) = self.handle_software_list_operation(request, plugins).await {
                     error!("{:?}", err);
                 }
             }
@@ -245,7 +237,6 @@ impl SoftwareManagerActor {
         &mut self,
         request: SoftwareUpdateCommand,
         plugins: &mut ExternalPlugins,
-        operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         if request.status() != CommandStatus::Scheduled {
             // Only handle commands in the scheduled state
@@ -261,17 +252,16 @@ impl SoftwareManagerActor {
         let executing_response = request.clone().with_status(CommandStatus::Executing);
         self.output_sender.send(executing_response.into()).await?;
 
-        let response = match operation_logs.new_log_file(LogKind::SoftwareUpdate).await {
-            Ok(log_file) => {
-                plugins
-                    .process(request, log_file, self.config.tmp_dir.as_std_path())
-                    .await
-            }
-            Err(err) => {
-                error!("{}", err);
-                request.with_error(format!("{}", err))
-            }
-        };
+        let command_log = request.payload.log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::SoftwareUpdate.to_string(),
+                request.cmd_id.clone(),
+            )
+        });
+        let response = plugins
+            .process(request, command_log, self.config.tmp_dir.as_std_path())
+            .await;
         self.output_sender.send(response.into()).await?;
 
         self.state_repository.clear().await?;
@@ -318,7 +308,6 @@ impl SoftwareManagerActor {
         &mut self,
         request: SoftwareListCommand,
         plugins: &ExternalPlugins,
-        operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         if request.status() != CommandStatus::Scheduled {
             // Only handle commands in the scheduled state
@@ -331,13 +320,15 @@ impl SoftwareManagerActor {
         let executing_response = request.clone().with_status(CommandStatus::Executing);
         self.output_sender.send(executing_response.into()).await?;
 
-        let response = match operation_logs.new_log_file(LogKind::SoftwareList).await {
-            Ok(log_file) => plugins.list(request, log_file).await,
-            Err(err) => {
-                error!("{}", err);
-                request.with_error(format!("{}", err))
-            }
-        };
+        let command_log = request.payload.log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::SoftwareList.to_string(),
+                request.cmd_id.clone(),
+            )
+        });
+
+        let response = plugins.list(request, command_log).await;
         self.output_sender.send(response.into()).await?;
 
         self.state_repository.clear().await?;

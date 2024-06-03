@@ -448,7 +448,7 @@ Log files can be added by creating or editing the following file with the given 
 
 ```toml title="file: /etc/tedge/plugins/tedge-log-plugin.toml"
 files = [
-  { type = "software-management", path = "/var/log/tedge/agent/software-*" },
+  { type = "software-management", path = "/var/log/tedge/agent/workflow-software_*" },
   { type = "mosquitto", path = "/var/log/mosquitto/mosquitto.log" },
   { type = "daemon", path = "/var/log/daemon.log" },
   { type = "user", path = "/var/log/user.log" },

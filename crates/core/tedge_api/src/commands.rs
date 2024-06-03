@@ -7,6 +7,8 @@ use crate::mqtt_topics::OperationType;
 use crate::software::*;
 use crate::workflow::GenericCommandData;
 use crate::workflow::GenericCommandState;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use download::DownloadInfo;
 use log::error;
 use mqtt_channel::MqttError;
@@ -18,8 +20,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt;
-use std::path::Path;
-use std::path::PathBuf;
 use time::OffsetDateTime;
 
 /// A command instance with its target and its current state of execution
@@ -350,7 +350,7 @@ pub struct SoftwareListCommandPayload {
     pub current_software_list: Vec<SoftwareList>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl Jsonify for SoftwareListCommandPayload {}
@@ -428,7 +428,7 @@ pub struct SoftwareUpdateCommandPayload {
     pub failures: Vec<SoftwareRequestResponseSoftwareList>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl Jsonify for SoftwareUpdateCommandPayload {}
@@ -540,8 +540,8 @@ impl SoftwareUpdateCommand {
             })
     }
 
-    pub fn set_log_path(&mut self, path: &Path) {
-        self.payload.log_path = Some(path.into())
+    pub fn set_log_path(&mut self, path: impl AsRef<Utf8Path>) {
+        self.payload.log_path = Some(path.as_ref().into())
     }
 }
 
@@ -660,7 +660,7 @@ pub struct RestartCommandPayload {
     pub status: CommandStatus,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl RestartCommandPayload {
@@ -777,7 +777,7 @@ pub struct LogUploadCmdPayload {
     pub search_text: Option<String>,
     pub lines: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl Jsonify for LogUploadCmdPayload {}
@@ -828,7 +828,7 @@ pub struct ConfigSnapshotCmdPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl Jsonify for ConfigSnapshotCmdPayload {}
@@ -877,7 +877,7 @@ pub struct ConfigUpdateCmdPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl Jsonify for ConfigUpdateCmdPayload {}
@@ -928,7 +928,7 @@ pub struct FirmwareUpdateCmdPayload {
     pub name: String,
     pub version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<Utf8PathBuf>,
 }
 
 impl Jsonify for FirmwareUpdateCmdPayload {}

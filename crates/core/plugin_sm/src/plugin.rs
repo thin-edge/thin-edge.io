@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
-use logged_command::LoggedCommand;
 use regex::Regex;
 use reqwest::Identity;
 use serde::Deserialize;
@@ -9,52 +8,57 @@ use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
-use tedge_api::*;
+use tedge_api::CommandLog;
+use tedge_api::DownloadInfo;
+use tedge_api::LoggedCommand;
+use tedge_api::SoftwareError;
+use tedge_api::SoftwareModule;
+use tedge_api::SoftwareModuleUpdate;
+use tedge_api::SoftwareType;
+use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
-use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufWriter;
 use tracing::error;
 
 #[async_trait]
 pub trait Plugin {
-    async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+    async fn prepare(&self, command_log: Option<&mut CommandLog>) -> Result<(), SoftwareError>;
 
     async fn install(
         &self,
         module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError>;
 
     async fn remove(
         &self,
         module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError>;
 
     async fn update_list(
         &self,
         modules: &[SoftwareModuleUpdate],
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError>;
 
-    async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
+    async fn finalize(&self, command_log: Option<&mut CommandLog>) -> Result<(), SoftwareError>;
 
     async fn list(
         &self,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Vec<SoftwareModule>, SoftwareError>;
 
     async fn version(
         &self,
         module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Option<String>, SoftwareError>;
 
     async fn apply(
         &self,
         update: &SoftwareModuleUpdate,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
         download_path: &Path,
     ) -> Result<(), SoftwareError> {
         match update.clone() {
@@ -65,18 +69,18 @@ pub trait Plugin {
                         self.install_from_url(
                             &mut module,
                             &url,
-                            logger,
+                            command_log,
                             download_path,
                             self.identity(),
                         )
                         .await?
                     }
-                    None => self.install(&module, logger).await?,
+                    None => self.install(&module, command_log).await?,
                 }
 
                 Ok(())
             }
-            SoftwareModuleUpdate::Remove { module } => self.remove(&module, logger).await,
+            SoftwareModuleUpdate::Remove { module } => self.remove(&module, command_log).await,
         }
     }
 
@@ -85,13 +89,13 @@ pub trait Plugin {
     async fn apply_all(
         &self,
         mut updates: Vec<SoftwareModuleUpdate>,
-        logger: &mut BufWriter<File>,
+        mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
         // Prepare the updates
-        if let Err(prepare_error) = self.prepare(logger).await {
+        if let Err(prepare_error) = self.prepare(command_log.as_deref_mut()).await {
             failed_updates.push(prepare_error);
             return failed_updates;
         }
@@ -105,8 +109,14 @@ pub trait Plugin {
             };
             let module_url = module.url.clone();
             if let Some(url) = module_url {
-                match Self::download_from_url(module, &url, logger, download_path, self.identity())
-                    .await
+                match Self::download_from_url(
+                    module,
+                    &url,
+                    command_log.as_deref_mut(),
+                    download_path,
+                    self.identity(),
+                )
+                .await
                 {
                     Err(prepare_error) => {
                         failed_updates.push(prepare_error);
@@ -119,10 +129,13 @@ pub trait Plugin {
 
         // Execute the updates
         if failed_updates.is_empty() {
-            let outcome = self.update_list(&updates, logger).await;
+            let outcome = self.update_list(&updates, command_log.as_deref_mut()).await;
             if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
                 for update in updates.iter() {
-                    if let Err(error) = self.apply(update, logger, download_path).await {
+                    if let Err(error) = self
+                        .apply(update, command_log.as_deref_mut(), download_path)
+                        .await
+                    {
                         failed_updates.push(error);
                     };
                 }
@@ -132,13 +145,14 @@ pub trait Plugin {
         }
 
         // Finalize the updates
-        if let Err(finalize_error) = self.finalize(logger).await {
+        if let Err(finalize_error) = self.finalize(command_log.as_deref_mut()).await {
             failed_updates.push(finalize_error);
         }
 
         // Cleanup all the downloaded modules
         for downloader in downloaders {
-            if let Err(cleanup_error) = Self::cleanup_downloaded_artefacts(downloader, logger).await
+            if let Err(cleanup_error) =
+                Self::cleanup_downloaded_artefacts(downloader, command_log.as_deref_mut()).await
             {
                 failed_updates.push(cleanup_error);
             }
@@ -151,14 +165,20 @@ pub trait Plugin {
         &self,
         module: &mut SoftwareModule,
         url: &DownloadInfo,
-        logger: &mut BufWriter<File>,
+        mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
     ) -> Result<(), SoftwareError> {
-        let downloader =
-            Self::download_from_url(module, url, logger, download_path, identity).await?;
-        let result = self.install(module, logger).await;
-        Self::cleanup_downloaded_artefacts(downloader, logger).await?;
+        let downloader = Self::download_from_url(
+            module,
+            url,
+            command_log.as_deref_mut(),
+            download_path,
+            identity,
+        )
+        .await?;
+        let result = self.install(module, command_log.as_deref_mut()).await;
+        Self::cleanup_downloaded_artefacts(downloader, command_log).await?;
 
         result
     }
@@ -166,24 +186,25 @@ pub trait Plugin {
     async fn download_from_url(
         module: &mut SoftwareModule,
         url: &DownloadInfo,
-        logger: &mut BufWriter<File>,
+        mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
     ) -> Result<Downloader, SoftwareError> {
         let sm_path = sm_path(&module.name, &module.version, download_path);
         let downloader = Downloader::new(sm_path, identity.map(|id| id.to_owned()));
 
-        logger
-            .write_all(
-                format!(
-                    "----- $ Downloading: {} to {} \n",
-                    &url.url(),
-                    &downloader.filename().to_string_lossy().to_string()
+        if let Some(ref mut logger) = command_log {
+            logger
+                .write(
+                    format!(
+                        "----- $ Downloading: {} to {} \n",
+                        &url.url(),
+                        &downloader.filename().to_string_lossy().to_string()
+                    )
+                    .as_bytes(),
                 )
-                .as_bytes(),
-            )
-            .await?;
-        logger.flush().await?;
+                .await?;
+        }
 
         if let Err(err) =
             downloader
@@ -196,9 +217,11 @@ pub trait Plugin {
                 })
         {
             error!("Download error: {err:#?}");
-            logger
-                .write_all(format!("error: {}\n", &err).as_bytes())
-                .await?;
+            if let Some(ref mut logger) = command_log {
+                logger
+                    .write(format!("error: {}\n", &err).as_bytes())
+                    .await?;
+            }
             return Err(err);
         }
 
@@ -209,7 +232,7 @@ pub trait Plugin {
 
     async fn cleanup_downloaded_artefacts(
         downloader: Downloader,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError> {
         if let Err(err) = downloader
             .cleanup()
@@ -218,9 +241,9 @@ pub trait Plugin {
                 reason: err.to_string(),
             })
         {
-            logger
-                .write_all(format!("warn: {}\n", &err).as_bytes())
-                .await?;
+            if let Some(logger) = command_log {
+                logger.write(format!("warn: {}\n", &err).as_bytes()).await?;
+            }
         }
         Ok(())
     }
@@ -296,10 +319,10 @@ impl ExternalPluginCommand {
     pub async fn execute(
         &self,
         command: LoggedCommand,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Output, SoftwareError> {
         let output = command
-            .execute(logger)
+            .execute(command_log)
             .await
             .map_err(|err| self.plugin_error(err))?;
         Ok(output)
@@ -340,9 +363,9 @@ const VERSION: &str = "version";
 
 #[async_trait]
 impl Plugin for ExternalPluginCommand {
-    async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
+    async fn prepare(&self, command_log: Option<&mut CommandLog>) -> Result<(), SoftwareError> {
         let command = self.command(PREPARE, None)?;
-        let output = self.execute(command, logger).await?;
+        let output = self.execute(command, command_log).await?;
 
         if output.status.success() {
             Ok(())
@@ -357,10 +380,10 @@ impl Plugin for ExternalPluginCommand {
     async fn install(
         &self,
         module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError> {
         let command = self.command(INSTALL, Some(module))?;
-        let output = self.execute(command, logger).await?;
+        let output = self.execute(command, command_log).await?;
 
         if output.status.success() {
             Ok(())
@@ -375,10 +398,10 @@ impl Plugin for ExternalPluginCommand {
     async fn remove(
         &self,
         module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError> {
         let command = self.command(REMOVE, Some(module))?;
-        let output = self.execute(command, logger).await?;
+        let output = self.execute(command, command_log).await?;
 
         if output.status.success() {
             Ok(())
@@ -393,7 +416,7 @@ impl Plugin for ExternalPluginCommand {
     async fn update_list(
         &self,
         updates: &[SoftwareModuleUpdate],
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), SoftwareError> {
         let mut command = self.command(UPDATE_LIST, None)?;
 
@@ -432,7 +455,7 @@ impl Plugin for ExternalPluginCommand {
             child_stdin.write_all(action.as_bytes()).await?
         }
 
-        let output = child.wait_with_output(logger).await?;
+        let output = child.wait_with_output(command_log).await?;
         match output.status.code() {
             Some(0) => Ok(()),
             Some(1) => Err(SoftwareError::UpdateListNotSupported(self.name.clone())),
@@ -447,9 +470,9 @@ impl Plugin for ExternalPluginCommand {
         }
     }
 
-    async fn finalize(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError> {
+    async fn finalize(&self, command_log: Option<&mut CommandLog>) -> Result<(), SoftwareError> {
         let command = self.command(FINALIZE, None)?;
-        let output = self.execute(command, logger).await?;
+        let output = self.execute(command, command_log).await?;
 
         if output.status.success() {
             Ok(())
@@ -463,10 +486,10 @@ impl Plugin for ExternalPluginCommand {
 
     async fn list(
         &self,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Vec<SoftwareModule>, SoftwareError> {
         let command = self.command(LIST, None)?;
-        let output = self.execute(command, logger).await?;
+        let output = self.execute(command, command_log).await?;
         if output.status.success() {
             let filtered_output = match (&self.exclude, &self.include) {
                 (None, None) => output.stdout,
@@ -525,10 +548,10 @@ impl Plugin for ExternalPluginCommand {
     async fn version(
         &self,
         module: &SoftwareModule,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Option<String>, SoftwareError> {
         let command = self.command(VERSION, Some(module))?;
-        let output = self.execute(command, logger).await?;
+        let output = self.execute(command, command_log).await?;
 
         if output.status.success() {
             let version = String::from(self.content(output.stdout)?.trim());

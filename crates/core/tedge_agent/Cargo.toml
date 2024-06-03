@@ -22,7 +22,6 @@ futures = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 lazy_static = { workspace = true }
 log = { workspace = true }
-logged_command = { workspace = true }
 path-clean = { workspace = true }
 plugin_sm = { workspace = true }
 reqwest = { workspace = true }

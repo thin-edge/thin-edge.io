@@ -23,6 +23,8 @@ pub use error::*;
 pub use health::*;
 pub use software::*;
 pub use store::pending_entity_store;
+pub use workflow::log::command_log::CommandLog;
+pub use workflow::log::logged_command::LoggedCommand;
 
 #[cfg(test)]
 mod tests {

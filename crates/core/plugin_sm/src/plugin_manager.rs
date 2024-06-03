@@ -1,4 +1,3 @@
-use crate::log_file::LogFile;
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::Plugin;
 use crate::plugin::LIST;
@@ -12,6 +11,7 @@ use std::process::Stdio;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
+use tedge_api::CommandLog;
 use tedge_api::SoftwareError;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
@@ -227,16 +227,15 @@ impl ExternalPlugins {
     pub async fn list(
         &self,
         mut response: SoftwareListCommand,
-        mut log_file: LogFile,
+        mut command_log: Option<CommandLog>,
     ) -> SoftwareListCommand {
-        let logger = log_file.buffer();
         let mut error_count = 0;
 
         if self.plugin_map.is_empty() {
             response.add_modules("".into(), vec![]);
         } else {
             for (software_type, plugin) in self.plugin_map.iter() {
-                match plugin.list(logger).await {
+                match plugin.list(command_log.as_mut()).await {
                     Ok(software_list) => response.add_modules(software_type.clone(), software_list),
                     Err(_) => {
                         error_count += 1;
@@ -245,7 +244,7 @@ impl ExternalPlugins {
             }
         }
 
-        if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
+        if let Some(reason) = ExternalPlugins::error_message(error_count, command_log) {
             response.with_error(reason)
         } else {
             response.with_status(CommandStatus::Successful)
@@ -255,17 +254,18 @@ impl ExternalPlugins {
     pub async fn process(
         &self,
         request: SoftwareUpdateCommand,
-        mut log_file: LogFile,
+        mut command_log: Option<CommandLog>,
         download_path: &Path,
     ) -> SoftwareUpdateCommand {
         let mut response = request.clone().with_status(CommandStatus::Executing);
-        let logger = log_file.buffer();
         let mut error_count = 0;
 
         for software_type in request.modules_types() {
             let errors = if let Some(plugin) = self.by_software_type(&software_type) {
                 let updates = request.updates_for(&software_type);
-                plugin.apply_all(updates, logger, download_path).await
+                plugin
+                    .apply_all(updates, command_log.as_mut(), download_path)
+                    .await
             } else {
                 vec![SoftwareError::UnknownSoftwareType {
                     software_type: software_type.clone(),
@@ -278,24 +278,23 @@ impl ExternalPlugins {
             }
         }
 
-        if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
+        if let Some(reason) = ExternalPlugins::error_message(error_count, command_log) {
             response.with_error(reason)
         } else {
             response.with_status(CommandStatus::Successful)
         }
     }
 
-    fn error_message(log_file: &Path, error_count: i32) -> Option<String> {
+    fn error_message(error_count: i32, command_log: Option<CommandLog>) -> Option<String> {
         if error_count > 0 {
             let reason = if error_count == 1 {
-                format!("1 error, see device log file {}", log_file.display())
+                "1 error".into()
             } else {
-                format!(
-                    "{} errors, see device log file {}",
-                    error_count,
-                    log_file.display()
-                )
+                format!("{} errors", error_count)
             };
+            let reason = command_log
+                .map(|log| format!("{}, see device log file {}", reason, log.path))
+                .unwrap_or(reason);
             Some(reason)
         } else {
             None

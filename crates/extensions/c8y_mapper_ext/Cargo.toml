@@ -18,7 +18,6 @@ c8y_http_proxy = { workspace = true }
 camino = { workspace = true }
 clock = { workspace = true }
 json-writer = { workspace = true }
-logged_command = { workspace = true }
 mime = { workspace = true }
 plugin_sm = { workspace = true }
 serde = { workspace = true }

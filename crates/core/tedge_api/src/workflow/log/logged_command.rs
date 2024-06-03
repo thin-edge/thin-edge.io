@@ -1,14 +1,13 @@
-use log::error;
-use nix::unistd::Pid;
+use crate::CommandLog;
 use std::ffi::OsStr;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::fs::File;
+use tedge_utils::signals::terminate_process;
+use tedge_utils::signals::Signal;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufWriter;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -27,7 +26,7 @@ pub struct LoggingChild {
 impl LoggingChild {
     pub async fn wait_for_output_with_timeout(
         self,
-        logger: &mut BufWriter<File>,
+        command_log: &mut CommandLog,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
     ) -> Result<Output, std::io::Error> {
@@ -36,7 +35,7 @@ impl LoggingChild {
         let mut status = CmdStatus::Successful;
         tokio::select! {
             outcome = self.inner_child.wait_with_output() => {
-               Self::update_and_log_outcome(cmd_line, outcome, logger, graceful_timeout, &status).await
+               Self::update_and_log_outcome(cmd_line, outcome, command_log, graceful_timeout, &status).await
             }
             _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout) => {
                 Err(std::io::Error::new(std::io::ErrorKind::Other,"failed to kill the process: {cmd_line}"))
@@ -46,20 +45,21 @@ impl LoggingChild {
 
     pub async fn wait_with_output(
         self,
-        logger: &mut BufWriter<File>,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<Output, std::io::Error> {
         let outcome = self.inner_child.wait_with_output().await;
-        if let Err(err) = LoggedCommand::log_outcome(&self.command_line, &outcome, logger).await {
-            error!("Fail to log the command execution: {}", err);
+        if let Some(command_log) = command_log {
+            command_log
+                .log_command_and_output(&self.command_line, &outcome)
+                .await;
         }
-
         outcome
     }
 
     async fn update_and_log_outcome(
         command_line: String,
         outcome: Result<Output, std::io::Error>,
-        logger: &mut BufWriter<File>,
+        command_log: &mut CommandLog,
         timeout: Duration,
         status: &CmdStatus,
     ) -> Result<Output, std::io::Error> {
@@ -69,9 +69,9 @@ impl LoggingChild {
                 outcome.map(|outcome| update_stderr_message(outcome, timeout))?
             }
         };
-        if let Err(err) = LoggedCommand::log_outcome(&command_line, &outcome, logger).await {
-            error!("Fail to log the command execution: {}", err);
-        }
+        command_log
+            .log_command_and_output(&command_line, &outcome)
+            .await;
         outcome
     }
 
@@ -83,16 +83,19 @@ impl LoggingChild {
     ) -> Result<(), std::io::Error> {
         *status = CmdStatus::Successful;
 
-        tokio::time::sleep(graceful_timeout).await;
+        if let Some(pid) = child_id {
+            tokio::time::sleep(graceful_timeout).await;
 
-        // stop the child process by sending sigterm
-        *status = CmdStatus::KilledWithSigterm;
-        send_signal_to_stop_child(child_id, CmdStatus::KilledWithSigterm);
-        tokio::time::sleep(forceful_timeout).await;
+            // stop the child process by sending sigterm
+            *status = CmdStatus::KilledWithSigterm;
+            terminate_process(pid, Signal::SIGTERM);
 
-        // stop the child process by sending sigkill
-        *status = CmdStatus::KilledWithSigKill;
-        send_signal_to_stop_child(child_id, CmdStatus::KilledWithSigKill);
+            tokio::time::sleep(forceful_timeout).await;
+
+            // stop the child process by sending sigkill
+            *status = CmdStatus::KilledWithSigKill;
+            terminate_process(pid, Signal::SIGKILL);
+        }
 
         // wait for the process to exit after signal
         tokio::time::sleep(Duration::from_secs(120)).await;
@@ -111,21 +114,6 @@ fn update_stderr_message(mut output: Output, timeout: Duration) -> Result<Output
         .to_vec(),
     );
     Ok(output)
-}
-
-fn send_signal_to_stop_child(child: Option<u32>, signal_type: CmdStatus) {
-    if let Some(pid) = child {
-        let pid: Pid = nix::unistd::Pid::from_raw(pid as nix::libc::pid_t);
-        match signal_type {
-            CmdStatus::KilledWithSigterm => {
-                let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGTERM);
-            }
-            CmdStatus::KilledWithSigKill => {
-                let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGKILL);
-            }
-            _ => {}
-        }
-    }
 }
 
 /// A command which execution is logged.
@@ -195,13 +183,16 @@ impl LoggedCommand {
     ///
     /// If the function fails to log the execution of the command,
     /// this is logged with `log::error!` without changing the return value.
-    pub async fn execute(mut self, logger: &mut BufWriter<File>) -> Result<Output, std::io::Error> {
+    pub async fn execute(
+        mut self,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<Output, std::io::Error> {
         let outcome = self.command.output().await;
-
-        if let Err(err) = LoggedCommand::log_outcome(&self.to_string(), &outcome, logger).await {
-            error!("Fail to log the command execution: {}", err);
+        if let Some(command_log) = command_log {
+            command_log
+                .log_command_and_output(&self.to_string(), &outcome)
+                .await;
         }
-
         outcome
     }
 
@@ -292,118 +283,5 @@ impl From<std::process::Command> for LoggedCommand {
         Self {
             command: tokio::process::Command::from(command),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tedge_test_utils::fs::TempTedgeDir;
-    use tokio::fs::File;
-
-    #[tokio::test]
-    async fn on_execute_are_logged_command_line_exit_status_stdout_and_stderr(
-    ) -> Result<(), anyhow::Error> {
-        // Prepare a log file
-        let tmp_dir = TempTedgeDir::new();
-        let tmp_file = tmp_dir.file("operation.log");
-        let log_file_path = tmp_file.path();
-        let log_file = File::create(&log_file_path).await?;
-        let mut logger = BufWriter::new(log_file);
-
-        // Prepare a command
-        let mut command = LoggedCommand::new("echo").unwrap();
-        command.arg("Hello").arg("World!");
-
-        // Execute the command with logging
-        let _ = command.execute(&mut logger).await;
-
-        let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
-        assert_eq!(
-            log_content,
-            r#"----- $ echo "Hello" "World!"
-Exit status: 0 (OK)
-
-stderr (EMPTY)
-
-stdout <<EOF
-Hello World!
-EOF
-"#
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn on_execute_with_error_stderr_is_logged() -> Result<(), anyhow::Error> {
-        // Prepare a log file
-        let tmp_dir = TempTedgeDir::new();
-        let tmp_file = tmp_dir.file("operation.log");
-        let log_file_path = tmp_file.path();
-        let log_file = File::create(&log_file_path).await?;
-        let mut logger = BufWriter::new(log_file);
-
-        // Prepare a command that triggers some content on stderr
-        let mut command = LoggedCommand::new("ls").unwrap();
-        command.arg("dummy-file");
-
-        // Execute the command with logging
-        let _ = command.execute(&mut logger).await;
-
-        // On expect the errors to be logged
-        let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
-        #[cfg(target_os = "linux")]
-        assert_eq!(
-            log_content,
-            r#"----- $ ls "dummy-file"
-Exit status: 2 (ERROR)
-
-stderr <<EOF
-ls: cannot access 'dummy-file': No such file or directory
-EOF
-
-stdout (EMPTY)
-"#
-        );
-        #[cfg(target_os = "macos")]
-        assert_eq!(
-            log_content,
-            r#"----- $ ls "dummy-file"
-Exit status: 1 (ERROR)
-
-stderr <<EOF
-ls: dummy-file: No such file or directory
-EOF
-
-stdout (EMPTY)
-"#
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn on_execution_error_are_logged_command_line_and_error() -> Result<(), anyhow::Error> {
-        // Prepare a log file
-        let tmp_dir = TempTedgeDir::new();
-        let tmp_file = tmp_dir.file("operation.log");
-        let log_file_path = tmp_file.path();
-        let log_file = File::create(&log_file_path).await?;
-        let mut logger = BufWriter::new(log_file);
-
-        // Prepare a command that cannot be executed
-        let command = LoggedCommand::new("dummy-command").unwrap();
-
-        // Execute the command with logging
-        let _ = command.execute(&mut logger).await;
-
-        // The fact that the command cannot be executed must be logged
-        let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
-        assert_eq!(
-            log_content,
-            r#"----- $ dummy-command
-error: No such file or directory (os error 2)
-"#
-        );
-        Ok(())
     }
 }

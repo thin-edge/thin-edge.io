@@ -1,8 +1,8 @@
+use camino::Utf8PathBuf;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::path::Path;
-use std::path::PathBuf;
 use time::format_description;
 use time::OffsetDateTime;
 use tracing::log;
@@ -23,7 +23,7 @@ pub enum OperationLogsError {
 
 #[derive(Debug)]
 pub struct OperationLogs {
-    pub log_dir: PathBuf,
+    pub log_dir: Utf8PathBuf,
 }
 
 pub enum LogKind {
@@ -36,7 +36,7 @@ const UPDATE_PREFIX: &str = "software-update";
 const LIST_PREFIX: &str = "software-list";
 
 impl OperationLogs {
-    pub fn try_new(log_dir: PathBuf) -> Result<OperationLogs, OperationLogsError> {
+    pub fn try_new(log_dir: Utf8PathBuf) -> Result<OperationLogs, OperationLogsError> {
         std::fs::create_dir_all(log_dir.clone())?;
         let operation_logs = OperationLogs { log_dir };
 
@@ -111,13 +111,13 @@ impl OperationLogs {
 
 fn remove_old_logs(
     log_tracker: &mut BinaryHeap<Reverse<String>>,
-    dir_path: &Path,
+    dir_path: impl AsRef<Path>,
     n: usize,
 ) -> Result<(), OperationLogsError> {
     while log_tracker.len() > n {
         if let Some(rname) = log_tracker.pop() {
             let name = rname.0;
-            let path = dir_path.join(name.clone());
+            let path = dir_path.as_ref().join(name.clone());
             if let Err(err) = std::fs::remove_file(path) {
                 log::warn!("Fail to remove out-dated log file {} : {}", name, err);
             }
@@ -131,6 +131,7 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::path::Path;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -151,7 +152,7 @@ mod tests {
         let unrelated_2 = create_file(log_dir.path(), "bar");
 
         // Open the log dir
-        let _operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf())?;
+        let _operation_logs = OperationLogs::try_new(log_dir.into_path().try_into().unwrap())?;
 
         // Outdated logs are removed
         assert!(!update_log_1.exists());
@@ -179,7 +180,8 @@ mod tests {
     async fn on_new_log_keep_the_latest_logs_plus_the_new_one() -> Result<(), anyhow::Error> {
         // Create a log dir
         let log_dir = TempDir::new()?;
-        let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf())?;
+        let operation_logs =
+            OperationLogs::try_new(log_dir.path().to_path_buf().try_into().unwrap())?;
 
         // Add a bunch of fake log files
         let swlist_log_1 = create_file(log_dir.path(), "software-list-1996-02-22T16:39:57z");

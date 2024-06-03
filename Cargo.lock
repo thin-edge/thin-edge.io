@@ -706,7 +706,6 @@ dependencies = [
  "camino",
  "clock",
  "json-writer",
- "logged_command",
  "mime",
  "plugin_sm",
  "proptest",
@@ -1855,18 +1854,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "logged_command"
-version = "1.1.1"
-dependencies = [
- "anyhow",
- "log",
- "nix",
- "shell-words",
- "tedge_test_utils",
- "tokio",
-]
-
-[[package]]
 name = "mach2"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2493,9 +2480,9 @@ version = "1.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "camino",
  "csv",
  "download",
- "logged_command",
  "regex",
  "reqwest",
  "serde",
@@ -3534,7 +3521,6 @@ dependencies = [
  "hyper",
  "lazy_static",
  "log",
- "logged_command",
  "path-clean",
  "plugin_sm",
  "rcgen",
@@ -3689,11 +3675,13 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "tedge_test_utils",
  "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",
  "time",
+ "tokio",
  "toml 0.7.8",
  "walkdir",
 ]

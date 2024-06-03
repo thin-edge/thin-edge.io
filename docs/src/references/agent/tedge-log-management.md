@@ -31,7 +31,7 @@ The `type` given to these paths are used as the log type associated to a log pat
 ```toml title="file: /etc/tedge/plugins/tedge-log-plugin.toml"
 files = [
   { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
-  { type = "software-management", path = '/var/log/tedge/agent/software-*' },
+  { type = "software-management", path = '/var/log/tedge/agent/workflow-software_*' },
   { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
 ]
 ```
