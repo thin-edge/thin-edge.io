@@ -14,8 +14,6 @@ use crate::smartrest::topic::publish_topic_from_ancestors;
 use mqtt_channel::MqttMessage;
 use tedge_config::TopicPrefix;
 
-use super::message::sanitize_for_smartrest;
-
 /// Create a SmartREST message for creating a child device under the given ancestors.
 /// The provided ancestors list must contain all the parents of the given device
 /// starting from its immediate parent device.
@@ -116,29 +114,6 @@ pub fn service_creation_message_payload(
         service_name,
         service_status,
     ]))
-}
-
-/// Create a SmartREST message for updating service status.
-///
-/// `service_status` can be any string, but `"up"`, `"down"`, and `"unknown"`
-/// have known meanings and are displayed in the UI in different ways.
-///
-/// `external_ids` differs from what is returned by `ancestors_external_ids` in
-/// that it also contains the external ID of the current entity (the one we want
-/// to set the status of).
-///
-/// https://cumulocity.com/guides/reference/smartrest-two/#104
-pub fn service_status_update_message(
-    external_ids: &[impl AsRef<str>],
-    service_status: &str,
-    prefix: &TopicPrefix,
-) -> MqttMessage {
-    let topic = publish_topic_from_ancestors(external_ids, prefix);
-
-    let service_status =
-        sanitize_for_smartrest(service_status, super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);
-
-    MqttMessage::new(&topic, fields_to_csv_string(&["104", &service_status]))
 }
 
 #[derive(thiserror::Error, Debug)]

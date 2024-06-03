@@ -87,9 +87,14 @@ pub fn convert_health_status_message(
         .and_then(|v| v.as_str())
         .expect("display type should be inserted for every service in the converter");
 
-    let Ok(status_message) =
-        // smartrest::inventory::service_status_update_message(&external_ids, &health_status);
-        smartrest::inventory::service_creation_message(entity.external_id.as_ref(), display_name, display_type, &health_status, ancestors_external_ids, prefix) else {
+    let Ok(status_message) = smartrest::inventory::service_creation_message(
+        entity.external_id.as_ref(),
+        display_name,
+        display_type,
+        &health_status,
+        ancestors_external_ids,
+        prefix,
+    ) else {
         error!("Can't create 102 for service status update");
         return vec![];
     };
