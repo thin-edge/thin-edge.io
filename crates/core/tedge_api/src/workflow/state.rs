@@ -612,6 +612,11 @@ mod tests {
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
         assert!(cmd.is_init());
+        assert!(!cmd.is_finished());
+        assert!(!cmd.is_successful());
+        assert!(!cmd.is_failed());
+        assert_eq!(cmd.operation(), Some("make_it".to_string()));
+        assert!(cmd.invoking_operation_names().is_empty());
         assert_eq!(
             cmd,
             GenericCommandState {
@@ -671,6 +676,10 @@ mod tests {
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
         assert!(cmd.is_successful());
+        assert!(cmd.is_finished());
+        assert!(!cmd.is_failed());
+        assert_eq!(cmd.operation(), Some("do_it".to_string()));
+        assert_eq!(cmd.invoking_operation_names(), vec!["make_it".to_string()]);
         assert_eq!(
             cmd,
             GenericCommandState {
@@ -692,16 +701,26 @@ mod tests {
     fn retrieve_invoking_command_of_sub_sub_command() {
         let topic =
             Topic::new_unchecked("te/device/main///cmd/child/sub:parent:sub:grand-parent:456");
-        let payload = r#"{ "status":"init" }"#;
+        let payload = r#"{ "status":"failed", "reason":"no idea" }"#;
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_finished());
+        assert!(cmd.is_failed());
+        assert_eq!(cmd.failure_reason(), Some("no idea"));
+        assert!(!cmd.is_successful());
+        assert_eq!(cmd.operation(), Some("child".to_string()));
+        assert_eq!(
+            cmd.invoking_operation_names(),
+            vec!["grand-parent".to_string(), "parent".to_string()]
+        );
         assert_eq!(
             cmd,
             GenericCommandState {
                 topic: topic.clone(),
-                status: "init".to_string(),
+                status: "failed".to_string(),
                 payload: json!({
-                    "status": "init"
+                    "status": "failed",
+                    "reason": "no idea"
                 }),
                 invoking_command_topic: Some(
                     "te/device/main///cmd/parent/sub:grand-parent:456".to_string()

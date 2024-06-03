@@ -6,10 +6,11 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 use serde_json::Value;
-use std::cmp::min;
+use std::cmp::max;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::os::unix::prelude::ExitStatusExt;
+use std::str::FromStr;
 use std::time::Duration;
 
 /// A parsed Unix command line
@@ -26,10 +27,18 @@ impl<'de> Deserialize<'de> for ShellScript {
         D: Deserializer<'de>,
     {
         let command_line = String::deserialize(deserializer)?;
-        let mut args = shell_words::split(&command_line)
-            .map_err(|err| D::Error::custom(format!("invalid script: {command_line}: {err}")))?;
+        command_line.parse().map_err(Error::custom)
+    }
+}
+
+impl FromStr for ShellScript {
+    type Err = String;
+
+    fn from_str(command_line: &str) -> Result<Self, Self::Err> {
+        let mut args = shell_words::split(command_line)
+            .map_err(|err| format!("invalid script: {command_line}: {err}"))?;
         if args.is_empty() {
-            Err(D::Error::custom("invalid script: empty"))
+            Err("invalid script: empty".to_string())
         } else {
             let script = args.remove(0);
             Ok(ShellScript {
@@ -241,7 +250,7 @@ impl ExitHandlers {
 
     pub fn forceful_timeout_extension(&self) -> Option<Duration> {
         self.timeout.map(|timeout| {
-            let extra = min(60, timeout.as_secs() / 20);
+            let extra = max(60, timeout.as_secs() / 20);
             Duration::from_secs(extra)
         })
     }
@@ -363,9 +372,23 @@ impl DefaultHandlers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workflow::toml_config::TomlStateUpdate;
     use crate::workflow::OperationAction;
     use serde_json::json;
     use std::process::Command;
+
+    #[test]
+    fn script_parse_and_display() {
+        let script: ShellScript = "sh -c 'sleep 10'".parse().unwrap();
+        assert_eq!(
+            script,
+            ShellScript {
+                command: "sh".to_string(),
+                args: vec!["-c".to_string(), "sleep 10".to_string()]
+            }
+        );
+        assert_eq!(format!("{script}"), "sh -c 'sleep 10'");
+    }
 
     #[test]
     fn successful_exit_code_determines_next_state() {
@@ -557,6 +580,132 @@ on_exit._ = "oops"
         )
     }
 
+    #[test]
+    fn json_output_is_extracted_from_script_output() {
+        let script = ShellScript::from_str(
+            r#"sh -c 'echo :::begin-tedge:::; echo {\"foo\":\"bar\"}; echo :::end-tedge:::'"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_json_output("user-script", script.output()),
+            Ok(json!({"foo":"bar"}))
+        );
+    }
+
+    #[test]
+    fn error_messages_capture_invalid_json() {
+        let script = ShellScript::from_str(
+            r#"sh -c 'echo :::begin-tedge:::; echo {foo:bar}; echo :::end-tedge:::'"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_json_output("user-script", script.output()),
+            Err("Program `user-script` stdout is not valid JSON: key must be a string at line 1 column 2".to_string())
+        );
+    }
+
+    #[test]
+    fn error_messages_capture_script_exec_errors() {
+        let script = ShellScript::from_str("/bin/user-script").unwrap();
+        assert_eq!(
+            extract_json_output("user-script", script.output()),
+            Err(
+                "Program `user-script` cannot be launched: No such file or directory (os error 2)"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn error_messages_capture_script_exit_status() {
+        let script = ShellScript::from_str("sh -c 'exit 1'").unwrap();
+        assert_eq!(
+            extract_json_output("user-script", script.output()),
+            Err("Program `user-script` failed with exit code 1".to_string())
+        );
+    }
+
+    #[test]
+    fn error_messages_capture_script_killing_signal() {
+        let script = ShellScript::from_str("sh -c 'kill -11 $$'").unwrap();
+        assert_eq!(
+            extract_json_output("user-script", script.output()),
+            Err("Program `user-script` has been killed by SIG11".to_string())
+        );
+    }
+
+    #[test]
+    fn error_messages_capture_ill_formed_script_output() {
+        let script = ShellScript::from_str("sh -c 'echo garbage'").unwrap();
+        assert_eq!(
+            extract_json_output("user-script", script.output()),
+            Err("Program `user-script` stdout contains no :::tedge::: content".to_string())
+        );
+    }
+
+    #[test]
+    fn inject_default_values() {
+        let handlers_unset = handlers_from_toml("");
+        let handlers = handlers_from_toml(r#"on_success = "ok""#);
+        let handlers_with_defaults = handlers_from_toml(
+            r#"
+timeout_second = 15
+on_success = "ok"
+on_kill = "timeout"
+on_error = "error"
+"#,
+        );
+
+        let no_defaults = DefaultHandlers::default();
+        let defaults = DefaultHandlers::try_new(
+            Some(Duration::from_secs(15)),
+            Some(TomlStateUpdate::Simple("timeout".to_string()).into()),
+            Some(TomlStateUpdate::Simple("error".to_string()).into()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            &handlers_unset,
+            &handlers_unset.clone().with_default(&no_defaults)
+        );
+        assert_eq!(&handlers, &handlers.clone().with_default(&no_defaults));
+        assert_eq!(
+            &handlers_with_defaults,
+            &handlers_with_defaults.clone().with_default(&no_defaults)
+        );
+        /* FIXME: `with_default` should also set on_success.
+        assert_eq!(
+            &handlers_with_defaults,
+            &handlers_unset.with_default(&defaults)
+        ); */
+        assert_eq!(&handlers_with_defaults, &handlers.with_default(&defaults));
+        assert_eq!(
+            &handlers_with_defaults,
+            &handlers_with_defaults.clone().with_default(&defaults)
+        );
+    }
+
+    #[test]
+    fn exit_handler_timeout() {
+        // The forceful timeout extension is 1/20 of the graceful timeout
+        // The idea is that we can wait a long time for a command to terminate (more than an hour)
+        // But if things are not going to happen we can be forceful.
+        let handlers = handlers_from_toml("timeout_second = 1600");
+        assert_eq!(handlers.graceful_timeout(), Some(Duration::from_secs(1600)));
+        assert_eq!(
+            handlers.forceful_timeout_extension(),
+            Some(Duration::from_secs(80))
+        );
+
+        // The forceful timeout extension is at least 1 minute
+        let handlers = handlers_from_toml("timeout_second = 15");
+        assert_eq!(handlers.graceful_timeout(), Some(Duration::from_secs(15)));
+        assert_eq!(
+            handlers.forceful_timeout_extension(),
+            Some(Duration::from_secs(60))
+        );
+    }
+
     impl ShellScript {
         pub fn output(&self) -> std::io::Result<std::process::Output> {
             Command::new(self.command.clone())
@@ -573,5 +722,15 @@ on_exit._ = "oops"
         }
 
         panic!("Expect a script with handlers")
+    }
+
+    fn handlers_from_toml(file: &str) -> ExitHandlers {
+        let (_, handlers) = script_from_toml(&format!(
+            r#"
+script = "some-script"
+{file}
+"#
+        ));
+        handlers
     }
 }
