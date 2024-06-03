@@ -663,6 +663,20 @@ define_tedge_config! {
             #[tedge_config(default(value = false))]
             #[doku(skip)] // Hide the configuration in `tedge config list --doc`
             built_in: bool,
+
+            reconnect_policy: {
+                /// The minimum time the built-in bridge will wait before reconnecting
+                #[tedge_config(example = "30", default(function = "|| Seconds(30)"))]
+                initial_interval: Seconds,
+
+                /// The maximum time the built-in bridge will wait before reconnecting
+                #[tedge_config(example = "600", default(function = "|| Seconds(600)"))]
+                maximum_interval: Seconds,
+
+                /// How long to wait after successful reconnection before resetting the reconnect timeout
+                #[tedge_config(example = "300", default(function = "|| Seconds(300)"))]
+                reset_window: Seconds,
+            },
         },
     },
 

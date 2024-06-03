@@ -10,9 +10,16 @@ pub struct CustomBackoff<C> {
     eb: ExponentialBackoff<C>,
     last_failure: Option<Instant>,
     reset_timeout: Duration,
+    last_state: State,
 }
 
-impl<C> CustomBackoff<C> {
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum State {
+    Success,
+    Failure,
+}
+
+impl<C: Clock> CustomBackoff<C> {
     pub fn new(
         clock: C,
         initial_interval: Duration,
@@ -26,32 +33,38 @@ impl<C> CustomBackoff<C> {
                 randomization_factor: 0.5,
                 multiplier: 2.0,
                 max_interval,
-                start_time: Instant::now(),
+                start_time: clock.now(),
                 max_elapsed_time: None,
                 clock,
             },
             last_failure: None,
             reset_timeout,
+            last_state: State::Success,
         }
     }
-}
 
-impl<C: Clock> CustomBackoff<C> {
     #[must_use]
-    pub fn backoff(&mut self) -> BackoffHandle<C> {
+    fn backoff(&mut self) -> BackoffHandle<C> {
         let now = self.eb.clock.now();
         match self.last_failure {
             Some(time) if now - time < self.reset_timeout => (),
-            Some(_) | None => {
+            Some(_) | None if self.last_state == State::Success => {
                 // TODO check we actually succeeded on the previous try too
                 self.eb.reset()
             }
+            _ => (),
         };
+
+        self.last_state = State::Failure;
 
         BackoffHandle {
             duration: self.eb.next_backoff().unwrap(),
             inner: self,
         }
+    }
+
+    pub fn mark_success(&mut self) {
+        self.last_state = State::Success;
     }
 
     pub async fn sleep(&mut self) {
@@ -128,6 +141,18 @@ mod tests {
         let mut backoff = deterministic_backoff(&clock);
         let _ = backoff.backoff();
         clock.tick();
+        backoff.mark_success();
+        assert_eq!(backoff.backoff().duration, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn backoff_does_not_reset_unless_() {
+        let now = Instant::now();
+        let clock = IterClock::new([now, now + Duration::from_secs(10 * 60)]);
+        let mut backoff = deterministic_backoff(&clock);
+        let _ = backoff.backoff();
+        clock.tick();
+        backoff.mark_success();
         assert_eq!(backoff.backoff().duration, Duration::from_secs(30));
     }
 

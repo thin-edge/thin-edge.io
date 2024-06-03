@@ -68,6 +68,12 @@ impl From<u64> for Seconds {
     }
 }
 
+impl From<Seconds> for Duration {
+    fn from(value: Seconds) -> Self {
+        Duration::from_secs(value.0)
+    }
+}
+
 #[cfg(test)]
 use assert_matches::*;
 #[test]

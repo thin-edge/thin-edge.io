@@ -3875,6 +3875,7 @@ version = "1.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backoff",
  "certificate",
  "env_logger",
  "futures",
