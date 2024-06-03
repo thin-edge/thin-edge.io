@@ -1207,10 +1207,13 @@ impl CumulocityConverter {
                     | OperationType::ConfigSnapshot
                     | OperationType::ConfigUpdate
                     | OperationType::FirmwareUpdate => {
-                        let operation_handler = Arc::clone(&self.operation_handler);
-
-                        operation_handler
-                            .handle_operation(operation.clone(), entity, cmd_id, message)
+                        self.operation_handler
+                            .handle_operation(
+                                operation.clone(),
+                                entity,
+                                cmd_id.as_str().into(),
+                                message.clone(),
+                            )
                             .await;
                         Ok((vec![], None))
                     }

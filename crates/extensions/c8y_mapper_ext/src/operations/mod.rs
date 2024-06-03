@@ -81,19 +81,15 @@ pub struct OperationHandler {
 
 impl OperationHandler {
     pub async fn handle_operation(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         operation: OperationType,
         entity: Entity,
-        cmd_id: &str,
-        message: &MqttMessage,
+        cmd_id: Arc<str>,
+        message: MqttMessage,
     ) {
         let handler = self.clone();
-        let cmd_id = cmd_id.to_string();
-        let message = message.clone();
+        let external_id = entity.external_id.clone();
         tokio::spawn(async move {
-            let mut mqtt_publisher = self.mqtt_publisher.clone();
-            let external_id = entity.external_id.clone();
-
             let res = match operation {
                 // old handling in converter
                 OperationType::Restart
@@ -124,10 +120,11 @@ impl OperationHandler {
                 }
             };
 
+            let mut mqtt_publisher = handler.mqtt_publisher.clone();
             match res {
                 // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
                 Ok((messages, Some(command))) if !messages.is_empty() => {
-                    if let Err(e) = self
+                    if let Err(e) = handler
                         .upload_operation_log(&external_id, &cmd_id, &operation, command)
                         .await
                     {
