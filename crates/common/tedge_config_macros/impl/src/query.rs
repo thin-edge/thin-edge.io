@@ -303,27 +303,24 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .field()
                 .expect("Back of path is guaranteed to be a field");
             let segments = path.iter().map(|thing| thing.ident());
+            let to_string = quote_spanned!(field.ty().span()=> .to_string());
             if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
                     parse_quote! {
-                        // Probably where the compiler error appears
-                        // TODO why do we need to unwrap
-                        ReadableKey::#variant_name => Ok(self.#(#segments).*.try_read(self)?.to_string()),
+                        ReadableKey::#variant_name => Ok(self.#(#segments).*.try_read(self)?#to_string),
                     }
                 } else {
                     parse_quote! {
-                        // Probably where the compiler error appears
-                        // TODO why do we need to unwrap
-                        ReadableKey::#variant_name => Ok(self.#(#segments).*.read(self).to_string()),
+                        ReadableKey::#variant_name => Ok(self.#(#segments).*.read(self)#to_string),
                     }
                 }
             } else if field.has_guaranteed_default() {
                 parse_quote! {
-                    ReadableKey::#variant_name => Ok(self.#(#segments).*.to_string()),
+                    ReadableKey::#variant_name => Ok(self.#(#segments).*#to_string),
                 }
             } else {
                 parse_quote! {
-                    ReadableKey::#variant_name => Ok(self.#(#segments).*.or_config_not_set()?.to_string()),
+                    ReadableKey::#variant_name => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
                 }
             }
         });
