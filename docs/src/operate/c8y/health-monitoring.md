@@ -12,7 +12,7 @@ or on the `child` device can be monitored from the **Cumulocity IoT** by sending
 A health status message can be published for any service on a `status/health` channel. The health message should at least contain the `status` of the service.
 
 :::note
-The `status` here can be `up or down` or any other string. For example, `unknown`.
+The `status` here can be `up` or `down` or any other string. For example, `unknown`.
 :::
 
 For example, to update the health status of `device/my-device/service/my-test-service` service, one has to send the
@@ -31,7 +31,7 @@ When an empty health status message is sent, e.g. `{}` or `''`, the `status` wil
 ## Conversion of the health status message to Cumulocity IoT service monitor message
 
 The `tedge-mapper-c8y` will translate any health status message that is received on `te/+/+/+/+/status/health` topic to
-Cumulocity [Service status update](https://cumulocity.com/guides/reference/smartrest-two/#104) SmartREST message and
+Cumulocity [Service creation](https://cumulocity.com/docs/smartrest/mqtt-static-templates/#102) SmartREST message and
 send it to the `Cumulocity` cloud. If a service was not previously registered and it fulfills the requirements for
 auto-registration, it will be auto-registered as described [in the Auto Registration
 section](https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#auto-registration).
@@ -55,18 +55,18 @@ tedge mqtt pub te/device/child1/service/service1/status/health '{"status":"up"}'
 **Cumulocity IoT (output)**
 
 ```text title="Topic"
-c8y/s/us/<device-id>:device:child/<device-id>:device:child:service:service1
+c8y/s/us/<device-id>:device:child1
 ```
 
 ```text title="Payload"
-104,up
+102,<device-id>:device:child1:service:service1,service,service1,up
 ```
 
 </div>
 
 ## Configuring the default service type
 
-The `default service type` can be configured using the `tedge` cli.
+The default service type can be configured using the `tedge` cli.
 
 The example below shows how one can set the default service type to `systemd`.
 
@@ -88,6 +88,6 @@ sudo tedge config unset service.type
 
 # References
 
-More info about the service monitoring can be found in the below link
+More info about the service monitoring can be found in the link below.
 
-[Service monitoring Cumulocity IoT](https://cumulocity.com/guides/reference/smartrest-two/#service-creation-102)
+[Service monitoring Cumulocity IoT](https://cumulocity.com/docs/device-management-application/viewing-device-details/#services)
