@@ -43,9 +43,14 @@ stop_extension_services() {
     done
 }
 
+terminate_tedge_processes() {
+    pkill -u tedge || true
+}
+
 remove_or_purge_package_if_exists() {
     disconnect_from_cloud
     stop_extension_services
+    terminate_tedge_processes
     for package in $packages; do
         if dpkg -s "$package" >/dev/null 2>&1; then
             sudo apt --assume-yes "$1" "$package"
