@@ -11,12 +11,12 @@ justfile @thin-edge/contributors @thin-edge/inetum-contributors
 /.github/ @reubenmiller @Bravo555 @rina23q
 
 # Documentation
-/docs/ @reubenmiller @didier-wenzek
+/docs/ @reubenmiller @didier-wenzek @gligorisaev
 /design/ @reubenmiller @didier-wenzek @albinsuresh
 /images/ @reubenmiller @didier-wenzek
 
 # Testing
-/tests/ @thin-edge/contributors
+/tests/ @thin-edge/contributors @gligorisaev
 
 # Packaging / Misc. contribution (e.g. config files)
 /configuration/ @reubenmiller @rina23q
