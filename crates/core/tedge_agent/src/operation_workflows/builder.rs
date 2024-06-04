@@ -1,9 +1,9 @@
+use crate::operation_workflows::actor::AgentInput;
+use crate::operation_workflows::actor::InternalCommandState;
+use crate::operation_workflows::actor::WorkflowActor;
+use crate::operation_workflows::config::OperationConfig;
+use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::state_repository::state::AgentStateRepository;
-use crate::tedge_operation_converter::actor::AgentInput;
-use crate::tedge_operation_converter::actor::InternalCommandState;
-use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
-use crate::tedge_operation_converter::config::OperationConfig;
-use crate::tedge_operation_converter::message_box::CommandDispatcher;
 use log::error;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
@@ -32,7 +32,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
 
-pub struct TedgeOperationConverterBuilder {
+pub struct WorkflowActorBuilder {
     config: OperationConfig,
     workflows: WorkflowSupervisor,
     input_sender: DynSender<AgentInput>,
@@ -44,7 +44,7 @@ pub struct TedgeOperationConverterBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
-impl TedgeOperationConverterBuilder {
+impl WorkflowActorBuilder {
     pub fn new(
         config: OperationConfig,
         workflows: WorkflowSupervisor,
@@ -105,20 +105,20 @@ impl TedgeOperationConverterBuilder {
     }
 }
 
-impl RuntimeRequestSink for TedgeOperationConverterBuilder {
+impl RuntimeRequestSink for WorkflowActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
     }
 }
 
-impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
+impl Builder<WorkflowActor> for WorkflowActorBuilder {
     type Error = LinkError;
 
-    fn try_build(self) -> Result<TedgeOperationConverterActor, Self::Error> {
+    fn try_build(self) -> Result<WorkflowActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(mut self) -> TedgeOperationConverterActor {
+    fn build(mut self) -> WorkflowActor {
         for capability in self.command_dispatcher.capabilities() {
             if let Err(err) = self
                 .workflows
@@ -130,7 +130,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
 
         let repository =
             AgentStateRepository::new(self.config.state_dir, self.config.config_dir, "workflows");
-        TedgeOperationConverterActor {
+        WorkflowActor {
             mqtt_schema: self.config.mqtt_schema,
             device_topic_id: self.config.device_topic_id,
             workflows: self.workflows,
