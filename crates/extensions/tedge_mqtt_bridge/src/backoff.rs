@@ -8,7 +8,7 @@ use ::backoff::Clock;
 
 pub struct CustomBackoff<C> {
     eb: ExponentialBackoff<C>,
-    last_failure: Option<Instant>,
+    okay_since: Option<Instant>,
     reset_timeout: Duration,
     last_state: State,
 }
@@ -37,63 +37,37 @@ impl<C: Clock> CustomBackoff<C> {
                 max_elapsed_time: None,
                 clock,
             },
-            last_failure: None,
+            okay_since: None,
             reset_timeout,
             last_state: State::Success,
         }
     }
 
     #[must_use]
-    fn backoff(&mut self) -> BackoffHandle<C> {
+    fn backoff(&mut self) -> Duration {
         let now = self.eb.clock.now();
-        match self.last_failure {
+        match self.okay_since {
             Some(time) if now - time < self.reset_timeout => (),
-            Some(_) | None if self.last_state == State::Success => {
-                // TODO check we actually succeeded on the previous try too
-                self.eb.reset()
-            }
+            Some(_) | None if self.last_state == State::Success => self.eb.reset(),
             _ => (),
         };
 
         self.last_state = State::Failure;
 
-        BackoffHandle {
-            duration: self.eb.next_backoff().unwrap(),
-            inner: self,
-        }
+        self.eb
+            .next_backoff()
+            .expect("ExponentialBackoff has no max elapsed time")
     }
 
     pub fn mark_success(&mut self) {
-        self.last_state = State::Success;
+        if self.last_state == State::Failure {
+            self.last_state = State::Success;
+            self.okay_since = Some(self.eb.clock.now());
+        }
     }
 
-    pub async fn sleep(&mut self) {
-        self.backoff().sleep().await
-    }
-}
-
-pub struct BackoffHandle<'a, C: Clock> {
-    inner: &'a mut CustomBackoff<C>,
-    duration: Duration,
-}
-
-impl<'a, C: Clock> Deref for BackoffHandle<'a, C> {
-    type Target = Duration;
-
-    fn deref(&self) -> &Self::Target {
-        &self.duration
-    }
-}
-
-impl<'a, C: Clock> Drop for BackoffHandle<'a, C> {
-    fn drop(&mut self) {
-        self.inner.last_failure = Some(self.inner.eb.clock.now());
-    }
-}
-
-impl<'a, C: Clock> BackoffHandle<'a, C> {
-    pub async fn sleep(self) {
-        tokio::time::sleep(self.duration).await
+    pub fn sleep(&mut self) -> tokio::time::Sleep {
+        tokio::time::sleep(self.backoff())
     }
 }
 
@@ -109,7 +83,7 @@ mod tests {
         let now = Instant::now();
         let clock = IterClock::new([now, now + Duration::from_secs(1)]);
         let mut backoff = deterministic_backoff(&clock);
-        assert_eq!(backoff.backoff().duration, Duration::from_secs(30));
+        assert_eq!(backoff.backoff(), Duration::from_secs(30));
     }
 
     #[test]
@@ -119,7 +93,7 @@ mod tests {
         let mut backoff = deterministic_backoff(&clock);
         let _ = backoff.backoff();
         clock.tick();
-        assert_eq!(backoff.backoff().duration, Duration::from_secs(60));
+        assert_eq!(backoff.backoff(), Duration::from_secs(60));
     }
 
     #[test]
@@ -128,32 +102,41 @@ mod tests {
         let clock = IterClock::new([now]);
         let mut backoff = deterministic_backoff(&clock);
         for _ in 0..1000 {
-            clock.add(backoff.backoff().duration);
+            clock.add(backoff.backoff());
         }
-        assert_eq!(backoff.backoff().duration, Duration::from_secs(600));
-        assert_eq!(backoff.backoff().duration, Duration::from_secs(600));
+        assert_eq!(backoff.backoff(), Duration::from_secs(600));
     }
 
     #[test]
     fn backoff_is_30_seconds_after_timeout() {
         let now = Instant::now();
-        let clock = IterClock::new([now, now + Duration::from_secs(10 * 60)]);
+        let clock = IterClock::new([now, now + Duration::from_secs(5 * 60)]);
         let mut backoff = deterministic_backoff(&clock);
         let _ = backoff.backoff();
-        clock.tick();
         backoff.mark_success();
-        assert_eq!(backoff.backoff().duration, Duration::from_secs(30));
+        clock.tick();
+        assert_eq!(backoff.backoff(), Duration::from_secs(30));
     }
 
     #[test]
-    fn backoff_does_not_reset_unless_() {
+    fn backoff_is_30_seconds_after_exceeding_timeout() {
+        let now = Instant::now();
+        let clock = IterClock::new([now, now + Duration::from_secs(10 * 60)]);
+        let mut backoff = deterministic_backoff(&clock);
+        let _ = backoff.backoff();
+        backoff.mark_success();
+        clock.tick();
+        assert_eq!(backoff.backoff(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn backoff_does_not_reset_unless_marked_successful() {
         let now = Instant::now();
         let clock = IterClock::new([now, now + Duration::from_secs(10 * 60)]);
         let mut backoff = deterministic_backoff(&clock);
         let _ = backoff.backoff();
         clock.tick();
-        backoff.mark_success();
-        assert_eq!(backoff.backoff().duration, Duration::from_secs(30));
+        assert_eq!(backoff.backoff(), Duration::from_secs(30));
     }
 
     /// Creates a [CustomBackoff] with randomization disabled for deterministic testing
