@@ -180,7 +180,7 @@ impl C8yMapperConfig {
         let enable_auto_register = tedge_config.c8y.entity_store.auto_register;
         let clean_start = tedge_config.c8y.entity_store.clean_start;
 
-        let software_management_api = tedge_config.c8y.software_management.api.clone();
+        let software_management_api = tedge_config.c8y.software_management.api;
         let software_management_with_types = tedge_config.c8y.software_management.with_types;
 
         let auto_log_upload = tedge_config.c8y.operations.auto_log_upload;
