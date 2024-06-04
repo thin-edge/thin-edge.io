@@ -293,7 +293,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: crate-ci/typos@v1.21.0
+    - uses: crate-ci/typos@v1.22.0
       continue-on-error: true
     - run: exit 0
 
