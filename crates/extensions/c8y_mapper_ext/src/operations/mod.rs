@@ -31,10 +31,12 @@ use tedge_actors::Sender;
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
 use tedge_config::AutoLogUpload;
+use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::error;
@@ -43,6 +45,9 @@ pub mod config_snapshot;
 pub mod config_update;
 pub mod firmware_update;
 pub mod log_upload;
+mod restart;
+mod software_list;
+mod software_update;
 mod upload;
 
 /// Handles operations.
@@ -69,6 +74,8 @@ pub struct OperationHandler {
     pub tmp_dir: Arc<Utf8Path>,
     pub mqtt_schema: MqttSchema,
     pub c8y_prefix: tedge_config::TopicPrefix,
+    pub software_management_api: SoftwareManagementApiFlag,
+    pub command_id: IdGenerator,
 
     pub http_proxy: C8YHttpProxy,
     pub c8y_endpoint: C8yEndPoint,
@@ -91,13 +98,23 @@ impl OperationHandler {
         let external_id = entity.external_id.clone();
         tokio::spawn(async move {
             let res = match operation {
-                // old handling in converter
-                OperationType::Restart
-                | OperationType::SoftwareList
-                | OperationType::SoftwareUpdate => Ok((vec![], None)),
-
                 OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
 
+                OperationType::Restart => {
+                    handler
+                        .publish_restart_operation_status(entity, &cmd_id, message)
+                        .await
+                }
+                OperationType::SoftwareList => {
+                    handler
+                        .publish_software_list(entity, &cmd_id, &message)
+                        .await
+                }
+                OperationType::SoftwareUpdate => {
+                    handler
+                        .publish_software_update_status(entity, &cmd_id, &message)
+                        .await
+                }
                 OperationType::LogUpload => {
                     handler
                         .handle_log_upload_state_change(entity, &cmd_id, &message)

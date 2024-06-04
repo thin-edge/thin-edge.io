@@ -730,6 +730,7 @@ pub enum ChannelFilter {
     CommandMetadata(OperationType),
 }
 
+#[derive(Debug, Clone)]
 pub struct IdGenerator {
     prefix: String,
 }
