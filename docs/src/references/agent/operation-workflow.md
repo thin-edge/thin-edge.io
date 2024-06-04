@@ -236,6 +236,19 @@ Data extracted from the command status topic and message payload can be passed a
   - `${.payload.status}` is the command current status (*e.g.* `"init"`)
   - `${.payload.x.y.z}` is the json value extracted from the payload following the given `x.y.z` path if any.
   - If given `${.some.unknown.path}`, the argument is passed unchanged to the script.
+  - An argument can contain a combination of path expressions and literals:
+    - in a context where the operation instance payload is  `{"x":"X", "y":"Y"}`
+    - the template `"prefix-${.payload.x}-separator-${.payload.y}-suffix"`
+    - is replaced by `"prefix-X-separator-Y-suffix"`.
+- These substitutions are applied using the following rules:
+  - The script command is first tokenized using shell escaping rules.
+    *e.g.* `"sudo systemctl restart tedge-mapper-${.payload.mapperType}"`
+    is interpreted as the `sudo` command with 3 parameters.
+  - Then all the path expressions of each parameter are expended using the command current topic and payload.
+    *e.g.* `"tedge-mapper-${.payload.mapperType}"` is interpreted as `"tedge-mapper-c8y"`
+    (assuming the JSON payload contains a `mapperType` field with `"c8y"` as string value).
+  - These substitutions apply to the command itself as well as all its arguments.
+  - Any ill-formed path expression is left unchanged.
 
 The script exit status and output is used to determine the next step for the command.
 - If the script cannot be launched or return a non-zero status, the command request is marked as __failed__.

@@ -271,8 +271,8 @@ impl OperationAction {
         match self {
             OperationAction::Script(script, handlers) => OperationAction::Script(
                 ShellScript {
-                    command: state.inject_parameter(&script.command),
-                    args: state.inject_parameters(&script.args),
+                    command: state.inject_values_into_template(&script.command),
+                    args: state.inject_values_into_parameters(&script.args),
                 },
                 handlers.clone(),
             ),
@@ -280,8 +280,8 @@ impl OperationAction {
                 OperationAction::Operation(
                     command.clone(),
                     Some(ShellScript {
-                        command: state.inject_parameter(&script.command),
-                        args: state.inject_parameters(&script.args),
+                        command: state.inject_values_into_template(&script.command),
+                        args: state.inject_values_into_parameters(&script.args),
                     }),
                     input.clone(),
                     handlers.clone(),
