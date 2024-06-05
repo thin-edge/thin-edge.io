@@ -11,7 +11,51 @@ Test Teardown       Get Logs
 
 *** Test Cases ***
 
-Triger custom device profile operation
+Device profile is included in supported operations
+    Should Contain Supported Operations    c8y_DeviceProfile
+    ${CAPABILITY_MESSAGE}=    Execute Command    timeout 1 tedge mqtt sub 'te/device/main///cmd/device_profile'    strip=${True}    ignore_exit_code=${True}
+    Should Be Equal    ${CAPABILITY_MESSAGE}    {}
+
+
+Send device profile operation from Cumulocity IoT
+    ${config_url}=    Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin.toml
+
+    ${PROFILE_ID}=      Set Variable    profile-abc
+    ${PROFILE_NAME}=    Set Variable    Custom Profile1
+
+    ${PAYLOAD}=    Catenate    SEPARATOR=\n    {
+    ...    "profileId":"${PROFILE_ID}",
+    ...    "profileName":"${PROFILE_NAME}",
+    ...    "c8y_DeviceProfile":{
+    ...        "firmware":[
+    ...            {
+    ...                "name":"tedge-core",
+    ...                "version":"1.0.0",
+    ...                "url":""
+    ...            }
+    ...        ],
+    ...        "software":[
+    ...            {
+    ...                "name":"jq",
+    ...                "action":"install",
+    ...                "version":"latest",
+    ...                "url":""
+    ...            }
+    ...        ],
+    ...        "configuration":[
+    ...            {
+    ...                "name":"tedge-configuration-plugin",
+    ...                "type":"tedge-configuration-plugin",
+    ...                "url":"${config_url}"
+    ...            }
+    ...        ]
+    ...    }}
+    ${operation}=    Cumulocity.Create Operation    fragments=${PAYLOAD}    description=Apply device profile: ${PROFILE_NAME}
+    Operation Should Be SUCCESSFUL    ${operation}
+    Device Should Have Installed Software    jq
+    Managed Object Should Have Fragment Values    c8y_Profile.profileId=${PROFILE_ID}    c8y_Profile.profileName=${PROFILE_NAME}    c8y_Profile.profileExecuted=true
+
+Trigger device profile operation locally
     ${config_url}=    Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin.toml
     Execute Command    /etc/tedge/operations/device_profile.sh create_test_operation te/device/main///cmd/device_profile/robot-123 ${config_url}
     ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/device_profile/robot-123    message_pattern=.*successful.*   maximum=1    timeout=30
