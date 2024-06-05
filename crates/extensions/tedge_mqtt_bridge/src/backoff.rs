@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -130,13 +129,13 @@ mod tests {
     }
 
     #[test]
-    fn backoff_does_not_reset_unless_marked_successful() {
+    fn backoff_does_not_reset_if_not_marked_successful() {
         let now = Instant::now();
         let clock = IterClock::new([now, now + Duration::from_secs(10 * 60)]);
         let mut backoff = deterministic_backoff(&clock);
         let _ = backoff.backoff();
         clock.tick();
-        assert_eq!(backoff.backoff(), Duration::from_secs(30));
+        assert_eq!(backoff.backoff(), Duration::from_secs(60));
     }
 
     /// Creates a [CustomBackoff] with randomization disabled for deterministic testing

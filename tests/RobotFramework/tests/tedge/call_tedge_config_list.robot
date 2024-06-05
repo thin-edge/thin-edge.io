@@ -410,7 +410,7 @@ set/unset firmware.child.update.timeout
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset firmware.child.update.timeout
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    firmware.child.update.timeout=3600
+    Should Contain    ${unset}    firmware.child.update.timeout=1h
 
 set/unset c8y.url
     Execute Command    sudo tedge config set c8y.url your-tenant.cumulocity.com    # Changing c8y.url

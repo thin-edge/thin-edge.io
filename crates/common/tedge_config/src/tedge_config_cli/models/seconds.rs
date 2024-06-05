@@ -1,14 +1,14 @@
-use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::fmt;
+use std::fmt::Debug;
 use std::str::FromStr;
 use std::time::Duration;
 
-#[derive(
-    Copy, Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq, doku::Document,
-)]
-#[serde(transparent)]
-pub struct Seconds(pub(crate) u64);
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(into = "String", try_from = "DeserializeTime")]
+pub struct SecondsOrHumanTime {
+    duration: Duration,
+    input: DeserializeTime,
+}
 
 #[derive(thiserror::Error, Debug)]
 #[error("Invalid seconds number: '{input}'.")]
@@ -16,80 +16,126 @@ pub struct InvalidSecondsNumber {
     input: String,
 }
 
-impl TryFrom<String> for Seconds {
-    type Error = InvalidSecondsNumber;
-
-    fn try_from(input: String) -> Result<Self, Self::Error> {
-        input
-            .as_str()
-            .parse::<u64>()
-            .map_err(|_| InvalidSecondsNumber { input })
-            .map(Seconds)
+impl From<SecondsOrHumanTime> for String {
+    fn from(value: SecondsOrHumanTime) -> Self {
+        value.to_string()
     }
 }
 
-impl TryInto<String> for Seconds {
-    type Error = std::convert::Infallible;
+impl FromStr for SecondsOrHumanTime {
+    type Err = humantime::DurationError;
 
-    fn try_into(self) -> Result<String, Self::Error> {
-        Ok(format!("{}", self.0))
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let seconds = input.parse::<u64>();
+
+        match seconds {
+            Ok(seconds) => Ok(Self {
+                duration: Duration::from_secs(seconds),
+                input: DeserializeTime::Seconds(seconds),
+            }),
+            Err(_) => humantime::parse_duration(input).map(|duration| Self {
+                duration,
+                input: DeserializeTime::MaybeHumanTime(input.to_owned()),
+            }),
+        }
     }
 }
 
-impl FromStr for Seconds {
-    type Err = <u64 as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u64::from_str(s).map(Self)
-    }
-}
-
-impl fmt::Display for Seconds {
+impl fmt::Display for SecondsOrHumanTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        fmt::Display::fmt(&self.input, f)
     }
 }
 
-impl Seconds {
-    pub fn duration(self) -> Duration {
-        Duration::from_secs(self.0)
+impl SecondsOrHumanTime {
+    pub fn duration(&self) -> Duration {
+        self.duration
     }
 }
 
-impl From<Seconds> for u64 {
-    fn from(val: Seconds) -> Self {
-        val.0
+impl doku::Document for SecondsOrHumanTime {
+    fn ty() -> doku::Type {
+        String::ty()
     }
 }
 
-impl From<u64> for Seconds {
-    fn from(value: u64) -> Self {
-        Self(value)
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+enum DeserializeTime {
+    Seconds(u64),
+    MaybeHumanTime(String),
+}
+
+impl fmt::Display for DeserializeTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DeserializeTime::Seconds(secs) => fmt::Display::fmt(&secs, f),
+            DeserializeTime::MaybeHumanTime(input) => fmt::Display::fmt(&input, f),
+        }
     }
 }
 
-impl From<Seconds> for Duration {
-    fn from(value: Seconds) -> Self {
-        Duration::from_secs(value.0)
+impl TryFrom<DeserializeTime> for SecondsOrHumanTime {
+    type Error = humantime::DurationError;
+    fn try_from(value: DeserializeTime) -> Result<Self, Self::Error> {
+        match value {
+            DeserializeTime::Seconds(secs) => Ok(Self {
+                duration: Duration::from_secs(secs),
+                input: value,
+            }),
+            DeserializeTime::MaybeHumanTime(human) => human.parse(),
+        }
     }
 }
 
-#[cfg(test)]
-use assert_matches::*;
 #[test]
 fn conversion_from_valid_seconds_succeeds() {
-    assert_matches!(Seconds::try_from("1234".to_string()), Ok(Seconds(1234)));
-}
-
-#[test]
-fn conversion_from_longer_integer_fails() {
-    assert_matches!(
-        Seconds::try_from("18446744073709551616".to_string()),
-        Err(InvalidSecondsNumber { .. })
+    assert_eq!(
+        "1234".parse::<SecondsOrHumanTime>().unwrap(),
+        SecondsOrHumanTime {
+            duration: Duration::from_secs(1234),
+            input: DeserializeTime::Seconds(1234),
+        }
     );
 }
 
 #[test]
-fn conversion_from_seconds_to_string() {
-    assert_matches!(TryInto::<String>::try_into(Seconds(1234)), Ok(seconds_str) if seconds_str == "1234");
+fn conversion_from_valid_humantime_succeeds() {
+    assert_eq!(
+        "1 hour".parse::<SecondsOrHumanTime>().unwrap(),
+        SecondsOrHumanTime {
+            duration: Duration::from_secs(3600),
+            input: DeserializeTime::MaybeHumanTime("1 hour".into()),
+        }
+    );
+}
+
+#[test]
+fn conversion_from_longer_integer_fails() {
+    assert_eq!(
+        "18446744073709551616"
+            .parse::<SecondsOrHumanTime>()
+            .unwrap_err()
+            .to_string(),
+        "number is too large"
+    );
+}
+
+#[test]
+fn display_implementation_preserves_format_of_seconds() {
+    assert_eq!(
+        "1234".parse::<SecondsOrHumanTime>().unwrap().to_string(),
+        "1234"
+    );
+}
+
+#[test]
+fn display_implementation_preserves_format_of_humantime() {
+    assert_eq!(
+        "20 minutes 34s"
+            .parse::<SecondsOrHumanTime>()
+            .unwrap()
+            .to_string(),
+        "20 minutes 34s"
+    );
 }

@@ -4,7 +4,7 @@ use crate::AutoFlag;
 use crate::AutoLogUpload;
 use crate::ConnectUrl;
 use crate::HostPort;
-use crate::Seconds;
+use crate::SecondsOrHumanTime;
 use crate::SoftwareManagementApiFlag;
 use crate::TEdgeConfigLocation;
 use crate::TemplatesSet;
@@ -666,16 +666,16 @@ define_tedge_config! {
 
             reconnect_policy: {
                 /// The minimum time the built-in bridge will wait before reconnecting
-                #[tedge_config(example = "30", default(function = "|| Seconds(30)"))]
-                initial_interval: Seconds,
+                #[tedge_config(example = "30s", default(from_str = "30s"))]
+                initial_interval: SecondsOrHumanTime,
 
                 /// The maximum time the built-in bridge will wait before reconnecting
-                #[tedge_config(example = "600", default(function = "|| Seconds(600)"))]
-                maximum_interval: Seconds,
+                #[tedge_config(example = "10m", default(from_str = "10m"))]
+                maximum_interval: SecondsOrHumanTime,
 
                 /// How long to wait after successful reconnection before resetting the reconnect timeout
-                #[tedge_config(example = "300", default(function = "|| Seconds(300)"))]
-                reset_window: Seconds,
+                #[tedge_config(example = "5m", default(from_str = "5m"))]
+                reset_window: SecondsOrHumanTime,
             },
         },
     },
@@ -787,9 +787,9 @@ define_tedge_config! {
         #[tedge_config(example = "true", default(value = true))]
         lock_files: bool,
 
-        /// Interval at which the memory usage is logged (in seconds). Logging is disabled if set to 0
-        #[tedge_config(example = "60", default(value = 0_u64))]
-        log_memory_interval: Seconds,
+        /// Interval at which the memory usage is logged (in seconds if no unit is provided). Logging is disabled if set to 0
+        #[tedge_config(example = "60s", default(from_str = "0"))]
+        log_memory_interval: SecondsOrHumanTime,
     },
 
     logs: {
@@ -817,8 +817,8 @@ define_tedge_config! {
         child: {
             update: {
                 /// The timeout limit in seconds for firmware update operations on child devices
-                #[tedge_config(example = "3600", default(value = 3600_u64))]
-                timeout: Seconds,
+                #[tedge_config(example = "1h", default(from_str = "1h"))]
+                timeout: SecondsOrHumanTime,
             }
         }
     },

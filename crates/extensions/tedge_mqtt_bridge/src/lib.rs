@@ -303,9 +303,9 @@ async fn half_bridge(
 ) {
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
-        reconnect_policy.initial_interval.into(),
-        reconnect_policy.maximum_interval.into(),
-        reconnect_policy.reset_window.into(),
+        reconnect_policy.initial_interval.duration(),
+        reconnect_policy.maximum_interval.duration(),
+        reconnect_policy.reset_window.duration(),
     );
     let mut forward_pkid_to_received_msg = HashMap::new();
     let mut bridge_health = BridgeHealth::new(name, tx_health);
