@@ -307,7 +307,9 @@ impl GenericCommandState {
 
     /// Extract the JSON value pointed by a path from this command state
     ///
-    /// Return None if the path contains unknown fields.
+    /// Return None if the path contains unknown fields,
+    /// with the exception that the empty string is returned for an unknown path below the `.payload`,
+    /// the rational being that the payload object represents a free-form value.
     pub fn extract_value(&self, path: &str) -> Option<Value> {
         match path {
             "." => Some(json!({
@@ -319,10 +321,14 @@ impl GenericCommandState {
             ".topic.operation" => self.operation().map(|s| s.into()),
             ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
             ".payload" => Some(self.payload.clone()),
-            path => path
-                .strip_prefix(".payload.")
-                .and_then(|path| json_excerpt(&self.payload, path))
-                .cloned(),
+            path if path.contains(['[', ']']) => None,
+            path => {
+                let value_path = path.strip_prefix(".payload.")?;
+                let value = json_excerpt(&self.payload, value_path)
+                    .cloned()
+                    .unwrap_or_else(|| String::new().into());
+                Some(value)
+            }
         }
     }
 
@@ -852,12 +858,12 @@ mod tests {
             "${ill-formed}"
         );
         assert_eq!(
-            cmd.inject_values_into_template("${.unknown}"),
-            "${.unknown}"
+            cmd.inject_values_into_template("${.unknown_root}"),
+            "${.unknown_root}"
         );
         assert_eq!(
             cmd.inject_values_into_template("${.payload.bar.unknown}"),
-            "${.payload.bar.unknown}"
+            ""
         );
     }
 
