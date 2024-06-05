@@ -1,24 +1,27 @@
 use c8y_api::smartrest;
-use tedge_api::entity_is_mosquitto_bridge_service;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::error;
 
-pub fn is_c8y_bridge_established(message: &MqttMessage, bridge_service_topic: &Topic) -> bool {
-    match message.payload_str() {
-        Ok(payload) => {
-            let health_status = HealthStatus::from_mosquitto_bridge_payload_str(payload);
-            &message.topic == bridge_service_topic && health_status.is_valid()
-        }
-        Err(_err) => false,
+pub fn is_c8y_bridge_established(
+    message: &MqttMessage,
+    mqtt_schema: &MqttSchema,
+    bridge_service_topic: &Topic,
+) -> bool {
+    if let Ok(health_status) = HealthStatus::try_from_health_status_message(message, mqtt_schema) {
+        &message.topic == bridge_service_topic && health_status.is_valid()
+    } else {
+        false
     }
 }
 
 pub fn convert_health_status_message(
+    mqtt_schema: &MqttSchema,
     entity: &EntityMetadata,
     ancestors_external_ids: &[String],
     message: &MqttMessage,
@@ -30,19 +33,10 @@ pub fn convert_health_status_message(
     }
 
     let HealthStatus {
-        status: mut health_status,
-    } = if entity_is_mosquitto_bridge_service(&entity.topic_id) {
-        message
-            .payload_str()
-            .map(HealthStatus::from_mosquitto_bridge_payload_str)
-            .unwrap_or_default()
-    } else {
-        serde_json::from_slice(message.payload()).unwrap_or_default()
-    };
-
-    if health_status.is_empty() {
-        health_status = "unknown".into();
-    }
+        status,
+        pid: _,
+        time: _,
+    } = HealthStatus::try_from_health_status_message(message, mqtt_schema).unwrap();
 
     let display_name = entity
         .other
@@ -61,7 +55,7 @@ pub fn convert_health_status_message(
         entity.external_id.as_ref(),
         display_name,
         display_type,
-        &health_status,
+        &status.to_string(),
         ancestors_external_ids,
         prefix,
     ) else {
@@ -84,7 +78,7 @@ mod tests {
     #[test_case(
         "test_device",
         "te/device/main/service/tedge-mapper-c8y/status/health",
-        r#"{"pid":"1234","status":"up"}"#,
+        r#"{"pid":1234,"status":"up"}"#,
         "c8y/s/us",
         r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,up"#;
         "service-monitoring-thin-edge-device"
@@ -92,7 +86,7 @@ mod tests {
     #[test_case(
         "test_device",
         "te/device/child/service/tedge-mapper-c8y/status/health",
-        r#"{"pid":"1234","status":"up"}"#,
+        r#"{"pid":1234,"status":"up"}"#,
         "c8y/s/us/test_device:device:child",
         r#"102,test_device:device:child:service:tedge-mapper-c8y,service,tedge-mapper-c8y,up"#;
         "service-monitoring-thin-edge-child-device"
@@ -213,6 +207,7 @@ mod tests {
             .unwrap();
 
         let msg = convert_health_status_message(
+            &mqtt_schema,
             entity,
             &ancestors_external_ids,
             &health_message,
@@ -222,7 +217,7 @@ mod tests {
     }
 
     const C8Y_BRIDGE_HEALTH_TOPIC: &str =
-        "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+        "te/device/main/service/mosquitto-c8y-bridge/status/health";
 
     #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "1", true)]
     #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "0", true)]
@@ -230,11 +225,15 @@ mod tests {
     #[test_case("tedge/not/health/topic", "1", false)]
     #[test_case("tedge/not/health/topic", "0", false)]
     fn test_bridge_is_established(topic: &str, payload: &str, expected: bool) {
+        let mqtt_schema = MqttSchema::default();
         let topic = Topic::new(topic).unwrap();
         let message = MqttMessage::new(&topic, payload);
 
-        let actual =
-            is_c8y_bridge_established(&message, &C8Y_BRIDGE_HEALTH_TOPIC.try_into().unwrap());
+        let actual = is_c8y_bridge_established(
+            &message,
+            &mqtt_schema,
+            &C8Y_BRIDGE_HEALTH_TOPIC.try_into().unwrap(),
+        );
         assert_eq!(actual, expected);
     }
 }

@@ -8,9 +8,6 @@ use futures::StreamExt;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_json::Value;
 use std::path::PathBuf;
 use std::process;
 use std::process::Command;
@@ -23,6 +20,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::HealthStatus;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::timestamp::IsoOrUnix;
 use time::OffsetDateTime;
@@ -39,14 +37,6 @@ const SERVICE_NAME: &str = "tedge-watchdog";
 /// Notifications are sent more often to make sure we don't miss the notify interval due to
 /// a timing misalignment.
 const NOTIFY_SEND_FREQ_RATIO: u64 = 4;
-
-// TODO: extract to common module
-#[derive(Debug, Serialize, Deserialize)]
-pub struct HealthStatus {
-    status: String,
-    pid: u32,
-    time: Value,
-}
 
 pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
     // Send ready notification to systemd.
@@ -228,11 +218,14 @@ async fn monitor_tedge_service(
         {
             Ok(health_status) => {
                 let health_status = health_status?;
-                debug!(
-                    "Sending notification for {} with pid: {}",
-                    name, health_status.pid
-                );
-                notify_systemd(health_status.pid, "WATCHDOG=1")?;
+                if let Some(pid) = health_status.pid {
+                    debug!("Sending notification for {} with pid: {}", name, pid);
+                    notify_systemd(pid, "WATCHDOG=1")?;
+                } else {
+                    error!(
+                        "Ignoring invalid health status message from {name} without a `pid` field in it"
+                    )
+                }
             }
             Err(_) => {
                 warn!("No health check response received from {name} in time");
@@ -255,7 +248,11 @@ async fn get_latest_health_status_message(
         if let Ok(message) = message.payload_str() {
             debug!("Health response received: {message}");
             if let Ok(health_status) = serde_json::from_str::<HealthStatus>(message) {
-                let datetime = IsoOrUnix::try_from(&health_status.time)?;
+                if health_status.time.is_none() {
+                    error!("Ignoring invalid health response: {health_status:?} without a `time` field in it");
+                    continue;
+                }
+                let datetime = IsoOrUnix::try_from(&health_status.time.clone().unwrap())?;
 
                 // Compare to a slightly old timestamp to avoid false negatives from floating-point error in unix timestamps
                 if datetime.into_inner() >= request_timestamp - Duration::from_millis(10) {
@@ -339,7 +336,7 @@ mod tests {
             get_latest_health_status_message(request_timestamp, &mut receiver).await;
 
         let expected_timestamp = TimeFormat::Rfc3339.to_json(request_timestamp).unwrap();
-        assert_eq!(health_status.unwrap().time, expected_timestamp);
+        assert_eq!(health_status.unwrap().time, Some(expected_timestamp));
 
         sender.close_channel();
         let base_timestamp = base_timestamp + Duration::from_secs(5);
@@ -378,6 +375,6 @@ mod tests {
 
         let health_status =
             get_latest_health_status_message(request_timestamp, &mut receiver).await;
-        assert_eq!(health_status.unwrap().time, payload_timestamp);
+        assert_eq!(health_status.unwrap().time, Some(payload_timestamp));
     }
 }

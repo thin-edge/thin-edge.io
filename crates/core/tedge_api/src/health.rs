@@ -10,18 +10,11 @@ use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use serde_json::Value as JsonValue;
+use std::fmt::Display;
 use std::process;
 use std::sync::Arc;
 use tedge_utils::timestamp::TimeFormat;
-
-pub const MOSQUITTO_BRIDGE_PREFIX: &str = "mosquitto-";
-pub const MOSQUITTO_BRIDGE_SUFFIX: &str = "-bridge";
-pub const MOSQUITTO_BRIDGE_UP_PAYLOAD: &str = "1";
-pub const MOSQUITTO_BRIDGE_DOWN_PAYLOAD: &str = "0";
-
-pub const UP_STATUS: &str = "up";
-pub const DOWN_STATUS: &str = "down";
-pub const UNKNOWN_STATUS: &str = "unknown";
 
 pub fn service_health_topic(
     mqtt_schema: &MqttSchema,
@@ -104,42 +97,78 @@ impl ServiceHealthTopic {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct HealthStatus {
+    pub status: Status,
+    pub pid: Option<u32>,
+    pub time: Option<JsonValue>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Status {
+    Up,
+    Down,
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Status::Other("unknown".to_string())
+    }
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let status = match self {
+            Status::Up => "up",
+            Status::Down => "down",
+            Status::Other(val) if val.is_empty() => "unknown",
+            Status::Other(val) => val,
+        };
+        write!(f, "{}", status)
+    }
+}
+
 #[derive(Debug)]
 pub struct HealthTopicError;
 
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct HealthStatus {
-    #[serde(default = "default_status")]
-    pub status: String,
-}
-
-fn default_status() -> String {
-    "unknown".to_string()
-}
-
 impl HealthStatus {
-    pub fn from_mosquitto_bridge_payload_str(payload: &str) -> Self {
-        let status = match payload {
-            MOSQUITTO_BRIDGE_UP_PAYLOAD => UP_STATUS,
-            MOSQUITTO_BRIDGE_DOWN_PAYLOAD => DOWN_STATUS,
-            _ => UNKNOWN_STATUS,
-        };
-        HealthStatus {
-            status: status.into(),
+    pub fn try_from_health_status_message(
+        message: &MqttMessage,
+        mqtt_schema: &MqttSchema,
+    ) -> Result<Self, HealthTopicError> {
+        if let Ok((topic_id, Channel::Health)) = mqtt_schema.entity_channel_of(&message.topic) {
+            let health_status = if entity_is_mosquitto_bridge_service(&topic_id) {
+                let status = match message.payload_str() {
+                    Ok("1") => Status::Up,
+                    Ok("0") => Status::Down,
+                    _ => Status::default(),
+                };
+                HealthStatus {
+                    status,
+                    pid: None,
+                    time: None,
+                }
+            } else {
+                serde_json::from_slice(message.payload()).unwrap_or_default()
+            };
+            Ok(health_status)
+        } else {
+            Err(HealthTopicError)
         }
     }
 
     pub fn is_valid(&self) -> bool {
-        self.status == UP_STATUS || self.status == DOWN_STATUS
+        self.status == Status::Up || self.status == Status::Down
     }
 }
 
 pub fn entity_is_mosquitto_bridge_service(entity_topic_id: &EntityTopicId) -> bool {
     entity_topic_id
         .default_service_name()
-        .filter(|name| {
-            name.starts_with(MOSQUITTO_BRIDGE_PREFIX) && name.ends_with(MOSQUITTO_BRIDGE_SUFFIX)
-        })
+        .filter(|name| name.starts_with("mosquitto-") && name.ends_with("-bridge"))
         .is_some()
 }
 
@@ -148,6 +177,83 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use serde_json::Value;
+    use test_case::test_case;
+
+    #[test_case(
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        r#"{"status":"up"}"#,
+        Status::Up;
+        "service-health-status-up"
+    )]
+    #[test_case(
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        r#"{"status":"down"}"#,
+        Status::Down;
+        "service-health-status-down"
+    )]
+    #[test_case(
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        r#"{"status":"foo"}"#,
+        Status::Other("foo".into());
+        "service-health-status-other-value"
+    )]
+    #[test_case(
+        "te/device/child/service/tedge-mapper-c8y/status/health",
+        r#"{"pid":1234,"status":"up"}"#,
+        Status::Up;
+        "service-health-status-with-extra-fields"
+    )]
+    #[test_case(
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        r#"{"pid":"123456"}"#,
+        Status::Other("unknown".into());
+        "service-health-status-no-value"
+    )]
+    #[test_case(
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        r#"{"status":""}"#,
+        Status::Other("".into());
+        "service-health-status-empty-value"
+    )]
+    #[test_case(
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        "{}",
+        Status::default();
+        "service-health-status-empty-message"
+    )]
+    #[test_case(
+        "te/device/main/service/mosquitto-xyz-bridge/status/health",
+        "1",
+        Status::Up;
+        "mosquitto-bridge-service-health-status-up"
+    )]
+    #[test_case(
+        "te/device/main/service/mosquitto-xyz-bridge/status/health",
+        "0",
+        Status::Down;
+        "mosquitto-bridge-service-health-status-down"
+    )]
+    #[test_case(
+        "te/device/main/service/mosquitto-xyz-bridge/status/health",
+        "invalid payload",
+        Status::default();
+        "mosquitto-bridge-service-health-status-invalid-payload"
+    )]
+    #[test_case(
+        "te/device/main/service/tedge-mapper-bridge-c8y/status/health",
+        r#"{"status":"up"}"#,
+        Status::Up;
+        "builtin-bridge-service-health-status-up"
+    )]
+    fn parse_heath_status(health_topic: &str, health_payload: &str, expected_status: Status) {
+        let mqtt_schema = MqttSchema::new();
+        let topic = Topic::new_unchecked(health_topic);
+        let health_message = MqttMessage::new(&topic, health_payload.as_bytes().to_owned());
+
+        let health_status =
+            HealthStatus::try_from_health_status_message(&health_message, &mqtt_schema);
+        assert_eq!(health_status.unwrap().status, expected_status);
+    }
 
     #[test]
     fn is_rfc3339_timestamp() {

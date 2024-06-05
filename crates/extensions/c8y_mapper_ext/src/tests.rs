@@ -34,7 +34,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareUpdateCommand;
-use tedge_api::MOSQUITTO_BRIDGE_UP_PAYLOAD;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
@@ -2561,7 +2560,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     tokio::spawn(async move { actor.run().await });
 
     let mut service_monitor_box = service_monitor_builder.build();
-    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, MOSQUITTO_BRIDGE_UP_PAYLOAD);
+    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");
     service_monitor_box.send(bridge_status_msg).await.unwrap();
 
     TestHandle {

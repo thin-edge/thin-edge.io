@@ -99,7 +99,7 @@ impl C8yMapperConfig {
         let state_dir = config_dir.join(STATE_DIR_NAME).into();
 
         let bridge_service_name = if bridge_in_mapper {
-            format!("tedge-mapper-bridge-{}", c8y_prefix)
+            format!("tedge-mapper-bridge-{c8y_prefix}")
         } else {
             "mosquitto-c8y-bridge".into()
         };

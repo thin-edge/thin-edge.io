@@ -79,7 +79,11 @@ impl Actor for C8yMapperActor {
         if !self.converter.config.bridge_in_mapper {
             // Wait till the c8y bridge is established
             while let Some(message) = self.bridge_status_messages.recv().await {
-                if is_c8y_bridge_established(&message, &self.converter.config.bridge_health_topic) {
+                if is_c8y_bridge_established(
+                    &message,
+                    &self.converter.config.mqtt_schema,
+                    &self.converter.config.bridge_health_topic,
+                ) {
                     break;
                 }
             }
