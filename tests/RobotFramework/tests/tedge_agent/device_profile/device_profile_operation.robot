@@ -12,7 +12,8 @@ Test Teardown       Get Logs
 *** Test Cases ***
 
 Triger custom device profile operation
-    Execute Command    /etc/tedge/operations/device_profile.sh create_test_operation te/device/main///cmd/device_profile/robot-123
+    ${config_url}=    Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin.toml
+    Execute Command    /etc/tedge/operations/device_profile.sh create_test_operation te/device/main///cmd/device_profile/robot-123 ${config_url}
     ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/device_profile/robot-123    message_pattern=.*successful.*   maximum=1    timeout=30
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/device_profile/robot-123 ''
 
