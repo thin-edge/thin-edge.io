@@ -16,6 +16,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
+use tedge_api::service_health_topic;
 use tedge_config::AutoLogUpload;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
@@ -23,6 +24,7 @@ use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigReaderService;
 use tedge_config::TopicPrefix;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
@@ -51,6 +53,8 @@ pub struct C8yMapperConfig {
     pub software_management_api: SoftwareManagementApiFlag,
     pub software_management_with_types: bool,
     pub auto_log_upload: AutoLogUpload,
+    pub bridge_service_name: String,
+    pub bridge_health_topic: Topic,
 
     pub data_dir: DataDir,
     pub config_dir: Arc<Utf8Path>,
@@ -94,6 +98,14 @@ impl C8yMapperConfig {
             .into();
         let state_dir = config_dir.join(STATE_DIR_NAME).into();
 
+        let bridge_service_name = if bridge_in_mapper {
+            format!("tedge-mapper-bridge-{}", c8y_prefix)
+        } else {
+            "mosquitto-c8y-bridge".into()
+        };
+        let bridge_health_topic =
+            service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
+
         Self {
             data_dir,
             device_id,
@@ -115,20 +127,14 @@ impl C8yMapperConfig {
             software_management_api,
             software_management_with_types,
             auto_log_upload,
+            bridge_service_name,
+            bridge_health_topic,
 
             config_dir,
             logs_path,
             ops_dir,
             state_dir,
             tmp_dir,
-        }
-    }
-
-    pub fn bridge_service_name(&self) -> String {
-        if self.bridge_in_mapper {
-            format!("tedge-mapper-bridge-{}", self.c8y_prefix)
-        } else {
-            "mosquitto-c8y-bridge".into()
         }
     }
 

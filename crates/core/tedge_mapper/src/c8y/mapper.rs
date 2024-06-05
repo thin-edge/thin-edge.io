@@ -159,7 +159,7 @@ impl TEdgeComponent for CumulocityMapper {
             let last_will_message_bridge =
                 c8y_api::smartrest::inventory::service_creation_message_payload(
                     mapper_service_external_id.as_ref(),
-                    &c8y_mapper_config.bridge_service_name(),
+                    &c8y_mapper_config.bridge_service_name,
                     service_type.as_str(),
                     "down",
                 )?;
@@ -175,7 +175,8 @@ impl TEdgeComponent for CumulocityMapper {
                 .spawn(
                     MqttBridgeActorBuilder::new(
                         &tedge_config,
-                        c8y_mapper_config.bridge_service_name(),
+                        &c8y_mapper_config.bridge_service_name,
+                        &c8y_mapper_config.bridge_health_topic,
                         tc,
                         cloud_config,
                     )

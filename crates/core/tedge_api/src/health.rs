@@ -1,4 +1,5 @@
 use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::ServiceTopicId;
 use clock::Clock;
@@ -6,20 +7,31 @@ use clock::WallClock;
 use log::error;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::Topic;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 use std::process;
 use std::sync::Arc;
 use tedge_utils::timestamp::TimeFormat;
 
-pub const MQTT_BRIDGE_UP_PAYLOAD: &str = "1";
-pub const MQTT_BRIDGE_DOWN_PAYLOAD: &str = "0";
+pub const MOSQUITTO_BRIDGE_PREFIX: &str = "mosquitto-";
+pub const MOSQUITTO_BRIDGE_SUFFIX: &str = "-bridge";
+pub const MOSQUITTO_BRIDGE_UP_PAYLOAD: &str = "1";
+pub const MOSQUITTO_BRIDGE_DOWN_PAYLOAD: &str = "0";
+
 pub const UP_STATUS: &str = "up";
 pub const DOWN_STATUS: &str = "down";
 pub const UNKNOWN_STATUS: &str = "unknown";
 
-// FIXME: doesn't account for custom topic root, use MQTT scheme API here
-pub fn main_device_health_topic(service: &str) -> String {
-    format!("te/device/main/service/{service}/status/health")
+pub fn service_health_topic(
+    mqtt_schema: &MqttSchema,
+    device_topic_id: &EntityTopicId,
+    service: &str,
+) -> Topic {
+    mqtt_schema.topic_for(
+        &device_topic_id.default_service_for_device(service).unwrap(),
+        &Channel::Health,
+    )
 }
 
 /// Encodes a valid health topic.
@@ -94,6 +106,42 @@ impl ServiceHealthTopic {
 
 #[derive(Debug)]
 pub struct HealthTopicError;
+
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct HealthStatus {
+    #[serde(default = "default_status")]
+    pub status: String,
+}
+
+fn default_status() -> String {
+    "unknown".to_string()
+}
+
+impl HealthStatus {
+    pub fn from_mosquitto_bridge_payload_str(payload: &str) -> Self {
+        let status = match payload {
+            MOSQUITTO_BRIDGE_UP_PAYLOAD => UP_STATUS,
+            MOSQUITTO_BRIDGE_DOWN_PAYLOAD => DOWN_STATUS,
+            _ => UNKNOWN_STATUS,
+        };
+        HealthStatus {
+            status: status.into(),
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.status == UP_STATUS || self.status == DOWN_STATUS
+    }
+}
+
+pub fn entity_is_mosquitto_bridge_service(entity_topic_id: &EntityTopicId) -> bool {
+    entity_topic_id
+        .default_service_name()
+        .filter(|name| {
+            name.starts_with(MOSQUITTO_BRIDGE_PREFIX) && name.ends_with(MOSQUITTO_BRIDGE_SUFFIX)
+        })
+        .is_some()
+}
 
 #[cfg(test)]
 mod tests {

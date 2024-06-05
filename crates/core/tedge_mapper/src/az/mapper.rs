@@ -4,11 +4,14 @@ use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
+use std::str::FromStr;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::service_health_topic;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
@@ -16,6 +19,7 @@ use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
+const BUILT_IN_BRIDGE_NAME: &str = "tedge-mapper-bridge-az";
 
 pub struct AzureMapper;
 
@@ -32,7 +36,11 @@ impl TEdgeComponent for AzureMapper {
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
+        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+
         if tedge_config.mqtt.bridge.built_in {
+            let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
+
             let remote_clientid = tedge_config.device.id.try_read(&tedge_config)?;
             let rules = built_in_bridge_rules(remote_clientid)?;
 
@@ -55,9 +63,13 @@ impl TEdgeComponent for AzureMapper {
                 &tedge_config,
             )?;
 
+            let health_topic =
+                service_health_topic(&mqtt_schema, &device_topic_id, BUILT_IN_BRIDGE_NAME);
+
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
-                "tedge-mapper-bridge-az".to_owned(),
+                BUILT_IN_BRIDGE_NAME,
+                &health_topic,
                 rules,
                 cloud_config,
             )
