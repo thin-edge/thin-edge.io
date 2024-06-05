@@ -13,7 +13,17 @@ update_agent() {
             "type": "apt",
             "modules": [
                 {
-                    "name": "tedge-full",
+                    "name": "tedge",
+                    "version": "latest",
+                    "action": "install"
+                },
+                {
+                    "name": "tedge-mapper",
+                    "version": "latest",
+                    "action": "install"
+                },
+                {
+                    "name": "tedge-agent",
                     "version": "latest",
                     "action": "install"
                 }

@@ -7,8 +7,19 @@ STATUS="$1"
 shift
 PAYLOAD=
 
-EXAMPLE_PAYLOAD=$(
-        cat << EOT
+example_payload() {
+  CONFIG_URL="${1:-http://127.0.0.1:8001/c8y/inventory/binaries/35861751}"
+
+  # Convert url to a local url
+  case "$CONFIG_URL" in
+    */inventory/binaries/*)
+      echo "Converting config url to a c8y local proxy url" >&2
+      MO_ID=$(echo "$CONFIG_URL" | rev | cut -d'/' -f1 | rev)
+      CONFIG_URL="http://127.0.0.1:8001/c8y/inventory/binaries/$MO_ID"
+      ;;
+  esac
+
+  cat << EOT
 {
   "status": "init",
   "profile": [
@@ -17,7 +28,7 @@ EXAMPLE_PAYLOAD=$(
       "skip": false,
       "payload": {
         "name": "core-image-tedge-rauc",
-        "remoteUrl": "https://t9679.latest.stage.c8y.io/inventory/binaries/82029",
+        "remoteUrl": "https://127.0.0.1:8000/some/dummy/url",
         "version": "20240430.1139"
       }
     },
@@ -46,20 +57,20 @@ EXAMPLE_PAYLOAD=$(
     },
     {
       "operation": "config_update",
-      "skip": true,
+      "skip": false,
       "payload": {
           "type": "tedge-configuration-plugin",
-          "remoteUrl":"http://127.0.0.1:8001/c8y/inventory/binaries/35861751"
+          "remoteUrl":"$CONFIG_URL"
       }
     }
   ]
 }
 EOT
-)
+}
 
 if [ $# -eq 0 ]; then
     # Test operation to help with initial creation and debugging
-    PAYLOAD="$EXAMPLE_PAYLOAD"
+    PAYLOAD="$(example_payload)"
 else
     PAYLOAD="$1"
 fi
@@ -75,10 +86,8 @@ update_state() {
 
 create_test_operation() {
     TOPIC="$1"
-    PAYLOAD="$EXAMPLE_PAYLOAD"
-    if [ $# -gt 1 ]; then
-        PAYLOAD="$2"
-    fi
+    CONFIG_URL="$2"
+    PAYLOAD="$(example_payload "$CONFIG_URL")"
     tedge mqtt pub -r "$TOPIC" "$PAYLOAD"
 }
 
