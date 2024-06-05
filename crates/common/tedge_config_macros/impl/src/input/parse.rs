@@ -140,6 +140,7 @@ pub enum FieldDefault {
     FromKey(Punctuated<syn::Ident, syn::Token![.]>),
     FromOptionalKey(Punctuated<syn::Ident, syn::Token![.]>),
     Value(DefaultValueLit),
+    FromStr(syn::LitStr),
     None,
 }
 
