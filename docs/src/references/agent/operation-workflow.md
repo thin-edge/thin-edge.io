@@ -508,6 +508,9 @@ on_timeout = "timeout_restart"
 on_success = "successful_restart"
 ```
 
+As for regular scripts, the parameters of a background script can be populated from the current command state,
+as in `background_script = "sudo shutdown --reboot ${.payload.reboot_delay}"`
+
 #### Awaiting Sub-Command Completion
 
 When a sub `operation` is executed, the operation workflow moves to a waiting state which `action` must be `await-operation-completion`.

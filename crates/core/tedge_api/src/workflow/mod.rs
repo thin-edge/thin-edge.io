@@ -273,6 +273,10 @@ impl OperationAction {
                 Self::inject_values_into_script(state, script),
                 handlers.clone(),
             ),
+            OperationAction::BgScript(script, handlers) => OperationAction::BgScript(
+                Self::inject_values_into_script(state, script),
+                handlers.clone(),
+            ),
             OperationAction::Operation(operation_expr, optional_script, input, handlers) => {
                 let operation = state.inject_values_into_template(operation_expr);
                 let optional_script = optional_script
