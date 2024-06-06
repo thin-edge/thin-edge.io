@@ -442,12 +442,20 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: taiki-e/install-action@just
+      - uses: taiki-e/install-action@git-cliff
+      - name: Generate changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          just generate-changelog
       - name: Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          generate_release_notes: true
+          body_path: _CHANGELOG.md
+          generate_release_notes: false
           draft: true
 
       - name: Create tedge-docs snapshot
