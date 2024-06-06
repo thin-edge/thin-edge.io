@@ -3,7 +3,7 @@
 The following steps describes the thin-edge.io release process:
 
 1. Trigger Workflow in thin-edge.io repo
-2. Review PR and approve 
+2. Review PR and approve
 
    **Notes**
 
@@ -25,6 +25,8 @@ The following steps describes the thin-edge.io release process:
 6. Trigger the Algolia crawler to update the search index (once the new version of the website is published and available)
 
 
+The above process can be visualized by the following git process:
+
 ```mermaid
 gitGraph
    commit
@@ -34,7 +36,7 @@ gitGraph
    commit
    checkout main
    merge feat
-   commit id: "Trigger release"
+   commit id: "Trigger Release"
    branch release
    checkout release
    commit id: "bump cargo version"
@@ -43,27 +45,35 @@ gitGraph
    commit tag: "1.0.1"
 ```
 
-## Goals
 
-* Generate more descriptive changelogs automatically
-   * Feature/fix etc.
-   * Add categories to show which components were affected, e.g. firmware, software, config, troubleshooting
-* Validate that a PR conforms
+## Changelog generation
 
-## Using Github features
+Changelog generation is provided by [git-cliff](https://github.com/orhun/git-cliff) combining both commit history and Github PR title and labels.
 
-* Use labels to control communication of breaking changes (allows post commit classification what a "breaking change" is)
+The following details which information is used to build the changelog:
+
+* The PR title is used as the changelog entry. This allows the title to be modified without having to amend commits.
+
+* Github labels which start with "theme:" are used to set the scope of the PR (e.g. which component the PR is related to), e.g. `theme:software`, `theme:mqtt` etc.
+
+* A PR can be excluded from the changelog by adding the label "skip-release-notes"
 
 
-## Other solutions - github based
+### PR Checklist
 
-https://github.com/release-drafter/release-drafter?tab=readme-ov-file
+The following items should be included in PRs to ensure they are ready for changelog generation:
 
-## Conventional commits
+* PR titles are human readable and follow the format:
 
-[Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) are used to formally communicate intent of code in a structure manner to allow other processes to parse the commit messages. This is commonly used to help generate change logs from commit messages.
+   ```
+   <type>: <description>
+   ```
 
-### Types
+   See [Types](./RELEASE.md#types) for a list of recommended values.
+
+* At least one "theme:*" label should be added to the PR to indicate which components are affected by the PR
+
+#### Types
 
 One of the following types (prefixes) MUST be used:
 
@@ -77,27 +87,3 @@ One of the following types (prefixes) MUST be used:
 * refactor:
 * perf:
 * test:
-
-### Scopes
-
-Scope is optional, but is used to indicate which topic the feature is referring too.
-
-Scopes can also be supplied by a github label.
-
-
-### How to highlight notable changes?
-
-* Use label "highlight" to add notable changes
-
-## git-cliff
-
-* search for the conventional commits, use github info
-
-## cocogitto
-
-https://docs.cocogitto.io/guide/
-
-* A little too inflexible as it enforces that all commits (except merge commits) need to adhere to the "conventional commits" standard
-
-   * You can rewrite non-conventional commits, but it would change the git commit hash. See https://docs.cocogitto.io/guide/#rewrite-non-compliant-commits
-
