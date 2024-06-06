@@ -19,6 +19,12 @@ on:
         required: false
         default: true
 
+      update_search_index:
+        description: Update the search index by triggering the Algolia crawler
+        type: boolean
+        required: false
+        default: false
+
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
@@ -91,3 +97,32 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  #
+  # Update the Algolia search index by triggering
+  # the crawler for the newly deployed page
+  #
+  update_search_index:
+    name: Update Search Index
+    needs: [deploy]
+    if: ${{ inputs.update_search_index }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      # It can take a while before the gh_pages are live
+      # and there does not seem to be a nice way to detect this for now
+      - name: Sleep for 60s
+        run: sleep 60
+
+      - name: Algolia crawler creation and crawl
+        uses: algolia/algoliasearch-crawler-github-actions@v1.0.10
+        id: algolia_crawler
+        with: # mandatory parameters
+          crawler-user-id: ${{ secrets.CRAWLER_USER_ID }}
+          crawler-api-key: ${{ secrets.CRAWLER_API_KEY }}
+          algolia-app-id: ${{ secrets.ALGOLIA_APP_ID }}
+          algolia-api-key: ${{ secrets.ALGOLIA_API_KEY }}
+          crawler-name: thin-edge-io
+          site-url: 'https://thin-edge.github.io/thin-edge.io/'
