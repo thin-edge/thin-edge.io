@@ -270,24 +270,29 @@ impl OperationAction {
     pub fn inject_state(&self, state: &GenericCommandState) -> Self {
         match self {
             OperationAction::Script(script, handlers) => OperationAction::Script(
-                ShellScript {
-                    command: state.inject_values_into_template(&script.command),
-                    args: state.inject_values_into_parameters(&script.args),
-                },
+                Self::inject_values_into_script(state, script),
                 handlers.clone(),
             ),
-            OperationAction::Operation(command, Some(script), input, handlers) => {
+            OperationAction::Operation(operation_expr, optional_script, input, handlers) => {
+                let operation = state.inject_values_into_template(operation_expr);
+                let optional_script = optional_script
+                    .as_ref()
+                    .map(|script| Self::inject_values_into_script(state, script));
                 OperationAction::Operation(
-                    command.clone(),
-                    Some(ShellScript {
-                        command: state.inject_values_into_template(&script.command),
-                        args: state.inject_values_into_parameters(&script.args),
-                    }),
+                    operation,
+                    optional_script,
                     input.clone(),
                     handlers.clone(),
                 )
             }
             _ => self.clone(),
+        }
+    }
+
+    fn inject_values_into_script(state: &GenericCommandState, script: &ShellScript) -> ShellScript {
+        ShellScript {
+            command: state.inject_values_into_template(&script.command),
+            args: state.inject_values_into_parameters(&script.args),
         }
     }
 }

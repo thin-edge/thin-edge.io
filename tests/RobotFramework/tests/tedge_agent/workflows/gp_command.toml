@@ -1,9 +1,10 @@
 # Example of an operation with 3 levels
 # gp_command -> super_command -> sub_command
+# Furthermore, the super_command name is dynamically set using the gp_command payload
 operation = "gp_command"
 
 [init]
-operation = "super_command"
+operation = "${.payload.sub_operation}"
 input.output_file = "${.payload.output_file}"
 on_exec = "awaiting_completion"
 
