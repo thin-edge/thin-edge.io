@@ -985,7 +985,7 @@ impl CumulocityConverter {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
                     return self
-                        .try_register_entity_with_pending_children(register_message)
+                        .try_register_entity_with_pending_children(&register_message)
                         .await;
                 }
                 Err(anyhow!(
@@ -1026,7 +1026,7 @@ impl CumulocityConverter {
 
     async fn try_register_entity_with_pending_children(
         &mut self,
-        register_message: EntityRegistrationMessage,
+        register_message: &EntityRegistrationMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut mapped_messages = vec![];
         match self.entity_store.update(register_message.clone()) {
@@ -1040,6 +1040,11 @@ impl CumulocityConverter {
                         self.try_convert_entity_registration(&pending_entity.reg_message)?;
                     mapped_messages.append(&mut c8y_message);
 
+                    // Republish the metadata message with @id if it's not given
+                    let mut updated_metadata_message =
+                        self.append_id_if_not_given(&pending_entity.reg_message);
+                    mapped_messages.append(&mut updated_metadata_message);
+
                     // Process all the cached data messages for that entity
                     let mut cached_messages =
                         self.process_cached_entity_data(pending_entity).await?;
@@ -1048,7 +1053,11 @@ impl CumulocityConverter {
 
                 return Ok(mapped_messages);
             }
-            Ok(_) => {}
+            Ok(_) => {
+                // Handle the case where @id is missing but there are no other changes to the payload
+                let mut updated_metadata_message = self.append_id_if_not_given(register_message);
+                mapped_messages.append(&mut updated_metadata_message);
+            }
         }
         Ok(mapped_messages)
     }
@@ -1086,6 +1095,25 @@ impl CumulocityConverter {
                 .append(&mut self.try_convert_auto_registered_entity(&entity, channel)?);
         }
         Ok(converted_messages)
+    }
+
+    fn append_id_if_not_given(
+        &mut self,
+        register_message: &EntityRegistrationMessage,
+    ) -> Vec<MqttMessage> {
+        let source = &register_message.topic_id;
+
+        if register_message.external_id.is_none() {
+            if let Some(metadata) = self.entity_store.get(source) {
+                let register_message_with_xid = register_message
+                    .clone()
+                    .with_external_id(metadata.external_id.clone());
+                let updated_metadata_message =
+                    register_message_with_xid.to_mqtt_message(&self.mqtt_schema);
+                return vec![updated_metadata_message];
+            }
+        }
+        vec![]
     }
 
     async fn try_convert_data_message(
@@ -3430,6 +3458,80 @@ pub(crate) mod tests {
                     "101,child000,child000,thin-edge.io-child".into(),
                 ),
             ],
+        );
+    }
+
+    #[tokio::test]
+    async fn update_entity_metadata() {
+        let tmp_dir = TempTedgeDir::new();
+        let config = c8y_converter_config(&tmp_dir);
+
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
+        // First register a child device
+        let reg_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child0//"),
+            json!({
+                "@type": "child-device",
+                "name": "child0",
+                "@parent": "device/main//",
+            })
+            .to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+
+        assert_messages_matching(
+            &messages,
+            [
+                ("c8y/s/us", "101,test-device:device:child0,child0,thin-edge.io-child".into()),
+                (
+                    "te/device/child0//",
+                    r#"{"@id":"test-device:device:child0","@parent":"device/main//","@type":"child-device","name":"child0"}"#.into(),
+                ),
+            ],
+        );
+
+        // Remove "@id" from the payload and republish the registration message
+        let reg_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child0//"),
+            json!({
+                "@type": "child-device",
+                "name": "child0",
+                "@parent": "device/main//",
+            })
+            .to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+
+        assert_messages_matching(
+            &messages,
+            [(
+                "te/device/child0//",
+                r#"{"@id":"test-device:device:child0","@parent":"device/main//","@type":"child-device","name":"child0"}"#.into(),
+            )],
+        );
+
+        // Add a new field but without "@id" and republish the registration message
+        let reg_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child0//"),
+            json!({
+                "@type": "child-device",
+                "name": "child0",
+                "@parent": "device/main//",
+                "custom": "foo"
+            })
+            .to_string(),
+        );
+        let messages = converter.convert(&reg_message).await;
+
+        assert_messages_matching(
+            &messages,
+            [
+                ("c8y/s/us", "101,test-device:device:child0,child0,thin-edge.io-child".into()),
+            (
+                "te/device/child0//",
+                r#"{"@id":"test-device:device:child0","@parent":"device/main//","@type":"child-device","custom":"foo","name":"child0"}"#.into(),
+            )],
         );
     }
 

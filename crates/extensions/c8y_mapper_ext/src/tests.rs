@@ -118,9 +118,12 @@ async fn child_device_registration_mapping() {
         [(
             "c8y/s/us",
             "101,test-device:device:child1,Child1,RaspberryPi",
+        ), (
+            "te/device/child1//",
+            r#"{"@id":"test-device:device:child1","@type":"child-device","name":"Child1","type":"RaspberryPi"}"#
         )],
     )
-    .await;
+        .await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child2//"),
@@ -134,9 +137,12 @@ async fn child_device_registration_mapping() {
         [(
             "c8y/s/us/test-device:device:child1",
             "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child",
+        ), (
+            "te/device/child2//",
+            r#"{"@id":"test-device:device:child2","@parent":"device/child1//","@type":"child-device"}"#
         )],
     )
-    .await;
+        .await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child3//"),
@@ -176,9 +182,10 @@ async fn custom_topic_scheme_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "101,test-device:custom,Child1,RaspberryPi")],
-    )
-    .await;
+        [("c8y/s/us", "101,test-device:custom,Child1,RaspberryPi"),
+            ("te/custom///", r#"{"@id":"test-device:custom","@type":"child-device","name":"Child1","type":"RaspberryPi"}"#)
+        ])
+        .await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/custom/child1//"),
@@ -192,9 +199,11 @@ async fn custom_topic_scheme_registration_mapping() {
         [(
             "c8y/s/us",
             "101,test-device:custom:child1,Child1,RaspberryPi",
+        ), (
+            "te/custom/child1//", r#"{"@id":"test-device:custom:child1","@type":"child-device","name":"Child1","type":"RaspberryPi"}"#
         )],
     )
-    .await;
+        .await;
 
     // Service with custom scheme
     mqtt.send(MqttMessage::new(
@@ -206,12 +215,14 @@ async fn custom_topic_scheme_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us",
-            "102,test-device:custom:service:collectd,systemd,Collectd,up",
+        [("c8y/s/us",
+          "102,test-device:custom:service:collectd,systemd,Collectd,up",
+        ), (
+            "te/custom/service/collectd/",
+            r#"{"@id":"test-device:custom:service:collectd","@type":"service","name":"Collectd","type":"systemd"}"#
         )],
     )
-    .await;
+        .await;
 }
 
 #[tokio::test]
@@ -239,7 +250,7 @@ async fn service_registration_mapping() {
     .await
     .unwrap();
 
-    mqtt.skip(2).await; // Skip mappings of above child device creation messages
+    mqtt.skip(4).await; // Skip mappings of above child device creation messages and republished messages with @id
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/collectd"),
@@ -257,6 +268,8 @@ async fn service_registration_mapping() {
     )
     .await;
 
+    mqtt.skip(1).await; // Skip republished message with @id
+
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child1/service/collectd"),
         r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
@@ -273,6 +286,8 @@ async fn service_registration_mapping() {
     )
     .await;
 
+    mqtt.skip(1).await; // Skip republished message with @id
+
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child2/service/collectd"),
         r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
@@ -288,6 +303,8 @@ async fn service_registration_mapping() {
         )],
     )
     .await;
+
+    mqtt.skip(1).await; // Skip republished message with @id
 }
 
 #[tokio::test]
@@ -354,7 +371,7 @@ async fn mapper_publishes_advanced_software_list() {
         &mut mqtt,
         [
             (
-                "c8y/s/us", 
+                "c8y/s/us",
                 "140,a,,debian,,b,1.0,debian,,c,,debian,https://foobar.io/c.deb,d,beta,debian,https://foobar.io/d.deb,m,,apama,https://foobar.io/m.epl"
             )
         ])

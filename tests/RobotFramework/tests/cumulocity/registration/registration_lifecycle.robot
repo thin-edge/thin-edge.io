@@ -44,10 +44,12 @@ Child device registration
 
 Register child device with defaults via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
+    Should Have MQTT Messages    te/device/${CHILD_SN}//    message_contains="@id":"${CHILD_XID}"    message_contains="@type":"child-device"
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_XID}    child_type=thin-edge.io-child
 
 Register child device with custom name and type via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
+    Should Have MQTT Messages    te/device/${CHILD_SN}//    message_contains="@id":"${CHILD_XID}"    message_contains="@type":"child-device"
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_SN}    child_type=linux-device-Aböut
 
 Register child device with custom id via MQTT
@@ -65,13 +67,17 @@ Register nested child device using default topic schema via MQTT
     Execute Command    tedge mqtt pub --retain 'te/device/${child_level3}/service/custom-app' '{"@type":"service","@parent":"device/${child_level3}//","name":"custom-app","type":"service-level3"}'
 
     # Level 1
+    Should Have MQTT Messages    te/device/${child_level1}//    message_contains="@id":"${DEVICE_SN}:device:${child_level1}"    message_contains="@type":"child-device"
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:device:${child_level1}    child_name=${DEVICE_SN}:device:${child_level1}    child_type=thin-edge.io-child
 
     # Level 2
+    Should Have MQTT Messages    te/device/${child_level2}//    message_contains="@id":"${DEVICE_SN}:device:${child_level2}"    message_contains="@type":"child-device"
     Check Child Device    parent_sn=${DEVICE_SN}:device:${child_level1}    child_sn=${DEVICE_SN}:device:${child_level2}    child_name=${child_level2}    child_type=thin-edge.io-child
 
     # Level 3
+    Should Have MQTT Messages    te/device/${child_level3}//    message_contains="@id":"${DEVICE_SN}:device:${child_level3}"    message_contains="@type":"child-device"
     Check Child Device    parent_sn=${DEVICE_SN}:device:${child_level2}    child_sn=${DEVICE_SN}:device:${child_level3}    child_name=${DEVICE_SN}:device:${child_level3}    child_type=child_level3
+    Should Have MQTT Messages    te/device/${child_level3}/service/custom-app    message_contains="@id":"${DEVICE_SN}:device:${child_level3}:service:custom-app"    message_contains="@type":"service"
     Check Service    child_sn=${DEVICE_SN}:device:${child_level3}    service_sn=${DEVICE_SN}:device:${child_level3}:service:custom-app    service_name=custom-app    service_type=service-level3    service_status=up
 
 
@@ -110,6 +116,15 @@ Register devices using custom MQTT schema
 
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:factory1:shop1:plc1:sensor1    child_name=sensor1    child_type=SmartSensor
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:factory1:shop1:plc1:sensor2    child_name=sensor2    child_type=SmartSensor
+
+
+    # Check if MQTT device/service representations contains @id
+    Should Have MQTT Messages    te/base///    message_contains="@id":"${DEVICE_SN}"    message_contains="@type":"device"
+    Should Have MQTT Messages    te/factory1/shop1/plc1/sensor1    message_contains="@id":"${DEVICE_SN}:factory1:shop1:plc1:sensor1"    message_contains="@type":"child-device"
+    Should Have MQTT Messages    te/factory1/shop1/plc1/sensor2    message_contains="@id":"${DEVICE_SN}:factory1:shop1:plc1:sensor2"    message_contains="@type":"child-device"
+    Should Have MQTT Messages    te/factory1/shop1/plc1/metrics    message_contains="@id":"${DEVICE_SN}:factory1:shop1:plc1:metrics"    message_contains="@type":"service"
+    Should Have MQTT Messages    te/factory1/shop1/apps/sensor1    message_contains="@id":"${DEVICE_SN}:factory1:shop1:apps:sensor1"    message_contains="@type":"service"
+    Should Have MQTT Messages    te/factory1/shop1/apps/sensor2    message_contains="@id":"${DEVICE_SN}:factory1:shop1:apps:sensor2"    message_contains="@type":"service"
 
     # Check main device services
     Cumulocity.Set Device    ${DEVICE_SN}
@@ -173,6 +188,36 @@ Early data messages cached and processed
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y
 
+Early data messages cached and processed without @id in registration messages
+    [Teardown]    Re-enable auto-registration and collect logs
+    ${timestamp}=        Get Unix Timestamp
+    ${prefix}=    Get Random Name
+    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    ${children}=    Create List    child0    child00    child01    child000    child0000    child00000
+    FOR    ${child}    IN    @{children}
+        Execute Command    sudo tedge mqtt pub 'te/device/${prefix}${child}///m/environment' '{ "temp": 50 }'
+        Execute Command    sudo tedge mqtt pub 'te/device/${prefix}${child}///twin/maintenance_mode' 'true'
+    END
+
+    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child000//' '{"@type":"child-device","@parent": "device/${prefix}child00//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child00000//' '{"@type":"child-device","@parent": "device/${prefix}child0000//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child0000//' '{"@type":"child-device","@parent": "device/${prefix}child000//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child01//' '{"@type":"child-device","@parent": "device/${prefix}child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child00//' '{"@type":"child-device","@parent": "device/${prefix}child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child0//' '{"@type":"child-device"}'
+
+    FOR    ${child}    IN    @{children}
+        Cumulocity.Set Device    ${DEVICE_SN}:device:${prefix}${child}
+        Device Should Have Measurements    type=environment    minimum=1    maximum=1
+        Device Should Have Fragments    maintenance_mode
+        Should Have MQTT Messages    te/device/${prefix}${child}//    message_contains="@id":"${DEVICE_SN}:device:${prefix}${child}"    message_contains="@type":"child-device"
+    END
+
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
 
 Entities persisted and restored
     [Teardown]    Enable clean start and collect logs
@@ -249,6 +294,7 @@ Entities send to cloud on restart
     Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=101,${prefix}plc2-sensor1    date_from=${timestamp}    minimum=1    maximum=1
     Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=102,${prefix}plc1-metrics    date_from=${timestamp}    minimum=1    maximum=1
     Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=102,${prefix}plc2-metrics    date_from=${timestamp}    minimum=1    maximum=1
+
 
 *** Keywords ***
 
