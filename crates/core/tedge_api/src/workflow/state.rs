@@ -258,21 +258,44 @@ impl GenericCommandState {
     /// - The script command is first tokenized using shell escaping rules.
     ///   `/some/script.sh arg1 "arg 2" "arg 3"` -> ["/some/script.sh", "arg1", "arg 2", "arg 3"]
     /// - Then each token matching `${x.y.z}` is substituted with the value pointed by the JSON path.
-    pub fn inject_parameters(&self, args: &[String]) -> Vec<String> {
-        args.iter().map(|arg| self.inject_parameter(arg)).collect()
+    pub fn inject_values_into_parameters(&self, args: &[String]) -> Vec<String> {
+        args.iter()
+            .map(|arg| self.inject_values_into_template(arg))
+            .collect()
     }
 
-    /// Inject values extracted from the message payload into a script argument
+    /// Inject values extracted from the message payload into a template string
+    ///
+    /// - Search the template string for path patterns `${...}`
+    /// - Replace all these paths by the value extracted from self using the paths
+    ///
+    /// `"prefix-${.payload.x}-separator-${.payload.y}-suffix"` is replaced by
+    /// `"prefix-X-separator-Y-suffix"` in a context where the payload is `{"x":"X", "y":"Y"}`
+    pub fn inject_values_into_template(&self, target: &str) -> String {
+        target
+            .split_inclusive('}')
+            .flat_map(|s| match s.find("${") {
+                None => vec![s],
+                Some(i) => {
+                    let (prefix, template) = s.split_at(i);
+                    vec![prefix, template]
+                }
+            })
+            .map(|s| self.replace_path_with_value(s))
+            .collect()
+    }
+
+    /// Replace a path pattern with the value extracted from the message payload using that path
     ///
     /// `${.payload}` -> the whole message payload
     /// `${.payload.x}` -> the value of x if there is any in the payload
     /// `${.payload.unknown}` -> `${.payload.unknown}` unchanged
     /// `Not a path expression` -> `Not a path expression` unchanged
-    pub fn inject_parameter(&self, script_parameter: &str) -> String {
-        Self::extract_path(script_parameter)
+    fn replace_path_with_value(&self, template: &str) -> String {
+        Self::extract_path(template)
             .and_then(|path| self.extract_value(path))
             .map(|v| json_as_string(&v))
-            .unwrap_or_else(|| script_parameter.to_string())
+            .unwrap_or_else(|| template.to_string())
     }
 
     /// Extract a path  from a `${ ... }` expression
@@ -284,7 +307,9 @@ impl GenericCommandState {
 
     /// Extract the JSON value pointed by a path from this command state
     ///
-    /// Return None if the path contains unknown fields.
+    /// Return None if the path contains unknown fields,
+    /// with the exception that the empty string is returned for an unknown path below the `.payload`,
+    /// the rational being that the payload object represents a free-form value.
     pub fn extract_value(&self, path: &str) -> Option<Value> {
         match path {
             "." => Some(json!({
@@ -296,10 +321,14 @@ impl GenericCommandState {
             ".topic.operation" => self.operation().map(|s| s.into()),
             ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
             ".payload" => Some(self.payload.clone()),
-            path => path
-                .strip_prefix(".payload.")
-                .and_then(|path| json_excerpt(&self.payload, path))
-                .cloned(),
+            path if path.contains(['[', ']']) => None,
+            path => {
+                let value_path = path.strip_prefix(".payload.")?;
+                let value = json_excerpt(&self.payload, value_path)
+                    .cloned()
+                    .unwrap_or_else(|| String::new().into());
+                Some(value)
+            }
         }
     }
 
@@ -612,6 +641,11 @@ mod tests {
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
         assert!(cmd.is_init());
+        assert!(!cmd.is_finished());
+        assert!(!cmd.is_successful());
+        assert!(!cmd.is_failed());
+        assert_eq!(cmd.operation(), Some("make_it".to_string()));
+        assert!(cmd.invoking_operation_names().is_empty());
         assert_eq!(
             cmd,
             GenericCommandState {
@@ -671,6 +705,10 @@ mod tests {
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
         assert!(cmd.is_successful());
+        assert!(cmd.is_finished());
+        assert!(!cmd.is_failed());
+        assert_eq!(cmd.operation(), Some("do_it".to_string()));
+        assert_eq!(cmd.invoking_operation_names(), vec!["make_it".to_string()]);
         assert_eq!(
             cmd,
             GenericCommandState {
@@ -692,16 +730,26 @@ mod tests {
     fn retrieve_invoking_command_of_sub_sub_command() {
         let topic =
             Topic::new_unchecked("te/device/main///cmd/child/sub:parent:sub:grand-parent:456");
-        let payload = r#"{ "status":"init" }"#;
+        let payload = r#"{ "status":"failed", "reason":"no idea" }"#;
         let command = mqtt_channel::MqttMessage::new(&topic, payload);
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
+        assert!(cmd.is_finished());
+        assert!(cmd.is_failed());
+        assert_eq!(cmd.failure_reason(), Some("no idea"));
+        assert!(!cmd.is_successful());
+        assert_eq!(cmd.operation(), Some("child".to_string()));
+        assert_eq!(
+            cmd.invoking_operation_names(),
+            vec!["grand-parent".to_string(), "parent".to_string()]
+        );
         assert_eq!(
             cmd,
             GenericCommandState {
                 topic: topic.clone(),
-                status: "init".to_string(),
+                status: "failed".to_string(),
                 payload: json!({
-                    "status": "init"
+                    "status": "failed",
+                    "reason": "no idea"
                 }),
                 invoking_command_topic: Some(
                     "te/device/main///cmd/parent/sub:grand-parent:456".to_string()
@@ -720,7 +768,7 @@ mod tests {
 
         // Valid paths
         assert_eq!(
-            cmd.inject_parameter("${.}").to_json(),
+            cmd.inject_values_into_template("${.}").to_json(),
             json!({
                 "topic": "te/device/main///cmd/make_it/123",
                 "payload": {
@@ -731,39 +779,91 @@ mod tests {
             })
         );
         assert_eq!(
-            cmd.inject_parameter("${.topic}"),
+            cmd.inject_values_into_template("${.topic}"),
             "te/device/main///cmd/make_it/123"
         );
-        assert_eq!(cmd.inject_parameter("${.topic.target}"), "device/main//");
-        assert_eq!(cmd.inject_parameter("${.topic.operation}"), "make_it");
-        assert_eq!(cmd.inject_parameter("${.topic.cmd_id}"), "123");
-        assert_eq!(cmd.inject_parameter("${.payload}").to_json(), cmd.payload);
-        assert_eq!(cmd.inject_parameter("${.payload.status}"), "init");
-        assert_eq!(cmd.inject_parameter("${.payload.foo}"), "42");
         assert_eq!(
-            cmd.inject_parameter("${.payload.bar}").to_json(),
+            cmd.inject_values_into_template("${.topic.target}"),
+            "device/main//"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.topic.operation}"),
+            "make_it"
+        );
+        assert_eq!(cmd.inject_values_into_template("${.topic.cmd_id}"), "123");
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload}").to_json(),
+            cmd.payload
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.status}"),
+            "init"
+        );
+        assert_eq!(cmd.inject_values_into_template("${.payload.foo}"), "42");
+        assert_eq!(
+            cmd.inject_values_into_template("prefix-${.payload.foo}"),
+            "prefix-42"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.foo}-suffix"),
+            "42-suffix"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("prefix-${.payload.foo}-suffix"),
+            "prefix-42-suffix"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template(
+                "prefix-${.payload.foo}-separator-${.topic.cmd_id}-suffix"
+            ),
+            "prefix-42-separator-123-suffix"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("prefix-${.payload.foo}-separator-${invalid-path}"),
+            "prefix-42-separator-${invalid-path}"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("not-a-valid-pattern}"),
+            "not-a-valid-pattern}"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${not-a-valid-pattern"),
+            "${not-a-valid-pattern"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar}").to_json(),
             json!({
                 "extra": [1,2,3]
             })
         );
         assert_eq!(
-            cmd.inject_parameter("${.payload.bar.extra}").to_json(),
+            cmd.inject_values_into_template("${.payload.bar.extra}")
+                .to_json(),
             json!([1, 2, 3])
         );
 
         // Not supported yet
         assert_eq!(
-            cmd.inject_parameter("${.payload.bar.extra[1]}"),
+            cmd.inject_values_into_template("${.payload.bar.extra[1]}"),
             "${.payload.bar.extra[1]}"
         );
 
         // Ill formed
-        assert_eq!(cmd.inject_parameter("not a pattern"), "not a pattern");
-        assert_eq!(cmd.inject_parameter("${ill-formed}"), "${ill-formed}");
-        assert_eq!(cmd.inject_parameter("${.unknown}"), "${.unknown}");
         assert_eq!(
-            cmd.inject_parameter("${.payload.bar.unknown}"),
-            "${.payload.bar.unknown}"
+            cmd.inject_values_into_template("not a pattern"),
+            "not a pattern"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${ill-formed}"),
+            "${ill-formed}"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.unknown_root}"),
+            "${.unknown_root}"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar.unknown}"),
+            ""
         );
     }
 

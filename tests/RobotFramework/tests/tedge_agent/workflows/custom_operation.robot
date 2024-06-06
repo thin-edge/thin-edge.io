@@ -91,7 +91,7 @@ Use scripts to create sub-operation init states
     Should Be Equal    ${actual_log}    ${expected_log}
 
 Invoke sub-operation from a sub-operation
-    Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub '{"status":"init", "output_file":"/tmp/test-sub-sub.json"}'
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub '{"status":"init", "sub_operation":"super_command", "output_file":"/tmp/test-sub-sub.json"}'
     ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/gp_command/test-sub-sub    message_pattern=.*successful.*   maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub ''
     ${actual_log}      Execute Command    cat /tmp/test-sub-sub.json
