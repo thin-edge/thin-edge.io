@@ -64,6 +64,14 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "Warning: You haven't set the GITHUB_TOKEN environment variable. The changelog generation might fail as Github rate limits unauthenticated users" >&2
+    echo "Set your token using: " >&2
+    echo >&2
+    echo "   export GITHUB_TOKEN=$(gh auth token)"
+    echo >&2
+fi
+
 if [ -z "$FROM_VERSION" ]; then
     FROM_VERSION=$(git-cliff --context --unreleased | jq -r '.[0].previous.version')
 fi
