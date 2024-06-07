@@ -465,7 +465,6 @@ define_tedge_config! {
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
             /// forwarded by to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
-            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
             topic_prefix: TopicPrefix,
         },
 
@@ -661,7 +660,6 @@ define_tedge_config! {
 
         bridge: {
             #[tedge_config(default(value = false))]
-            #[doku(skip)] // Hide the configuration in `tedge config list --doc`
             built_in: bool,
 
             reconnect_policy: {
@@ -866,22 +864,6 @@ define_tedge_config! {
 
 fn c8y_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("c8y").unwrap()
-}
-
-impl ReadableKey {
-    // This is designed to be a simple way of controlling whether values appear in the output of
-    // `tedge config list`. Ideally this would be integrated into [define_tedge_config], see
-    // https://github.com/thin-edge/thin-edge.io/issues/2767 for more detail on that.
-    // Currently this accompanies `#[doku(skip)]` on the relevant configurations, which hides
-    // them in `tedge config list --doc`. The configurations are hidden to avoid unfinished
-    // features from being discovered.
-    pub fn is_printable_value(self, value: &str) -> bool {
-        match self {
-            Self::MqttBridgeBuiltIn => value != "false",
-            Self::C8yBridgeTopicPrefix => value != "c8y",
-            _ => true,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]

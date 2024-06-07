@@ -33,10 +33,9 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
     let mut keys_without_values = Vec::new();
     for config_key in ReadableKey::iter() {
         match config.read_string(config_key).ok() {
-            Some(value) if config_key.is_printable_value(&value) => {
+            Some(value) => {
                 println!("{}={}", config_key, value);
             }
-            Some(_) => {}
             None => {
                 keys_without_values.push(config_key);
             }
