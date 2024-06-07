@@ -5,7 +5,7 @@ Library               ThinEdgeIO    adapter=${ADAPTER}
 Library               Cumulocity
 Library               String
 Suite Setup           Custom Setup
-Suite Teardown        Get Logs
+Suite Teardown        Custom Teardown
 
 *** Variables ***
 
@@ -152,14 +152,22 @@ Verify Child Device Measurement In Cumulocity
     Log    Verified ${type} measurement for child device ${child_id} with value ${value} in Cumulocity
 
 Custom Setup
-    [Documentation]    Custom setup for initializing the device environment.
+    [Documentation]    Initializes the device environment. 
+    ...                Sets up the device, transfers necessary packages, 
+    ...                installs them, and configures Cumulocity for connectivity.
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
     Set Suite Variable    ${DEVICE_SN}
-    Execute Command    sudo rm -rf /home/pi/*.deb
-    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
-    Execute Command    chmod a+x uninstall-thin-edge_io.sh
-    Execute Command    ./uninstall-thin-edge_io.sh purge
-    Log    Successfully uninstalled with purge
     ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
     Execute Command    sudo dpkg -i *.deb
     Log    Installed new packages on device
+
+Custom Teardown
+    [Documentation]    Cleans up the device environment. 
+    ...                Uninstalls ThinEdgeIO, removes packages and scripts, and retrieves logs.
+    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
+    Execute Command    sudo chmod a+x uninstall-thin-edge_io.sh
+    Execute Command    ./uninstall-thin-edge_io.sh purge
+    Log    Successfully uninstalled with purge
+    Execute Command    sudo rm -rf /home/pi/*.deb
+    Execute Command    sudo rm -rf /home/pi/*.sh
+    Get Logs
