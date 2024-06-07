@@ -43,7 +43,7 @@ impl<C: Clock> CustomBackoff<C> {
     }
 
     #[must_use]
-    fn backoff(&mut self) -> Duration {
+    pub fn backoff(&mut self) -> Duration {
         let now = self.eb.clock.now();
         match self.okay_since {
             Some(time) if now - time < self.reset_timeout => (),
@@ -63,10 +63,6 @@ impl<C: Clock> CustomBackoff<C> {
             self.last_state = State::Success;
             self.okay_since = Some(self.eb.clock.now());
         }
-    }
-
-    pub fn sleep(&mut self) -> tokio::time::Sleep {
-        tokio::time::sleep(self.backoff())
     }
 }
 

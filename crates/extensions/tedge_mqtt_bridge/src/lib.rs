@@ -322,7 +322,11 @@ async fn half_bridge(
                 notification
             }
             Err(_) => {
-                backoff.sleep().await;
+                let time = backoff.backoff();
+                if !time.is_zero() {
+                    info!("Waiting {time:?} until attempting reconnection to {name} broker");
+                }
+                tokio::time::sleep(time).await;
                 continue;
             }
         };
@@ -397,7 +401,6 @@ enum Status {
 impl Status {
     fn json(self) -> &'static str {
         match self {
-            // TODO Robot test that I make it to Cumulocity
             Status::Up => r#"{"status":"up"}"#,
             Status::Down => r#"{"status":"down"}"#,
         }
