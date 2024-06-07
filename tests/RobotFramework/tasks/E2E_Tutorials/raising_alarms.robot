@@ -5,7 +5,7 @@ Library               ThinEdgeIO    adapter=${ADAPTER}
 Library               Cumulocity
 Library               String
 Suite Setup           Custom Setup
-Suite Teardown        Get Logs
+Suite Teardown        Custom Teardown
 
 *** Variables ***
 
@@ -14,98 +14,83 @@ ${C8Y_ROOT_CERT_PATH}    /etc/ssl/certs
 
 *** Tasks ***
 
-Configure the device
-    [Documentation]    Configure the device with the Cumulocity IoT URL and root certificate path.
-    Configure Cumulocity URL
-    Configure Root Certificate Path
-
-Create the certificate
-    [Documentation]    Create a self-signed certificate for the device and verify its contents.
-    Create Device Certificate
-    Check Device Certificate
-
-Make the device trusted by Cumulocity
-    [Documentation]    Upload the device certificate to Cumulocity and ensure it's trusted.
-    Upload Device Certificate
-    Sleep    3s    reason=Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
-
-Connect the device
-    [Documentation]    Connect the device to Cumulocity IoT and verify the connection.
-    Connect to Cumulocity
-    Device Should Exist    ${DEVICE_SN}
-
 Raise Alarm
-    [Documentation]    Raise an alarm using ThinEdgeIO
-    Raise Alarm Keyword    temperature_high    Temperature is very high    critical
+    [Documentation]    This test case raises an alarm using ThinEdgeIO. 
+    ...                It publishes an alarm message with specified type, 
+    ...                text, and severity to the device and verifies the alarm's presence.
+    Raise Alarm Keyword    Current_high    Current is high    critical
 
 Raise Alarm With Timestamp
-    [Documentation]    Raise an alarm with a specific timestamp
-    Raise Alarm With Timestamp Keyword    temperature_high    Temperature is very high    critical    2024-01-01T12:00:00Z
+    [Documentation]    This test case raises an alarm with a specific timestamp using ThinEdgeIO. 
+    ...                It publishes an alarm message with specified type, text, severity, 
+    ...                and timestamp to the device and verifies the alarm's presence.
+    Raise Alarm With Timestamp Keyword    temperature_high    Temperature is very high    critical   2021-01-01T05:30:45+00:00 
 
 Raise Custom Alarm
-    [Documentation]    Raise a custom alarm using Cumulocity
-    Raise Custom Alarm Keyword    temperature_high    Temperature is very high    critical    2024-01-01T12:00:00Z    someOtherCustomFragment
+    [Documentation]    This test case raises a custom alarm using Cumulocity. 
+    ...                It publishes an alarm message with specified type, text, 
+    ...                severity, and a custom fragment to the device and verifies the alarm's presence.
+    Raise Custom Alarm Keyword    PIR    Person detected    critical    someOtherCustomFragment
+    Raise Custom Alarm Keyword    PIR    Person detected    critical    someOtherCustomFragment
 
 *** Keywords ***
 
 Raise Alarm Keyword
+    [Documentation]    Publishes an alarm message with the specified type, text, 
+    ...                and severity to the device using ThinEdgeIO MQTT. 
+    ...                Verifies that the alarm is present on the device.
     [Arguments]    ${alarm_type}    ${text}    ${severity}
-    ${payload}=    Set Variable    {"text": "${text}", "severity": "${severity}"}
+    ${payload}=    Set Variable    "text": "${text}", "severity": "${severity}"
     Execute Command    tedge mqtt pub te/device/main///a/${alarm_type} '{${payload}}' -r -q 2
+    Device Should Have Alarm/s    minimum=1    maximum=1    expected_text=${text}    type=${alarm_type}    severity=${severity}
 
 Raise Alarm With Timestamp Keyword
-    [Arguments]    ${alarm_type}    ${text}    ${severity}    ${timestamp}
-    ${payload}=    Set Variable    {"text": "${text}", "severity": "${severity}", "time": "${timestamp}"}
-    Execute Command    tedge mqtt pub te/device/main///a/${alarm_type} '{${payload}}' -r -q 2
+    [Documentation]    Publishes an alarm message with the specified type, text, severity, 
+    ...                and timestamp to the device using ThinEdgeIO MQTT. 
+    ...                Verifies that the alarm is present on the device with the correct timestamp.
+    [Arguments]    ${alarm_type1}    ${text1}    ${severity1}    ${timestamp1}
+    ${payload}=    Set Variable    "text": "${text1}", "severity": "${severity1}", "time": "${timestamp1}"
+    Execute Command    tedge mqtt pub te/device/main///a/${alarm_type1} '{${payload}}' -r -q 2
+    Device Should Have Alarm/s    minimum=1    maximum=1    expected_text=${text1}    type=${alarm_type1}    severity=${severity1}
 
 Raise Custom Alarm Keyword
-    [Arguments]    ${alarm_type}    ${text}    ${severity}    ${timestamp}    ${custom_fragment}
-    ${payload}=    Set Variable    {"text": "${text}", "severity": "${severity}", "time": "${timestamp}", "${custom_fragment}": "custom_value"}
+    [Documentation]    Publishes a custom alarm message with the specified type, text, 
+    ...                severity, and a custom fragment to the device using ThinEdgeIO MQTT. 
+    ...                Verifies that the alarm is present on the device.
+    [Arguments]    ${alarm_type}    ${text}    ${severity}    ${custom_fragment}
+    ${payload}=    Set Variable    "text": "${text}", "severity": "${severity}", "${custom_fragment}": "custom_value"
     Execute Command    tedge mqtt pub te/device/main///a/${alarm_type} '{${payload}}' -r -q 2
 
-Configure Cumulocity URL
-    [Documentation]    Set the Cumulocity IoT URL for the device.
-    ${HOSTNAME}=      Replace String Using Regexp    ${C8Y_CONFIG.host}    ^.*://    ${EMPTY}
-    ${HOSTNAME}=      Strip String    ${HOSTNAME}    characters=/
-    Execute Command    sudo tedge config set c8y.url ${HOSTNAME}
-    Log    Configured Cumulocity URL to ${HOSTNAME}
-
-Configure Root Certificate Path
-    [Documentation]    Configure the root certificate path on the device.
-    Execute Command    tedge config set c8y.root.cert.path ${C8Y_ROOT_CERT_PATH}
-    Log    Configured root certificate path: ${C8Y_ROOT_CERT_PATH}
-
-Create Device Certificate
-    [Documentation]    Create a self-signed certificate for the device.
-    Execute Command    tedge cert create --device-id ${DEVICE_SN}
-    Log    Created device certificate for: ${DEVICE_SN}
-
-Check Device Certificate
-    [Documentation]    Check the contents of the device certificate.
-    Execute Command    tedge cert show
-    Log    Verified device certificate
-
-Upload Device Certificate
-    [Documentation]    Upload the device certificate to Cumulocity IoT.
-    ${output}     Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
-    Log    ${output}
-    Should Contain    ${output}    Certificate uploaded successfully.
-    Log    Uploaded device certificate for ${DEVICE_SN}
-
-Connect to Cumulocity
-    [Documentation]    Connect the device to Cumulocity IoT.
-    Execute Command    tedge connect c8y
-    Log    Connected to Cumulocity IoT
-
 Custom Setup
-    [Documentation]    Custom setup for initializing the device environment.
+    [Documentation]    Initializes the device environment. 
+    ...                Sets up the device, transfers necessary packages, 
+    ...                installs them, and configures Cumulocity for connectivity.
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
     Set Suite Variable    ${DEVICE_SN}
-    Execute Command    sudo rm -rf /home/pi/*.deb
-    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
-    Execute Command    chmod a+x uninstall-thin-edge_io.sh
-    Execute Command    ./uninstall-thin-edge_io.sh purge
-    Log    Successfully uninstalled with purge
     ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
     Execute Command    sudo dpkg -i *.deb
     Log    Installed new packages on device
+    Configure Cumulocity
+
+Custom Teardown
+    [Documentation]    Cleans up the device environment. 
+    ...                Uninstalls ThinEdgeIO, removes packages and scripts, and retrieves logs.
+    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
+    Execute Command    sudo chmod a+x uninstall-thin-edge_io.sh
+    Execute Command    ./uninstall-thin-edge_io.sh purge
+    Log    Successfully uninstalled with purge
+    Execute Command    sudo rm -rf /home/pi/*.deb
+    Execute Command    sudo rm -rf /home/pi/*.sh
+    Get Logs
+
+Configure Cumulocity
+    [Documentation]    Configures the Cumulocity IoT connection settings on the device. 
+    ...                Sets the Cumulocity URL, uploads the certificate, and connects the device to Cumulocity.
+    ${HOSTNAME}=      Replace String Using Regexp    ${C8Y_CONFIG.host}    ^.*://    ${EMPTY}
+    ${HOSTNAME}=      Strip String    ${HOSTNAME}    characters=/
+    Execute Command    sudo tedge config set c8y.url ${HOSTNAME}
+    Execute Command    sudo tedge config set c8y.root.cert.path ${C8Y_ROOT_CERT_PATH}
+    Execute Command    sudo tedge cert create --device-id ${DEVICE_SN}
+    Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
+    Execute Command    sudo tedge connect c8y
+    Sleep    3s    reason=Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
