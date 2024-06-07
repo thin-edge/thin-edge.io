@@ -18,6 +18,7 @@ camino = { workspace = true, features = ["serde", "serde1"] }
 certificate = { workspace = true }
 doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
+humantime = { workspace = true }
 mqtt_channel = { workspace = true }
 once_cell = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }

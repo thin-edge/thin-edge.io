@@ -297,6 +297,12 @@ fn reader_value_for_field<'a>(
                         Some(value) => value.clone(),
                     }
                 },
+                FieldDefault::FromStr(default) => quote_spanned! {name.span()=>
+                    match &dto.#(#parents).*.#name {
+                        None => #default.parse().unwrap(),
+                        Some(value) => value.clone(),
+                    }
+                },
             }
         }
         ConfigurableField::ReadOnly(field) => {

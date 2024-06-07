@@ -1,3 +1,4 @@
+mod backoff;
 mod config;
 mod health;
 mod topics;
@@ -47,7 +48,9 @@ pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
 use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
 
+use crate::backoff::CustomBackoff;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 pub use config::*;
@@ -94,6 +97,8 @@ impl MqttBridgeActorBuilder {
         ));
         local_config.set_clean_session(false);
 
+        let reconnect_policy = tedge_config.mqtt.bridge.reconnect_policy.clone();
+
         cloud_config.set_manual_acks(true);
 
         let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
@@ -124,6 +129,7 @@ impl MqttBridgeActorBuilder {
             tx_status.clone(),
             "local",
             local_topics,
+            reconnect_policy.clone(),
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
@@ -135,6 +141,7 @@ impl MqttBridgeActorBuilder {
             tx_status.clone(),
             "cloud",
             cloud_topics,
+            reconnect_policy,
         ));
 
         Self {}
@@ -291,7 +298,14 @@ async fn half_bridge(
     tx_health: mpsc::Sender<(&'static str, Status)>,
     name: &'static str,
     topics: Vec<SubscribeFilter>,
+    reconnect_policy: TEdgeConfigReaderMqttBridgeReconnectPolicy,
 ) {
+    let mut backoff = CustomBackoff::new(
+        ::backoff::SystemClock {},
+        reconnect_policy.initial_interval.duration(),
+        reconnect_policy.maximum_interval.duration(),
+        reconnect_policy.reset_window.duration(),
+    );
     let mut forward_pkid_to_received_msg = HashMap::new();
     let mut bridge_health = BridgeHealth::new(name, tx_health);
     let mut loop_breaker =
@@ -302,8 +316,18 @@ async fn half_bridge(
         bridge_health.update(&res).await;
 
         let notification = match res {
-            Ok(notification) => notification,
-            Err(_) => continue,
+            Ok(notification) => {
+                backoff.mark_success();
+                notification
+            }
+            Err(_) => {
+                let time = backoff.backoff();
+                if !time.is_zero() {
+                    info!("Waiting {time:?} until attempting reconnection to {name} broker");
+                }
+                tokio::time::sleep(time).await;
+                continue;
+            }
         };
 
         match notification {
@@ -376,7 +400,6 @@ enum Status {
 impl Status {
     fn json(self) -> &'static str {
         match self {
-            // TODO Robot test that I make it to Cumulocity
             Status::Up => r#"{"status":"up"}"#,
             Status::Down => r#"{"status":"down"}"#,
         }

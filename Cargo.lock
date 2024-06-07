@@ -3696,6 +3696,7 @@ dependencies = [
  "certificate",
  "doku",
  "figment",
+ "humantime",
  "mqtt_channel",
  "once_cell",
  "reqwest",
@@ -3875,6 +3876,7 @@ version = "1.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backoff",
  "certificate",
  "env_logger",
  "futures",

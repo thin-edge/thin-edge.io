@@ -1,5 +1,6 @@
 //! This crate implements the macro for `tedge_config_macros` and should not be used directly.
 
+use crate::input::FieldDefault;
 use heck::ToUpperCamelCase;
 use optional_error::OptionalError;
 use proc_macro2::Span;
@@ -61,6 +62,33 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         })
         .collect::<Vec<_>>();
 
+    let fromstr_default_tests = fields_with_keys
+        .iter()
+        .filter_map(|(key, field)| Some((key, field.read_write()?)))
+        .filter_map(|(key, field)| {
+            let ty = field.from.as_ref().unwrap_or(&field.ty);
+            if let FieldDefault::FromStr(default) = &field.default {
+                let name = quote::format_ident!(
+                    "default_value_can_be_deserialized_for_{}",
+                    key.join("_").replace('-', "_")
+                );
+                let span = default.span();
+                let expect_message = format!(
+                    "Default value {default:?} for '{}' could not be deserialized",
+                    key.join("."),
+                );
+                Some(quote_spanned! {span=>
+                    #[test]
+                    fn #name() {
+                        #default.parse::<#ty>().expect(#expect_message);
+                    }
+                })
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
     let reader_name = proc_macro2::Ident::new("TEdgeConfigReader", Span::call_site());
     let dto_doc_comment = format!(
         "A data-transfer object, designed for reading and writing to
@@ -100,6 +128,7 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
 
     Ok(quote! {
         #(#example_tests)*
+        #(#fromstr_default_tests)*
         #dto
         #reader
         #enums
