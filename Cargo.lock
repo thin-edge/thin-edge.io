@@ -3886,7 +3886,6 @@ dependencies = [
  "rumqttd",
  "serde_json",
  "tedge_actors",
- "tedge_api",
  "tedge_config",
  "tedge_test_utils",
  "thiserror",

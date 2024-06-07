@@ -45,7 +45,6 @@ pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;
 pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
-use tedge_api::main_device_health_topic;
 use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
 
@@ -58,16 +57,16 @@ pub struct MqttBridgeActorBuilder {}
 impl MqttBridgeActorBuilder {
     pub async fn new(
         tedge_config: &TEdgeConfig,
-        service_name: String,
+        service_name: &str,
+        health_topic: &Topic,
         rules: BridgeConfig,
         mut cloud_config: MqttOptions,
     ) -> Self {
         let mut local_config = MqttOptions::new(
-            &service_name,
+            service_name,
             &tedge_config.mqtt.client.host,
             tedge_config.mqtt.client.port.into(),
         );
-        let health_topic = main_device_health_topic(&service_name);
         // TODO cope with certs but not ca_dir, or handle that case with an explicit error message?
         let auth_config = tedge_config.mqtt_client_auth_config();
         let local_tls_config = match auth_config {
@@ -88,7 +87,7 @@ impl MqttBridgeActorBuilder {
         }
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
-            &health_topic,
+            &health_topic.name,
             Status::Down.json(),
             QoS::AtLeastOnce,
             true,
@@ -113,7 +112,7 @@ impl MqttBridgeActorBuilder {
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
             rules.converters_and_bidirectional_topic_filters();
         let (tx_status, monitor) =
-            BridgeHealthMonitor::new(local_client.clone(), health_topic, &msgs_cloud);
+            BridgeHealthMonitor::new(local_client.clone(), health_topic.name.clone(), &msgs_cloud);
         tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
             local_event_loop,

@@ -22,7 +22,6 @@ mqtt_channel = { workspace = true }
 mutants = { workspace = true }
 rumqttc = { workspace = true }
 tedge_actors = { workspace = true }
-tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["macros"] }

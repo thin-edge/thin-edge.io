@@ -581,6 +581,7 @@ impl CumulocityConverter {
 
         let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
         Ok(convert_health_status_message(
+            &self.config.mqtt_schema,
             entity_metadata,
             &ancestors_external_ids,
             message,
@@ -2877,7 +2878,7 @@ pub(crate) mod tests {
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
         let in_topic = "te/device/child1/service/child-service-c8y/status/health";
-        let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
+        let in_payload = r#"{"pid":1234,"status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
         let mqtt_schema = MqttSchema::new();
@@ -2933,7 +2934,7 @@ pub(crate) mod tests {
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
         let in_topic = "te/device/main/service/test-tedge-mapper-c8y/status/health";
-        let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
+        let in_payload = r#"{"pid":1234,"status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
         let mqtt_schema = MqttSchema::new();

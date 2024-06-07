@@ -44,9 +44,15 @@ fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
 
 async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) {
     let cloud_config = MqttOptions::new("a-device-id", "localhost", cloud_port);
+    let service_name = "tedge-mapper-test";
+    let health_topic = format!("te/device/main/service/{service_name}/status/health")
+        .as_str()
+        .try_into()
+        .unwrap();
     MqttBridgeActorBuilder::new(
         &tedge_mqtt_config(local_port),
-        "tedge-mapper-test".into(),
+        service_name,
+        &health_topic,
         rules,
         cloud_config,
     )
