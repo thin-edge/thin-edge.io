@@ -5,34 +5,15 @@ Library               ThinEdgeIO    adapter=${ADAPTER}
 Library               Cumulocity
 Library               String
 Suite Setup           Custom Setup
-Suite Teardown        Get Logs
+Suite Teardown        Custom Teardown
 
 *** Variables ***
 
 ${ADAPTER}            ssh
 ${C8Y_ROOT_CERT_PATH}    /etc/ssl/certs
 
+
 *** Tasks ***
-
-Configure the device
-    [Documentation]    Configure the device with the Cumulocity IoT URL and root certificate path.
-    Configure Cumulocity URL
-    Configure Root Certificate Path
-
-Create the certificate
-    [Documentation]    Create a self-signed certificate for the device and verify its contents.
-    Create Device Certificate
-    Check Device Certificate
-
-Make the device trusted by Cumulocity
-    [Documentation]    Upload the device certificate to Cumulocity and ensure it's trusted.
-    Upload Device Certificate
-    Sleep    3s    reason=Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
-
-Connect the device
-    [Documentation]    Connect the device to Cumulocity IoT and verify the connection.
-    Connect to Cumulocity
-    Device Should Exist    ${DEVICE_SN}
 
 Sending simple event
     [Documentation]    Send a simple login event to Cumulocity IoT.
@@ -49,41 +30,8 @@ Sending child device event
     Send Child Device Login Event
     Verify Child Device Event In Cumulocity    external_sensor    login_event    A user just logged in
 
+
 *** Keywords ***
-
-Configure Cumulocity URL
-    [Documentation]    Set the Cumulocity IoT URL for the device.
-    ${HOSTNAME}=      Replace String Using Regexp    ${C8Y_CONFIG.host}    ^.*://    ${EMPTY}
-    ${HOSTNAME}=      Strip String    ${HOSTNAME}    characters=/
-    Execute Command    sudo tedge config set c8y.url ${HOSTNAME}
-    Log    Configured Cumulocity URL to ${HOSTNAME}
-
-Configure Root Certificate Path
-    [Documentation]    Configure the root certificate path on the device.
-    Execute Command    tedge config set c8y.root.cert.path ${C8Y_ROOT_CERT_PATH}
-    Log    Configured root certificate path: ${C8Y_ROOT_CERT_PATH}
-
-Create Device Certificate
-    [Documentation]    Create a self-signed certificate for the device.
-    Execute Command    tedge cert create --device-id ${DEVICE_SN}
-    Log    Created device certificate for: ${DEVICE_SN}
-
-Check Device Certificate
-    [Documentation]    Check the contents of the device certificate.
-    Execute Command    tedge cert show
-    Log    Verified device certificate
-
-Upload Device Certificate
-    [Documentation]    Upload the device certificate to Cumulocity IoT.
-    ${output}     Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
-    Log    ${output}
-    Should Contain    ${output}    Certificate uploaded successfully.
-    Log    Uploaded device certificate for ${DEVICE_SN}
-
-Connect to Cumulocity
-    [Documentation]    Connect the device to Cumulocity IoT.
-    Execute Command    tedge connect c8y
-    Log    Connected to Cumulocity IoT
 
 Send Login Event
     [Documentation]    Send a simple login event to Cumulocity IoT.
@@ -113,14 +61,35 @@ Verify Child Device Event In Cumulocity
     Log    Verified ${type} event for child device ${child_id} with text "${text}" and time "${time}" in Cumulocity
 
 Custom Setup
-    [Documentation]    Custom setup for initializing the device environment.
+    [Documentation]    Initializes the device environment. 
+    ...                Sets up the device, transfers necessary packages, 
+    ...                installs them, and configures Cumulocity for connectivity.
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
     Set Suite Variable    ${DEVICE_SN}
-    Execute Command    sudo rm -rf /home/pi/*.deb
-    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
-    Execute Command    chmod a+x uninstall-thin-edge_io.sh
-    Execute Command    ./uninstall-thin-edge_io.sh purge
-    Log    Successfully uninstalled with purge
     ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
     Execute Command    sudo dpkg -i *.deb
     Log    Installed new packages on device
+    Configure Cumulocity
+
+Custom Teardown
+    [Documentation]    Cleans up the device environment. 
+    ...                Uninstalls ThinEdgeIO, removes packages and scripts, and retrieves logs.
+    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
+    Execute Command    sudo chmod a+x uninstall-thin-edge_io.sh
+    Execute Command    ./uninstall-thin-edge_io.sh purge
+    Log    Successfully uninstalled with purge
+    Execute Command    sudo rm -rf /home/pi/*.deb
+    Execute Command    sudo rm -rf /home/pi/*.sh
+    Get Logs
+
+Configure Cumulocity
+    [Documentation]    Configures the Cumulocity IoT connection settings on the device. 
+    ...                Sets the Cumulocity URL, uploads the certificate, and connects the device to Cumulocity.
+    ${HOSTNAME}=      Replace String Using Regexp    ${C8Y_CONFIG.host}    ^.*://    ${EMPTY}
+    ${HOSTNAME}=      Strip String    ${HOSTNAME}    characters=/
+    Execute Command    sudo tedge config set c8y.url ${HOSTNAME}
+    Execute Command    sudo tedge config set c8y.root.cert.path ${C8Y_ROOT_CERT_PATH}
+    Execute Command    sudo tedge cert create --device-id ${DEVICE_SN}
+    Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
+    Execute Command    sudo tedge connect c8y
+    Sleep    3s    reason=Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
