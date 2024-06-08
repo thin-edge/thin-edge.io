@@ -45,7 +45,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_script_ext::Execute;
 use tempfile::TempDir;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 #[tokio::test]
 async fn convert_incoming_software_list_request() -> Result<(), DynError> {

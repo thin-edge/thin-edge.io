@@ -32,7 +32,7 @@ use toml::Table;
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
 type UploaderMessageBox = TimedMessageBox<FakeServerBox<LogUploadRequest, LogUploadResult>>;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 /// Preparing a temp directory containing four files, with
 /// two types { type_one, type_two } and one file for log type that does not exists:

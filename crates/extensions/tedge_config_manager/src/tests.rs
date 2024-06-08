@@ -33,7 +33,7 @@ use crate::ConfigManagerBuilder;
 use crate::ConfigManagerConfig;
 use crate::TedgeWriteStatus;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_secs(5);
+const TEST_TIMEOUT_MS: Duration = Duration::from_secs(3);
 
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
 type DownloaderMessageBox =

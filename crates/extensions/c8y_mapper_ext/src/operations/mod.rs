@@ -97,7 +97,7 @@ mod tests {
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {

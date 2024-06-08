@@ -12,7 +12,7 @@ mod tests {
     use tedge_config::TEdgeConfigLocation;
     use test_case::test_case;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     fn make_config(port: u16) -> Result<tempfile::TempDir, anyhow::Error> {
         let dir = tempfile::TempDir::new().unwrap();

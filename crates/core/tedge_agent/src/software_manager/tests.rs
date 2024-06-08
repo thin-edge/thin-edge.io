@@ -27,7 +27,7 @@ use tedge_config::SudoCommandBuilder;
 use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 const SUDO: &str = "echo";
 

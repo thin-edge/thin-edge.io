@@ -285,7 +285,7 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_uploader_ext::UploadResponse;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn mapper_converts_config_upload_op_to_config_snapshot_cmd_for_main_device() {

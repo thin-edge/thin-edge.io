@@ -46,7 +46,7 @@ use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_timer_ext::Timeout;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 #[tokio::test]
 async fn mapper_publishes_init_messages_on_startup() {
@@ -2057,7 +2057,7 @@ async fn custom_operation_timeout_sigkill() {
     let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let mut mqtt = mqtt.with_timeout(Duration::from_secs(5));
 
     skip_init_messages(&mut mqtt).await;
 

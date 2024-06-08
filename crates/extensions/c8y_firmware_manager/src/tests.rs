@@ -35,7 +35,7 @@ const DOWNLOADED_FILE_NAME: &str =
 const TEDGE_HOST: &str = "127.0.0.1";
 const TEDGE_HTTP_PORT: u16 = 8765;
 const C8Y_HOST: &str = "c8y.tenant.io";
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 const DEFAULT_REQUEST_TIMEOUT_SEC: Duration = Duration::from_secs(3600);
 
 #[tokio::test]

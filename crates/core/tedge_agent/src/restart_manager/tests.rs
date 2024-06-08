@@ -20,7 +20,7 @@ use tedge_api::RestartCommand;
 use tedge_config::SudoCommandBuilder;
 use tedge_test_utils::fs::TempTedgeDir;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 #[tokio::test]
 async fn test_pending_restart_operation() -> Result<(), DynError> {
