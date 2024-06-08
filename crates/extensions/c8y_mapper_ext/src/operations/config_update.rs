@@ -249,7 +249,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate c8y_DownloadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -351,7 +351,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -442,7 +442,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_update command with "executing" state
         mqtt.send(MqttMessage::new(
