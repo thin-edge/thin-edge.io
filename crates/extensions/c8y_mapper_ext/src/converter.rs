@@ -38,7 +38,6 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation;
-use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
@@ -77,7 +76,6 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::pending_entity_store::PendingEntityData;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
@@ -163,39 +161,6 @@ impl CumulocityConverter {
             ),
             Err(err) => self.new_error_message(err),
         }
-    }
-}
-
-pub struct UploadOperationData {
-    pub topic_id: EntityTopicId,
-    pub smartrest_topic: Topic,
-    pub clear_cmd_topic: Topic,
-    pub c8y_binary_url: String,
-    pub operation: CumulocitySupportedOperations,
-    pub command: GenericCommandState,
-
-    // used to automatically remove the temporary file after operation is finished
-    pub file_dir: tempfile::TempDir,
-}
-
-pub struct UploadOperationLog {
-    pub final_messages: Vec<MqttMessage>,
-}
-
-pub enum UploadContext {
-    OperationData(UploadOperationData),
-    OperationLog(UploadOperationLog),
-}
-
-impl From<UploadOperationData> for UploadContext {
-    fn from(value: UploadOperationData) -> Self {
-        UploadContext::OperationData(value)
-    }
-}
-
-impl From<UploadOperationLog> for UploadContext {
-    fn from(value: UploadOperationLog) -> Self {
-        UploadContext::OperationLog(value)
     }
 }
 
