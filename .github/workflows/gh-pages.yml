@@ -19,6 +19,10 @@ on:
         required: false
         default: true
 
+      # Note: the crawler should not be triggered by default, as the open source
+      # plan has limits how often the crawling can be triggered,
+      # so it should be reserved for official releases, which is triggered by the
+      # [tedge-docs](https://github.com/thin-edge/tedge-docs) repo
       update_search_index:
         description: Update the search index by triggering the Algolia crawler
         type: boolean
