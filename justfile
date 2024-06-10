@@ -101,3 +101,8 @@ publish-linux-virtual *ARGS='':
 # Publish linux packages for a specific target
 publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
     ./ci/build_scripts/publish_packages.sh --path "target/{{TARGET}}/packages" {{ARGS}}
+
+
+# Generate changelog for a release
+generate-changelog *ARGS:
+    ./ci/changelog/changelog.sh {{ARGS}}

@@ -56,3 +56,6 @@ Makefile.toml
 # thin-edge.io certificate files
 tedge-certificate.pem
 tedge-private-key.pem
+
+# temporary changelog
+_CHANGELOG.md
