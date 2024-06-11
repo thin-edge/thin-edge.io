@@ -644,7 +644,7 @@ class ThinEdgeIO(DeviceLibrary):
         | ${listen}=   | `Should Have MQTT Message` | topic=tedge/${CHILD_SN}/commands/req/config_snapshot | date_from=-5s |
         | ${messages}= | `Should Have MQTT Message` | te/device/main/service/tedge-agent/status/health | minimum=1 | minimum=2 |
         | ${messages}= | `Should Have MQTT Message` | te/device/main/service/tedge-agent/status/health | minimum=1 | minimum=2 | message_contains="time" |
-        | ${messages}= | `Should Have MQTT Message` | te/device/main/service/tedge-agent/status/health | minimum=1 | minimum=2 | message_pattern="value":\s*\d+ |
+        | ${messages}= | `Should Have MQTT Message` | te/device/main/service/tedge-agent/status/health | minimum=1 | minimum=2 | message_pattern="value":\\s*\\d+ |
         """
         result = self._assert_mqtt_topic_messages(
             topic,
