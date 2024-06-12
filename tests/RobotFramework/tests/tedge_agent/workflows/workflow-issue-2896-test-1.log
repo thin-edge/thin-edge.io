@@ -1,0 +1,10 @@
+----------------------[ issue-2896 @ init
+----------------------[ issue-2896 @ executing
+----------------------[ issue-2896 @ await_restart
+----------------------[ issue-2896 > restart @ init
+----------------------[ issue-2896 > restart @ scheduled
+----------------------[ issue-2896 > restart @ executing
+----------------------[ issue-2896 @ await_restart
+----------------------[ issue-2896 > restart @ successful
+----------------------[ issue-2896 @ restarted
+----------------------[ issue-2896 @ successful

@@ -1,0 +1,23 @@
+operation = "issue-2896"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "restart"
+on_exec = "await_restart"
+
+[await_restart]
+action = "await-operation-completion"
+on_success = "restarted"
+
+[restarted]
+script = "sh -c 'sleep 10'"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
