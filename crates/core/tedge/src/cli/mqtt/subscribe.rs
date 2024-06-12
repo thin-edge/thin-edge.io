@@ -8,6 +8,7 @@ use rumqttc::Client;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::MqttOptions;
+use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS;
 use tedge_config::MqttAuthClientConfig;
@@ -82,6 +83,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     }
 
     let (mut client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
+    super::disconnect_if_interrupted(client.clone());
 
     for event in connection.iter() {
         match event {
@@ -106,6 +108,9 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 eprintln!("INFO: Disconnected");
+                break;
+            }
+            Ok(Event::Outgoing(Outgoing::Disconnect)) => {
                 break;
             }
             Ok(Event::Incoming(Packet::ConnAck(_))) => {

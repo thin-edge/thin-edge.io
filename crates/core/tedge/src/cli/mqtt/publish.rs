@@ -89,6 +89,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let payload = cmd.message.as_bytes();
 
     let (mut client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
+    super::disconnect_if_interrupted(client.clone());
     let mut published = false;
     let mut acknowledged = false;
     let mut any_error = None;
@@ -120,6 +121,9 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
                 any_error = Some(MqttError::ServerConnection("Disconnected".to_string()));
                 break;
             }
+            Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                break;
+            }
             Err(err) => {
                 any_error = Some(err.into());
                 break;
@@ -135,6 +139,13 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     }
 
     client.disconnect()?;
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
     if let Some(err) = any_error {
         Err(err)
     } else {
