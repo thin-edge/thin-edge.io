@@ -190,7 +190,7 @@ mod tests {
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn mapper_converts_config_download_op_for_main_device() {
@@ -249,7 +249,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate c8y_DownloadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -351,7 +351,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -442,7 +442,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_update command with "executing" state
         mqtt.send(MqttMessage::new(

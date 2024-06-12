@@ -199,7 +199,7 @@ mod tests {
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn create_firmware_operation_file_for_main_device() {

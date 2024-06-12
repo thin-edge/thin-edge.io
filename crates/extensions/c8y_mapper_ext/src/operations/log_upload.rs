@@ -303,7 +303,7 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_uploader_ext::UploadResponse;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device() {

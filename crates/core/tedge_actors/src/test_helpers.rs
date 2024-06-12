@@ -255,7 +255,7 @@ where
 
     async fn skip(&mut self, count: usize) {
         for _ in 0..count {
-            let _ = self.recv().await;
+            assert!(self.recv().await.is_some());
         }
     }
 

@@ -285,7 +285,7 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_uploader_ext::UploadResponse;
 
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn mapper_converts_config_upload_op_to_config_snapshot_cmd_for_main_device() {
@@ -343,7 +343,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip the mapped child device registration message
+        mqtt.skip(1).await; // Skip the mapped child device registration message
 
         // Simulate c8y_UploadConfigFile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -439,7 +439,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -568,7 +568,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(2).await; // Skip child device registration messages
+        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "successful" state
         mqtt.send(MqttMessage::new(
