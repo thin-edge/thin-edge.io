@@ -2,6 +2,11 @@
 //!
 //! This is designed to take a [proc_macro2::TokenStream] and turn it into
 //! something useful with the aid of [syn].
+
+// FIXME: if let can be simplified with `.unwrap_or_default()`
+//        for all `#[darling(default)]`
+#![allow(clippy::manual_unwrap_or_default)]
+
 use darling::util::SpannedValue;
 use darling::FromAttributes;
 use darling::FromField;
@@ -13,7 +18,6 @@ use syn::punctuated::Punctuated;
 use syn::Attribute;
 use syn::Expr;
 use syn::Token;
-
 #[derive(Debug)]
 pub struct Configuration {
     pub groups: Punctuated<FieldOrGroup, Token![,]>,
@@ -48,8 +52,10 @@ pub struct ConfigurationGroup {
     pub deprecated_names: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub ident: syn::Ident,
-    pub colon_token: Token![:],
-    pub brace: syn::token::Brace,
+    #[allow(dead_code)] // FIXME: field `colon_token` is never read
+    colon_token: Token![:],
+    #[allow(dead_code)] // FIXME: field `brace` is never read
+    brace: syn::token::Brace,
     pub content: Punctuated<FieldOrGroup, Token![,]>,
 }
 
@@ -176,8 +182,6 @@ impl Parse for ConfigurableField {
 pub struct GroupDtoSettings {
     #[darling(default)]
     pub skip: bool,
-    #[darling(default)]
-    pub flatten: bool,
 }
 
 #[derive(FromMeta, Debug, Default)]

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
@@ -14,9 +13,7 @@ pub struct ReconnectBridgeCommand {
     pub config: TEdgeConfig,
     pub config_file: String,
     pub cloud: Cloud,
-    pub common_mosquitto_config: CommonMosquittoConfig,
     pub use_mapper: bool,
-    pub use_agent: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
@@ -43,9 +40,7 @@ impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
             config_file: reconnect_cmd.config_file.clone(),
             cloud: reconnect_cmd.cloud,
             use_mapper: reconnect_cmd.use_mapper,
-            use_agent: reconnect_cmd.use_agent,
             service_manager: reconnect_cmd.service_manager.clone(),
-            built_in_bridge: reconnect_cmd.config.mqtt.bridge.built_in,
         }
     }
 }

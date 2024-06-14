@@ -19,34 +19,27 @@ pub enum TEdgeDisconnectBridgeCli {
 
 impl BuildCommand for TEdgeDisconnectBridgeCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
-        let tedge_config = context.load_config()?;
         let cmd = match self {
             TEdgeDisconnectBridgeCli::C8y => DisconnectBridgeCommand {
                 config_location: context.config_location.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud: Cloud::C8y,
                 use_mapper: true,
-                use_agent: true,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
-                built_in_bridge: tedge_config.mqtt.bridge.built_in,
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_location: context.config_location.clone(),
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
                 use_mapper: true,
-                use_agent: false,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
-                built_in_bridge: tedge_config.mqtt.bridge.built_in,
             },
             TEdgeDisconnectBridgeCli::Aws => DisconnectBridgeCommand {
                 config_location: context.config_location.clone(),
                 config_file: AWS_CONFIG_FILENAME.into(),
                 cloud: Cloud::Aws,
                 use_mapper: true,
-                use_agent: false,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
-                built_in_bridge: tedge_config.mqtt.bridge.built_in,
             },
         };
         Ok(cmd.into_boxed())
