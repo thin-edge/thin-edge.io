@@ -5,11 +5,9 @@ use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
 use rumqttc::QoS;
-use std::time::Duration;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
-const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeMqttCli {
@@ -61,7 +59,6 @@ impl BuildCommand for TEdgeMqttCli {
                     message,
                     qos,
                     client_id: format!("{}-{}", PUB_CLIENT_PREFIX, std::process::id()),
-                    disconnect_timeout: DISCONNECT_TIMEOUT,
                     retain,
                     ca_file: auth_config.ca_file.clone(),
                     ca_dir: auth_config.ca_dir,

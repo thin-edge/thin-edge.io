@@ -12,7 +12,6 @@ use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::QoS::AtMostOnce;
 use rumqttc::QoS::ExactlyOnce;
-use std::time::Duration;
 use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -25,7 +24,6 @@ pub struct MqttPublishCommand {
     pub message: String,
     pub qos: rumqttc::QoS,
     pub client_id: String,
-    pub disconnect_timeout: Duration,
     pub retain: bool,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
