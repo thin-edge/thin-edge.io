@@ -15,7 +15,6 @@ pub struct DisconnectBridgeCommand {
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
-    pub built_in_bridge: bool,
 }
 
 impl Command for DisconnectBridgeCommand {
