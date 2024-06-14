@@ -35,7 +35,6 @@ impl BuildCommand for TEdgeReconnectCli {
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud: Cloud::C8y,
                 use_mapper: true,
-                use_agent: true,
             },
             TEdgeReconnectCli::Az => ReconnectBridgeCommand {
                 config_location,
@@ -45,7 +44,6 @@ impl BuildCommand for TEdgeReconnectCli {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
                 use_mapper: true,
-                use_agent: false,
             },
             TEdgeReconnectCli::Aws => ReconnectBridgeCommand {
                 config_location,
@@ -55,7 +53,6 @@ impl BuildCommand for TEdgeReconnectCli {
                 config_file: AWS_CONFIG_FILENAME.into(),
                 cloud: Cloud::Aws,
                 use_mapper: true,
-                use_agent: false,
             },
         };
         Ok(cmd.into_boxed())
