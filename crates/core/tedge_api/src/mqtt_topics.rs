@@ -404,6 +404,11 @@ impl EntityTopicId {
         self == &Self::default_main_device()
     }
 
+    /// Returns true if the current topic identifier matches that of the service
+    pub fn is_default_service(&self) -> bool {
+        self.default_service_name().is_some()
+    }
+
     /// If `self` is a device topic id, return a service topic id under this
     /// device.
     ///
