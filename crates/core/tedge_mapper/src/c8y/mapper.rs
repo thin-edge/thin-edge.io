@@ -244,7 +244,9 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
         runtime.spawn(old_to_new_agent_adapter).await?;
-        runtime.spawn(availability_actor).await?;
+        if tedge_config.c8y.availability.enable {
+            runtime.spawn(availability_actor).await?;
+        }
         runtime.run_to_completion().await?;
 
         Ok(())
