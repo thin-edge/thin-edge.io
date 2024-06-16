@@ -492,7 +492,17 @@ define_tedge_config! {
             /// Auto-upload the operation log once it finishes.
             #[tedge_config(example = "always", example = "never", example = "on-failure", default(variable = "AutoLogUpload::Never"))]
             auto_log_upload: AutoLogUpload,
-        }
+        },
+
+        availability: {
+            /// Enable sending heartbeat to Cumulocity periodically. If set to false, c8y_RequiredAvailability won't be sent
+            #[tedge_config(example = "true", default(value = true))]
+            enable: bool,
+
+            /// Heartbeat interval in minutes and the value to be sent to Cumulocity as c8y_RequiredAvailability
+            #[tedge_config(example = "60", default(value = 60_i16))]
+            interval: i16,
+        },
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
