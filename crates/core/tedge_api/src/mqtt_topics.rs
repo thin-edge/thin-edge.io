@@ -178,6 +178,7 @@ impl MqttSchema {
             ChannelFilter::Command(operation) => format!("/cmd/{operation}/+"),
             ChannelFilter::AnyCommandMetadata => "/cmd/+".to_string(),
             ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
+            ChannelFilter::Health => "/status/health".to_string(),
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
@@ -402,6 +403,11 @@ impl EntityTopicId {
     /// Returns true if the current topic identifier matches that of the main device
     pub fn is_default_main_device(&self) -> bool {
         self == &Self::default_main_device()
+    }
+
+    /// Returns true if the current topic identifier matches that of the service
+    pub fn is_default_service(&self) -> bool {
+        self.default_service_name().is_some()
     }
 
     /// If `self` is a device topic id, return a service topic id under this
@@ -728,6 +734,7 @@ pub enum ChannelFilter {
     AlarmMetadata,
     AnyCommandMetadata,
     CommandMetadata(OperationType),
+    Health,
 }
 
 pub struct IdGenerator {
