@@ -178,6 +178,7 @@ impl MqttSchema {
             ChannelFilter::Command(operation) => format!("/cmd/{operation}/+"),
             ChannelFilter::AnyCommandMetadata => "/cmd/+".to_string(),
             ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
+            ChannelFilter::Health => "/status/health".to_string(),
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
@@ -733,6 +734,7 @@ pub enum ChannelFilter {
     AlarmMetadata,
     AnyCommandMetadata,
     CommandMetadata(OperationType),
+    Health,
 }
 
 pub struct IdGenerator {
