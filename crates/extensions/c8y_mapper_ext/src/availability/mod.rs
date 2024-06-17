@@ -9,6 +9,7 @@ use tedge_timer_ext::Timeout;
 
 mod actor;
 mod builder;
+#[cfg(test)]
 mod tests;
 
 pub use builder::AvailabilityBuilder;
