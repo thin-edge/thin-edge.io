@@ -6,6 +6,7 @@ use crate::workflow::OperationName;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use log::error;
+use log::info;
 use std::process::Output;
 use time::format_description;
 use time::OffsetDateTime;
@@ -131,12 +132,7 @@ Action:   {action}
         let now = OffsetDateTime::now_utc()
             .format(&format_description::well_known::Rfc3339)
             .unwrap();
-        let operation = &self.operation;
-        let parent_operation = if self.invoking_operations.is_empty() {
-            operation.to_string()
-        } else {
-            format!("{} > {}", self.invoking_operations.join(" > "), operation)
-        };
+        let parent_operation = self.invoking_chain();
 
         let message = format!(
             r#"
@@ -149,6 +145,21 @@ Action:   {action}
         }
     }
 
+    fn invoking_chain(&self) -> String {
+        let operation = &self.operation;
+        if self.invoking_operations.is_empty() {
+            operation.to_string()
+        } else {
+            format!("{} > {}", self.invoking_operations.join(" > "), operation)
+        }
+    }
+
+    pub async fn log_next_step(&mut self, step: &str) {
+        let context = self.invoking_chain();
+        self.log_info(&format!("=> moving to {context} @ {step}"))
+            .await
+    }
+
     pub async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
         self.log_command_and_output("", result).await
     }
@@ -159,6 +170,14 @@ Action:   {action}
         result: &Result<Output, std::io::Error>,
     ) {
         if let Err(err) = self.write_script_output(command_line, result).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    pub async fn log_info(&mut self, msg: &str) {
+        info!("{msg}");
+        let line = format!("{msg}\n");
+        if let Err(err) = self.write(&line).await {
             error!("Fail to log to {}: {err}", self.path)
         }
     }

@@ -178,21 +178,25 @@ impl WorkflowSupervisor {
     /// Resume the given command when the agent is restarting after an interruption
     pub fn resume_command(
         &self,
-        _timestamp: &Timestamp,
+        timestamp: &Timestamp,
         command: &GenericCommandState,
     ) -> Option<GenericCommandState> {
         let Ok(action) = self.get_action(command) else {
             return None;
         };
 
+        let epoch = format!("{}.{}", timestamp.unix_timestamp(), timestamp.millisecond());
+        let command = command
+            .clone()
+            .update_with_key_value("resumed_on_restart", &epoch);
         match action {
             OperationAction::AwaitingAgentRestart(handlers) => {
-                Some(command.clone().update(handlers.on_success))
+                Some(command.update(handlers.on_success))
             }
 
             _ => {
                 // TODO: Use the timestamp to filter out action pending since too long
-                Some(command.clone())
+                Some(command)
             }
         }
     }
