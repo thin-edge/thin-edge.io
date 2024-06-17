@@ -23,6 +23,7 @@ use futures::Sink;
 use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
+use hyper::header::HOST;
 use hyper::HeaderMap;
 use reqwest::Method;
 use reqwest::StatusCode;
@@ -220,7 +221,9 @@ async fn connect_to_websocket(
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Error> {
     let mut req = Request::builder();
     for (name, value) in headers {
-        req = req.header(name.as_str(), value);
+        if name != HOST {
+            req = req.header(name.as_str(), value);
+        }
     }
     req = req.header("Authorization", format!("Bearer {token}"));
     let req = req
@@ -371,7 +374,7 @@ async fn respond_to(
     path: Option<Path<String>>,
     uri: hyper::Uri,
     method: Method,
-    headers: HeaderMap<HeaderValue>,
+    mut headers: HeaderMap<HeaderValue>,
     ws: Option<WebSocketUpgrade>,
     small_body: crate::body::PossiblySmallBody,
 ) -> Result<Response, ProxyError> {
@@ -385,6 +388,8 @@ async fn respond_to(
         } else {
             |req, token| req.bearer_auth(token)
         };
+
+    headers.remove(HOST);
 
     // Cumulocity revokes the device token if we access parts of the frontend UI,
     // so deny requests to these proactively
