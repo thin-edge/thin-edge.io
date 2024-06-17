@@ -488,6 +488,8 @@ mod tests {
     use tedge_actors::Server;
     use tedge_actors::ServerActorBuilder;
     use tedge_actors::ServerConfig;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
     use tokio::net::TcpStream;
     use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
     use tokio_tungstenite::tungstenite::protocol::CloseFrame;
@@ -535,6 +537,57 @@ mod tests {
 
     async fn close_connection(ws: WebSocket) {
         ws.close().await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn does_not_forward_host_header_for_http_requests() {
+        let target_host = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target = target_host.local_addr().unwrap();
+
+        let proxy_port = start_server_port(target.port(), vec!["unused token"]);
+        tokio::spawn(async move {
+            let client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap();
+            client
+                .get(format!("http://127.0.0.1:{proxy_port}/c8y/test"))
+                .send()
+                .await
+                .unwrap()
+                .error_for_status()
+                .unwrap();
+        });
+
+        let proxy_host = format!("127.0.0.1:{proxy_port}");
+        let destination_host = format!("127.0.0.1:{}", target.port());
+
+        let (mut tcp_stream, _) =
+            tokio::time::timeout(Duration::from_secs(5), target_host.accept())
+                .await
+                .unwrap()
+                .unwrap();
+
+        let mut incoming_payload = Vec::with_capacity(256);
+        tcp_stream.read_buf(&mut incoming_payload).await.unwrap();
+        let incoming_payload = std::str::from_utf8(&incoming_payload).unwrap();
+        tcp_stream
+            .write_all(b"HTTP/1.1 204 No Content")
+            .await
+            .unwrap();
+        assert!(
+            !incoming_payload.contains(&format!("host: {}", proxy_host)),
+            "Found host header with incorrect value {proxy_host:?} in incoming request:\n{}",
+            indent(incoming_payload)
+        );
+        assert!(incoming_payload.contains(&format!("host: {}", destination_host)), "Did not find correct host header {destination_host:?} in incoming request:\n{incoming_payload}");
+    }
+
+    fn indent(text: &str) -> String {
+        text.lines()
+            .map(|l| format!("    {l}"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[tokio::test]
