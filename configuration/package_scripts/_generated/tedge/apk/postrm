@@ -5,8 +5,32 @@ command_exists() {
     command -V "$1" >/dev/null 2>&1
 }
 
+group_exists() {
+    name="$1"
+    if command_exists id; then
+        id -g "$name" >/dev/null 2>&1
+    elif command_exists getent; then
+        getent group "$name" >/dev/null 2>&1
+    else
+        # Fallback to plain grep, as busybox does not have getent
+        grep -q "^${name}:" /etc/group
+    fi
+}
+
+user_exists() {
+    name="$1"
+    if command_exists id; then
+        id -u "$name" >/dev/null 2>&1
+    elif command_exists getent; then
+        getent passwd "$name" >/dev/null 2>&1
+    else
+        # Fallback to plain grep, as busybox does not have getent
+        grep -q "^${name}:" /etc/passwd
+    fi
+}
+
 remove_user_tedge() {
-    if getent passwd tedge > /dev/null; then
+    if user_exists tedge; then
         if command_exists userdel; then
             userdel tedge
         elif command_exists deluser; then
@@ -18,7 +42,7 @@ remove_user_tedge() {
 }
 
 remove_tedge_group() {
-    if getent group tedge > /dev/null; then
+    if group_exists tedge; then
         if command_exists groupdel; then
             groupdel tedge
         elif command_exists delgroup; then
