@@ -221,13 +221,12 @@ async fn connect_to_websocket(
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Error> {
     let mut req = Request::builder();
     for (name, value) in headers {
-        if name != HOST {
-            req = req.header(name.as_str(), value);
-        }
+        req = req.header(name.as_str(), value);
     }
     req = req.header("Authorization", format!("Bearer {token}"));
     let req = req
         .uri(uri)
+        .header(HOST, url::Url::parse(uri).expect("URI must have valid host to reach c8y proxy").host_str().unwrap())
         .body(())
         .expect("Builder should always work as the headers are copied from a previous request, so must be valid");
     tokio_tungstenite::connect_async(req)
@@ -388,7 +387,6 @@ async fn respond_to(
         } else {
             |req, token| req.bearer_auth(token)
         };
-
     headers.remove(HOST);
 
     // Cumulocity revokes the device token if we access parts of the frontend UI,
