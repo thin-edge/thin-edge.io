@@ -9,6 +9,7 @@ use crate::ConfigSettingResult;
 use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;
 use crate::TEdgeConfigError;
+use crate::TEdgeConfigReader;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Serialize;
@@ -62,10 +63,11 @@ impl TEdgeConfigLocation {
 
     pub fn update_toml(
         &self,
-        update: &impl Fn(&mut TEdgeConfigDto) -> ConfigSettingResult<()>,
+        update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,
     ) -> Result<(), TEdgeConfigError> {
         let mut config = self.load_dto::<FileOnly>(self.toml_path())?;
-        update(&mut config)?;
+        let reader = TEdgeConfigReader::from_dto(&config, self);
+        update(&mut config, &reader)?;
 
         self.store(&config)
     }
