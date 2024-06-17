@@ -2,6 +2,7 @@ use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
 use heck::ToUpperCamelCase;
+use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
@@ -337,7 +338,12 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
 fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let variant_names = paths.iter().map(variant_name);
-    let (update_arms, unset_arms): (Vec<syn::Arm>, Vec<syn::Arm>) = paths
+    let (update_arms, unset_arms, append_arms, remove_arms): (
+        Vec<syn::Arm>,
+        Vec<syn::Arm>,
+        Vec<syn::Arm>,
+        Vec<syn::Arm>,
+    ) = paths
         .iter()
         .zip(variant_names)
         .map(|(path, variant_name)| {
@@ -353,6 +359,18 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             let parse = quote_spanned! {parse_as.span()=> parse::<#parse_as>() };
             let convert_to_field_ty = quote_spanned! {ty.span()=> map(<#ty>::from)};
 
+            let current_value = if field.read_only().is_some() {
+                if extract_type_from_result(field.ty()).is_some() {
+                    quote_spanned! {ty.span()=> reader.#(#segments).*.try_read(reader).ok()}
+                } else {
+                    quote_spanned! {ty.span()=> Some(reader.#(#segments).*.read(reader))}
+                }
+            } else if field.has_guaranteed_default() {
+                quote_spanned! {ty.span()=> Some(reader.#(#segments).*.to_owned())}
+            } else {
+                quote_spanned! {ty.span()=> reader.#(#segments).*.or_none().cloned()}
+            };
+
             (
                 parse_quote_spanned! {ty.span()=>
                     WritableKey::#variant_name => self.#(#segments).* = Some(value
@@ -363,9 +381,26 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 parse_quote_spanned! {ty.span()=>
                     WritableKey::#variant_name => self.#(#segments).* = None,
                 },
+                parse_quote_spanned! {ty.span()=>
+                    WritableKey::#variant_name => self.#(#segments).* = <#ty as AppendRemoveItem>::append(
+                        #current_value,
+                        value
+                        .#parse
+                        .#convert_to_field_ty
+                        .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                },
+                parse_quote_spanned! {ty.span()=>
+                    WritableKey::#variant_name => self.#(#segments).* = <#ty as AppendRemoveItem>::remove(
+                        #current_value,
+                        value
+                        .#parse
+                        .#convert_to_field_ty
+                        .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                },
             )
         })
-        .unzip();
+        .multiunzip();
+
     quote! {
         impl TEdgeConfigDto {
             pub fn try_update_str(&mut self, key: WritableKey, value: &str) -> Result<(), WriteError> {
@@ -379,6 +414,20 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 match key {
                     #(#unset_arms)*
                 }
+            }
+
+            pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: WritableKey, value: &str) -> Result<(), WriteError> {
+                match key {
+                    #(#append_arms)*
+                };
+                Ok(())
+            }
+
+            pub fn try_remove_str(&mut self, reader: &TEdgeConfigReader, key: WritableKey, value: &str) -> Result<(), WriteError> {
+                match key {
+                    #(#remove_arms)*
+                };
+                Ok(())
             }
         }
     }

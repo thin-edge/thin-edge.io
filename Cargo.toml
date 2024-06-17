@@ -82,6 +82,7 @@ hyper-rustls = { version = "0.24", default_features = false, features = [
     "http1",
     "http2",
 ] }
+itertools = "0.13"
 json-writer = { path = "crates/common/json_writer" }
 lazy_static = "1.4"
 log = "0.4"

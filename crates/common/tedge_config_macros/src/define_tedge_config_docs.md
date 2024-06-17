@@ -53,6 +53,27 @@ error, you can use a `#[doku(as = "...")]` attribute like so:
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 use camino::Utf8PathBuf;
 use std::path::PathBuf;
 
@@ -72,6 +93,26 @@ easily.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(transparent)]
@@ -114,6 +155,26 @@ attributes.
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
 #
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 define_tedge_config! {
   device: {
     #[serde(rename = "type")]
@@ -128,6 +189,26 @@ define_tedge_config! {
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 define_tedge_config! {
   device: {
@@ -154,6 +235,26 @@ to solve the problem instead).
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 define_tedge_config! {
   group: {
@@ -182,6 +283,26 @@ automatically renamed in `tedge.toml` next time `tedge` writes to `tedge.toml`.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 define_tedge_config! {
   mqtt: {
@@ -214,6 +335,26 @@ migration step if making a change like this to ensure the field is moved in
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
 #
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 define_tedge_config! {
   /// You can document groups too, but this won't be shown to users
   az: {
@@ -236,6 +377,26 @@ structs.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 define_tedge_config! {
   az: {
@@ -268,6 +429,26 @@ will verify `"true".parse::<bool>().is_ok()`.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 use std::path::PathBuf;
 use camino::Utf8PathBuf;
 
@@ -293,6 +474,26 @@ There are some options to customise the fields in the generated `Reader` struct.
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
 #
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 define_tedge_config! {
   #[tedge_config(reader(skip))]
   config: {
@@ -314,6 +515,26 @@ from the reader using this attribute
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 mod tedge_config {
   define_tedge_config! {
@@ -347,6 +568,26 @@ default value for a field will result in the reader field being non-optional
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
 #
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 define_tedge_config! {
   mqtt: {
     bind: {
@@ -375,6 +616,26 @@ the value is a simply a literal, it does not have to be quoted.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use camino::Utf8PathBuf;
@@ -411,6 +672,26 @@ using the `variable` specifier. Like `value`, the generated implematation calls
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 define_tedge_config! {
   mqtt: {
@@ -450,6 +731,26 @@ field.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+#
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
 #
 define_tedge_config! {
   c8y: {
@@ -494,6 +795,26 @@ the value is not set.
 # use tedge_config_macros::*;
 # #[derive(::thiserror::Error, Debug)]
 # pub enum ReadError { #[error(transparent)] NotSet(#[from] ConfigNotSet)}
+# pub trait AppendRemoveItem {
+#    type Item;
+# 
+#    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+#
+#    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+# }
+#
+# impl<T> AppendRemoveItem for T {
+#    type Item = T;
+#
+#    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+#
+#    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+#        unimplemented!()
+#    }
+# }
+#
 use std::num::NonZeroU16;
 use camino::Utf8PathBuf;
 
@@ -559,6 +880,26 @@ pub enum ReadError {
     CertificateParseFailure(#[from] Box<dyn std::error::Error>),
 }
 
+pub trait AppendRemoveItem {
+    type Item;
+
+    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+
+    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+}
+
+impl<T> AppendRemoveItem for T {
+    type Item = T;
+
+    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+
+    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
 define_tedge_config! {
   device: {
     #[tedge_config(readonly(
@@ -591,6 +932,26 @@ use tedge_config_macros::*;
 use std::sync::Arc;
 
 pub enum ReadError {}
+
+pub trait AppendRemoveItem {
+    type Item;
+
+    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+
+    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+}
+
+impl<T> AppendRemoveItem for T {
+    type Item = T;
+
+    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+
+    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
 
 define_tedge_config! {
   device: {
