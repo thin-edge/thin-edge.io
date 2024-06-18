@@ -11,6 +11,7 @@ use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS;
+use std::sync::atomic::Ordering;
 use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -83,7 +84,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     }
 
     let (mut client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
-    super::disconnect_if_interrupted(client.clone());
+    let interrupted = super::disconnect_if_interrupted(client.clone());
 
     for event in connection.iter() {
         match event {
@@ -117,12 +118,11 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                 eprintln!("INFO: Connected");
                 client.subscribe(cmd.topic.as_str(), cmd.qos).unwrap();
             }
-            // TODO: should we keep trying to reconnect for all errors, or just
-            // if the broker isn't up and abort when e.g. we receive connection
-            // refused?
             Err(err) => {
+                if interrupted.load(Ordering::Relaxed) {
+                    break;
+                }
                 let err_msg = err.to_string();
-
                 eprintln!("ERROR: {}", err_msg);
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
