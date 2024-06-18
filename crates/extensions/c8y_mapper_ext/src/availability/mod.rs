@@ -1,9 +1,14 @@
 use crate::availability::actor::TimerPayload;
+pub use builder::AvailabilityBuilder;
+use c8y_api::smartrest::topic::C8yTopic;
 use tedge_actors::fan_in_message_type;
+use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::ServiceTopicId;
+use tedge_api::HealthStatus;
 use tedge_config::TEdgeConfig;
 use tedge_config::TopicPrefix;
-use tedge_mqtt_ext::MqttMessage;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 
@@ -12,16 +17,29 @@ mod builder;
 #[cfg(test)]
 mod tests;
 
-pub use builder::AvailabilityBuilder;
-use tedge_api::entity_store::EntityExternalId;
-
 pub type TimerStart = SetTimeout<TimerPayload>;
 pub type TimerComplete = Timeout<TimerPayload>;
+pub type SourceHealthStatus = (ServiceTopicId, HealthStatus);
 
-fan_in_message_type!(AvailabilityInput[MqttMessage, TimerComplete] : Debug);
-fan_in_message_type!(AvailabilityOutput[MqttMessage, TimerStart] : Debug);
+fan_in_message_type!(AvailabilityInput[EntityRegistrationMessage, SourceHealthStatus, TimerComplete] : Debug);
+fan_in_message_type!(AvailabilityOutput[C8ySmartRestSetInterval117, C8yJsonInventoryUpdate] : Debug);
+
+// TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
+#[derive(Debug)]
+pub struct C8ySmartRestSetInterval117 {
+    c8y_topic: C8yTopic,
+    interval: i16,
+}
+
+// TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
+#[derive(Debug)]
+pub struct C8yJsonInventoryUpdate {
+    external_id: String,
+    payload: serde_json::Value,
+}
 
 /// Required key-value pairs derived from tedge config
+#[derive(Debug, Clone)]
 pub struct AvailabilityConfig {
     pub main_device_id: EntityExternalId,
     pub mqtt_schema: MqttSchema,

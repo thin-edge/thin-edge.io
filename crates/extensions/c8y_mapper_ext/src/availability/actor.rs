@@ -1,10 +1,12 @@
 use crate::availability::AvailabilityConfig;
 use crate::availability::AvailabilityInput;
 use crate::availability::AvailabilityOutput;
+use crate::availability::C8yJsonInventoryUpdate;
+use crate::availability::C8ySmartRestSetInterval117;
 use crate::availability::TimerStart;
 use async_trait::async_trait;
-use c8y_api::smartrest::inventory::set_required_availability_message;
 use c8y_api::smartrest::topic::C8yTopic;
+use serde_json::json;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
@@ -17,13 +19,10 @@ use tedge_actors::SimpleMessageBox;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
-use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_api::HealthStatus;
 use tedge_api::Status;
-use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tracing::debug;
 use tracing::info;
@@ -53,7 +52,6 @@ enum RegistrationResult {
 pub struct AvailabilityActor {
     config: AvailabilityConfig,
     message_box: SimpleMessageBox<AvailabilityInput, AvailabilityOutput>,
-    mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<TimerStart>,
     device_ids_map: HashMap<EntityTopicId, DeviceIds>,
     service_status_map: HashMap<ServiceTopicId, HealthStatus>,
@@ -75,8 +73,12 @@ impl Actor for AvailabilityActor {
 
         while let Some(input) = self.message_box.recv().await {
             match input {
-                AvailabilityInput::MqttMessage(message) => {
-                    self.process_mqtt_message(&message).await?;
+                AvailabilityInput::EntityRegistrationMessage(message) => {
+                    self.process_registration_message(&message).await?;
+                }
+                AvailabilityInput::SourceHealthStatus((source, health_status)) => {
+                    // Insert a "service topic ID" - "health status" pair to the map.
+                    self.service_status_map.insert(source, health_status);
                 }
                 AvailabilityInput::TimerComplete(event) => {
                     self.process_timer_complete(event.event).await?;
@@ -92,13 +94,11 @@ impl AvailabilityActor {
     pub fn new(
         config: AvailabilityConfig,
         message_box: SimpleMessageBox<AvailabilityInput, AvailabilityOutput>,
-        mqtt_publisher: LoggingSender<MqttMessage>,
         timer_sender: LoggingSender<TimerStart>,
     ) -> Self {
         Self {
             config,
             message_box,
-            mqtt_publisher,
             timer_sender,
             device_ids_map: HashMap::new(),
             service_status_map: HashMap::new(),
@@ -121,56 +121,42 @@ impl AvailabilityActor {
 
         self.send_smartrest_set_required_availability_for_main_device()
             .await?;
-
         self.start_heartbeat_timer_if_interval_is_positive(&topic_id)
             .await?;
 
         Ok(())
     }
 
-    async fn process_mqtt_message(&mut self, message: &MqttMessage) -> Result<(), RuntimeError> {
-        if let Ok((source, channel)) = self.config.mqtt_schema.entity_channel_of(&message.topic) {
-            match channel {
-                Channel::EntityMetadata => {
-                    if let Ok(registration_message) = EntityRegistrationMessage::try_from(message) {
-                        match registration_message.r#type {
-                            EntityType::MainDevice => {
-                                match self.update_device_service_pair(&registration_message) {
-                                    RegistrationResult::New | RegistrationResult::Update => {
-                                        self.start_heartbeat_timer_if_interval_is_positive(&source)
-                                            .await?;
-                                    }
-                                    RegistrationResult::Error(reason) => {
-                                        warn!(reason)
-                                    }
-                                }
-                            }
-                            EntityType::ChildDevice => {
-                                match self.update_device_service_pair(&registration_message) {
-                                    RegistrationResult::New => {
-                                        self.send_smartrest_set_required_availability_for_child_device(&source)
-                                            .await?;
-                                        self.start_heartbeat_timer_if_interval_is_positive(&source)
-                                            .await?;
-                                    }
-                                    RegistrationResult::Update => {
-                                        self.start_heartbeat_timer_if_interval_is_positive(&source)
-                                            .await?;
-                                    }
-                                    RegistrationResult::Error(reason) => warn!(reason),
-                                }
-                            }
-                            EntityType::Service => {}
-                        }
-                    }
+    async fn process_registration_message(
+        &mut self,
+        message: &EntityRegistrationMessage,
+    ) -> Result<(), RuntimeError> {
+        let source = &message.topic_id;
+
+        match message.r#type {
+            EntityType::MainDevice => match self.update_device_service_pair(message) {
+                RegistrationResult::New | RegistrationResult::Update => {
+                    self.start_heartbeat_timer_if_interval_is_positive(source)
+                        .await?;
                 }
-                Channel::Health => {
-                    if source.is_default_service() {
-                        self.update_service_health_status(&source, message);
-                    }
+                RegistrationResult::Error(reason) => {
+                    warn!(reason)
                 }
-                _ => {}
-            }
+            },
+            EntityType::ChildDevice => match self.update_device_service_pair(message) {
+                RegistrationResult::New => {
+                    self.send_smartrest_set_required_availability_for_child_device(source)
+                        .await?;
+                    self.start_heartbeat_timer_if_interval_is_positive(source)
+                        .await?;
+                }
+                RegistrationResult::Update => {
+                    self.start_heartbeat_timer_if_interval_is_positive(source)
+                        .await?;
+                }
+                RegistrationResult::Error(reason) => warn!(reason),
+            },
+            EntityType::Service => {}
         }
 
         Ok(())
@@ -245,12 +231,11 @@ impl AvailabilityActor {
     async fn send_smartrest_set_required_availability_for_main_device(
         &mut self,
     ) -> Result<(), RuntimeError> {
-        let smartrest = set_required_availability_message(
-            C8yTopic::SmartRestResponse,
-            self.config.interval,
-            &self.config.c8y_prefix,
-        );
-        self.mqtt_publisher.send(smartrest).await?;
+        let c8y_117 = C8ySmartRestSetInterval117 {
+            c8y_topic: C8yTopic::SmartRestResponse,
+            interval: self.config.interval,
+        };
+        self.message_box.send(c8y_117.into()).await?;
 
         Ok(())
     }
@@ -266,24 +251,15 @@ impl AvailabilityActor {
             .get(source)
             .map(|ids| ids.external_id.clone())
         {
-            let smartrest = set_required_availability_message(
-                C8yTopic::ChildSmartRestResponse(external_id.into()),
-                self.config.interval,
-                &self.config.c8y_prefix,
-            );
-            self.mqtt_publisher.send(smartrest).await?;
+            let c8y_117 = C8ySmartRestSetInterval117 {
+                c8y_topic: C8yTopic::ChildSmartRestResponse(external_id.into()),
+                interval: self.config.interval,
+            };
+
+            self.message_box.send(c8y_117.into()).await?;
         }
 
         Ok(())
-    }
-
-    /// Insert a "service topic ID" - "health status" pair to the map.
-    /// The received MQTT topic should be in default service schema: "device/+/service/+/status/health".
-    fn update_service_health_status(&mut self, source: &EntityTopicId, message: &MqttMessage) {
-        let health_status: HealthStatus =
-            serde_json::from_slice(message.payload()).unwrap_or_default();
-        self.service_status_map
-            .insert(source.clone().into(), health_status);
     }
 
     async fn process_timer_complete(
@@ -299,13 +275,11 @@ impl AvailabilityActor {
             if let Some(health_status) = self.service_status_map.get(service_topic_id) {
                 // Send an empty JSON over MQTT message if the target service status is "up"
                 if health_status.status == Status::Up {
-                    let json_over_mqtt_topic = format!(
-                        "{prefix}/inventory/managedObjects/update/{external_id}",
-                        prefix = self.config.c8y_prefix
-                    );
-                    let message =
-                        MqttMessage::new(&Topic::new_unchecked(&json_over_mqtt_topic), "{}");
-                    self.mqtt_publisher.send(message).await?;
+                    let json_over_mqtt = C8yJsonInventoryUpdate {
+                        external_id: external_id.into(),
+                        payload: json!({}),
+                    };
+                    self.message_box.send(json_over_mqtt.into()).await?;
                 } else {
                     debug!("Heartbeat message is not sent because the status of the service '{service_topic_id}' is not 'up'");
                 }
