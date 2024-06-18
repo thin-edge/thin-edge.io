@@ -42,18 +42,17 @@ sudo tedge reconnect c8y
 ```
 
 :::note
-To add/append a new template to a device that's already configured with some, all the existing templates should also be declared along with the new one in the `tedge config set` command.
-For example, if `template-1` is already configured on the device, as following:
+To add/append a new template to a device that's already configured with some, you can use the `tedge config add` command that will preserve current templates. For example, if `template-1` is already configured on the device:
 
 ```sh
 tedge config get c8y.smartrest.templates
 ["template-1"]
 ```
 
-To add new template to the set it is required to include current template, so the command would look like this:
+The `tedge config` cli tool can be used as following to add another template:
 
 ```sh
-tedge config set c8y.smartrest.templates template-1,template-2
+tedge config add c8y.smartrest.templates template-2
 ```
 
 Now when we get the configuration the both templates will be there:
@@ -62,6 +61,15 @@ Now when we get the configuration the both templates will be there:
 tedge config get c8y.smartrest.templates
 ["template-1", "template-2"]
 ```
+
+If you want to use the `tedge config set` command, it is required to include current templates:
+
+```sh
+tedge config set c8y.smartrest.templates template-1,template-2
+```
+
+Otherwise, your configuration will be overwritten.
+
 :::
 
 ## Removing templates from configuration
@@ -72,7 +80,7 @@ To remove all the templates, the `unset` subcommand can used as follows:
 sudo tedge config unset c8y.smartrest.templates
 ```
 
-To remove one of existing templates you can overwrite the existing `c8y.smartrest.templates` with the new set which doesn't contain the unwanted template.
+To remove one of existing templates you can use the `tedge config remove` command:
 
 ```sh
 tedge config get c8y.smartrest.templates
@@ -81,6 +89,12 @@ tedge config get c8y.smartrest.templates
 ```toml title="Output"
 ["template-1", "template-2"]
 ```
+
+```sh
+sudo tedge config remove c8y.smartrest.templates template-2
+```
+
+or overwrite the existing `c8y.smartrest.templates` with the new set which doesn't contain the unwanted template:
 
 ```sh
 sudo tedge config set c8y.smartrest.templates template-1

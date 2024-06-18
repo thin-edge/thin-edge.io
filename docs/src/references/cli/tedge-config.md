@@ -22,6 +22,8 @@ SUBCOMMANDS:
     list     Print the configuration keys and their values
     set      Set or update the provided configuration key with the given value
     unset    Unset the provided configuration key
+    add      Append or set the provided configuration key with the given value
+    remove   Remove value from the provided configuration key
 ```
 
 ## Get
@@ -86,4 +88,36 @@ ARGS:
 
 OPTIONS:
     -h, --help    Print help information
+```
+
+## Add
+
+```sh title="tedge config add"
+Append or set the provided configuration key with the given value
+
+Usage: tedge config add [OPTIONS] <KEY> <VALUE>
+
+Arguments:
+  <KEY>    Configuration key. Run `tedge config list --doc` for available keys
+  <VALUE>  Configuration value
+
+Options:
+      --config-dir <CONFIG_DIR>  [default: /etc/tedge]
+  -h, --help                     Print help
+```
+
+## Remove
+
+```sh title="tedge config remove"
+Remove value from the provided configuration key
+
+Usage: tedge config remove [OPTIONS] <KEY> <VALUE>
+
+Arguments:
+  <KEY>    Configuration key. Run `tedge config list --doc` for available keys
+  <VALUE>  Configuration value
+
+Options:
+      --config-dir <CONFIG_DIR>  [default: /etc/tedge]
+  -h, --help                     Print help
 ```
