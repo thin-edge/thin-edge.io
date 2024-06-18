@@ -73,10 +73,10 @@ impl Actor for WorkflowActor {
                     self.process_mqtt_message(message).await?;
                 }
                 AgentInput::InternalCommandState(InternalCommandState(command_state)) => {
-                    self.process_command_state_update(command_state).await?;
+                    self.process_internal_state_update(command_state).await?;
                 }
                 AgentInput::GenericCommandData(GenericCommandData::State(new_state)) => {
-                    self.publish_command_state(new_state, None).await?;
+                    self.process_command_state_update(new_state).await?;
                 }
                 AgentInput::GenericCommandData(GenericCommandData::Metadata(
                     GenericCommandMetadata { operation, payload },
@@ -136,7 +136,7 @@ impl WorkflowActor {
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
                 if new_state.is_init() {
-                    self.process_command_state_update(new_state.set_log_path(&log_file.path))
+                    self.process_internal_state_update(new_state.set_log_path(&log_file.path))
                         .await?;
                 }
             }
@@ -152,7 +152,7 @@ impl WorkflowActor {
         Ok(())
     }
 
-    async fn process_command_state_update(
+    async fn process_internal_state_update(
         &mut self,
         state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
@@ -203,8 +203,7 @@ impl WorkflowActor {
             OperationAction::MoveTo(next_step) => {
                 info!("Moving {operation} operation to state: {next_step}");
                 let new_state = state.move_to(next_step);
-                self.publish_command_state(new_state, Some(&mut log_file))
-                    .await
+                self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::BuiltIn => {
                 let step = &state.status;
@@ -223,8 +222,7 @@ impl WorkflowActor {
                         .on_timeout
                         .unwrap_or_else(GenericStateUpdate::timeout),
                 );
-                self.publish_command_state(new_state, Some(&mut log_file))
-                    .await
+                self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::Script(script, handlers) => {
                 let step = &state.status;
@@ -248,8 +246,7 @@ impl WorkflowActor {
                 log_file.log_script_output(&output).await;
 
                 let new_state = state.update_with_script_output(script_name, output, handlers);
-                self.publish_command_state(new_state, Some(&mut log_file))
-                    .await
+                self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::BgScript(script, handlers) => {
                 let next_state = &handlers.on_exec.status;
@@ -257,8 +254,7 @@ impl WorkflowActor {
                     "Moving {operation} operation to {next_state} state before running: {script}"
                 );
                 let new_state = state.update(handlers.on_exec);
-                self.publish_command_state(new_state, Some(&mut log_file))
-                    .await?;
+                self.publish_command_state(new_state, &mut log_file).await?;
 
                 // Run the command, but ignore its result
                 let command = Execute::new(script.command, script.args);
@@ -283,8 +279,7 @@ impl WorkflowActor {
                             Ok(init_state) => init_state,
                             Err(reason) => {
                                 let err_state = state.update(GenericStateUpdate::failed(reason));
-                                self.publish_command_state(err_state, Some(&mut log_file))
-                                    .await?;
+                                self.publish_command_state(err_state, &mut log_file).await?;
                                 return Ok(());
                             }
                         }
@@ -306,8 +301,7 @@ impl WorkflowActor {
 
                 // Persist the new state for this command
                 let new_state = state.update(handlers.on_exec);
-                self.publish_command_state(new_state, Some(&mut log_file))
-                    .await?;
+                self.publish_command_state(new_state, &mut log_file).await?;
 
                 // Finally, init the sub-operation
                 self.mqtt_publisher
@@ -348,9 +342,9 @@ impl WorkflowActor {
                                 GenericStateUpdate::failed("sub-operation failed".to_string())
                             }))
                         };
-                        self.publish_command_state(new_state, Some(&mut log_file))
+                        self.publish_command_state(new_state, &mut log_file).await?;
+                        self.publish_command_state(sub_state.clear(), &mut log_file)
                             .await?;
-                        self.publish_command_state(sub_state.clear(), None).await?;
                     } else {
                         // Nothing specific has to be done: the current state has been persisted
                         // and will be resumed on completion of the sub-operation
@@ -368,6 +362,20 @@ impl WorkflowActor {
                 Ok(())
             }
         }
+    }
+
+    async fn process_command_state_update(
+        &mut self,
+        new_state: GenericCommandState,
+    ) -> Result<(), RuntimeError> {
+        if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
+            error!("Fail to persist workflow operation state: {err}");
+        }
+        self.persist_command_board().await?;
+        self.mqtt_publisher
+            .send(new_state.clone().into_message())
+            .await?;
+        self.process_internal_state_update(new_state).await
     }
 
     fn open_command_log(
@@ -399,16 +407,14 @@ impl WorkflowActor {
     async fn publish_command_state(
         &mut self,
         new_state: GenericCommandState,
-        log_file: Option<&mut CommandLog>,
+        log_file: &mut CommandLog,
     ) -> Result<(), RuntimeError> {
         if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
         if !new_state.is_cleared() {
-            if let Some(log_file) = log_file {
-                log_file.log_next_step(&new_state.status).await;
-            }
+            log_file.log_next_step(&new_state.status).await;
             self.command_sender
                 .send(InternalCommandState(new_state.clone()))
                 .await?;
@@ -421,14 +427,8 @@ impl WorkflowActor {
     async fn load_command_board(&mut self) -> Result<(), RuntimeError> {
         match self.state_repository.load().await {
             Ok(Some(pending_commands)) => {
-                self.workflows.load_pending_commands(pending_commands);
-                for (timestamp, command) in self.workflows.pending_commands().iter() {
-                    if let Some(resumed_command) = self.workflows.resume_command(timestamp, command)
-                    {
-                        self.command_sender
-                            .send(InternalCommandState(resumed_command))
-                            .await?;
-                    }
+                for command in self.workflows.load_pending_commands(pending_commands) {
+                    self.process_internal_state_update(command.clone()).await?;
                 }
             }
             Ok(None) => {}
