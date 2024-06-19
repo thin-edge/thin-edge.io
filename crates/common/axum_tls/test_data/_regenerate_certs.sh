@@ -6,7 +6,7 @@
 days=365000
 args=("-days" "$days" "-noenc" \
         -subj "/CN=localhost" \
-        -addext "subjectAltName=DNS:localhost,DNS:*.localhost" \
+        -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" \
         -addext "basicConstraints=critical,CA:false")
 
 set -eux

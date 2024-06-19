@@ -30,7 +30,7 @@ authorityKeyIdentifier=keyid
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, keyAgreement
 extendedKeyUsage = serverAuth, clientAuth
-subjectAltName=DNS:localhost,IP:$C8Y_PROXY_COMMON_NAME
+subjectAltName=DNS:localhost,IP:$C8Y_PROXY_COMMON_NAME,IP:127.0.0.1
 EOF
 
 openssl x509 -req \
@@ -49,7 +49,7 @@ authorityKeyIdentifier=keyid
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, keyAgreement
 extendedKeyUsage = serverAuth, clientAuth
-subjectAltName=DNS:localhost,IP:$FTS_COMMON_NAME
+subjectAltName=DNS:localhost,IP:$FTS_COMMON_NAME,IP:127.0.0.1
 EOF
 
 openssl genrsa -out main-agent.key 2048

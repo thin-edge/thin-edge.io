@@ -695,7 +695,7 @@ gen_certs() {
     authorityKeyIdentifier=keyid
     basicConstraints=CA:FALSE
     keyUsage = digitalSignature, keyAgreement
-    subjectAltName=DNS:$(hostname), DNS:localhost
+    subjectAltName=DNS:$(hostname), DNS:localhost, IP:127.0.0.1
 EOF
 
     openssl x509 -req \
@@ -774,7 +774,7 @@ authorityKeyIdentifier=keyid
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, keyAgreement
 extendedKeyUsage = serverAuth, clientAuth
-subjectAltName=DNS:${CN},DNS:localhost
+subjectAltName=DNS:${CN},DNS:localhost,IP:127.0.0.1
 EOF
     )
 
