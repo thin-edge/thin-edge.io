@@ -4,7 +4,6 @@ use crate::availability::AvailabilityInput;
 use crate::availability::AvailabilityOutput;
 use crate::availability::TimerComplete;
 use crate::availability::TimerStart;
-use c8y_api::smartrest::inventory::set_required_availability_message;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
@@ -104,14 +103,7 @@ impl AvailabilityBuilder {
         config: AvailabilityConfig,
     ) -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                let smartrest = set_required_availability_message(
-                    value.c8y_topic,
-                    value.interval,
-                    &config.c8y_prefix,
-                );
-                Some(smartrest)
-            }
+            AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(value.into()),
             AvailabilityOutput::C8yJsonInventoryUpdate(value) => {
                 let json_over_mqtt_topic = format!(
                     "{prefix}/inventory/managedObjects/update/{external_id}",

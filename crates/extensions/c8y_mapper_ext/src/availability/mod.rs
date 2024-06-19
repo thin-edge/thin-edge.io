@@ -1,6 +1,6 @@
 use crate::availability::actor::TimerPayload;
 pub use builder::AvailabilityBuilder;
-use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::smartrest::inventory::C8ySmartRestSetInterval117;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_api::entity_store::EntityExternalId;
@@ -24,13 +24,6 @@ pub type SourceHealthStatus = (ServiceTopicId, HealthStatus);
 
 fan_in_message_type!(AvailabilityInput[EntityRegistrationMessage, SourceHealthStatus, TimerComplete] : Debug);
 fan_in_message_type!(AvailabilityOutput[C8ySmartRestSetInterval117, C8yJsonInventoryUpdate] : Debug);
-
-// TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
-#[derive(Debug)]
-pub struct C8ySmartRestSetInterval117 {
-    c8y_topic: C8yTopic,
-    interval: u64,
-}
 
 // TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
 #[derive(Debug)]

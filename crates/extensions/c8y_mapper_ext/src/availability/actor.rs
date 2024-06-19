@@ -231,6 +231,7 @@ impl AvailabilityActor {
         let c8y_117 = C8ySmartRestSetInterval117 {
             c8y_topic: C8yTopic::SmartRestResponse,
             interval: self.config.interval.as_secs() / 60, // convert to MINUTES
+            prefix: self.config.c8y_prefix.clone(),
         };
         self.message_box.send(c8y_117.into()).await?;
 
@@ -250,7 +251,8 @@ impl AvailabilityActor {
         {
             let c8y_117 = C8ySmartRestSetInterval117 {
                 c8y_topic: C8yTopic::ChildSmartRestResponse(external_id.into()),
-                interval: self.config.interval.as_secs() / 60,
+                interval: self.config.interval.as_secs() / 60, // convert to MINUTES
+                prefix: self.config.c8y_prefix.clone(),
             };
 
             self.message_box.send(c8y_117.into()).await?;

@@ -122,17 +122,21 @@ pub fn service_creation_message_payload(
 /// In the SmartREST 117 message, the interval must be in MINUTES, and can be <=0,
 /// which means the device is in maintenance mode in the c8y context.
 /// Details: https://cumulocity.com/docs/device-integration/fragment-library/#device-availability
-pub fn set_required_availability_message(
-    c8y_topic: C8yTopic,
-    interval: u64,
-    prefix: &TopicPrefix,
-) -> MqttMessage {
-    let topic = c8y_topic.to_topic(prefix).unwrap();
+#[derive(Debug)]
+pub struct C8ySmartRestSetInterval117 {
+    pub c8y_topic: C8yTopic,
+    pub interval: u64,
+    pub prefix: TopicPrefix,
+}
 
-    MqttMessage::new(
-        &topic,
-        fields_to_csv_string(&["117", &interval.to_string()]),
-    )
+impl From<C8ySmartRestSetInterval117> for MqttMessage {
+    fn from(value: C8ySmartRestSetInterval117) -> Self {
+        let topic = value.c8y_topic.to_topic(&value.prefix).unwrap();
+        MqttMessage::new(
+            &topic,
+            fields_to_csv_string(&["117", &value.interval.to_string()]),
+        )
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
