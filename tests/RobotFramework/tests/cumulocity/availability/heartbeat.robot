@@ -13,11 +13,11 @@ Test Teardown    Get Logs
 Heartbeat is sent
     Stop Service    tedge-agent
     Service Health Status Should Be Down    tedge-agent
-    Wait Until Keyword Succeeds    2m 10s    1x    Device Should Have Fragment Values    c8y_Availability.status=UNAVAILABLE
+    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=UNAVAILABLE
 
     Start Service    tedge-agent
     Service Health Status Should Be Up    tedge-agent
-    Wait Until Keyword Succeeds    2m 10s    1x    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
 
 Heartbeat is sent based on the custom health topic status
     Execute Command    tedge mqtt pub --retain 'te/device/main//' '{"@health":"device/main/service/foo"}'
@@ -27,7 +27,7 @@ Heartbeat is sent based on the custom health topic status
     Stop Service    tedge-agent
     Service Health Status Should Be Down    tedge-agent
 
-    Wait Until Keyword Succeeds    2m 10s    1x    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
 
 ### Child Device ###
 Child heartbeat is sent
@@ -36,11 +36,11 @@ Child heartbeat is sent
     Set Device    ${CHILD_XID}
     Device Should Exist    ${CHILD_XID}
 
-    Wait Until Keyword Succeeds    2m 10s    1x    Device Should Have Fragment Values    c8y_Availability.status=UNAVAILABLE
+    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=UNAVAILABLE
 
     # Fake tedge-agent status is up for the child device
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/tedge-agent/status/health' '{"status":"up"}'
-    Wait Until Keyword Succeeds    2m 10s    1x    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
 
 Child heartbeat is sent based on the custom health topic status
     # Register a child device
@@ -52,7 +52,7 @@ Child heartbeat is sent based on the custom health topic status
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/bar/status/health' '{"status":"up"}'
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/tedge-agent/status/health' '{"status":"down"}'
 
-    Wait Until Keyword Succeeds    2m 10s    1x    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
 
 
 *** Keywords ***
@@ -66,7 +66,7 @@ Test Setup
 
     # Set tedge config value before connecting
     Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
-    Execute Command    sudo tedge config set c8y.availability.interval 1
+    Execute Command    sudo tedge config set c8y.availability.interval 1m
     Execute Command    ./bootstrap.sh --no-install
 
     Device Should Exist    ${DEVICE_SN}

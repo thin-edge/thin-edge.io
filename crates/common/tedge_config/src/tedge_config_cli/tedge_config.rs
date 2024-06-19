@@ -499,9 +499,11 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = true))]
             enable: bool,
 
-            /// Heartbeat interval in minutes and the value to be sent to Cumulocity as c8y_RequiredAvailability
-            #[tedge_config(example = "60", default(value = 60_i16))]
-            interval: i16,
+            /// Heartbeat interval to be sent to Cumulocity as c8y_RequiredAvailability.
+            /// If it is set to 0, the device is considered in maintenance mode in the Cumulocity context.
+            /// Details: https://cumulocity.com/docs/device-integration/fragment-library/#device-availability
+            #[tedge_config(example = "60m", default(from_str = "60m"))]
+            interval: SecondsOrHumanTime,
         },
     },
 

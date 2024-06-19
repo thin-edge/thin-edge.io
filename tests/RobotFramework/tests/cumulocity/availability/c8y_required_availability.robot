@@ -23,16 +23,16 @@ c8y_RequiredAvailability is set by default
 c8y_RequiredAvailability is set with custom value
     # Set tedge config value before connecting
     Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
-    Execute Command    sudo tedge config set c8y.availability.interval -- '-30'
+    Execute Command    sudo tedge config set c8y.availability.interval 0
     Execute Command    ./bootstrap.sh --no-install
 
     # Main
     Device Should Exist    ${DEVICE_SN}
-    Device Should Have Fragment Values    c8y_RequiredAvailability.responseInterval\=-30
+    Device Should Have Fragment Values    c8y_RequiredAvailability.responseInterval\=0
 
     # Child
     Register child
-    Device Should Have Fragment Values    c8y_RequiredAvailability.responseInterval\=-30
+    Device Should Have Fragment Values    c8y_RequiredAvailability.responseInterval\=0
 
 c8y_RequiredAvailability is not set when disabled
     # Set tedge config value before connecting

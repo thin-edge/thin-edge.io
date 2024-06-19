@@ -9,7 +9,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -205,17 +204,15 @@ impl AvailabilityActor {
         }
     }
 
-    /// Set a new timer for heartbeat
-    /// Caution: the heartbeat interval from config is defined in MINUTES, not seconds
+    /// Set a new timer for heartbeat if the given interval is positive value
     async fn start_heartbeat_timer_if_interval_is_positive(
         &mut self,
         source: &EntityTopicId,
     ) -> Result<(), RuntimeError> {
-        if self.config.interval > 0 {
-            let interval: u64 = self.config.interval.try_into().unwrap();
+        if !self.config.interval.is_zero() {
             self.timer_sender
                 .send(SetTimeout::new(
-                    Duration::from_secs(interval * 60),
+                    self.config.interval,
                     TimerPayload {
                         topic_id: source.clone(),
                     },
@@ -233,7 +230,7 @@ impl AvailabilityActor {
     ) -> Result<(), RuntimeError> {
         let c8y_117 = C8ySmartRestSetInterval117 {
             c8y_topic: C8yTopic::SmartRestResponse,
-            interval: self.config.interval,
+            interval: self.config.interval.as_secs() / 60, // convert to MINUTES
         };
         self.message_box.send(c8y_117.into()).await?;
 
@@ -253,7 +250,7 @@ impl AvailabilityActor {
         {
             let c8y_117 = C8ySmartRestSetInterval117 {
                 c8y_topic: C8yTopic::ChildSmartRestResponse(external_id.into()),
-                interval: self.config.interval,
+                interval: self.config.interval.as_secs() / 60,
             };
 
             self.message_box.send(c8y_117.into()).await?;
