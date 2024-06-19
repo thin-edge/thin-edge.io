@@ -63,7 +63,7 @@ pub struct Config {
 pub struct BrokerConfig {
     /// MQTT host to connect to
     ///
-    /// Default: "localhost"
+    /// Default: "127.0.0.1"
     pub host: String,
 
     /// MQTT port to connect to. Usually it's either 1883 for insecure MQTT and
@@ -156,7 +156,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             broker: BrokerConfig {
-                host: String::from("localhost"),
+                host: String::from("127.0.0.1"),
                 port: 1883,
                 authentication: None,
             },
