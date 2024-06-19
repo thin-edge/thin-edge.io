@@ -3556,7 +3556,7 @@ pub(crate) mod tests {
         let device_type = "test-device-type".into();
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".into();
-        let tedge_http_host = "localhost".into();
+        let tedge_http_host = "127.0.0.1".into();
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;

@@ -584,7 +584,7 @@ define_tedge_config! {
 
         client: {
             /// The host that the thin-edge MQTT client should connect to
-            #[tedge_config(example = "localhost", default(value = "localhost"))]
+            #[tedge_config(example = "127.0.0.1", default(value = "127.0.0.1"))]
             host: String,
 
             /// The port that the thin-edge MQTT client should connect to

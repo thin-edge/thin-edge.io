@@ -299,7 +299,7 @@ set/unset mqtt.client.host
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset mqtt.client.host
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    mqtt.client.host=localhost
+    Should Contain    ${unset}    mqtt.client.host=127.0.0.1
 
 set/unset mqtt.client.port
     Execute Command    sudo tedge config set mqtt.client.port 1888

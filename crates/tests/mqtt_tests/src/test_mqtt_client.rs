@@ -162,7 +162,7 @@ impl TestCon {
         let id: String = std::iter::repeat_with(fastrand::alphanumeric)
             .take(10)
             .collect();
-        let mut options = MqttOptions::new(id, "localhost", mqtt_port);
+        let mut options = MqttOptions::new(id, "127.0.0.1", mqtt_port);
         options.set_clean_session(true);
 
         let (client, eventloop) = AsyncClient::new(options, 10);

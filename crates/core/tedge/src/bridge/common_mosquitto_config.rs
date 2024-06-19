@@ -89,7 +89,7 @@ impl Default for CommonMosquittoConfig {
             config_file: COMMON_MOSQUITTO_CONFIG_FILENAME.into(),
             internal_listener: ListenerConfig {
                 port: Some(1883),
-                bind_address: Some("localhost".into()),
+                bind_address: Some("127.0.0.1".into()),
                 allow_anonymous: true,
                 require_certificate: false,
                 ..Default::default()
@@ -237,7 +237,7 @@ mod tests {
             .collect();
         let mut expected = std::collections::HashSet::new();
 
-        expected.insert("listener 1883 localhost");
+        expected.insert("listener 1883 127.0.0.1");
         expected.insert("allow_anonymous true");
         expected.insert("connection_messages true");
 

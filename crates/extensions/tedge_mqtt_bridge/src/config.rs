@@ -225,7 +225,7 @@ mod tests {
 
         #[test]
         fn sets_certs_in_the_provided_mqtt_config() {
-            let mut opts = MqttOptions::new("dummy-device", "localhost", 1883);
+            let mut opts = MqttOptions::new("dummy-device", "127.0.0.1", 1883);
             let device_cert = rcgen::generate_simple_self_signed(["dummy-device".into()]).unwrap();
             let c8y_cert = rcgen::generate_simple_self_signed(["dummy-c8y".into()]).unwrap();
 
