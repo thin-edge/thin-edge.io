@@ -625,7 +625,6 @@ dependencies = [
  "camino",
  "env_logger",
  "futures",
- "httparse",
  "hyper",
  "mockito",
  "rcgen",
