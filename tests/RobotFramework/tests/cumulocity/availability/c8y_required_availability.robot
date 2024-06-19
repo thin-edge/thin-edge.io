@@ -3,13 +3,13 @@ Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
 
-Test Tags    theme:c8y
+Test Tags    theme:c8y    theme:monitoring
 Test Setup    Test Setup
 Test Teardown    Get Logs
 
 *** Test Cases ***
 
-c8y_RequiredAvailability is set by default
+c8y_RequiredAvailability is set by default to an hour
     Execute Command    ./bootstrap.sh
 
     # Main

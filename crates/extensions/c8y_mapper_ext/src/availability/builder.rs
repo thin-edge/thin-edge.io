@@ -4,7 +4,6 @@ use crate::availability::AvailabilityInput;
 use crate::availability::AvailabilityOutput;
 use crate::availability::TimerComplete;
 use crate::availability::TimerStart;
-use c8y_api::smartrest::inventory::set_required_availability_message;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
@@ -24,7 +23,6 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct AvailabilityBuilder {
@@ -48,11 +46,7 @@ impl AvailabilityBuilder {
             Self::mqtt_message_parser(config.clone()),
         );
 
-        mqtt.connect_mapped_source(
-            NoConfig,
-            &mut box_builder,
-            Self::mqtt_message_builder(config.clone()),
-        );
+        mqtt.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
 
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
 
@@ -86,12 +80,9 @@ impl AvailabilityBuilder {
                         }
                     }
                     Channel::Health => {
-                        // Support only the default service schema: "device/+/service/+/status/health"
-                        if source.is_default_service() {
-                            let health_status: HealthStatus =
-                                serde_json::from_slice(message.payload()).unwrap_or_default();
-                            return Some((source.into(), health_status).into());
-                        }
+                        let health_status: HealthStatus =
+                            serde_json::from_slice(message.payload()).unwrap_or_default();
+                        return Some((source, health_status).into());
                     }
                     _ => {}
                 }
@@ -100,30 +91,10 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn mqtt_message_builder(
-        config: AvailabilityConfig,
-    ) -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
+    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                let smartrest = set_required_availability_message(
-                    value.c8y_topic,
-                    value.interval,
-                    &config.c8y_prefix,
-                );
-                Some(smartrest)
-            }
-            AvailabilityOutput::C8yJsonInventoryUpdate(value) => {
-                let json_over_mqtt_topic = format!(
-                    "{prefix}/inventory/managedObjects/update/{external_id}",
-                    prefix = config.c8y_prefix,
-                    external_id = value.external_id
-                );
-                let json_over_mqtt_message = MqttMessage::new(
-                    &Topic::new_unchecked(&json_over_mqtt_topic),
-                    value.payload.to_string(),
-                );
-                Some(json_over_mqtt_message)
-            }
+            AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(value.into()),
+            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(value.into()),
         }
     }
 }

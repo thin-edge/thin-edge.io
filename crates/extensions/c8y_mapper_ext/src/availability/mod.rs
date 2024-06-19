@@ -1,15 +1,17 @@
 use crate::availability::actor::TimerPayload;
 pub use builder::AvailabilityBuilder;
-use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::smartrest::inventory::C8ySmartRestSetInterval117;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_api::HealthStatus;
 use tedge_config::TEdgeConfig;
 use tedge_config::TopicPrefix;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 
@@ -20,23 +22,31 @@ mod tests;
 
 pub type TimerStart = SetTimeout<TimerPayload>;
 pub type TimerComplete = Timeout<TimerPayload>;
-pub type SourceHealthStatus = (ServiceTopicId, HealthStatus);
+pub type SourceHealthStatus = (EntityTopicId, HealthStatus);
 
 fan_in_message_type!(AvailabilityInput[EntityRegistrationMessage, SourceHealthStatus, TimerComplete] : Debug);
 fan_in_message_type!(AvailabilityOutput[C8ySmartRestSetInterval117, C8yJsonInventoryUpdate] : Debug);
 
 // TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
 #[derive(Debug)]
-pub struct C8ySmartRestSetInterval117 {
-    c8y_topic: C8yTopic,
-    interval: u64,
-}
-
-// TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
-#[derive(Debug)]
 pub struct C8yJsonInventoryUpdate {
     external_id: String,
     payload: serde_json::Value,
+    pub prefix: TopicPrefix,
+}
+
+impl From<C8yJsonInventoryUpdate> for MqttMessage {
+    fn from(value: C8yJsonInventoryUpdate) -> Self {
+        let json_over_mqtt_topic = format!(
+            "{prefix}/inventory/managedObjects/update/{external_id}",
+            prefix = value.prefix,
+            external_id = value.external_id
+        );
+        MqttMessage::new(
+            &Topic::new_unchecked(&json_over_mqtt_topic),
+            value.payload.to_string(),
+        )
+    }
 }
 
 /// Required key-value pairs derived from tedge config

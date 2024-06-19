@@ -3,7 +3,7 @@ Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
 
-Test Tags    theme:c8y
+Test Tags    theme:c8y    theme:monitoring
 Test Setup    Test Setup
 Test Teardown    Get Logs
 
