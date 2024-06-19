@@ -8,9 +8,8 @@ use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::Path;
 use tedge_config::HostPort;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_config::HTTPS_PORT;
+use tedge_utils::certificates::read_trust_store;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
@@ -31,6 +30,7 @@ pub struct UploadCertCmd {
     pub path: Utf8PathBuf,
     pub host: HostPort<HTTPS_PORT>,
     pub username: String,
+    pub root_cert_path: Utf8PathBuf,
     pub password: String,
 }
 
@@ -70,20 +70,18 @@ impl UploadCertCmd {
             self.password.clone()
         };
 
-        let config = TEdgeConfig::try_new(TEdgeConfigLocation::default())?;
-        let root_cert = &config.c8y.root_cert_path;
         let mut client_builder = reqwest::blocking::Client::builder();
-        if let Err(e) = std::fs::metadata(root_cert) {
+        if let Err(e) = std::fs::metadata(&self.root_cert_path) {
             let e = match e.kind() {
                 ErrorKind::NotFound => {
-                    CertError::RootCertificatePathDoesNotExist(root_cert.to_string())
+                    CertError::RootCertificatePathDoesNotExist(self.root_cert_path.to_string())
                 }
                 _ => CertError::IoError(e),
             };
             return Err(e);
         }
 
-        for certificate in tedge_utils::certificates::read_trust_store(root_cert)? {
+        for certificate in read_trust_store(&self.root_cert_path)? {
             client_builder = client_builder.add_root_certificate(certificate);
         }
         let client = client_builder.build()?;
