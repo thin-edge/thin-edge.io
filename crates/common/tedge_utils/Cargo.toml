@@ -17,13 +17,16 @@ fs-notify = ["strum", "notify", "notify-debouncer-full"]
 timestamp = ["strum", "time", "serde", "serde_json"]
 
 [dependencies]
-anyhow = "1.0.71"
+anyhow = { workspace = true }
+camino = { workspace = true }
 doku = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 notify = { workspace = true, optional = true }
 notify-debouncer-full = { workspace = true, optional = true }
+reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
+rustls-pemfile = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 strum = { workspace = true, optional = true, features = ["derive"] }

@@ -47,6 +47,9 @@ pub enum CertError {
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
 
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
+
     #[error("Invalid device.cert_path path: {0}")]
     CertPathError(PathsError),
 
