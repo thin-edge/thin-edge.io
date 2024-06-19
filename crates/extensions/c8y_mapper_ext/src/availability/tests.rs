@@ -334,14 +334,14 @@ async fn child_device_sends_heartbeat_based_on_custom_endpoint() {
 }
 
 #[tokio::test]
-async fn interval_is_minus_value() {
-    let config = get_availability_config(-10);
+async fn interval_is_zero_value() {
+    let config = get_availability_config(0);
     let handlers = spawn_availability_actor(config).await;
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
     // SmartREST 117 for the main device
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117,-10")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117,0")]).await;
 
     // No timer request created
     assert!(timer.recv().with_timeout(TEST_TIMEOUT_MS).await.is_err());
@@ -354,11 +354,8 @@ async fn interval_is_minus_value() {
     mqtt.send(registration_message).await.unwrap();
 
     // SmartREST 117 for the child device
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us/test-device:device:child1", "117,-10")],
-    )
-    .await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us/test-device:device:child1", "117,0")])
+        .await;
 
     // No timer request created
     assert!(timer.recv().with_timeout(TEST_TIMEOUT_MS).await.is_err());
@@ -405,12 +402,12 @@ async fn spawn_availability_actor(config: AvailabilityConfig) -> TestHandler {
     }
 }
 
-fn get_availability_config(interval: i16) -> AvailabilityConfig {
+fn get_availability_config(interval_in_minutes: u64) -> AvailabilityConfig {
     AvailabilityConfig {
         main_device_id: "test-device".into(),
         mqtt_schema: MqttSchema::default(),
         c8y_prefix: "c8y".try_into().unwrap(),
         enable: true,
-        interval,
+        interval: Duration::from_secs(interval_in_minutes * 60),
     }
 }

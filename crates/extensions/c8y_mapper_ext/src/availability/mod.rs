@@ -1,6 +1,7 @@
 use crate::availability::actor::TimerPayload;
 pub use builder::AvailabilityBuilder;
 use c8y_api::smartrest::topic::C8yTopic;
+use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
@@ -28,7 +29,7 @@ fan_in_message_type!(AvailabilityOutput[C8ySmartRestSetInterval117, C8yJsonInven
 #[derive(Debug)]
 pub struct C8ySmartRestSetInterval117 {
     c8y_topic: C8yTopic,
-    interval: i16,
+    interval: u64,
 }
 
 // TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
@@ -45,7 +46,7 @@ pub struct AvailabilityConfig {
     pub mqtt_schema: MqttSchema,
     pub c8y_prefix: TopicPrefix,
     pub enable: bool,
-    pub interval: i16,
+    pub interval: Duration,
 }
 
 impl From<&TEdgeConfig> for AvailabilityConfig {
@@ -56,7 +57,7 @@ impl From<&TEdgeConfig> for AvailabilityConfig {
             mqtt_schema: MqttSchema::with_root(tedge_config.mqtt.topic_root.clone()),
             c8y_prefix: tedge_config.c8y.bridge.topic_prefix.clone(),
             enable: tedge_config.c8y.availability.enable,
-            interval: tedge_config.c8y.availability.interval,
+            interval: tedge_config.c8y.availability.interval.duration(),
         }
     }
 }
