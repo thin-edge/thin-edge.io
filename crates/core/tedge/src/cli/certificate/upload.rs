@@ -8,8 +8,6 @@ use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::Path;
 use tedge_config::HostPort;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_config::HTTPS_PORT;
 use tedge_utils::certificates::read_trust_store;
 
