@@ -13,6 +13,7 @@ use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::topic::publish_topic_from_ancestors;
 use crate::smartrest::topic::C8yTopic;
 use mqtt_channel::MqttMessage;
+use std::time::Duration;
 use tedge_config::TopicPrefix;
 
 /// Create a SmartREST message for creating a child device under the given ancestors.
@@ -125,16 +126,17 @@ pub fn service_creation_message_payload(
 #[derive(Debug)]
 pub struct C8ySmartRestSetInterval117 {
     pub c8y_topic: C8yTopic,
-    pub interval: u64,
+    pub interval: Duration,
     pub prefix: TopicPrefix,
 }
 
 impl From<C8ySmartRestSetInterval117> for MqttMessage {
     fn from(value: C8ySmartRestSetInterval117) -> Self {
         let topic = value.c8y_topic.to_topic(&value.prefix).unwrap();
+        let interval_in_minutes = value.interval.as_secs() / 60;
         MqttMessage::new(
             &topic,
-            fields_to_csv_string(&["117", &value.interval.to_string()]),
+            fields_to_csv_string(&["117", &interval_in_minutes.to_string()]),
         )
     }
 }

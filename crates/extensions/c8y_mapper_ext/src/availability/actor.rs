@@ -19,7 +19,6 @@ use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_api::HealthStatus;
 use tedge_api::Status;
 use tedge_timer_ext::SetTimeout;
@@ -37,7 +36,7 @@ pub struct TimerPayload {
 /// IDs can be retrieved from the registration message's payload
 #[derive(Debug)]
 struct DeviceIds {
-    service_topic_id: ServiceTopicId,
+    health_topic_id: EntityTopicId,
     external_id: EntityExternalId,
 }
 
@@ -53,7 +52,7 @@ pub struct AvailabilityActor {
     message_box: SimpleMessageBox<AvailabilityInput, AvailabilityOutput>,
     timer_sender: LoggingSender<TimerStart>,
     device_ids_map: HashMap<EntityTopicId, DeviceIds>,
-    service_status_map: HashMap<ServiceTopicId, HealthStatus>,
+    health_status_map: HashMap<EntityTopicId, HealthStatus>,
 }
 
 #[async_trait]
@@ -76,8 +75,7 @@ impl Actor for AvailabilityActor {
                     self.process_registration_message(&message).await?;
                 }
                 AvailabilityInput::SourceHealthStatus((source, health_status)) => {
-                    // Insert a "service topic ID" - "health status" pair to the map.
-                    self.service_status_map.insert(source, health_status);
+                    self.health_status_map.insert(source, health_status);
                 }
                 AvailabilityInput::TimerComplete(event) => {
                     self.process_timer_complete(event.event).await?;
@@ -100,7 +98,7 @@ impl AvailabilityActor {
             message_box,
             timer_sender,
             device_ids_map: HashMap::new(),
-            service_status_map: HashMap::new(),
+            health_status_map: HashMap::new(),
         }
     }
 
@@ -111,9 +109,7 @@ impl AvailabilityActor {
         self.device_ids_map.insert(
             topic_id.clone(),
             DeviceIds {
-                service_topic_id: EntityTopicId::default_main_service("tedge-agent")
-                    .unwrap()
-                    .into(),
+                health_topic_id: EntityTopicId::default_main_service("tedge-agent").unwrap(),
                 external_id: self.config.main_device_id.clone(),
             },
         );
@@ -161,8 +157,8 @@ impl AvailabilityActor {
         Ok(())
     }
 
-    /// Insert a <"device topic ID" - "service topic ID" and "external ID"> pair into the map.
-    /// If @health is provided in the registration message, use the value as long as it's valid as a service topic ID.
+    /// Insert a <"device topic ID" - "health entity topic ID" and "external ID"> pair into the map.
+    /// If @health is provided in the registration message, use the value as long as it's valid as entity topic ID.
     /// If @health is not provided, use the "tedge-agent" service topic ID as default.
     /// @id is the only source to know the device's external ID. Hence, @id must be provided in the registration message.
     fn update_device_service_pair(
@@ -172,28 +168,24 @@ impl AvailabilityActor {
         let source = &registration_message.topic_id;
 
         let result = match registration_message.other.get("@health") {
-            None => {
-                Ok(registration_message.topic_id.to_default_service_topic_id("tedge-agent").unwrap())
-            }
-            Some(raw_value) => {
-                match raw_value.as_str() {
-                    None => Err(format!("'@health' must hold a string value. Given: {raw_value:?}")),
-                    Some(maybe_service_topic_id) => {
-                        EntityTopicId::from_str(maybe_service_topic_id)
-                            .map(|id| id.into())
-                            .map_err(|_| format!("'@health' must be the default service topic schema 'device/DEVICE_NAME/service/SERVICE_NAME'. Given: {maybe_service_topic_id}"))
-                    }
-                }
+            None => Ok(registration_message
+                .topic_id
+                .default_service_for_device("tedge-agent")
+                .unwrap()),
+            Some(raw_value) => match raw_value.as_str() {
+                None => Err(format!("'@health' must hold a string value. Given: {raw_value:?}")),
+                Some(maybe_entity_topic_id) => EntityTopicId::from_str(maybe_entity_topic_id)
+                    .map_err(|_| format!("'@health' must be 4-segment identifier like `a/b/c/d`. Given: {maybe_entity_topic_id}"))
             }
         };
 
         match result {
-            Ok(service_topic_id) => {
+            Ok(health_topic_id) => {
                 match registration_message.external_id.clone() {
                     None => RegistrationResult::Error(format!("'@id' field is missing. Cannot start availability monitoring for the device '{source}'")),
                     Some(external_id) => {
                         match self.device_ids_map
-                            .insert(source.clone(), DeviceIds { service_topic_id, external_id }) {
+                            .insert(source.clone(), DeviceIds { health_topic_id, external_id }) {
                             None => RegistrationResult::New,
                             Some(_) => RegistrationResult::Update,
                         }
@@ -230,7 +222,7 @@ impl AvailabilityActor {
     ) -> Result<(), RuntimeError> {
         let c8y_117 = C8ySmartRestSetInterval117 {
             c8y_topic: C8yTopic::SmartRestResponse,
-            interval: self.config.interval.as_secs() / 60, // convert to MINUTES
+            interval: self.config.interval,
             prefix: self.config.c8y_prefix.clone(),
         };
         self.message_box.send(c8y_117.into()).await?;
@@ -251,7 +243,7 @@ impl AvailabilityActor {
         {
             let c8y_117 = C8ySmartRestSetInterval117 {
                 c8y_topic: C8yTopic::ChildSmartRestResponse(external_id.into()),
-                interval: self.config.interval.as_secs() / 60, // convert to MINUTES
+                interval: self.config.interval,
                 prefix: self.config.c8y_prefix.clone(),
             };
 
@@ -269,14 +261,15 @@ impl AvailabilityActor {
         if let Some((service_topic_id, external_id)) = self
             .device_ids_map
             .get(&entity_topic_id)
-            .map(|ids| (&ids.service_topic_id, ids.external_id.as_ref()))
+            .map(|ids| (&ids.health_topic_id, ids.external_id.as_ref()))
         {
-            if let Some(health_status) = self.service_status_map.get(service_topic_id) {
+            if let Some(health_status) = self.health_status_map.get(service_topic_id) {
                 // Send an empty JSON over MQTT message if the target service status is "up"
                 if health_status.status == Status::Up {
                     let json_over_mqtt = C8yJsonInventoryUpdate {
                         external_id: external_id.into(),
                         payload: json!({}),
+                        prefix: self.config.c8y_prefix.clone(),
                     };
                     self.message_box.send(json_over_mqtt.into()).await?;
                 } else {
