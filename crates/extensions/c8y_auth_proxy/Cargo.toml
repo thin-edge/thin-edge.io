@@ -35,6 +35,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
+httparse = { workspace = true }
 mockito = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true, features = ["dangerous_configuration"] }
