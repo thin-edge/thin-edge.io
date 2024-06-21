@@ -51,9 +51,13 @@ impl WorkflowSupervisor {
         &self.commands
     }
 
-    /// The set of pending commands
-    pub fn load_pending_commands(&mut self, commands: CommandBoard) {
-        self.commands = commands
+    /// Update on start the set of pending commands
+    pub fn load_pending_commands(&mut self, commands: CommandBoard) -> Vec<GenericCommandState> {
+        self.commands = commands;
+        self.commands
+            .iter()
+            .filter_map(|(t, s)| self.resume_command(t, s))
+            .collect()
     }
 
     /// List the capabilities provided by the registered workflows
@@ -176,23 +180,25 @@ impl WorkflowSupervisor {
     }
 
     /// Resume the given command when the agent is restarting after an interruption
-    pub fn resume_command(
+    fn resume_command(
         &self,
-        _timestamp: &Timestamp,
+        timestamp: &Timestamp,
         command: &GenericCommandState,
     ) -> Option<GenericCommandState> {
         let Ok(action) = self.get_action(command) else {
             return None;
         };
 
+        let epoch = format!("{}.{}", timestamp.unix_timestamp(), timestamp.millisecond());
+        let command = command.clone().update_with_key_value("resumed_at", &epoch);
         match action {
             OperationAction::AwaitingAgentRestart(handlers) => {
-                Some(command.clone().update(handlers.on_success))
+                Some(command.update(handlers.on_success))
             }
 
             _ => {
                 // TODO: Use the timestamp to filter out action pending since too long
-                Some(command.clone())
+                Some(command)
             }
         }
     }

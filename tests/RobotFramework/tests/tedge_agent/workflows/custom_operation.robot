@@ -98,6 +98,21 @@ Invoke sub-operation from a sub-operation
     ${expected_log}    Get File    ${CURDIR}/gp-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
 
+Command steps should not be executed twice
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 '{"status":"init"}'
+    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/issue-2896/test-1    message_pattern=.*successful.*
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 ''
+    ${workflow_log}    Execute Command    grep '\\[ issue-2896' /var/log/tedge/agent/workflow-issue-2896-test-1.log | cut -d '|' -f 1 | sed 's/ $//'
+    TRY
+        # "issue-2896 @ await_restart" is resumed first
+        ${expected_log}    Get File    ${CURDIR}/issue-2896-test-1.seq1.log
+        Should Be Equal    ${workflow_log}    ${expected_log}
+    EXCEPT
+        # "issue-2896 > restart @ executing" is resumed first
+        ${expected_log}    Get File    ${CURDIR}/issue-2896-test-1.seq2.log
+        Should Be Equal    ${workflow_log}    ${expected_log}
+    END
+
 *** Keywords ***
 
 Custom Test Setup
@@ -132,3 +147,4 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_config_update.toml            /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_software_update.toml          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-2896.toml                    /etc/tedge/operations/
