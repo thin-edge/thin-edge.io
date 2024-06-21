@@ -96,7 +96,7 @@ impl AvailabilityBuilder {
     fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
             AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                sleep(Duration::from_millis(500)); // FIXME: WORKAROUND to address race condition with 101 child registration message
+                sleep(Duration::from_millis(1000)); // FIXME: WORKAROUND to address race condition with 101 child registration message
                 Some(value.into())
             }
             AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(value.into()),
