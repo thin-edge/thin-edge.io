@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use http::header::HeaderName;
 use http::header::HeaderValue;
+use http::Method;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
@@ -9,8 +10,12 @@ pub enum HttpError {
     #[error(transparent)]
     HttpError(#[from] http::Error),
 
-    #[error("Failed with HTTP error status {0}")]
-    HttpStatusError(http::status::StatusCode),
+    #[error("Failed with HTTP error status {code} for {method} request to endpoint {endpoint}")]
+    HttpStatusError {
+        code: http::status::StatusCode,
+        endpoint: String,
+        method: Method,
+    },
 
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
@@ -24,7 +29,18 @@ pub enum HttpError {
 
 pub type HttpRequest = http::Request<hyper::Body>;
 
-pub type HttpResponse = http::Response<hyper::Body>;
+#[derive(Debug)]
+pub struct HttpResponse {
+    pub response: http::Response<hyper::Body>,
+    pub endpoint: String,
+    pub method: Method,
+}
+
+impl HttpResponse {
+    pub fn status(&self) -> http::StatusCode {
+        self.response.status()
+    }
+}
 
 pub type HttpResult = Result<HttpResponse, HttpError>;
 
@@ -135,16 +151,20 @@ pub trait HttpResponseExt {
 #[async_trait]
 impl HttpResponseExt for HttpResponse {
     fn error_for_status(self) -> HttpResult {
-        let status = self.status();
+        let status = self.response.status();
         if status.is_success() {
             Ok(self)
         } else {
-            Err(HttpError::HttpStatusError(status))
+            Err(HttpError::HttpStatusError {
+                code: status,
+                endpoint: self.endpoint,
+                method: self.method,
+            })
         }
     }
 
     async fn bytes(self) -> Result<HttpBytes, HttpError> {
-        Ok(hyper::body::to_bytes(self.into_body()).await?)
+        Ok(hyper::body::to_bytes(self.response.into_body()).await?)
     }
 
     async fn text(self) -> Result<String, HttpError> {

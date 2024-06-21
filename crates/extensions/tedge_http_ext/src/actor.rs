@@ -1,4 +1,5 @@
 use crate::HttpRequest;
+use crate::HttpResponse;
 use crate::HttpResult;
 use async_trait::async_trait;
 use hyper::client::Client;
@@ -35,6 +36,10 @@ impl Server for HttpService {
     }
 
     async fn handle(&mut self, request: Self::Request) -> Self::Response {
-        Ok(self.client.request(request).await?)
+        Ok(HttpResponse {
+            endpoint: request.uri().path().to_owned(),
+            method: request.method().to_owned(),
+            response: self.client.request(request).await?,
+        })
     }
 }

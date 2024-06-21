@@ -1,5 +1,6 @@
 use crate::HttpError;
 use crate::HttpRequest;
+use crate::HttpResponse;
 use crate::HttpResult;
 use http::StatusCode;
 
@@ -48,8 +49,16 @@ impl HttpResponseBuilder {
 
     /// Build the response
     pub fn build(self) -> HttpResult {
-        self.body
-            .and_then(|body| self.inner.body(body).map_err(|err| err.into()))
+        self.body.and_then(|body| {
+            self.inner
+                .body(body)
+                .map(|body| HttpResponse {
+                    response: body,
+                    endpoint: "<test response>".to_string(),
+                    method: "TEST".parse().unwrap(),
+                })
+                .map_err(|err| err.into())
+        })
     }
 }
 
