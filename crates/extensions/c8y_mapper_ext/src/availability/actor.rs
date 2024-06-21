@@ -204,7 +204,7 @@ impl AvailabilityActor {
         if !self.config.interval.is_zero() {
             self.timer_sender
                 .send(SetTimeout::new(
-                    self.config.interval,
+                    self.config.interval / 2,
                     TimerPayload {
                         topic_id: source.clone(),
                     },

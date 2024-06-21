@@ -37,7 +37,7 @@ async fn main_device_init() {
 
     // Timer request
     let timer_start = timer_recv(&mut timer).await;
-    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60));
+    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60 / 2));
     assert_eq!(
         timer_start.event,
         TimerPayload {
@@ -81,7 +81,7 @@ async fn main_device_sends_heartbeat() {
 
     // New timer request
     let timer_start = timer_recv(&mut timer).await;
-    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60));
+    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60 / 2));
     assert_eq!(
         timer_start.event,
         TimerPayload {
@@ -121,7 +121,7 @@ async fn main_device_does_not_send_heartbeat_when_service_status_is_not_up() {
 
     // New timer request
     let timer_start = timer_recv(&mut timer).await;
-    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60));
+    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60 / 2));
     assert_eq!(
         timer_start.event,
         TimerPayload {
@@ -224,7 +224,7 @@ async fn child_device_sends_heartbeat() {
 
     // New timer request
     let timer_start = timer_recv(&mut timer).await;
-    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60));
+    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60 / 2));
     assert_eq!(
         timer_start.event,
         TimerPayload {
@@ -273,7 +273,7 @@ async fn child_device_does_not_send_heartbeat_when_service_status_is_not_up() {
 
     // New timer request
     let timer_start = timer_recv(&mut timer).await;
-    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60));
+    assert_eq!(timer_start.duration, Duration::from_secs(10 * 60 / 2));
     assert_eq!(
         timer_start.event,
         TimerPayload {
