@@ -205,6 +205,8 @@ impl C8YHttpProxyActor {
             let request = HttpRequestBuilder::get(&url_get_id)
                 .bearer_auth(self.end_point.token.clone().unwrap_or_default())
                 .build()?;
+            let endpoint = request.uri().path().to_owned();
+            let method = request.method().to_owned();
 
             match self.peers.http.await_response(request).await? {
                 Ok(response) => {
@@ -236,7 +238,11 @@ impl C8YHttpProxyActor {
                         }
                         code => {
                             return Err(C8YRestError::FromHttpError(
-                                tedge_http_ext::HttpError::HttpStatusError(code),
+                                tedge_http_ext::HttpError::HttpStatusError {
+                                    code,
+                                    endpoint,
+                                    method,
+                                },
                             ))
                         }
                     }
@@ -257,6 +263,8 @@ impl C8YHttpProxyActor {
             .await?
             .bearer_auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
+        let endpoint = request.uri().path().to_owned();
+        let method = request.method().to_owned();
 
         let resp = self.peers.http.await_response(request).await?;
         match resp {
@@ -270,7 +278,11 @@ impl C8YHttpProxyActor {
                         .await
                 }
                 code => Err(C8YRestError::FromHttpError(
-                    tedge_http_ext::HttpError::HttpStatusError(code),
+                    tedge_http_ext::HttpError::HttpStatusError {
+                        code,
+                        endpoint,
+                        method,
+                    },
                 )),
             },
 
@@ -366,7 +378,9 @@ impl C8YHttpProxyActor {
         };
 
         let http_result = self.execute(device_id.clone(), build_request).await?;
-        http_result.error_for_status()?;
+        http_result
+            .error_for_status()
+            .context("updating software list")?;
         Ok(())
     }
 
