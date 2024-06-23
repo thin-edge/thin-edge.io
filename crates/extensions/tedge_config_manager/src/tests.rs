@@ -163,7 +163,7 @@ async fn default_plugin_config() {
         type = "tedge-log-plugin"
         user = "tedge"
         group = "tedge"
-        mode = 644
+        mode = 0o644
     };
 
     assert_eq!(plugin_config_toml, expected_config);

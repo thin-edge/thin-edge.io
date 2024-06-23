@@ -133,7 +133,7 @@ impl ConfigManagerBuilder {
             type = "tedge-log-plugin"
             user = "tedge"
             group = "tedge"
-            mode = 644
+            mode = 0o644
         }
         .to_string();
         create_file_with_defaults(&config.plugin_config_path, Some(&example_config))?;
