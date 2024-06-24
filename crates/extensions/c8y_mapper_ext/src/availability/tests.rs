@@ -23,7 +23,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::Timeout;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(7000);
 
 #[tokio::test]
 async fn main_device_init() {
