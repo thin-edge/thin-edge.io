@@ -117,8 +117,7 @@ impl AvailabilityActor {
 
         self.send_smartrest_set_required_availability_for_main_device()
             .await?;
-        self.start_heartbeat_timer_if_interval_is_positive(&topic_id)
-            .await?;
+        self.start_heartbeat_timer(&topic_id).await?;
 
         Ok(())
     }
@@ -132,8 +131,7 @@ impl AvailabilityActor {
         match message.r#type {
             EntityType::MainDevice => match self.update_device_service_pair(message) {
                 RegistrationResult::New | RegistrationResult::Update => {
-                    self.start_heartbeat_timer_if_interval_is_positive(source)
-                        .await?;
+                    self.start_heartbeat_timer(source).await?;
                 }
                 RegistrationResult::Error(reason) => {
                     warn!(reason)
@@ -143,12 +141,10 @@ impl AvailabilityActor {
                 RegistrationResult::New => {
                     self.send_smartrest_set_required_availability_for_child_device(source)
                         .await?;
-                    self.start_heartbeat_timer_if_interval_is_positive(source)
-                        .await?;
+                    self.start_heartbeat_timer(source).await?;
                 }
                 RegistrationResult::Update => {
-                    self.start_heartbeat_timer_if_interval_is_positive(source)
-                        .await?;
+                    self.start_heartbeat_timer(source).await?;
                 }
                 RegistrationResult::Error(reason) => warn!(reason),
             },
@@ -198,10 +194,7 @@ impl AvailabilityActor {
     }
 
     /// Set a new timer for heartbeat if the given interval is positive value
-    async fn start_heartbeat_timer_if_interval_is_positive(
-        &mut self,
-        source: &EntityTopicId,
-    ) -> Result<(), RuntimeError> {
+    async fn start_heartbeat_timer(&mut self, source: &EntityTopicId) -> Result<(), RuntimeError> {
         if !self.config.interval.is_zero() {
             self.timer_sender
                 .send(SetTimeout::new(
@@ -280,8 +273,7 @@ impl AvailabilityActor {
             }
 
             // Set a new timer
-            self.start_heartbeat_timer_if_interval_is_positive(&entity_topic_id)
-                .await?;
+            self.start_heartbeat_timer(&entity_topic_id).await?;
         };
 
         Ok(())
