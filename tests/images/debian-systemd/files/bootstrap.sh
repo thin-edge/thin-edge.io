@@ -866,6 +866,8 @@ connect_mappers() {
     # retry connection attempts
     sudo tedge disconnect "$TEDGE_MAPPER" || true
 
+    sudo tedge config set mqtt.bridge.built_in true
+
     CONNECT_ATTEMPT=0
     while true; do
         CONNECT_ATTEMPT=$((CONNECT_ATTEMPT + 1))
