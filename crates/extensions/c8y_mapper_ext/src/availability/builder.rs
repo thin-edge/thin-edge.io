@@ -5,8 +5,6 @@ use crate::availability::AvailabilityOutput;
 use crate::availability::TimerComplete;
 use crate::availability::TimerStart;
 use std::convert::Infallible;
-use std::thread::sleep;
-use std::time::Duration;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
@@ -95,10 +93,7 @@ impl AvailabilityBuilder {
 
     fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                sleep(Duration::from_millis(1000)); // FIXME: WORKAROUND to address race condition with 101 child registration message
-                Some(value.into())
-            }
+            AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(value.into()),
             AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(value.into()),
         }
     }
