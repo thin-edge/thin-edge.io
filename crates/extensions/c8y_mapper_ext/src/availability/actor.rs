@@ -248,7 +248,7 @@ impl AvailabilityActor {
                 prefix: self.config.c8y_prefix.clone(),
             };
 
-            tokio::time::sleep(Duration::from_secs(5)).await; // FIXME: Workaround to solve the race condition with 101 child registration message
+            tokio::time::sleep(Duration::from_secs(1)).await; // FIXME: Workaround to solve the race condition with 101 child registration message
             self.message_box.send(c8y_117.into()).await?;
         }
 
