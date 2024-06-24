@@ -4118,6 +4118,7 @@ dependencies = [
  "tedge_actors",
  "tedge_utils",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -11,9 +11,8 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
-use tedge_actors::LoggingReceiver;
-use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
@@ -32,9 +31,9 @@ pub use mqtt_channel::TopicFilter;
 
 pub struct MqttActorBuilder {
     mqtt_config: mqtt_channel::Config,
-    input_receiver: LoggingReceiver<MqttMessage>,
+    input_receiver: CombinedReceiver<MqttMessage>,
     publish_sender: mpsc::Sender<MqttMessage>,
-    pub subscriber_addresses: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
+    pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -42,7 +41,7 @@ impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
         let (publish_sender, publish_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let input_receiver = LoggingReceiver::new("MQTT".into(), publish_receiver, signal_receiver);
+        let input_receiver = CombinedReceiver::new(publish_receiver, signal_receiver);
 
         MqttActorBuilder {
             mqtt_config: config,
@@ -56,6 +55,9 @@ impl MqttActorBuilder {
     pub(crate) fn build_actor(self) -> MqttActor {
         let mut combined_topic_filter = TopicFilter::empty();
         for (topic_filter, _) in self.subscriber_addresses.iter() {
+            for pattern in topic_filter.patterns() {
+                tracing::info!(target: "MQTT sub", "{pattern}");
+            }
             combined_topic_filter.add_all(topic_filter.to_owned());
         }
         let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
@@ -72,7 +74,7 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
 
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_sink(&mut self, subscriptions: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
-        let sender = LoggingSender::new("MQTT".into(), peer.get_sender());
+        let sender = peer.get_sender();
         self.subscriber_addresses.push((subscriptions, sender));
     }
 }
@@ -102,11 +104,11 @@ impl Builder<MqttActor> for MqttActorBuilder {
 }
 
 pub struct FromPeers {
-    input_receiver: LoggingReceiver<MqttMessage>,
+    input_receiver: CombinedReceiver<MqttMessage>,
 }
 
 pub struct ToPeers {
-    peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
+    peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
 impl FromPeers {
@@ -115,6 +117,7 @@ impl FromPeers {
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         while let Ok(Some(message)) = self.try_recv().await {
+            tracing::debug!(target: "MQTT pub", "{message}");
             SinkExt::send(outgoing_mqtt, message)
                 .await
                 .map_err(Box::new)?;
@@ -139,6 +142,7 @@ impl ToPeers {
         incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         while let Some(message) = incoming_mqtt.next().await {
+            tracing::debug!(target: "MQTT recv", "{message}");
             self.send(message).await?;
         }
         Ok(())
@@ -178,8 +182,8 @@ pub struct MqttActor {
 impl MqttActor {
     fn new(
         mqtt_config: mqtt_channel::Config,
-        input_receiver: LoggingReceiver<MqttMessage>,
-        peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
+        input_receiver: CombinedReceiver<MqttMessage>,
+        peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     ) -> Self {
         MqttActor {
             mqtt_config,

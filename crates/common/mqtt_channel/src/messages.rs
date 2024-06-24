@@ -7,6 +7,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Write;
 
@@ -18,6 +19,21 @@ pub struct MqttMessage {
     #[serde(serialize_with = "serialize_qos", deserialize_with = "deserialize_qos")]
     pub qos: QoS,
     pub retain: bool,
+}
+
+impl Display for MqttMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_char('[')?;
+        f.write_str(&self.topic.name)?;
+        f.write_str(" qos=")?;
+        f.write_char(match self.qos {
+            QoS::AtMostOnce => '0',
+            QoS::AtLeastOnce => '1',
+            QoS::ExactlyOnce => '2',
+        })?;
+        f.write_str(if self.retain { " retained] " } else { "] " })?;
+        Display::fmt(&self.payload, f)
+    }
 }
 
 fn serialize_qos<S>(qos: &QoS, serializer: S) -> Result<S::Ok, S::Error>
@@ -116,6 +132,15 @@ impl<'de> Deserialize<'de> for DebugPayload {
         }
 
         deserializer.deserialize_any(DebugPayloadVisitor)
+    }
+}
+
+impl Display for DebugPayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.as_str() {
+            Ok(str) => f.write_str(str),
+            Err(_) => f.write_str(&format!("non UTF-8 payload of {} bytes", self.0.len())),
+        }
     }
 }
 

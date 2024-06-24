@@ -135,6 +135,10 @@ impl TopicFilter {
             })
             .collect()
     }
+
+    pub fn patterns(&self) -> &Vec<String> {
+        &self.patterns
+    }
 }
 
 impl TryInto<Topic> for &str {
