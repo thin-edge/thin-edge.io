@@ -77,6 +77,7 @@ use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;

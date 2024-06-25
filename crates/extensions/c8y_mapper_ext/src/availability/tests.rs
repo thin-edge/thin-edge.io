@@ -1,3 +1,4 @@
+use crate::actor::PublishMessage;
 use crate::availability::actor::TimerPayload;
 use crate::availability::AvailabilityBuilder;
 use crate::availability::AvailabilityConfig;
@@ -380,12 +381,12 @@ async fn timer_send(timer: &mut FakeServerBox<TimerStart, TimerComplete>, event:
 }
 
 struct TestHandler {
-    pub mqtt_box: SimpleMessageBox<MqttMessage, MqttMessage>,
+    pub mqtt_box: SimpleMessageBox<PublishMessage, MqttMessage>,
     pub timer_box: FakeServerBox<TimerStart, TimerComplete>,
 }
 
 async fn spawn_availability_actor(config: AvailabilityConfig) -> TestHandler {
-    let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+    let mut mqtt_builder: SimpleMessageBoxBuilder<PublishMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
     let mut timer_builder: FakeServerBoxBuilder<TimerStart, TimerComplete> =
         FakeServerBoxBuilder::default();

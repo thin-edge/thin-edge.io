@@ -168,6 +168,7 @@ impl MqttSchema {
         };
         let channel = match channel {
             ChannelFilter::EntityMetadata => "".to_string(),
+            ChannelFilter::EntityTwinData => "/twin/+".to_string(),
             ChannelFilter::Measurement => "/m/+".to_string(),
             ChannelFilter::MeasurementMetadata => "/m/+/meta".to_string(),
             ChannelFilter::Event => "/e/+".to_string(),
@@ -518,7 +519,7 @@ pub enum TopicIdError {
 /// A channel identifies the type of the messages exchanged over a topic
 ///
 /// <https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-channel>
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Channel {
     EntityMetadata,
     EntityTwinData {
@@ -722,8 +723,10 @@ pub enum EntityFilter<'a> {
     Entity(&'a EntityTopicId),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChannelFilter {
     EntityMetadata,
+    EntityTwinData,
     Measurement,
     Event,
     Alarm,
@@ -735,6 +738,31 @@ pub enum ChannelFilter {
     AnyCommandMetadata,
     CommandMetadata(OperationType),
     Health,
+}
+
+impl From<Channel> for ChannelFilter {
+    fn from(value: Channel) -> Self {
+        match value {
+            Channel::EntityMetadata => ChannelFilter::EntityMetadata,
+            Channel::EntityTwinData { fragment_key: _ } => ChannelFilter::EntityTwinData,
+            Channel::Measurement {
+                measurement_type: _,
+            } => ChannelFilter::Measurement,
+            Channel::Event { event_type: _ } => ChannelFilter::Event,
+            Channel::Alarm { alarm_type: _ } => ChannelFilter::Alarm,
+            Channel::Command {
+                operation,
+                cmd_id: _,
+            } => ChannelFilter::Command(operation),
+            Channel::MeasurementMetadata {
+                measurement_type: _,
+            } => ChannelFilter::MeasurementMetadata,
+            Channel::EventMetadata { event_type: _ } => ChannelFilter::EventMetadata,
+            Channel::AlarmMetadata { alarm_type: _ } => ChannelFilter::AlarmMetadata,
+            Channel::CommandMetadata { operation } => ChannelFilter::CommandMetadata(operation),
+            Channel::Health => ChannelFilter::Health,
+        }
+    }
 }
 
 pub struct IdGenerator {

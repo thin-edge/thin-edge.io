@@ -211,7 +211,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut service_monitor_actor =
             MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
 
-        let c8y_mapper_actor = C8yMapperBuilder::try_new(
+        let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
             &mut mqtt_actor,
             &mut c8y_http_proxy_actor,
@@ -228,7 +228,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         let availability_actor = AvailabilityBuilder::new(
             AvailabilityConfig::from(&tedge_config),
-            &mut mqtt_actor,
+            &mut c8y_mapper_actor,
             &mut timer_actor,
         );
 
