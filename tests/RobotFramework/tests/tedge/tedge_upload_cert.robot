@@ -25,7 +25,7 @@ Renew the certificate
     Execute Command    sudo tedge disconnect c8y 
     ${output}=    Execute Command    sudo tedge cert renew    stderr=${True}    stdout=${False}    ignore_exit_code=${True}    
     Should Contain    ${output}    Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud
-    Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
+    Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}      log_output=${False}
     ${output}=    Execute Command    sudo tedge connect c8y    
     Should Contain    ${output}    Connection check is successful.
 
