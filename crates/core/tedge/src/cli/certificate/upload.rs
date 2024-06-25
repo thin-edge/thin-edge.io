@@ -30,6 +30,7 @@ pub struct UploadCertCmd {
     pub path: Utf8PathBuf,
     pub host: HostPort<HTTPS_PORT>,
     pub username: String,
+    pub password: String,
 }
 
 impl Command for UploadCertCmd {
@@ -44,7 +45,11 @@ impl Command for UploadCertCmd {
 
 impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
-        // Prompt for password if not already set
+        if std::env::var("C8YPASS").is_ok() {
+            eprintln!("WARN: Detected use of a deprecated env variable, C8YPASS. Please use C8Y_PASSWORD instead\n");
+        }
+
+        // Prompt if not already set
         let username = if self.username.is_empty() {
             print!("Enter username: ");
             std::io::stdout().flush()?;
@@ -60,10 +65,10 @@ impl UploadCertCmd {
         };
 
         // Read the password from /dev/tty
-        // Unless a password is provided using the `C8YPASS` env var.
-        let password = match std::env::var("C8YPASS") {
-            Ok(password) => password,
-            Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
+        let password = if self.password.is_empty() {
+            rpassword::read_password_from_tty(Some("Enter password: "))?
+        } else {
+            self.password.clone()
         };
 
         let config = TEdgeConfig::try_new(TEdgeConfigLocation::default())?;
