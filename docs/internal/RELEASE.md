@@ -12,7 +12,7 @@ The following steps describes the thin-edge.io release process:
 
    **Notes**
 
-   When this PR is merged, the [autotag](.github/workflows/autotag.yml) workflow will detect the change in official version in the Cargo.toml, and then tag the commit with the new version number. This in turn triggers the [build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml) yet again to build the artifacts with the official version number.
+   When this PR is merged, the [autotag](/.github/workflows/autotag.yml) workflow will detect the change in official version in the Cargo.toml, and then tag the commit with the new version number. This in turn triggers the [build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml) yet again to build the artifacts with the official version number.
 
    During a release, the [build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml) will do the following:
 
