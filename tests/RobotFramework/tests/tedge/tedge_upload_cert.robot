@@ -29,6 +29,24 @@ Renew the certificate
     ${output}=    Execute Command    sudo tedge connect c8y    
     Should Contain    ${output}    Connection check is successful.
 
+Cert upload prompts for username (from stdin)
+    # Note: Use bash process substitution to simulate user input from /dev/stdin
+    [Setup]    Setup With Self-Signed Certificate
+    Execute Command    sudo tedge disconnect c8y
+    ${output}=    Execute Command    sudo tedge cert renew    stderr=${True}    stdout=${False}    ignore_exit_code=${True}
+    Should Contain    ${output}    Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud
+    Execute Command    cmd=sudo env --unset=C8Y_USER C8Y_PASSWORD='${C8Y_CONFIG.password}' bash -c "tedge cert upload c8y < <(echo '${C8Y_CONFIG.username}')"    log_output=${False}
+    ${output}=    Execute Command    sudo tedge connect c8y
+    Should Contain    ${output}    Connection check is successful.
+
+Cert upload supports reading username/password from go-c8y-cli env variables
+    [Setup]    Setup With Self-Signed Certificate
+    Execute Command    sudo tedge disconnect c8y
+    ${output}=    Execute Command    sudo tedge cert renew    stderr=${True}    stdout=${False}    ignore_exit_code=${True}
+    Should Contain    ${output}    Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud
+    Execute Command    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y   log_output=${False}
+    ${output}=    Execute Command    sudo tedge connect c8y
+    Should Contain    ${output}    Connection check is successful.
 
 Renew certificate fails
     [Setup]    Setup Without Certificate
