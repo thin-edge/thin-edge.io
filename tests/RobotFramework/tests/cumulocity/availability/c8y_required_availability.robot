@@ -42,11 +42,11 @@ c8y_RequiredAvailability is not set when disabled
 
     # Main
     Device Should Exist    ${DEVICE_SN}
-    Run Keyword And Expect Error    *    Cumulocity.Device Should Have Fragments    c8y_RequiredAvailability
+    Managed Object Should Not Have Fragments    c8y_RequiredAvailability
 
     # Child
     Register child
-    Run Keyword And Expect Error    *    Cumulocity.Device Should Have Fragments    c8y_RequiredAvailability
+    Managed Object Should Not Have Fragments    c8y_RequiredAvailability
 
 *** Keywords ***
 Test Setup
