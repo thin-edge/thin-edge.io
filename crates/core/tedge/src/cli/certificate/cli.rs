@@ -127,8 +127,9 @@ pub enum UploadCertCli {
     /// The command will upload root certificate to Cumulocity.
     C8y {
         #[clap(long = "user")]
+        #[arg(env = "C8Y_USER", default_value = "")]
         /// Provided username should be a Cumulocity user with tenant management permissions.
-        /// The password is requested on /dev/tty, unless the $C8YPASS env var is set to the user password.
+        /// The username is requested on stdin unless provided by the --user flag, or the C8Y_USER env var.
         username: String,
     },
 }

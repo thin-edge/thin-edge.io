@@ -44,6 +44,21 @@ impl Command for UploadCertCmd {
 
 impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
+        // Prompt for password if not already set
+        let username = if self.username.is_empty() {
+            print!("Enter username: ");
+            std::io::stdout().flush()?;
+            let mut input = String::new();
+            std::io::stdin()
+                .read_line(&mut input)
+                .expect("Invalid username");
+            input
+                .trim_end_matches(|c| c == '\n' || c == '\r')
+                .to_string()
+        } else {
+            self.username.clone()
+        };
+
         // Read the password from /dev/tty
         // Unless a password is provided using the `C8YPASS` env var.
         let password = match std::env::var("C8YPASS") {
@@ -83,16 +98,17 @@ impl UploadCertCmd {
         let tenant_id = get_tenant_id_blocking(
             &client,
             build_get_tenant_id_url(&self.host.to_string())?,
-            &self.username,
+            &username,
             &password,
         )?;
-        self.post_certificate(&client, &tenant_id, &password)
+        self.post_certificate(&client, &tenant_id, &username, &password)
     }
 
     fn post_certificate(
         &self,
         client: &reqwest::blocking::Client,
         tenant_id: &str,
+        username: &str,
         password: &str,
     ) -> Result<(), CertError> {
         let post_url = build_upload_certificate_url(&self.host.to_string(), tenant_id)?;
@@ -107,7 +123,7 @@ impl UploadCertCmd {
         let res = client
             .post(post_url)
             .json(&post_body)
-            .basic_auth(&self.username, Some(password))
+            .basic_auth(username, Some(password))
             .send()
             .map_err(get_webpki_error_from_reqwest)?;
 
