@@ -76,9 +76,9 @@ Once the software modules have been added to the software repository, these can 
 
 Here is an Apama project that you can use to test this plugin.
 
-[project zip](https://github.com/thin-edge/thin-edge.io/raw/main/tests/PySys/plugin_apama/Input/quickstart.zip)
+[project](https://github.com/thin-edge/thin-edge.io_examples/tree/main/StreamingAnalytics/src/quickstart)
 
-Add this project as a software package in the Cumulocity software repository by following the instructions in the previous section.
+Zip this project and add it as a software package in the Cumulocity software repository by following the instructions in the previous section.
 Once added, this Apama project can be installed on any target device.
 You can test if the project was successfully installed by running the following Apama command:
 
