@@ -9,7 +9,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
