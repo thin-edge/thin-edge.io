@@ -1,3 +1,4 @@
+use crate::actor::PublishMessage;
 use crate::availability::actor::AvailabilityActor;
 use crate::availability::AvailabilityConfig;
 use crate::availability::AvailabilityInput;
@@ -19,11 +20,8 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
-use tedge_api::mqtt_topics::EntityFilter;
-use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::TopicFilter;
 
 pub struct AvailabilityBuilder {
     config: AvailabilityConfig,
@@ -34,14 +32,14 @@ pub struct AvailabilityBuilder {
 impl AvailabilityBuilder {
     pub fn new(
         config: AvailabilityConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
+        mqtt: &mut (impl MessageSource<MqttMessage, Vec<ChannelFilter>> + MessageSink<PublishMessage>),
         timer: &mut impl Service<TimerStart, TimerComplete>,
     ) -> Self {
         let mut box_builder: SimpleMessageBoxBuilder<AvailabilityInput, AvailabilityOutput> =
             SimpleMessageBoxBuilder::new("AvailabilityMonitoring", 16);
 
         box_builder.connect_mapped_source(
-            Self::subscriptions(&config.mqtt_schema),
+            Self::channels(),
             mqtt,
             Self::mqtt_message_parser(config.clone()),
         );
@@ -57,13 +55,8 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn subscriptions(mqtt_schema: &MqttSchema) -> TopicFilter {
-        [
-            mqtt_schema.topics(EntityFilter::AnyEntity, ChannelFilter::EntityMetadata),
-            mqtt_schema.topics(EntityFilter::AnyEntity, ChannelFilter::Health),
-        ]
-        .into_iter()
-        .collect()
+    fn channels() -> Vec<ChannelFilter> {
+        vec![ChannelFilter::EntityMetadata, ChannelFilter::Health]
     }
 
     fn mqtt_message_parser(
@@ -91,10 +84,12 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
+    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<PublishMessage> {
         move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(value.into()),
-            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(value.into()),
+            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
+                Some(PublishMessage(value.into()))
+            }
+            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(PublishMessage(value.into())),
         }
     }
 }

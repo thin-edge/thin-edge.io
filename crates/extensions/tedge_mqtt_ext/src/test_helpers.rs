@@ -4,10 +4,11 @@ use mqtt_channel::TopicFilter;
 use std::fmt::Debug;
 use tedge_actors::MessageReceiver;
 
-pub async fn assert_received_contains_str<'a, I>(
-    messages: &mut dyn MessageReceiver<MqttMessage>,
+pub async fn assert_received_contains_str<'a, M, I>(
+    messages: &mut dyn MessageReceiver<M>,
     expected: I,
 ) where
+    M: Into<MqttMessage>,
     I: IntoIterator<Item = (&'a str, &'a str)>,
 {
     for expected_msg in expected.into_iter() {
@@ -18,20 +19,21 @@ pub async fn assert_received_contains_str<'a, I>(
             expected_msg
         );
         let message = message.unwrap();
-        assert_message_contains_str(&message, expected_msg);
+        assert_message_contains_str(&message.into(), expected_msg);
     }
 }
 
-pub async fn assert_received_includes_json<I, S>(
-    messages: &mut dyn MessageReceiver<MqttMessage>,
+pub async fn assert_received_includes_json<M, I, S>(
+    messages: &mut dyn MessageReceiver<M>,
     expected: I,
 ) where
+    M: Into<MqttMessage>,
     I: IntoIterator<Item = (S, serde_json::Value)>,
     S: AsRef<str>,
 {
     for expected_msg in expected.into_iter() {
         let message = messages.recv().await.expect("MQTT channel closed");
-        assert_message_includes_json(&message, expected_msg);
+        assert_message_includes_json(&message.into(), expected_msg);
     }
 }
 

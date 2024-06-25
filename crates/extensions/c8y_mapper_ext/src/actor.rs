@@ -14,6 +14,7 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -32,6 +33,7 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -58,7 +60,22 @@ pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult] : Debug);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishMessage(pub MqttMessage);
+
+impl From<MqttMessage> for PublishMessage {
+    fn from(value: MqttMessage) -> Self {
+        PublishMessage(value)
+    }
+}
+
+impl From<PublishMessage> for MqttMessage {
+    fn from(value: PublishMessage) -> Self {
+        value.0
+    }
+}
+
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult, PublishMessage] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -67,6 +84,7 @@ pub struct C8yMapperActor {
     mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+    message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
 
 #[async_trait]
@@ -116,6 +134,9 @@ impl Actor for C8yMapperActor {
                 C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
                     self.process_download_result(cmd_id, result).await?;
                 }
+                C8yMapperInput::PublishMessage(message) => {
+                    self.mqtt_publisher.send(message.0).await?;
+                }
             }
         }
         Ok(())
@@ -129,6 +150,7 @@ impl C8yMapperActor {
         mqtt_publisher: LoggingSender<MqttMessage>,
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+        message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     ) -> Self {
         Self {
             converter,
@@ -136,6 +158,7 @@ impl C8yMapperActor {
             mqtt_publisher,
             timer_sender,
             bridge_status_messages,
+            message_handlers,
         }
     }
 
@@ -144,6 +167,13 @@ impl C8yMapperActor {
 
         for converted_message in converted_messages.into_iter() {
             self.mqtt_publisher.send(converted_message).await?;
+        }
+        if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
+            if let Some(message_handler) = self.message_handlers.get_mut(&channel.into()) {
+                for sender in message_handler {
+                    sender.send(message.clone()).await?;
+                }
+            }
         }
 
         Ok(())
@@ -314,6 +344,7 @@ pub struct C8yMapperBuilder {
     download_sender: DynSender<IdDownloadRequest>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
+    message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
 
 impl C8yMapperBuilder {
@@ -357,6 +388,8 @@ impl C8yMapperBuilder {
             &bridge_monitor_builder,
         );
 
+        let message_handlers = HashMap::new();
+
         Ok(Self {
             config,
             box_builder,
@@ -367,6 +400,7 @@ impl C8yMapperBuilder {
             download_sender,
             auth_proxy,
             bridge_monitor_builder,
+            message_handlers,
         })
     }
 
@@ -384,6 +418,24 @@ impl C8yMapperBuilder {
 impl RuntimeRequestSink for C8yMapperBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
+    }
+}
+
+impl MessageSource<MqttMessage, Vec<ChannelFilter>> for C8yMapperBuilder {
+    fn connect_sink(&mut self, config: Vec<ChannelFilter>, peer: &impl MessageSink<MqttMessage>) {
+        let sender = LoggingSender::new("Mapper MQTT".into(), peer.get_sender());
+        for channel in config {
+            self.message_handlers
+                .entry(channel)
+                .or_default()
+                .push(sender.clone());
+        }
+    }
+}
+
+impl MessageSink<PublishMessage> for C8yMapperBuilder {
+    fn get_sender(&self) -> DynSender<PublishMessage> {
+        self.box_builder.get_sender().sender_clone()
     }
 }
 
@@ -417,6 +469,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             mqtt_publisher,
             timer_sender,
             bridge_monitor_box,
+            self.message_handlers,
         ))
     }
 }
