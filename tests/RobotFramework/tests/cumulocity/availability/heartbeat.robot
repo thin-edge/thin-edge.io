@@ -7,17 +7,24 @@ Test Tags    theme:c8y    theme:monitoring
 Test Setup    Test Setup
 Test Teardown    Get Logs
 
+
+*** Variables ***
+
+${INTERVAL_CHANGE_TIMEOUT}    120
+${CHECK_INTERVAL}             10
+
 *** Test Cases ***
 
 ### Main Device ###
 Heartbeat is sent
+    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE   timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
     Stop Service    tedge-agent
     Service Health Status Should Be Down    tedge-agent
-    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=UNAVAILABLE
+    Device Should Have Fragment Values    c8y_Availability.status\=UNAVAILABLE   timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
 
     Start Service    tedge-agent
     Service Health Status Should Be Up    tedge-agent
-    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE   timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
 
 Heartbeat is sent based on the custom health topic status
     Execute Command    tedge mqtt pub --retain 'te/device/main//' '{"@health":"device/main/service/foo"}'
@@ -27,7 +34,8 @@ Heartbeat is sent based on the custom health topic status
     Stop Service    tedge-agent
     Service Health Status Should Be Down    tedge-agent
 
-    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Sleep    90s    reason=Wait for the server to have updated the status
+    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE
 
 ### Child Device ###
 Child heartbeat is sent
@@ -36,11 +44,11 @@ Child heartbeat is sent
     Set Device    ${CHILD_XID}
     Device Should Exist    ${CHILD_XID}
 
-    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=UNAVAILABLE
+    Device Should Have Fragment Values    c8y_Availability.status\=UNAVAILABLE    timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
 
     # Fake tedge-agent status is up for the child device
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/tedge-agent/status/health' '{"status":"up"}'
-    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE    timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
 
 Child heartbeat is sent based on the custom health topic status
     # Register a child device
@@ -52,7 +60,8 @@ Child heartbeat is sent based on the custom health topic status
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/bar/status/health' '{"status":"up"}'
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/tedge-agent/status/health' '{"status":"down"}'
 
-    Wait Until Keyword Succeeds    1x    1m 10s    Device Should Have Fragment Values    c8y_Availability.status=AVAILABLE
+    Sleep    90s    reason=Wait for the server to have updated the status
+    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE
 
 
 *** Keywords ***
