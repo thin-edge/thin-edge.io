@@ -6,7 +6,7 @@ description: Monitoring the availability of devices
 
 # Availability Monitoring
 
-%%te%% fully supports the [Cumulocity IoT's device availability monitoring feature](https://cumulocity.com/docs/device-management-application/monitoring-and-controlling-devices/#availability) by setting the required interval for devices and sending heartbeats to **Cumulotity IoT** periodically.
+%%te%% fully supports the [Cumulocity IoT's device availability monitoring feature](https://cumulocity.com/docs/device-management-application/monitoring-and-controlling-devices/#availability) by setting the required interval for devices and sending heartbeats to **Cumulocity IoT** periodically.
 
 
 ## Set the required availability interval
@@ -31,16 +31,16 @@ For example, the device `device/my-device//` is considered "available" when its 
 tedge mqtt pub te/device/my-device/service/tedge-agent/status/health '{"status":"up"}' -q 2 -r
 ```
 
-To change the health endpoint from the default to a custom value, include `@health` in the entity registration message.
-`@health` should have a valid [4-segment identifier](../../contribute/design/mqtt-topic-design.md).
+To change the health endpoint from the default to a custom value, include the `@health` property in the entity registration message.
+The `@health` value should have a valid [4-segment identifier](../../contribute/design/mqtt-topic-design.md).
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub te/device/my-device// '{"@health":"device/my-device/service/foo", "@type":"child-device"}' -q 2 -r
 ```
 
-Then, if the status of the new endpoint is reported as `up`, the device is considered "available".
-If the status has other values than `up`, the device is considered "unavailable",
-and no heartbeat message will be sent to the tenant unless the status changes to `up`.
+Then, if the `status` of the new endpoint is reported as `up`, the device is considered "available", and a heartbeat signal will be sent to Cumulocity IoT.
+If the `status` has any other value, then the device is considered "unavailable", and the heartbeat message will not be sent.
+
 ```sh te2mqtt formats=v1
 tedge mqtt pub te/device/my-device/service/foo/status/health '{"status":"up"}' -q 2 -r
 ```
@@ -53,4 +53,4 @@ By default, the feature is enabled. If you want to disable it, use the `tedge` c
 sudo tedge config set c8y.availability.enable false
 ```
 
-If it's disabled, the required availability interval and periodic heartbeat messages won't be sent to your Cumulocity IoT tenant.
+If it's disabled, the required availability interval and periodic heartbeat messages won't be sent to Cumulocity IoT.
