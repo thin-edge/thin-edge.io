@@ -22,6 +22,33 @@ This macro outputs a few different types:
   with [`FromStr`](std::str::FromStr) and [`Display`](std::fmt::Display)
   implementations.
 
+# Traits
+## `AppendRemoveItem` trait
+
+Some `tedge_config` fields, like `TemplatesSet`, are array-type. Thanks to that, the new values can be added or removed from the existing items. To make that work, all types used in `tedge_config` must implement the `AppendRemoveItem` trait that contains two functions: `append` and `remove`. For single value types, it must imitate the `tedge config set/unset` behavior. For array types, user should be able to add or remove values from an array. It should have been implemented according to the used container type. Trait implementation looks as follows:
+
+```rust
+pub trait AppendRemoveItem {
+    type Item;
+
+    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+
+    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+}
+
+impl<T> AppendRemoveItem for T {
+    type Item = T;
+
+    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+
+    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+```
+
 # Attributes
 ## `#[tedge_config(...)]` attributes
 
