@@ -55,13 +55,18 @@ impl MqttActorBuilder {
     pub(crate) fn build_actor(self) -> MqttActor {
         let mut combined_topic_filter = TopicFilter::empty();
         for (topic_filter, _) in self.subscriber_addresses.iter() {
-            for pattern in topic_filter.patterns() {
-                tracing::info!(target: "MQTT sub", "{pattern}");
-            }
             combined_topic_filter.add_all(topic_filter.to_owned());
         }
-        let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
 
+        let removed = combined_topic_filter.remove_overlapping_patterns();
+        for pattern in combined_topic_filter.patterns() {
+            tracing::info!(target: "MQTT sub", "{pattern}");
+        }
+        for pattern in removed {
+            tracing::warn!(target: "MQTT sub", "ignoring overlapping subscription to {pattern}");
+        }
+
+        let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
         MqttActor::new(mqtt_config, self.input_receiver, self.subscriber_addresses)
     }
 }
