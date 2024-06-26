@@ -9,7 +9,7 @@ description: Monitoring the availability of devices
 %%te%% fully supports the [Cumulocity IoT's device availability monitoring feature](https://cumulocity.com/docs/device-management-application/monitoring-and-controlling-devices/#availability) 
 allowing you to set the desired required interval for the devices
 and also sending heartbeats to **Cumulocity IoT** periodically when a device is deemed available.
-Thin-edge considers a device as available when the `tedge-agent` service on it is up and running,
+%%te%% considers a device as available when the `tedge-agent` service on it is up and running,
 monitored using its service health endpoint.
 The health endpoint can be changed from the `tedge-agent` to any other entity's health endpoint as well.
 
