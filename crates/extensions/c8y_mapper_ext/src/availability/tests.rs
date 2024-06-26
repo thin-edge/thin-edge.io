@@ -174,6 +174,39 @@ async fn main_device_sends_heartbeat_based_on_custom_endpoint() {
 }
 
 #[tokio::test]
+async fn only_one_timer_created_when_registration_message_indicates_same_health_endpoint() {
+    let config = get_availability_config(10);
+    let handlers = spawn_availability_actor(config).await;
+    let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
+    let mut timer = handlers.timer_box;
+
+    mqtt.skip(1).await; // SmartREST 117
+
+    // Send the registration messages with the same health endpoint
+    let registration_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main//"),
+        json!({"@id": "test-device", "@type": "device"}).to_string(),
+    );
+    mqtt.send(registration_message).await.unwrap();
+
+    let registration_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main//"),
+        json!({"@id": "test-device", "@type": "device", "@health": "device/main/service/tedge-agent"}).to_string(),
+    );
+    mqtt.send(registration_message).await.unwrap();
+
+    let registration_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main//"),
+        json!({"@id": "test-device", "@type": "device", "foo": "bar"}).to_string(),
+    );
+    mqtt.send(registration_message).await.unwrap();
+
+    // Only one timer created
+    assert!(timer.recv().with_timeout(TEST_TIMEOUT_MS).await.is_ok());
+    assert!(timer.recv().with_timeout(TEST_TIMEOUT_MS).await.is_err());
+}
+
+#[tokio::test]
 async fn child_device_sends_heartbeat() {
     let config = get_availability_config(10);
     let handlers = spawn_availability_actor(config).await;
