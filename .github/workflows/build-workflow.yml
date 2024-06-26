@@ -54,12 +54,14 @@ jobs:
           - armv5te-unknown-linux-musleabi
           - x86_64-unknown-linux-musl
           - i686-unknown-linux-musl
+          - riscv64gc-unknown-linux-gnu
+          - aarch64-apple-darwin
           - x86_64-apple-darwin
         mode:
           - --release
 
         rust_channel:
-          - "1.70"
+          - "1.78"
 
         include:
           - target: aarch64-unknown-linux-musl
@@ -90,19 +92,10 @@ jobs:
             cargo_options: --no-run
 
           - target: riscv64gc-unknown-linux-gnu
-            mode: '--release'
-            # Using < 1.73 causes a segmentation fault when running a binary built with the --release flag
-            # Rust 1.73 includes both an updated llvm version and updated binutils which is like to have improved compatibility
-            # See: https://github.com/rust-lang/rust/blob/master/RELEASES.md#version-1730-2023-10-05
-            # There is a comment in the https://github.com/rust-lang/rust/pull/114048/ which refers to riscv64 support:
-            # * "Updated dist-riscv64-linux to use binutils 2.36 in order to recognize the zicsr feature, which is no longer part of the base ISA."
-            rust_channel: "1.73" 
             host_os: ubuntu-22.04
             cargo_options: --no-run
 
           - target: aarch64-apple-darwin
-            mode: --release
-            rust_channel: "1.72" # ahash uses "stdsimd" feature which was stabilized in 1.72, https://github.com/tkaitchuck/aHash/issues/195
             host_os: macos-14
             cargo_options: --no-run
 
