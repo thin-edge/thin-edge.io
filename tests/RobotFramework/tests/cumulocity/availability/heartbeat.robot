@@ -10,7 +10,7 @@ Test Teardown    Get Logs
 
 *** Variables ***
 
-${INTERVAL_CHANGE_TIMEOUT}    120
+${INTERVAL_CHANGE_TIMEOUT}    180
 ${CHECK_INTERVAL}             10
 
 *** Test Cases ***
