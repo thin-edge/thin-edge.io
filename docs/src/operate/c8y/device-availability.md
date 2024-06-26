@@ -41,16 +41,16 @@ tedge mqtt pub te/device/my-device/service/tedge-agent/status/health '{"status":
 ```
 
 To change the health endpoint from the default to a custom value, include the `@health` property in the entity registration message.
-The The `@health` value value should be valid [entity topic identifier](../../contribute/design/mqtt-topic-design.md).
+The `@health` value should be a valid [entity topic identifier](../../contribute/design/mqtt-topic-design.md).
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub te/device/my-device// '{"@health":"device/my-device/service/foo", "@type":"child-device"}' -q 2 -r
 ```
 
 If the status of the new endpoint is reported as `up`, the device is considered "available",
-and a heartbeat signal is sent to Cumulocity IoT
-If the status has values other than `up`, the device is considered "unavailable",
-and no heartbeat message are sent to Cumulocity until the status changes to `up`.
+and a heartbeat signal is sent to Cumulocity IoT.
+If the status has any other value, the device is considered "unavailable",
+and no heartbeat message are sent to Cumulocity until the status changes to `up` again.
 
 ## Disable the availability monitoring
 
@@ -62,4 +62,3 @@ sudo tedge config set c8y.availability.enable false
 ```
 
 When disabled, the required availability interval and periodic heartbeat messages aren't sent to Cumulocity IoT.
-
