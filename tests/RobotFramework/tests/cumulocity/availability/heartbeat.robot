@@ -12,11 +12,15 @@ Test Teardown    Get Logs
 
 ${INTERVAL_CHANGE_TIMEOUT}    180
 ${CHECK_INTERVAL}             10
+${HEARTBEAT_INTERVAL}         60
 
 *** Test Cases ***
 
 ### Main Device ###
 Heartbeat is sent
+    [Documentation]    Full end-to-end test which will check the Cumulocity IoT behaviour to sending the heartbeat signal
+        ...            The tests therefore relies on the backend availability service which then sets the c8y_Availability fragment
+        ...            based on the last received telemetry data.
     Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE   timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
     Stop Service    tedge-agent
     Service Health Status Should Be Down    tedge-agent
@@ -26,16 +30,25 @@ Heartbeat is sent
     Service Health Status Should Be Up    tedge-agent
     Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE   timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
 
+#
+# Note about remaining test cases
+# The remaining test cases do not use the platform to assert whether the availability is set or not
+# as this either takes too long, and is too flakey as the performance of the backend service which sets
+# the c8y_Availability fragments varies greatly (as it is designed for longer intervals, e.g. ~30/60 mins)
+# Instead, the test cases check if the heartbeat signal is being sent for the given devices which does not
+# rely on any additional platform checks.
+#
+
 Heartbeat is sent based on the custom health topic status
-    Execute Command    tedge mqtt pub --retain 'te/device/main//' '{"@health":"device/main/service/foo"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/main//' '{"@type":"device","@health":"device/main/service/foo"}'
     Execute Command    tedge mqtt pub --retain 'te/device/main/service/foo/status/health' '{"status":"up"}'
+    ${existing_count}=    Should Have Heartbeat Message Count    ${DEVICE_SN}    minimum=1
 
     # Stop tedge-agent to make sure the heartbeat is not sent based on the tedge-agent status
     Stop Service    tedge-agent
     Service Health Status Should Be Down    tedge-agent
+    ${existing_count}=    Should Have Heartbeat Message Count    ${DEVICE_SN}    minimum=${existing_count + 1}    timeout=${HEARTBEAT_INTERVAL}
 
-    Sleep    90s    reason=Wait for the server to have updated the status
-    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE
 
 ### Child Device ###
 Child heartbeat is sent
@@ -44,11 +57,11 @@ Child heartbeat is sent
     Set Device    ${CHILD_XID}
     Device Should Exist    ${CHILD_XID}
 
-    Device Should Have Fragment Values    c8y_Availability.status\=UNAVAILABLE    timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
+    ${existing_count}=    Should Have Heartbeat Message Count    ${CHILD_XID}    minimum=0    maximum=0
 
     # Fake tedge-agent status is up for the child device
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/tedge-agent/status/health' '{"status":"up"}'
-    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE    timeout=${INTERVAL_CHANGE_TIMEOUT}    wait=${CHECK_INTERVAL}
+    Should Have Heartbeat Message Count    ${CHILD_XID}    minimum=${existing_count + 1}    timeout=${HEARTBEAT_INTERVAL}
 
 Child heartbeat is sent based on the custom health topic status
     # Register a child device
@@ -56,12 +69,13 @@ Child heartbeat is sent based on the custom health topic status
     Set Device    ${CHILD_XID}
     Device Should Exist    ${CHILD_XID}
 
+    ${existing_count}=    Should Have Heartbeat Message Count    ${CHILD_XID}    minimum=0    maximum=0
+
     # The custom health endpoint is up but tedge-agent is down
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/bar/status/health' '{"status":"up"}'
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/tedge-agent/status/health' '{"status":"down"}'
 
-    Sleep    90s    reason=Wait for the server to have updated the status
-    Device Should Have Fragment Values    c8y_Availability.status\=AVAILABLE
+    Should Have Heartbeat Message Count    ${CHILD_XID}    minimum=${existing_count + 1}    timeout=${HEARTBEAT_INTERVAL}
 
 
 *** Keywords ***
@@ -79,3 +93,9 @@ Test Setup
     Execute Command    ./bootstrap.sh --no-install
 
     Device Should Exist    ${DEVICE_SN}
+
+Should Have Heartbeat Message Count
+    [Arguments]    ${SERIAL}    ${minimum}=${None}    ${maximum}=${None}    ${timeout}=30
+    ${messages}=    Should Have MQTT Messages    c8y/inventory/managedObjects/update/${SERIAL}    minimum=${minimum}    maximum=${maximum}    message_pattern=^\{\}$    timeout=${timeout}
+    ${count}=    Get Length    ${messages}
+    RETURN    ${count}
