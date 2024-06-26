@@ -226,11 +226,15 @@ impl TEdgeComponent for CumulocityMapper {
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
         let old_to_new_agent_adapter = OldAgentAdapter::builder(&mut mqtt_actor);
 
-        let availability_actor = AvailabilityBuilder::new(
-            AvailabilityConfig::from(&tedge_config),
-            &mut c8y_mapper_actor,
-            &mut timer_actor,
-        );
+        let availability_actor = if tedge_config.c8y.availability.enable {
+            Some(AvailabilityBuilder::new(
+                AvailabilityConfig::from(&tedge_config),
+                &mut c8y_mapper_actor,
+                &mut timer_actor,
+            ))
+        } else {
+            None
+        };
 
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(jwt_actor).await?;
@@ -244,7 +248,7 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
         runtime.spawn(old_to_new_agent_adapter).await?;
-        if tedge_config.c8y.availability.enable {
+        if let Some(availability_actor) = availability_actor {
             runtime.spawn(availability_actor).await?;
         }
         runtime.run_to_completion().await?;

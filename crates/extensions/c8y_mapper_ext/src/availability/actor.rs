@@ -45,6 +45,7 @@ enum RegistrationResult {
     New,
     Update,
     Error(String),
+    Skip(String),
 }
 
 pub struct AvailabilityActor {
@@ -132,9 +133,8 @@ impl AvailabilityActor {
                 RegistrationResult::New | RegistrationResult::Update => {
                     self.start_heartbeat_timer(source).await?;
                 }
-                RegistrationResult::Error(reason) => {
-                    warn!(reason)
-                }
+                RegistrationResult::Error(reason) => warn!(reason),
+                RegistrationResult::Skip(reason) => debug!(reason),
             },
             EntityType::ChildDevice => match self.update_device_service_pair(message) {
                 RegistrationResult::New => {
@@ -146,6 +146,7 @@ impl AvailabilityActor {
                     self.start_heartbeat_timer(source).await?;
                 }
                 RegistrationResult::Error(reason) => warn!(reason),
+                RegistrationResult::Skip(reason) => debug!(reason),
             },
             EntityType::Service => {}
         }
@@ -176,18 +177,27 @@ impl AvailabilityActor {
         };
 
         match result {
-            Ok(health_topic_id) => {
-                match registration_message.external_id.clone() {
-                    None => RegistrationResult::Error(format!("'@id' field is missing. Cannot start availability monitoring for the device '{source}'")),
-                    Some(external_id) => {
-                        match self.device_ids_map
-                            .insert(source.clone(), DeviceIds { health_topic_id, external_id }) {
-                            None => RegistrationResult::New,
-                            Some(_) => RegistrationResult::Update,
+            Ok(health_topic_id) => match registration_message.external_id.clone() {
+                None => RegistrationResult::Skip(format!("Registration message is skipped since '@id' is missing in the payload. source: '{source}', {registration_message:?}")),
+                Some(external_id) => {
+                    if let Some(ids) = self.device_ids_map.get(source) {
+                        if ids.health_topic_id == health_topic_id {
+                            return RegistrationResult::Skip(format!("Registration message is skipped since no health endpoint change is detected. source: '{source}', {registration_message:?}"))
                         }
                     }
+
+                    match self.device_ids_map.insert(
+                        source.clone(),
+                        DeviceIds {
+                            health_topic_id,
+                            external_id,
+                        },
+                    ) {
+                        None => RegistrationResult::New,
+                        Some(_) => RegistrationResult::Update,
+                    }
                 }
-            }
+            },
             Err(err) => RegistrationResult::Error(err),
         }
     }
