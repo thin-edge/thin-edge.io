@@ -318,6 +318,10 @@ impl TEdgeTomlVersion {
     }
 }
 
+#[diagnostic::on_unimplemented(
+    message = "To use `{Self}` as a tedge config type, it must implement the `AppendRemoveItem` trait",
+    note = "This can be done using impl_append_remove_for_single_value! macro"
+)]
 pub trait AppendRemoveItem {
     type Item;
 
