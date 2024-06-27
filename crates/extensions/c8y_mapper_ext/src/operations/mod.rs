@@ -24,7 +24,9 @@ use c8y_api::http_proxy::C8yEndPoint;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
@@ -66,7 +68,6 @@ mod upload;
 /// concurrently, so we need an object separate from [`CumulocityConverter`], where many `&mut self`
 /// methods prevent us from concurrent data access. Instead, this object has all necessary data for
 /// operation handling, and `&self` methods so it can be run concurrently.
-#[derive(Clone)]
 pub struct OperationHandler {
     pub capabilities: Capabilities,
     pub auto_log_upload: AutoLogUpload,
@@ -84,6 +85,8 @@ pub struct OperationHandler {
     pub downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     pub uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     pub mqtt_publisher: LoggingSender<MqttMessage>,
+
+    pub running_operations: Arc<Mutex<HashMap<Arc<str>, RunningOperation>>>,
 }
 
 impl OperationHandler {
@@ -94,73 +97,156 @@ impl OperationHandler {
         cmd_id: Arc<str>,
         message: MqttMessage,
     ) {
-        let handler = self.clone();
-        let external_id = entity.external_id.clone();
-        tokio::spawn(async move {
-            let res = match operation {
-                OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
+        let message = OperationMessage {
+            operation,
+            entity,
+            cmd_id: cmd_id.clone(),
+            message,
+        };
 
-                OperationType::Restart => {
-                    handler
-                        .publish_restart_operation_status(entity, &cmd_id, message)
-                        .await
-                }
-                OperationType::SoftwareList => {
-                    handler
-                        .publish_software_list(entity, &cmd_id, &message)
-                        .await
-                }
-                OperationType::SoftwareUpdate => {
-                    handler
-                        .publish_software_update_status(entity, &cmd_id, &message)
-                        .await
-                }
-                OperationType::LogUpload => {
-                    handler
-                        .handle_log_upload_state_change(entity, &cmd_id, &message)
-                        .await
-                }
-                OperationType::ConfigSnapshot => {
-                    handler
-                        .handle_config_snapshot_state_change(entity, &cmd_id, &message)
-                        .await
-                }
-                OperationType::ConfigUpdate => {
-                    handler
-                        .handle_config_update_state_change(entity, &cmd_id, &message)
-                        .await
-                }
-                OperationType::FirmwareUpdate => {
-                    handler
-                        .handle_firmware_update_state_change(entity, &cmd_id, &message)
-                        .await
-                }
-            };
+        let topic: Arc<str> = message.message.topic.name.clone().into();
+        let running_operation = {
+            let mut lock = self.running_operations.lock().unwrap();
+            let op = lock.get(&topic);
 
-            let mut mqtt_publisher = handler.mqtt_publisher.clone();
-            match res {
-                // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
-                Ok((messages, Some(command))) if !messages.is_empty() => {
-                    if let Err(e) = handler
-                        .upload_operation_log(&external_id, &cmd_id, &operation, command)
-                        .await
-                    {
-                        error!("failed to upload operation logs: {e}");
-                    }
+            if let Some(running_operation) = op {
+                // task already terminated
+                if let Err(e) = running_operation.tx.send(message) {
+                    error!("couldnt send message: {e}");
+                    let running_operation = lock.remove(&topic).unwrap();
+                    Some(running_operation)
+                } else {
+                    None
+                }
+            } else {
+                let handler = self.clone();
+                let running_operation = RunningOperation::spawn(message, handler);
 
-                    for message in messages {
-                        mqtt_publisher.send(message).await.unwrap();
-                    }
-                }
-                Ok((messages, _)) => {
-                    for message in messages {
-                        mqtt_publisher.send(message).await.unwrap();
-                    }
-                }
-                Err(e) => error!("{e}"),
+                lock.insert(topic, running_operation);
+                None
             }
-        });
+        };
+
+        if let Some(running_operation) = running_operation {
+            let join_result = running_operation.handle.await;
+            error!("handle: {join_result:?}");
+        }
     }
+}
+
+pub struct RunningOperation {
+    handle: tokio::task::JoinHandle<()>,
+    tx: tokio::sync::mpsc::UnboundedSender<OperationMessage>,
+}
+
+impl RunningOperation {
+    /// Spawns a task that handles the operation.
+    ///
+    /// The task handles a single operation with a given command id, and via a channel it receives
+    /// operation state changes (if any) to drive an operation to completion.
+    fn spawn(message: OperationMessage, handler: Arc<OperationHandler>) -> Self {
+        let cmd_id = message.cmd_id.clone();
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        tx.send(message).unwrap();
+
+        let handle = tokio::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                if message.cmd_id != cmd_id {
+                    panic!("operation payload message sent to wrong task");
+                }
+
+                let OperationMessage {
+                    entity,
+                    cmd_id,
+                    message,
+                    operation,
+                } = message;
+                let external_id = entity.external_id.clone();
+
+                let command_topic = message.topic.clone();
+                let res = match operation {
+                    OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
+
+                    OperationType::Restart => {
+                        handler
+                            .publish_restart_operation_status(entity, &cmd_id, message)
+                            .await
+                    }
+                    OperationType::SoftwareList => {
+                        handler
+                            .publish_software_list(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::SoftwareUpdate => {
+                        handler
+                            .publish_software_update_status(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::LogUpload => {
+                        handler
+                            .handle_log_upload_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::ConfigSnapshot => {
+                        handler
+                            .handle_config_snapshot_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::ConfigUpdate => {
+                        handler
+                            .handle_config_update_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::FirmwareUpdate => {
+                        handler
+                            .handle_firmware_update_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                };
+
+                let mut mqtt_publisher = handler.mqtt_publisher.clone();
+                match res {
+                    // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
+                    Ok((messages, command)) => {
+                        if let Some(command) = command {
+                            if let Err(e) = handler
+                                .upload_operation_log(&external_id, &cmd_id, &operation, command)
+                                .await
+                            {
+                                error!("failed to upload operation logs: {e}");
+                            }
+                        }
+
+                        for message in messages {
+                            if message.retain
+                                && message.payload_bytes().is_empty()
+                                && message.topic == command_topic
+                            {
+                                rx.close();
+                            }
+                            mqtt_publisher.send(message).await.unwrap();
+                        }
+                    }
+                    Err(e) => error!("{e}"),
+                }
+            }
+            handler.running_operations.lock().unwrap().remove(&cmd_id);
+        });
+
+        Self { handle, tx }
+    }
+}
+
+/// An MQTT message that contains an operation payload.
+///
+/// These are MQTT messages that contain operation payloads. These messages need to be passed to
+/// tasks that handle a given operation to advance the operation and eventually complete it.
+struct OperationMessage {
+    operation: OperationType,
+    entity: Entity,
+    cmd_id: Arc<str>,
+    message: MqttMessage,
 }
 
 /// A subset of entity-related information necessary to handle an operation.

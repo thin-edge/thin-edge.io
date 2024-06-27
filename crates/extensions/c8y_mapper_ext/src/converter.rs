@@ -263,6 +263,7 @@ impl CumulocityConverter {
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
             http_proxy: http_proxy.clone(),
+            running_operations: Default::default(),
         });
 
         Ok(CumulocityConverter {
