@@ -5,11 +5,11 @@ use camino::Utf8PathBuf;
 use reqwest::StatusCode;
 use reqwest::Url;
 use std::io::prelude::*;
+use std::io::ErrorKind;
 use std::path::Path;
 use tedge_config::HostPort;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_config::HTTPS_PORT;
+use tedge_utils::certificates::read_trust_store;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
@@ -30,6 +30,7 @@ pub struct UploadCertCmd {
     pub path: Utf8PathBuf,
     pub host: HostPort<HTTPS_PORT>,
     pub username: String,
+    pub root_cert_path: Utf8PathBuf,
 }
 
 impl Command for UploadCertCmd {
@@ -51,30 +52,21 @@ impl UploadCertCmd {
             Err(_) => rpassword::read_password_from_tty(Some("Enter password: "))?,
         };
 
-        let config = TEdgeConfig::try_new(TEdgeConfigLocation::default())?;
-        let root_cert = &config.c8y.root_cert_path;
-        let client_builder = reqwest::blocking::Client::builder();
-        let res = match std::fs::metadata(root_cert) {
-            Ok(res) => res,
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => {
-                    return Err(CertError::RootCertificatePathDoesNotExist(
-                        root_cert.to_string(),
-                    ))
+        let mut client_builder = reqwest::blocking::Client::builder();
+        if let Err(e) = std::fs::metadata(&self.root_cert_path) {
+            let e = match e.kind() {
+                ErrorKind::NotFound => {
+                    CertError::RootCertificatePathDoesNotExist(self.root_cert_path.to_string())
                 }
-                e => return Err(CertError::IoError(e.into())),
-            },
-        };
+                _ => CertError::IoError(e),
+            };
+            return Err(e);
+        }
 
-        let client = match res.is_file() {
-            true => {
-                let cert = std::fs::read(root_cert);
-
-                let cert_pem = reqwest::Certificate::from_pem(&cert?)?;
-                client_builder.add_root_certificate(cert_pem).build()?
-            }
-            false => client_builder.build()?,
-        };
+        for certificate in read_trust_store(&self.root_cert_path)? {
+            client_builder = client_builder.add_root_certificate(certificate);
+        }
+        let client = client_builder.build()?;
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
