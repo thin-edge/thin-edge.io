@@ -1,12 +1,16 @@
-use c8y_api::{json_c8y::C8yUpdateSoftwareListResponse, smartrest};
-use tedge_api::{workflow::GenericCommandState, CommandStatus, SoftwareListCommand};
+use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::smartrest;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::CommandStatus;
+use tedge_api::SoftwareListCommand;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 
 use crate::error::ConversionError;
 
-use super::{Entity, OperationHandler};
+use super::Entity;
+use super::OperationHandler;
 
 const SOFTWARE_LIST_CHUNK_SIZE: usize = 100;
 

@@ -1,10 +1,14 @@
-use c8y_api::smartrest::{self, smartrest_serializer::CumulocitySupportedOperations};
-use tedge_api::{workflow::GenericCommandState, CommandStatus, RestartCommand};
+use c8y_api::smartrest;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::CommandStatus;
+use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
 
 use crate::error::ConversionError;
 
-use super::{Entity, OperationHandler};
+use super::Entity;
+use super::OperationHandler;
 
 impl OperationHandler {
     pub async fn publish_restart_operation_status(
