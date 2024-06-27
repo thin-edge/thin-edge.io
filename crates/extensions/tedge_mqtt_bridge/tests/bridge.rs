@@ -521,6 +521,7 @@ fn get_rumqttd_config(port: u16) -> Config {
         max_inflight_count: 200,
         auth: None,
         dynamic_filters: false,
+        external_auth: None,
     };
 
     let server_config = ServerSettings {
@@ -541,8 +542,8 @@ fn get_rumqttd_config(port: u16) -> Config {
         id: 0,
         router: router_config,
         cluster: None,
-        console: console_settings,
-        v4: servers,
+        console: Some(console_settings),
+        v4: Some(servers),
         ws: None,
         v5: None,
         bridge: None,
