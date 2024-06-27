@@ -262,6 +262,7 @@ impl CumulocityConverter {
             c8y_endpoint: c8y_endpoint.clone(),
             auth_proxy: auth_proxy.clone(),
             http_proxy: http_proxy.clone(),
+            running_operations: Default::default(),
         });
 
         Ok(CumulocityConverter {
@@ -1157,26 +1158,19 @@ impl CumulocityConverter {
                 }
             }
 
-            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
+            Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
 
                 let entity = self.entity_store.try_get(&source)?;
                 let external_id = entity.external_id.clone();
-                let entity = operations::Entity {
+                let entity = operations::EntityTarget {
                     topic_id: entity.topic_id.clone(),
                     external_id: external_id.clone(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(&entity.topic_id)?,
                 };
 
-                self.operation_handler
-                    .handle_operation(
-                        operation.clone(),
-                        entity,
-                        cmd_id.as_str().into(),
-                        message.clone(),
-                    )
-                    .await;
+                self.operation_handler.handle(entity, message.clone()).await;
                 Ok(vec![])
             }
 

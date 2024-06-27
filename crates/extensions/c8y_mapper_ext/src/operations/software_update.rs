@@ -1,18 +1,21 @@
-use c8y_api::smartrest::{self, smartrest_serializer::CumulocitySupportedOperations};
-use tedge_api::{
-    mqtt_topics::EntityTopicId, workflow::GenericCommandState, CommandStatus, SoftwareListCommand,
-    SoftwareUpdateCommand,
-};
+use c8y_api::smartrest;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::CommandStatus;
+use tedge_api::SoftwareListCommand;
+use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::MqttMessage;
 
 use crate::error::ConversionError;
 
-use super::{Entity, OperationHandler};
+use super::EntityTarget;
+use super::OperationHandler;
 
 impl OperationHandler {
     pub async fn publish_software_update_status(
         &self,
-        target: Entity,
+        target: EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {

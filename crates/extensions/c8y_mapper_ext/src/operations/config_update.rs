@@ -25,7 +25,7 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
-use super::Entity;
+use super::EntityTarget;
 use super::OperationHandler;
 
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
@@ -50,7 +50,7 @@ impl OperationHandler {
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_config_update_state_change(
         &self,
-        target: Entity,
+        target: EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {

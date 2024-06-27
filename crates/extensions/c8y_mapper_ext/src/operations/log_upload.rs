@@ -1,4 +1,4 @@
-use super::Entity;
+use super::EntityTarget;
 use super::OperationHandler;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
@@ -89,7 +89,7 @@ impl OperationHandler {
     /// - "failed", it converts the message to SmartREST "Failed" with that event URL.
     pub async fn handle_log_upload_state_change(
         &self,
-        target: Entity,
+        target: EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
