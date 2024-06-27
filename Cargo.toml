@@ -116,7 +116,8 @@ reqwest = { version = "0.11", default-features = false }
 rpassword = "5.0"
 rstest = "0.16.0"
 rumqttc = "0.23"
-rumqttd = "0.18"
+# TODO: used git rev version to fix `unknown feature stdsimd` error: replace with 0.20 version after the release
+rumqttd = { git = "https://github.com/bytebeamio/rumqtt", rev = "0767080715699c34d8fe90b843716ba5ec12f8b9" }
 rustls = "0.21.11"
 rustls-pemfile = "1.0.1"
 serde = "1.0"
