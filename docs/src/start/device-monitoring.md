@@ -50,13 +50,13 @@ You can further customize the default collectd configuration by editing the foll
 /etc/collectd/collectd.conf
 ```
 
-Details about collectd plugins and their configuration can be viewed directly from the [collectd documentation](https://collectd.org/documentation/manpages/collectd.conf.5.shtml).
+Details about collectd plugins and their configuration can be viewed directly from the [collectd documentation](https://collectd.org/documentation/manpages/collectd.conf.html).
 
 However keep in mind the following points when editing the file:
 
 1. __MQTT must be enabled__.
    * %%te%% expects the `collectd` metrics to be published on the local MQTT bus.
-     Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.5.shtml#plugin_mqtt).
+     Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.html#plugin-mqtt).
    * The MQTT plugin is available on most distribution of `collectd`, but this is not the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
      See [https://github.com/collectd/collectd](https://github.com/collectd/collectd) for details.

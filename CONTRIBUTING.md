@@ -16,7 +16,7 @@ If you are interested in contributing documentation, please note the following:
 - Doc issues are labeled with the `doc` label.
 - The thin-edge.io docs content is in the `docs/src/` directory.
 
-[How to build from source.](./docs/src/BUILDING.md)
+[How to build from source.](https://thin-edge.github.io/thin-edge.io/contribute/build/)
 
 <br/>
 <br/>

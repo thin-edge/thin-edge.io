@@ -417,5 +417,5 @@ That example exists immediately if one of the commands fails.
 
 Additional information and examples can be found from the following references:
 
-- [Package Manager Plugin API Specification](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/software-management-plugin-api.md).
+- [Package Manager Plugin API Specification](../references/software-management-plugin-api.md).
 - [tedge-apt-plugin (Debian APT Plugin)](https://github.com/thin-edge/thin-edge.io/tree/main/plugins/tedge_apt_plugin) written in Rust.

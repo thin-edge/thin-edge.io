@@ -31,7 +31,7 @@ The general test suite flow is as follows:
 
 The ssh adapter uses an existing device and uses a SSH connect to run the test suite against it. In this setup, you are responsible for providing a device, container, server before the test can start.
 
-The general test suit flow is very similar to the above [Docker adapter](./SETUP.md#docker-adapter) flow, however the device creation and destroy steps are skipped.
+The general test suit flow is very similar to the above [Docker adapter](#docker-adapter) flow, however the device creation and destroy steps are skipped.
 
 The core thin-edge.io team uses some physical devices setup in a test lab to facilitate testing on real hardware. These devices are not available for public use, however make up part of the automated and exploratory testing.
 
@@ -68,11 +68,11 @@ It is assumed that you are running on either MacOS or Linux. If you are a Window
     sudo apt-get install python3 python3-pip python3-venv
     ```
 
-3. Install docker and docker-compose using [this guide](../../docs/src/developer/INSTALLING_DOCKER.md)
+3. Install docker and docker-compose using [this guide](https://thin-edge.github.io/thin-edge.io/contribute/setting-up-docker/)
 
 ### Option 2: Using the project's dev container
 
-Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER.md) for more details.
+Checkout the [dev container instructions](https://thin-edge.github.io/thin-edge.io/contribute/vscode-dev-containers/) for more details.
 
 ## Running the tests
 
