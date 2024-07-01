@@ -622,6 +622,10 @@ impl Display for Channel {
 }
 
 impl Channel {
+    pub fn is_entity_metadata(&self) -> bool {
+        matches!(self, Channel::EntityMetadata)
+    }
+
     pub fn is_measurement(&self) -> bool {
         matches!(self, Channel::Measurement { .. })
     }
@@ -740,8 +744,8 @@ pub enum ChannelFilter {
     Health,
 }
 
-impl From<Channel> for ChannelFilter {
-    fn from(value: Channel) -> Self {
+impl From<&Channel> for ChannelFilter {
+    fn from(value: &Channel) -> Self {
         match value {
             Channel::EntityMetadata => ChannelFilter::EntityMetadata,
             Channel::EntityTwinData { fragment_key: _ } => ChannelFilter::EntityTwinData,
@@ -753,13 +757,15 @@ impl From<Channel> for ChannelFilter {
             Channel::Command {
                 operation,
                 cmd_id: _,
-            } => ChannelFilter::Command(operation),
+            } => ChannelFilter::Command(operation.clone()),
             Channel::MeasurementMetadata {
                 measurement_type: _,
             } => ChannelFilter::MeasurementMetadata,
             Channel::EventMetadata { event_type: _ } => ChannelFilter::EventMetadata,
             Channel::AlarmMetadata { alarm_type: _ } => ChannelFilter::AlarmMetadata,
-            Channel::CommandMetadata { operation } => ChannelFilter::CommandMetadata(operation),
+            Channel::CommandMetadata { operation } => {
+                ChannelFilter::CommandMetadata(operation.clone())
+            }
             Channel::Health => ChannelFilter::Health,
         }
     }

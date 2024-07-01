@@ -55,7 +55,7 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn channels() -> Vec<ChannelFilter> {
+    pub(crate) fn channels() -> Vec<ChannelFilter> {
         vec![ChannelFilter::EntityMetadata, ChannelFilter::Health]
     }
 

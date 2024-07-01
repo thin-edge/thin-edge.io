@@ -307,8 +307,10 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -354,8 +356,10 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -411,8 +415,9 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_main_device() {
-        let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let ttd: TempTedgeDir = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -444,7 +449,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -513,8 +519,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
@@ -566,8 +574,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
@@ -650,7 +660,10 @@ mod tests {
     #[tokio::test]
     async fn handle_log_upload_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, ul, dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle {
+            mqtt, http, ul, dl, ..
+        } = test_handle;
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -723,7 +736,10 @@ mod tests {
     #[tokio::test]
     async fn handle_log_upload_successful_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, ul, dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle {
+            mqtt, http, ul, dl, ..
+        } = test_handle;
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);

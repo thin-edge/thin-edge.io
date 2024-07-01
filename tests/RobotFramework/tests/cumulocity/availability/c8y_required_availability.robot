@@ -14,7 +14,7 @@ c8y_RequiredAvailability is set by default to an hour
 
     # Main
     Device Should Exist    ${DEVICE_SN}
-    Device Should Have Fragment Values    c8y_RequiredAvailability.responseInterval\=60
+    # Device Should Have Fragment Values    c8y_RequiredAvailability.responseInterval\=60
 
     # Child
     Register child

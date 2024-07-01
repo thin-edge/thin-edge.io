@@ -270,6 +270,7 @@ mod tests {
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::spawn_dummy_c8y_http_proxy;
     use crate::tests::test_mapper_config;
+    use crate::tests::TestHandle;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
@@ -290,7 +291,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_config_upload_op_to_config_snapshot_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -330,7 +332,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_config_upload_op_to_config_snapshot_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -380,7 +383,8 @@ mod tests {
     #[tokio::test]
     async fn handle_config_snapshot_executing_and_failed_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -426,7 +430,8 @@ mod tests {
     #[tokio::test]
     async fn handle_config_snapshot_executing_and_failed_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -486,7 +491,10 @@ mod tests {
     #[tokio::test]
     async fn handle_config_snapshot_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, ul, dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle {
+            mqtt, http, ul, dl, ..
+        } = test_handle;
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -552,7 +560,10 @@ mod tests {
     #[tokio::test]
     async fn handle_config_snapshot_successful_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, ul, dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle {
+            mqtt, http, ul, dl, ..
+        } = test_handle;
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -636,11 +647,11 @@ mod tests {
             ..test_mapper_config(&ttd)
         };
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-        spawn_dummy_c8y_http_proxy(test_handle.c8y_http_box);
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
-        let mut mqtt = test_handle.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
-        let mut ul = test_handle.ul_box.with_timeout(TEST_TIMEOUT_MS);
-        let mut dl = test_handle.dl_box.with_timeout(TEST_TIMEOUT_MS);
+        let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = test_handle.ul.with_timeout(TEST_TIMEOUT_MS);
+        let mut dl = test_handle.dl.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
 
@@ -720,10 +731,10 @@ mod tests {
             ..test_mapper_config(&ttd)
         };
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-        spawn_dummy_c8y_http_proxy(test_handle.c8y_http_box);
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
-        let mut mqtt = test_handle.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
-        let mut ul = test_handle.ul_box.with_timeout(TEST_TIMEOUT_MS);
+        let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = test_handle.ul.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
 
