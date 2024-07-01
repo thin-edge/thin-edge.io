@@ -119,6 +119,41 @@ impl TopicFilter {
         self.accept_topic(&msg.topic)
     }
 
+    /// Simplify the list of patterns, removing overlaps.
+    ///
+    /// Return the patterns that have been removed.
+    pub fn remove_overlapping_patterns(&mut self) -> Vec<String> {
+        let mut patterns = vec![];
+        let mut removed = vec![];
+        patterns.append(&mut self.patterns);
+
+        for pattern in patterns {
+            if self.include_topic(&pattern) {
+                removed.push(pattern)
+            } else {
+                let mut sub_patterns = vec![];
+                sub_patterns.append(&mut self.patterns);
+                for sub_pattern in sub_patterns {
+                    if rumqttc::matches(&sub_pattern, &pattern) {
+                        removed.push(sub_pattern);
+                    } else {
+                        self.patterns.push(sub_pattern);
+                    }
+                }
+                self.patterns.push(pattern)
+            }
+        }
+
+        removed
+    }
+
+    /// Check if the given pattern is already matched by this filter pattern.
+    fn include_topic(&self, sub_pattern: &str) -> bool {
+        self.patterns
+            .iter()
+            .any(|pattern| rumqttc::matches(sub_pattern, pattern))
+    }
+
     /// A clone topic filter with the given QoS
     pub fn with_qos(self, qos: QoS) -> Self {
         Self { qos, ..self }
@@ -134,6 +169,10 @@ impl TopicFilter {
                 qos,
             })
             .collect()
+    }
+
+    pub fn patterns(&self) -> &Vec<String> {
+        &self.patterns
     }
 }
 
@@ -234,5 +273,38 @@ mod tests {
         assert!(TopicFilter::new("").is_err());
         assert!(TopicFilter::new("/a/#/b").is_err());
         assert!(TopicFilter::new("/a/#/+").is_err());
+    }
+
+    #[test]
+    fn check_removing_overlapping_patterns() {
+        let mut topics = TopicFilter::empty();
+        assert!(topics.remove_overlapping_patterns().is_empty());
+
+        // One can adds several patterns, as long as non overlapping
+        topics.add_unchecked("te/+/+/+/+/cmd/+/+");
+        topics.add_unchecked("te/+/+/+/+/m/+");
+        topics.add_unchecked("te/device/main///e/+");
+        topics.add_unchecked("te/device/child///e/+");
+        assert!(topics.remove_overlapping_patterns().is_empty());
+
+        // If a sub pattern is added, the overlapping is detected
+        topics.add_unchecked("te/device/main///m/+");
+        let removed = topics.remove_overlapping_patterns();
+        assert_eq!(removed.len(), 1);
+        assert!(removed.contains(&"te/device/main///m/+".to_string()));
+
+        // If a super pattern is added, the sub patterns are removed
+        topics.add_unchecked("te/+/+/+/+/e/+");
+        let removed = topics.remove_overlapping_patterns();
+        assert_eq!(removed.len(), 2);
+        assert!(removed.contains(&"te/device/main///e/+".to_string()));
+        assert!(removed.contains(&"te/device/child///e/+".to_string()));
+
+        // Unfortunately, some overlaps are not detected
+        // In the following case a message published on `te/xxx/xxx` might be received twice
+        topics.add_unchecked("te/xxx/+");
+        topics.add_unchecked("te/+/xxx");
+        let removed = topics.remove_overlapping_patterns();
+        assert!(removed.is_empty());
     }
 }

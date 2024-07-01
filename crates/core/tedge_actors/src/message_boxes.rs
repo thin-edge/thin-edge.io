@@ -155,8 +155,7 @@ impl<Input: Debug> LoggingReceiver<Input> {
 
     /// Close the input so no new messages can be sent to this receiver
     pub fn close_input(&mut self) {
-        self.receiver.input_receiver.close();
-        self.receiver.signal_receiver.close();
+        self.receiver.close_input();
     }
 }
 
@@ -363,6 +362,12 @@ impl<Input> CombinedReceiver<Input> {
             input_receiver,
             signal_receiver,
         }
+    }
+
+    /// Close the input so no new messages can be sent to this receiver
+    pub fn close_input(&mut self) {
+        self.input_receiver.close();
+        self.signal_receiver.close();
     }
 }
 
