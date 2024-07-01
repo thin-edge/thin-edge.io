@@ -69,6 +69,25 @@ impl<T, U> MultiOption for (OptionalConfig<T>, OptionalConfig<U>) {
 ///     ConfigNotSet(#[from] ConfigNotSet),
 /// }
 ///
+/// pub trait AppendRemoveItem {
+///     type Item;
+///
+///     fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+///
+///     fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+/// }
+/// impl<T> AppendRemoveItem for T {
+///     type Item = T;
+///
+///    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+///         unimplemented!()
+///     }
+///
+///     fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+///         unimplemented!()
+///     }
+/// }
+///
 /// define_tedge_config! {
 ///     mqtt: {
 ///         auth: {

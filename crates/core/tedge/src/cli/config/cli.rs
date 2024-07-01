@@ -27,6 +27,24 @@ pub enum ConfigCmd {
         key: WritableKey,
     },
 
+    /// Append or set the provided configuration key with the given value
+    Add {
+        /// Configuration key. Run `tedge config list --doc` for available keys
+        key: WritableKey,
+
+        /// Configuration value.
+        value: String,
+    },
+
+    /// Remove value from the provided configuration key
+    Remove {
+        /// Configuration key. Run `tedge config list --doc` for available keys
+        key: WritableKey,
+
+        /// Configuration value.
+        value: String,
+    },
+
     /// Print the configuration keys and their values
     List {
         /// Prints all the configuration keys, even those without a configured value
@@ -57,6 +75,18 @@ impl BuildCommand for ConfigCmd {
             .into_boxed()),
             ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
                 key,
+                config_location,
+            }
+            .into_boxed()),
+            ConfigCmd::Add { key, value } => Ok(AddConfigCommand {
+                key,
+                value,
+                config_location,
+            }
+            .into_boxed()),
+            ConfigCmd::Remove { key, value } => Ok(RemoveConfigCommand {
+                key,
+                value,
                 config_location,
             }
             .into_boxed()),

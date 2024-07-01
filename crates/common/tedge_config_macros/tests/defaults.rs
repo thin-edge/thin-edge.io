@@ -7,6 +7,39 @@ pub enum ReadError {
     ConfigNotSet(#[from] ConfigNotSet),
 }
 
+pub trait AppendRemoveItem {
+    type Item;
+
+    fn append(current_value: Option<Self::Item>, new_value: Self::Item) -> Option<Self::Item>;
+
+    fn remove(current_value: Option<Self::Item>, remove_value: Self::Item) -> Option<Self::Item>;
+}
+
+impl<T> AppendRemoveItem for T {
+    type Item = T;
+
+    fn append(_current_value: Option<Self::Item>, _new_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+
+    fn remove(_current_value: Option<Self::Item>, _remove_value: Self::Item) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
+define_tedge_config! {
+    #[tedge_config(deprecated_name = "azure")]
+    az: {
+        mapper: {
+            timestamp: bool,
+        }
+    },
+    device: {
+        #[tedge_config(rename = "type")]
+        ty: bool,
+    }
+}
+
 #[test]
 fn root_cert_path_default() {
     const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";

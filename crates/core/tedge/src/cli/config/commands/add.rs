@@ -2,13 +2,13 @@ use crate::command::Command;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::WritableKey;
 
-pub struct SetConfigCommand {
+pub struct AddConfigCommand {
     pub key: WritableKey,
     pub value: String,
     pub config_location: TEdgeConfigLocation,
 }
 
-impl Command for SetConfigCommand {
+impl Command for AddConfigCommand {
     fn description(&self) -> String {
         format!(
             "set the configuration key: '{}' with value: {}.",
@@ -18,8 +18,8 @@ impl Command for SetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        self.config_location.update_toml(&|dto, _reader| {
-            dto.try_update_str(self.key, &self.value)
+        self.config_location.update_toml(&|dto, reader| {
+            dto.try_append_str(reader, self.key, &self.value)
                 .map_err(|e| e.into())
         })?;
         Ok(())

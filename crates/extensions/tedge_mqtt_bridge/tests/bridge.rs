@@ -497,7 +497,7 @@ fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
     config_loc
-        .update_toml(&|dto| {
+        .update_toml(&|dto, _reader| {
             dto.mqtt.client.port = Some(mqtt_port.try_into().unwrap());
             dto.mqtt.bridge.reconnect_policy.initial_interval = Some("0s".parse().unwrap());
             Ok(())
