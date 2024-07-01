@@ -467,29 +467,19 @@ mod tests {
             r#"{"name":"firmware", "version":"1.0"}"#,
         );
 
+        converter
+            .try_register_source_entities(&twin_message)
+            .await
+            .unwrap();
+
         let inventory_messages = converter.convert(&twin_message).await;
 
         assert_messages_matching(
             &inventory_messages,
-            [
-                (
-                    "te/device/child1//",
-                    json!({
-                        "@type":"child-device",
-                        "@id":"test-device:device:child1",
-                        "name":"child1"
-                    })
-                    .into(),
-                ),
-                (
-                    "c8y/s/us",
-                    "101,test-device:device:child1,child1,thin-edge.io-child".into(),
-                ),
-                (
-                    "c8y/inventory/managedObjects/update/test-device:device:child1",
-                    json!({"c8y_Firmware":{"name":"firmware","version":"1.0"}}).into(),
-                ),
-            ],
+            [(
+                "c8y/inventory/managedObjects/update/test-device:device:child1",
+                json!({"c8y_Firmware":{"name":"firmware","version":"1.0"}}).into(),
+            )],
         );
     }
 }

@@ -179,6 +179,7 @@ impl CumulocityConverter {
 mod tests {
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::TestHandle;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
@@ -195,7 +196,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_config_download_op_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -236,7 +238,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_config_download_op_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -287,7 +290,8 @@ mod tests {
     #[tokio::test]
     async fn handle_config_update_executing_and_failed_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -338,7 +342,8 @@ mod tests {
     #[tokio::test]
     async fn handle_config_update_executing_and_failed_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -403,7 +408,8 @@ mod tests {
     #[tokio::test]
     async fn handle_config_update_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -429,7 +435,8 @@ mod tests {
     #[tokio::test]
     async fn handle_config_update_successful_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
