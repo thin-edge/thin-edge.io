@@ -33,6 +33,8 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -168,35 +170,12 @@ impl C8yMapperActor {
             match self.converter.try_register_source_entities(&message).await {
                 Ok(pending_entities) => {
                     for pending_entity in pending_entities {
-                        let entity_reg_msg = pending_entity
-                            .reg_message
-                            .clone()
-                            .to_mqtt_message(&self.converter.mqtt_schema);
-                        // Convert and publish the registration messages
-                        match self
-                            .converter
-                            .convert_pending_entity(pending_entity, &channel)
-                            .await
-                        {
-                            Ok(messages) => {
-                                self.publish_messages(messages).await?;
+                        self.process_registration_message(pending_entity.reg_message, &channel)
+                            .await?;
 
-                                // Send the registration message to all subscribed handlers
-                                if let Some(message_handler) = self
-                                    .message_handlers
-                                    .get_mut(&ChannelFilter::EntityMetadata)
-                                {
-                                    for sender in message_handler {
-                                        sender.send(entity_reg_msg.clone()).await?;
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                self.mqtt_publisher
-                                    .send(self.converter.new_error_message(err))
-                                    .await?;
-                                return Ok(());
-                            }
+                        // Convert and publish cached data messages
+                        for pending_data_message in pending_entity.data_messages {
+                            self.process_data_message(pending_data_message).await?;
                         }
                     }
                 }
@@ -207,17 +186,70 @@ impl C8yMapperActor {
                     return Ok(());
                 }
             }
+
+            self.process_data_message(message.clone()).await?;
+        } else {
+            self.convert_and_publish(&message).await?;
         }
 
-        // Convert and publish the incoming data message
-        let converted_messages = self.converter.convert(&message).await;
-        self.publish_messages(converted_messages).await
+        Ok(())
     }
 
-    // async fn process_pending_entities(
-    //     entities: Vec<PendingEntityData>,
-    // ) -> Result<(), RuntimeError> {
-    // }
+    async fn process_registration_message(
+        &mut self,
+        message: EntityRegistrationMessage,
+        channel: &Channel,
+    ) -> Result<(), RuntimeError> {
+        // Convert and publish the registration message
+        let reg_messages = self
+            .converter
+            .convert_entity_registration_message(&message, &channel);
+        self.publish_messages(reg_messages).await?;
+
+        // Send the registration message to all subscribed handlers
+        self.publish_message_to_subscribed_handles(
+            &Channel::EntityMetadata,
+            message
+                .clone()
+                .to_mqtt_message(&self.converter.mqtt_schema)
+                .clone(),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn process_data_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
+        if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
+            self.convert_and_publish(&message).await?;
+            self.publish_message_to_subscribed_handles(&channel, message)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn convert_and_publish(&mut self, message: &MqttMessage) -> Result<(), RuntimeError> {
+        // Convert and publish the incoming data message
+        let converted_messages = self.converter.convert(&message).await;
+        self.publish_messages(converted_messages).await?;
+
+        Ok(())
+    }
+
+    async fn publish_message_to_subscribed_handles(
+        &mut self,
+        channel: &Channel,
+        message: MqttMessage,
+    ) -> Result<(), RuntimeError> {
+        // Send the registration message to all subscribed handlers
+        if let Some(message_handler) = self.message_handlers.get_mut(&channel.into()) {
+            for sender in message_handler {
+                sender.send(message.clone()).await?;
+            }
+        }
+        Ok(())
+    }
 
     async fn publish_messages(&mut self, messages: Vec<MqttMessage>) -> Result<(), RuntimeError> {
         for message in messages.into_iter() {

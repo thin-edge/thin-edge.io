@@ -1049,7 +1049,7 @@ impl CumulocityConverter {
 
     pub(crate) async fn try_register_entity_with_pending_children(
         &mut self,
-        mut register_message: EntityRegistrationMessage,
+        register_message: EntityRegistrationMessage,
     ) -> Result<Vec<PendingEntityData>, ConversionError> {
         match self.entity_store.update(register_message.clone()) {
             Err(e) => {
@@ -2004,29 +2004,10 @@ pub(crate) mod tests {
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        // Child device creation messages are published.
-        let device_creation_msgs = converter.convert(&alarm_message).await;
-        assert_eq!(
-            device_creation_msgs[0].topic.name,
-            "te/device/external_sensor//"
-        );
-        assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(
-                device_creation_msgs[0].payload_str().unwrap()
-            )
-            .unwrap(),
-            json!({
-                "@type":"child-device",
-                "@id":"test-device:device:external_sensor",
-                "name": "external_sensor"
-            })
-        );
-
-        let second_msg = MqttMessage::new(
-            &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-        );
-        assert_eq!(device_creation_msgs[1], second_msg);
+        converter
+            .try_register_source_entities(&alarm_message)
+            .await
+            .unwrap();
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later
         assert!(converter.convert(&alarm_message).await.is_empty());
@@ -2473,26 +2454,10 @@ pub(crate) mod tests {
         let messages = converter.convert(&invalid_measurement).await;
         assert_messages_matching(
             &messages,
-            [
-                (
-                    "te/device/child1//",
-                    json!({
-                        "@id":"test-device:device:child1",
-                        "@type":"child-device",
-                        "name":"child1",
-                    })
-                    .into(),
-                ),
-                (
-                    "c8y/s/us",
-                    "101,test-device:device:child1,child1,thin-edge.io-child".into(),
-                ),
-                (
-                    "te/errors",
-                    "Invalid JSON: expected value at line 1 column 1: `invalid measurement\n`"
-                        .into(),
-                ),
-            ],
+            [(
+                "te/errors",
+                "Invalid JSON: expected value at line 1 column 1: `invalid measurement\n`".into(),
+            )],
         );
 
         // Second convert valid Thin Edge JSON message.
@@ -3119,26 +3084,21 @@ pub(crate) mod tests {
             r#"{"temperature": 21.37}"#,
         );
 
-        // when auto-registered, local and cloud registration messages should be produced
-        let mapped_messages = converter.convert(&measurement_message).await;
-
-        let local_registration_message = mapped_messages
-            .iter()
-            .find(|m| EntityRegistrationMessage::new(m).is_some())
+        let mut entities = converter
+            .try_register_source_entities(&measurement_message)
+            .await
             .unwrap();
-
-        // check if cloud registration message
-        assert!(mapped_messages
-            .iter()
-            .any(|m| m.topic.name == "c8y/s/us" && m.payload_str().unwrap().starts_with("102")));
+        let local_registration_message = entities.remove(0).reg_message;
 
         // when converting a registration message the same as the previous one, no additional registration messages should be produced
-        let mapped_messages = converter.convert(local_registration_message).await;
+        let entities = converter
+            .try_register_source_entities(
+                &local_registration_message.to_mqtt_message(&MqttSchema::default()),
+            )
+            .await
+            .unwrap();
 
-        let second_registration_message_mapped = mapped_messages.into_iter().any(|m| {
-            m.topic.name.starts_with("c8y/s/us") && m.payload_str().unwrap().starts_with("102")
-        });
-        assert!(!second_registration_message_mapped);
+        assert!(entities.is_empty(), "Duplicate entry not registered");
     }
 
     #[tokio::test]
@@ -3154,6 +3114,11 @@ pub(crate) mod tests {
             &Topic::new_unchecked("te/device/main/service/service1/status/health"),
             serde_json::to_string(&json!({"status": "up"})).unwrap(),
         );
+
+        converter
+            .try_register_source_entities(&service_health_message)
+            .await
+            .unwrap();
 
         let output = converter.convert(&service_health_message).await;
         let service_creation_message = output
@@ -3372,9 +3337,13 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+
+        let entities = converter
+            .try_register_source_entities(&reg_message)
+            .await
+            .unwrap();
         assert!(
-            messages.is_empty(),
+            entities.is_empty(),
             "Expected child device registration messages to be cached and not mapped"
         );
 
@@ -3389,9 +3358,13 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+
+        let entities = converter
+            .try_register_source_entities(&reg_message)
+            .await
+            .unwrap();
         assert!(
-            messages.is_empty(),
+            entities.is_empty(),
             "Expected child device registration messages to be cached and not mapped"
         );
 
@@ -3406,7 +3379,11 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+        let entities = converter
+            .try_register_source_entities(&reg_message)
+            .await
+            .unwrap();
+        let messages = pending_entities_mqtt_messages(entities);
 
         // Assert that the registration message, the twin updates and the cached measurement messages are converted
         assert_messages_matching(
