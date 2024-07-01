@@ -60,7 +60,7 @@ On your machine you will need on of the following:
 
 1. Install [go-c8y-cli](https://goc8ycli.netlify.app/docs/installation/shell-installation/) as per the instructions
 
-2. Install the [](https://github.com/thin-edge/c8y-tedge)
+2. Install the [go-c8y-cli](https://goc8ycli.netlify.app/docs/installation/shell-installation/) extension, [c8y-tedge](https://github.com/thin-edge/c8y-tedge)
 
     ```sh
     c8y extension install thin-edge/c8y-tedge
