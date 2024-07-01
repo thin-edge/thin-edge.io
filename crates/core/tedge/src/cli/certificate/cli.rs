@@ -98,11 +98,12 @@ impl BuildCommand for TEdgeCertCli {
 
             TEdgeCertCli::Upload(cmd) => {
                 let cmd = match cmd {
-                    UploadCertCli::C8y { username } => UploadCertCmd {
+                    UploadCertCli::C8y { username, password } => UploadCertCmd {
                         device_id: config.device.id.try_read(&config)?.clone(),
                         path: config.device.cert_path.clone(),
                         host: config.c8y.http.or_err()?.to_owned(),
                         username,
+                        password,
                     },
                 };
                 cmd.into_boxed()
@@ -127,8 +128,23 @@ pub enum UploadCertCli {
     /// The command will upload root certificate to Cumulocity.
     C8y {
         #[clap(long = "user")]
-        /// Provided username should be a Cumulocity user with tenant management permissions.
-        /// The password is requested on /dev/tty, unless the $C8YPASS env var is set to the user password.
+        #[arg(
+            env = "C8Y_USER",
+            hide_env_values = true,
+            hide_default_value = true,
+            default_value = ""
+        )]
+        /// Provided username should be a Cumulocity IoT user with tenant management permissions.
+        /// You will be prompted for input if the value is not provided or is empty
         username: String,
+
+        #[clap(long = "password")]
+        #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
+        // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
+        /// Cumulocity IoT Password.
+        /// You will be prompted for input if the value is not provided or is empty
+        ///
+        /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
+        password: String,
     },
 }
