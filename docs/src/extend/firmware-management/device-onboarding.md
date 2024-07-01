@@ -21,10 +21,15 @@ It is a two step process which is described as follows:
 1. Detect the device (by using DNS Service Discovery)
 2. Onboard it via ssh commands
 
+Below shows a diagram of the intended setup to perform the onboarding, where both your computer and the device (to onboard) are in the same network, and you can ssh into the device.
+
+<p align="center">
+    <img width="60%" src={require('./images/onboarding-c8y-tedge.drawio.png').default} alt="Onboarding diagram" />
+</p>
 
 ### Pre-requisites
 
-On your machine you will need on of the following:
+On your machine (not the target device that will be on-boarded) you will need on of the following:
 
 1. One of the following CLI tools to scan for devices
 
