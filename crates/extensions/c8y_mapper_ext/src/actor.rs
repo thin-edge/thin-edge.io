@@ -168,24 +168,36 @@ impl C8yMapperActor {
             match self.converter.try_register_source_entities(&message).await {
                 Ok(pending_entities) => {
                     for pending_entity in pending_entities {
+                        let entity_reg_msg = pending_entity
+                            .reg_message
+                            .clone()
+                            .to_mqtt_message(&self.converter.mqtt_schema);
                         // Convert and publish the registration messages
-                        let reg_messages = self.converter.convert_entity_registration_message(
-                            &pending_entity.reg_message,
-                            &channel,
-                        );
-                        self.publish_messages(reg_messages).await?;
-
-                        // Send the registration message to all subscribed handlers
-                        if let Some(message_handler) =
-                            self.message_handlers.get_mut(&channel.clone().into())
+                        match self
+                            .converter
+                            .convert_pending_entity(pending_entity, &channel)
+                            .await
                         {
-                            for sender in message_handler {
-                                sender.send(message.clone()).await?;
+                            Ok(messages) => {
+                                self.publish_messages(messages).await?;
+
+                                // Send the registration message to all subscribed handlers
+                                if let Some(message_handler) = self
+                                    .message_handlers
+                                    .get_mut(&ChannelFilter::EntityMetadata)
+                                {
+                                    for sender in message_handler {
+                                        sender.send(entity_reg_msg.clone()).await?;
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                self.mqtt_publisher
+                                    .send(self.converter.new_error_message(err))
+                                    .await?;
+                                return Ok(());
                             }
                         }
-
-                        // Publish all cached data of pending entities
-                        self.publish_messages(pending_entity.data_messages).await?;
                     }
                 }
                 Err(err) => {
@@ -201,6 +213,11 @@ impl C8yMapperActor {
         let converted_messages = self.converter.convert(&message).await;
         self.publish_messages(converted_messages).await
     }
+
+    // async fn process_pending_entities(
+    //     entities: Vec<PendingEntityData>,
+    // ) -> Result<(), RuntimeError> {
+    // }
 
     async fn publish_messages(&mut self, messages: Vec<MqttMessage>) -> Result<(), RuntimeError> {
         for message in messages.into_iter() {

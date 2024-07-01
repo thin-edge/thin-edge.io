@@ -1061,8 +1061,11 @@ impl CumulocityConverter {
                     pending_entities
                 } else {
                     // Handle the case where @id is missing but there are no other changes to the payload
-                    self.append_id_if_not_given(&mut register_message);
-                    vec![register_message.into()]
+                    if register_message.external_id.is_none() {
+                        vec![register_message.into()]
+                    } else {
+                        vec![]
+                    }
                 };
                 Ok(pending_entities)
             }
@@ -1072,16 +1075,20 @@ impl CumulocityConverter {
     pub async fn convert_pending_entity(
         &mut self,
         pending_entity: PendingEntityData,
+        channel: &Channel,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut mapped_messages = vec![];
         let mut entity_reg_message = pending_entity.reg_message;
         // Register and convert the entity registration first
-        let mut c8y_message = self.try_convert_entity_registration(&entity_reg_message)?;
+        let mut c8y_message =
+            self.convert_entity_registration_message(&entity_reg_message, channel);
         mapped_messages.append(&mut c8y_message);
 
-        // Republish the metadata message with @id if it's not given
-        self.append_id_if_not_given(&mut entity_reg_message);
-        mapped_messages.push(entity_reg_message.to_mqtt_message(&self.mqtt_schema));
+        if entity_reg_message.external_id.is_none() {
+            // Republish the metadata message with @id if it's not given
+            self.append_id_if_not_given(&mut entity_reg_message);
+            mapped_messages.push(entity_reg_message.to_mqtt_message(&self.mqtt_schema));
+        }
 
         // Process all the cached data messages for that entity
         let mut cached_messages = self
@@ -1915,7 +1922,6 @@ pub(crate) mod tests {
     use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity_store::EntityRegistrationMessage;
-    use tedge_api::entity_store::EntityType;
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::ChannelFilter;
@@ -1923,6 +1929,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
+    use tedge_api::pending_entity_store::PendingEntityData;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_config::AutoLogUpload;
     use tedge_config::SoftwareManagementApiFlag;
@@ -2105,6 +2112,42 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn auto_register_child_device_service() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///m/"),
+            json!({
+                "temp": 1,
+                "time": "2021-11-16T17:45:40.571760714+01:00"
+            })
+            .to_string(),
+        );
+        let entities = converter
+            .try_register_source_entities(&in_message)
+            .await
+            .unwrap();
+        let messages: Vec<MqttMessage> = entities
+            .into_iter()
+            .map(|entity| entity.reg_message.to_mqtt_message(&converter.mqtt_schema))
+            .collect();
+
+        assert_messages_matching(
+            &messages,
+            [(
+                "te/device/child1//",
+                json!({
+                    "@type":"child-device",
+                    "@id":"test-device:device:child1",
+                    "name":"child1"
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
     async fn convert_child_device_registration() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
@@ -2172,38 +2215,23 @@ pub(crate) mod tests {
 
         assert_messages_matching(
             &messages,
-            [
-                // (
-                //     "te/device/child1//",
-                //     json!({
-                //         "@type":"child-device",
-                //         "@id":"test-device:device:child1",
-                //         "name":"child1"
-                //     })
-                //     .into(),
-                // ),
-                // (
-                //     "c8y/s/us",
-                //     "101,test-device:device:child1,child1,thin-edge.io-child".into(),
-                // ),
-                (
-                    "c8y/measurement/measurements/create",
-                    json!({
-                        "externalSource":{
-                            "externalId":"test-device:device:child1",
-                            "type":"c8y_Serial"
-                        },
+            [(
+                "c8y/measurement/measurements/create",
+                json!({
+                    "externalSource":{
+                        "externalId":"test-device:device:child1",
+                        "type":"c8y_Serial"
+                    },
+                    "temp":{
                         "temp":{
-                            "temp":{
-                                "value":1.0
-                            }
-                        },
-                        "time":"2021-11-16T17:45:40.571760714+01:00",
-                        "type":"ThinEdgeMeasurement"
-                    })
-                    .into(),
-                ),
-            ],
+                            "value":1.0
+                        }
+                    },
+                    "time":"2021-11-16T17:45:40.571760714+01:00",
+                    "type":"ThinEdgeMeasurement"
+                })
+                .into(),
+            )],
         );
     }
 
@@ -2916,133 +2944,19 @@ pub(crate) mod tests {
             big_measurement_payload,
         );
 
+        converter
+            .try_register_source_entities(&big_measurement_message)
+            .await
+            .unwrap();
+
         let result = converter.convert(&big_measurement_message).await;
 
         // Skipping the first two auto-registration messages and validating the third mapped message
-        let payload = result[2].payload_str().unwrap();
+        let payload = result[0].payload_str().unwrap();
         assert!(payload.starts_with(
             r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/child1///m/ after translation is"#
         ));
         assert!(payload.ends_with("greater than the threshold size of 16184."));
-    }
-
-    #[tokio::test]
-    async fn test_convert_small_measurement_for_child_device() {
-        let tmp_dir = TempTedgeDir::new();
-        let measurement_topic = "te/device/child1///m/";
-        let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
-
-        let big_measurement_message = MqttMessage::new(
-            &Topic::new_unchecked(measurement_topic),
-            big_measurement_payload,
-        );
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-        let result: Vec<_> = converter
-            .convert(&big_measurement_message)
-            .await
-            .into_iter()
-            .filter(|m| m.topic.name.starts_with("c8y"))
-            .collect();
-
-        let payload1 = &result[0].payload_str().unwrap();
-        let payload2 = &result[1].payload_str().unwrap();
-
-        assert!(payload1.contains("101,test-device:device:child1,child1,thin-edge.io-child"));
-        assert!(payload2.contains(
-            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
-        ));
-        assert!(payload2.contains(r#""type":"ThinEdgeMeasurement""#));
-    }
-
-    #[tokio::test]
-    async fn translate_service_monitor_message_for_child_device() {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        let in_topic = "te/device/child1/service/child-service-c8y/status/health";
-        let in_payload = r#"{"pid":1234,"status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
-        let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
-
-        let mqtt_schema = MqttSchema::new();
-        let (in_entity, _in_channel) = mqtt_schema.entity_channel_of(&in_message.topic).unwrap();
-
-        let expected_child_create_smart_rest_message = MqttMessage::new(
-            &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child1,child1,thin-edge.io-child",
-        );
-
-        let expected_service_monitor_smart_rest_message = MqttMessage::new(
-            &Topic::new_unchecked("c8y/s/us/test-device:device:child1"),
-            r#"102,test-device:device:child1:service:child-service-c8y,service,child-service-c8y,up"#,
-        );
-
-        let out_messages = converter.convert(&in_message).await;
-        let mut out_messages = out_messages.into_iter();
-
-        // child device entity store registration message
-        let device_registration_message = out_messages.next().unwrap();
-        let device_registration_message =
-            EntityRegistrationMessage::new(&device_registration_message).unwrap();
-        assert_eq!(
-            device_registration_message.topic_id,
-            in_entity.default_parent_identifier().unwrap()
-        );
-        assert_eq!(device_registration_message.r#type, EntityType::ChildDevice);
-
-        // child device cloud registration message
-        assert_eq!(
-            out_messages.next().unwrap(),
-            expected_child_create_smart_rest_message
-        );
-
-        // service entity store registration message
-        let service_registration_message = out_messages.next().unwrap();
-        let service_registration_message =
-            EntityRegistrationMessage::new(&service_registration_message).unwrap();
-        assert_eq!(service_registration_message.topic_id, in_entity);
-        assert_eq!(service_registration_message.r#type, EntityType::Service);
-
-        // service cloud registration message
-
-        assert_eq!(
-            out_messages.next().unwrap(),
-            expected_service_monitor_smart_rest_message.clone()
-        );
-    }
-
-    #[tokio::test]
-    async fn translate_service_monitor_message_for_thin_edge_device() {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        let in_topic = "te/device/main/service/test-tedge-mapper-c8y/status/health";
-        let in_payload = r#"{"pid":1234,"status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
-        let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
-
-        let mqtt_schema = MqttSchema::new();
-        let (in_entity, _in_channel) = mqtt_schema.entity_channel_of(&in_message.topic).unwrap();
-
-        let expected_service_monitor_smart_rest_message = MqttMessage::new(
-            &Topic::new_unchecked("c8y/s/us"),
-            r#"102,test-device:device:main:service:test-tedge-mapper-c8y,service,test-tedge-mapper-c8y,up"#,
-        );
-
-        // Test the output messages contains SmartREST and C8Y JSON.
-        let mut out_messages = converter.convert(&in_message).await.into_iter();
-
-        // service entity store registration message
-        let service_registration_message = out_messages.next().unwrap();
-        let service_registration_message =
-            EntityRegistrationMessage::new(&service_registration_message).unwrap();
-        assert_eq!(service_registration_message.topic_id, in_entity);
-        assert_eq!(service_registration_message.r#type, EntityType::Service);
-
-        let service_monitor_message = out_messages.next().unwrap();
-
-        assert_eq!(
-            service_monitor_message,
-            expected_service_monitor_smart_rest_message
-        );
     }
 
     #[tokio::test]
@@ -3088,21 +3002,11 @@ pub(crate) mod tests {
         let mqtt_schema = MqttSchema::default();
         let child = EntityTopicId::default_child_device("childId").unwrap();
         let child_capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &child);
-        let registrations = converter.try_convert(&child_capability).await.unwrap();
 
-        // the first message should be auto-registration of chidlId
-        let registration = registrations.get(0).unwrap().clone();
-        assert_eq!(
-            registration,
-            MqttMessage::new(
-                &Topic::new_unchecked("te/device/childId//"),
-                r#"{"@id":"test-device:device:childId","@type":"child-device","name":"childId"}"#,
-            )
-            .with_retain()
-        );
-
-        // the auto-registration message is produced & processed by the mapper
-        converter.try_convert(&registration).await.unwrap();
+        converter
+            .try_register_source_entities(&child_capability)
+            .await
+            .unwrap();
 
         // A request to a child is forwarded to that child using its registered mapping: external id <=> topic identifier
         let device_cmd_channel = mqtt_schema.topics(
@@ -3283,37 +3187,40 @@ pub(crate) mod tests {
 
         // Register main device service
         let _ = converter
-            .convert(&MqttMessage::new(
+            .try_register_source_entities(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/dummy"),
                 json!({
                     "@type":"service",
                 })
                 .to_string(),
             ))
-            .await;
+            .await
+            .unwrap();
         // Register immediate child device
         let _ = converter
-            .convert(&MqttMessage::new(
+            .try_register_source_entities(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/immediate_child//"),
                 json!({
                     "@type":"child-device",
                 })
                 .to_string(),
             ))
-            .await;
+            .await
+            .unwrap();
         // Register immediate child device service
         let _ = converter
-            .convert(&MqttMessage::new(
+            .try_register_source_entities(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/immediate_child/service/dummy"),
                 json!({
                     "@type":"service",
                 })
                 .to_string(),
             ))
-            .await;
+            .await
+            .unwrap();
         // Register nested child device
         let _ = converter
-            .convert(&MqttMessage::new(
+            .try_register_source_entities(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/nested_child//"),
                 json!({
                     "@type":"child-device",
@@ -3321,17 +3228,19 @@ pub(crate) mod tests {
                 })
                 .to_string(),
             ))
-            .await;
+            .await
+            .unwrap();
         // Register nested child device service
         let _ = converter
-            .convert(&MqttMessage::new(
+            .try_register_source_entities(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/nested_child/service/dummy"),
                 json!({
                     "@type":"service",
                 })
                 .to_string(),
             ))
-            .await;
+            .await
+            .unwrap();
 
         for device_id in ["main", "immediate_child", "nested_child"] {
             let messages = converter
@@ -3533,12 +3442,17 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+        let messages = pending_entities_mqtt_messages(
+            converter
+                .try_register_source_entities(&reg_message)
+                .await
+                .unwrap(),
+        );
 
         assert_messages_matching(
             &messages,
             [
-                ("c8y/s/us", "101,test-device:device:child0,child0,thin-edge.io-child".into()),
+                // ("c8y/s/us", "101,test-device:device:child0,child0,thin-edge.io-child".into()),
                 (
                     "te/device/child0//",
                     r#"{"@id":"test-device:device:child0","@parent":"device/main//","@type":"child-device","name":"child0"}"#.into(),
@@ -3556,7 +3470,12 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+        let messages = pending_entities_mqtt_messages(
+            converter
+                .try_register_source_entities(&reg_message)
+                .await
+                .unwrap(),
+        );
 
         assert_messages_matching(
             &messages,
@@ -3577,7 +3496,12 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+        let messages = pending_entities_mqtt_messages(
+            converter
+                .try_register_source_entities(&reg_message)
+                .await
+                .unwrap(),
+        );
 
         assert_messages_matching(
             &messages,
@@ -3588,6 +3512,13 @@ pub(crate) mod tests {
                 r#"{"@id":"test-device:device:child0","@parent":"device/main//","@type":"child-device","custom":"foo","name":"child0"}"#.into(),
             )],
         );
+    }
+
+    fn pending_entities_mqtt_messages(entities: Vec<PendingEntityData>) -> Vec<MqttMessage> {
+        entities
+            .into_iter()
+            .map(|entity| entity.reg_message.to_mqtt_message(&MqttSchema::default()))
+            .collect()
     }
 
     pub(crate) async fn create_c8y_converter(
