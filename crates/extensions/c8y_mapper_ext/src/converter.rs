@@ -1056,8 +1056,11 @@ impl CumulocityConverter {
                 error!("Entity registration failed: {e}");
                 Ok(vec![])
             }
-            Ok((affected_entities, pending_entities)) => {
+            Ok((affected_entities, mut pending_entities)) => {
                 let pending_entities = if !affected_entities.is_empty() {
+                    for pending_entity in pending_entities.iter_mut() {
+                        self.append_id_if_not_given(&mut pending_entity.reg_message)
+                    }
                     pending_entities
                 } else {
                     // Handle the case where @id is missing but there are no other changes to the payload
@@ -1070,33 +1073,6 @@ impl CumulocityConverter {
                 Ok(pending_entities)
             }
         }
-    }
-
-    pub async fn convert_pending_entity(
-        &mut self,
-        pending_entity: PendingEntityData,
-        channel: &Channel,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut mapped_messages = vec![];
-        let mut entity_reg_message = pending_entity.reg_message;
-        // Register and convert the entity registration first
-        let mut c8y_message =
-            self.convert_entity_registration_message(&entity_reg_message, channel);
-        mapped_messages.append(&mut c8y_message);
-
-        if entity_reg_message.external_id.is_none() {
-            // Republish the metadata message with @id if it's not given
-            self.append_id_if_not_given(&mut entity_reg_message);
-            mapped_messages.push(entity_reg_message.to_mqtt_message(&self.mqtt_schema));
-        }
-
-        // Process all the cached data messages for that entity
-        let mut cached_messages = self
-            .process_cached_entity_data(pending_entity.data_messages)
-            .await?;
-        mapped_messages.append(&mut cached_messages);
-
-        Ok(mapped_messages)
     }
 
     pub(crate) fn try_auto_register_entity(
@@ -1245,23 +1221,6 @@ impl CumulocityConverter {
 
             _ => Ok(vec![]),
         }
-    }
-
-    async fn process_cached_entity_data(
-        &mut self,
-        data_messages: Vec<MqttMessage>,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut converted_messages = vec![];
-        for message in data_messages {
-            let (source, channel) = self.mqtt_schema.entity_channel_of(&message.topic).unwrap();
-            converted_messages.append(
-                &mut self
-                    .try_convert_data_message(source, channel, &message)
-                    .await?,
-            );
-        }
-
-        Ok(converted_messages)
     }
 
     fn validate_operation_supported(
@@ -1900,7 +1859,6 @@ pub(crate) mod tests {
     use crate::config::C8yMapperConfig;
     use crate::Capabilities;
     use anyhow::Result;
-    use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use c8y_api::smartrest::operations::ResultFormat;
@@ -1921,7 +1879,6 @@ pub(crate) mod tests {
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBoxBuilder;
-    use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::ChannelFilter;
@@ -2073,6 +2030,7 @@ pub(crate) mod tests {
             .try_register_source_entities(&in_message)
             .await
             .unwrap();
+        dbg!(&entities);
         let messages: Vec<MqttMessage> = entities
             .into_iter()
             .map(|entity| entity.reg_message.to_mqtt_message(&converter.mqtt_schema))

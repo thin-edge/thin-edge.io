@@ -187,7 +187,9 @@ impl C8yMapperActor {
                 }
             }
 
-            self.process_data_message(message.clone()).await?;
+            if !channel.is_entity_metadata() {
+                self.process_data_message(message.clone()).await?;
+            }
         } else {
             self.convert_and_publish(&message).await?;
         }
@@ -203,7 +205,7 @@ impl C8yMapperActor {
         // Convert and publish the registration message
         let reg_messages = self
             .converter
-            .convert_entity_registration_message(&message, &channel);
+            .convert_entity_registration_message(&message, channel);
         self.publish_messages(reg_messages).await?;
 
         // Send the registration message to all subscribed handlers
@@ -231,7 +233,7 @@ impl C8yMapperActor {
 
     async fn convert_and_publish(&mut self, message: &MqttMessage) -> Result<(), RuntimeError> {
         // Convert and publish the incoming data message
-        let converted_messages = self.converter.convert(&message).await;
+        let converted_messages = self.converter.convert(message).await;
         self.publish_messages(converted_messages).await?;
 
         Ok(())

@@ -622,6 +622,10 @@ impl Display for Channel {
 }
 
 impl Channel {
+    pub fn is_entity_metadata(&self) -> bool {
+        matches!(self, Channel::EntityMetadata)
+    }
+
     pub fn is_measurement(&self) -> bool {
         matches!(self, Channel::Measurement { .. })
     }

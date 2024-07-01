@@ -6,6 +6,8 @@ use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
+use crate::actor::PublishMessage;
+use crate::availability::AvailabilityBuilder;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -26,6 +28,8 @@ use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
+use tedge_actors::MessageSink;
+use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
@@ -95,13 +99,15 @@ async fn mapper_publishes_init_messages_on_startup() {
 
 #[tokio::test]
 async fn child_device_registration_mapping() {
-    let cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, mut timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let ttd = TempTedgeDir::new();
+    let test_handle =
+        spawn_c8y_mapper_actor_with_config(&ttd, test_mapper_config(&ttd), true).await;
+    let mut mqtt = test_handle.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
+    let mut timer = test_handle.timer_box;
+    let mut availability = test_handle.availability_box.with_timeout(TEST_TIMEOUT_MS);
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
@@ -116,6 +122,15 @@ async fn child_device_registration_mapping() {
         [(
             "c8y/s/us",
             "101,test-device:device:child1,Child1,RaspberryPi",
+        )],
+    )
+    .await;
+
+    assert_received_contains_str(
+        &mut availability,
+        [(
+            "te/device/child1//",
+            r#"{"@id":"test-device:device:child1","@type":"child-device","name":"Child1","type":"RaspberryPi"}"#
         )],
     )
     .await;
@@ -136,6 +151,18 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
+    // while let Some(msg) = availability.recv().await {
+    //     dbg!(msg);
+    // }
+    assert_received_contains_str(
+        &mut availability,
+        [(
+            "te/device/child2//",
+            r#"{"@id":"test-device:device:child2","@parent":"device/child1//","@type":"child-device"}"#
+        )],
+    )
+    .await;
+
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child3//"),
         r#"{ "@type": "child-device", "@id": "child3", "@parent": "device/child2//" }"#,
@@ -148,6 +175,15 @@ async fn child_device_registration_mapping() {
         [(
             "c8y/s/us/test-device:device:child1/test-device:device:child2",
             "101,child3,child3,thin-edge.io-child",
+        )],
+    )
+    .await;
+
+    assert_received_contains_str(
+        &mut availability,
+        [(
+            "te/device/child3//",
+            r#"{"@id":"child3","@parent":"device/child2//","@type":"child-device"}"#,
         )],
     )
     .await;
@@ -2516,6 +2552,7 @@ pub(crate) struct TestHandle {
     pub timer_box: FakeServerBox<SyncStart, SyncComplete>,
     pub ul_box: FakeServerBox<IdUploadRequest, IdUploadResult>,
     pub dl_box: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
+    pub availability_box: SimpleMessageBox<MqttMessage, PublishMessage>,
 }
 
 pub(crate) async fn spawn_c8y_mapper_actor_with_config(
@@ -2544,7 +2581,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
     let bridge_health_topic = config.bridge_health_topic.clone();
-    let c8y_mapper_builder = C8yMapperBuilder::try_new(
+    let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
         &mut mqtt_builder,
         &mut c8y_proxy_builder,
@@ -2555,6 +2592,12 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         &mut service_monitor_builder,
     )
     .unwrap();
+
+    let mut availability_box_builder: SimpleMessageBoxBuilder<MqttMessage, PublishMessage> =
+        SimpleMessageBoxBuilder::new("Availability", 10);
+    availability_box_builder
+        .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
+    c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
     let actor = c8y_mapper_builder.build();
     tokio::spawn(async move { actor.run().await });
@@ -2570,6 +2613,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         timer_box: timer_builder.build(),
         ul_box: uploader_builder.build(),
         dl_box: downloader_builder.build(),
+        availability_box: availability_box_builder.build(),
     }
 }
 
