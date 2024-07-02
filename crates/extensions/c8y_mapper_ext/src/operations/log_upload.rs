@@ -307,7 +307,7 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -356,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -519,7 +519,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -574,7 +574,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
