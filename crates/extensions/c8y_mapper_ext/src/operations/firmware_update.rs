@@ -283,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_main_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -329,7 +329,7 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_when_remote_utl_has_c8y_url() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -375,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_child_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -431,7 +431,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_firmware_update_executing_and_failed_cmd_for_main_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
@@ -481,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_firmware_update_executing_and_failed_cmd_for_child_device() {
-                let ttd = TempTedgeDir::new();
+        let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;

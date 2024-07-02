@@ -36,6 +36,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
+use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -169,15 +170,8 @@ impl C8yMapperActor {
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
             match self.converter.try_register_source_entities(&message).await {
                 Ok(pending_entities) => {
-                    for pending_entity in pending_entities {
-                        self.process_registration_message(pending_entity.reg_message, &channel)
-                            .await?;
-
-                        // Convert and publish cached data messages
-                        for pending_data_message in pending_entity.data_messages {
-                            self.process_data_message(pending_data_message).await?;
-                        }
-                    }
+                    self.process_registered_entities(pending_entities, &channel)
+                        .await?;
                 }
                 Err(err) => {
                     self.mqtt_publisher
@@ -192,6 +186,24 @@ impl C8yMapperActor {
             }
         } else {
             self.convert_and_publish(&message).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn process_registered_entities(
+        &mut self,
+        pending_entities: Vec<PendingEntityData>,
+        channel: &Channel,
+    ) -> Result<(), RuntimeError> {
+        for pending_entity in pending_entities {
+            self.process_registration_message(pending_entity.reg_message, channel)
+                .await?;
+
+            // Convert and publish cached data messages
+            for pending_data_message in pending_entity.data_messages {
+                self.process_data_message(pending_data_message).await?;
+            }
         }
 
         Ok(())

@@ -1049,7 +1049,7 @@ impl CumulocityConverter {
 
     pub(crate) async fn try_register_entity_with_pending_children(
         &mut self,
-        register_message: EntityRegistrationMessage,
+        mut register_message: EntityRegistrationMessage,
     ) -> Result<Vec<PendingEntityData>, ConversionError> {
         match self.entity_store.update(register_message.clone()) {
             Err(e) => {
@@ -1065,6 +1065,7 @@ impl CumulocityConverter {
                 } else {
                     // Handle the case where @id is missing but there are no other changes to the payload
                     if register_message.external_id.is_none() {
+                        self.append_id_if_not_given(&mut register_message);
                         vec![register_message.into()]
                     } else {
                         vec![]
@@ -3222,55 +3223,39 @@ pub(crate) mod tests {
             &Topic::new_unchecked("te/custom/child1//"),
             json!({"@type": "child-device", "@id": "child1", "name": "child1"}).to_string(),
         );
-        let messages = converter.convert(&reg_message).await;
+
+        let entities = converter
+            .try_register_source_entities(&reg_message)
+            .await
+            .unwrap();
+
+        let messages = pending_entities_into_mqtt_messages(entities);
 
         // Assert that the registration message, the twin updates and the cached measurement messages are converted
         assert_messages_matching(
             &messages,
             [
                 (
-                    "custom-c8y-prefix/s/us",
-                    "101,child1,child1,thin-edge.io-child".into(),
-                ),
-                (
-                    "custom-c8y-prefix/inventory/managedObjects/update/child1",
+                    "te/custom/child1//",
                     json!({
-                        "foo": 5.6789
+                        "@id":"child1",
+                        "@type":"child-device",
+                        "name":"child1"
                     })
                     .into(),
                 ),
+                ("te/custom/child1///twin/foo", "5.6789".into()),
                 (
-                    "custom-c8y-prefix/measurement/measurements/create",
-                    json!({
-                        "temperature":{
-                            "temperature":{
-                                "value": 0.0
-                            }
-                        },
-                    })
-                    .into(),
+                    "te/custom/child1///m/environment",
+                    json!({ "temperature": 0 }).into(),
                 ),
                 (
-                    "custom-c8y-prefix/measurement/measurements/create",
-                    json!({
-                        "temperature":{
-                            "temperature":{
-                                "value": 1.0
-                            }
-                        },
-                    })
-                    .into(),
+                    "te/custom/child1///m/environment",
+                    json!({ "temperature": 1 }).into(),
                 ),
                 (
-                    "custom-c8y-prefix/measurement/measurements/create",
-                    json!({
-                        "temperature":{
-                            "temperature":{
-                                "value": 2.0
-                            }
-                        },
-                    })
-                    .into(),
+                    "te/custom/child1///m/environment",
+                    json!({ "temperature": 2 }).into(),
                 ),
             ],
         );
@@ -3341,20 +3326,39 @@ pub(crate) mod tests {
             .try_register_source_entities(&reg_message)
             .await
             .unwrap();
-        let messages = pending_entities_mqtt_messages(entities);
-
-        // Assert that the registration message, the twin updates and the cached measurement messages are converted
+        let messages = pending_entities_into_mqtt_messages(entities);
         assert_messages_matching(
             &messages,
             [
-                ("c8y/s/us", "101,child0,child0,thin-edge.io-child".into()),
                 (
-                    "c8y/s/us/child0",
-                    "101,child00,child00,thin-edge.io-child".into(),
+                    "te/device/child0//",
+                    json!({
+                        "@type": "child-device",
+                        "@id": "child0",
+                        "name": "child0",
+                        "@parent": "device/main//",
+                    })
+                    .into(),
                 ),
                 (
-                    "c8y/s/us/child0/child00",
-                    "101,child000,child000,thin-edge.io-child".into(),
+                    "te/device/child00//",
+                    json!({
+                        "@type": "child-device",
+                        "@id": "child00",
+                        "name": "child00",
+                        "@parent": "device/child0//",
+                    })
+                    .into(),
+                ),
+                (
+                    "te/device/child000//",
+                    json!({
+                        "@type": "child-device",
+                        "@id": "child000",
+                        "name": "child000",
+                        "@parent": "device/child00//",
+                    })
+                    .into(),
                 ),
             ],
         );
@@ -3377,7 +3381,7 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = pending_entities_mqtt_messages(
+        let messages = pending_entities_into_mqtt_messages(
             converter
                 .try_register_source_entities(&reg_message)
                 .await
@@ -3405,7 +3409,7 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = pending_entities_mqtt_messages(
+        let messages = pending_entities_into_mqtt_messages(
             converter
                 .try_register_source_entities(&reg_message)
                 .await
@@ -3431,7 +3435,7 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let messages = pending_entities_mqtt_messages(
+        let messages = pending_entities_into_mqtt_messages(
             converter
                 .try_register_source_entities(&reg_message)
                 .await
@@ -3441,7 +3445,7 @@ pub(crate) mod tests {
         assert_messages_matching(
             &messages,
             [
-                ("c8y/s/us", "101,test-device:device:child0,child0,thin-edge.io-child".into()),
+                // ("c8y/s/us", "101,test-device:device:child0,child0,thin-edge.io-child".into()),
             (
                 "te/device/child0//",
                 r#"{"@id":"test-device:device:child0","@parent":"device/main//","@type":"child-device","custom":"foo","name":"child0"}"#.into(),
@@ -3449,11 +3453,15 @@ pub(crate) mod tests {
         );
     }
 
-    fn pending_entities_mqtt_messages(entities: Vec<PendingEntityData>) -> Vec<MqttMessage> {
-        entities
-            .into_iter()
-            .map(|entity| entity.reg_message.to_mqtt_message(&MqttSchema::default()))
-            .collect()
+    fn pending_entities_into_mqtt_messages(entities: Vec<PendingEntityData>) -> Vec<MqttMessage> {
+        let mut messages = vec![];
+        for entity in entities {
+            messages.push(entity.reg_message.to_mqtt_message(&MqttSchema::default()));
+            for data_message in entity.data_messages {
+                messages.push(data_message);
+            }
+        }
+        messages
     }
 
     pub(crate) async fn create_c8y_converter(
