@@ -776,6 +776,7 @@ dependencies = [
  "clock",
  "json-writer",
  "mime",
+ "mockito",
  "plugin_sm",
  "proptest",
  "rand",

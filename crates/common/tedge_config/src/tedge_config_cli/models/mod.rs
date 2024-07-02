@@ -29,7 +29,7 @@ pub use self::templates_set::*;
 pub use tedge_utils::timestamp;
 
 #[derive(
-    Debug, Display, Clone, Eq, PartialEq, doku::Document, serde::Serialize, serde::Deserialize,
+    Debug, Display, Clone, Copy, Eq, PartialEq, doku::Document, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]

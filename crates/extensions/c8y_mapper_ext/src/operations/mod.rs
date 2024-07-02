@@ -13,47 +13,251 @@
 //!   (MQTT, Smartrest)
 //! - implementations of operations
 
+use crate::actor::IdDownloadRequest;
+use crate::actor::IdDownloadResult;
+use crate::actor::IdUploadRequest;
+use crate::actor::IdUploadResult;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
+use crate::Capabilities;
+use c8y_api::http_proxy::C8yEndPoint;
+use c8y_auth_proxy::url::ProxyUrlGenerator;
+use c8y_http_proxy::handle::C8YHttpProxy;
+use camino::Utf8Path;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
+use tedge_actors::ClientMessageBox;
+use tedge_actors::LoggingSender;
+use tedge_actors::Sender;
 use tedge_api::commands::ConfigMetadata;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::workflow::GenericCommandState;
+use tedge_api::mqtt_topics::IdGenerator;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
+use tedge_config::AutoLogUpload;
+use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tracing::error;
 
 pub mod config_snapshot;
 pub mod config_update;
 pub mod firmware_update;
 pub mod log_upload;
+mod restart;
+mod software_list;
+mod software_update;
+mod upload;
 
-/// Represents a pending download performed by the downloader from the FTS.
+/// Handles operations.
 ///
-/// Functions which download files from the tedge File Transfer Service as part of handling
-/// operations (e.g. when performing `log_upload` or `config_snapshot`, the relevant file is
-/// uploaded into FTS) will use this type for communicating with the Downloader actor.
-pub struct FtsDownloadOperationData {
-    pub download_type: FtsDownloadOperationType,
-    pub url: String,
+/// Handling an operation usually consists of 3 steps:
+///
+/// 1. Receive a smartrest message which is an operation request, convert it to thin-edge message,
+///    and publish on local MQTT (done by the converter).
+/// 2. Various local thin-edge components/services execute the operation, and when they're done,
+///    they publish an MQTT message with 'status: successful/failed'
+/// 3. The cumulocity mapper needs to do some additional steps, like downloading/uploading files via
+///    HTTP, or talking to C8y via HTTP proxy, before it can send operation response via the bridge
+///    and then clear the local MQTT operation topic.
+///
+/// This struct concerns itself with performing step 3. We need to handle multiple operations
+/// concurrently, so we need an object separate from [`CumulocityConverter`], where many `&mut self`
+/// methods prevent us from concurrent data access. Instead, this object has all necessary data for
+/// operation handling, and `&self` methods so it can be run concurrently.
+pub struct OperationHandler {
+    pub capabilities: Capabilities,
+    pub auto_log_upload: AutoLogUpload,
+    pub tedge_http_host: Arc<str>,
+    pub tmp_dir: Arc<Utf8Path>,
+    pub mqtt_schema: MqttSchema,
+    pub c8y_prefix: tedge_config::TopicPrefix,
+    pub software_management_api: SoftwareManagementApiFlag,
+    pub command_id: IdGenerator,
 
-    // used to automatically remove the temporary file after operation is finished
-    pub file_dir: tempfile::TempDir,
+    pub http_proxy: C8YHttpProxy,
+    pub c8y_endpoint: C8yEndPoint,
+    pub auth_proxy: ProxyUrlGenerator,
 
-    // TODO: remove this message field since command is available
-    // the message that triggered the operation
-    pub message: MqttMessage,
+    pub downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+    pub uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
+    pub mqtt_publisher: LoggingSender<MqttMessage>,
 
-    pub entity_topic_id: EntityTopicId,
-
-    pub command: GenericCommandState,
+    pub running_operations: Arc<Mutex<HashMap<Arc<str>, RunningOperation>>>,
 }
 
-/// Used to denote as type of what operation was the file downloaded from the FTS.
+impl OperationHandler {
+    pub async fn handle_operation(
+        self: &Arc<Self>,
+        operation: OperationType,
+        entity: Entity,
+        cmd_id: Arc<str>,
+        message: MqttMessage,
+    ) {
+        let message = OperationMessage {
+            operation,
+            entity,
+            cmd_id: cmd_id.clone(),
+            message,
+        };
+
+        let topic: Arc<str> = message.message.topic.name.clone().into();
+        let running_operation = {
+            let mut lock = self.running_operations.lock().unwrap();
+            let op = lock.get(&topic);
+
+            if let Some(running_operation) = op {
+                // task already terminated
+                if let Err(e) = running_operation.tx.send(message) {
+                    error!("couldnt send message: {e}");
+                    let running_operation = lock.remove(&topic).unwrap();
+                    Some(running_operation)
+                } else {
+                    None
+                }
+            } else {
+                let handler = self.clone();
+                let running_operation = RunningOperation::spawn(message, handler);
+
+                lock.insert(topic, running_operation);
+                None
+            }
+        };
+
+        if let Some(running_operation) = running_operation {
+            let join_result = running_operation.handle.await;
+            error!("handle: {join_result:?}");
+        }
+    }
+}
+
+pub struct RunningOperation {
+    handle: tokio::task::JoinHandle<()>,
+    tx: tokio::sync::mpsc::UnboundedSender<OperationMessage>,
+}
+
+impl RunningOperation {
+    /// Spawns a task that handles the operation.
+    ///
+    /// The task handles a single operation with a given command id, and via a channel it receives
+    /// operation state changes (if any) to drive an operation to completion.
+    fn spawn(message: OperationMessage, handler: Arc<OperationHandler>) -> Self {
+        let cmd_id = message.cmd_id.clone();
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        tx.send(message).unwrap();
+
+        let handle = tokio::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                if message.cmd_id != cmd_id {
+                    panic!("operation payload message sent to wrong task");
+                }
+
+                let OperationMessage {
+                    entity,
+                    cmd_id,
+                    message,
+                    operation,
+                } = message;
+                let external_id = entity.external_id.clone();
+
+                let command_topic = message.topic.clone();
+                let res = match operation {
+                    OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
+
+                    OperationType::Restart => {
+                        handler
+                            .publish_restart_operation_status(entity, &cmd_id, message)
+                            .await
+                    }
+                    OperationType::SoftwareList => {
+                        handler
+                            .publish_software_list(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::SoftwareUpdate => {
+                        handler
+                            .publish_software_update_status(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::LogUpload => {
+                        handler
+                            .handle_log_upload_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::ConfigSnapshot => {
+                        handler
+                            .handle_config_snapshot_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::ConfigUpdate => {
+                        handler
+                            .handle_config_update_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                    OperationType::FirmwareUpdate => {
+                        handler
+                            .handle_firmware_update_state_change(entity, &cmd_id, &message)
+                            .await
+                    }
+                };
+
+                let mut mqtt_publisher = handler.mqtt_publisher.clone();
+                match res {
+                    // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
+                    Ok((messages, command)) => {
+                        if let Some(command) = command {
+                            if let Err(e) = handler
+                                .upload_operation_log(&external_id, &cmd_id, &operation, command)
+                                .await
+                            {
+                                error!("failed to upload operation logs: {e}");
+                            }
+                        }
+
+                        for message in messages {
+                            if message.retain
+                                && message.payload_bytes().is_empty()
+                                && message.topic == command_topic
+                            {
+                                rx.close();
+                            }
+                            mqtt_publisher.send(message).await.unwrap();
+                        }
+                    }
+                    Err(e) => error!("{e}"),
+                }
+            }
+            handler.running_operations.lock().unwrap().remove(&cmd_id);
+        });
+
+        Self { handle, tx }
+    }
+}
+
+/// An MQTT message that contains an operation payload.
 ///
-/// Used to dispatch download result to the correct operation handler.
-pub enum FtsDownloadOperationType {
-    LogDownload,
-    ConfigDownload,
+/// These are MQTT messages that contain operation payloads. These messages need to be passed to
+/// tasks that handle a given operation to advance the operation and eventually complete it.
+struct OperationMessage {
+    operation: OperationType,
+    entity: Entity,
+    cmd_id: Arc<str>,
+    message: MqttMessage,
+}
+
+/// A subset of entity-related information necessary to handle an operation.
+///
+/// Because the operation may take time and other operations may run concurrently, we don't want to
+/// query the entity store.
+#[derive(Clone, Debug)]
+pub struct Entity {
+    pub topic_id: EntityTopicId,
+    pub external_id: EntityExternalId,
+    pub smartrest_publish_topic: Topic,
 }
 
 impl CumulocityConverter {
@@ -82,6 +286,23 @@ impl CumulocityConverter {
         messages.push(MqttMessage::new(&sm_topic, payload));
 
         Ok(messages)
+    }
+}
+
+fn get_smartrest_response_for_upload_result(
+    upload_result: tedge_uploader_ext::UploadResult,
+    binary_url: &str,
+    operation: c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations,
+) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+    match upload_result {
+        Ok(_) => c8y_api::smartrest::smartrest_serializer::succeed_static_operation(
+            operation,
+            Some(binary_url),
+        ),
+        Err(err) => c8y_api::smartrest::smartrest_serializer::fail_operation(
+            operation,
+            &format!("Upload failed with {err}"),
+        ),
     }
 }
 
