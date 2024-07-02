@@ -204,7 +204,8 @@ mod tests {
     #[tokio::test]
     async fn create_firmware_operation_file_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -226,7 +227,8 @@ mod tests {
     #[tokio::test]
     async fn create_firmware_operation_file_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -281,8 +283,10 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_main_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -325,8 +329,10 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_when_remote_utl_has_c8y_url() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -369,8 +375,10 @@ mod tests {
 
     #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_child_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -423,8 +431,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_firmware_update_executing_and_failed_cmd_for_main_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
@@ -471,8 +481,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_firmware_update_executing_and_failed_cmd_for_child_device() {
-        let cfg_dir = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
@@ -529,7 +541,8 @@ mod tests {
     #[tokio::test]
     async fn handle_firmware_update_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, http, .. } = test_handle;
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -568,7 +581,8 @@ mod tests {
     #[tokio::test]
     async fn handle_firmware_update_successful_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, http, .. } = test_handle;
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);

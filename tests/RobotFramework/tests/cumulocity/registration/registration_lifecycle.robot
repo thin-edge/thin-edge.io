@@ -179,6 +179,13 @@ Early data messages cached and processed
     Execute Command    tedge mqtt pub --retain 'te/device/child00//' '{"@type":"child-device","@id":"${prefix}child00","@parent": "device/child0//"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child0//' '{"@type":"child-device","@id":"${prefix}child0"}'
 
+    Check Child Device    ${DEVICE_SN}    ${prefix}child0    ${prefix}child0    thin-edge.io-child
+    Check Child Device    ${prefix}child0    ${prefix}child00    ${prefix}child00    thin-edge.io-child
+    Check Child Device    ${prefix}child0    ${prefix}child01    ${prefix}child01    thin-edge.io-child
+    Check Child Device    ${prefix}child00    ${prefix}child000    ${prefix}child000    thin-edge.io-child
+    Check Child Device    ${prefix}child000    ${prefix}child0000    ${prefix}child0000    thin-edge.io-child
+    Check Child Device    ${prefix}child0000    ${prefix}child00000    ${prefix}child00000    thin-edge.io-child
+
     FOR    ${child}    IN    @{children}
         Cumulocity.Set Device    ${prefix}${child}
         Device Should Have Measurements    type=environment    minimum=1    maximum=1
@@ -208,6 +215,13 @@ Early data messages cached and processed without @id in registration messages
     Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child01//' '{"@type":"child-device","@parent": "device/${prefix}child0//"}'
     Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child00//' '{"@type":"child-device","@parent": "device/${prefix}child0//"}'
     Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child0//' '{"@type":"child-device"}'
+
+    Check Child Device    ${DEVICE_SN}    ${DEVICE_SN}:device:${prefix}child0    ${DEVICE_SN}:device:${prefix}child0    thin-edge.io-child
+    Check Child Device    ${DEVICE_SN}:device:${prefix}child0    ${DEVICE_SN}:device:${prefix}child00    ${DEVICE_SN}:device:${prefix}child00    thin-edge.io-child
+    Check Child Device    ${DEVICE_SN}:device:${prefix}child0    ${DEVICE_SN}:device:${prefix}child01    ${DEVICE_SN}:device:${prefix}child01    thin-edge.io-child
+    Check Child Device    ${DEVICE_SN}:device:${prefix}child00    ${DEVICE_SN}:device:${prefix}child000    ${DEVICE_SN}:device:${prefix}child000    thin-edge.io-child
+    Check Child Device    ${DEVICE_SN}:device:${prefix}child000    ${DEVICE_SN}:device:${prefix}child0000    ${DEVICE_SN}:device:${prefix}child0000    thin-edge.io-child
+    Check Child Device    ${DEVICE_SN}:device:${prefix}child0000    ${DEVICE_SN}:device:${prefix}child00000    ${DEVICE_SN}:device:${prefix}child00000    thin-edge.io-child
 
     FOR    ${child}    IN    @{children}
         Cumulocity.Set Device    ${DEVICE_SN}:device:${prefix}${child}

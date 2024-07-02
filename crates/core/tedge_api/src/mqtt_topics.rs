@@ -168,6 +168,7 @@ impl MqttSchema {
         };
         let channel = match channel {
             ChannelFilter::EntityMetadata => "".to_string(),
+            ChannelFilter::EntityTwinData => "/twin/+".to_string(),
             ChannelFilter::Measurement => "/m/+".to_string(),
             ChannelFilter::MeasurementMetadata => "/m/+/meta".to_string(),
             ChannelFilter::Event => "/e/+".to_string(),
@@ -178,6 +179,7 @@ impl MqttSchema {
             ChannelFilter::Command(operation) => format!("/cmd/{operation}/+"),
             ChannelFilter::AnyCommandMetadata => "/cmd/+".to_string(),
             ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
+            ChannelFilter::Health => "/status/health".to_string(),
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
@@ -404,6 +406,11 @@ impl EntityTopicId {
         self == &Self::default_main_device()
     }
 
+    /// Returns true if the current topic identifier matches that of the service
+    pub fn is_default_service(&self) -> bool {
+        self.default_service_name().is_some()
+    }
+
     /// If `self` is a device topic id, return a service topic id under this
     /// device.
     ///
@@ -512,7 +519,7 @@ pub enum TopicIdError {
 /// A channel identifies the type of the messages exchanged over a topic
 ///
 /// <https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-channel>
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Channel {
     EntityMetadata,
     EntityTwinData {
@@ -615,6 +622,10 @@ impl Display for Channel {
 }
 
 impl Channel {
+    pub fn is_entity_metadata(&self) -> bool {
+        matches!(self, Channel::EntityMetadata)
+    }
+
     pub fn is_measurement(&self) -> bool {
         matches!(self, Channel::Measurement { .. })
     }
@@ -716,8 +727,10 @@ pub enum EntityFilter<'a> {
     Entity(&'a EntityTopicId),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChannelFilter {
     EntityMetadata,
+    EntityTwinData,
     Measurement,
     Event,
     Alarm,
@@ -728,6 +741,34 @@ pub enum ChannelFilter {
     AlarmMetadata,
     AnyCommandMetadata,
     CommandMetadata(OperationType),
+    Health,
+}
+
+impl From<&Channel> for ChannelFilter {
+    fn from(value: &Channel) -> Self {
+        match value {
+            Channel::EntityMetadata => ChannelFilter::EntityMetadata,
+            Channel::EntityTwinData { fragment_key: _ } => ChannelFilter::EntityTwinData,
+            Channel::Measurement {
+                measurement_type: _,
+            } => ChannelFilter::Measurement,
+            Channel::Event { event_type: _ } => ChannelFilter::Event,
+            Channel::Alarm { alarm_type: _ } => ChannelFilter::Alarm,
+            Channel::Command {
+                operation,
+                cmd_id: _,
+            } => ChannelFilter::Command(operation.clone()),
+            Channel::MeasurementMetadata {
+                measurement_type: _,
+            } => ChannelFilter::MeasurementMetadata,
+            Channel::EventMetadata { event_type: _ } => ChannelFilter::EventMetadata,
+            Channel::AlarmMetadata { alarm_type: _ } => ChannelFilter::AlarmMetadata,
+            Channel::CommandMetadata { operation } => {
+                ChannelFilter::CommandMetadata(operation.clone())
+            }
+            Channel::Health => ChannelFilter::Health,
+        }
+    }
 }
 
 pub struct IdGenerator {

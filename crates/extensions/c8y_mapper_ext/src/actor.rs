@@ -14,6 +14,7 @@ use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -32,6 +33,10 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::ChannelFilter;
+use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -58,7 +63,22 @@ pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult] : Debug);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishMessage(pub MqttMessage);
+
+impl From<MqttMessage> for PublishMessage {
+    fn from(value: MqttMessage) -> Self {
+        PublishMessage(value)
+    }
+}
+
+impl From<PublishMessage> for MqttMessage {
+    fn from(value: PublishMessage) -> Self {
+        value.0
+    }
+}
+
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult, PublishMessage] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -67,6 +87,7 @@ pub struct C8yMapperActor {
     mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+    message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
 
 #[async_trait]
@@ -116,6 +137,9 @@ impl Actor for C8yMapperActor {
                 C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
                     self.process_download_result(cmd_id, result).await?;
                 }
+                C8yMapperInput::PublishMessage(message) => {
+                    self.mqtt_publisher.send(message.0).await?;
+                }
             }
         }
         Ok(())
@@ -129,6 +153,7 @@ impl C8yMapperActor {
         mqtt_publisher: LoggingSender<MqttMessage>,
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+        message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     ) -> Self {
         Self {
             converter,
@@ -136,16 +161,114 @@ impl C8yMapperActor {
             mqtt_publisher,
             timer_sender,
             bridge_status_messages,
+            message_handlers,
         }
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let converted_messages = self.converter.convert(&message).await;
+        // If incoming message follows MQTT topic scheme v1
+        if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
+            match self.converter.try_register_source_entities(&message).await {
+                Ok(pending_entities) => {
+                    self.process_registered_entities(pending_entities, &channel)
+                        .await?;
+                }
+                Err(err) => {
+                    self.mqtt_publisher
+                        .send(self.converter.new_error_message(err))
+                        .await?;
+                    return Ok(());
+                }
+            }
 
-        for converted_message in converted_messages.into_iter() {
-            self.mqtt_publisher.send(converted_message).await?;
+            if !channel.is_entity_metadata() {
+                self.process_data_message(message.clone()).await?;
+            }
+        } else {
+            self.convert_and_publish(&message).await?;
         }
 
+        Ok(())
+    }
+
+    async fn process_registered_entities(
+        &mut self,
+        pending_entities: Vec<PendingEntityData>,
+        channel: &Channel,
+    ) -> Result<(), RuntimeError> {
+        for pending_entity in pending_entities {
+            self.process_registration_message(pending_entity.reg_message, channel)
+                .await?;
+
+            // Convert and publish cached data messages
+            for pending_data_message in pending_entity.data_messages {
+                self.process_data_message(pending_data_message).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn process_registration_message(
+        &mut self,
+        message: EntityRegistrationMessage,
+        channel: &Channel,
+    ) -> Result<(), RuntimeError> {
+        // Convert and publish the registration message
+        let reg_messages = self
+            .converter
+            .convert_entity_registration_message(&message, channel);
+        self.publish_messages(reg_messages).await?;
+
+        // Send the registration message to all subscribed handlers
+        self.publish_message_to_subscribed_handles(
+            &Channel::EntityMetadata,
+            message
+                .clone()
+                .to_mqtt_message(&self.converter.mqtt_schema)
+                .clone(),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn process_data_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
+        if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
+            self.convert_and_publish(&message).await?;
+            self.publish_message_to_subscribed_handles(&channel, message)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn convert_and_publish(&mut self, message: &MqttMessage) -> Result<(), RuntimeError> {
+        // Convert and publish the incoming data message
+        let converted_messages = self.converter.convert(message).await;
+        self.publish_messages(converted_messages).await?;
+
+        Ok(())
+    }
+
+    async fn publish_message_to_subscribed_handles(
+        &mut self,
+        channel: &Channel,
+        message: MqttMessage,
+    ) -> Result<(), RuntimeError> {
+        // Send the registration message to all subscribed handlers
+        if let Some(message_handler) = self.message_handlers.get_mut(&channel.into()) {
+            for sender in message_handler {
+                sender.send(message.clone()).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn publish_messages(&mut self, messages: Vec<MqttMessage>) -> Result<(), RuntimeError> {
+        for message in messages.into_iter() {
+            self.mqtt_publisher.send(message).await?;
+        }
         Ok(())
     }
 
@@ -314,6 +437,7 @@ pub struct C8yMapperBuilder {
     download_sender: DynSender<IdDownloadRequest>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
+    message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
 
 impl C8yMapperBuilder {
@@ -357,6 +481,8 @@ impl C8yMapperBuilder {
             &bridge_monitor_builder,
         );
 
+        let message_handlers = HashMap::new();
+
         Ok(Self {
             config,
             box_builder,
@@ -367,6 +493,7 @@ impl C8yMapperBuilder {
             download_sender,
             auth_proxy,
             bridge_monitor_builder,
+            message_handlers,
         })
     }
 
@@ -384,6 +511,24 @@ impl C8yMapperBuilder {
 impl RuntimeRequestSink for C8yMapperBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
+    }
+}
+
+impl MessageSource<MqttMessage, Vec<ChannelFilter>> for C8yMapperBuilder {
+    fn connect_sink(&mut self, config: Vec<ChannelFilter>, peer: &impl MessageSink<MqttMessage>) {
+        let sender = LoggingSender::new("Mapper MQTT".into(), peer.get_sender());
+        for channel in config {
+            self.message_handlers
+                .entry(channel)
+                .or_default()
+                .push(sender.clone());
+        }
+    }
+}
+
+impl MessageSink<PublishMessage> for C8yMapperBuilder {
+    fn get_sender(&self) -> DynSender<PublishMessage> {
+        self.box_builder.get_sender().sender_clone()
     }
 }
 
@@ -417,6 +562,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             mqtt_publisher,
             timer_sender,
             bridge_monitor_box,
+            self.message_handlers,
         ))
     }
 }
