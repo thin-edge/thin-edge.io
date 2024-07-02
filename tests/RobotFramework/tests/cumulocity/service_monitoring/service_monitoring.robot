@@ -76,7 +76,7 @@ Test if all c8y services using default service type when service type configured
 
 Check health status of tedge-mapper-c8y service on broker stop start
     Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
 
@@ -84,7 +84,7 @@ Check health status of tedge-mapper-c8y service on broker stop start
     ThinEdgeIO.Service Should Be Stopped  mosquitto.service
 
     Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    down
 
@@ -126,7 +126,7 @@ Check health status of child device service
 
     # Check created service entries
     Device Should Exist                      ${child_sn}:service:childservice    show_info=False
-    ${SERVICE}=    Device Should Have Fragment Values    status\=unknown
+    ${SERVICE}=    Device Should Have Fragment Values    status\=unknown    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    childservice
     Should Be Equal    ${SERVICE["serviceType"]}    service
     Should Be Equal    ${SERVICE["status"]}    unknown
@@ -162,7 +162,7 @@ Check if a service is down
     ThinEdgeIO.Service Should Be Stopped  ${service_name}
 
     Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down    timeout=${TIMEOUT}
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
     Should Be Equal    ${SERVICE["serviceType"]}    service
