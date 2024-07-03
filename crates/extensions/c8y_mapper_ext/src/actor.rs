@@ -211,9 +211,10 @@ impl C8yMapperActor {
 
     async fn process_registration_message(
         &mut self,
-        message: EntityRegistrationMessage,
+        mut message: EntityRegistrationMessage,
         channel: &Channel,
     ) -> Result<(), RuntimeError> {
+        self.converter.append_id_if_not_given(&mut message);
         // Convert and publish the registration message
         let reg_messages = self
             .converter
