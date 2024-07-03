@@ -165,6 +165,18 @@ impl C8yMapperActor {
         }
     }
 
+    /// Processing an incoming message involves the following steps, if the message follows MQTT topic scheme v1:
+    /// 1. Try to register the source entity and any of its cached pending children for the incoming message
+    /// 2. For each entity that got registered in the previous step
+    ///    1. Convert and publish that registration message
+    ///    2. Publish that registration messages to any message handlers interested in that message type
+    ///    3. Convert and publish all the cached data messages of that entity to the cloud
+    ///    4. Publish those data messages also to any message handlers interested in those message types
+    /// 3. Once all the required entities and their cached data is processed, process the incoming message itself
+    ///    1. Convert and publish that message to the cloud
+    ///    2. Publish that message to any message handlers interested in its message type
+    ///
+    /// If the message follows the legacy topic scheme v0, the data message is simply converted the old way.
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         // If incoming message follows MQTT topic scheme v1
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
@@ -182,7 +194,7 @@ impl C8yMapperActor {
             }
 
             if !channel.is_entity_metadata() {
-                self.process_data_message(message.clone()).await?;
+                self.process_message(message.clone()).await?;
             }
         } else {
             self.convert_and_publish(&message).await?;
@@ -191,6 +203,10 @@ impl C8yMapperActor {
         Ok(())
     }
 
+    /// Process a list of registered entities with their cached data.
+    /// For each entity its registration message is converted and published to the cloud
+    /// and any of the interested message handlers for that type,
+    /// followed by repeating the same for its cached data messages.
     async fn process_registered_entities(
         &mut self,
         pending_entities: Vec<PendingEntityData>,
@@ -202,7 +218,7 @@ impl C8yMapperActor {
 
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
-                self.process_data_message(pending_data_message).await?;
+                self.process_message(pending_data_message).await?;
             }
         }
 
@@ -234,7 +250,9 @@ impl C8yMapperActor {
         Ok(())
     }
 
-    async fn process_data_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
+    //  Process an MQTT message by converting and publishing it to the cloud
+    /// and any of the message handlers interested in its type.
+    async fn process_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
             self.convert_and_publish(&message).await?;
             self.publish_message_to_subscribed_handles(&channel, message)

@@ -324,6 +324,16 @@ impl CumulocityConverter {
         })
     }
 
+    /// Try to register the target entity and any of its pending children for the incoming message,
+    /// if that target entity is not already registered with the entity store.
+    ///
+    /// For an entity metadata message (aka registration message),
+    /// an attempt is made to register that entity and any previously cached children of that entity.
+    /// If the entity can not be registered due to missing parents, it is cached with the entity store to be registered later.
+    ///
+    /// For any other data messages, auto-registration of the target entities are attempted when enabled.
+    ///
+    /// In both cases, the successfully registered entities, along with their cached data, is returned.
     pub async fn try_register_source_entities(
         &mut self,
         message: &MqttMessage,
@@ -354,6 +364,12 @@ impl CumulocityConverter {
                             .map(|reg_msg| reg_msg.into())
                             .collect())
                     } else {
+                        // On receipt of an unregistered entity data message with custom topic scheme OR
+                        // one with default topic scheme itself when auto registration disabled,
+                        // since it is received before the entity itself is registered,
+                        // cache it in the unregistered entity store to be processed after the entity is registered
+                        self.entity_store.cache_early_data_message(message.clone());
+
                         Ok(vec![])
                     }
                 }
@@ -363,6 +379,13 @@ impl CumulocityConverter {
         }
     }
 
+    /// Convert an entity registration message based on the context:
+    /// that is the kind of message that triggered this registration(channel)
+    /// The context is relevant here because of the inconsistency in handling the
+    /// auto-registered source entities of a health status message.
+    /// For those health messages, the entity registration message is not mapped and ignored
+    /// as the status message mapping will create the target entity in the cloud
+    /// with the proper initial state derived from the status message itself.
     pub(crate) fn convert_entity_registration_message(
         &mut self,
         message: &EntityRegistrationMessage,
@@ -375,6 +398,7 @@ impl CumulocityConverter {
         self.wrap_errors(c8y_reg_message)
     }
 
+    /// Convert an entity registration message into its C8y counterpart
     pub fn try_convert_entity_registration(
         &mut self,
         input: &EntityRegistrationMessage,
@@ -1064,6 +1088,12 @@ impl CumulocityConverter {
         &mut self,
         source: &EntityTopicId,
     ) -> Result<Vec<EntityRegistrationMessage>, ConversionError> {
+        if !self.config.enable_auto_register {
+            return Err(ConversionError::AutoRegistrationDisabled(
+                source.to_string(),
+            ));
+        }
+
         let auto_registered_entities = self.entity_store.auto_register_entity(source)?;
         for auto_registered_entity in &auto_registered_entities {
             if auto_registered_entity.r#type == EntityType::ChildDevice {
@@ -1103,11 +1133,12 @@ impl CumulocityConverter {
         if self.entity_store.get(&source).is_none()
             && !(self.config.enable_auto_register && source.matches_default_topic_scheme())
         {
-            // On receipt of an unregistered entity data message with custom topic scheme OR
-            // one with default topic scheme itself when auto registration disabled,
-            // since it is received before the entity itself is registered,
-            // cache it in the unregistered entity store to be processed after the entity is registered
-            self.entity_store.cache_early_data_message(message.clone());
+            // Since the entity is still not present in the entity store,
+            // despite an attempt to register the source entity in try_register_source_entities,
+            // either auto-registration is disabled or a non-default topic scheme is used.
+            // In either case, the message would have been cached in the entity store as pending entity data.
+            // Hence just skip the conversion as it will be converted eventually
+            // once its source entity is registered.
             return Ok(vec![]);
         }
 
@@ -1254,38 +1285,6 @@ impl CumulocityConverter {
 
         Ok(registration_messages)
     }
-
-    // fn convert_entity_registration_message(
-    //     &self,
-    //     value: &EntityRegistrationMessage,
-    // ) -> MqttMessage {
-    //     let entity_topic_id = value.topic_id.clone();
-
-    //     let mut register_payload: Map<String, Value> = Map::new();
-
-    //     let entity_type = match value.r#type {
-    //         EntityType::MainDevice => "device",
-    //         EntityType::ChildDevice => "child-device",
-    //         EntityType::Service => "service",
-    //     };
-    //     register_payload.insert("@type".into(), Value::String(entity_type.to_string()));
-
-    //     if let Some(external_id) = &value.external_id {
-    //         register_payload.insert("@id".into(), Value::String(external_id.as_ref().into()));
-    //     }
-
-    //     if let Some(parent_id) = &value.parent {
-    //         register_payload.insert("@parent".into(), Value::String(parent_id.to_string()));
-    //     }
-
-    //     register_payload.extend(value.other.clone());
-
-    //     MqttMessage::new(
-    //         &Topic::new(&format!("{}/{entity_topic_id}", self.mqtt_schema.root)).unwrap(),
-    //         serde_json::to_string(&Value::Object(register_payload)).unwrap(),
-    //     )
-    //     .with_retain()
-    // }
 
     async fn try_convert_tedge_and_c8y_topics(
         &mut self,
@@ -2001,24 +2000,54 @@ pub(crate) mod tests {
         assert!(converter.convert(&internal_alarm_message).await.is_empty());
     }
 
+    #[test_case(
+        "m/env", 
+        json!({ "temp": 1})
+        ;"measurement"
+    )]
+    #[test_case(
+        "e/click", 
+        json!({ "text": "Someone clicked" })
+        ;"event"
+    )]
+    #[test_case(
+        "a/temp", 
+        json!({ "text": "Temperature too high" })
+        ;"alarm"
+    )]
+    #[test_case(
+        "twin/custom", 
+        json!({ "foo": "bar" })
+        ;"twin"
+    )]
+    #[test_case(
+        "status/health", 
+        json!({ "status": "up" })
+        ;"health status"
+    )]
+    #[test_case(
+        "cmd/restart", 
+        json!({ })
+        ;"command metadata"
+    )]
+    #[test_case(
+        "cmd/restart/123", 
+        json!({ "status": "init" })
+        ;"command"
+    )]
     #[tokio::test]
-    async fn auto_register_child_device() {
+    async fn auto_registration(channel: &str, payload: Value) {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let in_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///m/"),
-            json!({
-                "temp": 1,
-                "time": "2021-11-16T17:45:40.571760714+01:00"
-            })
-            .to_string(),
-        );
+        // Validate auto-registration of child device
+        let topic = format!("te/device/child1///{channel}");
+        let in_message = MqttMessage::new(&Topic::new_unchecked(&topic), payload.to_string());
+
         let entities = converter
             .try_register_source_entities(&in_message)
             .await
             .unwrap();
-        dbg!(&entities);
         let messages: Vec<MqttMessage> = entities
             .into_iter()
             .map(|entity| entity.reg_message.to_mqtt_message(&converter.mqtt_schema))
@@ -2036,21 +2065,11 @@ pub(crate) mod tests {
                 .into(),
             )],
         );
-    }
 
-    #[tokio::test]
-    async fn auto_register_child_device_service() {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        // Validate auto-registration of child device and its service
+        let topic = format!("te/device/child2///{channel}");
+        let in_message = MqttMessage::new(&Topic::new_unchecked(&topic), payload.to_string());
 
-        let in_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///m/"),
-            json!({
-                "temp": 1,
-                "time": "2021-11-16T17:45:40.571760714+01:00"
-            })
-            .to_string(),
-        );
         let entities = converter
             .try_register_source_entities(&in_message)
             .await
@@ -2063,11 +2082,11 @@ pub(crate) mod tests {
         assert_messages_matching(
             &messages,
             [(
-                "te/device/child1//",
+                "te/device/child2//",
                 json!({
                     "@type":"child-device",
-                    "@id":"test-device:device:child1",
-                    "name":"child1"
+                    "@id":"test-device:device:child2",
+                    "name":"child2"
                 })
                 .into(),
             )],

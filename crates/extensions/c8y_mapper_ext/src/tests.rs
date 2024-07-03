@@ -152,9 +152,6 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    // while let Some(msg) = availability.recv().await {
-    //     dbg!(msg);
-    // }
     assert_received_contains_str(
         &mut avail,
         [(
