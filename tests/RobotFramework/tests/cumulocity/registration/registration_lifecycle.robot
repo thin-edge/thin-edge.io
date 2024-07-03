@@ -4,8 +4,7 @@ Library    Cumulocity
 Library    ThinEdgeIO
 
 Test Tags    theme:c8y    theme:registration    theme:deregistration
-Suite Setup    Custom Setup
-Test Setup    Test Setup
+Test Setup    Custom Setup
 Test Teardown    Get Logs    ${DEVICE_SN}
 
 *** Test Cases ***
@@ -144,29 +143,27 @@ Register devices using custom MQTT schema
 
 
 Register tedge-agent when tedge-mapper-c8y is not running #2389
-    [Teardown]    Start Service    tedge-mapper-c8y
-    Device Should Exist    ${DEVICE_SN}
-
     Stop Service    tedge-mapper-c8y
     Execute Command    cmd=timeout 5 env TEDGE_RUN_LOCK_FILES=false tedge-agent --mqtt-device-topic-id device/offlinechild1//    ignore_exit_code=${True}
     Start Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
 
-    Should Be A Child Device Of Device    ${DEVICE_SN}:device:offlinechild1
     Should Have MQTT Messages    te/device/offlinechild1//    minimum=1
+    Cumulocity.Set Managed Object    ${DEVICE_SN}
+    Should Be A Child Device Of Device    ${DEVICE_SN}:device:offlinechild1
 
     Device Should Exist    ${DEVICE_SN}:device:offlinechild1
     Cumulocity.Restart Device
     Should Have MQTT Messages    te/device/offlinechild1///cmd/restart/+
 
 Early data messages cached and processed
-    [Teardown]    Re-enable auto-registration and collect logs
     ${timestamp}=        Get Unix Timestamp
     ${prefix}=    Get Random Name
     Execute Command    sudo tedge config set c8y.entity_store.auto_register false
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y
 
-    ${children}=    Create List    child0    child00    child01    child000    child0000    child00000
+    ${children}=    Create List    child0    child00    child01    child02    child000    child0000    child00000
     FOR    ${child}    IN    @{children}
         Execute Command    sudo tedge mqtt pub 'te/device/${child}///m/environment' '{ "temp": 50 }'
         Execute Command    sudo tedge mqtt pub 'te/device/${child}///twin/maintenance_mode' 'true'
@@ -177,70 +174,31 @@ Early data messages cached and processed
     Execute Command    tedge mqtt pub --retain 'te/device/child0000//' '{"@type":"child-device","@id":"${prefix}child0000","@parent": "device/child000//"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child01//' '{"@type":"child-device","@id":"${prefix}child01","@parent": "device/child0//"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child00//' '{"@type":"child-device","@id":"${prefix}child00","@parent": "device/child0//"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child02//' '{"@type":"child-device","@parent": "device/child0//"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child0//' '{"@type":"child-device","@id":"${prefix}child0"}'
 
     Check Child Device    ${DEVICE_SN}    ${prefix}child0    ${prefix}child0    thin-edge.io-child
     Check Child Device    ${prefix}child0    ${prefix}child00    ${prefix}child00    thin-edge.io-child
     Check Child Device    ${prefix}child0    ${prefix}child01    ${prefix}child01    thin-edge.io-child
+    Check Child Device    ${prefix}child0    ${DEVICE_SN}:device:child02    ${DEVICE_SN}:device:child02    thin-edge.io-child
     Check Child Device    ${prefix}child00    ${prefix}child000    ${prefix}child000    thin-edge.io-child
     Check Child Device    ${prefix}child000    ${prefix}child0000    ${prefix}child0000    thin-edge.io-child
     Check Child Device    ${prefix}child0000    ${prefix}child00000    ${prefix}child00000    thin-edge.io-child
 
-    FOR    ${child}    IN    @{children}
-        Cumulocity.Set Device    ${prefix}${child}
+    ${xids}=    Create List    ${prefix}child0    ${prefix}child00    ${prefix}child01    ${DEVICE_SN}:device:child02    ${prefix}child000    ${prefix}child0000    ${prefix}child00000
+    FOR    ${xid}    IN    @{xids}
+        Cumulocity.Set Device    ${xid}
         Device Should Have Measurements    type=environment    minimum=1    maximum=1
         Device Should Have Fragments    maintenance_mode
     END
-
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
-
-Early data messages cached and processed without @id in registration messages
-    [Teardown]    Re-enable auto-registration and collect logs
-    ${timestamp}=        Get Unix Timestamp
-    ${prefix}=    Get Random Name
-    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
-
-    ${children}=    Create List    child0    child00    child01    child000    child0000    child00000
-    FOR    ${child}    IN    @{children}
-        Execute Command    sudo tedge mqtt pub 'te/device/${prefix}${child}///m/environment' '{ "temp": 50 }'
-        Execute Command    sudo tedge mqtt pub 'te/device/${prefix}${child}///twin/maintenance_mode' 'true'
-    END
-
-    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child000//' '{"@type":"child-device","@parent": "device/${prefix}child00//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child00000//' '{"@type":"child-device","@parent": "device/${prefix}child0000//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child0000//' '{"@type":"child-device","@parent": "device/${prefix}child000//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child01//' '{"@type":"child-device","@parent": "device/${prefix}child0//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child00//' '{"@type":"child-device","@parent": "device/${prefix}child0//"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${prefix}child0//' '{"@type":"child-device"}'
-
-    Check Child Device    ${DEVICE_SN}    ${DEVICE_SN}:device:${prefix}child0    ${DEVICE_SN}:device:${prefix}child0    thin-edge.io-child
-    Check Child Device    ${DEVICE_SN}:device:${prefix}child0    ${DEVICE_SN}:device:${prefix}child00    ${DEVICE_SN}:device:${prefix}child00    thin-edge.io-child
-    Check Child Device    ${DEVICE_SN}:device:${prefix}child0    ${DEVICE_SN}:device:${prefix}child01    ${DEVICE_SN}:device:${prefix}child01    thin-edge.io-child
-    Check Child Device    ${DEVICE_SN}:device:${prefix}child00    ${DEVICE_SN}:device:${prefix}child000    ${DEVICE_SN}:device:${prefix}child000    thin-edge.io-child
-    Check Child Device    ${DEVICE_SN}:device:${prefix}child000    ${DEVICE_SN}:device:${prefix}child0000    ${DEVICE_SN}:device:${prefix}child0000    thin-edge.io-child
-    Check Child Device    ${DEVICE_SN}:device:${prefix}child0000    ${DEVICE_SN}:device:${prefix}child00000    ${DEVICE_SN}:device:${prefix}child00000    thin-edge.io-child
-
-    FOR    ${child}    IN    @{children}
-        Cumulocity.Set Device    ${DEVICE_SN}:device:${prefix}${child}
-        Device Should Have Measurements    type=environment    minimum=1    maximum=1
-        Device Should Have Fragments    maintenance_mode
-        Should Have MQTT Messages    te/device/${prefix}${child}//    message_contains="@id":"${DEVICE_SN}:device:${prefix}${child}"    message_contains="@type":"child-device"
-    END
-
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
 
 Entities persisted and restored
-    [Teardown]    Enable clean start and collect logs
     Execute Command    sudo tedge config set c8y.entity_store.clean_start false
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y
-    
+
     ${prefix}=    Get Random Name
-    
+
     # without @id
     Execute Command    tedge mqtt pub --retain 'te/school/shop/plc1/' '{"@type":"child-device"}'
     Execute Command    tedge mqtt pub --retain 'te/school/shop/plc1/sensor1' '{"@type":"child-device","@parent":"school/shop/plc1/"}'
@@ -251,13 +209,13 @@ Entities persisted and restored
     External Identity Should Exist    ${DEVICE_SN}:school:shop:plc1:metrics
 
     # with @id
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/${prefix}plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/sensor2' '{"@type":"child-device","@id":"${prefix}plc1-sensor2","@parent":"factory/shop/${prefix}plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc2/sensor1' '{"@type":"child-device","@id":"${prefix}plc2-sensor1","@parent":"factory/shop/${prefix}plc2/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/metrics' '{"@type":"service","@id":"${prefix}plc1-metrics","@parent":"factory/shop/${prefix}plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc2/metrics' '{"@type":"service","@id":"${prefix}plc2-metrics","@parent":"factory/shop/${prefix}plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor2' '{"@type":"child-device","@id":"${prefix}plc1-sensor2","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/sensor1' '{"@type":"child-device","@id":"${prefix}plc2-sensor1","@parent":"factory/shop/plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"${prefix}plc1-metrics","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"${prefix}plc2-metrics","@parent":"factory/shop/plc2/"}'
 
     External Identity Should Exist    ${prefix}plc1
     External Identity Should Exist    ${prefix}plc2
@@ -291,19 +249,15 @@ Entities persisted and restored
     END
 
 Entities send to cloud on restart
-    Execute Command    sudo tedge config unset c8y.entity_store.clean_start
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
-
     ${prefix}=    Get Random Name
 
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/${prefix}plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/sensor2' '{"@type":"child-device","@id":"${prefix}plc1-sensor2","@parent":"factory/shop/${prefix}plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc2/sensor1' '{"@type":"child-device","@id":"${prefix}plc2-sensor1","@parent":"factory/shop/${prefix}plc2/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc1/metrics' '{"@type":"service","@id":"${prefix}plc1-metrics","@parent":"factory/shop/${prefix}plc1/"}'
-    Execute Command    tedge mqtt pub --retain 'te/factory/shop/${prefix}plc2/metrics' '{"@type":"service","@id":"${prefix}plc2-metrics","@parent":"factory/shop/${prefix}plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/' '{"@type":"child-device","@id":"${prefix}plc1"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/' '{"@type":"child-device","@id":"${prefix}plc2"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor1' '{"@type":"child-device","@id":"${prefix}plc1-sensor1","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/sensor2' '{"@type":"child-device","@id":"${prefix}plc1-sensor2","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/sensor1' '{"@type":"child-device","@id":"${prefix}plc2-sensor1","@parent":"factory/shop/plc2/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc1/metrics' '{"@type":"service","@id":"${prefix}plc1-metrics","@parent":"factory/shop/plc1/"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory/shop/plc2/metrics' '{"@type":"service","@id":"${prefix}plc2-metrics","@parent":"factory/shop/plc2/"}'
 
     External Identity Should Exist    ${prefix}plc1
     External Identity Should Exist    ${prefix}plc2
@@ -312,6 +266,8 @@ Entities send to cloud on restart
     External Identity Should Exist    ${prefix}plc2-sensor1
     External Identity Should Exist    ${prefix}plc1-metrics
     External Identity Should Exist    ${prefix}plc2-metrics
+
+    Sleep    1s    reason=Provide sufficient gap after the last published messages so that the timestamp in the next step is higher than when the first messages published
 
     ${timestamp}=    Get Unix Timestamp
     Restart Service    tedge-mapper-c8y
@@ -326,32 +282,19 @@ Entities send to cloud on restart
     Should Have MQTT Messages    c8y/s/us/${prefix}plc1    message_contains=102,${prefix}plc1-metrics    date_from=${timestamp}    minimum=1    maximum=1
     Should Have MQTT Messages    c8y/s/us/${prefix}plc2    message_contains=102,${prefix}plc2-metrics    date_from=${timestamp}    minimum=1    maximum=1
 
-
 *** Keywords ***
 
-Should Have Retained Message Count  
+Should Have Retained Message Count
     [Arguments]    ${topic}    ${exp_count}  
     ${output}=    Execute Command    mosquitto_sub --retained-only -W 3 -t "${topic}" -v    exp_exit_code=27    return_stdout=True  
     Length Should Be    ${output.splitlines()}    ${exp_count}  
-
-Re-enable auto-registration and collect logs
-    [Teardown]    Get Logs    ${DEVICE_SN}
-    Execute Command    sudo tedge config unset c8y.entity_store.auto_register
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
-
-Enable clean start and collect logs
-    [Teardown]    Get Logs    ${DEVICE_SN}
-    Execute Command    sudo tedge config set c8y.entity_store.clean_start true
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
 
 Check Child Device
     [Arguments]    ${parent_sn}    ${child_sn}    ${child_name}    ${child_type}
     ${child_mo}=    Device Should Exist        ${child_sn}
 
     ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${child_name}
-    Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN} 
+    Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}
     Should Be Equal    ${child_mo["name"]}     ${child_name}
     Should Be Equal    ${child_mo["type"]}     ${child_type}
 
@@ -365,14 +308,12 @@ Check Service
     Cumulocity.Device Should Exist    ${child_sn}    show_info=${False}
     Should Have Services    name=${service_name}    service_type=${service_type}    status=${service_status}
 
+Custom Setup
+    ${DEVICE_SN}=                    Setup
+    Set Test Variable               $DEVICE_SN
 
-Test Setup
     ${CHILD_SN}=    Get Random Name
     Set Test Variable    $CHILD_SN
     Set Test Variable    $CHILD_XID    ${DEVICE_SN}:device:${CHILD_SN}
 
     ThinEdgeIO.Set Device Context    ${DEVICE_SN}
-
-Custom Setup
-    ${DEVICE_SN}=                    Setup
-    Set Suite Variable               $DEVICE_SN
