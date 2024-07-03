@@ -1,5 +1,7 @@
 use std::fs;
 use std::fs::Permissions;
+use std::os::unix::fs::chown;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -31,10 +33,10 @@ fn creates_dest_file_if_doesnt_exist() {
 }
 
 #[test]
-fn sets_file_permissions_if_file_doesnt_exist() {
+fn changes_permissions_if_destination_doesnt_exist() {
     // Arrange
     let (temp_dir, source_path) = setup_source_file();
-    fs::set_permissions(&source_path, Permissions::from_mode(0o644)).unwrap();
+    chown(&source_path, Some(2137), Some(2137)).unwrap();
 
     let destination_path = temp_dir.path().join("destination.txt");
 
@@ -42,38 +44,48 @@ fn sets_file_permissions_if_file_doesnt_exist() {
     command.pipe_stdin(&source_path).unwrap();
     command.arg(&destination_path);
 
-    command.args(["--mode", "600"]);
+    command.args(["--user", "2138", "--group", "2138", "--mode", "600"]);
 
     // Act
     command.assert().success();
 
     // Assert
-    let dest_mode = destination_path.metadata().unwrap().permissions().mode();
+    let dest_metadata = destination_path.metadata().unwrap();
     // .mode() returns st_mode, we only need to compare a subset
-    assert_eq!(dest_mode & 0o777, 0o600);
+    let dest_mode = dest_metadata.permissions().mode() & 0o777;
+
+    assert_eq!(dest_metadata.uid(), 2138);
+    assert_eq!(dest_metadata.gid(), 2138);
+
+    assert_eq!(dest_mode, 0o600);
 }
 
 #[test]
-fn doesnt_change_permissions_if_file_exists() {
+fn preserves_permissions_if_destination_exists() {
     // Arrange
     let (temp_dir, source_path) = setup_source_file();
-    fs::set_permissions(&source_path, Permissions::from_mode(0o644)).unwrap();
-    let destination_path = temp_dir.path().join("destination.txt");
 
+    let destination_path = temp_dir.path().join("destination.txt");
     fs::File::create(&destination_path).unwrap();
+    chown(&destination_path, Some(2137), Some(2137)).unwrap();
+    fs::set_permissions(&destination_path, Permissions::from_mode(0o666)).unwrap();
 
     let mut command = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
     command.pipe_stdin(&source_path).unwrap();
     command.arg(&destination_path);
 
-    command.args(["--mode", "600"]);
+    command.args(["--user", "2138", "--group", "2138", "--mode", "600"]);
 
     // Act
     command.assert().success();
 
     // Assert
-    let dest_mode = destination_path.metadata().unwrap().permissions().mode();
-    assert_eq!(dest_mode & 0o777, 0o644);
+    let dest_metadata = destination_path.metadata().unwrap();
+    let dest_mode = dest_metadata.permissions().mode() & 0o777;
+
+    assert_eq!(dest_metadata.uid(), 2137);
+    assert_eq!(dest_metadata.gid(), 2137);
+    assert_eq!(dest_mode, 0o666, "{dest_mode:o} != 666");
 }
 
 #[test]
