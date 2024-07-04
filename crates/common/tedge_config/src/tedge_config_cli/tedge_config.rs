@@ -578,7 +578,20 @@ define_tedge_config! {
             /// Auto-upload the operation log once it finishes.
             #[tedge_config(example = "always", example = "never", example = "on-failure", default(variable = "AutoLogUpload::Never"))]
             auto_log_upload: AutoLogUpload,
-        }
+        },
+
+        availability: {
+            /// Enable sending heartbeat to Cumulocity periodically. If set to false, c8y_RequiredAvailability won't be sent
+            #[tedge_config(example = "true", default(value = true))]
+            enable: bool,
+
+            /// Heartbeat interval to be sent to Cumulocity as c8y_RequiredAvailability.
+            /// The value must be greater than 1 minute.
+            /// If set to a lower value or 0, the device is considered in maintenance mode in the Cumulocity context.
+            /// Details: https://cumulocity.com/docs/device-integration/fragment-library/#device-availability
+            #[tedge_config(example = "60m", default(from_str = "60m"))]
+            interval: SecondsOrHumanTime,
+        },
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility

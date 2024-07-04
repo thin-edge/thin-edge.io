@@ -89,6 +89,7 @@ impl CumulocityConverter {
 mod tests {
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::TestHandle;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Sender;
@@ -102,7 +103,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;
@@ -162,7 +164,8 @@ mod tests {
     #[tokio::test]
     async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, _http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
         skip_init_messages(&mut mqtt).await;

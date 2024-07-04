@@ -47,6 +47,15 @@ pub struct PendingEntityData {
     pub data_messages: Vec<MqttMessage>,
 }
 
+impl From<EntityRegistrationMessage> for PendingEntityData {
+    fn from(reg_message: EntityRegistrationMessage) -> Self {
+        Self {
+            reg_message,
+            data_messages: vec![],
+        }
+    }
+}
+
 impl PendingEntityStore {
     pub fn new(mqtt_schema: MqttSchema, telemetry_cache_size: usize) -> Self {
         Self {

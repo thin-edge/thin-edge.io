@@ -6,6 +6,8 @@ use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
+use c8y_mapper_ext::availability::AvailabilityBuilder;
+use c8y_mapper_ext::availability::AvailabilityConfig;
 use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
@@ -209,7 +211,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut service_monitor_actor =
             MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
 
-        let c8y_mapper_actor = C8yMapperBuilder::try_new(
+        let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
             &mut mqtt_actor,
             &mut c8y_http_proxy_actor,
@@ -224,6 +226,16 @@ impl TEdgeComponent for CumulocityMapper {
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
         let old_to_new_agent_adapter = OldAgentAdapter::builder(&mut mqtt_actor);
 
+        let availability_actor = if tedge_config.c8y.availability.enable {
+            Some(AvailabilityBuilder::new(
+                AvailabilityConfig::from(&tedge_config),
+                &mut c8y_mapper_actor,
+                &mut timer_actor,
+            ))
+        } else {
+            None
+        };
+
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(jwt_actor).await?;
         runtime.spawn(http_actor).await?;
@@ -236,6 +248,9 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
         runtime.spawn(old_to_new_agent_adapter).await?;
+        if let Some(availability_actor) = availability_actor {
+            runtime.spawn(availability_actor).await?;
+        }
         runtime.run_to_completion().await?;
 
         Ok(())
