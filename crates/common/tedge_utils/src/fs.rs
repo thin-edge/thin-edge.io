@@ -8,41 +8,111 @@ use std::path::PathBuf;
 use tokio::fs as tokio_fs;
 use tokio::io::AsyncWriteExt;
 
+#[derive(Debug, thiserror::Error)]
+pub enum AtomFileError {
+    #[error("Writing the content to the file {file:?} failed: {context:?}. source={source:?}")]
+    WriteError {
+        file: Box<Path>,
+        context: String,
+        source: std::io::Error,
+    },
+}
+
+pub trait ErrContext<T> {
+    fn with_context(
+        self,
+        context: impl Fn() -> String,
+        file: impl AsRef<Path>,
+    ) -> Result<T, AtomFileError>;
+}
+
+impl<T, E: Into<std::io::Error>> ErrContext<T> for Result<T, E> {
+    fn with_context(
+        self,
+        context: impl Fn() -> String,
+        file: impl AsRef<Path>,
+    ) -> Result<T, AtomFileError> {
+        self.map_err(|err| AtomFileError::WriteError {
+            file: Box::from(file.as_ref()),
+            context: context(),
+            source: err.into(),
+        })
+    }
+}
+
+pub struct TempFile(PathBuf);
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = std_fs::remove_file(&self.0);
+    }
+}
+
 /// Write file to filesystem atomically using std::fs synchronously.
 pub fn atomically_write_file_sync(
     dest: impl AsRef<Path>,
     mut reader: impl Read,
-) -> std::io::Result<()> {
+) -> Result<(), AtomFileError> {
     let dest_dir = parent_dir(dest.as_ref());
     // FIXME: `.with_extension` replaces file extension, so if we used this
     // function to write files `file.txt`, `file.bin`, `file.jpg`, etc.
     // concurrently, then this will result in an error
-    let tempfile = PathBuf::from(dest.as_ref()).with_extension("tmp");
+    let tempfile = TempFile(PathBuf::from(dest.as_ref()).with_extension("tmp"));
 
     // Write the content on a temp file
     let mut file = std_fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&tempfile)?;
+        .open(&tempfile.0)
+        .with_context(
+            || format!("could not create the temporary file {:?}", tempfile.0),
+            &dest,
+        )?;
 
-    if let Err(err) = std::io::copy(&mut reader, &mut file) {
-        let _ = std_fs::remove_file(tempfile);
-        return Err(err);
-    }
+    std::io::copy(&mut reader, &mut file).with_context(
+        || {
+            format!(
+                "could not copy the content to the temporary file {:?}",
+                tempfile.0,
+            )
+        },
+        &dest,
+    )?;
 
     // Ensure the content reach the disk
-    file.flush()?;
-    file.sync_all()?;
+    file.flush().with_context(
+        || {
+            format!(
+                "could not flush the content of the temporary file {:?}",
+                tempfile.0,
+            )
+        },
+        &dest,
+    )?;
+
+    file.sync_all().with_context(
+        || format!("could not save the temporary file {:?} to disk", tempfile.0,),
+        &dest,
+    )?;
 
     // Move the temp file to its destination
-    if let Err(err) = std_fs::rename(&tempfile, dest) {
-        let _ = std_fs::remove_file(tempfile);
-        return Err(err);
-    }
+    std_fs::rename(&tempfile.0, &dest).with_context(
+        || {
+            format!(
+                "could not move the file from {:?} to {:?}",
+                tempfile.0,
+                dest.as_ref(),
+            )
+        },
+        &dest,
+    )?;
 
     // Ensure the new name reach the disk
-    let dir = std::fs::File::open(dest_dir)?;
-    dir.sync_all()?;
+    let dir = std::fs::File::open(dest_dir)
+        .with_context(|| "could not open the directory".to_string(), &dest)?;
+
+    dir.sync_all()
+        .with_context(|| "could not save the file to disk".to_string(), &dest)?;
 
     Ok(())
 }
@@ -51,7 +121,7 @@ pub fn atomically_write_file_sync(
 pub async fn atomically_write_file_async(
     dest: impl AsRef<Path>,
     content: &[u8],
-) -> std::io::Result<()> {
+) -> Result<(), AtomFileError> {
     let dest_dir = parent_dir(dest.as_ref());
     let tempfile = PathBuf::from(dest.as_ref()).with_extension("tmp");
 
@@ -60,26 +130,59 @@ pub async fn atomically_write_file_async(
         .write(true)
         .create_new(true)
         .open(&tempfile)
-        .await?;
+        .await
+        .with_context(
+            || format!("could not create the temporary file {tempfile:?}"),
+            &dest,
+        )?;
 
-    if let Err(err) = file.write_all(content).await {
-        tokio_fs::remove_file(tempfile).await?;
+    if let Err(err) = file.write_all(content).await.with_context(
+        || format!("could not write the content to the temporary file {tempfile:?}",),
+        &dest,
+    ) {
+        let _ = tokio_fs::remove_file(&tempfile).await;
         return Err(err);
     }
 
     // Ensure the content reach the disk
-    file.flush().await?;
-    file.sync_all().await?;
+    if let Err(err) = file.flush().await.with_context(
+        || format!("could not flush the content of the temporary file {tempfile:?}",),
+        &dest,
+    ) {
+        let _ = tokio_fs::remove_file(&tempfile).await;
+        return Err(err);
+    }
+
+    if let Err(err) = file.sync_all().await.with_context(
+        || format!("could not save the temporary file {tempfile:?} to disk",),
+        &dest,
+    ) {
+        let _ = tokio_fs::remove_file(&tempfile).await;
+        return Err(err);
+    }
 
     // Move the temp file to its destination
-    if let Err(err) = tokio_fs::rename(&tempfile, dest).await {
-        tokio_fs::remove_file(tempfile).await?;
+    if let Err(err) = tokio_fs::rename(&tempfile, &dest).await.with_context(
+        || {
+            format!(
+                "could not move the file from {tempfile:?} to {:?}",
+                dest.as_ref()
+            )
+        },
+        &dest,
+    ) {
+        let _ = tokio_fs::remove_file(&tempfile).await;
         return Err(err);
     }
 
     // Ensure the new name reach the disk
-    let dir = tokio_fs::File::open(dest_dir).await?;
-    dir.sync_all().await?;
+    let dir = tokio_fs::File::open(&dest_dir)
+        .await
+        .with_context(|| "could not open the directory".to_string(), &dest)?;
+
+    dir.sync_all()
+        .await
+        .with_context(|| "could not save the file to disk".to_string(), &dest)?;
 
     Ok(())
 }
