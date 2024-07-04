@@ -34,7 +34,8 @@ mod tests;
 /// Configuration of C8Y REST API
 #[derive(Default, Clone)]
 pub struct C8YHttpConfig {
-    pub c8y_host: String,
+    pub c8y_http_host: String,
+    pub c8y_mqtt_host: String,
     pub device_id: String,
     pub tmp_dir: PathBuf,
     identity: Option<Identity>,
@@ -45,14 +46,16 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     type Error = C8yHttpConfigBuildError;
 
     fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
-        let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
+        let c8y_http_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
+        let c8y_mqtt_host = tedge_config.c8y.mqtt.or_config_not_set()?.to_string();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
         let identity = tedge_config.http.client.auth.identity()?;
         let retry_interval = Duration::from_secs(5);
 
         Ok(Self {
-            c8y_host,
+            c8y_http_host,
+            c8y_mqtt_host,
             device_id,
             tmp_dir,
             identity,

@@ -131,7 +131,11 @@ impl Actor for C8YHttpProxyActor {
 
 impl C8YHttpProxyActor {
     pub fn new(config: C8YHttpConfig, message_box: C8YHttpProxyMessageBox) -> Self {
-        let end_point = C8yEndPoint::new(&config.c8y_host, &config.device_id);
+        let end_point = C8yEndPoint::new(
+            &config.c8y_http_host,
+            &config.c8y_mqtt_host,
+            &config.device_id,
+        );
         C8YHttpProxyActor {
             config,
             end_point,
