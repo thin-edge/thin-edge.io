@@ -1,10 +1,12 @@
+//! Helpers for spawning `tedge-write` processes, to be used by other thin-edge components.
+
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
 use std::process::Command;
 use tedge_config::SudoCommandBuilder;
 
-/// Additional flags passed to `tedge-write` process
+/// Options for copying files using a `tedge-write` process.
 #[derive(Debug, PartialEq)]
 pub struct CopyOptions<'a> {
     /// Source path
@@ -45,7 +47,7 @@ impl<'a> CopyOptions<'a> {
         Ok(())
     }
 
-    pub fn command(&self) -> std::io::Result<Command> {
+    fn command(&self) -> std::io::Result<Command> {
         let mut command = self.sudo.command(crate::TEDGE_WRITE_PATH);
 
         let from_reader = std::fs::File::open(self.from)?;
@@ -62,5 +64,52 @@ impl<'a> CopyOptions<'a> {
         }
 
         Ok(command)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::*;
+
+    const SUDO: &str = "sudo";
+
+    #[test]
+    fn uses_sudo_only_if_installed() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_path = temp_dir.path().join("source.txt");
+        std::fs::File::create_new(&source_path).unwrap();
+
+        let dest_path = temp_dir.path().join("destination");
+
+        let options = CopyOptions {
+            from: source_path.as_path().try_into().unwrap(),
+            to: dest_path.as_path().try_into().unwrap(),
+            sudo: SudoCommandBuilder::enabled(true),
+            mode: None,
+            user: None,
+            group: None,
+        };
+
+        // when sudo not in path, start tedge-write without sudo
+        std::env::set_var("PATH", temp_dir.path());
+        let no_sudo_command = options.command().unwrap();
+        assert_ne!(no_sudo_command.get_program(), SUDO);
+
+        // if sudo is in path, start tedge-write with sudo
+        let dummy_sudo_path = temp_dir.path().join(SUDO);
+        let dummy_sudo = std::fs::File::create(dummy_sudo_path).unwrap();
+        let mut dummy_sudo_permissions = dummy_sudo.metadata().unwrap().permissions();
+
+        // chmod +x
+        dummy_sudo_permissions.set_mode(dummy_sudo_permissions.mode() | 0o111);
+        dummy_sudo.set_permissions(dummy_sudo_permissions).unwrap();
+
+        let sudo_command = options.command().unwrap();
+        // sudo can be either just program name or full path
+        let sudo_command = Path::new(sudo_command.get_program());
+        assert_eq!(sudo_command.file_name().unwrap(), SUDO);
     }
 }
