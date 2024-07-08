@@ -1,0 +1,8 @@
+[[files]]
+type = "software-management"
+path = "/var/log/tedge/agent/software-*"
+
+[[files]]
+type = "sqlite"
+# This path can be any dummy location that the tedge-agent has write access to
+path = "/tmp/sqlite.log"
