@@ -15,6 +15,26 @@ Test Tags           adapter:docker    theme:tedge-write
 
 *** Test Cases ***
 Creates a destination file if it doesn't exist
+    [Template]    Creates a destination file if it doesn't exist
+    0022
+    0777
+
+Changes permissions if a destination doesn't exist
+    [Template]    Changes permissions if a destination doesn't exist
+    0022
+    0777
+
+Preserves permissions if a destination exists
+    [Template]    Preserves permissions if a destination exists
+    0022
+    0777
+
+*** Keywords ***
+Creates a destination file if it doesn't exist
+    [Arguments]          ${umask}
+
+    Execute Command      umask ${umask}
+
     ${dest_filename}=    Execute Command    mktemp --dry-run
     Execute Command      echo abc | sudo tedge-write ${dest_filename}    strip=True
 
@@ -26,6 +46,10 @@ Creates a destination file if it doesn't exist
 
 
 Changes permissions if a destination doesn't exist
+    [Arguments]          ${umask}
+
+    Execute Command      umask ${umask}
+
     ${dest_filename}=    Execute Command    mktemp --dry-run    strip=True
     Execute Command      echo abc | sudo tedge-write ${dest_filename} --user tedge --group tedge --mode 700
 
@@ -38,6 +62,10 @@ Changes permissions if a destination doesn't exist
     Should Be Equal      ${mode}    700
 
 Preserves permissions if a destination exists
+    [Arguments]          ${umask}
+
+    Execute Command      umask ${umask}
+
     ${dest_filename}=    Execute Command    mktemp    strip=True
     Execute Command      chown tedge:tedge ${dest_filename}
     Execute Command      chmod 666 ${dest_filename}
@@ -51,8 +79,6 @@ Preserves permissions if a destination exists
     ${mode}=      Execute Command    stat -c '%a' ${dest_filename}    strip=True
     Should Be Equal      ${mode}    666
 
-
-*** Keywords ***
 Custom Setup
     Setup    skip_bootstrap=True
     Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
