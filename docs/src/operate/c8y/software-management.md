@@ -112,6 +112,27 @@ If you are upgrading %%te%% from any version prior to `1.0.0` (including `1.0.0-
 
 ## Configuration {#configuration}
 
+### Switching to Advanced Software Management
+
+%%te%% supports both [Legacy Software Management](https://cumulocity.com/docs/device-integration/fragment-library/#legacy-software-management) and [Advanced Software Management](https://cumulocity.com/docs/device-integration/fragment-library/#advanced-software-management) features of Cumulocity IoT.
+By default, Legacy Software Management is selected.
+To switch to Advanced Software Management, use the `tedge` command to change the following configurations:
+
+```sh
+sudo tedge config set c8y.software_management.api advanced
+sudo tedge config set c8y.software_management.with_types true
+```
+
+* The first key `c8y.software_management.api` can be set to either `legacy` or `advanced`.
+* If the second key `c8y.software_management.with_types`  is set to `true`, the `c8y_SupportedSoftwareTypes` fragment is sent based on the software types reported by the [software_list MQTT API](../../references/agent/software-management.md#software_list-mqtt-api).
+
+After changing the configurations, a restart of the `tedge-mapper-c8y` service is required.
+To restart the service using `systemctl`, run this command:
+
+```sh
+sudo systemctl restart tedge-mapper-c8y
+```
+
 ### tedge-apt-plugin: Filter packages by name and maintainer
 
 By default the `tedge-apt-plugin` lists all of the installed Debian (*.deb) packages. On typical Debian installations, the list of packages could easily be more than 500 packages. In order to focus on the Debian packages which are important for your device, the `tedge-apt-plugin` supports filtering by either name or maintainer.
