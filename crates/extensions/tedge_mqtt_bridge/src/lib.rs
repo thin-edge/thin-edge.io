@@ -36,6 +36,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tracing::info;
+use tracing::log::debug;
 
 pub type MqttConfig = mqtt_channel::Config;
 
@@ -329,6 +330,7 @@ async fn half_bridge(
                 continue;
             }
         };
+        debug!("Received notification ({name}) {notification:?}");
 
         match notification {
             Event::Incoming(Incoming::ConnAck(_)) => {
@@ -342,6 +344,7 @@ async fn half_bridge(
 
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
+                dbg!(name, publish.pkid);
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
                         target
@@ -378,6 +381,7 @@ async fn half_bridge(
                 Some(Some((topic, msg))) => {
                     loop_breaker.forward_on_topic(topic, &msg);
                     forward_pkid_to_received_msg.insert(pkid, msg);
+                    dbg!(name, &forward_pkid_to_received_msg);
                 }
 
                 // A healthcheck message was published, ignore this packet id
