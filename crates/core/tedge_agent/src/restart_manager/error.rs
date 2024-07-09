@@ -21,4 +21,7 @@ pub enum RestartManagerError {
 
     #[error("Could not convert {timestamp:?} to unix timestamp. Error message: {error_msg}")]
     TimestampConversionError { timestamp: i64, error_msg: String },
+
+    #[error(transparent)]
+    FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
 }

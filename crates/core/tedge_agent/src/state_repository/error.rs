@@ -23,4 +23,7 @@ pub enum StateError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
 }

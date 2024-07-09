@@ -33,6 +33,9 @@ pub enum ConfigManagementError {
     FromEntityTopicError(#[from] tedge_api::mqtt_topics::EntityTopicError),
 
     #[error(transparent)]
+    FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
+
+    #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
 

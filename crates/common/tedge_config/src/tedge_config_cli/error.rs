@@ -32,6 +32,9 @@ pub enum TEdgeConfigError {
 
     #[error(transparent)]
     FromParseHostPortError(#[from] crate::tedge_config_cli::models::host_port::ParseHostPortError),
+
+    #[error(transparent)]
+    FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
 }
 
 impl TEdgeConfigError {
