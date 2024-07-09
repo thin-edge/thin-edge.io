@@ -23,18 +23,22 @@ ${CHILD_SN}     ${EMPTY}
 Set Configuration when file does not exist
     [Tags]    \#2318
     [Template]    Set Configuration from Device
+    [Documentation]    If the configuration file does not exist, it should be created, with owner and permissions
+    ...    specified in `tedge-configuration-plugin.toml` file.
     Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    640    tedge:tedge    delete_file_before=${true}
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    640    tedge:tedge    delete_file_before=${true}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
 
 Set Configuration when file exists
+    [Tags]    \#2972
     [Template]    Set Configuration from Device
-    # Note: File permission will not change if the file already exists
-    Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    644    root:root    delete_file_before=${false}
-    Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    644    root:root    delete_file_before=${false}
-    Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    644    root:root    delete_file_before=${false}
-    Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    644    root:root    delete_file_before=${false}
+    [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
+    ...    should remain unchanged.
+    Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
+    Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+    Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
+    Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
 
 Set configuration with broken url
     [Template]    Set Configuration from URL
@@ -512,9 +516,11 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config2.json    /etc/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/binary-config1.tar.gz    /etc/
 
-    # Remove line below after https://github.com/thin-edge/thin-edge.io/issues/2456 is resolved
-    Execute Command    chgrp tedge /etc/ && chmod g+w /etc/
-    # Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
+    # make sure initial files have the same permissions on systems with different umasks
+    Execute Command                  chmod 664 /etc/config1.json /etc/config2.json /etc/binary-config1.tar.gz
+
+    # on a child device, user with uid 1000 doesn't exist, so make sure files we're testing on have a well defined user
+    Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json /etc/binary-config1.tar.gz
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
 
 Customize Operation Workflows
