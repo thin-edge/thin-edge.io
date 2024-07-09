@@ -184,7 +184,7 @@ jobs:
     needs: [approve, check-build]
     environment:
       name: Test Auto
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         job:
