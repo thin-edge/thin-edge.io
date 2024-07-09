@@ -8,16 +8,16 @@ description: Device profile API proposal
 # Device profile
 
 A device profile defines any desired combination of a firmware, software and associated configurations to be installed on a device.
-Device profiles are used to get a fleet of devices into a consistent and homogenous state by having the same set of firmware,
+Device profiles are used to get a fleet of devices into a consistent and homogeneous state by having the same set of firmware,
 software and configurations installed on all of them.
 
 The `tedge-agent` handles `device_profile` operations as follows:
 
 * Declares `device_profile` support by sending the capability message to `<root>/<device-topic-id>/cmd/device_profile` topics
 * Subscribes to `<root>/<device-topic-id>/cmd/device_profile/+` to receive `device_profile` commands.
-* The `device_profile` command payload is an ordered list of modules representing any firmware, software and configuration combination.
-* The agent processes each module one by one in the same order, triggering sub-operations for the respective module type.
-* One successful installation of all the modules, the applied profile information is published to the same capability topic.
+* The `device_profile` command payload is an ordered list of firmware, software and configuration update operations.
+* The agent processes each operation one by one, triggering sub-operations for the respective operation.
+* On successful installation of all the modules, the applied profile information is published to the same capability topic.
 * No rollback is performed on partial failures unless the subcommand for the failed module can rollback that single module.
 
 # Why device profile FAQ
@@ -34,6 +34,11 @@ instead of multiple.
 Although this is a more robust approach, it is not feasible on all kinds of devices,
 especially the ones that does not support delta firmware updates.
 On such devices, pushing the entire firmware binary for each iterative change would considerably increase the binary size overhead.
+
+# Requirements
+
+* Ability to control the order of execution of the operations defined in the command input
+* Ability to apply 
 
 # Device profile capability
 
@@ -68,56 +73,82 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
   "version": "v2",
   "profile": [
     {
-      "module": "firmware",
-      "include": true,
-      "name": "core-image-tedge-rauc",
-      "remoteUrl": "https://abc.com/some/firmware/url",
-      "version": "20240430.1139"
+      "operation": "firmware_update",
+      "skip": false,
+      "payload": {
+        "name": "core-image-tedge-rauc",
+        "remoteUrl": "https://abc.com/some/firmware/url",
+        "version": "20240430.1139"
+      }
     },
     {
-      "module": "software",
-      "include": true,
-      "name": "collectd",
-      "version": "latest",
-      "type": "apt",
-      "action": "install"
+      "operation": "software_update",
+      "skip": false,
+      "payload": {
+        "updateList": [
+          {
+            "type": "apt",
+            "modules": [
+              {
+                "name": "c8y-command-plugin",
+                "version": "latest",
+                "action": "install"
+              },
+              {
+                "name": "collectd",
+                "version": "latest",
+                "type": "apt",
+                "action": "install"
+              }
+            ]
+          }
+        ]
+      }
     },
     {
-      "module": "configuration",
-      "include": true,
-      "type": "collectd.conf",
-      "remoteUrl":"https://abc.com/some/collectd/conf",
-      "path": "/etc/collectd/collectd.conf"
+      "operation": "config_update",
+      "skip": false,
+      "payload": {
+        "type": "collectd.conf",
+        "remoteUrl":"https://abc.com/some/collectd/conf",
+        "path": "/etc/collectd/collectd.conf"
+      }
     },
     {
-      "module": "software",
-      "include": true,
-      "name": "jq",
-      "version": "latest",
-      "type": "apt",
-      "action": "install"
+      "operation": "software_update",
+      "skip": false,
+      "payload": {
+        "updateList": [
+          {
+            "type": "apt",
+            "modules": [
+              {
+                "name": "jq",
+                "version": "latest",
+                "action": "install"
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }'
 ```
 
-The profile definition in the payload is an array of modules.
-Each module could be a firmware, software or configuration.
-The modules are installed/applied in the order in which they are defined in the profile definition.
+The profile definition in the payload is an array of operations.
+Each operation could be a `firmware_update`, `software_update` or `config_update`.
+The operations are executed in the order in which they are defined in the profile definition, by default.
 There is no restriction on the order of modules in a profile and hence can be defined in any preferred order.
 For example, additional software can be installed or configurations updated before the firmware is updated.
+This default execution order can also be overridden in the workflow definition, by updating the order in the `scheduled` state.
 
-The `"include"` field is optional and the value is true, by default.
-It can be used to exclude already installed modules when the same profile is reapplied on a device after a partial failure.
-
-When the profile is applied, `tedge-agent` is free to group modules of the same kind that are listed sequentially,
-to optimize the execution of that operation.
-For example, if 3 software modules are defined sequentially, the agent could group them into an `updateList`
-so that they can be installed in one-go using the `update-list` API of software plugins.
+The `"skip"` field is optional and the value is `false`, by default.
+It can be used to skip any operations during the development/testing phase, without fully deleting the entry from the profile.
 
 ## Tedge agent handling device profile commands
 
-The `tedge-agent` handless `device_profile` commands using the workflow definition at `/etc/tedge/operations/device_profile.toml`.
+The `tedge-agent` handles `device_profile` commands using the workflow definition at `/etc/tedge/operations/device_profile.toml`.
 This workflow definition handles each module type using sub-operation workflows defined for that type.
 For example, the firmware module is installed by triggering a `firmware_update` sub-command
 which in turn uses the `firmware_update` workflow for that operation execution.
@@ -125,9 +156,70 @@ Similarly software modules are installed with `software_update` subcommands and
 configuration updates are applied using `config_update` subcommands.
 These subcommands are triggered for each module defined in the profile definition in that order.
 
+Here is a sample device profile workflow:
+
+```toml
+operation = "device_profile"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+# Sort the inputs as desired
+[scheduled]
+script = "/etc/tedge/operations/device_profile.sh ${.payload.status} ${.payload}"
+on_success = "executing"
+on_error = { status = "failed", reason = "fail to sort the profile list"}
+
+[executing]
+operations = [
+    { operation = "firmware_update", target_operation="firmware_update" }
+    { operation = "software_update", target_operation="custom_software_update" }
+    { operation = "config_update" }
+]
+on_exec = "awaiting_sub_operation"
+on_success = "successful"
+on_error = { status = "failed", reason = "fail to apply device profile"}
+
+[awaiting_sub_operation]
+action = "await-operation-completion"
+on_success = "executing"
+on_error = { status = "failed", reason = "fail to update configuration"}
+
+#
+# End states
+#
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+```
+
+* The workflow just proceeds to the `scheduled` state from the `init` state
+* The order of operation execution is finalized in the `scheduled` state.
+  If the `builtin` action is specified in this state, the default order as defined in the input is used.
+  This order can be modified using a `script` action, if desired.
+  The updated list is captured into a `updated_profile` field with the starting `current_index` value.
+  The `current_index` value specifies the next item in the list to be processed by the `executing` state.
+  By default, this `current_index` value starts with `0`.
+  This index value is incremented as the operation execution proceeds.
+  This index can also be used to skip the first `n` items in the list, especially when the same profile is reapplied.
+* The `target_operation` to be invoked for each item in the input is defined in the `executing` state.
+  If a `target_operation` is not explicitly specified, then the default workflow for the `operation` value itself is used.
+  The sub-operation execution starts from the item corresponding to the `current_index` value.
+  As soon as the sub-operation is triggered, the workflow moves to the `awaiting_sub_operation` state defined as the `on_exec` target.
+* In the `awaiting_sub_operation` state, workflow just waits monitoring the state of the sub-operation completion.
+  Once the sub-operation is successful, the workflow moves back to the `executing` state with the index value incremented,
+  so that the next item can be applied.
+  * In case of a failure, the workflow moves to the `on_error` target state, keeping the `current_index` value intact,
+    so that the item that caused the failure can be easily identified.
+* Once the `updated_profile` list is exhausted in the `executing` state, the workflow moves to its `on_success` target state.
+
+
 ### On success
 
-Once all the modules in the profile are successfully installed, the successful status is published
+Once all the operations in the profile are successfully completed, the successful status is published
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
@@ -147,14 +239,16 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile' '{
 
 ### On failure
 
-On failure, the `device_profile` operation is aborted at the module that caused the failure.
-The remaining modules in the profile are not installed and no attempt is made to rollback the already installed modules either.
-If the sub-operations support rollbacks at the sub-operation level, it is performed for the failed module.
+On failure, the `device_profile` operation is aborted at the operation that caused the failure.
+The remaining operations in the profile are executed and no attempt is made to rollback the already completed operations either.
+If the sub-operations support rollbacks at the sub-operation level, it is performed for the failed operation.
 
 For example, if a profile includes a firmware, 2 software and 1 configuration updates in that sequence,
 if the failure happens during the second software update, no rollback is performed at the overall `device_profile` operation level,
 or even for that failed software update, unless the `software_update` workflow for that software type supports rollbacks.
 In that case the firmware and 1st software would remain installed, with the failed software update and last config update skipped.
+But, if the failure happens during the `firmware_update` itself, a rollback is most likely performed by that workflow,
+as most `firmware_update` workflows support a robust rollback mechanism.
 
 The `device_profile` operation itself is marked failed as follows:
 
@@ -166,47 +260,10 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
 }'
 ```
 
-The same profile can be applied again, by excluding all the modules(`"include": false`) before the failed `jq` module as follows:
-
-```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
-  "status": "init",
-  "name": "prod-profile",
-  "version": "v2",
-  "profile": [
-    {
-      "module": "firmware",
-      "include": false,
-      "name": "core-image-tedge-rauc",
-      "remoteUrl": "https://abc.com/some/firmware/url",
-      "version": "20240430.1139"
-    },
-    {
-      "module": "software",
-      "include": false,
-      "name": "collectd",
-      "version": "latest",
-      "type": "apt",
-      "action": "install"
-    },
-    {
-      "module": "configuration",
-      "include": false,
-      "type": "collectd.conf",
-      "remoteUrl":"https://abc.com/some/collectd/conf",
-      "path": "/etc/collectd/collectd.conf"
-    },
-    {
-      "module": "software",
-      "include": true,
-      "name": "jq",
-      "version": "latest",
-      "type": "apt",
-      "action": "install"
-    }
-  ]
-}'
-```
+The same profile can be applied again after fixing the issues that caused the failure,
+and it is left to the individual sub-operations to determine whether
+the same operation that was successfully applied in the last attempt must be reapplied or not.
+The user can also manually skip any operation using the `skip` field.
 
 # Cumulocity operation mapping
 
