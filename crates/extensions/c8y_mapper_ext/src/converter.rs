@@ -104,7 +104,7 @@ const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
-const REQUESTER_NAME: &str = "c8y-mapper";
+pub const REQUESTER_NAME: &str = "c8y-mapper";
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug)]
@@ -186,7 +186,7 @@ pub struct CumulocityConverter {
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
 
-    pub operation_handler: Arc<OperationHandler>,
+    pub operation_handler: OperationHandler,
 }
 
 impl CumulocityConverter {
@@ -245,25 +245,14 @@ impl CumulocityConverter {
 
         let command_id = IdGenerator::new(REQUESTER_NAME);
 
-        let operation_handler = Arc::new(OperationHandler {
-            capabilities: config.capabilities,
-            auto_log_upload: config.auto_log_upload,
-            tedge_http_host: config.tedge_http_host.clone(),
-            tmp_dir: config.tmp_dir.clone(),
-            mqtt_schema: mqtt_schema.clone(),
-            c8y_prefix: prefix.clone(),
-            mqtt_publisher: mqtt_publisher.clone(),
-            software_management_api: config.software_management_api,
-            command_id: command_id.clone(),
-
+        let operation_handler = OperationHandler::new(
+            &config,
             downloader,
             uploader,
-
-            c8y_endpoint: c8y_endpoint.clone(),
-            auth_proxy: auth_proxy.clone(),
-            http_proxy: http_proxy.clone(),
-            running_operations: Default::default(),
-        });
+            mqtt_publisher.clone(),
+            http_proxy.clone(),
+            auth_proxy.clone(),
+        );
 
         Ok(CumulocityConverter {
             size_threshold,

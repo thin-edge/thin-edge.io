@@ -15,9 +15,9 @@ use url::Url;
 
 use crate::error::ConversionError;
 
-use super::OperationHandler;
+use super::OperationContext;
 
-impl OperationHandler {
+impl OperationContext {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn upload_file(
         &self,

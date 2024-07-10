@@ -1,5 +1,5 @@
 use super::EntityTarget;
-use super::OperationHandler;
+use super::OperationContext;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
@@ -82,7 +82,7 @@ impl CumulocityConverter {
     }
 }
 
-impl OperationHandler {
+impl OperationContext {
     /// Address a received log_upload command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
     /// - "successful", it creates an event in c8y, then creates an UploadRequest for the uploader actor.

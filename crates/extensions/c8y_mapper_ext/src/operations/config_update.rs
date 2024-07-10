@@ -26,7 +26,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
 use super::EntityTarget;
-use super::OperationHandler;
+use super::OperationContext;
 
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     [
@@ -43,7 +43,7 @@ pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     .collect()
 }
 
-impl OperationHandler {
+impl OperationContext {
     /// Address a received ThinEdge config_update command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
     /// - "successful", it converts the message to SmartREST "Successful".

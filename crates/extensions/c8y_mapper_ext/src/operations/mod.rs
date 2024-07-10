@@ -12,11 +12,14 @@
 //! - status and error handing utilities for reporting operation success/failure in different ways
 //!   (MQTT, Smartrest)
 //! - implementations of operations
+//!
+//! thin-edge.io operations reference: https://thin-edge.github.io/thin-edge.io/operate/c8y/supported-operations/
 
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
+use crate::config::C8yMapperConfig;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::Capabilities;
@@ -26,7 +29,6 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
@@ -71,27 +73,50 @@ mod upload;
 /// performs an operation in the background in separate tasks. The operation tasks themselves handle
 /// reporting their success/failure.
 pub struct OperationHandler {
-    pub capabilities: Capabilities,
-    pub auto_log_upload: AutoLogUpload,
-    pub tedge_http_host: Arc<str>,
-    pub tmp_dir: Arc<Utf8Path>,
-    pub mqtt_schema: MqttSchema,
-    pub c8y_prefix: tedge_config::TopicPrefix,
-    pub software_management_api: SoftwareManagementApiFlag,
-    pub command_id: IdGenerator,
-
-    pub http_proxy: C8YHttpProxy,
-    pub c8y_endpoint: C8yEndPoint,
-    pub auth_proxy: ProxyUrlGenerator,
-
-    pub downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
-    pub uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    pub mqtt_publisher: LoggingSender<MqttMessage>,
-
-    pub running_operations: Arc<Mutex<HashMap<Arc<str>, RunningOperation>>>,
+    context: Arc<OperationContext>,
+    running_operations: HashMap<Arc<str>, RunningOperation>,
 }
 
 impl OperationHandler {
+    pub fn new(
+        c8y_mapper_config: &C8yMapperConfig,
+
+        downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+        uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
+        mqtt_publisher: LoggingSender<MqttMessage>,
+
+        http_proxy: C8YHttpProxy,
+        auth_proxy: ProxyUrlGenerator,
+    ) -> Self {
+        Self {
+            context: Arc::new(OperationContext {
+                capabilities: c8y_mapper_config.capabilities,
+                auto_log_upload: c8y_mapper_config.auto_log_upload,
+                tedge_http_host: c8y_mapper_config.tedge_http_host.clone(),
+                tmp_dir: c8y_mapper_config.tmp_dir.clone(),
+                mqtt_schema: c8y_mapper_config.mqtt_schema.clone(),
+                mqtt_publisher: mqtt_publisher.clone(),
+                software_management_api: c8y_mapper_config.software_management_api,
+
+                // TODO(marcel): would be good not to generate new ids from running operations, see if
+                // we can remove it somehow
+                command_id: IdGenerator::new(crate::converter::REQUESTER_NAME),
+
+                downloader,
+                uploader,
+
+                c8y_endpoint: C8yEndPoint::new(
+                    &c8y_mapper_config.c8y_host,
+                    &c8y_mapper_config.device_id,
+                ),
+                http_proxy: http_proxy.clone(),
+                auth_proxy: auth_proxy.clone(),
+            }),
+
+            running_operations: Default::default(),
+        }
+    }
+
     /// Handles an MQTT command id message.
     ///
     /// All MQTT messages with a topic that contains an operation id, e.g.
@@ -105,9 +130,11 @@ impl OperationHandler {
     /// need to be handled as well.
     ///
     /// When an operation terminates (successfully or unsuccessfully), an MQTT operation clearing
-    /// message will be published automatically, which does not need to be handled.
-    pub async fn handle(self: &Arc<Self>, entity: EntityTarget, message: MqttMessage) {
-        let Ok((_, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) else {
+    /// message will be published to the broker by the running operation task, but this message also
+    /// needs to be handled when an MQTT broker echoes it back to us, so that `OperationHandler` can
+    /// free the data associated with the operation.
+    pub async fn handle(&mut self, entity: EntityTarget, message: MqttMessage) {
+        let Ok((_, channel)) = self.context.mqtt_schema.entity_channel_of(&message.topic) else {
             return;
         };
 
@@ -123,30 +150,31 @@ impl OperationHandler {
         };
 
         let topic: Arc<str> = message.message.topic.name.clone().into();
-        let running_operation = {
-            let mut lock = self.running_operations.lock().unwrap();
-            let op = lock.get(&topic);
+        let terminated_operation = {
+            let op = self.running_operations.get(&topic);
 
             if let Some(running_operation) = op {
                 // task already terminated
                 if running_operation.tx.send(message).is_err() {
-                    let running_operation = lock.remove(&topic).unwrap();
+                    let running_operation = self.running_operations.remove(&topic).unwrap();
                     Some(running_operation)
                 } else {
                     None
                 }
             } else {
-                let handler = self.clone();
-                let running_operation = RunningOperation::spawn(message, handler);
+                let running_operation = RunningOperation::spawn(message, Arc::clone(&self.context));
 
-                lock.insert(topic, running_operation);
+                self.running_operations
+                    .insert(topic.clone(), running_operation);
                 None
             }
         };
 
-        if let Some(running_operation) = running_operation {
-            let join_result = running_operation.handle.await;
-            error!("handle: {join_result:?}");
+        if let Some(terminated_operation) = terminated_operation {
+            let join_result = terminated_operation.handle.await;
+            if let Err(err) = join_result {
+                error!(%topic, ?err, "operation task could not be joined");
+            }
         }
     }
 }
@@ -161,7 +189,7 @@ impl RunningOperation {
     ///
     /// The task handles a single operation with a given command id, and via a channel it receives
     /// operation state changes (if any) to drive an operation to completion.
-    fn spawn(message: OperationMessage, handler: Arc<OperationHandler>) -> Self {
+    fn spawn(message: OperationMessage, context: Arc<OperationContext>) -> Self {
         let cmd_id = message.cmd_id.clone();
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -186,49 +214,49 @@ impl RunningOperation {
                     OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
 
                     OperationType::Restart => {
-                        handler
+                        context
                             .publish_restart_operation_status(entity, &cmd_id, message)
                             .await
                     }
                     OperationType::SoftwareList => {
-                        handler
+                        context
                             .publish_software_list(entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::SoftwareUpdate => {
-                        handler
+                        context
                             .publish_software_update_status(entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::LogUpload => {
-                        handler
+                        context
                             .handle_log_upload_state_change(entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::ConfigSnapshot => {
-                        handler
+                        context
                             .handle_config_snapshot_state_change(entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::ConfigUpdate => {
-                        handler
+                        context
                             .handle_config_update_state_change(entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::FirmwareUpdate => {
-                        handler
+                        context
                             .handle_firmware_update_state_change(entity, &cmd_id, &message)
                             .await
                     }
                 };
 
-                let mut mqtt_publisher = handler.mqtt_publisher.clone();
+                let mut mqtt_publisher = context.mqtt_publisher.clone();
                 match res {
                     // If there are mapped final status messages to be published, they are cached until the operation
                     // log is uploaded
                     Ok((messages, command)) => {
                         if let Some(command) = command {
-                            if let Err(e) = handler
+                            if let Err(e) = context
                                 .upload_operation_log(&external_id, &cmd_id, &operation, command)
                                 .await
                             {
@@ -255,6 +283,25 @@ impl RunningOperation {
 
         Self { handle, tx }
     }
+}
+
+/// State required by the operation handlers.
+struct OperationContext {
+    capabilities: Capabilities,
+    auto_log_upload: AutoLogUpload,
+    tedge_http_host: Arc<str>,
+    tmp_dir: Arc<Utf8Path>,
+    mqtt_schema: MqttSchema,
+    software_management_api: SoftwareManagementApiFlag,
+    command_id: IdGenerator,
+
+    http_proxy: C8YHttpProxy,
+    c8y_endpoint: C8yEndPoint,
+    auth_proxy: ProxyUrlGenerator,
+
+    downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+    uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
+    mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
 /// An MQTT message that contains an operation payload.

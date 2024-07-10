@@ -10,11 +10,11 @@ use tracing::error;
 use crate::error::ConversionError;
 
 use super::EntityTarget;
-use super::OperationHandler;
+use super::OperationContext;
 
 const SOFTWARE_LIST_CHUNK_SIZE: usize = 100;
 
-impl OperationHandler {
+impl OperationContext {
     pub async fn publish_software_list(
         &self,
         target: EntityTarget,

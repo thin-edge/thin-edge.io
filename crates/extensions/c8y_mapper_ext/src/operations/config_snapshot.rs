@@ -1,5 +1,5 @@
 use super::EntityTarget;
-use super::OperationHandler;
+use super::OperationContext;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
@@ -84,7 +84,7 @@ impl CumulocityConverter {
     }
 }
 
-impl OperationHandler {
+impl OperationContext {
     /// Address received ThinEdge config_snapshot command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
     /// - "successful", it uploads a config snapshot to c8y and converts the message to SmartREST "Successful".

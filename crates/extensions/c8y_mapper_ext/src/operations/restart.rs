@@ -8,9 +8,9 @@ use tedge_mqtt_ext::MqttMessage;
 use crate::error::ConversionError;
 
 use super::EntityTarget;
-use super::OperationHandler;
+use super::OperationContext;
 
-impl OperationHandler {
+impl OperationContext {
     pub async fn publish_restart_operation_status(
         &self,
         target: EntityTarget,
