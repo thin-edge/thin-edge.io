@@ -172,19 +172,24 @@ on_success = "executing"
 on_error = { status = "failed", reason = "fail to sort the profile list"}
 
 [executing]
-operations = [
-    { operation = "firmware_update", target_operation="firmware_update" }
-    { operation = "software_update", target_operation="custom_software_update" }
-    { operation = "config_update" }
-]
+action = "builtin"
+on_success = "next_operation"
+
+[next_operation]
+action = "builtin"
+on_success = "apply_operation"
+on_error = { status = "failed", reason = "Failed to pick the next operation to be executed" }
+
+[apply_sub_operation]
+operations = [ "firmware_update", "software_update", "config_update" ]
 on_exec = "awaiting_sub_operation"
 on_success = "successful"
-on_error = { status = "failed", reason = "fail to apply device profile"}
+on_error = { status = "failed", reason = "failed to apply device profile"}
 
 [awaiting_sub_operation]
 action = "await-operation-completion"
-on_success = "executing"
-on_error = { status = "failed", reason = "fail to update configuration"}
+on_success = "next_operation"
+on_error = { status = "failed", reason = "failed to apply device profile" }
 
 #
 # End states
@@ -197,21 +202,26 @@ action = "cleanup"
 ```
 
 * The workflow just proceeds to the `scheduled` state from the `init` state
-* The order of operation execution is finalized in the `scheduled` state.
+* The order of operation execution must be finalized before the `executing` state and and the `scheduled` state is an ideal candidate for that.
   If the `builtin` action is specified in this state, the default order as defined in the input is used.
-  This order can be modified using a `script` action, if desired.
-  The updated list is captured into a `updated_profile` field with the starting `current_index` value.
-  The `current_index` value specifies the next item in the list to be processed by the `executing` state.
-  By default, this `current_index` value starts with `0`.
-  This index value is incremented as the operation execution proceeds.
-  This index can also be used to skip the first `n` items in the list, especially when the same profile is reapplied.
-* The `target_operation` to be invoked for each item in the input is defined in the `executing` state.
-  If a `target_operation` is not explicitly specified, then the default workflow for the `operation` value itself is used.
-  The sub-operation execution starts from the item corresponding to the `current_index` value.
+  This order can be overridden by the user using a `script` action, if desired.
+  Once the updated list is captured into a `updated_profile` field in the payload, proceed to the `executing` state.
+* The mandatory `executing` state simply passes the input to the `next_operation`.
+* The `next_operation` state chooses the next operation to be executed from the list of operations in the profile,
+  indicated using the a `current_index` value.
+  When the `builtin` action is used, if the `current_index` field is not present in the input payload,
+  one is added with an initial value of `0`.
+  If the field already exists, the value is just incremented.
+  The default indexing logic can be overridden using a `script` action which can manipulate the order in any manner.
+  For example, the script may choose to skip certain operation types by just skipping their indexes.
+  The `on_success` target of this state must be another state where all the expected sub-operations are listed
+  (`apply_sub_operation` state in this example).
+* The `apply_sub_operation` state is a simple wrapper over all possible `operations` expected as sub-operations,
+  and invokes each target sub-operation that corresponds to the `current_index` value in the input.
   As soon as the sub-operation is triggered, the workflow moves to the `awaiting_sub_operation` state defined as the `on_exec` target.
 * In the `awaiting_sub_operation` state, workflow just waits monitoring the state of the sub-operation completion.
-  Once the sub-operation is successful, the workflow moves back to the `executing` state with the index value incremented,
-  so that the next item can be applied.
+  * Once the sub-operation is successful, the workflow must move back to the `next_operation` state,
+  so that the next sub-operation in the list can be applied.
   * In case of a failure, the workflow moves to the `on_error` target state, keeping the `current_index` value intact,
     so that the item that caused the failure can be easily identified.
 * Once the `updated_profile` list is exhausted in the `executing` state, the workflow moves to its `on_success` target state.
