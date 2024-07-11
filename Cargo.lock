@@ -2012,6 +2012,7 @@ dependencies = [
  "glob",
  "log",
  "rand",
+ "regex",
  "serde",
  "tedge_test_utils",
  "tedge_utils",

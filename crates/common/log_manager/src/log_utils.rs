@@ -2,6 +2,8 @@ use super::config::FileEntry;
 use super::error::LogRetrievalError;
 use easy_reader::EasyReader;
 use glob::glob;
+use regex::Regex;
+use std::cmp::Reverse;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Write;
@@ -11,16 +13,15 @@ use time::OffsetDateTime;
 
 /// read any log file coming from `obj.log.log_type`
 pub fn new_read_logs(
-    files: &Vec<FileEntry>,
+    files: &[FileEntry],
     log_type: &str,
     date_from: OffsetDateTime,
     lines: usize,
     search_text: &Option<String>,
     tmp_dir: &Path,
 ) -> Result<PathBuf, LogRetrievalError> {
-    // first filter logs on type
-    let mut logfiles_to_read = filter_logs_on_type(files, log_type)?;
-    logfiles_to_read = filter_logs_path_on_metadata(log_type, date_from, logfiles_to_read)?;
+    //filter logs on type and date
+    let logfiles_to_read = filter_logs(files, log_type, date_from)?;
 
     let temp_path = tmp_dir.join(format!("{log_type}-{}", rand::random::<u128>()));
     let mut temp_file = File::create(&temp_path)?;
@@ -44,7 +45,7 @@ pub fn new_read_logs(
     Ok(temp_path)
 }
 
-pub fn read_log_content(
+fn read_log_content(
     logfile: &Path,
     mut line_counter: usize,
     max_lines: usize,
@@ -93,68 +94,80 @@ pub fn read_log_content(
     }
 }
 
-pub fn filter_logs_on_type(
-    files: &Vec<FileEntry>,
+fn filter_logs(
+    files: &[FileEntry],
     log_type: &str,
+    date_from: OffsetDateTime,
 ) -> Result<Vec<PathBuf>, LogRetrievalError> {
-    let mut files_to_send = Vec::new();
-    for file in files {
-        let maybe_file_path = file.path.as_str(); // because it can be a glob pattern
-        let file_type = file.config_type.as_str();
+    let mut file_list = filter_logs_by_type(files, log_type)?;
+    sort_logs_by_date(&mut file_list);
 
-        if !file_type.eq(log_type) {
-            continue;
-        } else {
-            for entry in glob(maybe_file_path)? {
-                let file_path = entry?;
-                files_to_send.push(file_path)
-            }
-        }
-    }
-    if files_to_send.is_empty() {
+    let file_list = filter_logs_by_date(file_list, date_from);
+
+    if file_list.is_empty() {
         Err(LogRetrievalError::NoLogsAvailableForType {
             log_type: log_type.to_string(),
         })
     } else {
-        Ok(files_to_send)
+        Ok(file_list)
     }
 }
 
-/// filter a vector of pathbufs according to `obj.log.date_from` and `obj.log.date_to`
-pub fn filter_logs_path_on_metadata(
+fn filter_logs_by_type(
+    files: &[FileEntry],
     log_type: &str,
-    date_from: OffsetDateTime,
-    mut logs_path_vec: Vec<PathBuf>,
-) -> Result<Vec<PathBuf>, LogRetrievalError> {
-    let mut out = vec![];
+) -> Result<Vec<(PathBuf, OffsetDateTime, bool)>, LogRetrievalError> {
+    let mut file_list = Vec::new();
+    let wildcard_regex = Regex::new(r"^.*\*.*").unwrap();
 
-    logs_path_vec.sort_by_key(|pathbuf| {
-        if let Ok(metadata) = std::fs::metadata(pathbuf) {
-            if let Ok(file_modified_time) = metadata.modified() {
-                return OffsetDateTime::from(file_modified_time);
-            }
-        };
-        // if the file metadata can not be read, we set the file's metadata
-        // to UNIX_EPOCH (Jan 1st 1970)
-        OffsetDateTime::UNIX_EPOCH
-    });
-    logs_path_vec.reverse(); // to get most recent
+    let files: Vec<&str> = files
+        .iter()
+        .filter(|file| file.config_type.eq(log_type))
+        .map(|file| file.path.as_str())
+        .collect();
 
-    for file_pathbuf in logs_path_vec {
-        let metadata = std::fs::metadata(&file_pathbuf)?;
-        let datetime_modified = OffsetDateTime::from(metadata.modified()?);
-        if datetime_modified >= date_from {
-            out.push(file_pathbuf);
+    for file in files {
+        let paths = glob(file)?;
+        for path in paths {
+            let entry = path?;
+            file_list.push((
+                entry.to_owned(),
+                get_modification_date(entry.as_path()),
+                wildcard_regex.is_match(file),
+            ))
         }
     }
 
-    if out.is_empty() {
-        Err(LogRetrievalError::NoLogsAvailableForType {
-            log_type: log_type.to_string(),
+    Ok(file_list)
+}
+
+fn get_modification_date(path: impl AsRef<Path>) -> OffsetDateTime {
+    if let Ok(metadata) = std::fs::metadata(path) {
+        if let Ok(file_modified_time) = metadata.modified() {
+            return OffsetDateTime::from(file_modified_time);
+        }
+    };
+    // if the file metadata can not be read, we set the file's metadata
+    // to UNIX_EPOCH (Jan 1st 1970)
+    OffsetDateTime::UNIX_EPOCH
+}
+
+fn filter_logs_by_date(
+    files: Vec<(PathBuf, OffsetDateTime, bool)>,
+    date_from: OffsetDateTime,
+) -> Vec<PathBuf> {
+    // include log file with static path no matter whether or not it is in date range
+    files
+        .into_iter()
+        .filter(|(_, modification_time, wildcard_match)| {
+            !wildcard_match || *modification_time >= date_from
         })
-    } else {
-        Ok(out)
-    }
+        .map(|(path, _, _)| path)
+        .collect()
+}
+
+fn sort_logs_by_date(files: &mut [(PathBuf, OffsetDateTime, bool)]) {
+    files.sort_by_key(|(_, modification_time, _)| Reverse(*modification_time));
 }
 
 #[cfg(test)]
@@ -172,67 +185,39 @@ mod tests {
         let tempdir = TempTedgeDir::new();
         let tempdir_path = tempdir.path().to_str().unwrap();
 
-        tempdir.file("file_a");
-        tempdir.file("file_b");
-        tempdir.file("file_c");
-        tempdir.file("file_d");
+        tempdir.file("file_a_one");
+        tempdir.file("file_b_one");
+        tempdir.file("file_c_two");
+        tempdir.file("file_d_one");
 
         set_file_mtime(
-            format!("{tempdir_path}/file_a"),
+            format!("{tempdir_path}/file_a_one"),
             FileTime::from_unix_time(2, 0),
         )
         .unwrap();
         set_file_mtime(
-            format!("{tempdir_path}/file_b"),
+            format!("{tempdir_path}/file_b_one"),
             FileTime::from_unix_time(3, 0),
         )
         .unwrap();
         set_file_mtime(
-            format!("{tempdir_path}/file_c"),
+            format!("{tempdir_path}/file_c_two"),
             FileTime::from_unix_time(11, 0),
         )
         .unwrap();
 
         let files: Vec<FileEntry> = vec![
             FileEntry {
-                path: format!("{tempdir_path}/file_a"),
+                path: format!("{tempdir_path}/*_one"),
                 config_type: "type_one".to_string(),
             },
             FileEntry {
-                path: format!("{tempdir_path}/file_b"),
-                config_type: "type_one".to_string(),
-            },
-            FileEntry {
-                path: format!("{tempdir_path}/file_c"),
+                path: format!("{tempdir_path}/*_two"),
                 config_type: "type_two".to_string(),
-            },
-            FileEntry {
-                path: format!("{tempdir_path}/file_d"),
-                config_type: "type_one".to_string(),
             },
         ];
 
         (tempdir, files)
-    }
-
-    #[test]
-    /// Filter on type = "type_one".
-    /// There are four logs created in tempdir { file_a, file_b, file_c, file_d }
-    /// Of which, { file_a, file_b, file_d } are "type_one"
-    fn test_filter_logs_on_type() {
-        let (tempdir, files) = prepare();
-        let tempdir_path = tempdir.path().to_str().unwrap();
-
-        let logs = filter_logs_on_type(&files, "type_one").unwrap();
-
-        assert_eq!(
-            logs,
-            vec![
-                PathBuf::from(format!("{tempdir_path}/file_a")),
-                PathBuf::from(format!("{tempdir_path}/file_b")),
-                PathBuf::from(format!("{tempdir_path}/file_d"))
-            ]
-        )
     }
 
     #[test]
@@ -247,20 +232,67 @@ mod tests {
     ///
     /// The order of the output is { file_d, file_b }, because files are sorted from
     /// most recent to oldest
-    fn test_filter_logs_path_on_metadata() {
+    fn test_filter_logs_path_containing_wildcard_on_type_and_metadata() {
         let (tempdir, files) = prepare();
         let tempdir_path = tempdir.path().to_str().unwrap();
 
-        let logs = filter_logs_on_type(&files, "type_one").unwrap();
-        let logs =
-            filter_logs_path_on_metadata("type_one", datetime!(1970-01-01 00:00:03 +00:00), logs)
-                .unwrap();
+        let logs = filter_logs(&files, "type_one", datetime!(1970-01-01 00:00:03 +00:00)).unwrap();
 
         assert_eq!(
             logs,
             vec![
-                PathBuf::from(format!("{tempdir_path}/file_d")),
-                PathBuf::from(format!("{tempdir_path}/file_b")),
+                PathBuf::from(format!("{tempdir_path}/file_d_one")),
+                PathBuf::from(format!("{tempdir_path}/file_b_one")),
+            ]
+        )
+    }
+
+    #[test]
+    /// Out of logs filtered on type = "type_one", that is: { file_a, file_b, file_d }.
+    /// logs filtered on metadata are the same, that is { file_a, file_b, file_d }.
+    ///
+    /// This is because:
+    ///
+    /// file_a has timestamp: 1970/01/01 00:00:02
+    /// file_b has timestamp: 1970/01/01 00:00:03
+    /// file_d has timestamp: (current, not modified)
+    ///
+    /// However, files are provided with static path so we don't take date range into consideration
+    ///
+    /// The order of the output is { file_d, file_b, file_a }, because files are sorted from
+    /// most recent to oldest
+    fn test_filter_logs_with_static_path_on_type_and_metadata() {
+        let (tempdir, _) = prepare();
+        let tempdir_path = tempdir.path().to_str().unwrap();
+
+        // provide vector of files with static paths
+        let files: Vec<FileEntry> = vec![
+            FileEntry {
+                path: format!("{tempdir_path}/file_a_one"),
+                config_type: "type_one".to_string(),
+            },
+            FileEntry {
+                path: format!("{tempdir_path}/file_b_one"),
+                config_type: "type_one".to_string(),
+            },
+            FileEntry {
+                path: format!("{tempdir_path}/file_c_two"),
+                config_type: "type_two".to_string(),
+            },
+            FileEntry {
+                path: format!("{tempdir_path}/file_d_one"),
+                config_type: "type_one".to_string(),
+            },
+        ];
+
+        let logs = filter_logs(&files, "type_one", datetime!(1970-01-01 00:00:03 +00:00)).unwrap();
+
+        assert_eq!(
+            logs,
+            vec![
+                PathBuf::from(format!("{tempdir_path}/file_d_one")),
+                PathBuf::from(format!("{tempdir_path}/file_b_one")),
+                PathBuf::from(format!("{tempdir_path}/file_a_one")),
             ]
         )
     }
@@ -287,7 +319,7 @@ mod tests {
     fn test_read_log_content() {
         let (tempdir, _) = prepare();
         let tempdir_path = tempdir.path().to_str().unwrap();
-        let file_path = &format!("{tempdir_path}/file_a");
+        let file_path = &format!("{tempdir_path}/file_a_one");
         let mut log_file = std::fs::OpenOptions::new()
             .append(true)
             .create(false)
@@ -306,7 +338,7 @@ mod tests {
             read_log_content(Path::new(file_path), line_counter, max_lines, &filter_text).unwrap();
 
         assert_eq!(line_counter, max_lines);
-        assert_eq!(result, "filename: file_a\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.\n");
+        assert_eq!(result, "filename: file_a_one\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.\n");
     }
 
     #[test]
@@ -333,10 +365,10 @@ mod tests {
         let tempdir_path = tempdir.path().to_str().unwrap();
 
         for (file_name, m_time) in [
-            ("file_a", 2),
-            ("file_b", 3),
-            ("file_c", 11),
-            ("file_d", 100),
+            ("file_a_one", 2),
+            ("file_b_one", 3),
+            ("file_c_two", 11),
+            ("file_d_one", 100),
         ] {
             let file_path = &format!("{tempdir_path}/{file_name}");
 
@@ -366,6 +398,6 @@ mod tests {
         assert_eq!(temp_path.parent().unwrap(), tempdir.path());
 
         let result = std::fs::read_to_string(temp_path).unwrap();
-        assert_eq!(result, String::from("filename: file_d\nthis is the first line of file_d.\nthis is the second line of file_d.\nthis is the third line of file_d.\nthis is the forth line of file_d.\nthis is the fifth line of file_d.\nfilename: file_b\nthis is the forth line of file_b.\nthis is the fifth line of file_b.\n"))
+        assert_eq!(result, String::from("filename: file_d_one\nthis is the first line of file_d_one.\nthis is the second line of file_d_one.\nthis is the third line of file_d_one.\nthis is the forth line of file_d_one.\nthis is the fifth line of file_d_one.\nfilename: file_b_one\nthis is the forth line of file_b_one.\nthis is the fifth line of file_b_one.\n"))
     }
 }
