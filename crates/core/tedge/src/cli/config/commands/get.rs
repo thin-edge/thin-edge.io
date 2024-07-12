@@ -19,9 +19,11 @@ impl Command for GetConfigCommand {
             }
             Err(tedge_config::ReadError::ConfigNotSet { .. }) => {
                 eprintln!("The provided config key: '{}' is not set", self.key);
+                std::process::exit(1)
             }
             Err(tedge_config::ReadError::ReadOnlyNotFound { message, key }) => {
                 eprintln!("The provided config key: '{key}' is not configured: {message}",);
+                std::process::exit(1)
             }
             Err(err) => return Err(err.into()),
         }
