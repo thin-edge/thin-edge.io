@@ -1,3 +1,5 @@
+use super::EntityTarget;
+use super::OperationContext;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
@@ -74,18 +76,20 @@ impl CumulocityConverter {
             MqttMessage::new(&topic, request.to_json()).with_retain()
         ])
     }
+}
 
+impl OperationContext {
     /// Address a received ThinEdge firmware_update command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
     /// - "successful", it converts the message to SmartREST "Successful" and update the current installed firmware.
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_firmware_update_state_change(
-        &mut self,
-        topic_id: &EntityTopicId,
+        &self,
+        target: EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        if !self.config.capabilities.firmware_update {
+        if !self.capabilities.firmware_update {
             warn!(
                 "Received a firmware_update command, however, firmware_update feature is disabled"
             );
@@ -93,7 +97,7 @@ impl CumulocityConverter {
         }
 
         let command = match FirmwareUpdateCmd::try_from_bytes(
-            topic_id.clone(),
+            target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
         )? {
@@ -104,7 +108,7 @@ impl CumulocityConverter {
             }
         };
 
-        let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
+        let sm_topic = target.smartrest_publish_topic;
 
         let messages = match command.status() {
             CommandStatus::Executing => {
@@ -123,7 +127,7 @@ impl CumulocityConverter {
                     .with_qos(QoS::AtLeastOnce);
 
                 let twin_metadata_topic = self.mqtt_schema.topic_for(
-                    topic_id,
+                    &target.topic_id,
                     &Channel::EntityTwinData {
                         fragment_key: "firmware".to_string(),
                     },
@@ -162,7 +166,9 @@ impl CumulocityConverter {
             Some(command.into_generic_command(&self.mqtt_schema)),
         ))
     }
+}
 
+impl CumulocityConverter {
     pub fn register_firmware_update_operation(
         &mut self,
         topic_id: &EntityTopicId,

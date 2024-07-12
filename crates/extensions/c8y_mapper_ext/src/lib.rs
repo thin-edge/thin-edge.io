@@ -15,7 +15,7 @@ pub mod service_monitor;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
 pub struct Capabilities {
     log_upload: bool,
     config_snapshot: bool,

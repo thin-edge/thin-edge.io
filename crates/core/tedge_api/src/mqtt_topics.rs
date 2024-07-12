@@ -771,6 +771,7 @@ impl From<&Channel> for ChannelFilter {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct IdGenerator {
     prefix: String,
 }

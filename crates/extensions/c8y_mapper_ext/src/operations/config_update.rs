@@ -25,6 +25,9 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
+use super::EntityTarget;
+use super::OperationContext;
+
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     [
         mqtt_schema.topics(
@@ -40,24 +43,24 @@ pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     .collect()
 }
 
-impl CumulocityConverter {
+impl OperationContext {
     /// Address a received ThinEdge config_update command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
     /// - "successful", it converts the message to SmartREST "Successful".
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_config_update_state_change(
-        &mut self,
-        topic_id: &EntityTopicId,
+        &self,
+        target: EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        if !self.config.capabilities.config_update {
+        if !self.capabilities.config_update {
             warn!("Received a config_update command, however, config_update feature is disabled");
             return Ok((vec![], None));
         }
 
         let command = match ConfigUpdateCmd::try_from_bytes(
-            topic_id.clone(),
+            target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
         )? {
@@ -68,7 +71,7 @@ impl CumulocityConverter {
             }
         };
 
-        let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
+        let sm_topic = target.smartrest_publish_topic;
 
         let messages = match command.status() {
             CommandStatus::Executing => {
@@ -110,11 +113,13 @@ impl CumulocityConverter {
             Some(command.into_generic_command(&self.mqtt_schema)),
         ))
     }
+}
 
+impl CumulocityConverter {
     /// Upon receiving a SmartREST c8y_DownloadConfigFile request, convert it to a message on the
     /// command channel.
     pub async fn convert_config_update_request(
-        &mut self,
+        &self,
         device_xid: String,
         cmd_id: String,
         config_download_request: C8yDownloadConfigFile,
