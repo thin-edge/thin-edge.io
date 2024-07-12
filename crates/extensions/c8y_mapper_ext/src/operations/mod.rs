@@ -372,3 +372,107 @@ fn get_smartrest_response_for_upload_result(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use c8y_auth_proxy::url::Protocol;
+    use c8y_http_proxy::messages::C8YRestRequest;
+    use c8y_http_proxy::messages::C8YRestResult;
+    use tedge_actors::test_helpers::FakeServerBox;
+    use tedge_actors::test_helpers::FakeServerBoxBuilder;
+    use tedge_actors::Builder;
+    use tedge_actors::MessageSink;
+    use tedge_actors::SimpleMessageBox;
+    use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    use crate::tests::test_mapper_config;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn ignores_messages_that_are_not_operations() {
+        // system under test
+        let mut sut = setup_operation_handler().operation_handler;
+        let mqtt_schema = sut.context.mqtt_schema.clone();
+
+        let entity_topic_id = EntityTopicId::default_main_device();
+        let entity_target = EntityTarget {
+            topic_id: entity_topic_id.clone(),
+            external_id: EntityExternalId::from("anything"),
+            smartrest_publish_topic: Topic::new("anything").unwrap(),
+        };
+
+        let message_wrong_entity = MqttMessage::new(&Topic::new("asdf").unwrap(), []);
+        sut.handle(entity_target.clone(), message_wrong_entity)
+            .await;
+
+        assert_eq!(sut.running_operations.len(), 0);
+
+        let topic = mqtt_schema.topic_for(
+            &entity_topic_id,
+            &Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            },
+        );
+        let message_wrong_channel = MqttMessage::new(&topic, []);
+        sut.handle(entity_target, message_wrong_channel).await;
+
+        assert_eq!(sut.running_operations.len(), 0);
+    }
+
+    fn setup_operation_handler() -> TestHandle {
+        let ttd = TempTedgeDir::new();
+        let c8y_mapper_config = test_mapper_config(&ttd);
+
+        let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+            SimpleMessageBoxBuilder::new("MQTT", 10);
+        let mqtt_publisher = LoggingSender::new("MQTT".to_string(), mqtt_builder.get_sender());
+
+        let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+            FakeServerBoxBuilder::default();
+        let c8y_proxy = C8YHttpProxy::new(&mut c8y_proxy_builder);
+
+        let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
+            FakeServerBoxBuilder::default();
+        let uploader = ClientMessageBox::new(&mut uploader_builder);
+
+        let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+            FakeServerBoxBuilder::default();
+        let downloader = ClientMessageBox::new(&mut downloader_builder);
+
+        let auth_proxy_addr = c8y_mapper_config.auth_proxy_addr.clone();
+        let auth_proxy_port = c8y_mapper_config.auth_proxy_port;
+        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
+
+        let operation_handler = OperationHandler::new(
+            &c8y_mapper_config,
+            downloader,
+            uploader,
+            mqtt_publisher,
+            c8y_proxy,
+            auth_proxy,
+        );
+
+        let _mqtt = mqtt_builder.build();
+        let _downloader = downloader_builder.build();
+        let _uploader = uploader_builder.build();
+        let _c8y_proxy = c8y_proxy_builder.build();
+
+        TestHandle {
+            _mqtt,
+            _downloader,
+            _uploader,
+            _c8y_proxy,
+            operation_handler,
+        }
+    }
+
+    struct TestHandle {
+        operation_handler: OperationHandler,
+        _mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
+        _c8y_proxy: FakeServerBox<C8YRestRequest, C8YRestResult>,
+        _uploader: FakeServerBox<IdUploadRequest, IdUploadResult>,
+        _downloader: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
+    }
+}
