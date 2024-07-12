@@ -2610,6 +2610,175 @@ async fn mapper_processes_operations_concurrently() {
     }
 }
 
+#[tokio::test]
+async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate config_snapshot cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "114,c8y_UploadConfigFile"),
+            ("c8y/s/us", "119,typeA,typeB,typeC"),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/c8y_UploadConfigFile")
+        .exists());
+
+    // Simulate config_update cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_update"),
+        r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
+            ),
+            ("c8y/s/us", "119,typeD,typeE,typeF"),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/c8y_DownloadConfigFile")
+        .exists());
+}
+
+#[tokio::test]
+async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate config_snapshot cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    mqtt.skip(2).await; // Skip the mapped child device registration message
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_UploadConfigFile",
+            ),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "119,typeA,typeB,typeC",
+            ),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/test-device:device:child1/c8y_UploadConfigFile")
+        .exists());
+
+    // Sending an updated list of config types
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+        r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Assert that the updated config type list does not trigger a duplicate supported ops message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:child1",
+            "119,typeB,typeC,typeD",
+        )],
+    )
+    .await;
+
+    // Simulate config_update cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+        r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
+            ),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "119,typeD,typeE,typeF",
+            ),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/test-device:device:child1/c8y_DownloadConfigFile")
+        .exists());
+
+    // Sending an updated list of config types
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+        r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Assert that the updated config type list does not trigger a duplicate supported ops message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:child1",
+            "119,typeB,typeC,typeD",
+        )],
+    )
+    .await;
+}
+
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
     let paths = fs::read_dir(cfg_dir.to_path_buf().join("agent")).unwrap();
     for path in paths {
