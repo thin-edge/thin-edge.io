@@ -188,7 +188,7 @@ impl OperationContext {
                 self.upload_operation_log(
                     &target.external_id,
                     cmd_id,
-                    &CumulocitySupportedOperations::C8yLogFileRequest.into(),
+                    &OperationType::LogUpload,
                     command.clone().into_generic_command(&self.mqtt_schema),
                 )
                 .await?;
