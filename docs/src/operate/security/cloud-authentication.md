@@ -55,7 +55,7 @@ To add a self-signed certificate to the trusted certificate repository on %%te%%
 Create a `/usr/local/share/ca-certificates/` directory if it does not exist on your computer:
 
 ```sh
-sudo mkdir /usr/local/share/ca-certificates/
+sudo mkdir -p /usr/local/share/ca-certificates/
 ```
 
 The directory should be owned by `root:root` and have `755` permissions set for it. The certificates files should be `644`.
