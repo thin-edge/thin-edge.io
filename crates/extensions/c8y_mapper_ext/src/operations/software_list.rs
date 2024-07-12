@@ -83,3 +83,67 @@ impl OperationContext {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use serde_json::json;
+    use tedge_actors::test_helpers::MessageReceiverExt;
+    use tedge_actors::Sender;
+    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
+    use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::Topic;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    use crate::tests::skip_init_messages;
+    use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::spawn_dummy_c8y_http_proxy;
+    use crate::tests::TestHandle;
+
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+
+    #[tokio::test]
+    async fn mapper_publishes_advanced_software_list() {
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, http, .. } = test_handle;
+        spawn_dummy_c8y_http_proxy(http);
+
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate software_list request
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/software_list/c8y-mapper-1234"),
+            json!({
+            "id":"1",
+            "status":"successful",
+            "currentSoftwareList":[
+                {"type":"debian", "modules":[
+                    {"name":"a"},
+                    {"name":"b","version":"1.0"},
+                    {"name":"c","url":"https://foobar.io/c.deb"},
+                    {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
+                ]},
+                {"type":"apama","modules":[
+                    {"name":"m","url":"https://foobar.io/m.epl"}
+                ]}
+            ]})
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "140,a,,debian,,b,1.0,debian,,c,,debian,https://foobar.io/c.deb,d,beta,debian,https://foobar.io/d.deb,m,,apama,https://foobar.io/m.epl"
+            )
+        ])
+        .await;
+    }
+}
