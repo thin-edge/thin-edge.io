@@ -79,5 +79,4 @@ Custom Teardown
 
 Check Owner of Directory
     [Arguments]    ${directory_path}    ${expected_owner}
-    ${output}    Execute Command    ls -ld ${directory_path} | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${output}    \s*${expected_owner}\s*
+    Path Should Have Permissions    path=${directory_path}    owner_group=${expected_owner}
