@@ -37,22 +37,33 @@ On such devices, pushing the entire firmware binary for each iterative change wo
 
 # Requirements
 
-* Ability to control the order of execution of the operations defined in the command input
-* Ability to apply 
+* Ability to override the order of execution of the operations defined in the command input.
+* Ability to dynamically control the next operation to be executed during the workflow execution.
+* Provide an option to add any custom rollback step into the workflow, when feasible,
+  with sufficient info available to the rollback logic like which operation failed, which ones completed and which ones are pending.
 
 # Device profile capability
 
-A device that supports device profile operation must declare that capability by publishing the following message:
+A device that supports device profile operation must declare that capability
+by publishing an empty JSON message to the `device_profile` command metadata topic as follows:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/main///cmd/device_profile' '{
+tedge mqtt pub -r 'te/device/main///cmd/device_profile' '{}'
+```
+
+If a profile is applied on the factory image itself, this information can be published to the corresponding `twin` topic,
+so that the existing profile information is propagated to the cloud as well.
+
+```sh te2mqtt formats=v1
+tedge mqtt pub -r 'te/device/main///twin/device_profile' '{
   "name": "prod-profile",
   "version: "v1"
 }'
 ```
 
-If the current profile information is not known upfront, publish an empty JSON (`{}`) instead.
-The firmware information, supported software and configuration types must be declared separately with their respective capability messages.
+If the current profile information is not known upfront, this step can be skipped.
+
+When a new profile is applied, this twin value is updated with the applied profile's `name` and `version`.
 
 # Device profile command
 
@@ -71,7 +82,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
   "status": "init",
   "name": "prod-profile",
   "version": "v2",
-  "profile": [
+  "operations": [
     {
       "operation": "firmware_update",
       "skip": false,
@@ -176,20 +187,25 @@ action = "builtin"
 on_success = "next_operation"
 
 [next_operation]
-action = "builtin"
-on_success = "apply_operation"
-on_error = { status = "failed", reason = "Failed to pick the next operation to be executed" }
-
-[apply_sub_operation]
-operations = [ "firmware_update", "software_update", "config_update" ]
-on_exec = "awaiting_sub_operation"
+action = "iterator"
+on_next = "apply_operation"
 on_success = "successful"
-on_error = { status = "failed", reason = "failed to apply device profile"}
+on_error = { status = "failed", reason = "Failed to compute the next operation to be executed" }
+
+[apply_operation]
+operation = "${.@next_operation.operation}"
+input = "${.@next_operation.payload}"
+on_exec = "awaiting_sub_operation"
 
 [awaiting_sub_operation]
 action = "await-operation-completion"
 on_success = "next_operation"
-on_error = { status = "failed", reason = "failed to apply device profile" }
+on_error = "rollback"
+
+[rollback]
+action="proceed"
+on_success = { status = "failed", reason = "Device profile application failed" }
+on_error = { status = "failed", reason = "Rollback failed" }
 
 #
 # End states
@@ -202,30 +218,61 @@ action = "cleanup"
 ```
 
 * The workflow just proceeds to the `scheduled` state from the `init` state
-* The order of operation execution must be finalized before the `executing` state and and the `scheduled` state is an ideal candidate for that.
+* The order of operation execution must be finalized before the `executing` state
+  and the `scheduled` state is an ideal candidate for that.
   If the `builtin` action is specified in this state, the default order as defined in the input is used.
   This order can be overridden by the user using a `script` action, if desired.
-  Once the updated list is captured into a `updated_profile` field in the payload, proceed to the `executing` state.
+  The script is expected to return the updated `operations` list which replaces the original list
+  and then proceed to the `executing` state.
 * The mandatory `executing` state simply passes the input to the `next_operation`.
-* The `next_operation` state chooses the next operation to be executed from the list of operations in the profile,
-  indicated using the a `current_index` value.
-  When the `builtin` action is used, if the `current_index` field is not present in the input payload,
-  one is added with an initial value of `0`.
-  If the field already exists, the value is just incremented.
-  The default indexing logic can be overridden using a `script` action which can manipulate the order in any manner.
-  For example, the script may choose to skip certain operation types by just skipping their indexes.
-  The `on_success` target of this state must be another state where all the expected sub-operations are listed
-  (`apply_sub_operation` state in this example).
-* The `apply_sub_operation` state is a simple wrapper over all possible `operations` expected as sub-operations,
-  and invokes each target sub-operation that corresponds to the `current_index` value in the input.
+* The `next_operation` state chooses the next operation to be executed from the list of `operations` in the input.
+  When the built-in `iterator` action is used, the next operation is picked up sequentially from the `operations` list.
+  The target operation is captured into a `@next_operation` object in the payload,
+  with an `index` field representing the index position of that operation in the `operations` list, 
+  along with that operation's `operation` and `payload` values as follows:
+
+  ```json
+  {
+    "@next_operation": {
+      "index": 0,
+      "operation": "firmware_update",
+      "payload": {
+        "name": "core-image-tedge-rauc",
+        "remoteUrl": "https://abc.com/some/firmware/url",
+        "version": "20240430.1139"
+      }
+    },
+    ... // Other fields in the incoming payload
+  }
+  ```
+
+  If the `@next_operation` field is not present in the input payload.
+  one is added with an initial `index` value of `0` and the corresponding `operation` and `payload` values.
+  If the field already exists, the `index` value is incremented along with its `operation` and `payload` values.
+  Once the next operation is successfully computed, the workflow moves to the `on_next` target.
+  Once the `operations` list is exhausted (`index` value higher than its size),
+  the profile application is deemed complete and the workflow proceeds to the `on_success` target.
+  If the operation computation fails for some reason, then the workflow moves to the `on_error` target.
+  This builtin iteration logic can be overridden using a `script` action which can manipulate the order in any manner, dynamically.
+* The `apply_sub_operation` state executes the sub-operation defined in the `@next_operation` field in the payload.
+  The `input` to the sub-operation is also extracted from the `payload` field of the `@next_operation`.
   As soon as the sub-operation is triggered, the workflow moves to the `awaiting_sub_operation` state defined as the `on_exec` target.
 * In the `awaiting_sub_operation` state, workflow just waits monitoring the state of the sub-operation completion.
   * Once the sub-operation is successful, the workflow must move back to the `next_operation` state,
-  so that the next sub-operation in the list can be applied.
-  * In case of a failure, the workflow moves to the `on_error` target state, keeping the `current_index` value intact,
-    so that the item that caused the failure can be easily identified.
-* Once the `updated_profile` list is exhausted in the `executing` state, the workflow moves to its `on_success` target state.
-
+    so that the next sub-operation in the list can be applied.
+  * In case of a failure, the workflow moves to the `on_error` target state,
+    keeping the `@next_operation` value in the payload intact,
+    so that the item that caused the failure can be easily identified using the its `index` value.
+    Using the `index` value, all the operations that were previously applied can easily be identified
+    by looking up all the lower index values in the `operations` list.
+    This can come in handy for any rollback attempts if feasible.
+    For e.g: if a profile consisted of a 4 inter-connected configuration updates and if the profile application failed
+    during the 3rd configuration,
+    a profile level rollback can be implemented by identifying the previously applied config update operations
+    using the `index` value, and undoing them as well.
+* The `rollback` state does nothing but just falls through to the `failed` state,
+  as there is no built-in support for a profile level rollbacks.
+  If such a rollback is feasible, this state must be overridden using a user provided `script` action.
 
 ### On success
 
@@ -241,7 +288,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
 ...and the current applied device profile information is updated by publishing the same to the capability topic as follows:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/main///cmd/device_profile' '{
+tedge mqtt pub -r 'te/device/main///twin/device_profile' '{
   "name": "prod-profile",
   "version: "v2"
 }'
