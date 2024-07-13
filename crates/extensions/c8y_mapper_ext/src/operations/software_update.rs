@@ -1,7 +1,6 @@
 use c8y_api::smartrest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -11,14 +10,15 @@ use crate::error::ConversionError;
 
 use super::EntityTarget;
 use super::OperationContext;
+use super::OperationResult;
 
 impl OperationContext {
     pub async fn publish_software_update_status(
         &self,
-        target: EntityTarget,
+        target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationResult, ConversionError> {
         let command = match SoftwareUpdateCommand::try_from_bytes(
             target.topic_id.clone(),
             cmd_id.to_string(),
@@ -27,34 +27,30 @@ impl OperationContext {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((vec![], None));
+                return Ok(OperationResult::Ignored);
             }
         };
 
-        let topic = target.smartrest_publish_topic;
-        let messages = match command.status() {
+        let topic = &target.smartrest_publish_topic;
+        match command.status() {
             CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Unknown => {
                 // The command has not been processed yet
-                vec![]
+                Ok(OperationResult::Ignored)
             }
-            CommandStatus::Executing => {
-                let smartrest_set_operation_status =
-                    smartrest::smartrest_serializer::set_operation_executing(
-                        CumulocitySupportedOperations::C8ySoftwareUpdate,
-                    );
-                vec![MqttMessage::new(&topic, smartrest_set_operation_status)]
-            }
+            CommandStatus::Executing => Ok(OperationResult::Executing),
             CommandStatus::Successful => {
                 let smartrest_set_operation =
                     smartrest::smartrest_serializer::succeed_operation_no_payload(
                         CumulocitySupportedOperations::C8ySoftwareUpdate,
                     );
 
-                vec![
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                    command.clearing_message(&self.mqtt_schema),
-                    self.request_software_list(&target.topic_id),
-                ]
+                Ok(OperationResult::Finished {
+                    messages: vec![
+                        MqttMessage::new(topic, smartrest_set_operation),
+                        self.request_software_list(&target.topic_id),
+                    ],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
@@ -62,18 +58,15 @@ impl OperationContext {
                     &reason,
                 );
 
-                vec![
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                    command.clearing_message(&self.mqtt_schema),
-                    self.request_software_list(&target.topic_id),
-                ]
+                Ok(OperationResult::Finished {
+                    messages: vec![
+                        MqttMessage::new(topic, smartrest_set_operation),
+                        self.request_software_list(&target.topic_id),
+                    ],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+        }
     }
 
     fn request_software_list(&self, target: &EntityTopicId) -> MqttMessage {
@@ -202,13 +195,6 @@ mod tests {
         // Expect `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_SoftwareUpdate")]).await;
 
-        // The successful state is cleared
-        assert_received_contains_str(
-            &mut mqtt,
-            [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
-        )
-        .await;
-
         // An updated list of software is requested
         assert_received_contains_str(
             &mut mqtt,
@@ -216,6 +202,13 @@ mod tests {
                 "te/device/main///cmd/software_list/+",
                 r#"{"status":"init"}"#,
             )],
+        )
+        .await;
+
+        // The successful state is cleared
+        assert_received_contains_str(
+            &mut mqtt,
+            [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
         )
         .await;
     }
@@ -249,13 +242,6 @@ mod tests {
         )
         .await;
 
-        // The failed state is cleared
-        assert_received_contains_str(
-            &mut mqtt,
-            [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
-        )
-        .await;
-
         // An updated list of software is requested
         assert_received_contains_str(
             &mut mqtt,
@@ -263,6 +249,13 @@ mod tests {
                 "te/device/main///cmd/software_list/+",
                 r#"{"status":"init"}"#,
             )],
+        )
+        .await;
+
+        // The failed state is cleared
+        assert_received_contains_str(
+            &mut mqtt,
+            [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
         )
         .await;
     }

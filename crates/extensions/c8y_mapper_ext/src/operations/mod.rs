@@ -24,6 +24,8 @@ use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
@@ -39,10 +41,12 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tracing::error;
 
@@ -210,80 +214,143 @@ impl RunningOperation {
                 } = message;
                 let external_id = entity.external_id.clone();
 
-                let command_topic = message.topic.clone();
-                let res = match operation {
-                    OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
+                let operation_result = match operation {
+                    OperationType::Health | OperationType::Custom(_) => {
+                        Ok(OperationResult::Ignored)
+                    }
 
                     OperationType::Restart => {
                         context
-                            .publish_restart_operation_status(entity, &cmd_id, message)
+                            .publish_restart_operation_status(&entity, &cmd_id, message)
                             .await
                     }
                     OperationType::SoftwareList => {
                         context
-                            .publish_software_list(entity, &cmd_id, &message)
+                            .publish_software_list(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::SoftwareUpdate => {
                         context
-                            .publish_software_update_status(entity, &cmd_id, &message)
+                            .publish_software_update_status(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::LogUpload => {
                         context
-                            .handle_log_upload_state_change(entity, &cmd_id, &message)
+                            .handle_log_upload_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::ConfigSnapshot => {
                         context
-                            .handle_config_snapshot_state_change(entity, &cmd_id, &message)
+                            .handle_config_snapshot_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::ConfigUpdate => {
                         context
-                            .handle_config_update_state_change(entity, &cmd_id, &message)
+                            .handle_config_update_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::FirmwareUpdate => {
                         context
-                            .handle_firmware_update_state_change(entity, &cmd_id, &message)
+                            .handle_firmware_update_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                 };
 
                 let mut mqtt_publisher = context.mqtt_publisher.clone();
-                match res {
-                    // If there are mapped final status messages to be published, they are cached until the operation
-                    // log is uploaded
-                    Ok((messages, command)) => {
-                        if let Some(command) = command {
+                match operation_result {
+                    Ok(result) => match result {
+                        OperationResult::Ignored => {}
+                        OperationResult::Executing => {
+                            if let Some(c8y_state_executing_payload) =
+                                c8y_state_message_executing(operation)
+                            {
+                                let c8y_state_executing_message = MqttMessage::new(
+                                    &entity.smartrest_publish_topic,
+                                    c8y_state_executing_payload,
+                                );
+                                mqtt_publisher
+                                    .send(c8y_state_executing_message)
+                                    .await
+                                    .unwrap();
+                            }
+                        }
+                        OperationResult::Finished { messages, command } => {
                             if let Err(e) = context
-                                .upload_operation_log(&external_id, &cmd_id, &operation, command)
+                                .upload_operation_log(&external_id, &cmd_id, &operation, &command)
                                 .await
                             {
                                 error!("failed to upload operation logs: {e}");
                             }
-                        }
 
-                        for message in messages {
-                            // if task publishes MQTT clearing message, an operation is considered finished, so we can
-                            // terminate the task as well
-                            if message.retain
-                                && message.payload_bytes().is_empty()
-                                && message.topic == command_topic
-                            {
-                                rx.close();
+                            for message in messages {
+                                mqtt_publisher.send(message).await.unwrap();
                             }
-                            mqtt_publisher.send(message).await.unwrap();
+
+                            // clear command topic
+                            let state = command.clear();
+                            let clearing_message = state.into_message();
+                            assert!(clearing_message.payload_bytes().is_empty());
+                            assert!(clearing_message.retain);
+                            assert_eq!(clearing_message.qos, QoS::AtLeastOnce);
+                            mqtt_publisher.send(clearing_message).await.unwrap();
+
+                            rx.close();
                         }
+                    },
+                    Err(err) => {
+                        unimplemented!()
                     }
-                    Err(e) => error!("{e}"),
                 }
             }
         });
 
         Self { handle, tx }
     }
+}
+
+/// Result of an update of operation's state.
+///
+/// When a new MQTT message is received with an updated state of the operation, the mapper needs to
+/// do something in response. Depending on if it cares about the operation, it can ignore it, send
+/// some MQTT messages to notify C8y about the state change, or terminate the operation.
+enum OperationResult {
+    /// Do nothing in response.
+    ///
+    /// Used for states that don't have an equivalent on C8y so we don't have to notify.
+    Ignored,
+
+    /// Update C8y operation state to `EXECUTING`.
+    Executing,
+
+    /// Operation is terminated.
+    ///
+    /// Operation state is either `SUCCESSFUL` or `FAILED`. Report state to C8y, send operation log,
+    /// clean local MQTT topic.
+    Finished {
+        messages: Vec<MqttMessage>,
+        command: GenericCommandState,
+    },
+}
+
+/// For a given `OperationType`, obtain a C8y Smartrest Set operation to EXECUTING message.
+fn c8y_state_message_executing(operation_type: OperationType) -> Option<String> {
+    // convert local operation to c8y operation
+    let c8y_operation = match operation_type {
+        OperationType::LogUpload => Some(CumulocitySupportedOperations::C8yLogFileRequest),
+        OperationType::Restart => Some(CumulocitySupportedOperations::C8yRestartRequest),
+        OperationType::ConfigSnapshot => Some(CumulocitySupportedOperations::C8yUploadConfigFile),
+        OperationType::ConfigUpdate => Some(CumulocitySupportedOperations::C8yDownloadConfigFile),
+        OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
+        OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
+        // SoftwareList is handled by HTTP proxy, not smartrest
+        OperationType::SoftwareList => None,
+        // local-only operation, not always invoked by c8y, handled in other codepath
+        OperationType::Health => None,
+        // other custom operations, no c8y equivalent
+        OperationType::Custom(_) => None,
+    };
+
+    c8y_operation.map(set_operation_executing)
 }
 
 /// State required by the operation handlers.

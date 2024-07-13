@@ -3,10 +3,10 @@ use super::OperationContext;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use crate::operations::OperationResult;
 use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use tedge_api::commands::CommandStatus;
@@ -20,11 +20,9 @@ use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::error;
 use tracing::log::warn;
@@ -89,13 +87,13 @@ impl OperationContext {
     /// - "failed", it converts the message to SmartREST "Failed" with that event URL.
     pub async fn handle_log_upload_state_change(
         &self,
-        target: EntityTarget,
+        target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationResult, ConversionError> {
         if !self.capabilities.log_upload {
             warn!("Received a log_upload command, however, log_upload feature is disabled");
-            return Ok((vec![], None));
+            return Ok(OperationResult::Ignored);
         }
 
         let command = match LogUploadCmd::try_from_bytes(
@@ -106,21 +104,14 @@ impl OperationContext {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((vec![], None));
+                return Ok(OperationResult::Ignored);
             }
         };
 
-        let smartrest_topic = target.smartrest_publish_topic;
+        let smartrest_topic = &target.smartrest_publish_topic;
 
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_operation_status =
-                    set_operation_executing(CumulocitySupportedOperations::C8yLogFileRequest);
-                vec![MqttMessage::new(
-                    &smartrest_topic,
-                    smartrest_operation_status,
-                )]
-            }
+        match command.status() {
+            CommandStatus::Executing => Ok(OperationResult::Executing),
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);
@@ -148,11 +139,11 @@ impl OperationContext {
                     ),
                         );
 
-                        let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
-                        let clean_operation = MqttMessage::new(&message.topic, "")
-                            .with_retain()
-                            .with_qos(QoS::AtLeastOnce);
-                        return Ok((vec![c8y_notification, clean_operation], None));
+                        let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_error);
+                        return Ok(OperationResult::Finished {
+                            messages: vec![c8y_notification],
+                            command: command.into_generic_command(&self.mqtt_schema),
+                        });
                     }
                     Ok(download) => download,
                 };
@@ -180,40 +171,36 @@ impl OperationContext {
                     CumulocitySupportedOperations::C8yLogFileRequest,
                 );
 
-                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_response);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
+                let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
 
                 self.upload_operation_log(
                     &target.external_id,
                     cmd_id,
                     &OperationType::LogUpload,
-                    command.clone().into_generic_command(&self.mqtt_schema),
+                    &command.clone().into_generic_command(&self.mqtt_schema),
                 )
                 .await?;
 
-                vec![c8y_notification, clear_local_cmd]
+                Ok(OperationResult::Finished {
+                    messages: vec![c8y_notification],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status =
                     fail_operation(CumulocitySupportedOperations::C8yLogFileRequest, &reason);
                 let c8y_notification =
-                    MqttMessage::new(&smartrest_topic, smartrest_operation_status);
-                let clean_operation = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-                vec![c8y_notification, clean_operation]
+                    MqttMessage::new(smartrest_topic, smartrest_operation_status);
+                Ok(OperationResult::Finished {
+                    messages: vec![c8y_notification],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             _ => {
-                vec![] // Do nothing as other components might handle those states
+                // Do nothing as other components might handle those states
+                Ok(OperationResult::Ignored)
             }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+        }
     }
 }
 

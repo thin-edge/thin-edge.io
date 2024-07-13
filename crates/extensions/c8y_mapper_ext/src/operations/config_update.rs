@@ -3,7 +3,6 @@ use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use std::sync::Arc;
@@ -18,15 +17,14 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
 use super::EntityTarget;
 use super::OperationContext;
+use super::OperationResult;
 
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     [
@@ -50,13 +48,13 @@ impl OperationContext {
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_config_update_state_change(
         &self,
-        target: EntityTarget,
+        target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationResult, ConversionError> {
         if !self.capabilities.config_update {
             warn!("Received a config_update command, however, config_update feature is disabled");
-            return Ok((vec![], None));
+            return Ok(OperationResult::Ignored);
         }
 
         let command = match ConfigUpdateCmd::try_from_bytes(
@@ -67,51 +65,41 @@ impl OperationContext {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((vec![], None));
+                return Ok(OperationResult::Ignored);
             }
         };
 
-        let sm_topic = target.smartrest_publish_topic;
+        let sm_topic = &target.smartrest_publish_topic;
 
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_operation_status =
-                    set_operation_executing(CumulocitySupportedOperations::C8yDownloadConfigFile);
-
-                vec![MqttMessage::new(&sm_topic, smartrest_operation_status)]
-            }
+        match command.status() {
+            CommandStatus::Executing => Ok(OperationResult::Executing),
             CommandStatus::Successful => {
                 let smartrest_operation_status = succeed_operation_no_payload(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
                 );
-                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
+                let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
-                vec![c8y_notification, clear_local_cmd]
+                Ok(OperationResult::Finished {
+                    messages: vec![c8y_notification],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             CommandStatus::Failed { reason } => {
                 let smartrest_operation_status = fail_operation(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
                     &reason,
                 );
-                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
+                let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
-                vec![c8y_notification, clear_local_cmd]
+                Ok(OperationResult::Finished {
+                    messages: vec![c8y_notification],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             _ => {
-                vec![] // Do nothing as other components might handle those states
+                Ok(OperationResult::Ignored) // Do nothing as other components might handle those states
             }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+        }
     }
 }
 

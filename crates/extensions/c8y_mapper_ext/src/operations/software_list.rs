@@ -1,6 +1,5 @@
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareListCommand;
 use tedge_config::SoftwareManagementApiFlag;
@@ -11,29 +10,30 @@ use crate::error::ConversionError;
 
 use super::EntityTarget;
 use super::OperationContext;
+use super::OperationResult;
 
 const SOFTWARE_LIST_CHUNK_SIZE: usize = 100;
 
 impl OperationContext {
     pub async fn publish_software_list(
         &self,
-        target: EntityTarget,
+        target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationResult, ConversionError> {
         let command = match SoftwareListCommand::try_from_bytes(
-            target.topic_id,
+            target.topic_id.clone(),
             cmd_id.to_owned(),
             message.payload_bytes(),
         )? {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((Vec::new(), None));
+                return Ok(OperationResult::Ignored);
             }
         };
 
-        let messages = match command.status() {
+        match command.status() {
             CommandStatus::Successful => {
                 // Send a list via HTTP to support backwards compatibility to c8y < 10.14
                 if self.software_management_api == SoftwareManagementApiFlag::Legacy {
@@ -45,11 +45,14 @@ impl OperationContext {
                             target.external_id.as_ref().to_string(),
                         )
                         .await?;
-                    return Ok((vec![command.clearing_message(&self.mqtt_schema)], None));
+                    return Ok(OperationResult::Finished {
+                        messages: vec![],
+                        command: command.into_generic_command(&self.mqtt_schema),
+                    });
                 }
 
                 // Send a list via SmartREST, "advanced software list" feature c8y >= 10.14
-                let topic = target.smartrest_publish_topic;
+                let topic = target.smartrest_publish_topic.clone();
                 let payloads = smartrest::smartrest_serializer::get_advanced_software_list_payloads(
                     &command,
                     SOFTWARE_LIST_CHUNK_SIZE,
@@ -59,13 +62,19 @@ impl OperationContext {
                 for payload in payloads {
                     messages.push(MqttMessage::new(&topic, payload))
                 }
-                messages.push(command.clearing_message(&self.mqtt_schema));
-                messages
+
+                Ok(OperationResult::Finished {
+                    messages,
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
 
             CommandStatus::Failed { reason } => {
                 error!("Fail to list installed software packages: {reason}");
-                vec![command.clearing_message(&self.mqtt_schema)]
+                Ok(OperationResult::Finished {
+                    messages: vec![],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
 
             CommandStatus::Init
@@ -73,14 +82,9 @@ impl OperationContext {
             | CommandStatus::Executing
             | CommandStatus::Unknown => {
                 // C8Y doesn't expect any message to be published
-                Vec::new()
+                Ok(OperationResult::Ignored)
             }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+        }
     }
 }
 

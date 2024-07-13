@@ -1,6 +1,5 @@
 use c8y_api::smartrest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
 use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
@@ -9,45 +8,40 @@ use crate::error::ConversionError;
 
 use super::EntityTarget;
 use super::OperationContext;
+use super::OperationResult;
 
 impl OperationContext {
     pub async fn publish_restart_operation_status(
         &self,
-        target: EntityTarget,
+        target: &EntityTarget,
         cmd_id: &str,
         message: MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationResult, ConversionError> {
         let command = match RestartCommand::try_from_bytes(
-            target.topic_id,
+            target.topic_id.clone(),
             cmd_id.to_owned(),
             message.payload_bytes(),
         )? {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((vec![], None));
+                return Ok(OperationResult::Ignored);
             }
         };
-        let topic = target.smartrest_publish_topic;
+        let topic = &target.smartrest_publish_topic;
 
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_set_operation =
-                    smartrest::smartrest_serializer::set_operation_executing(
-                        CumulocitySupportedOperations::C8yRestartRequest,
-                    );
-                vec![MqttMessage::new(&topic, smartrest_set_operation)]
-            }
+        match command.status() {
+            CommandStatus::Executing => Ok(OperationResult::Executing),
             CommandStatus::Successful => {
                 let smartrest_set_operation =
                     smartrest::smartrest_serializer::succeed_operation_no_payload(
                         CumulocitySupportedOperations::C8yRestartRequest,
                     );
 
-                vec![
-                    command.clearing_message(&self.mqtt_schema),
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                ]
+                Ok(OperationResult::Finished {
+                    messages: vec![MqttMessage::new(topic, smartrest_set_operation)],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             CommandStatus::Failed { ref reason } => {
                 let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
@@ -55,20 +49,15 @@ impl OperationContext {
                     &format!("Restart Failed: {reason}"),
                 );
 
-                vec![
-                    command.clearing_message(&self.mqtt_schema),
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                ]
+                Ok(OperationResult::Finished {
+                    messages: vec![MqttMessage::new(topic, smartrest_set_operation)],
+                    command: command.into_generic_command(&self.mqtt_schema),
+                })
             }
             _ => {
                 // The other states are ignored
-                vec![]
+                Ok(OperationResult::Ignored)
             }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+        }
     }
 }
