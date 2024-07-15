@@ -55,7 +55,7 @@ To add a self-signed certificate to the trusted certificate repository on %%te%%
 Create a `/usr/local/share/ca-certificates/` directory if it does not exist on your computer:
 
 ```sh
-sudo mkdir /usr/local/share/ca-certificates/
+sudo mkdir -p /usr/local/share/ca-certificates/
 ```
 
 The directory should be owned by `root:root` and have `755` permissions set for it. The certificates files should be `644`.
@@ -79,6 +79,14 @@ Running hooks in /etc/ca-certificates/update.d...
 done.
 ```
 
+:::caution
+If the `update-ca-certificates` includes the following error, then see the [common errors section](#update-ca-certificates-rehash-error) for the fix, otherwise mosquitto bridge will most likely have problems connecting to the cloud.
+
+```sh
+openssl:Error: 'rehash' is an invalid command.
+```
+:::
+
 Check the certificate was correctly installed:
 
 ```sh
@@ -89,4 +97,45 @@ Additionally, you can check correctness of the installed certificate:
 
 ```sh
 cat /etc/ssl/certs/ca-certificates.crt | grep -f <full_path_to_the_certificate>
+```
+
+### Common errors
+
+#### update-ca-certificates fails with `'rehash' is an invalid command` {#update-ca-certificates-rehash-error}
+
+Older **openssl** versions (e.g. `OpenSSL 1.0.2d 9 Jul 2015`), don't support the `rehash` command, which will result in the `update-ca-certificates` command showing the following error:
+
+```sh
+Updating certificates in /etc/ssl/certs...
+openssl:Error: 'rehash' is an invalid command.
+```
+
+In this case, use the following steps to add a new certificate, where the ca-certificates rehashing will be manually executed using a one-liner:
+
+```sh
+sudo cp <full_path_to_the_certificate> /usr/local/share/ca-certificates/
+update-ca-certificates
+sudo sh -c 'cd /etc/ssl/certs; for file in *.pem; do ln -sf "$file" "$(openssl x509 -hash -noout -in "$file")".0; done'
+```
+
+If you don't rehash the ca-certificates, then mosquitto will not be able to connect to the cloud due to SSL verify errors. Such errors are typically visible from the mosquitto logs, or by starting mosquitto manually on the command console.
+
+:::tip
+You can check if there are any ca-certificate hashes by using the following command:
+
+```sh
+ls -l /etc/ssl/certs/*.0
+```
+
+The hashes are symlinks with the name in the form of: 
+
+```sh
+<hash>.0
+```
+:::
+
+Afterwards, you can try to reconnect to the cloud to see if the connection issue has been resolved:
+
+```sh
+sudo tedge reconnect <cloud>
 ```
