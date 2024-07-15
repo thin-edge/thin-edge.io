@@ -56,11 +56,14 @@ After installation of the support for Apama onto the %%te%% device, the correlat
 
 Before an Apama project can be installed on the device using the software management feature in Cumulocity, the project files need to be added to the Cumulocity software repository.
 
-There is a naming convention that you need to follow while creating software entries for Apama artifacts in the software repository.
+There are certain conventions that you need to follow while creating software entries for Apama artifacts in the software repository.
 
 For Apama projects:
 
-1. The uploaded binary must be a `zip` file that contains the `project` directory. If a directory named `project` is not found by the plugin at the root level in the zip, it is considered invalid.
+1. The software type must be `apama`.
+1. The uploaded binary must be a `zip` file that contains the `project` directory.
+   If a directory named `project` is not found by the plugin at the root level in the zip, it is considered invalid.
+
 
 <p align="center">
     <img
@@ -74,12 +77,8 @@ Once the software modules have been added to the software repository, these can 
 
 ### Testing Apama Plugin
 
-Here is an Apama project that you can use to test this plugin.
+Follow the instructions [here](https://github.com/thin-edge/thin-edge.io_examples/tree/main/StreamingAnalytics#deploying-the-project-to-thin-edge) to install a test project on the device.
 
-[project](https://github.com/thin-edge/thin-edge.io_examples/tree/main/StreamingAnalytics/src/quickstart)
-
-Zip this project and add it as a software package in the Cumulocity software repository by following the instructions in the previous section.
-Once added, this Apama project can be installed on any target device.
 You can test if the project was successfully installed by running the following Apama command:
 
 ```sh
@@ -94,4 +93,4 @@ Name                                               Num Sub Monitors
 TedgeDemoMonitor                                             1
 ```
 
-You can find more information on this test Apama project [here](https://github.com/thin-edge/thin-edge.io_examples/tree/main/StreamingAnalytics#testing-a-project).
+You can find more information on how to test this project [here](https://github.com/thin-edge/thin-edge.io_examples/tree/main/StreamingAnalytics#testing-a-project).
