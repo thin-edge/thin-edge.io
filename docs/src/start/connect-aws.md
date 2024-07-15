@@ -74,7 +74,7 @@ To create a new policy, head over to the AWS IoT Core and navigate to
 
 **Security &rarr; Policies &rarr; Create policy &rarr; Policy properties &rarr; Policy name &rarr; Enter the name of your policy (e.g.tedge)**
 
-On the Policy statements tab click on ***JSON*** and enter the policy in the ***Policy document*** (an example policy can be found [here](./aws-example-policy.json)) then click ***Create***.
+On the Policy statements tab click on ***JSON*** and enter the policy in the ***Policy document*** (an example policy can be found [here](https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/docs/src/start/aws-example-policy.json)) then click ***Create***.
 
 In the AWS IoT Core, navigate to ***Manage &rarr; All devices &rarr; Things &rarr; Create things &rarr; Create Single thing &rarr; Next***. Enter the Thing name which can be obtained from the device with the output of the following command:
 
