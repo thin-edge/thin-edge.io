@@ -49,7 +49,6 @@ impl OperationContext {
                         MqttMessage::new(topic, smartrest_set_operation),
                         self.request_software_list(&target.topic_id),
                     ],
-                    command: command.into_generic_command(&self.mqtt_schema),
                 })
             }
             CommandStatus::Failed { reason } => {
@@ -63,7 +62,6 @@ impl OperationContext {
                         MqttMessage::new(topic, smartrest_set_operation),
                         self.request_software_list(&target.topic_id),
                     ],
-                    command: command.into_generic_command(&self.mqtt_schema),
                 })
             }
         }

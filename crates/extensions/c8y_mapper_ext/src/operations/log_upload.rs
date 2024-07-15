@@ -142,7 +142,7 @@ impl OperationContext {
                         let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_error);
                         return Ok(OperationResult::Finished {
                             messages: vec![c8y_notification],
-                            command: command.into_generic_command(&self.mqtt_schema),
+                            
                         });
                     }
                     Ok(download) => download,
@@ -183,7 +183,6 @@ impl OperationContext {
 
                 Ok(OperationResult::Finished {
                     messages: vec![c8y_notification],
-                    command: command.into_generic_command(&self.mqtt_schema),
                 })
             }
             CommandStatus::Failed { reason } => {
@@ -193,7 +192,7 @@ impl OperationContext {
                     MqttMessage::new(smartrest_topic, smartrest_operation_status);
                 Ok(OperationResult::Finished {
                     messages: vec![c8y_notification],
-                    command: command.into_generic_command(&self.mqtt_schema),
+                    
                 })
             }
             _ => {

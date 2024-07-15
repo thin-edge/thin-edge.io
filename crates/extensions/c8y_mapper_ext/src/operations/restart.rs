@@ -40,7 +40,6 @@ impl OperationContext {
 
                 Ok(OperationResult::Finished {
                     messages: vec![MqttMessage::new(topic, smartrest_set_operation)],
-                    command: command.into_generic_command(&self.mqtt_schema),
                 })
             }
             CommandStatus::Failed { ref reason } => {
@@ -51,7 +50,6 @@ impl OperationContext {
 
                 Ok(OperationResult::Finished {
                     messages: vec![MqttMessage::new(topic, smartrest_set_operation)],
-                    command: command.into_generic_command(&self.mqtt_schema),
                 })
             }
             _ => {

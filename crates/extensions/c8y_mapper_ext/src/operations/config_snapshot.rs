@@ -164,7 +164,7 @@ impl OperationContext {
 
                         return Ok(OperationResult::Finished {
                             messages: vec![c8y_notification],
-                            command: command.into_generic_command(&self.mqtt_schema),
+                            
                         });
                     }
                     Ok(download) => download,
@@ -197,7 +197,6 @@ impl OperationContext {
 
                 Ok(OperationResult::Finished {
                     messages: vec![c8y_notification],
-                    command: command.into_generic_command(&self.mqtt_schema),
                 })
             }
             CommandStatus::Failed { reason } => {
@@ -208,7 +207,7 @@ impl OperationContext {
 
                 Ok(OperationResult::Finished {
                     messages: vec![c8y_notification],
-                    command: command.into_generic_command(&self.mqtt_schema),
+                    
                 })
             }
             _ => {

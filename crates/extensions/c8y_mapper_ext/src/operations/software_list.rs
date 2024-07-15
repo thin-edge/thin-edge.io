@@ -45,10 +45,7 @@ impl OperationContext {
                             target.external_id.as_ref().to_string(),
                         )
                         .await?;
-                    return Ok(OperationResult::Finished {
-                        messages: vec![],
-                        command: command.into_generic_command(&self.mqtt_schema),
-                    });
+                    return Ok(OperationResult::Finished { messages: vec![] });
                 }
 
                 // Send a list via SmartREST, "advanced software list" feature c8y >= 10.14
@@ -63,18 +60,12 @@ impl OperationContext {
                     messages.push(MqttMessage::new(&topic, payload))
                 }
 
-                Ok(OperationResult::Finished {
-                    messages,
-                    command: command.into_generic_command(&self.mqtt_schema),
-                })
+                Ok(OperationResult::Finished { messages })
             }
 
             CommandStatus::Failed { reason } => {
                 error!("Fail to list installed software packages: {reason}");
-                Ok(OperationResult::Finished {
-                    messages: vec![],
-                    command: command.into_generic_command(&self.mqtt_schema),
-                })
+                Ok(OperationResult::Finished { messages: vec![] })
             }
 
             CommandStatus::Init
