@@ -30,6 +30,7 @@ use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
+use error::OperationError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
@@ -54,6 +55,7 @@ use tracing::error;
 
 pub mod config_snapshot;
 pub mod config_update;
+mod error;
 pub mod firmware_update;
 pub mod log_upload;
 mod restart;
@@ -228,47 +230,70 @@ impl RunningOperation {
                     }
                 };
 
-                let Some(c8y_operation) = to_c8y_operation(&operation) else {
-                    debug!(
-                        topic = message.topic.name,
-                        ?operation,
-                        "ignoring local-only operation"
-                    );
-                    return;
-                };
+                let operation_result = match operation {
+                    OperationType::Health | OperationType::Custom(_) => {
+                        debug!(
+                            topic = message.topic.name,
+                            ?operation,
+                            "ignoring local-only operation"
+                        );
+                        Ok(OperationOutcome::Ignored)
+                    }
 
-                let operation_result = match c8y_operation {
-                    CumulocitySupportedOperations::C8yRestartRequest => {
+                    OperationType::Restart => {
                         context
-                            .publish_restart_operation_status(&entity, &cmd_id, message)
+                            .publish_restart_operation_status(&entity, &cmd_id, &message)
                             .await
                     }
-                    CumulocitySupportedOperations::C8ySoftwareList => {
-                        context
+                    // SoftwareList is not a regular operation: it doesn't update its status and doesn't report any
+                    // failures; it just maps local software list to c8y software list payloads and sends it via MQTT
+                    // Smartrest 2.0/HTTP
+                    OperationType::SoftwareList => {
+                        let result = context
                             .publish_software_list(&entity, &cmd_id, &message)
-                            .await
+                            .await;
+
+                        let mut mqtt_publisher = context.mqtt_publisher.clone();
+                        match result {
+                            Err(err) => {
+                                error!("Fail to list installed software packages: {err}");
+                            }
+                            Ok(OperationOutcome::Finished { messages }) => {
+                                for message in messages {
+                                    mqtt_publisher.send(message).await.unwrap();
+                                }
+                            }
+                            // command is not yet finished, avoid clearing the command topic
+                            Ok(_) => {
+                                continue;
+                            }
+                        }
+
+                        clear_command_topic(command, &mut mqtt_publisher).await;
+                        rx.close();
+                        continue;
                     }
-                    CumulocitySupportedOperations::C8ySoftwareUpdate => {
+                    OperationType::SoftwareUpdate => {
                         context
                             .publish_software_update_status(&entity, &cmd_id, &message)
                             .await
                     }
-                    CumulocitySupportedOperations::C8yLogFileRequest => {
+                    OperationType::LogUpload => {
                         context
                             .handle_log_upload_state_change(&entity, &cmd_id, &message)
                             .await
                     }
-                    CumulocitySupportedOperations::C8yUploadConfigFile => {
+                    OperationType::ConfigSnapshot => {
                         context
                             .handle_config_snapshot_state_change(&entity, &cmd_id, &message)
                             .await
                     }
-                    CumulocitySupportedOperations::C8yDownloadConfigFile => {
+                    OperationType::ConfigUpdate => {
                         context
                             .handle_config_update_state_change(&entity, &cmd_id, &message)
                             .await
                     }
-                    CumulocitySupportedOperations::C8yFirmware => {
+                    OperationType::FirmwareUpdate => {
                         context
                             .handle_firmware_update_state_change(&entity, &cmd_id, &message)
                             .await
@@ -276,13 +301,17 @@ impl RunningOperation {
                 };
 
                 let mut mqtt_publisher = context.mqtt_publisher.clone();
+
+                // at this point all local operations that are not regular c8y operations should be handled above
+                let c8y_operation = to_c8y_operation(&operation).unwrap();
+
                 match to_response(
                     operation_result,
                     c8y_operation,
                     &entity.smartrest_publish_topic,
                 ) {
-                    OperationResult::Ignored => {}
-                    OperationResult::Executing => {
+                    OperationOutcome::Ignored => {}
+                    OperationOutcome::Executing => {
                         let c8y_state_executing_payload = set_operation_executing(c8y_operation);
                         let c8y_state_executing_message = MqttMessage::new(
                             &entity.smartrest_publish_topic,
@@ -293,7 +322,7 @@ impl RunningOperation {
                             .await
                             .unwrap();
                     }
-                    OperationResult::Finished { messages } => {
+                    OperationOutcome::Finished { messages } => {
                         if let Err(e) = context
                             .upload_operation_log(&external_id, &cmd_id, &operation, &command)
                             .await
@@ -305,13 +334,7 @@ impl RunningOperation {
                             mqtt_publisher.send(message).await.unwrap();
                         }
 
-                        // clear command topic
-                        let command = command.clear();
-                        let clearing_message = command.into_message();
-                        assert!(clearing_message.payload_bytes().is_empty());
-                        assert!(clearing_message.retain);
-                        assert_eq!(clearing_message.qos, QoS::AtLeastOnce);
-                        mqtt_publisher.send(clearing_message).await.unwrap();
+                        clear_command_topic(command, &mut mqtt_publisher).await;
 
                         rx.close();
                     }
@@ -323,12 +346,24 @@ impl RunningOperation {
     }
 }
 
+async fn clear_command_topic(
+    command: GenericCommandState,
+    mqtt_publisher: &mut LoggingSender<MqttMessage>,
+) {
+    let command = command.clear();
+    let clearing_message = command.into_message();
+    assert!(clearing_message.payload_bytes().is_empty());
+    assert!(clearing_message.retain);
+    assert_eq!(clearing_message.qos, QoS::AtLeastOnce);
+    mqtt_publisher.send(clearing_message).await.unwrap();
+}
+
 /// Result of an update of operation's state.
 ///
 /// When a new MQTT message is received with an updated state of the operation, the mapper needs to
 /// do something in response. Depending on if it cares about the operation, it can ignore it, send
 /// some MQTT messages to notify C8y about the state change, or terminate the operation.
-enum OperationResult {
+enum OperationOutcome {
     /// Do nothing in response.
     ///
     /// Used for states that don't have an equivalent on C8y so we don't have to notify.
@@ -346,10 +381,10 @@ enum OperationResult {
 
 /// Converts operation result to valid C8y response.
 fn to_response(
-    result: Result<OperationResult, ConversionError>,
+    result: Result<OperationOutcome, OperationError>,
     operation_type: CumulocitySupportedOperations,
     smartrest_publish_topic: &Topic,
-) -> OperationResult {
+) -> OperationOutcome {
     let err = match result {
         Ok(res) => {
             return res;
@@ -365,7 +400,7 @@ fn to_response(
 
     let messages = vec![set_operation_to_failed_message];
 
-    OperationResult::Finished { messages }
+    OperationOutcome::Finished { messages }
 }
 
 /// For a given `OperationType`, obtain a matching `C8ySupportedOperations`.
@@ -379,7 +414,9 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::ConfigUpdate => Some(CumulocitySupportedOperations::C8yDownloadConfigFile),
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
-        OperationType::SoftwareList => Some(CumulocitySupportedOperations::C8ySoftwareList),
+        // software list is not an c8y, only a fragment, but is a local operation that is spawned as
+        // part of C8y_SoftwareUpdate operation
+        OperationType::SoftwareList => None,
         // local-only operation, not always invoked by c8y, handled in other codepath
         OperationType::Health => None,
         // other custom operations, no c8y equivalent

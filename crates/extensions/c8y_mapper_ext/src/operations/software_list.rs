@@ -1,16 +1,15 @@
+use anyhow::Context;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareListCommand;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
-use tracing::error;
 
-use crate::error::ConversionError;
-
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
-use super::OperationResult;
+use super::OperationOutcome;
 
 const SOFTWARE_LIST_CHUNK_SIZE: usize = 100;
 
@@ -20,16 +19,18 @@ impl OperationContext {
         target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<OperationResult, ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         let command = match SoftwareListCommand::try_from_bytes(
             target.topic_id.clone(),
             cmd_id.to_owned(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as software list command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok(OperationResult::Ignored);
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
@@ -44,8 +45,9 @@ impl OperationContext {
                             c8y_software_list,
                             target.external_id.as_ref().to_string(),
                         )
-                        .await?;
-                    return Ok(OperationResult::Finished { messages: vec![] });
+                        .await
+                        .context("Could not send software list via http")?;
+                    return Ok(OperationOutcome::Finished { messages: vec![] });
                 }
 
                 // Send a list via SmartREST, "advanced software list" feature c8y >= 10.14
@@ -60,20 +62,17 @@ impl OperationContext {
                     messages.push(MqttMessage::new(&topic, payload))
                 }
 
-                Ok(OperationResult::Finished { messages })
+                Ok(OperationOutcome::Finished { messages })
             }
 
-            CommandStatus::Failed { reason } => {
-                error!("Fail to list installed software packages: {reason}");
-                Ok(OperationResult::Finished { messages: vec![] })
-            }
+            CommandStatus::Failed { reason } => Err(anyhow::anyhow!("{reason}").into()),
 
             CommandStatus::Init
             | CommandStatus::Scheduled
             | CommandStatus::Executing
             | CommandStatus::Unknown => {
                 // C8Y doesn't expect any message to be published
-                Ok(OperationResult::Ignored)
+                Ok(OperationOutcome::Ignored)
             }
         }
     }

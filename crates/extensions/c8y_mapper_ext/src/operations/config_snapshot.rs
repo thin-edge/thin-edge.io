@@ -1,12 +1,12 @@
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
-use super::OperationResult;
+use super::OperationOutcome;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
@@ -92,12 +92,12 @@ impl OperationContext {
         entity: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<OperationResult, ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         if !self.capabilities.config_snapshot {
             warn!(
                 "Received a config_snapshot command, however, config_snapshot feature is disabled"
             );
-            return Ok(OperationResult::Ignored);
+            return Ok(OperationOutcome::Ignored);
         }
         let target = entity;
 
@@ -105,11 +105,13 @@ impl OperationContext {
             target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as a config snapshot command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok(OperationResult::Ignored);
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
@@ -117,7 +119,7 @@ impl OperationContext {
         let cmd_id = command.cmd_id.as_str();
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationResult::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing),
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let config_filename = format!(
@@ -150,28 +152,14 @@ impl OperationContext {
                     .downloader
                     .clone()
                     .await_response((cmd_id.to_string(), download_request))
-                    .await?;
+                    .await
+                    .context("Unexpected ChannelError")?;
 
-                match download_result {
-                    Err(err) => {
-                        let smartrest_error =
-                    fail_operation(
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
-                    );
+                download_result.context( "tedge-mapper-c8y failed to download configuration snapshot from file-transfer service")?;
 
-                        let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_error);
-
-                        return Ok(OperationResult::Finished {
-                            messages: vec![c8y_notification],
-                            
-                        });
-                    }
-                    Ok(download) => download,
-                };
-
-                let file_path =
-                    Utf8PathBuf::try_from(destination_path).map_err(|e| e.into_io_error())?;
+                let file_path = Utf8PathBuf::try_from(destination_path)
+                    .map_err(|e| e.into_io_error())
+                    .context("Could not parse destination path as utf-8")?;
                 let event_type = command.payload.config_type.clone();
 
                 // Upload the file to C8y
@@ -185,7 +173,8 @@ impl OperationContext {
                         event_type,
                         None,
                     )
-                    .await?;
+                    .await
+                    .context("Could not upload config file to C8y")?;
 
                 let smartrest_response = super::get_smartrest_response_for_upload_result(
                     upload_result,
@@ -195,24 +184,14 @@ impl OperationContext {
 
                 let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
 
-                Ok(OperationResult::Finished {
+                Ok(OperationOutcome::Finished {
                     messages: vec![c8y_notification],
                 })
             }
-            CommandStatus::Failed { reason } => {
-                let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, &reason);
-                let c8y_notification =
-                    MqttMessage::new(smartrest_topic, smartrest_operation_status);
-
-                Ok(OperationResult::Finished {
-                    messages: vec![c8y_notification],
-                    
-                })
-            }
+            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
             _ => {
                 // Do nothing as other components might handle those states
-                Ok(OperationResult::Ignored)
+                Ok(OperationOutcome::Ignored)
             }
         }
     }

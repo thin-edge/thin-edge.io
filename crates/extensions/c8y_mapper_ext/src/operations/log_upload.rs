@@ -1,12 +1,12 @@
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use crate::operations::OperationResult;
+use crate::operations::OperationOutcome;
 use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use tedge_api::commands::CommandStatus;
@@ -90,28 +90,30 @@ impl OperationContext {
         target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<OperationResult, ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         if !self.capabilities.log_upload {
             warn!("Received a log_upload command, however, log_upload feature is disabled");
-            return Ok(OperationResult::Ignored);
+            return Ok(OperationOutcome::Ignored);
         }
 
         let command = match LogUploadCmd::try_from_bytes(
             target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as a log upload command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok(OperationResult::Ignored);
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
         let smartrest_topic = &target.smartrest_publish_topic;
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationResult::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing),
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);
@@ -128,30 +130,17 @@ impl OperationContext {
                     .clone()
                     .await_response((cmd_id.into(), download_request))
                     .await
-                    .map_err(CumulocityMapperError::ChannelError)?;
+                    .context("Unexpected ChannelError")?;
 
-                let download_response = match download_result {
-                    Err(err) => {
-                        let smartrest_error = fail_operation(
-                            CumulocitySupportedOperations::C8yLogFileRequest,
-                            &format!(
-                        "tedge-mapper-c8y failed to download log from file transfer service: {err}",
-                    ),
-                        );
-
-                        let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_error);
-                        return Ok(OperationResult::Finished {
-                            messages: vec![c8y_notification],
-                            
-                        });
-                    }
-                    Ok(download) => download,
-                };
+                let download_response = download_result.context(
+                    "tedge-mapper-c8y failed to download log from file transfer service",
+                )?;
 
                 let file_path = Utf8PathBuf::try_from(download_response.file_path)
-                    .map_err(|e| e.into_io_error())?;
-                let response = &LogUploadCmdPayload::from_json(message.payload_str()?)?;
-                let event_type = response.log_type.clone();
+                    .map_err(|e| e.into_io_error())
+                    .context("Could not parse file path as Utf-8")?;
+
+                let event_type = &command.payload.log_type;
 
                 let (binary_upload_event_url, upload_result) = self
                     .upload_file(
@@ -163,7 +152,8 @@ impl OperationContext {
                         event_type.clone(),
                         None,
                     )
-                    .await?;
+                    .await
+                    .context("Could not upload log file to C8y")?;
 
                 let smartrest_response = super::get_smartrest_response_for_upload_result(
                     upload_result,
@@ -179,25 +169,17 @@ impl OperationContext {
                     &OperationType::LogUpload,
                     &command.clone().into_generic_command(&self.mqtt_schema),
                 )
-                .await?;
+                .await
+                .context("Could not upload operation log")?;
 
-                Ok(OperationResult::Finished {
+                Ok(OperationOutcome::Finished {
                     messages: vec![c8y_notification],
                 })
             }
-            CommandStatus::Failed { reason } => {
-                let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yLogFileRequest, &reason);
-                let c8y_notification =
-                    MqttMessage::new(smartrest_topic, smartrest_operation_status);
-                Ok(OperationResult::Finished {
-                    messages: vec![c8y_notification],
-                    
-                })
-            }
+            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
             _ => {
                 // Do nothing as other components might handle those states
-                Ok(OperationResult::Ignored)
+                Ok(OperationOutcome::Ignored)
             }
         }
     }

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use c8y_api::smartrest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -6,11 +7,10 @@ use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::MqttMessage;
 
-use crate::error::ConversionError;
-
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
-use super::OperationResult;
+use super::OperationOutcome;
 
 impl OperationContext {
     pub async fn publish_software_update_status(
@@ -18,16 +18,18 @@ impl OperationContext {
         target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<OperationResult, ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         let command = match SoftwareUpdateCommand::try_from_bytes(
             target.topic_id.clone(),
             cmd_id.to_string(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as a software update command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok(OperationResult::Ignored);
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
@@ -35,29 +37,30 @@ impl OperationContext {
         match command.status() {
             CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Unknown => {
                 // The command has not been processed yet
-                Ok(OperationResult::Ignored)
+                Ok(OperationOutcome::Ignored)
             }
-            CommandStatus::Executing => Ok(OperationResult::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing),
             CommandStatus::Successful => {
                 let smartrest_set_operation =
                     smartrest::smartrest_serializer::succeed_operation_no_payload(
                         CumulocitySupportedOperations::C8ySoftwareUpdate,
                     );
 
-                Ok(OperationResult::Finished {
+                Ok(OperationOutcome::Finished {
                     messages: vec![
                         MqttMessage::new(topic, smartrest_set_operation),
                         self.request_software_list(&target.topic_id),
                     ],
                 })
             }
+            // TODO(marcel): use simpler error handling once software list request extracted to converter
             CommandStatus::Failed { reason } => {
                 let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
                     CumulocitySupportedOperations::C8ySoftwareUpdate,
                     &reason,
                 );
 
-                Ok(OperationResult::Finished {
+                Ok(OperationOutcome::Finished {
                     messages: vec![
                         MqttMessage::new(topic, smartrest_set_operation),
                         self.request_software_list(&target.topic_id),

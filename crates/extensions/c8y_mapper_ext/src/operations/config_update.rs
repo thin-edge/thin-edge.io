@@ -1,8 +1,8 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use std::sync::Arc;
@@ -22,9 +22,10 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
-use super::OperationResult;
+use super::OperationOutcome;
 
 pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     [
@@ -51,51 +52,43 @@ impl OperationContext {
         target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<OperationResult, ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         if !self.capabilities.config_update {
             warn!("Received a config_update command, however, config_update feature is disabled");
-            return Ok(OperationResult::Ignored);
+            return Ok(OperationOutcome::Ignored);
         }
 
         let command = match ConfigUpdateCmd::try_from_bytes(
             target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as a config update command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok(OperationResult::Ignored);
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
         let sm_topic = &target.smartrest_publish_topic;
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationResult::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing),
             CommandStatus::Successful => {
                 let smartrest_operation_status = succeed_operation_no_payload(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
                 );
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
-                Ok(OperationResult::Finished {
+                Ok(OperationOutcome::Finished {
                     messages: vec![c8y_notification],
                 })
             }
-            CommandStatus::Failed { reason } => {
-                let smartrest_operation_status = fail_operation(
-                    CumulocitySupportedOperations::C8yDownloadConfigFile,
-                    &reason,
-                );
-                let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
-
-                Ok(OperationResult::Finished {
-                    messages: vec![c8y_notification],
-                })
-            }
+            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
             _ => {
-                Ok(OperationResult::Ignored) // Do nothing as other components might handle those states
+                Ok(OperationOutcome::Ignored) // Do nothing as other components might handle those states
             }
         }
     }
