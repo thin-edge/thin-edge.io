@@ -4,6 +4,19 @@ tags: [Operate, Cloud]
 description: Connecting %%te%% to Cumulocity IoT
 ---
 
+import UserContext from '@site/src/components/UserContext';
+import UserContextForm from '@site/src/components/UserContextForm';
+
+:::tip
+#### User Context {#user-context}
+
+You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
+
+<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_USER" />
+
+The user context will be persisted in your web browser's local storage.
+:::
+
 To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
 
 :::note
@@ -14,9 +27,13 @@ To create northbound connection a local bridge shall be established and this can
 
 Configure required parameters for %%te%% with [`tedge config set`](../../references/cli/tedge-config.md):
 
+<UserContext>
+
 ```sh
-sudo tedge config set c8y.url example.cumulocity.com
+sudo tedge config set c8y.url $C8Y_URL
 ```
+
+</UserContext>
 
 :::info
 If you are unsure which parameters required by the command, simply run the command and it will tell you which parameters are missing.
@@ -54,13 +71,13 @@ and the command will prompt you for this user's password.
 These credentials are used only for this upload and will in no case be stored on the device.
 :::
 
+<UserContext>
+
 ```sh
-sudo tedge cert upload c8y --user "${C8Y_USER}"
+sudo tedge cert upload c8y --user "$C8Y_USER"
 ```
 
-```sh title="Example"
-sudo tedge cert upload c8y --user "john.smith@example.com"
-```
+</UserContext>
 
 ## Creating an MQTT bridge between the device and the cloud
 
