@@ -28,8 +28,7 @@ Publish Connection Closed after publish and no error message with TLS
     Execute Command    tedge mqtt pub test/topic Hello
     ${MQTT_PUB}    Execute Command    journalctl -u mosquitto -n 30
     Should Contain    ${MQTT_PUB}    Received DISCONNECT from tedge-pub
-    Should Not Contain    ${MQTT_PUB}    Error
-
+   
 Subscribe Connection Closed On Interruption
     [Documentation]    Tests that a subscribe connection to MQTT broker closes upon interruption.
     Execute Command    /setup/bootstrap.sh

@@ -4,7 +4,7 @@ use strum::Display;
 /// A flag that switches legacy or advanced software management API.
 /// Can be set to auto in the future, see #2778.
 #[derive(
-    Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, doku::Document, Display,
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq, doku::Document, Display,
 )]
 #[strum(serialize_all = "camelCase")]
 pub enum SoftwareManagementApiFlag {

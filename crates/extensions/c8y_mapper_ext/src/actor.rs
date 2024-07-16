@@ -1,15 +1,8 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
-use crate::converter::UploadContext;
-use crate::converter::UploadOperationLog;
-use crate::operations::FtsDownloadOperationType;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::succeed_static_operation;
-use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_api::smartrest::smartrest_serializer::SmartRest;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -20,6 +13,7 @@ use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
@@ -41,7 +35,6 @@ use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
@@ -49,8 +42,6 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
-use tracing::error;
-use tracing::warn;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -78,7 +69,8 @@ impl From<PublishMessage> for MqttMessage {
     }
 }
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult, PublishMessage] : Debug);
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, PublishMessage] : Debug);
+
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -130,12 +122,6 @@ impl Actor for C8yMapperActor {
                 }
                 C8yMapperInput::SyncComplete(_) => {
                     self.process_sync_timeout().await?;
-                }
-                C8yMapperInput::IdUploadResult((cmd_id, result)) => {
-                    self.process_upload_result(cmd_id, result).await?;
-                }
-                C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
-                    self.process_download_result(cmd_id, result).await?;
                 }
                 C8yMapperInput::PublishMessage(message) => {
                     self.mqtt_publisher.send(message.0).await?;
@@ -337,113 +323,6 @@ impl C8yMapperActor {
 
         Ok(())
     }
-
-    async fn process_upload_result(
-        &mut self,
-        cmd_id: CmdId,
-        upload_result: UploadResult,
-    ) -> Result<(), RuntimeError> {
-        match self.converter.pending_upload_operations.remove(&cmd_id) {
-            Some(UploadContext::OperationData(queued_data)) => {
-                let payload = match queued_data.operation {
-                    CumulocitySupportedOperations::C8yLogFileRequest
-                    | CumulocitySupportedOperations::C8yUploadConfigFile => self
-                        .get_smartrest_response_for_upload_result(
-                            upload_result,
-                            &queued_data.c8y_binary_url,
-                            queued_data.operation,
-                        ),
-                    other_type => {
-                        warn!("Received unsupported operation {other_type:?} for uploading a file");
-                        return Ok(());
-                    }
-                };
-
-                let c8y_notification = MqttMessage::new(&queued_data.smartrest_topic, payload);
-                let clear_local_cmd = MqttMessage::new(&queued_data.clear_cmd_topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-
-                let messages = self
-                    .converter
-                    .upload_operation_log(
-                        &queued_data.topic_id,
-                        &cmd_id,
-                        &queued_data.operation.into(),
-                        queued_data.command,
-                        vec![c8y_notification, clear_local_cmd],
-                    )
-                    .await;
-                for message in messages {
-                    self.mqtt_publisher.send(message).await?
-                }
-            }
-            Some(UploadContext::OperationLog(UploadOperationLog { final_messages })) => {
-                for message in final_messages {
-                    self.mqtt_publisher.send(message).await?
-                }
-                return Ok(());
-            }
-            None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
-        }
-
-        Ok(())
-    }
-
-    fn get_smartrest_response_for_upload_result(
-        &self,
-        upload_result: UploadResult,
-        binary_url: &str,
-        operation: CumulocitySupportedOperations,
-    ) -> SmartRest {
-        match upload_result {
-            Ok(_) => succeed_static_operation(operation, Some(binary_url)),
-            Err(err) => fail_operation(operation, &format!("Upload failed with {err}")),
-        }
-    }
-
-    async fn process_download_result(
-        &mut self,
-        cmd_id: CmdId,
-        result: DownloadResult,
-    ) -> Result<(), RuntimeError> {
-        // download not from c8y_proxy, check if it was from FTS
-        let operation_result = if let Some(fts_download) = self
-            .converter
-            .pending_fts_download_operations
-            .remove(&cmd_id)
-        {
-            let cmd_id = cmd_id.clone();
-            match fts_download.download_type {
-                FtsDownloadOperationType::ConfigDownload => {
-                    self.converter
-                        .handle_fts_config_download_result(cmd_id, result, fts_download)
-                        .await
-                }
-                FtsDownloadOperationType::LogDownload => {
-                    self.converter
-                        .handle_fts_log_download_result(cmd_id, result, fts_download)
-                        .await
-                }
-            }
-        } else {
-            error!("Received a download result for the unknown command ID: {cmd_id}");
-            return Ok(());
-        };
-
-        match operation_result {
-            Ok(converted_messages) => {
-                for converted_message in converted_messages.into_iter() {
-                    self.mqtt_publisher.send(converted_message).await?
-                }
-            }
-            Err(err) => {
-                error!("Error occurred while processing a download result. {err}")
-            }
-        }
-
-        Ok(())
-    }
 }
 
 pub struct C8yMapperBuilder {
@@ -452,8 +331,8 @@ pub struct C8yMapperBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
-    upload_sender: DynSender<IdUploadRequest>,
-    download_sender: DynSender<IdDownloadRequest>,
+    downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+    uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
@@ -480,8 +359,10 @@ impl C8yMapperBuilder {
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
         let http_proxy = C8YHttpProxy::new(http);
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
-        let upload_sender = uploader.connect_client(box_builder.get_sender().sender_clone());
-        let download_sender = downloader.connect_client(box_builder.get_sender().sender_clone());
+
+        let downloader = ClientMessageBox::new(downloader);
+        let uploader = ClientMessageBox::new(uploader);
+
         fs_watcher.connect_sink(
             config.ops_dir.as_std_path().to_path_buf(),
             &box_builder.get_sender(),
@@ -508,8 +389,8 @@ impl C8yMapperBuilder {
             mqtt_publisher,
             http_proxy,
             timer_sender,
-            upload_sender,
-            download_sender,
+            uploader,
+            downloader,
             auth_proxy,
             bridge_monitor_builder,
             message_handlers,
@@ -557,18 +438,14 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
-        let uploader_sender =
-            LoggingSender::new("C8yMapper => Uploader".into(), self.upload_sender);
-        let downloader_sender =
-            LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
 
         let converter = CumulocityConverter::new(
             self.config,
             mqtt_publisher.clone(),
             self.http_proxy,
             self.auth_proxy,
-            uploader_sender.clone(),
-            downloader_sender.clone(),
+            self.uploader,
+            self.downloader,
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 

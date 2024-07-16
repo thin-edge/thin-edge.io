@@ -2,6 +2,8 @@
 
 use std::fs;
 use std::io;
+use std::os::unix::fs::chown;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 
 use anyhow::bail;
@@ -17,8 +19,9 @@ use clap::Parser;
 pub struct Args {
     /// A canonical path to a file which will be written to.
     ///
-    /// If the file does not exist, it will be created. If the file does exist and is not empty, the
-    /// file will be overridden.
+    /// If the file does not exist, it will be created with the specified owner/group/permissions.
+    /// If the file does exist, it will be overwritten, but its owner/group/permissions will remain
+    /// unchanged.
     destination_path: Utf8PathBuf,
 
     /// Permission mode for the file, in octal form.
@@ -102,11 +105,31 @@ fn write_stdin_to_file_atomic(target_filepath: &Utf8Path) -> anyhow::Result<()> 
         target_filepath.with_file_name(temp_filename)
     };
 
+    // can fail if no permissions or temporary file already exists
     let mut temp_file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(temp_filepath.as_std_path())
         .with_context(|| format!("Could not open temporary file `{temp_filepath}` for writing"))?;
+
+    // If the target file already exists, use the same permissions and uid/gid
+    if target_filepath.is_file() {
+        let target_metadata = target_filepath.metadata().with_context(|| {
+            format!("Could not fetch metadata of target file {target_filepath}")
+        })?;
+
+        let uid = target_metadata.uid();
+        let gid = target_metadata.gid();
+        chown(&temp_filepath, Some(uid), Some(gid))
+            .context("Could not set destination owner/group")?;
+
+        let target_permissions = target_metadata.permissions();
+        temp_file
+            .set_permissions(target_permissions)
+            .with_context(|| {
+                format!("Could not set permissions for temporary file {temp_filepath}")
+            })?;
+    }
 
     let mut stdin = std::io::stdin().lock();
     io::copy(&mut stdin, &mut temp_file)
@@ -123,24 +146,40 @@ fn write_stdin_to_file_atomic(target_filepath: &Utf8Path) -> anyhow::Result<()> 
 
 fn chown_by_user_and_group_name(
     filepath: &Utf8Path,
-    user_name: Option<&str>,
-    group_name: Option<&str>,
+    user: Option<&str>,
+    group: Option<&str>,
 ) -> anyhow::Result<()> {
-    let new_uid = match user_name {
-        Some(u) => Some(
-            uzers::get_user_by_name(u)
-                .with_context(|| format!("User `{u}` does not exist"))?
-                .uid(),
-        ),
+    // if user and group contain only digits, then they're ids
+    let user_id = user.and_then(|u| u.parse::<u32>().ok());
+    let group_id = group.and_then(|g| g.parse::<u32>().ok());
+
+    let new_uid = match user {
+        Some(u) => {
+            if user_id.is_some() {
+                user_id
+            } else {
+                Some(
+                    uzers::get_user_by_name(u)
+                        .with_context(|| format!("User `{u}` does not exist"))?
+                        .uid(),
+                )
+            }
+        }
         None => None,
     };
 
-    let new_gid = match group_name {
-        Some(g) => Some(
-            uzers::get_group_by_name(g)
-                .with_context(|| format!("Group `{g}` does not exist"))?
-                .gid(),
-        ),
+    let new_gid = match group {
+        Some(g) => {
+            if group_id.is_some() {
+                group_id
+            } else {
+                Some(
+                    uzers::get_group_by_name(g)
+                        .with_context(|| format!("Group `{g}` does not exist"))?
+                        .gid(),
+                )
+            }
+        }
         None => None,
     };
 

@@ -5,16 +5,16 @@ use super::error::CumulocityMapperError;
 use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
-use crate::actor::IdUploadRequest;
+use crate::actor::IdDownloadResult;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
-use crate::operations::FtsDownloadOperationData;
+use crate::operations;
+use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
-use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
@@ -35,12 +35,9 @@ use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::get_advanced_software_list_payloads;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
-use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
@@ -48,7 +45,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
-use camino::Utf8Path;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
@@ -60,18 +56,16 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
-use tedge_api::commands::CommandStatus;
 use tedge_api::commands::RestartCommand;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
-use tedge_api::commands::SoftwareUpdateCommand;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
-use tedge_api::entity_store::Error;
 use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
@@ -81,35 +75,28 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::pending_entity_store::PendingEntityData;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
-use tedge_config::AutoLogUpload;
-use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tedge_uploader_ext::ContentType;
-use tedge_uploader_ext::FormData;
-use tedge_uploader_ext::Mime;
 use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
-use time::OffsetDateTime;
 use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
 use tracing::warn;
-use url::Url;
 
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
@@ -117,9 +104,8 @@ const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
-const REQUESTER_NAME: &str = "c8y-mapper";
+pub const REQUESTER_NAME: &str = "c8y-mapper";
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
-const SOFTWARE_LIST_CHUNK_SIZE: usize = 100;
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -177,39 +163,6 @@ impl CumulocityConverter {
     }
 }
 
-pub struct UploadOperationData {
-    pub topic_id: EntityTopicId,
-    pub smartrest_topic: Topic,
-    pub clear_cmd_topic: Topic,
-    pub c8y_binary_url: String,
-    pub operation: CumulocitySupportedOperations,
-    pub command: GenericCommandState,
-
-    // used to automatically remove the temporary file after operation is finished
-    pub file_dir: tempfile::TempDir,
-}
-
-pub struct UploadOperationLog {
-    pub final_messages: Vec<MqttMessage>,
-}
-
-pub enum UploadContext {
-    OperationData(UploadOperationData),
-    OperationLog(UploadOperationLog),
-}
-
-impl From<UploadOperationData> for UploadContext {
-    fn from(value: UploadOperationData) -> Self {
-        UploadContext::OperationData(value)
-    }
-}
-
-impl From<UploadOperationLog> for UploadContext {
-    fn from(value: UploadOperationLog) -> Self {
-        UploadContext::OperationLog(value)
-    }
-}
-
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: Arc<C8yMapperConfig>,
@@ -228,17 +181,12 @@ pub struct CumulocityConverter {
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
-    pub uploader_sender: LoggingSender<IdUploadRequest>,
-    pub downloader_sender: LoggingSender<IdDownloadRequest>,
-    pub pending_upload_operations: HashMap<CmdId, UploadContext>,
-
-    /// Used to store pending downloads from the FTS.
-    // Using a separate field to not mix downloads from FTS and HTTP proxy
-    pub pending_fts_download_operations: HashMap<CmdId, FtsDownloadOperationData>,
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
+
+    pub operation_handler: OperationHandler,
 }
 
 impl CumulocityConverter {
@@ -247,8 +195,8 @@ impl CumulocityConverter {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
-        uploader_sender: LoggingSender<IdUploadRequest>,
-        downloader_sender: LoggingSender<IdDownloadRequest>,
+        uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
+        downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -298,6 +246,15 @@ impl CumulocityConverter {
 
         let command_id = IdGenerator::new(REQUESTER_NAME);
 
+        let operation_handler = OperationHandler::new(
+            &config,
+            downloader,
+            uploader,
+            mqtt_publisher.clone(),
+            http_proxy.clone(),
+            auth_proxy.clone(),
+        );
+
         Ok(CumulocityConverter {
             size_threshold,
             config: Arc::new(config),
@@ -313,15 +270,12 @@ impl CumulocityConverter {
             mqtt_publisher,
             service_type,
             c8y_endpoint,
-            mqtt_schema,
+            mqtt_schema: mqtt_schema.clone(),
             entity_store,
             auth_proxy,
-            uploader_sender,
-            downloader_sender,
-            pending_upload_operations: HashMap::new(),
-            pending_fts_download_operations: HashMap::new(),
             command_id,
             active_commands: HashSet::new(),
+            operation_handler,
         })
     }
 
@@ -1194,47 +1148,20 @@ impl CumulocityConverter {
                 }
             }
 
-            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
+            Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
-                let res = match operation {
-                    OperationType::Restart => {
-                        self.publish_restart_operation_status(&source, cmd_id, message)
-                            .await
-                    }
-                    OperationType::SoftwareList => {
-                        self.publish_software_list(&source, cmd_id, message).await
-                    }
-                    OperationType::SoftwareUpdate => {
-                        self.publish_software_update_status(&source, cmd_id, message)
-                            .await
-                    }
-                    OperationType::LogUpload => {
-                        self.handle_log_upload_state_change(&source, cmd_id, message)
-                            .await
-                    }
-                    OperationType::ConfigSnapshot => {
-                        self.handle_config_snapshot_state_change(&source, cmd_id, message)
-                            .await
-                    }
-                    OperationType::ConfigUpdate => {
-                        self.handle_config_update_state_change(&source, cmd_id, message)
-                            .await
-                    }
-                    OperationType::FirmwareUpdate => {
-                        self.handle_firmware_update_state_change(&source, cmd_id, message)
-                            .await
-                    }
-                    _ => Ok((vec![], None)),
+
+                let entity = self.entity_store.try_get(&source)?;
+                let external_id = entity.external_id.clone();
+                let entity = operations::EntityTarget {
+                    topic_id: entity.topic_id.clone(),
+                    external_id: external_id.clone(),
+                    smartrest_publish_topic: self
+                        .smartrest_publish_topic_for_entity(&entity.topic_id)?,
                 };
 
-                match res {
-                    // If there are mapped final status messages to be published, they are cached until the operation log is uploaded
-                    Ok((messages, Some(command))) if !messages.is_empty() => Ok(self
-                        .upload_operation_log(&source, cmd_id, operation, command, messages)
-                        .await),
-                    Ok((messages, _)) => Ok(messages),
-                    Err(e) => Err(e),
-                }
+                self.operation_handler.handle(entity, message.clone()).await;
+                Ok(vec![])
             }
 
             Channel::Health => self.process_health_status_message(&source, message).await,
@@ -1483,67 +1410,6 @@ impl CumulocityConverter {
         }
     }
 
-    async fn publish_restart_operation_status(
-        &mut self,
-        target: &EntityTopicId,
-        cmd_id: &str,
-        message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        let command = match RestartCommand::try_from_bytes(
-            target.clone(),
-            cmd_id.to_owned(),
-            message.payload_bytes(),
-        )? {
-            Some(command) => command,
-            None => {
-                // The command has been fully processed
-                return Ok((vec![], None));
-            }
-        };
-        let topic = self
-            .entity_store
-            .get(target)
-            .and_then(|entity| C8yTopic::smartrest_response_topic(entity, &self.config.c8y_prefix))
-            .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
-
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_set_operation =
-                    set_operation_executing(CumulocitySupportedOperations::C8yRestartRequest);
-                vec![MqttMessage::new(&topic, smartrest_set_operation)]
-            }
-            CommandStatus::Successful => {
-                let smartrest_set_operation =
-                    succeed_operation_no_payload(CumulocitySupportedOperations::C8yRestartRequest);
-
-                vec![
-                    command.clearing_message(&self.mqtt_schema),
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                ]
-            }
-            CommandStatus::Failed { ref reason } => {
-                let smartrest_set_operation = fail_operation(
-                    CumulocitySupportedOperations::C8yRestartRequest,
-                    &format!("Restart Failed: {reason}"),
-                );
-
-                vec![
-                    command.clearing_message(&self.mqtt_schema),
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                ]
-            }
-            _ => {
-                // The other states are ignored
-                vec![]
-            }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
-    }
-
     fn register_custom_operation(
         &mut self,
         target: &EntityTopicId,
@@ -1591,233 +1457,6 @@ impl CumulocityConverter {
         registration.push(self.request_software_list(target));
         Ok(registration)
     }
-
-    async fn publish_software_update_status(
-        &mut self,
-        target: &EntityTopicId,
-        cmd_id: &str,
-        message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        let command = match SoftwareUpdateCommand::try_from_bytes(
-            target.clone(),
-            cmd_id.to_string(),
-            message.payload_bytes(),
-        )? {
-            Some(command) => command,
-            None => {
-                // The command has been fully processed
-                return Ok((vec![], None));
-            }
-        };
-
-        let topic = self
-            .entity_store
-            .get(target)
-            .and_then(|entity| C8yTopic::smartrest_response_topic(entity, &self.config.c8y_prefix))
-            .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
-
-        let messages = match command.status() {
-            CommandStatus::Init | CommandStatus::Scheduled | CommandStatus::Unknown => {
-                // The command has not been processed yet
-                vec![]
-            }
-            CommandStatus::Executing => {
-                let smartrest_set_operation_status =
-                    set_operation_executing(CumulocitySupportedOperations::C8ySoftwareUpdate);
-                vec![MqttMessage::new(&topic, smartrest_set_operation_status)]
-            }
-            CommandStatus::Successful => {
-                let smartrest_set_operation =
-                    succeed_operation_no_payload(CumulocitySupportedOperations::C8ySoftwareUpdate);
-
-                vec![
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                    command.clearing_message(&self.mqtt_schema),
-                    self.request_software_list(target),
-                ]
-            }
-            CommandStatus::Failed { reason } => {
-                let smartrest_set_operation =
-                    fail_operation(CumulocitySupportedOperations::C8ySoftwareUpdate, &reason);
-
-                vec![
-                    MqttMessage::new(&topic, smartrest_set_operation),
-                    command.clearing_message(&self.mqtt_schema),
-                    self.request_software_list(target),
-                ]
-            }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
-    }
-
-    pub async fn upload_operation_log(
-        &mut self,
-        target: &EntityTopicId,
-        cmd_id: &str,
-        op_type: &OperationType,
-        command: GenericCommandState,
-        final_messages: Vec<MqttMessage>,
-    ) -> Vec<MqttMessage> {
-        if command.is_finished()
-            && command.get_log_path().is_some()
-            && (self.config.auto_log_upload == AutoLogUpload::Always
-                || (self.config.auto_log_upload == AutoLogUpload::OnFailure && command.is_failed()))
-        {
-            let log_path = command.get_log_path().unwrap();
-            let event_type = format!("{}_op_log", op_type);
-            let event_text = format!("{} operation log", &op_type);
-            match self
-                .upload_file(
-                    target,
-                    &log_path,
-                    None,
-                    None,
-                    cmd_id,
-                    event_type,
-                    Some(event_text),
-                )
-                .await
-            {
-                Ok(_) => {
-                    self.pending_upload_operations
-                        .insert(cmd_id.into(), UploadOperationLog { final_messages }.into());
-                    return vec![];
-                }
-                Err(err) => {
-                    error!("Operation log upload failed due to {}", err);
-                }
-            }
-        }
-        final_messages
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn upload_file(
-        &mut self,
-        topic_id: &EntityTopicId,
-        file_path: &Utf8Path,
-        file_name: Option<String>,
-        mime_type: Option<Mime>,
-        cmd_id: &str,
-        event_type: String,
-        event_text: Option<String>,
-    ) -> Result<Url, ConversionError> {
-        let target = self.entity_store.try_get(topic_id)?;
-        let xid = target.external_id.as_ref();
-
-        let create_event = CreateEvent {
-            event_type: event_type.clone(),
-            time: OffsetDateTime::now_utc(),
-            text: event_text.unwrap_or(event_type),
-            extras: HashMap::new(),
-            device_id: xid.into(),
-        };
-        let event_response_id = self.http_proxy.send_event(create_event).await?;
-        let binary_upload_event_url = self
-            .c8y_endpoint
-            .get_url_for_event_binary_upload_unchecked(&event_response_id);
-
-        let proxy_url = self.auth_proxy.proxy_url(binary_upload_event_url.clone());
-
-        let file_name = file_name.unwrap_or_else(|| {
-            format!(
-                "{xid}_{filename}",
-                filename = file_path.file_name().unwrap_or(cmd_id)
-            )
-        });
-        let form_data = if let Some(mime) = mime_type {
-            FormData::new(file_name).set_mime(mime)
-        } else {
-            FormData::new(file_name)
-        };
-        // The method must be POST, otherwise file name won't be supported.
-        let upload_request = UploadRequest::new(proxy_url.as_str(), file_path)
-            .post()
-            .with_content_type(ContentType::FormData(form_data));
-
-        self.uploader_sender
-            .send((cmd_id.into(), upload_request))
-            .await?;
-
-        Ok(binary_upload_event_url)
-    }
-
-    async fn publish_software_list(
-        &mut self,
-        target: &EntityTopicId,
-        cmd_id: &str,
-        message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
-        let command = match SoftwareListCommand::try_from_bytes(
-            target.clone(),
-            cmd_id.to_owned(),
-            message.payload_bytes(),
-        )? {
-            Some(command) => command,
-            None => {
-                // The command has been fully processed
-                return Ok((Vec::new(), None));
-            }
-        };
-
-        let messages = match command.status() {
-            CommandStatus::Successful => {
-                // Send a list via HTTP to support backwards compatibility to c8y < 10.14
-                if self.config.software_management_api == SoftwareManagementApiFlag::Legacy {
-                    if let Some(device) = self.entity_store.get(target) {
-                        let c8y_software_list: C8yUpdateSoftwareListResponse = (&command).into();
-                        self.http_proxy
-                            .send_software_list_http(
-                                c8y_software_list,
-                                device.external_id.as_ref().to_string(),
-                            )
-                            .await?;
-                    }
-                    return Ok((vec![command.clearing_message(&self.mqtt_schema)], None));
-                }
-
-                // Send a list via SmartREST, "advanced software list" feature c8y >= 10.14
-                let topic = self
-                    .entity_store
-                    .get(target)
-                    .and_then(|entity| {
-                        C8yTopic::smartrest_response_topic(entity, &self.config.c8y_prefix)
-                    })
-                    .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
-                let payloads =
-                    get_advanced_software_list_payloads(&command, SOFTWARE_LIST_CHUNK_SIZE);
-
-                let mut messages: Vec<MqttMessage> = Vec::new();
-                for payload in payloads {
-                    messages.push(MqttMessage::new(&topic, payload))
-                }
-                messages.push(command.clearing_message(&self.mqtt_schema));
-                messages
-            }
-
-            CommandStatus::Failed { reason } => {
-                error!("Fail to list installed software packages: {reason}");
-                vec![command.clearing_message(&self.mqtt_schema)]
-            }
-
-            CommandStatus::Init
-            | CommandStatus::Scheduled
-            | CommandStatus::Executing
-            | CommandStatus::Unknown => {
-                // C8Y doesn't expect any message to be published
-                Vec::new()
-            }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
-    }
 }
 
 /// Lists all the locally available child devices linked to this parent device.
@@ -1858,10 +1497,13 @@ pub(crate) mod tests {
     use c8y_http_proxy::messages::C8YRestResult;
     use serde_json::json;
     use serde_json::Value;
+
     use std::str::FromStr;
+
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
+    use tedge_actors::ClientMessageBox;
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
@@ -3466,23 +3108,21 @@ pub(crate) mod tests {
         let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
 
-        let uploader_builder: SimpleMessageBoxBuilder<IdUploadResult, IdUploadRequest> =
-            SimpleMessageBoxBuilder::new("UL", 5);
-        let uploader_sender =
-            LoggingSender::new("UL".into(), uploader_builder.build().sender_clone());
+        let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
+            FakeServerBox::builder();
+        let uploader = ClientMessageBox::new(&mut uploader_builder);
 
-        let downloader_builder: SimpleMessageBoxBuilder<IdDownloadResult, IdDownloadRequest> =
-            SimpleMessageBoxBuilder::new("DL", 5);
-        let downloader_sender =
-            LoggingSender::new("DL".into(), downloader_builder.build().sender_clone());
+        let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+            FakeServerBox::builder();
+        let downloader = ClientMessageBox::new(&mut downloader_builder);
 
         let converter = CumulocityConverter::new(
             config,
             mqtt_publisher,
             http_proxy,
             auth_proxy,
-            uploader_sender,
-            downloader_sender,
+            uploader,
+            downloader,
         )
         .unwrap();
 

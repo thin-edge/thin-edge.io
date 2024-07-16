@@ -735,7 +735,37 @@ EOF
     tedge config set mqtt.client.auth.cert_file /setup/client.crt
     tedge config set mqtt.client.auth.key_file /setup/client.key
 
-    systemctl restart mosquitto
+    if ! sudo systemctl restart mosquitto.service; then
+        echo "Failed to restart mosquitto"
+        exit 1
+    fi
+
+    echo "Generated certificates successfully"
+}
+
+check_systemd_cgroup_compat() {
+    #
+    # Check the systemd/cgroup version compatibility
+    # Fail if an invalid combination is detected
+    #
+    CGROUPS_VERSION=1
+    if [ -e /sys/fs/cgroup/cgroup.controllers ]; then
+        CGROUPS_VERSION=2
+    fi
+
+    # systemd version 256 drops cgroup v1 support, which means on older operating systems like
+    # ubuntu 20.04, systemd may not behave as expected
+    # ee systemd release notes https://github.com/systemd/systemd/blob/main/NEWS
+    SYSTEMD_VERSION=
+    if command_exists systemctl; then
+        SYSTEMD_VERSION=$(systemctl --version | head -n1 | cut -d' ' -f2)
+    fi
+    if [[ "$SYSTEMD_VERSION" =~ ^\d+$ ]]; then
+        if [ "$CGROUPS_VERSION" -lt 2 ] && [ "$SYSTEMD_VERSION" -ge 256 ]; then
+            echo "ERROR!!!!: incompatible cgroup version detected. systemd >=256 drops support for cgroupsv1. systemd_version=$SYSTEMD_VERSION, cgroup_version=$CGROUPS_VERSION"
+            exit 1
+        fi
+    fi
 }
 
 prompt_value() {
@@ -912,6 +942,8 @@ post_configure() {
 }
 
 main() {
+    check_systemd_cgroup_compat
+
     # ---------------------------------------
     # Preparation (clean and disconnect)
     # ---------------------------------------

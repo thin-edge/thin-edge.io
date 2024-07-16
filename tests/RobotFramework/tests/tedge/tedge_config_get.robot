@@ -14,10 +14,10 @@ Set keys should return value on stdout
     Should Be Equal    ${output}    ${DEVICE_SN}
 
 Unset keys should not return anything on stdout and warnings on stderr
-    ${output}=    Execute Command    tedge config get az.url 2>/dev/null    exp_exit_code=0
+    ${output}=    Execute Command    tedge config get az.url 2>/dev/null    exp_exit_code=1
     Should Be Empty    ${output}
 
-    ${stderr}=    Execute Command    tedge config get az.url 2>&1 >/dev/null    exp_exit_code=0
+    ${stderr}=    Execute Command    tedge config get az.url 2>&1 >/dev/null    exp_exit_code=1
     Should Not Be Empty    ${stderr}
 
 Invalid keys should not return anything on stdout and warnings on stderr
