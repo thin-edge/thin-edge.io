@@ -55,6 +55,89 @@ Send device profile operation from Cumulocity IoT
     Device Should Have Installed Software    jq
     Managed Object Should Have Fragment Values    c8y_Profile.profileId=${PROFILE_ID}    c8y_Profile.profileName=${PROFILE_NAME}    c8y_Profile.profileExecuted=true
 
+Send device profile operation locally
+    ${config_url}=    Set Variable    http://localhost:8000/tedge/file-transfer/main/config_update/robot-123
+
+    Execute Command     curl -X PUT --data-binary "bad toml" "${config_url}"
+
+    ${payload}=    Catenate    SEPARATOR=\n    
+    ...    {
+    ...      "status": "init",
+    ...      "name": "dev-profile",
+    ...      "version": "v2",
+    ...      "operations": [
+    ...        {
+    ...          "operation": "firmware_update",
+    ...          "skip": false,
+    ...          "payload": {
+    ...            "name": "core-image-tedge-rauc",
+    ...            "remoteUrl": "https://abc.com/some/firmware/url",
+    ...            "version": "20240430.1139"
+    ...          }
+    ...        },
+    ...        {
+    ...          "operation": "software_update",
+    ...          "skip": false,
+    ...          "payload": {
+    ...            "updateList": [
+    ...              {
+    ...                "type": "apt",
+    ...                "modules": [
+    ...                  {
+    ...                    "name": "yq",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  },
+    ...                  {
+    ...                    "name": "jo",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  }
+    ...                ]
+    ...              }
+    ...            ]
+    ...          }
+    ...        },
+    ...        {
+    ...          "operation": "config_update",
+    ...          "skip": false,
+    ...          "payload": {
+    ...            "type": "tedge-configuration-plugin",
+    ...            "tedgeUrl": "${config_url}",
+    ...            "remoteUrl": ""
+    ...          }
+    ...        },
+    # ...        {
+    # ...          "operation": "restart",
+    # ...          "skip": false,
+    # ...          "payload": {}
+    # ...        },
+    ...        {
+    ...          "operation": "software_update",
+    ...          "skip": false,
+    ...          "payload": {
+    ...            "updateList": [
+    ...              {
+    ...                "type": "apt",
+    ...                "modules": [
+    ...                  {
+    ...                    "name": "rolldice",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  }
+    ...                ]
+    ...              }
+    ...            ]
+    ...          }
+    ...        }
+    ...      ]
+    ...    }
+
+    Execute Command    tedge mqtt pub --retain 'te/device/main///cmd/device_profile_v2/robot-123' '${payload}'
+
+    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/device_profile_v2/robot-123    message_pattern=.*successful.*   maximum=1    timeout=60
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/device_profile_v2/robot-123 ''
+
 Trigger device profile operation locally
     ${config_url}=    Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin.toml
     Execute Command    /etc/tedge/operations/device_profile.sh create_test_operation te/device/main///cmd/device_profile/robot-123 ${config_url}
@@ -76,9 +159,14 @@ Custom Setup
     Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
     Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/community/setup.deb.sh' | sudo -E bash
     Restart Service    tedge-agent
+    # Installing python for the python scripts used in workflows
+    Execute Command    sudo apt install python3 -y
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/device_profile.toml       /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/firmware_update.toml      /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/device_profile.sh         /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge_operator_helper.sh         /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/device_profile_v2.toml       /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/iterator.py         /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/extract_next.sh         /etc/tedge/operations/
