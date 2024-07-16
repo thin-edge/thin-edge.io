@@ -1,0 +1,40 @@
+operation = "device_profile"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "next_operation"
+
+[next_operation]
+iterate = "${.payload.operations}"
+on_next = "apply_operation"
+on_success = "successful"
+on_error = "rollback"
+
+[apply_operation]
+operation = "${.payload.@next.item.operation}"
+input = "${.payload.@next.item.payload}"
+on_exec = "awaiting_operation"
+
+[awaiting_operation]
+action = "await-operation-completion"
+on_success = "next_operation"
+on_error = "rollback"
+
+[rollback]
+action="proceed"
+on_success = { status = "failed", reason = "Device profile application failed" }
+on_error = { status = "failed", reason = "Rollback failed" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

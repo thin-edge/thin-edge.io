@@ -3,7 +3,9 @@ use crate::workflow::AwaitHandlers;
 use crate::workflow::BgExitHandlers;
 use crate::workflow::DefaultHandlers;
 use crate::workflow::ExitHandlers;
+use crate::workflow::GenericCommandState;
 use crate::workflow::GenericStateUpdate;
+use crate::workflow::IterateHandlers;
 use crate::workflow::OperationAction;
 use crate::workflow::OperationWorkflow;
 use crate::workflow::ScriptDefinitionError;
@@ -72,6 +74,7 @@ pub enum TomlOperationAction {
     BackgroundScript(ShellScript),
     Action(String),
     Operation(String),
+    Iterate(String),
 }
 
 impl Default for TomlOperationAction {
@@ -128,6 +131,15 @@ impl TryFrom<TomlOperationState> for OperationAction {
                     cmd_input,
                     handlers,
                 ))
+            }
+            TomlOperationAction::Iterate(target_json_path) => {
+                let handlers = TryInto::<IterateHandlers>::try_into(input.handlers)?;
+                let Some(json_path) = GenericCommandState::extract_path(&target_json_path) else {
+                    return Err(WorkflowDefinitionError::InvalidPathExpression(
+                        target_json_path,
+                    ));
+                };
+                Ok(OperationAction::Iterate(json_path.to_string(), handlers))
             }
             TomlOperationAction::Action(command) => match command.as_str() {
                 "builtin" => Ok(OperationAction::BuiltIn),
@@ -212,6 +224,9 @@ pub struct TomlExitHandlers {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     on_exec: Option<TomlStateUpdate>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_next: Option<TomlStateUpdate>,
 }
 
 impl TryFrom<TomlExitHandlers> for ExitHandlers {
@@ -273,6 +288,25 @@ impl TryFrom<TomlExitHandlers> for AwaitHandlers {
             on_error,
             on_timeout,
         })
+    }
+}
+
+impl TryFrom<TomlExitHandlers> for IterateHandlers {
+    type Error = WorkflowDefinitionError;
+
+    fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+        let on_next = value.on_next.map(|u| u.into()).ok_or_else(|| {
+            WorkflowDefinitionError::MissingState {
+                state: "on_next".to_string(),
+            }
+        })?;
+        let on_success = value.on_success.map(|u| u.into()).ok_or_else(|| {
+            WorkflowDefinitionError::MissingState {
+                state: "on_success".to_string(),
+            }
+        })?;
+        let on_error = value.on_error.map(|u| u.into());
+        Ok(IterateHandlers::new(on_next, on_success, on_error))
     }
 }
 
@@ -356,6 +390,7 @@ impl FromStr for ExitCodes {
 mod tests {
     use super::*;
     use crate::workflow::GenericStateUpdate;
+    use assert_matches::assert_matches;
     use ExitCodes::*;
 
     #[test]
@@ -399,6 +434,7 @@ on_kill = { status = "failed", reason = "killed"}         # next status when kil
                 on_timeout: None,
                 on_stdout: Vec::new(),
                 on_exec: None,
+                on_next: None,
             }
         )
     }
@@ -581,5 +617,97 @@ script = "/some/script/which/fails"
                 ),
             }
         )
+    }
+
+    #[test]
+    fn parse_iterate_toml() {
+        let file = r#"
+operation = "custom_operation"
+
+[init]
+action = "proceed"
+on_success = "apply_operation"
+
+[apply_operation]
+iterate = "${.payload.target}"
+on_next = "next_operation"
+on_success = "successful"
+on_error = "failed"
+
+[next_operation]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("apply_operation").unwrap() {
+            OperationAction::Iterate(
+                target,
+                IterateHandlers {
+                    on_next,
+                    on_success,
+                    on_error,
+                },
+            ) => {
+                assert_eq!(target, ".payload.target");
+                assert_eq!(on_next, &"next_operation".into());
+                assert_eq!(on_success, &"successful".into());
+                assert_eq!(on_error, &Some("failed".into()));
+            }
+            other => panic!("Expected iterate action, but got {other}"),
+        }
+    }
+
+    #[test]
+    fn iterate_parse_fails_without_on_next() {
+        let file = r#"
+operation = "custom_operation"
+
+[apply_operation]
+iterate = "{.payload.target}"
+on_success = "successful"
+on_error = "failed"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let res = OperationWorkflow::try_from(input);
+        assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_next");
+    }
+
+    #[test]
+    fn iterate_parse_fails_without_on_success() {
+        let file = r#"
+operation = "custom_operation"
+
+[apply_operation]
+iterate = "{.payload.target}"
+on_next = "next_operation"
+on_error = "failed"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let res = OperationWorkflow::try_from(input);
+        assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_success");
+    }
+
+    #[test]
+    fn iterate_parse_fails_with_invalid_json_path() {
+        let file = r#"
+operation = "custom_operation"
+
+[apply_operation]
+iterate = "{invalid.json.path}"
+on_next = "next_operation"
+on_success = "successful"
+on_error = "failed"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let res = OperationWorkflow::try_from(input);
+        assert_matches!(res, Err(WorkflowDefinitionError::InvalidPathExpression(_)));
     }
 }

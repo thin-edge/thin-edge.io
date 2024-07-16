@@ -33,6 +33,7 @@ tokio = { workspace = true, features = ["fs", "process"] }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 clock = { workspace = true }
 maplit = { workspace = true }

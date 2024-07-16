@@ -3883,6 +3883,7 @@ name = "tedge_api"
 version = "1.2.0"
 dependencies = [
  "anyhow",
+ "assert-json-diff",
  "assert_matches",
  "camino",
  "clock",

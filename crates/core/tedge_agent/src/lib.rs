@@ -21,6 +21,7 @@ use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tracing::log::warn;
 
 mod agent;
+mod device_profile_manager;
 mod file_transfer_server;
 mod operation_file_cache;
 mod operation_workflows;

@@ -347,6 +347,39 @@ impl AwaitHandlers {
     }
 }
 
+/// Define state transition on each iteration outcome
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IterateHandlers {
+    pub on_next: GenericStateUpdate,
+    pub on_success: GenericStateUpdate,
+    pub on_error: Option<GenericStateUpdate>,
+}
+
+impl IterateHandlers {
+    pub fn new(
+        on_next: GenericStateUpdate,
+        on_success: GenericStateUpdate,
+        on_error: Option<GenericStateUpdate>,
+    ) -> Self {
+        Self {
+            on_next,
+            on_success,
+            on_error,
+        }
+    }
+
+    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
+        if self.on_error.is_none() {
+            self.on_error = default
+                .on_error
+                .clone()
+                .or_else(|| Some(GenericStateUpdate::failed("Iteration failed".to_string())));
+        }
+
+        self
+    }
+}
+
 /// Define default handlers for all state of an operation workflow
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DefaultHandlers {

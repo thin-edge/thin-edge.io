@@ -361,6 +361,25 @@ impl WorkflowActor {
 
                 Ok(())
             }
+            OperationAction::Iterate(target_json_path, handlers) => {
+                match OperationAction::process_iterate(
+                    state.clone(),
+                    &target_json_path,
+                    handlers.clone(),
+                ) {
+                    Ok(next_state) => {
+                        self.publish_command_state(next_state, &mut log_file)
+                            .await?
+                    }
+                    Err(err) => {
+                        error!("Iteration failed due to: {err}");
+                        let new_state = state
+                            .update(handlers.on_error.expect("on_error target can not be none"));
+                        self.publish_command_state(new_state, &mut log_file).await?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 

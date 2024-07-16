@@ -183,21 +183,21 @@ on_success = "executing"
 on_error = { status = "failed", reason = "fail to sort the profile list"}
 
 [executing]
-action = "builtin"
+action = "proceed"
 on_success = "next_operation"
 
 [next_operation]
-action = "iterator"
+iterate = "${.payload.operations}"
 on_next = "apply_operation"
 on_success = "successful"
 on_error = { status = "failed", reason = "Failed to compute the next operation to be executed" }
 
 [apply_operation]
-operation = "${.@next_operation.operation}"
-input = "${.@next_operation.payload}"
-on_exec = "awaiting_sub_operation"
+operation = "${.payload.@next.operation.operation}"
+input = "${.payload.@next.operation.payload}"
+on_exec = "awaiting_operation"
 
-[awaiting_sub_operation]
+[awaiting_operation]
 action = "await-operation-completion"
 on_success = "next_operation"
 on_error = "rollback"
@@ -254,12 +254,12 @@ action = "cleanup"
   the profile application is deemed complete and the workflow proceeds to the `on_success` target.
   If the operation computation fails for some reason, then the workflow moves to the `on_error` target.
   This builtin iteration logic can be overridden using a `script` action which can manipulate the order in any manner, dynamically.
-* The `apply_sub_operation` state executes the sub-operation defined in the `@next_operation` field in the payload.
+* The `apply_operation` state executes the sub-operation defined in the `@next_operation` field in the payload.
   The `input` to the sub-operation is also extracted from the `payload` field of the `@next_operation`.
-  As soon as the sub-operation is triggered, the workflow moves to the `awaiting_sub_operation` state defined as the `on_exec` target.
-* In the `awaiting_sub_operation` state, workflow just waits monitoring the state of the sub-operation completion.
+  As soon as the sub-operation is triggered, the workflow moves to the `awaiting_operation` state defined as the `on_exec` target.
+* In the `awaiting_operation` state, workflow just waits monitoring the state of the sub-operation completion.
   * Once the sub-operation is successful, the workflow must move back to the `next_operation` state,
-    so that the next sub-operation in the list can be applied.
+    so that the next operation in the list can be applied.
   * In case of a failure, the workflow moves to the `on_error` target state,
     keeping the `@next_operation` value in the payload intact,
     so that the item that caused the failure can be easily identified using the its `index` value.

@@ -498,6 +498,12 @@ impl From<String> for GenericStateUpdate {
     }
 }
 
+impl From<&str> for GenericStateUpdate {
+    fn from(status: &str) -> Self {
+        status.to_string().into()
+    }
+}
+
 impl From<GenericStateUpdate> for Value {
     fn from(update: GenericStateUpdate) -> Self {
         match update.reason {
