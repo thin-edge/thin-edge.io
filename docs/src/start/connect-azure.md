@@ -5,6 +5,19 @@ sidebar_position: 3
 description: Connect %%te%% to Azure IoT and publish telemetry data
 ---
 
+import UserContext from '@site/src/components/UserContext';
+import UserContextForm from '@site/src/components/UserContextForm';
+
+:::tip
+#### User Context {#user-context}
+
+You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
+
+<UserContextForm settings="DEVICE_ID,AZURE_URL" />
+
+The user context will be persisted in your web browser's local storage.
+:::
+
 The very first step to enable %%te%% is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.
@@ -35,9 +48,13 @@ This identifier will be used to uniquely identify your devices among others in y
 This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is the device with that identity.
 
+<UserContext>
+
 ```sh
-sudo tedge cert create --device-id my-device
+sudo tedge cert create --device-id "$DEVICE_ID"
 ```
+
+</UserContext>
 
 ```text title="Output"
 Certificate was successfully created
@@ -51,14 +68,18 @@ You can then check the content of that certificate.
 sudo tedge cert show
 ```
 
+<UserContext>
+
 ```text title="Output"
 Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
-Subject: CN=my-device, O=Thin Edge, OU=Test Device
-Issuer: CN=my-device, O=Thin Edge, OU=Test Device
+Subject: CN=$DEVICE_ID, O=Thin Edge, OU=Test Device
+Issuer: CN=$DEVICE_ID, O=Thin Edge, OU=Test Device
 Valid from: Tue, 09 Mar 2021 14:10:30 +0000
 Valid up to: Thu, 10 Mar 2022 14:10:30 +0000
 Thumbprint: 860218AD0A996004449521E2713C28F67B5EA580
 ```
+
+</UserContext>
 
 You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
@@ -90,9 +111,13 @@ To connect the device to the Azure IoT Hub, one needs to set the URL/Hostname of
 
 Set the URL/Hostname of your Azure IoT Hub.
 
+<UserContext>
+
 ```sh
-sudo tedge config set az.url your-iot-hub-name.azure-devices.net
+sudo tedge config set az.url $AZURE_URL
 ```
+
+</UserContext>
 
 The URL/Hostname can be found in the Azure web portal, clicking on the overview section of your IoT Hub.
 

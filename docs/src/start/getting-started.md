@@ -4,6 +4,19 @@ tags: [Getting Started, Cumulocity]
 sidebar_position: 1
 ---
 
+import UserContext from '@site/src/components/UserContext';
+import UserContextForm from '@site/src/components/UserContextForm';
+
+:::tip
+#### User Context {#user-context}
+
+You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
+
+<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_USER" />
+
+The user context will be persisted in your web browser's local storage.
+:::
+
 After following this tutorial you will have an overview of the installation and configuration of %%te%%. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity IoT and performing some additional device management tasks.
 
 
@@ -107,13 +120,13 @@ To connect the device to the Cumulocity IoT it needs to be configured.
 
 This URL is needed to allow the upload of the certificate to the specific tenant and the registration of the device. It can be configured via:
 
+<UserContext>
+
 ```sh
-sudo tedge config set c8y.url "${YOUR_C8Y_URL}"
+sudo tedge config set c8y.url "$C8Y_URL"
 ```
 
-```sh title="Example"
-sudo tedge config set c8y.url "mycompany.cumulocity.com"
-```
+</UserContext>
 
 ### Certificate
 
@@ -121,26 +134,25 @@ sudo tedge config set c8y.url "mycompany.cumulocity.com"
 
 First, we need to create the device certificate locally (If the device certificate is already uploaded, directly via the UI to Cumulocity IoT this step can be skipped).
 
+<UserContext>
+
 ```sh
-sudo tedge cert create --device-id "${DEVICE_ID}"
+sudo tedge cert create --device-id "$DEVICE_ID"
 ```
 
-```sh title="Example"
-export DEVICE_ID="gateway_4932C0CE7D12"
-sudo tedge cert create --device-id "${DEVICE_ID}"
-```
+</UserContext>
 
 The device id is a unique identifier e.g. the MAC address that identifies the physical device.
 
 The certificate is uploaded to the Cumulocity IoT Tenant via:
 
+<UserContext>
+
 ```sh
-sudo tedge cert upload c8y --user "${C8Y_USER}"
+sudo tedge cert upload c8y --user "$C8Y_USER"
 ```
 
-```sh title="Example"
-sudo tedge cert upload c8y --user "john.smith@example.com"
-```
+</UserContext>
 
 If the password prompt appears, enter your password.
 
@@ -320,8 +332,7 @@ The APT plugin (provided by the `tedge-apt-plugin` package) is installed by defa
 <!-- TODO: Verify if reconnecting the mapper is really necessary! -->
 
 ```sh
-sudo tedge disconnect c8y
-sudo tedge connect c8y
+sudo tedge reconnect c8y
 ```
 
 ### Adding new software into the software repository in Cumulocity IoT
