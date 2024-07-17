@@ -76,6 +76,10 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
                 connection_check_sub_msg_topic,
             ],
             bridge_location,
+            // AWS IoT Just In Time Provisioning (JITP) uses the first connection
+            // to create the "Thing", so the first connection attempt can fail, but retrying
+            // will give it a higher chance of success
+            connection_check_attempts: 5,
         }
     }
 }
@@ -126,6 +130,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
+        connection_check_attempts: 5,
     };
 
     assert_eq!(bridge, expected);

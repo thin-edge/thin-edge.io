@@ -113,7 +113,9 @@ impl Command for ConnectCommand {
         if self.offline_mode {
             println!("Offline mode. Skipping connection check.\n");
         } else {
-            match self.check_connection(config) {
+            match self
+                .check_connection_with_retries(config, bridge_config.connection_check_attempts)
+            {
                 Ok(DeviceStatus::AlreadyExists) => {
                     println!("Connection check is successful.\n");
                 }
@@ -152,6 +154,24 @@ impl Command for ConnectCommand {
 }
 
 impl ConnectCommand {
+    fn check_connection_with_retries(
+        &self,
+        config: &TEdgeConfig,
+        max_attempts: i32,
+    ) -> Result<DeviceStatus, ConnectError> {
+        for i in 1..max_attempts {
+            let result = self.check_connection(config);
+            if let Ok(DeviceStatus::AlreadyExists) = result {
+                return result;
+            }
+            println!(
+                "Connection test failed, attempt {} of {}\n",
+                i, max_attempts,
+            );
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        self.check_connection(config)
+    }
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",

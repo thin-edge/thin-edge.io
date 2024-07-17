@@ -34,6 +34,7 @@ pub struct BridgeConfig {
     pub notification_topic: String,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
+    pub connection_check_attempts: i32,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -173,6 +174,7 @@ mod test {
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -239,6 +241,7 @@ bridge_attempt_unsubscribe false
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -307,6 +310,7 @@ bridge_attempt_unsubscribe false
             notification_topic: "test_topic".into(),
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
         };
 
         let mut buffer = Vec::new();
@@ -424,6 +428,7 @@ bridge_attempt_unsubscribe false
             bridge_attempt_unsubscribe: false,
             topics: vec![],
             bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
         }
     }
 }

@@ -115,6 +115,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_attempt_unsubscribe: false,
             topics,
             bridge_location,
+            connection_check_attempts: 1,
         }
     }
 }
@@ -227,6 +228,7 @@ mod tests {
             notification_topic: C8Y_BRIDGE_HEALTH_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
         };
 
         assert_eq!(bridge, expected);
