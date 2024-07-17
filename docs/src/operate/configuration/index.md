@@ -140,7 +140,7 @@ The names for these environment variables are prefixed with `TEDGE_` to avoid co
 | `device.cert_path`  | `TEDGE_DEVICE_CERT_PATH`  |
 | `mqtt.bind.address` | `TEDGE_MQTT_BIND_ADDRESS` |
 
-You can also use `tedge config` to inspect the value that is set, which may prove useful if you are using a mix of toml configuration and environment variables. If you had tedge.toml file set as shown [above](#tedgetoml), you could run:
+You can also use `tedge config` to inspect the value that is set, which may prove useful if you are using a mix of toml configuration and environment variables. For example, if you have already set the `c8y.url`, then you can read the value using:
 
 ```sh
 tedge config get c8y.url
