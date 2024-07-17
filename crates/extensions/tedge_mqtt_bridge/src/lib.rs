@@ -345,7 +345,6 @@ async fn half_bridge(
 
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
-                dbg!(name, publish.pkid);
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
                         target
@@ -384,7 +383,6 @@ async fn half_bridge(
                         Some(Some((topic, msg))) => {
                             loop_breaker.forward_on_topic(topic, &msg);
                             e.insert(msg);
-                            dbg!(name, &forward_pkid_to_received_msg);
                         }
 
                         // A healthcheck message was published, ignore this packet id
