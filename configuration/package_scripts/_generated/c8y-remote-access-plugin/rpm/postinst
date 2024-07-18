@@ -1,5 +1,18 @@
 #!/bin/sh
 set -e
 
+# Automatically added by thin-edge.io
+if [ $1 -eq 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
+    # Initial installation
+    /usr/lib/systemd/systemd-update-helper install-system-units c8y-remote-access-plugin.socket || :
+fi
+# End automatically added section
+# Automatically added by thin-edge.io
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+	systemctl start c8y-remote-access-plugin.socket >/dev/null || true
+fi
+# End automatically added section
+
 ### Create supported operation files
 c8y-remote-access-plugin --init

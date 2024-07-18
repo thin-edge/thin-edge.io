@@ -1,0 +1,13 @@
+[Unit]
+Description=c8y-remote-access-plugin socket
+PartOf=c8y-remote-access-plugin.service
+
+[Socket]
+ListenStream=/run/c8y-remote-access-plugin.sock
+SocketMode=0660
+SocketUser=tedge
+SocketGroup=tedge
+Accept=yes
+
+[Install]
+WantedBy=sockets.target

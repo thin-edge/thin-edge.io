@@ -1,5 +1,31 @@
 #!/bin/sh
 set -e
 
+# Automatically added by thin-edge.io
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# This will only remove masks created by d-s-h on package removal.
+	deb-systemd-helper unmask c8y-remote-access-plugin.socket >/dev/null || true
+
+	# was-enabled defaults to true, so new installations run enable.
+	if deb-systemd-helper --quiet was-enabled c8y-remote-access-plugin.socket; then
+		# Enables the unit on first installation, creates new
+		# symlinks on upgrades if the unit file has changed.
+		deb-systemd-helper enable c8y-remote-access-plugin.socket >/dev/null || true
+	else
+		# Update the statefile to add new symlinks (if any), which need to be
+		# cleaned up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state c8y-remote-access-plugin.socket >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by thin-edge.io
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		deb-systemd-invoke start c8y-remote-access-plugin.socket >/dev/null || true
+	fi
+fi
+# End automatically added section
+
 ### Create supported operation files
 c8y-remote-access-plugin --init

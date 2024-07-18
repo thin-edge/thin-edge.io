@@ -1,0 +1,12 @@
+[Unit]
+Description=c8y-remote-access-plugin Service
+After=network.target c8y-remote-access-plugin.socket
+Requires=c8y-remote-access-plugin.socket
+CollectMode=inactive-or-failed
+
+[Service]
+ExecStart=/usr/bin/c8y-remote-access-plugin --child -
+StandardInput=socket
+
+[Install]
+WantedBy=default.target
