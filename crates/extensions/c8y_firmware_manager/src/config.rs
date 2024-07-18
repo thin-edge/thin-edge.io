@@ -38,6 +38,7 @@ impl FirmwareManagerConfig {
         data_dir: DataDir,
         timeout_sec: Duration,
         c8y_url: String,
+        c8y_mqtt: String,
         c8y_prefix: TopicPrefix,
     ) -> Self {
         let local_http_host = format!("{}:{}", local_http_host, local_http_port).into();
@@ -46,7 +47,7 @@ impl FirmwareManagerConfig {
         let firmware_update_response_topics =
             TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS);
 
-        let c8y_end_point = C8yEndPoint::new(&c8y_url, &tedge_device_id);
+        let c8y_end_point = C8yEndPoint::new(&c8y_url, &c8y_mqtt, &tedge_device_id);
 
         Self {
             tedge_device_id,
@@ -72,6 +73,7 @@ impl FirmwareManagerConfig {
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
         let c8y_url = tedge_config.c8y.http.or_config_not_set()?.to_string();
+        let c8y_mqtt = tedge_config.c8y.mqtt.or_config_not_set()?.to_string();
         let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
         Ok(Self::new(
@@ -82,6 +84,7 @@ impl FirmwareManagerConfig {
             data_dir,
             timeout_sec,
             c8y_url,
+            c8y_mqtt,
             c8y_prefix,
         ))
     }

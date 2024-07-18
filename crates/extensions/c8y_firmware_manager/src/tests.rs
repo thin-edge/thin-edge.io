@@ -643,6 +643,7 @@ async fn spawn_firmware_manager(
         tmp_dir.utf8_path_buf().into(),
         timeout_sec,
         C8Y_HOST.into(),
+        C8Y_HOST.into(),
         "c8y".try_into().unwrap(),
     );
 

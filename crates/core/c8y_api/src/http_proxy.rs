@@ -24,15 +24,17 @@ pub enum C8yEndPointError {
 #[derive(Debug, Clone)]
 pub struct C8yEndPoint {
     c8y_host: String,
+    c8y_mqtt_host: String,
     pub device_id: String,
     pub token: Option<String>,
     devices_internal_id: HashMap<String, String>,
 }
 
 impl C8yEndPoint {
-    pub fn new(c8y_host: &str, device_id: &str) -> C8yEndPoint {
+    pub fn new(c8y_host: &str, c8y_mqtt_host: &str, device_id: &str) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
+            c8y_mqtt_host: c8y_mqtt_host.into(),
             device_id: device_id.into(),
             token: None,
             devices_internal_id: HashMap::new(),
@@ -101,20 +103,29 @@ impl C8yEndPoint {
         // * <tenant_id>.<domain> eg: t12345.c8y.io
         // These URLs may be both equivalent and point to the same tenant.
         // We are going to remove that and only check if the domain is the same.
-        let (tenant_host, _port) = self
+        let (tenant_http_host, _port) = self
             .c8y_host
             .split_once(':')
             .unwrap_or((&self.c8y_host, ""));
+        let (tenant_mqtt_host, _port) = self
+            .c8y_mqtt_host
+            .split_once(':')
+            .unwrap_or((&self.c8y_mqtt_host, ""));
         let url = Url::parse(url).ok()?;
         let url_host = url.domain()?;
 
         let (_, host) = url_host.split_once('.').unwrap_or((url_host, ""));
-        let (_, c8y_host) = tenant_host.split_once('.').unwrap_or((tenant_host, ""));
+        let (_, c8y_http_host) = tenant_http_host
+            .split_once('.')
+            .unwrap_or((tenant_http_host, ""));
+        let (_, c8y_mqtt_host) = tenant_mqtt_host
+            .split_once('.')
+            .unwrap_or((tenant_mqtt_host, ""));
 
         // The configured `c8y.http` setting may have a port value specified,
         // but the incoming URL is less likely to have any port specified.
         // Hence just matching the host prefix.
-        (host == c8y_host).then_some(url)
+        (host == c8y_http_host || host == c8y_mqtt_host).then_some(url)
     }
 }
 
@@ -208,7 +219,7 @@ mod tests {
 
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
-        let c8y = C8yEndPoint::new("test_host", "test_device");
+        let c8y = C8yEndPoint::new("test_host", "test_host", "test_device");
         let res = c8y.get_url_for_internal_id("test_device");
 
         assert_eq!(
@@ -219,7 +230,7 @@ mod tests {
 
     #[test]
     fn get_url_for_sw_list_returns_correct_address() {
-        let mut c8y = C8yEndPoint::new("test_host", "test_device");
+        let mut c8y = C8yEndPoint::new("test_host", "test_host", "test_device");
         c8y.devices_internal_id
             .insert("test_device".to_string(), "12345".to_string());
         let internal_id = c8y.get_internal_id("test_device".to_string()).unwrap();
@@ -237,8 +248,39 @@ mod tests {
     #[test_case("https://t1124124.test.com/path")]
     #[test_case("https://t1124124.test.com/path/to/file.test")]
     #[test_case("https://t1124124.test.com/path/to/file")]
+    #[test_case("https://t1124124.mqtt-url.com/path/to/file")]
     fn url_is_my_tenant_correct_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test_device");
+        let c8y = C8yEndPoint::new("test.test.com", "test.mqtt-url.com", "test_device");
+        assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
+    }
+
+    #[test_case("http://aaa.test.com")]
+    #[test_case("https://aaa.test.com")]
+    #[test_case("ftp://aaa.test.com")]
+    #[test_case("mqtt://aaa.test.com")]
+    #[test_case("https://t1124124.test.com")]
+    #[test_case("https://t1124124.test.com:12345")]
+    #[test_case("https://t1124124.test.com/path")]
+    #[test_case("https://t1124124.test.com/path/to/file.test")]
+    #[test_case("https://t1124124.test.com/path/to/file")]
+    #[test_case("https://t1124124.mqtt-url.com/path/to/file")]
+    fn url_is_my_tenant_correct_urls_with_http_port(url: &str) {
+        let c8y = C8yEndPoint::new("test.test.com:443", "test.mqtt-url.com", "test_device");
+        assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
+    }
+
+    #[test_case("http://aaa.test.com")]
+    #[test_case("https://aaa.test.com")]
+    #[test_case("ftp://aaa.test.com")]
+    #[test_case("mqtt://aaa.test.com")]
+    #[test_case("https://t1124124.test.com")]
+    #[test_case("https://t1124124.test.com:12345")]
+    #[test_case("https://t1124124.test.com/path")]
+    #[test_case("https://t1124124.test.com/path/to/file.test")]
+    #[test_case("https://t1124124.test.com/path/to/file")]
+    #[test_case("https://t1124124.mqtt-url.com/path/to/file")]
+    fn url_is_my_tenant_correct_urls_with_mqtt_port(url: &str) {
+        let c8y = C8yEndPoint::new("test.test.com", "test.mqtt-url.com:8883", "test_device");
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
@@ -250,13 +292,13 @@ mod tests {
     #[test_case("http://localhost")]
     #[test_case("http://abc.com")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test_device");
+        let c8y = C8yEndPoint::new("test.test.com", "test.mqtt-url.com", "test_device");
         assert!(c8y.maybe_tenant_url(url).is_none());
     }
 
     #[test]
     fn url_is_my_tenant_with_hostname_without_commas() {
-        let c8y = C8yEndPoint::new("custom-domain", "test_device");
+        let c8y = C8yEndPoint::new("custom-domain", "non-custom-mqtt-domain", "test_device");
         let url = "http://custom-domain/path";
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
@@ -264,14 +306,14 @@ mod tests {
     #[ignore = "Until #2804 is fixed"]
     #[test]
     fn url_is_my_tenant_check_not_too_broad() {
-        let c8y = C8yEndPoint::new("abc.com", "test_device");
+        let c8y = C8yEndPoint::new("abc.com", "abc.com", "test_device");
         dbg!(c8y.maybe_tenant_url("http://xyz.com"));
         assert!(c8y.maybe_tenant_url("http://xyz.com").is_none());
     }
 
     #[test]
     fn check_non_cached_internal_id_for_a_device() {
-        let mut c8y = C8yEndPoint::new("test_host", "test_device");
+        let mut c8y = C8yEndPoint::new("test_host", "test_host", "test_device");
         c8y.devices_internal_id
             .insert("test_device".to_string(), "12345".to_string());
         let end_pt_err = c8y.get_internal_id("test_child".into()).unwrap_err();

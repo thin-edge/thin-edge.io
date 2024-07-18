@@ -208,7 +208,8 @@ impl CumulocityConverter {
             config.service.ty.clone()
         };
 
-        let c8y_host = config.c8y_host.clone();
+        let c8y_host = &config.c8y_host;
+        let c8y_mqtt = &config.c8y_mqtt;
 
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
@@ -220,7 +221,7 @@ impl CumulocityConverter {
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir)?;
 
-        let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_id);
+        let c8y_endpoint = C8yEndPoint::new(c8y_host, c8y_mqtt, &device_id);
 
         let mqtt_schema = config.mqtt_schema.clone();
 
@@ -1643,37 +1644,37 @@ pub(crate) mod tests {
     }
 
     #[test_case(
-        "m/env", 
+        "m/env",
         json!({ "temp": 1})
         ;"measurement"
     )]
     #[test_case(
-        "e/click", 
+        "e/click",
         json!({ "text": "Someone clicked" })
         ;"event"
     )]
     #[test_case(
-        "a/temp", 
+        "a/temp",
         json!({ "text": "Temperature too high" })
         ;"alarm"
     )]
     #[test_case(
-        "twin/custom", 
+        "twin/custom",
         json!({ "foo": "bar" })
         ;"twin"
     )]
     #[test_case(
-        "status/health", 
+        "status/health",
         json!({ "status": "up" })
         ;"health status"
     )]
     #[test_case(
-        "cmd/restart", 
+        "cmd/restart",
         json!({ })
         ;"command metadata"
     )]
     #[test_case(
-        "cmd/restart/123", 
+        "cmd/restart/123",
         json!({ "status": "init" })
         ;"command"
     )]
@@ -3050,7 +3051,7 @@ pub(crate) mod tests {
         let device_topic_id = EntityTopicId::default_main_device();
         let device_type = "test-device-type".into();
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
-        let c8y_host = "test.c8y.io".into();
+        let c8y_host = "test.c8y.io".to_owned();
         let tedge_http_host = "127.0.0.1".into();
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
@@ -3070,6 +3071,7 @@ pub(crate) mod tests {
             device_topic_id,
             device_type,
             tedge_config.service.clone(),
+            c8y_host.clone(),
             c8y_host,
             tedge_http_host,
             topics,

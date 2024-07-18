@@ -107,6 +107,7 @@ impl OperationHandler {
 
                 c8y_endpoint: C8yEndPoint::new(
                     &c8y_mapper_config.c8y_host,
+                    &c8y_mapper_config.c8y_mqtt,
                     &c8y_mapper_config.device_id,
                 ),
                 http_proxy: http_proxy.clone(),

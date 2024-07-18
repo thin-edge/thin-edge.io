@@ -2761,7 +2761,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let device_topic_id = EntityTopicId::default_main_device();
     let device_type = "test-device-type".into();
     let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
-    let c8y_host = "test.c8y.io".into();
+    let c8y_host = "test.c8y.io".to_owned();
     let tedge_http_host = "localhost:8888".into();
     let mqtt_schema = MqttSchema::default();
     let auth_proxy_addr = "127.0.0.1".into();
@@ -2787,6 +2787,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         device_topic_id,
         device_type,
         config.service.clone(),
+        c8y_host.clone(),
         c8y_host,
         tedge_http_host,
         topics,
