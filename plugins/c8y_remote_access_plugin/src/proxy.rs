@@ -1,3 +1,4 @@
+use crate::auth::Jwt;
 use async_compat::CompatExt;
 use async_tungstenite::tokio::ConnectStream;
 use futures::future::join;
@@ -8,12 +9,9 @@ use miette::Context;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
 use rand::RngCore;
-use rustls::ClientConfig;
-use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::net::ToSocketAddrs;
-
 use url::Url;
 use ws_stream_tungstenite::WsStream;
 
@@ -35,10 +33,10 @@ impl WebsocketSocketProxy {
     pub async fn connect<SA: ToSocketAddrs + std::fmt::Debug>(
         url: &Url,
         socket: SA,
-        client_config: Option<ClientConfig>,
+        jwt: Jwt,
     ) -> miette::Result<Self> {
         let socket_future = TcpStream::connect(socket);
-        let websocket_future = Websocket::new(url, client_config);
+        let websocket_future = Websocket::new(url, jwt.authorization_header());
 
         match join(socket_future, websocket_future).await {
             (Err(socket_error), _) => Err(SocketError(socket_error))?,
@@ -79,8 +77,9 @@ fn generate_sec_websocket_key() -> String {
 }
 
 impl Websocket {
-    async fn new(url: &Url, config: Option<ClientConfig>) -> miette::Result<Self> {
+    async fn new(url: &Url, authorization: String) -> miette::Result<Self> {
         let request = http::Request::builder()
+            .header("Authorization", authorization)
             .header("Sec-WebSocket-Key", generate_sec_websocket_key())
             .header("Host", url.host_str().unwrap())
             .header("Connection", "Upgrade")
@@ -91,15 +90,12 @@ impl Websocket {
             .into_diagnostic()
             .context("Instantiating Websocket connection")?;
 
-        let socket = async_tungstenite::tokio::connect_async_with_tls_connector(
-            request,
-            config.map(|c| Arc::new(c).into()),
-        )
-        .await
-        .into_diagnostic()
-        .with_context(|| format!("host {url}"))
-        .context("Connecting to Websocket")?
-        .0;
+        let socket = async_tungstenite::tokio::connect_async(request)
+            .await
+            .into_diagnostic()
+            .with_context(|| format!("host {url}"))
+            .context("Connecting to Websocket")?
+            .0;
 
         Ok(Websocket {
             socket: WsStream::new(socket),
