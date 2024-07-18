@@ -13,8 +13,8 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_utils::file::PermissionEntry;
 use tedge_utils::certificates::RootCertClient;
+use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {
@@ -86,10 +86,7 @@ impl<T> Clone for DownloaderActor<T> {
 }
 
 impl<T: Message + Default> DownloaderActor<T> {
-    pub fn new(
-        identity: Option<Identity>,
-        root_cert_client: RootCertClient,
-    ) -> Self {
+    pub fn new(identity: Option<Identity>, root_cert_client: RootCertClient) -> Self {
         DownloaderActor {
             config: <_>::default(),
             key: PhantomData,

@@ -21,6 +21,7 @@ reqwest = { workspace = true, features = [
     "rustls-tls-native-roots",
     "multipart",
 ] }
+tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { workspace = true, features = ["codec"] }

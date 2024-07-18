@@ -24,10 +24,10 @@ use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_utils::certificates::RootCertClient;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
-use tedge_utils::certificates::RootCertClient;
 
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;

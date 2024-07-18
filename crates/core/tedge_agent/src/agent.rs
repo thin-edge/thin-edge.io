@@ -51,8 +51,8 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::certificates::RootCertClient;
+use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
@@ -281,9 +281,13 @@ impl Agent {
         let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
 
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
-        let mut downloader_actor_builder =
-            DownloaderActor::new(self.config.identity.clone(), self.config.root_cert_client.clone()).builder();
-        let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
+        let mut downloader_actor_builder = DownloaderActor::new(
+            self.config.identity.clone(),
+            self.config.root_cert_client.clone(),
+        )
+        .builder();
+        let mut uploader_actor_builder =
+            UploaderActor::new(self.config.identity, self.config.root_cert_client).builder();
 
         // Instantiate config manager actor if config_snapshot or both operations are enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =

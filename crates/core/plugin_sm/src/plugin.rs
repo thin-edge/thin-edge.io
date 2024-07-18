@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use tedge_utils::certificates::RootCertClient;
 use csv::ReaderBuilder;
 use download::Downloader;
 use regex::Regex;
@@ -18,6 +17,7 @@ use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
+use tedge_utils::certificates::RootCertClient;
 use tokio::io::AsyncWriteExt;
 use tracing::error;
 
@@ -198,7 +198,8 @@ pub trait Plugin {
         root_cert_client: RootCertClient,
     ) -> Result<Downloader, SoftwareError> {
         let sm_path = sm_path(&module.name, &module.version, download_path);
-        let downloader = Downloader::new(sm_path, identity.map(|id| id.to_owned()), root_cert_client);
+        let downloader =
+            Downloader::new(sm_path, identity.map(|id| id.to_owned()), root_cert_client);
 
         if let Some(ref mut logger) = command_log {
             logger

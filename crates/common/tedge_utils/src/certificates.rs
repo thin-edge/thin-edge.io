@@ -24,9 +24,7 @@ impl RootCertClient {
 
 impl From<Arc<[Certificate]>> for RootCertClient {
     fn from(certificates: Arc<[Certificate]>) -> Self {
-        Self {
-            certificates
-        }
+        Self { certificates }
     }
 }
 

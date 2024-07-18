@@ -15,6 +15,7 @@ camino = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 tedge_actors = { workspace = true }
+tedge_utils = { workspace = true }
 upload = { workspace = true }
 
 [dev-dependencies]

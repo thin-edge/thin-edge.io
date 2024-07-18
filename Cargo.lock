@@ -4176,6 +4176,7 @@ dependencies = [
  "reqwest",
  "tedge_actors",
  "tedge_test_utils",
+ "tedge_utils",
  "tokio",
  "upload",
 ]
@@ -4763,6 +4764,7 @@ dependencies = [
  "mockito",
  "reqwest",
  "tedge_test_utils",
+ "tedge_utils",
  "tempfile",
  "thiserror",
  "tokio",

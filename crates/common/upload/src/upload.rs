@@ -13,6 +13,7 @@ use reqwest::multipart;
 use reqwest::Body;
 use reqwest::Identity;
 use std::time::Duration;
+use tedge_utils::certificates::RootCertClient;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;
@@ -132,14 +133,20 @@ pub struct Uploader {
     source_filename: Utf8PathBuf,
     backoff: ExponentialBackoff,
     identity: Option<Identity>,
+    root_cert_client: RootCertClient,
 }
 
 impl Uploader {
-    pub fn new(target_path: Utf8PathBuf, identity: Option<Identity>) -> Self {
+    pub fn new(
+        target_path: Utf8PathBuf,
+        identity: Option<Identity>,
+        root_cert_client: RootCertClient,
+    ) -> Self {
         Self {
             source_filename: target_path,
             backoff: default_backoff(),
             identity,
+            root_cert_client,
         }
     }
 
@@ -174,7 +181,7 @@ impl Uploader {
 
             let file_body = Body::wrap_stream(FramedRead::new(file, BytesCodec::new()));
 
-            let mut client = reqwest::Client::builder();
+            let mut client = self.root_cert_client.builder();
             if let Some(identity) = self.identity.clone() {
                 client = client.identity(identity);
             }
