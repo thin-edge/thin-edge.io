@@ -384,7 +384,7 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 if response.topic.contains(REGISTRATION_OK) {
-                    println!("Received expected response message, connection check is successful.");
+                    println!("Received expected response message.");
                     return Ok(DeviceStatus::AlreadyExists);
                 } else {
                     break;
@@ -450,10 +450,7 @@ fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
-                println!(
-                    "Received expected response on topic {}, connection check is successful.",
-                    response.topic
-                );
+                println!("Received expected response on topic {}.", response.topic);
                 return Ok(DeviceStatus::AlreadyExists);
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
