@@ -26,7 +26,7 @@ The following steps describes the thin-edge.io release process:
 
    **Notes**
 
-   You may need to edit the PR before merging. For example, if you also want to remove an existing version in the same PR, then you will have to checkout the PR, make the edits, then push the changes.
+   When a new documentation snapshot is created, only the latest major version of each snapshot will be kept.
 
    When the PR is merged, it will trigger a new deployment of the [Github Pages](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml) with the option enabled to update the Algolia search index (e.g. by triggering the Algolia crawler).
 
