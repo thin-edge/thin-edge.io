@@ -188,6 +188,8 @@ on_success = "next_operation"
 
 [next_operation]
 action = "iterator"
+iterator.next_item = "next_operation"
+iterator.items = "operations"
 on_next = "apply_operation"
 on_success = "successful"
 on_error = { status = "failed", reason = "Failed to compute the next operation to be executed" }

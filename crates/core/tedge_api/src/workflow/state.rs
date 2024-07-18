@@ -589,11 +589,11 @@ impl TryFrom<Option<Value>> for StateExcerpt {
                 Ok(StateExcerpt::ExcerptMap(HashMap::new()))
             }
             Some(value) if value.is_object() => Ok(value.into()),
+            Some(value) if value.is_string() => Ok(value.into()),
             Some(value) => {
                 let kind = match &value {
                     Value::Bool(_) => "bool",
                     Value::Number(_) => "number",
-                    Value::String(_) => "string",
                     Value::Array(_) => "array",
                     _ => unreachable!(),
                 };

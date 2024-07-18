@@ -20,7 +20,8 @@ on_stdout = ["apply_operation", "successful", "rollback"]
 
 [apply_operation]
 operation = "${.payload.@next.operation.operation}"
-input_script = "/etc/tedge/operations/extract_next.sh ${.payload}"
+input = "${.payload.@next.operation.payload}"
+# input_script = "/etc/tedge/operations/extract_next.sh ${.payload}"
 on_exec = "awaiting_operation"
 
 [awaiting_operation]
