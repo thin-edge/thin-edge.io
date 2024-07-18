@@ -8,3 +8,6 @@ ${DEVICE_ADAPTER}    %{DEVICE_ADAPTER=docker}
 
 # Cumulocity settings
 &{C8Y_CONFIG}        host=%{C8Y_BASEURL= }    username=%{C8Y_USER= }    password=%{C8Y_PASSWORD= }
+
+# AWS settings
+&{AWS_CONFIG}        host=%{AWS_URL= }

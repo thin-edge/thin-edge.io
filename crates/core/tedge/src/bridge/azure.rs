@@ -76,6 +76,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 "twin/PATCH/# out 1 az/ $iothub/".into(),
             ],
             bridge_location,
+            connection_check_attempts: 1,
         }
     }
 }
@@ -128,6 +129,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
+        connection_check_attempts: 1,
     };
 
     assert_eq!(bridge, expected);
