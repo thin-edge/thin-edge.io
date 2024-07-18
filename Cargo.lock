@@ -2643,6 +2643,7 @@ dependencies = [
  "serial_test",
  "tedge_api",
  "tedge_config",
+ "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",

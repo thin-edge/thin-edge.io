@@ -2,7 +2,33 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use reqwest::Certificate;
+use reqwest::ClientBuilder;
 use std::fs::File;
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
+pub struct RootCertClient {
+    certificates: Arc<[Certificate]>,
+}
+
+impl RootCertClient {
+    pub fn builder(&self) -> ClientBuilder {
+        self.certificates
+            .iter()
+            .cloned()
+            .fold(ClientBuilder::new(), |builder, cert| {
+                builder.add_root_certificate(cert)
+            })
+    }
+}
+
+impl From<Arc<[Certificate]>> for RootCertClient {
+    fn from(certificates: Arc<[Certificate]>) -> Self {
+        Self {
+            certificates
+        }
+    }
+}
 
 /// Read a directory into a [RootCertStore]
 pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certificate>> {

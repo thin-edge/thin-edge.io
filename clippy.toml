@@ -1,0 +1,2 @@
+disallowed-types = ["reqwest::ClientBuilder"]
+disallowed-methods = ["reqwest::Client::builder"]

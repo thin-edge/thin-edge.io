@@ -85,7 +85,8 @@ async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         tedge_config.c8y.bridge.topic_prefix.clone(),
     );
     let identity = tedge_config.http.client.auth.identity()?;
-    let mut downloader_actor = DownloaderActor::new(identity).builder();
+    let root_cert_client = tedge_config.root_cert_client();
+    let mut downloader_actor = DownloaderActor::new(identity, root_cert_client).builder();
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
     //Instantiate health monitor actor

@@ -52,6 +52,7 @@ use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::certificates::RootCertClient;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
@@ -78,6 +79,7 @@ pub(crate) struct AgentConfig {
     pub tedge_http_host: Arc<str>,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
+    pub root_cert_client: RootCertClient,
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
@@ -149,6 +151,7 @@ impl AgentConfig {
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
+        let root_cert_client = tedge_config.root_cert_client();
 
         let is_sudo_enabled = tedge_config.sudo.enable;
 
@@ -181,6 +184,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             tedge_http_host,
             identity,
+            root_cert_client,
             fts_url,
             is_sudo_enabled,
             service: tedge_config.service.clone(),
@@ -278,7 +282,7 @@ impl Agent {
 
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
         let mut downloader_actor_builder =
-            DownloaderActor::new(self.config.identity.clone()).builder();
+            DownloaderActor::new(self.config.identity.clone(), self.config.root_cert_client.clone()).builder();
         let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
 
         // Instantiate config manager actor if config_snapshot or both operations are enabled

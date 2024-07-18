@@ -10,6 +10,7 @@ use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
 use reqwest::header;
+use reqwest::Client;
 use reqwest::Identity;
 use serde::Deserialize;
 use serde::Serialize;
@@ -26,6 +27,7 @@ use std::time::Duration;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
+use tedge_utils::certificates::RootCertClient;
 
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;
@@ -106,18 +108,28 @@ pub struct Downloader {
     target_filename: PathBuf,
     target_permission: PermissionEntry,
     backoff: ExponentialBackoff,
-    identity: Option<Identity>,
+    client: Client,
 }
 
 impl Downloader {
     /// Creates a new downloader which downloads to a target directory and uses
     /// default permissions.
-    pub fn new(target_path: PathBuf, identity: Option<Identity>) -> Self {
+    pub fn new(
+        target_path: PathBuf,
+        identity: Option<Identity>,
+        root_cert_client: RootCertClient,
+    ) -> Self {
+        let mut client_builder = root_cert_client.builder();
+        if let Some(identity) = identity {
+            client_builder = client_builder.identity(identity);
+        }
+        // TODO don't unwrap
+        let client = client_builder.build().unwrap();
         Self {
             target_filename: target_path,
             target_permission: PermissionEntry::default(),
             backoff: default_backoff(),
-            identity,
+            client,
         }
     }
 
@@ -127,12 +139,19 @@ impl Downloader {
         target_path: PathBuf,
         target_permission: PermissionEntry,
         identity: Option<Identity>,
+        root_cert_client: RootCertClient,
     ) -> Self {
+        let mut client_builder = root_cert_client.builder();
+        if let Some(identity) = identity {
+            client_builder = client_builder.identity(identity);
+        }
+        // TODO no unwrap
+        let client = client_builder.build().unwrap();
         Self {
             target_filename: target_path,
             target_permission,
             backoff: default_backoff(),
-            identity,
+            client,
         }
     }
 
@@ -389,11 +408,7 @@ impl Downloader {
         let backoff = self.backoff.clone();
 
         let operation = || async {
-            let mut client = reqwest::Client::builder();
-            if let Some(identity) = &self.identity {
-                client = client.identity(identity.clone());
-            }
-            let mut request = client.build()?.get(url.url());
+            let mut request = self.client.get(url.url());
             if let Some(Auth::Bearer(token)) = &url.auth {
                 request = request.bearer_auth(token)
             }

@@ -22,6 +22,7 @@ use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
+use tedge_utils::certificates::RootCertClient;
 
 mod actor;
 pub mod credentials;
@@ -32,13 +33,14 @@ pub mod messages;
 mod tests;
 
 /// Configuration of C8Y REST API
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct C8YHttpConfig {
     pub c8y_http_host: String,
     pub c8y_mqtt_host: String,
     pub device_id: String,
     pub tmp_dir: PathBuf,
     identity: Option<Identity>,
+    root_cert_client: RootCertClient,
     retry_interval: Duration,
 }
 
@@ -51,6 +53,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
         let identity = tedge_config.http.client.auth.identity()?;
+        let root_cert_client = tedge_config.root_cert_client();
         let retry_interval = Duration::from_secs(5);
 
         Ok(Self {
@@ -59,6 +62,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
             device_id,
             tmp_dir,
             identity,
+            root_cert_client,
             retry_interval,
         })
     }

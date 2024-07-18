@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use tedge_utils::certificates::RootCertClient;
 use csv::ReaderBuilder;
 use download::Downloader;
 use regex::Regex;
@@ -72,6 +73,7 @@ pub trait Plugin {
                             command_log,
                             download_path,
                             self.identity(),
+                            self.root_cert_client().clone(),
                         )
                         .await?
                     }
@@ -85,6 +87,7 @@ pub trait Plugin {
     }
 
     fn identity(&self) -> Option<&Identity>;
+    fn root_cert_client(&self) -> &RootCertClient;
 
     async fn apply_all(
         &self,
@@ -115,6 +118,7 @@ pub trait Plugin {
                     command_log.as_deref_mut(),
                     download_path,
                     self.identity(),
+                    self.root_cert_client().clone(),
                 )
                 .await
                 {
@@ -168,6 +172,7 @@ pub trait Plugin {
         mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
+        root_cert_client: RootCertClient,
     ) -> Result<(), SoftwareError> {
         let downloader = Self::download_from_url(
             module,
@@ -175,6 +180,7 @@ pub trait Plugin {
             command_log.as_deref_mut(),
             download_path,
             identity,
+            root_cert_client,
         )
         .await?;
         let result = self.install(module, command_log.as_deref_mut()).await;
@@ -189,9 +195,10 @@ pub trait Plugin {
         mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
+        root_cert_client: RootCertClient,
     ) -> Result<Downloader, SoftwareError> {
         let sm_path = sm_path(&module.name, &module.version, download_path);
-        let downloader = Downloader::new(sm_path, identity.map(|id| id.to_owned()));
+        let downloader = Downloader::new(sm_path, identity.map(|id| id.to_owned()), root_cert_client);
 
         if let Some(ref mut logger) = command_log {
             logger
@@ -266,6 +273,7 @@ pub struct ExternalPluginCommand {
     exclude: Option<String>,
     include: Option<String>,
     identity: Option<Identity>,
+    root_cert_client: RootCertClient,
 }
 
 impl ExternalPluginCommand {
@@ -277,6 +285,7 @@ impl ExternalPluginCommand {
         exclude: Option<String>,
         include: Option<String>,
         identity: Option<Identity>,
+        root_cert_client: RootCertClient,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
@@ -286,6 +295,7 @@ impl ExternalPluginCommand {
             exclude,
             include,
             identity,
+            root_cert_client,
         }
     }
 
@@ -570,6 +580,10 @@ impl Plugin for ExternalPluginCommand {
 
     fn identity(&self) -> Option<&Identity> {
         self.identity.as_ref()
+    }
+
+    fn root_cert_client(&self) -> &RootCertClient {
+        &self.root_cert_client
     }
 }
 
