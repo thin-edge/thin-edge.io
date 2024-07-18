@@ -74,6 +74,21 @@ else
     exit 1
 fi
 
+# install go-c8y-cli (required for the remoteaccess tests)
+if ! command c8y >/dev/null 2>&1; then
+    if command -V apt-get > /dev/null 2>&1; then
+        echo "installing go-c8y-cli using apt"
+        curl https://reubenmiller.github.io/go-c8y-cli-repo/debian/PUBLIC.KEY | gpg --dearmor | sudo tee /usr/share/keyrings/go-c8y-cli-archive-keyring.gpg >/dev/null
+        sudo sh -c "echo 'deb [signed-by=/usr/share/keyrings/go-c8y-cli-archive-keyring.gpg] http://reubenmiller.github.io/go-c8y-cli-repo/debian stable main' >> /etc/apt/sources.list.d/go-c8y-cli.list"
+        sudo apt-get update
+        sudo apt-get install go-c8y-cli
+    elif command -V brew >/dev/null 2>&1; then
+        echo "installing go-c8y-cli using homebrew"
+        brew tap reubenmiller/go-c8y-cli
+        brew install go-c8y-cli
+    fi
+fi
+
 #
 # Setup dotenv file
 #
