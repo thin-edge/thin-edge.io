@@ -302,7 +302,8 @@ impl RunningOperation {
 
                 let mut mqtt_publisher = context.mqtt_publisher.clone();
 
-                // at this point all local operations that are not regular c8y operations should be handled above
+                // unwrap is safe: at this point all local operations that are not regular c8y
+                // operations should be handled above
                 let c8y_operation = to_c8y_operation(&operation).unwrap();
 
                 match to_response(
