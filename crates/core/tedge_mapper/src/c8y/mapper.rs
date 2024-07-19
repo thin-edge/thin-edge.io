@@ -190,7 +190,7 @@ impl TEdgeComponent for CumulocityMapper {
             mqtt_config.clone(),
             tedge_config.c8y.bridge.topic_prefix.clone(),
         );
-        let mut http_actor = HttpActor::new().builder();
+        let mut http_actor = HttpActor::new(&tedge_config).builder();
         let c8y_http_config = (&tedge_config).try_into()?;
         let mut c8y_http_proxy_actor =
             C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);

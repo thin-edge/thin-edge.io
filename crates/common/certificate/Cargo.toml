@@ -11,10 +11,12 @@ repository = { workspace = true }
 [dependencies]
 rcgen = { workspace = true }
 rustls = { workspace = true }
+rustls-native-certs = { workspace = true }
 rustls-pemfile = { workspace = true }
 sha-1 = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
+tracing = { workspace = true }
 x509-parser = { workspace = true }
 zeroize = { workspace = true }
 

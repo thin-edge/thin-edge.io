@@ -25,9 +25,11 @@ hyper = { workspace = true, default_features = false, features = [
     "tcp",
 ] }
 hyper-rustls = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
+tedge_config = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default_features = false, features = [
     "macros",

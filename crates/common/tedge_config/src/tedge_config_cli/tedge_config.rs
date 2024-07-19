@@ -14,6 +14,7 @@ use anyhow::anyhow;
 use anyhow::ensure;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::client_config_for_ca_certificates;
 use certificate::parse_root_certificate::create_tls_config;
 use certificate::CertificateError;
 use certificate::PemCertificate;
@@ -999,6 +1000,16 @@ impl TEdgeConfigReader {
         });
 
         RootCertClient::from(roots.clone())
+    }
+
+    pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {
+        // TODO do we want to unwrap here?
+        client_config_for_ca_certificates([
+            &self.c8y.root_cert_path,
+            &self.az.root_cert_path,
+            &self.aws.root_cert_path,
+        ])
+        .unwrap()
     }
 }
 
