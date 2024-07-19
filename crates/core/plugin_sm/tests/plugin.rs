@@ -13,6 +13,7 @@ mod tests {
     use tedge_api::SoftwareModule;
     use tedge_config::SudoCommandBuilder;
     use tedge_config::TEdgeConfigLocation;
+    use tedge_utils::certificates::RootCertClient;
     use test_case::test_case;
 
     #[test_case("abc", Some("1.0")  ; "with version")]
@@ -70,6 +71,7 @@ mod tests {
             None,
             None,
             config.http.client.auth.identity()?,
+            config.root_cert_client(),
         );
         assert_eq!(plugin.name, "test");
         assert_eq!(plugin.path, dummy_plugin_path);
@@ -90,6 +92,7 @@ mod tests {
             None,
             None,
             None,
+            RootCertClient::from([]),
         );
 
         let module = SoftwareModule {
@@ -122,6 +125,7 @@ mod tests {
             None,
             None,
             None,
+            RootCertClient::from([]),
         );
 
         // Create test module with name `test2`.
@@ -160,6 +164,7 @@ mod tests {
             None,
             None,
             None,
+            RootCertClient::from([]),
         );
 
         // Create software module without an explicit type.

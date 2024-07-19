@@ -534,7 +534,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let mut downloader = Downloader::new(target_path, None);
+        let mut downloader = Downloader::new(target_path, None, RootCertClient::from([]));
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -564,7 +564,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path.clone(), None);
+        let downloader = Downloader::new(target_path.clone(), None, RootCertClient::from([]));
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_path).unwrap();
@@ -594,7 +594,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None);
+        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(err, DownloadError::InsufficientSpace));
     }
@@ -617,7 +617,7 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         // empty filename
-        let downloader = Downloader::new("".into(), None);
+        let downloader = Downloader::new("".into(), None, RootCertClient::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -626,7 +626,7 @@ mod tests {
 
         // invalid unicode filename
         let path = unsafe { String::from_utf8_unchecked(b"\xff".to_vec()) };
-        let downloader = Downloader::new(path.into(), None);
+        let downloader = Downloader::new(path.into(), None, RootCertClient::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -634,7 +634,7 @@ mod tests {
         ));
 
         // relative path filename
-        let downloader = Downloader::new("myfile.txt".into(), None);
+        let downloader = Downloader::new("myfile.txt".into(), None, RootCertClient::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -661,7 +661,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_file_path.clone(), None);
+        let downloader = Downloader::new(target_file_path.clone(), None, RootCertClient::from([]));
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_file_path).unwrap();
@@ -688,7 +688,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None);
+        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
 
         downloader.download(&url).await.unwrap();
 
@@ -715,7 +715,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None);
+        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
         downloader.download(&url).await.unwrap();
 
         let log_content = std::fs::read(downloader.filename()).unwrap();
@@ -736,7 +736,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None);
+        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
         downloader.download(&url).await.unwrap();
 
         assert_eq!("".as_bytes(), std::fs::read(downloader.filename()).unwrap());
@@ -826,7 +826,7 @@ mod tests {
         let tmpdir = TempDir::new().unwrap();
         let target_path = tmpdir.path().join("partial_download");
 
-        let downloader = Downloader::new(target_path, None);
+        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
         let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
 
         downloader.download(&url).await.unwrap();
@@ -934,7 +934,7 @@ mod tests {
         };
 
         let target_path = target_dir_path.path().join("test_download");
-        let mut downloader = Downloader::new(target_path, None);
+        let mut downloader = Downloader::new(target_path, None, RootCertClient::from([]));
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()

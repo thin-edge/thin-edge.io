@@ -29,8 +29,10 @@
 //!         "https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/README.md",
 //!     );
 //!
+//!     let root_cert_client = unimplemented!("Get this from tedge config");
+//!
 //!     // Create downloader instance with desired file path and target directory.
-//!     let downloader = Downloader::new("/tmp/test_download".into(), None);
+//!     let downloader = Downloader::new("/tmp/test_download".into(), None, root_cert_client);
 //!
 //!     // Call `download` method to get data from url.
 //!     downloader.download(&url_data).await?;

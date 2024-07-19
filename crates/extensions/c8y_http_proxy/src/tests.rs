@@ -27,6 +27,7 @@ use tedge_http_ext::HttpActor;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
+use tedge_utils::certificates::RootCertClient;
 use time::macros::datetime;
 
 #[tokio::test]
@@ -359,6 +360,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         identity: None,
+        root_cert_client: RootCertClient::from([]),
         retry_interval: Duration::from_millis(100),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
@@ -424,6 +426,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         identity: None,
+        root_cert_client: RootCertClient::from([]),
         retry_interval: Duration::from_millis(100),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
@@ -668,6 +671,7 @@ async fn spawn_c8y_http_proxy(
         device_id,
         tmp_dir,
         identity: None,
+        root_cert_client: RootCertClient::from([]),
         retry_interval: Duration::from_millis(10),
     };
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use download::DownloadInfo;
 use download::Downloader;
+use tedge_utils::certificates::RootCertClient;
 
 /// This example shows how to use the `downloader`.
 #[tokio::main]
@@ -12,7 +13,7 @@ async fn main() -> Result<()> {
 
     // Create downloader instance with desired file path and target directory.
     #[allow(deprecated)]
-    let downloader = Downloader::new("/tmp/test_download".into(), None);
+    let downloader = Downloader::new("/tmp/test_download".into(), None, RootCertClient::from([]));
 
     // Call `download` method to get data from url.
     downloader.download(&url_data).await?;

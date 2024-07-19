@@ -28,6 +28,14 @@ impl From<Arc<[Certificate]>> for RootCertClient {
     }
 }
 
+impl From<[Certificate; 0]> for RootCertClient {
+    fn from(certificates: [Certificate; 0]) -> Self {
+        Self {
+            certificates: Arc::new(certificates),
+        }
+    }
+}
+
 /// Read a directory into a [RootCertStore]
 pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certificate>> {
     let mut certs = Vec::new();

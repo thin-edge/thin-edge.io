@@ -316,7 +316,11 @@ mod tests {
         ttd.file("file_upload.txt")
             .with_raw_content("Hello, world!");
 
-        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"), None);
+        let mut uploader = Uploader::new(
+            ttd.utf8_path().join("file_upload.txt"),
+            None,
+            RootCertClient::from([]),
+        );
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -344,7 +348,11 @@ mod tests {
         ttd.file("file_upload.txt")
             .with_raw_content("Hello, world!");
 
-        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"), None);
+        let mut uploader = Uploader::new(
+            ttd.utf8_path().join("file_upload.txt"),
+            None,
+            RootCertClient::from([]),
+        );
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -374,7 +382,11 @@ mod tests {
         ttd.file("file_upload.txt")
             .with_raw_content("Hello, world!");
 
-        let mut uploader = Uploader::new(ttd.utf8_path().join("file_upload.txt"), None);
+        let mut uploader = Uploader::new(
+            ttd.utf8_path().join("file_upload.txt"),
+            None,
+            RootCertClient::from([]),
+        );
 
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
@@ -400,13 +412,13 @@ mod tests {
         // Not existing filename
         let source_path = Utf8Path::new("not_exist.txt").to_path_buf();
 
-        let uploader = Uploader::new(source_path, None);
+        let uploader = Uploader::new(source_path, None, RootCertClient::from([]));
         assert!(uploader.upload(&url).await.is_err());
     }
 
     #[test]
     fn default_uploader_uses_customised_backoff_parameters() {
-        let uploader = Uploader::new(Utf8PathBuf::default(), None);
+        let uploader = Uploader::new(Utf8PathBuf::default(), None, RootCertClient::from([]));
 
         assert_eq!(uploader.backoff.initial_interval, Duration::from_secs(15));
         assert_eq!(
@@ -486,7 +498,7 @@ mod tests {
 
         write_to_file_with_size(&mut source_file, 1024 * 1024).await;
 
-        let mut uploader = Uploader::new(source_path.to_owned(), None);
+        let mut uploader = Uploader::new(source_path.to_owned(), None, RootCertClient::from([]));
         // Adjust the backoff to be super fast for testing purposes
         uploader.set_backoff(
             ExponentialBackoffBuilder::new()
