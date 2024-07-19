@@ -11,6 +11,11 @@ from typing import Any, Union, List, Dict
 import time
 from datetime import datetime
 import re
+import base64
+import os
+import shutil
+import subprocess
+from pathlib import Path
 
 import dateparser
 from paho.mqtt import matcher
@@ -732,6 +737,146 @@ class ThinEdgeIO(DeviceLibrary):
             return value.replace("\\", "\\\\")
 
         return value
+
+    @keyword("Add Remote Access Passthrough Configuration")
+    def add_remote_access_passthrough_configuration(self, device: str = "", port: int = 22, **kwargs) -> str:
+        """Add the Cumulocity IoT Remote Access Passthrough configuration
+        to a device
+
+        Examples:
+        | ${stdout} = | Add Remote Access Passthrough Configuration |
+        | ${stdout} = | Add Remote Access Passthrough Configuration | device=mycustomdevice |
+        | ${stdout} = | Add Remote Access Passthrough Configuration | device=mycustomdevice | port=22222 |
+        """
+        if not device:
+            device = self.current.get_id()
+
+        assert shutil.which(
+            "c8y"
+        ), "could not find c8y binary. Check that go-c8y-cli is installed"
+        cmd = [
+            "c8y",
+            "remoteaccess",
+            "configurations",
+            "create-passthrough",
+            "--device",
+            device,
+            f"--port={port}",
+        ]
+
+        env = {
+            **os.environ.copy(),
+            "CI": "true",
+        }
+        proc = subprocess.Popen(
+            cmd,
+            text=True,
+            encoding="utf8",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        timeout = kwargs.pop("timeout", 30)
+        proc.wait(timeout)
+        assert (
+            proc.returncode == 0
+        ), f"Failed to add remote access PASSTHROUGH configuration.\n{proc.stdout.read()}"
+        return proc.stdout.read()
+
+    @keyword("Execute Remote Access Command")
+    def execute_remote_access_command(
+        self,
+        command,
+        device: str = "",
+        key_file: str = "",
+        user: str = "",
+        exp_exit_code: int = 0,
+        **kwargs,
+    ) -> str:
+        """Execute a command using the Cumulocity Remote Access feature (using ssh)
+
+        You have to supply it a local ssh key (local to the machine running the tests).
+
+        Examples:
+        | ${stdout} = | Execute Remote Access Command | command=ls -l | key_file=/tmp/key |
+        | ${stdout} = | Add Remote Access Passthrough Configuration | device=mycustomdevice |
+        | ${stdout} = | Add Remote Access Passthrough Configuration | device=mycustomdevice | port=22222 |
+        """
+        if not device:
+            device = self.current.get_id()
+
+        assert shutil.which(
+            "c8y"
+        ), "could not find c8y binary. Check that go-c8y-cli is installed"
+        cmd = [
+            "c8y",
+            "remoteaccess",
+            "connect",
+            "run",
+            "-n",
+            "--device",
+            device,
+            "--",
+            "sh",
+            "-c",
+            rf"ssh -F /dev/null -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i '{key_file}' -p %p {user}@%h -- {command}",
+        ]
+
+        env = {
+            **os.environ.copy(),
+            "CI": "true",
+        }
+        proc = subprocess.Popen(
+            cmd,
+            text=True,
+            encoding="utf8",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+
+        timeout = kwargs.pop("timeout", 30)
+        proc.wait(timeout)
+
+        stdout = proc.stdout.read()
+        if exp_exit_code is not None:
+            assert (
+                proc.returncode == exp_exit_code
+            ), f"Failed to connect via remote access.\n{stdout}"
+
+        log.info(f"Command:\n%s", stdout)
+        return stdout
+
+    @keyword("Configure SSH")
+    def configure_ssh(self, user: str = "root", device: str = None) -> str:
+        """Configure SSH on a device.
+
+        The keyword generates a new ssh key pair on the host running the test, then adds
+        the public key to the authorized_keys on the device under test, then returns the path
+        to the private key (so it can be used in subsequent calls)
+        """
+        if not device:
+            device = self.current.get_id()
+
+        key = Path("/tmp") / device
+        pub_key = Path("/tmp") / f"{device}.pub"
+        key.unlink(missing_ok=True)
+        pub_key.unlink(missing_ok=True)
+
+        # create ssh key
+        subprocess.check_call(
+            ["ssh-keygen", "-b", "2048", "-t", "rsa", "-f", key, "-q", "-N", ""]
+        )
+
+        # add public key to authorized_keys on the device
+        ssh_dir = "/root/.ssh" if user == "root" else f"/home/{user}/.ssh"
+        pub_key_encoded = base64.b64encode(pub_key.read_bytes()).decode("utf8")
+        self.execute_command(
+            f"mkdir -p {ssh_dir} && echo {pub_key_encoded} | base64 -d >> '{ssh_dir}/authorized_keys'"
+        )
+        return str(key)
 
 
 def to_date(value: relativetime_) -> datetime:

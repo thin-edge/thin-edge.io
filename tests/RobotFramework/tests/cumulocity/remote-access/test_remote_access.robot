@@ -9,12 +9,17 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 
-Install c8y-remote-access-plugin
-    Skip    remote-access is not yet part of the official release. Enable when it is
+Install/uninstall c8y-remote-access-plugin
     Device Should Have Installed Software    c8y-remote-access-plugin
     File Should Exist    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
     Execute Command    dpkg -r c8y-remote-access-plugin
     File Should Not Exist    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
+
+Execute ssh command using PASSTHROUGH
+    ${KEY_FILE}=    Configure SSH
+    Add Remote Access Passthrough Configuration
+    ${stdout}=    Execute Remote Access Command    command=tedge --version    exp_exit_code=0    user=root    key_file=${KEY_FILE}
+    Should Match Regexp    ${stdout}    tedge .+
 
 *** Keywords ***
 
@@ -22,7 +27,5 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
-
-    Execute Command    find /setup -type f -name "c8y-remote-access-plugin_*.deb" -exec dpkg -i {} \\;
-    Restart Service    tedge-mapper-c8y
-    Execute Command    systemctl start sshd
+    Enable Service    ssh
+    Start Service    ssh
