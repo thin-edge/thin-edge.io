@@ -66,15 +66,15 @@ Send device profile operation locally
     ...      "name": "dev-profile",
     ...      "version": "v2",
     ...      "operations": [
-    ...        {
-    ...          "operation": "firmware_update",
-    ...          "skip": false,
-    ...          "payload": {
-    ...            "name": "core-image-tedge-rauc",
-    ...            "remoteUrl": "https://abc.com/some/firmware/url",
-    ...            "version": "20240430.1139"
-    ...          }
-    ...        },
+    # ...        {
+    # ...          "operation": "firmware_update",
+    # ...          "skip": false,
+    # ...          "payload": {
+    # ...            "name": "core-image-tedge-rauc",
+    # ...            "remoteUrl": "https://abc.com/some/firmware/url",
+    # ...            "version": "20240430.1139"
+    # ...          }
+    # ...        },
     ...        {
     ...          "operation": "software_update",
     ...          "skip": false,
@@ -107,11 +107,11 @@ Send device profile operation locally
     ...            "remoteUrl": ""
     ...          }
     ...        },
-    # ...        {
-    # ...          "operation": "restart",
-    # ...          "skip": false,
-    # ...          "payload": {}
-    # ...        },
+    ...        {
+    ...          "operation": "restart",
+    ...          "skip": false,
+    ...          "payload": {}
+    ...        },
     ...        {
     ...          "operation": "software_update",
     ...          "skip": false,

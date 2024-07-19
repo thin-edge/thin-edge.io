@@ -588,8 +588,7 @@ impl TryFrom<Option<Value>> for StateExcerpt {
                 // A mapping that change nothing
                 Ok(StateExcerpt::ExcerptMap(HashMap::new()))
             }
-            Some(value) if value.is_object() => Ok(value.into()),
-            Some(value) if value.is_string() => Ok(value.into()),
+            Some(value) if value.is_object() || value.is_string() => Ok(value.into()),
             Some(value) => {
                 let kind = match &value {
                     Value::Bool(_) => "bool",
