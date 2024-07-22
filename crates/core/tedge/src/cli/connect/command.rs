@@ -258,6 +258,7 @@ pub fn bridge_config(
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 smartrest_templates: config.c8y.smartrest.templates.clone(),
+                smartrest_one_templates: config.c8y.smartrest1.templates.clone(),
                 include_local_clean_session: config.c8y.bridge.include.local_cleansession.clone(),
                 bridge_location,
             };

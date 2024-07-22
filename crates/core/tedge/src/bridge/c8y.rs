@@ -19,6 +19,7 @@ pub struct BridgeConfigC8yParams {
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
     pub smartrest_templates: TemplatesSet,
+    pub smartrest_one_templates: TemplatesSet,
     pub include_local_clean_session: AutoFlag,
     pub bridge_location: BridgeLocation,
 }
@@ -34,6 +35,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_keyfile,
             smartrest_templates,
             include_local_clean_session,
+            smartrest_one_templates,
             bridge_location,
         } = params;
 
@@ -49,6 +51,12 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             r#"s/ds in 2 c8y/ """#.into(),
             // Debug
             r#"s/e in 0 c8y/ """#.into(),
+            // SmartRest1 (to support customers with existing solutions based on SmartRest 1)
+            // r#"s/ul/# out 2 c8y/ """#.into(),
+            // r#"t/ul/# out 2 c8y/ """#.into(),
+            // r#"q/ul/# out 2 c8y/ """#.into(),
+            // r#"c/ul/# out 2 c8y/ """#.into(),
+            // r#"s/dl/# in 2 c8y/ """#.into(),
             // SmartRest2
             r#"s/uc/# out 2 c8y/ """#.into(),
             r#"t/uc/# out 2 c8y/ """#.into(),
@@ -82,6 +90,35 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             })
             .collect::<Vec<String>>();
         topics.extend(templates_set);
+
+        // SmartRest1 (to support customers with existing solutions based on SmartRest 1)
+        // Only add the topics if at least 1 template is defined
+        if !smartrest_one_templates.0.is_empty() {
+            topics.extend([
+                r#"s/ul/# out 2 c8y/ """#.into(),
+                r#"t/ul/# out 2 c8y/ """#.into(),
+                r#"q/ul/# out 2 c8y/ """#.into(),
+                r#"c/ul/# out 2 c8y/ """#.into(),
+                r#"s/dl/# in 2 c8y/ """#.into(),
+            ]);
+
+            // TODO: Add support for smartrest one topics
+            let templates_set = smartrest_one_templates
+                .0
+                .iter()
+                .flat_map(|s| {
+                    // Smartrest templates should be deserialized as:
+                    // c8y/s/ul/template-1 (in from localhost), s/ul/template-1
+                    // c8y/s/dl/template-1 (out to localhost), s/dl/template-1
+                    [
+                        format!(r#"s/ul/{s} out 2 c8y/ """#),
+                        format!(r#"s/dl/{s} in 2 c8y/ """#),
+                    ]
+                    .into_iter()
+                })
+                .collect::<Vec<String>>();
+            topics.extend(templates_set);
+        }
 
         let include_local_clean_session = match include_local_clean_session {
             AutoFlag::True => true,
@@ -163,6 +200,7 @@ mod tests {
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
+            smartrest_one_templates: TemplatesSet::try_from(vec!["legacy1", "legacy2"])?,
             include_local_clean_session: AutoFlag::False,
             bridge_location: BridgeLocation::Mosquitto,
         };
@@ -217,6 +255,17 @@ mod tests {
                 r#"s/dc/abc in 2 c8y/ """#.into(),
                 r#"s/uc/def out 2 c8y/ """#.into(),
                 r#"s/dc/def in 2 c8y/ """#.into(),
+                // SmartREST 1.0 topics
+                r#"s/ul/# out 2 c8y/ """#.into(),
+                r#"t/ul/# out 2 c8y/ """#.into(),
+                r#"q/ul/# out 2 c8y/ """#.into(),
+                r#"c/ul/# out 2 c8y/ """#.into(),
+                r#"s/dl/# in 2 c8y/ """#.into(),
+                // SmartREST 1.0 custom templates
+                r#"s/ul/legacy1 out 2 c8y/ """#.into(),
+                r#"s/dl/legacy1 in 2 c8y/ """#.into(),
+                r#"s/ul/legacy2 out 2 c8y/ """#.into(),
+                r#"s/dl/legacy2 in 2 c8y/ """#.into(),
             ],
             try_private: false,
             start_type: "automatic".into(),

@@ -471,6 +471,11 @@ define_tedge_config! {
             templates: TemplatesSet,
         },
 
+        smartrest1: {
+            /// Set of SmartREST 1.0 template IDs the device should subscribe to
+            #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
+            templates: TemplatesSet,
+        },
 
         /// HTTP Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "http.your-tenant.cumulocity.com:1234")]
