@@ -7,7 +7,7 @@ description: Device profile API proposal
 
 # Device profile
 
-A device profile defines any desired combination of a firmware, software and associated configurations to be installed on a device.
+A device profile defines any desired combination of firmware, software and associated configurations to be installed on a device.
 Device profiles are used to get a fleet of devices into a consistent and homogeneous state by having the same set of firmware,
 software and configurations installed on all of them.
 
@@ -326,4 +326,127 @@ The user can also manually skip any operation using the `skip` field.
 
 # Cumulocity operation mapping
 
-TBD
+Cumulocity device profiles represent a combination of firmware, one or more software packages and configuration files,
+represented by the `c8y_DeviceProfile` operation type.
+Here is a sample `c8y_DeviceProfile` operation payload on the `c8y/devicecontrol/notifications` topic:
+
+```json
+{
+  "delivery": {
+    "log": [],
+    "time": "2024-07-22T10:26:31.457Z",
+    "status": "PENDING"
+  },
+  "agentId": "98523229",
+  "creationTime": "2024-07-22T10:26:31.441Z",
+  "deviceId": "98523229",
+  "id": "523244",
+  "status": "PENDING",
+  "profileName": "prod-profile-v2",
+  "description": "Assign device profile prod-profile-v2 to device TST_char_humane_exception",
+  "profileId": "50523216",
+  "c8y_DeviceProfile": {
+    "software": [
+      {
+        "name": "c8y-command-plugin",
+        "action": "install",
+        "version": "latest",
+        "url": " "
+      },
+      {
+        "name": "collectd",
+        "action": "install",
+        "version": "latest",
+        "url": " "
+      }
+    ],
+    "configuration": [
+      {
+        "name": "collectd-v2",
+        "type": "collectd.conf",
+        "url": "https://t2373.basic.stage.c8y.io/inventory/binaries/88395"
+      }
+    ],
+    "firmware": {
+      "name": "core-image-tedge-rauc",
+      "version": "20240430.1139",
+      "url": "https://t2373.basic.stage.c8y.io/inventory/binaries/43226"
+    }
+  },
+  "externalSource": {
+    "externalId": "TST_char_humane_exception",
+    "type": "c8y_Serial"
+  }
+}
+```
+
+There can only be one firmware entry in the device profile along with multiple software and configuration items.
+Artifacts of each type are always grouped together and hence do not allow interleaving of different artifact types.
+The payload does not enforce any clear order between artifact types either.
+
+The mapping from this Cumulocity format to tedge JSON format is fairly straight-forward.
+Each artifact type is mapped to the corresponding operation type in thin-edge
+(e.g: `software` -> `software_update`, `configuration` -> `config_update` and `firmware` -> `firmware_update`).
+
+Since the thin-edge payload is an ordered list of operations offering flexibility in defining them in any order,
+the C8y payload is mapped to the equivalent tedge JSON format by applying an implicit order between the artifact types,
+starting with the `firmware_update` operation followed by `software_update` and then `config_update`.
+Since both `software` and `configuration` values are arrays with a defined order, it is maintained during the mapping as well.
+
+The above payload, meant for the main device, is mapped to thin-edge JSON format as follows:
+
+```sh te2mqtt formats=v1
+tedge mqtt pub -r 'te/device/main///cmd/device_profile/523244' '{
+  "status": "init",
+  "name": "prod-profile",
+  "operations": [
+    {
+      "operation": "firmware_update",
+      "skip": false,
+      "payload": {
+        "name": "core-image-tedge-rauc",
+        "version": "20240430.1139",
+        "remoteUrl": "https://t2373.basic.stage.c8y.io/inventory/binaries/43226"
+      }
+    },
+    {
+      "operation": "software_update",
+      "skip": false,
+      "payload": {
+        "updateList": [
+          {
+            "type": "apt",
+            "modules": [
+              {
+                "name": "c8y-command-plugin",
+                "version": "latest",
+                "action": "install"
+              },
+              {
+                "name": "collectd",
+                "version": "latest",
+                "type": "apt",
+                "action": "install"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "operation": "config_update",
+      "skip": false,
+      "payload": {
+        "type": "collectd.conf",
+        "remoteUrl":"https://t2373.basic.stage.c8y.io/inventory/binaries/88395"
+      }
+    }
+  ]
+}'
+```
+
+Since Cumulocity device profiles do not contain any version information, it is omitted in the tedge JSON payload as well.
+
+If the users want to change this implicit order of operation execution,
+then they may enforce a different order in the `device_profile` workflow definition,
+by overriding any state (e.g: `scheduled` state) before the workflow moves to the `executing` state.
