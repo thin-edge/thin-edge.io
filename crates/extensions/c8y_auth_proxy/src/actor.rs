@@ -41,10 +41,12 @@ impl C8yAuthProxyBuilder {
         config: &TEdgeConfig,
         jwt: &mut ServerActorBuilder<C8YJwtRetriever, Sequential>,
     ) -> anyhow::Result<Self> {
+        let reqwest_client = config.root_cert_client().builder().build().unwrap();
         let app_data = AppData {
             is_https: true,
             host: config.c8y.http.or_config_not_set()?.to_string(),
             token_manager: TokenManager::new(JwtRetriever::new(jwt)).shared(),
+            client: reqwest_client,
         };
         let bind = &config.c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);

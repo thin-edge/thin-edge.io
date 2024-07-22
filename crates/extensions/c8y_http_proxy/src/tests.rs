@@ -22,11 +22,13 @@ use tedge_actors::Sender;
 use tedge_actors::Server;
 use tedge_actors::ServerActor;
 use tedge_actors::ServerMessageBoxBuilder;
+use tedge_config::TEdgeConfigLocation;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
+use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::certificates::RootCertClient;
 use time::macros::datetime;
 
@@ -352,7 +354,10 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
     let target_url = server.url();
     let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
 
-    let mut http_actor = HttpActor::new().builder();
+    let ttd = TempTedgeDir::new();
+    let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+    let tedge_config = config_loc.load().unwrap();
+    let mut http_actor = HttpActor::new(&tedge_config).builder();
 
     let config = C8YHttpConfig {
         c8y_http_host: target_url.clone(),
@@ -418,7 +423,10 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     let target_url = server.url();
     let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
 
-    let mut http_actor = HttpActor::new().builder();
+    let ttd = TempTedgeDir::new();
+    let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+    let tedge_config = config_loc.load().unwrap();
+    let mut http_actor = HttpActor::new(&tedge_config).builder();
 
     let config = C8YHttpConfig {
         c8y_http_host: target_url.clone(),

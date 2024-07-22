@@ -9,6 +9,8 @@ use miette::Context;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
 use rand::RngCore;
+use rustls::ClientConfig;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::net::ToSocketAddrs;
@@ -34,9 +36,10 @@ impl WebsocketSocketProxy {
         url: &Url,
         socket: SA,
         jwt: Jwt,
+        config: ClientConfig,
     ) -> miette::Result<Self> {
         let socket_future = TcpStream::connect(socket);
-        let websocket_future = Websocket::new(url, jwt.authorization_header());
+        let websocket_future = Websocket::new(url, jwt.authorization_header(), config);
 
         match join(socket_future, websocket_future).await {
             (Err(socket_error), _) => Err(SocketError(socket_error))?,
@@ -77,7 +80,7 @@ fn generate_sec_websocket_key() -> String {
 }
 
 impl Websocket {
-    async fn new(url: &Url, authorization: String) -> miette::Result<Self> {
+    async fn new(url: &Url, authorization: String, config: ClientConfig) -> miette::Result<Self> {
         let request = http::Request::builder()
             .header("Authorization", authorization)
             .header("Sec-WebSocket-Key", generate_sec_websocket_key())
@@ -90,12 +93,15 @@ impl Websocket {
             .into_diagnostic()
             .context("Instantiating Websocket connection")?;
 
-        let socket = async_tungstenite::tokio::connect_async(request)
-            .await
-            .into_diagnostic()
-            .with_context(|| format!("host {url}"))
-            .context("Connecting to Websocket")?
-            .0;
+        let socket = async_tungstenite::tokio::connect_async_with_tls_connector(
+            request,
+            Some(Arc::new(config).into()),
+        )
+        .await
+        .into_diagnostic()
+        .with_context(|| format!("host {url}"))
+        .context("Connecting to Websocket")?
+        .0;
 
         Ok(Websocket {
             socket: WsStream::new(socket),

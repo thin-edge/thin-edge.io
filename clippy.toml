@@ -1,2 +1,2 @@
 disallowed-types = ["reqwest::ClientBuilder"]
-disallowed-methods = ["reqwest::Client::builder"]
+disallowed-methods = ["reqwest::Client::builder", "reqwest::Client::new", "hyper::client::Client::new"]

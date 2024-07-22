@@ -242,6 +242,7 @@ mod tests {
             format!("http://localhost:{}/tedge/file-transfer/{path}", self.port)
         }
 
+        #[allow(clippy::disallowed_methods)]
         fn client(&self) -> reqwest::Client {
             reqwest::Client::new()
         }
@@ -304,6 +305,7 @@ mod tests {
                 .context("building anonymous client")
         }
 
+        #[allow(clippy::disallowed_types, clippy::disallowed_methods)]
         fn client_builder(&self) -> anyhow::Result<reqwest::ClientBuilder> {
             let reqwest_certificate = Certificate::from_der(
                 &self

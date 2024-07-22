@@ -278,6 +278,7 @@ pub struct ExternalPluginCommand {
 }
 
 impl ExternalPluginCommand {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<SoftwareType>,
         path: impl Into<PathBuf>,

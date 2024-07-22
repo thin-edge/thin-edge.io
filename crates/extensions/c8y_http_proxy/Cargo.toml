@@ -34,6 +34,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_http_ext = { workspace = true, features = ["test_helpers"] }
+tedge_test_utils = { workspace = true }
 time = { workspace = true }
 
 [lints]

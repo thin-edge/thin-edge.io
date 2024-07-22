@@ -704,6 +704,7 @@ dependencies = [
  "tedge_config",
  "tedge_config_macros",
  "tedge_http_ext",
+ "tedge_utils",
  "tokio",
  "tokio-tungstenite",
  "tracing",
@@ -756,6 +757,7 @@ dependencies = [
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",
+ "tedge_test_utils",
  "tedge_utils",
  "thiserror",
  "time",
@@ -4058,6 +4060,7 @@ dependencies = [
  "serde_json",
  "tedge_actors",
  "tedge_config",
+ "tedge_test_utils",
  "thiserror",
  "tokio",
 ]

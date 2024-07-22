@@ -107,6 +107,7 @@ fn common_name<'a>(cert: Option<&'a (&[u8], X509Certificate)>) -> Option<&'a str
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use crate::ssl_config;
