@@ -24,9 +24,13 @@ use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
+use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
+use error::OperationError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
@@ -39,15 +43,19 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
+use tracing::debug;
 use tracing::error;
 
 pub mod config_snapshot;
 pub mod config_update;
+mod error;
 pub mod firmware_update;
 pub mod log_upload;
 mod restart;
@@ -134,6 +142,22 @@ impl OperationHandler {
     /// message will be published to the broker by the running operation task, but this message also
     /// needs to be handled when an MQTT broker echoes it back to us, so that `OperationHandler` can
     /// free the data associated with the operation.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if a task that runs the operation has panicked. The task can panic if e.g. MQTT
+    /// send returns an error or the task encountered any other unexpected error that makes it
+    /// impossible to finish handling the operation (i.e. send MQTT clearing message and report
+    /// operation status to c8y).
+    ///
+    /// The panic in the operation task has to happen first, and then another message with the same
+    /// command id has to be handled for the call to `.handle()` to panic.
+
+    // but there's a problem: in practice, when a panic in a child task happens, .handle() will
+    // never get called for that operation again. Operation task itself sends the messages, so if
+    // they can't be sent over MQTT because of a panic, they won't be handled, won't be joined, so
+    // we will not see that an exception has occurred.
+    // FIXME(marcel): ensure panics are always propagated without the caller having to ask for them
     pub async fn handle(&mut self, entity: EntityTarget, message: MqttMessage) {
         let Ok((_, channel)) = self.context.mqtt_schema.entity_channel_of(&message.topic) else {
             return;
@@ -172,10 +196,10 @@ impl OperationHandler {
         };
 
         if let Some(terminated_operation) = terminated_operation {
-            let join_result = terminated_operation.handle.await;
-            if let Err(err) = join_result {
-                error!(%topic, ?err, "operation task could not be joined");
-            }
+            terminated_operation
+                .handle
+                .await
+                .expect("operation task should not panic");
         }
     }
 }
@@ -199,6 +223,10 @@ impl RunningOperation {
         let handle = tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
                 if message.cmd_id != cmd_id {
+                    debug!(
+                        msg_cmd_id = %message.cmd_id,
+                        %cmd_id, "operation-related message was routed incorrectly"
+                    );
                     continue;
                 }
 
@@ -210,79 +238,206 @@ impl RunningOperation {
                 } = message;
                 let external_id = entity.external_id.clone();
 
-                let command_topic = message.topic.clone();
-                let res = match operation {
-                    OperationType::Health | OperationType::Custom(_) => Ok((vec![], None)),
+                let command = match GenericCommandState::from_command_message(&message) {
+                    Ok(command) => command,
+                    Err(err) => {
+                        error!(%err, ?message, "could not parse command payload");
+                        return;
+                    }
+                };
+
+                let operation_result = match operation {
+                    OperationType::Health | OperationType::Custom(_) => {
+                        debug!(
+                            topic = message.topic.name,
+                            ?operation,
+                            "ignoring local-only operation"
+                        );
+                        Ok(OperationOutcome::Ignored)
+                    }
 
                     OperationType::Restart => {
                         context
-                            .publish_restart_operation_status(entity, &cmd_id, message)
+                            .publish_restart_operation_status(&entity, &cmd_id, &message)
                             .await
                     }
+                    // SoftwareList is not a regular operation: it doesn't update its status and doesn't report any
+                    // failures; it just maps local software list to c8y software list payloads and sends it via MQTT
+                    // Smartrest 2.0/HTTP
                     OperationType::SoftwareList => {
-                        context
-                            .publish_software_list(entity, &cmd_id, &message)
-                            .await
+                        let result = context
+                            .publish_software_list(&entity, &cmd_id, &message)
+                            .await;
+
+                        let mut mqtt_publisher = context.mqtt_publisher.clone();
+                        match result {
+                            Err(err) => {
+                                error!("Fail to list installed software packages: {err}");
+                            }
+                            Ok(OperationOutcome::Finished { messages }) => {
+                                for message in messages {
+                                    mqtt_publisher.send(message).await.unwrap();
+                                }
+                            }
+                            // command is not yet finished, avoid clearing the command topic
+                            Ok(_) => {
+                                continue;
+                            }
+                        }
+
+                        clear_command_topic(command, &mut mqtt_publisher).await;
+                        rx.close();
+                        continue;
                     }
                     OperationType::SoftwareUpdate => {
                         context
-                            .publish_software_update_status(entity, &cmd_id, &message)
+                            .publish_software_update_status(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::LogUpload => {
                         context
-                            .handle_log_upload_state_change(entity, &cmd_id, &message)
+                            .handle_log_upload_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::ConfigSnapshot => {
                         context
-                            .handle_config_snapshot_state_change(entity, &cmd_id, &message)
+                            .handle_config_snapshot_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::ConfigUpdate => {
                         context
-                            .handle_config_update_state_change(entity, &cmd_id, &message)
+                            .handle_config_update_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                     OperationType::FirmwareUpdate => {
                         context
-                            .handle_firmware_update_state_change(entity, &cmd_id, &message)
+                            .handle_firmware_update_state_change(&entity, &cmd_id, &message)
                             .await
                     }
                 };
 
                 let mut mqtt_publisher = context.mqtt_publisher.clone();
-                match res {
-                    // If there are mapped final status messages to be published, they are cached until the operation
-                    // log is uploaded
-                    Ok((messages, command)) => {
-                        if let Some(command) = command {
-                            if let Err(e) = context
-                                .upload_operation_log(&external_id, &cmd_id, &operation, command)
-                                .await
-                            {
-                                error!("failed to upload operation logs: {e}");
-                            }
+
+                // unwrap is safe: at this point all local operations that are not regular c8y
+                // operations should be handled above
+                let c8y_operation = to_c8y_operation(&operation).unwrap();
+
+                match to_response(
+                    operation_result,
+                    c8y_operation,
+                    &entity.smartrest_publish_topic,
+                ) {
+                    OperationOutcome::Ignored => {}
+                    OperationOutcome::Executing => {
+                        let c8y_state_executing_payload = set_operation_executing(c8y_operation);
+                        let c8y_state_executing_message = MqttMessage::new(
+                            &entity.smartrest_publish_topic,
+                            c8y_state_executing_payload,
+                        );
+                        mqtt_publisher
+                            .send(c8y_state_executing_message)
+                            .await
+                            .unwrap();
+                    }
+                    OperationOutcome::Finished { messages } => {
+                        if let Err(e) = context
+                            .upload_operation_log(&external_id, &cmd_id, &operation, &command)
+                            .await
+                        {
+                            error!("failed to upload operation logs: {e}");
                         }
 
                         for message in messages {
-                            // if task publishes MQTT clearing message, an operation is considered finished, so we can
-                            // terminate the task as well
-                            if message.retain
-                                && message.payload_bytes().is_empty()
-                                && message.topic == command_topic
-                            {
-                                rx.close();
-                            }
                             mqtt_publisher.send(message).await.unwrap();
                         }
+
+                        clear_command_topic(command, &mut mqtt_publisher).await;
+
+                        rx.close();
                     }
-                    Err(e) => error!("{e}"),
                 }
             }
         });
 
         Self { handle, tx }
+    }
+}
+
+async fn clear_command_topic(
+    command: GenericCommandState,
+    mqtt_publisher: &mut LoggingSender<MqttMessage>,
+) {
+    let command = command.clear();
+    let clearing_message = command.into_message();
+    assert!(clearing_message.payload_bytes().is_empty());
+    assert!(clearing_message.retain);
+    assert_eq!(clearing_message.qos, QoS::AtLeastOnce);
+    mqtt_publisher.send(clearing_message).await.unwrap();
+}
+
+/// Result of an update of operation's state.
+///
+/// When a new MQTT message is received with an updated state of the operation, the mapper needs to
+/// do something in response. Depending on if it cares about the operation, it can ignore it, send
+/// some MQTT messages to notify C8y about the state change, or terminate the operation.
+enum OperationOutcome {
+    /// Do nothing in response.
+    ///
+    /// Used for states that don't have an equivalent on C8y so we don't have to notify.
+    Ignored,
+
+    /// Update C8y operation state to `EXECUTING`.
+    Executing,
+
+    /// Operation is terminated.
+    ///
+    /// Operation state is either `SUCCESSFUL` or `FAILED`. Report state to C8y, send operation log,
+    /// clean local MQTT topic.
+    Finished { messages: Vec<MqttMessage> },
+}
+
+/// Converts operation result to valid C8y response.
+fn to_response(
+    result: Result<OperationOutcome, OperationError>,
+    operation_type: CumulocitySupportedOperations,
+    smartrest_publish_topic: &Topic,
+) -> OperationOutcome {
+    let err = match result {
+        Ok(res) => {
+            return res;
+        }
+        Err(err) => err,
+    };
+
+    // assuming `high level error: low level error: root cause error` error display impl
+    let set_operation_to_failed_payload = fail_operation(operation_type, &err.to_string());
+
+    let set_operation_to_failed_message =
+        MqttMessage::new(smartrest_publish_topic, set_operation_to_failed_payload);
+
+    let messages = vec![set_operation_to_failed_message];
+
+    OperationOutcome::Finished { messages }
+}
+
+/// For a given `OperationType`, obtain a matching `C8ySupportedOperations`.
+///
+/// For `OperationType`s that don't have C8y operation equivalent, `None` is returned.
+fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupportedOperations> {
+    match operation_type {
+        OperationType::LogUpload => Some(CumulocitySupportedOperations::C8yLogFileRequest),
+        OperationType::Restart => Some(CumulocitySupportedOperations::C8yRestartRequest),
+        OperationType::ConfigSnapshot => Some(CumulocitySupportedOperations::C8yUploadConfigFile),
+        OperationType::ConfigUpdate => Some(CumulocitySupportedOperations::C8yDownloadConfigFile),
+        OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
+        OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
+        // software list is not an c8y, only a fragment, but is a local operation that is spawned as
+        // part of C8y_SoftwareUpdate operation
+        OperationType::SoftwareList => None,
+        // local-only operation, not always invoked by c8y, handled in other codepath
+        OperationType::Health => None,
+        // other custom operations, no c8y equivalent
+        OperationType::Custom(_) => None,
     }
 }
 
@@ -375,185 +530,280 @@ fn get_smartrest_response_for_upload_result(
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::skip_init_messages;
-    use crate::tests::spawn_c8y_mapper_actor;
-    use crate::tests::TestHandle;
     use std::time::Duration;
+
+    use c8y_auth_proxy::url::Protocol;
+    use c8y_http_proxy::messages::C8YRestRequest;
+    use c8y_http_proxy::messages::C8YRestResult;
+    use tedge_actors::test_helpers::FakeServerBox;
+    use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::test_helpers::MessageReceiverExt;
-    use tedge_actors::Sender;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-    use tedge_mqtt_ext::MqttMessage;
-    use tedge_mqtt_ext::Topic;
+    use tedge_actors::Builder;
+    use tedge_actors::MessageReceiver;
+    use tedge_actors::MessageSink;
+    use tedge_actors::SimpleMessageBox;
+    use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::commands::ConfigSnapshotCmd;
+    use tedge_api::commands::ConfigSnapshotCmdPayload;
+    use tedge_api::CommandStatus;
+    use tedge_downloader_ext::DownloadResponse;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_uploader_ext::UploadResponse;
+
+    use crate::tests::test_mapper_config;
+
+    use super::*;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
-    async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
-        let ttd = TempTedgeDir::new();
-        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-        let TestHandle { mqtt, .. } = test_handle;
-        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    async fn handle_ignores_messages_that_are_not_operations() {
+        // system under test
+        let mut sut = setup_operation_handler().operation_handler;
+        let mqtt_schema = sut.context.mqtt_schema.clone();
 
-        skip_init_messages(&mut mqtt).await;
+        let entity_topic_id = EntityTopicId::default_main_device();
+        let entity_target = EntityTarget {
+            topic_id: entity_topic_id.clone(),
+            external_id: EntityExternalId::from("anything"),
+            smartrest_publish_topic: Topic::new("anything").unwrap(),
+        };
 
-        // Simulate config_snapshot cmd metadata message
-        mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
-            r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-        ))
-        .await
-        .expect("Send failed");
+        let message_wrong_entity = MqttMessage::new(&Topic::new("asdf").unwrap(), []);
+        sut.handle(entity_target.clone(), message_wrong_entity)
+            .await;
 
-        // Validate SmartREST message is published
-        assert_received_contains_str(
-            &mut mqtt,
-            [
-                ("c8y/s/us", "114,c8y_UploadConfigFile"),
-                ("c8y/s/us", "119,typeA,typeB,typeC"),
-            ],
-        )
-        .await;
+        assert_eq!(sut.running_operations.len(), 0);
 
-        // Validate if the supported operation file is created
-        assert!(ttd
-            .path()
-            .join("operations/c8y/c8y_UploadConfigFile")
-            .exists());
+        let topic = mqtt_schema.topic_for(
+            &entity_topic_id,
+            &Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            },
+        );
+        let message_wrong_channel = MqttMessage::new(&topic, []);
+        sut.handle(entity_target, message_wrong_channel).await;
 
-        // Simulate config_update cmd metadata message
-        mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_update"),
-            r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
-        ))
-        .await
-        .expect("Send failed");
-
-        // Validate SmartREST message is published
-        assert_received_contains_str(
-            &mut mqtt,
-            [
-                (
-                    "c8y/s/us",
-                    "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
-                ),
-                ("c8y/s/us", "119,typeD,typeE,typeF"),
-            ],
-        )
-        .await;
-
-        // Validate if the supported operation file is created
-        assert!(ttd
-            .path()
-            .join("operations/c8y/c8y_DownloadConfigFile")
-            .exists());
+        assert_eq!(sut.running_operations.len(), 0);
     }
 
     #[tokio::test]
-    async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device() {
-        let ttd = TempTedgeDir::new();
-        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-        let TestHandle { mqtt, .. } = test_handle;
+    async fn handle_joins_terminated_operations() {
+        let TestHandle {
+            operation_handler: mut sut,
+            downloader: dl,
+            uploader: ul,
+            mqtt,
+            c8y_proxy,
+            ttd: _ttd,
+            ..
+        } = setup_operation_handler();
+
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
+        let mut c8y_proxy = c8y_proxy.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
+        let mqtt_schema = sut.context.mqtt_schema.clone();
 
-        // Simulate config_snapshot cmd metadata message
-        mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
-            r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-        ))
-        .await
-        .expect("Send failed");
+        let entity_topic_id = EntityTopicId::default_main_device();
+        let entity_target = EntityTarget {
+            topic_id: entity_topic_id.clone(),
+            external_id: EntityExternalId::from("anything"),
+            smartrest_publish_topic: Topic::new("anything").unwrap(),
+        };
 
-        mqtt.skip(2).await; // Skip the mapped child device registration message
+        // spawn an operation to see if it's successfully joined when it's completed.
+        // particular operation used is not important, because we want to test only the handler.
+        // it would be even better if we could define some inline operation so test could be shorter
+        // TODO(marcel): don't assume operation implementations when testing the handler
+        let config_snapshot_operation = ConfigSnapshotCmd {
+            target: entity_topic_id,
+            cmd_id: "config-snapshot-1".to_string(),
+            payload: ConfigSnapshotCmdPayload {
+                status: CommandStatus::Successful,
+                tedge_url: Some("asdf".to_string()),
+                config_type: "typeA".to_string(),
+                path: None,
+                log_path: None,
+            },
+        };
 
-        // Validate SmartREST message is published
-        assert_received_contains_str(
-            &mut mqtt,
-            [
-                (
-                    "c8y/s/us/test-device:device:child1",
-                    "114,c8y_UploadConfigFile",
-                ),
-                (
-                    "c8y/s/us/test-device:device:child1",
-                    "119,typeA,typeB,typeC",
-                ),
-            ],
+        sut.handle(
+            entity_target.clone(),
+            config_snapshot_operation.command_message(&mqtt_schema),
         )
         .await;
+        assert_eq!(sut.running_operations.len(), 1);
 
-        // Validate if the supported operation file is created
-        assert!(ttd
-            .path()
-            .join("operations/c8y/test-device:device:child1/c8y_UploadConfigFile")
-            .exists());
+        dl.recv()
+            .await
+            .expect("downloader should receive DownloadRequest");
 
-        // Sending an updated list of config types
-        mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
-            r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+        dl.send((
+            "config-snapshot-1".to_string(),
+            Ok(DownloadResponse {
+                url: "asdf".to_string(),
+                file_path: "asdf".into(),
+            }),
         ))
         .await
-        .expect("Send failed");
+        .unwrap();
 
-        // Assert that the updated config type list does not trigger a duplicate supported ops message
-        assert_received_contains_str(
-            &mut mqtt,
-            [(
-                "c8y/s/us/test-device:device:child1",
-                "119,typeB,typeC,typeD",
-            )],
-        )
-        .await;
+        c8y_proxy
+            .recv()
+            .await
+            .expect("C8yProxy should receive CreateEvent");
 
-        // Simulate config_update cmd metadata message
-        mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_update"),
-            r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
+        c8y_proxy
+            .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
+                "asdf".to_string(),
+            )))
+            .await
+            .unwrap();
+
+        ul.recv()
+            .await
+            .expect("uploader should receive UploadRequest");
+
+        ul.send((
+            "config-snapshot-1".to_string(),
+            Ok(UploadResponse {
+                url: "asdf".to_string(),
+                file_path: "asdf".into(),
+            }),
         ))
         .await
-        .expect("Send failed");
+        .unwrap();
 
-        // Validate SmartREST message is published
-        assert_received_contains_str(
-            &mut mqtt,
-            [
-                (
-                    "c8y/s/us/test-device:device:child1",
-                    "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
-                ),
-                (
-                    "c8y/s/us/test-device:device:child1",
-                    "119,typeD,typeE,typeF",
-                ),
-            ],
+        assert_eq!(sut.running_operations.len(), 1);
+
+        // skip 503 smartrest
+        mqtt.skip(1).await;
+
+        let clearing_message = mqtt.recv().await.expect("MQTT should receive message");
+        assert_eq!(
+            clearing_message,
+            config_snapshot_operation.clearing_message(&mqtt_schema)
+        );
+
+        assert_eq!(sut.running_operations.len(), 1);
+
+        // finally, check that after handling clearing message, operation was joined
+        sut.handle(entity_target, clearing_message).await;
+
+        assert_eq!(sut.running_operations.len(), 0);
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn handle_should_panic_when_background_task_panics() {
+        // we're immediately dropping test's temporary directory, so we'll get an error that a
+        // directory for the operation could not be created
+        let TestHandle {
+            operation_handler: mut sut,
+            ..
+        } = setup_operation_handler();
+
+        let mqtt_schema = sut.context.mqtt_schema.clone();
+
+        let entity_topic_id = EntityTopicId::default_main_device();
+        let entity_target = EntityTarget {
+            topic_id: entity_topic_id.clone(),
+            external_id: EntityExternalId::from("anything"),
+            smartrest_publish_topic: Topic::new("anything").unwrap(),
+        };
+
+        // spawn an operation to see if it's successfully joined when it's completed.
+        // particular operation used is not important, because we want to test only the handler.
+        // it would be even better if we could define some inline operation so test could be shorter
+        // TODO(marcel): don't assume operation implementations when testing the handler
+        let config_snapshot_operation = ConfigSnapshotCmd {
+            target: entity_topic_id,
+            cmd_id: "config-snapshot-1".to_string(),
+            payload: ConfigSnapshotCmdPayload {
+                status: CommandStatus::Successful,
+                tedge_url: Some("asdf".to_string()),
+                config_type: "typeA".to_string(),
+                path: None,
+                log_path: None,
+            },
+        };
+
+        sut.handle(
+            entity_target.clone(),
+            config_snapshot_operation.command_message(&mqtt_schema),
         )
         .await;
+        assert_eq!(sut.running_operations.len(), 1);
 
-        // Validate if the supported operation file is created
-        assert!(ttd
-            .path()
-            .join("operations/c8y/test-device:device:child1/c8y_DownloadConfigFile")
-            .exists());
+        // give OperationHandler time to handle message
+        // TODO(marcel): remove sleeps
+        tokio::time::sleep(Duration::from_millis(50)).await;
 
-        // Sending an updated list of config types
-        mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_update"),
-            r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
-        ))
-        .await
-        .expect("Send failed");
-
-        // Assert that the updated config type list does not trigger a duplicate supported ops message
-        assert_received_contains_str(
-            &mut mqtt,
-            [(
-                "c8y/s/us/test-device:device:child1",
-                "119,typeB,typeC,typeD",
-            )],
+        // normally clearing message would be sent by operation task.
+        // Using it here just as a dummy, to call `handle` with the same cmd-id, so that it panics
+        sut.handle(
+            entity_target.clone(),
+            config_snapshot_operation.clearing_message(&mqtt_schema),
         )
         .await;
+    }
+
+    fn setup_operation_handler() -> TestHandle {
+        let ttd = TempTedgeDir::new();
+        let c8y_mapper_config = test_mapper_config(&ttd);
+
+        let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+            SimpleMessageBoxBuilder::new("MQTT", 10);
+        let mqtt_publisher = LoggingSender::new("MQTT".to_string(), mqtt_builder.get_sender());
+
+        let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+            FakeServerBoxBuilder::default();
+        let c8y_proxy = C8YHttpProxy::new(&mut c8y_proxy_builder);
+
+        let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
+            FakeServerBoxBuilder::default();
+        let uploader = ClientMessageBox::new(&mut uploader_builder);
+
+        let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
+            FakeServerBoxBuilder::default();
+        let downloader = ClientMessageBox::new(&mut downloader_builder);
+
+        let auth_proxy_addr = c8y_mapper_config.auth_proxy_addr.clone();
+        let auth_proxy_port = c8y_mapper_config.auth_proxy_port;
+        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
+
+        let operation_handler = OperationHandler::new(
+            &c8y_mapper_config,
+            downloader,
+            uploader,
+            mqtt_publisher,
+            c8y_proxy,
+            auth_proxy,
+        );
+
+        let mqtt = mqtt_builder.build();
+        let downloader = downloader_builder.build();
+        let uploader = uploader_builder.build();
+        let c8y_proxy = c8y_proxy_builder.build();
+
+        TestHandle {
+            mqtt,
+            downloader,
+            uploader,
+            c8y_proxy,
+            operation_handler,
+            ttd,
+        }
+    }
+
+    struct TestHandle {
+        operation_handler: OperationHandler,
+        mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
+        c8y_proxy: FakeServerBox<C8YRestRequest, C8YRestResult>,
+        uploader: FakeServerBox<IdUploadRequest, IdUploadResult>,
+        downloader: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
+        ttd: TempTedgeDir,
     }
 }

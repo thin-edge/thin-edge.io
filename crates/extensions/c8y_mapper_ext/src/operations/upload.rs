@@ -77,7 +77,7 @@ impl OperationContext {
         external_id: &EntityExternalId,
         cmd_id: &str,
         op_type: &OperationType,
-        command: GenericCommandState,
+        command: &GenericCommandState,
     ) -> Result<(), ConversionError> {
         if command.is_finished()
             && command.get_log_path().is_some()

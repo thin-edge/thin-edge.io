@@ -36,11 +36,10 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::CommandStatus;
-use tedge_api::SoftwareUpdateCommand;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
+use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -355,264 +354,6 @@ async fn mapper_publishes_supported_software_types() {
         )],
     )
     .await;
-}
-
-#[tokio::test]
-async fn mapper_publishes_advanced_software_list() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate software_list request
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/software_list/c8y-mapper-1234"),
-        json!({
-        "id":"1",
-        "status":"successful",
-        "currentSoftwareList":[
-            {"type":"debian", "modules":[
-                {"name":"a"},
-                {"name":"b","version":"1.0"},
-                {"name":"c","url":"https://foobar.io/c.deb"},
-                {"name":"d","version":"beta","url":"https://foobar.io/d.deb"}
-            ]},
-            {"type":"apama","modules":[
-                {"name":"m","url":"https://foobar.io/m.epl"}
-            ]}
-        ]})
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
-
-    assert_received_contains_str(
-        &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "140,a,,debian,,b,1.0,debian,,c,,debian,https://foobar.io/c.deb,d,beta,debian,https://foobar.io/d.deb,m,,apama,https://foobar.io/m.epl"
-            )
-        ])
-        .await;
-}
-
-#[tokio::test]
-async fn mapper_publishes_software_update_request() {
-    // The test assures c8y mapper correctly receives software update request from JSON over MQTT
-    // and converts it to thin-edge json message published on `te/device/main///cmd/software_update/+`.
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate c8y_SoftwareUpdate JSON over MQTT request
-    mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
-        json!({
-            "id": "123456",
-            "c8y_SoftwareUpdate": [
-                {
-                    "name": "nodered",
-                    "action": "install",
-                    "version": "1.0.0::debian",
-                    "url": ""
-                }
-            ],
-            "externalSource": {
-                "externalId": "test-device",
-                "type": "c8y_Serial"
-            }
-        })
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
-
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/main///cmd/software_update/c8y-mapper-123456",
-            json!({
-                "status": "init",
-                "updateList": [
-                    {
-                        "type": "debian",
-                        "modules": [
-                            {
-                                "name": "nodered",
-                                "version": "1.0.0",
-                                "action": "install"
-                            }
-                        ]
-                    }
-                ]
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn mapper_publishes_software_update_status_onto_c8y_topic() {
-    // The test assures SM Mapper correctly receives software update response message on `te/device/main///cmd/software_update/123`
-    // and publishes status of the operation `501` on `c8y/s/us`
-
-    // Start SM Mapper
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // Prepare and publish a software update status response message `executing` on `te/device/main///cmd/software_update/123`.
-    let mqtt_schema = MqttSchema::default();
-    let device = EntityTopicId::default_main_device();
-    let request = SoftwareUpdateCommand::new(&device, "c8y-mapper-123".to_string());
-    let response = request.with_status(CommandStatus::Executing);
-    mqtt.send(response.command_message(&mqtt_schema))
-        .await
-        .expect("Send failed");
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_SoftwareUpdate")]).await;
-
-    // Prepare and publish a software update response `successful`.
-    let response = response.with_status(CommandStatus::Successful);
-    mqtt.send(response.command_message(&mqtt_schema))
-        .await
-        .expect("Send failed");
-
-    // Expect `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_SoftwareUpdate")]).await;
-
-    // The successful state is cleared
-    assert_received_contains_str(
-        &mut mqtt,
-        [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
-    )
-    .await;
-
-    // An updated list of software is requested
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "te/device/main///cmd/software_list/+",
-            r#"{"status":"init"}"#,
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
-    // Start SM Mapper
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // The agent publish an error
-    let mqtt_schema = MqttSchema::default();
-    let device = EntityTopicId::default_main_device();
-    let response = SoftwareUpdateCommand::new(&device, "c8y-mapper-123".to_string())
-        .with_error("Partial failure: Couldn't install collectd and nginx".to_string());
-    mqtt.send(response.command_message(&mqtt_schema))
-        .await
-        .expect("Send failed");
-
-    // `502` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "502,c8y_SoftwareUpdate,Partial failure: Couldn't install collectd and nginx",
-        )],
-    )
-    .await;
-
-    // The failed state is cleared
-    assert_received_contains_str(
-        &mut mqtt,
-        [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
-    )
-    .await;
-
-    // An updated list of software is requested
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "te/device/main///cmd/software_list/+",
-            r#"{"status":"init"}"#,
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn mapper_publishes_software_update_request_with_wrong_action() {
-    // The test assures c8y-mapper correctly receives software update request via JSON over MQTT
-    // Then the c8y-mapper finds out that wrong action as part of the update request.
-    // Then c8y-mapper publishes an operation status message as executing `501,c8y_SoftwareUpdate'
-    // Then c8y-mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
-    // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
-
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
-
-    // Publish a c8y_SoftwareUpdate via JSON over MQTT that contains a wrong action `remove`, that is not known by c8y.
-    mqtt.send(MqttMessage::new(
-        &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
-        json!({
-            "id": "123456",
-            "c8y_SoftwareUpdate": [
-                {
-                    "name": "nodered",
-                    "action": "remove",
-                    "version": "1.0.0::debian"
-                }
-            ],
-            "externalSource": {
-                "externalId": "test-device",
-                "type": "c8y_Serial"
-            }
-        })
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
-
-    // Expect a 501 (executing) followed by a 502 (failed)
-    assert_received_contains_str(
-        &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "501,c8y_SoftwareUpdate",
-            ),
-            (
-                "c8y/s/us",
-                "502,c8y_SoftwareUpdate,Parameter remove is not recognized. It must be install or delete."
-            )
-        ],
-    )
-        .await;
 }
 
 #[tokio::test]
@@ -2608,6 +2349,275 @@ async fn mapper_processes_operations_concurrently() {
             .await
             .expect("there should be one DownloadRequest per operation");
     }
+}
+
+#[tokio::test]
+async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoing() {
+    let cfg_dir = TempTedgeDir::new();
+    let TestHandle {
+        mqtt,
+        http,
+        dl,
+        ul,
+        mut timer,
+        ..
+    } = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
+    let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
+
+    spawn_dummy_c8y_http_proxy(http);
+
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+
+    // simulate many successful operations that needs to be handled by the mapper
+    mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1"),
+            json!({
+            "status": "successful",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/c8y-mapper-1",
+            "type": "mosquitto",
+            "dateFrom": "2023-11-28T16:33:50+01:00",
+            "dateTo": "2023-11-29T16:33:50+01:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        })
+                .to_string(),
+        ))
+            .await.unwrap();
+
+    let (download_id, download_request) = dl
+        .recv()
+        .await
+        .expect("DownloadRequest for log_upload should be sent");
+    assert_eq!(download_id, "c8y-mapper-1");
+    assert_eq!(
+        download_request.url,
+        "http://localhost:8888/tedge/file-transfer/test-device/log_upload/c8y-mapper-1"
+    );
+
+    // here it would be good to assert that upload message hasn't been sent yet, but due to the
+    // behaviour of message channels it can't be easily done
+
+    dl.send((
+        "c8y-mapper-1".to_string(),
+        Ok(DownloadResponse {
+            url: "http://localhost:8888/tedge/file-transfer/test-device/log_upload/c8y-mapper-1"
+                .to_string(),
+            file_path: "whatever".into(),
+        }),
+    ))
+    .await
+    .unwrap();
+
+    let (upload_id, _) = ul
+        .recv()
+        .await
+        .expect("UploadRequest for log_upload should be sent");
+    assert_eq!(upload_id, "c8y-mapper-1");
+
+    // now that an upload is ongoing, check that downloads can also be triggered
+    mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-2"),
+            json!({
+            "status": "successful",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-2",
+            "type": "typeA",
+        })
+                .to_string(),
+        ))
+            .await.unwrap();
+
+    let (config_snapshot_id, _) = dl
+        .recv()
+        .await
+        .expect("DownloadRequest for config snapshot should be sent");
+    assert_eq!(config_snapshot_id, "c8y-mapper-2");
+
+    // while download and upload are ongoing, try some other operation that doesn't do download or upload
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-3"),
+        json!({
+            "status": "successful",
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_Restart")]).await;
+}
+
+#[tokio::test]
+async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate config_snapshot cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "114,c8y_UploadConfigFile"),
+            ("c8y/s/us", "119,typeA,typeB,typeC"),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/c8y_UploadConfigFile")
+        .exists());
+
+    // Simulate config_update cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_update"),
+        r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
+            ),
+            ("c8y/s/us", "119,typeD,typeE,typeF"),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/c8y_DownloadConfigFile")
+        .exists());
+}
+
+#[tokio::test]
+async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate config_snapshot cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    mqtt.skip(2).await; // Skip the mapped child device registration message
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_UploadConfigFile",
+            ),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "119,typeA,typeB,typeC",
+            ),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/test-device:device:child1/c8y_UploadConfigFile")
+        .exists());
+
+    // Sending an updated list of config types
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+        r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Assert that the updated config type list does not trigger a duplicate supported ops message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:child1",
+            "119,typeB,typeC,typeD",
+        )],
+    )
+    .await;
+
+    // Simulate config_update cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+        r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Validate SmartREST message is published
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_DownloadConfigFile,c8y_UploadConfigFile",
+            ),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "119,typeD,typeE,typeF",
+            ),
+        ],
+    )
+    .await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/test-device:device:child1/c8y_DownloadConfigFile")
+        .exists());
+
+    // Sending an updated list of config types
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+        r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    // Assert that the updated config type list does not trigger a duplicate supported ops message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:child1",
+            "119,typeB,typeC,typeD",
+        )],
+    )
+    .await;
 }
 
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {

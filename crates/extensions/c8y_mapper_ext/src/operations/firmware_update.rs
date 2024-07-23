@@ -1,11 +1,12 @@
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
+use super::OperationOutcome;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::FirmwareInfo;
@@ -19,7 +20,6 @@ use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
@@ -85,46 +85,39 @@ impl OperationContext {
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_firmware_update_state_change(
         &self,
-        target: EntityTarget,
+        target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         if !self.capabilities.firmware_update {
             warn!(
                 "Received a firmware_update command, however, firmware_update feature is disabled"
             );
-            return Ok((vec![], None));
+            return Ok(OperationOutcome::Ignored);
         }
 
         let command = match FirmwareUpdateCmd::try_from_bytes(
             target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as a firmware update command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((vec![], None));
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
-        let sm_topic = target.smartrest_publish_topic;
+        let sm_topic = &target.smartrest_publish_topic;
 
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_operation_status =
-                    set_operation_executing(CumulocitySupportedOperations::C8yFirmware);
-
-                vec![MqttMessage::new(&sm_topic, smartrest_operation_status)]
-            }
+        match command.status() {
+            CommandStatus::Executing => Ok(OperationOutcome::Executing),
             CommandStatus::Successful => {
                 let smartrest_operation_status =
                     succeed_operation_no_payload(CumulocitySupportedOperations::C8yFirmware);
-                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
-
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
+                let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
                 let twin_metadata_topic = self.mqtt_schema.topic_for(
                     &target.topic_id,
@@ -144,27 +137,13 @@ impl OperationContext {
                         .with_retain()
                         .with_qos(QoS::AtLeastOnce);
 
-                vec![c8y_notification, clear_local_cmd, twin_metadata]
+                Ok(OperationOutcome::Finished {
+                    messages: vec![c8y_notification, twin_metadata],
+                })
             }
-            CommandStatus::Failed { reason } => {
-                let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yFirmware, &reason);
-                let c8y_notification = MqttMessage::new(&sm_topic, smartrest_operation_status);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-
-                vec![c8y_notification, clear_local_cmd]
-            }
-            _ => {
-                vec![] // Do nothing as other components might handle those states
-            }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
+            _ => Ok(OperationOutcome::Ignored),
+        }
     }
 }
 
@@ -574,11 +553,11 @@ mod tests {
             &mut mqtt,
             [
                 ("c8y/s/us", "503,c8y_Firmware"), // SmartREST successful
-                ("te/device/main///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
                 (
                     "te/device/main///twin/firmware",
                     r#"{"name":"myFirmware","version":"1.0","url":"http://www.my.url"}"#,
                 ), // Twin firmware metadata
+                ("te/device/main///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
             ],
         )
         .await;
@@ -616,11 +595,11 @@ mod tests {
             &mut mqtt,
             [
                 ("c8y/s/us/test-device:device:child1", "503,c8y_Firmware"), // SmartREST successful
-                ("te/device/child1///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
                 (
                     "te/device/child1///twin/firmware",
                     r#"{"name":"myFirmware","version":"1.0","url":"http://www.my.url"}"#,
                 ), // Twin firmware metadata
+                ("te/device/child1///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
             ],
         )
         .await;

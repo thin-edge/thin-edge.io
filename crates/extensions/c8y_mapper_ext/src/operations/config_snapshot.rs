@@ -1,12 +1,12 @@
+use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
+use super::OperationOutcome;
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
 use anyhow::Context;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
@@ -19,11 +19,9 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
@@ -91,42 +89,37 @@ impl OperationContext {
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_config_snapshot_state_change(
         &self,
-        entity: EntityTarget,
+        entity: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
-    ) -> Result<(Vec<MqttMessage>, Option<GenericCommandState>), ConversionError> {
+    ) -> Result<OperationOutcome, OperationError> {
         if !self.capabilities.config_snapshot {
             warn!(
                 "Received a config_snapshot command, however, config_snapshot feature is disabled"
             );
-            return Ok((vec![], None));
+            return Ok(OperationOutcome::Ignored);
         }
         let target = entity;
-        let topic_id = &target.topic_id;
 
         let command = match ConfigSnapshotCmd::try_from_bytes(
-            topic_id.clone(),
+            target.topic_id.clone(),
             cmd_id.into(),
             message.payload_bytes(),
-        )? {
+        )
+        .context("Could not parse command as a config snapshot command")?
+        {
             Some(command) => command,
             None => {
                 // The command has been fully processed
-                return Ok((vec![], None));
+                return Ok(OperationOutcome::Ignored);
             }
         };
 
-        let smartrest_topic = target.smartrest_publish_topic;
+        let smartrest_topic = &target.smartrest_publish_topic;
+        let cmd_id = command.cmd_id.as_str();
 
-        let messages = match command.status() {
-            CommandStatus::Executing => {
-                let smartrest_operation_status =
-                    set_operation_executing(CumulocitySupportedOperations::C8yUploadConfigFile);
-                vec![MqttMessage::new(
-                    &smartrest_topic,
-                    smartrest_operation_status,
-                )]
-            }
+        match command.status() {
+            CommandStatus::Executing => Ok(OperationOutcome::Executing),
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let config_filename = format!(
@@ -159,28 +152,14 @@ impl OperationContext {
                     .downloader
                     .clone()
                     .await_response((cmd_id.to_string(), download_request))
-                    .await?;
+                    .await
+                    .context("Unexpected ChannelError")?;
 
-                match download_result {
-                    Err(err) => {
-                        let smartrest_error =
-                    fail_operation(
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                        &format!("tedge-mapper-c8y failed to download configuration snapshot from file-transfer service: {err}"),
-                    );
+                download_result.context( "tedge-mapper-c8y failed to download configuration snapshot from file-transfer service")?;
 
-                        let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_error);
-                        let clean_operation = MqttMessage::new(&message.topic, "")
-                            .with_retain()
-                            .with_qos(QoS::AtLeastOnce);
-
-                        return Ok((vec![c8y_notification, clean_operation], None));
-                    }
-                    Ok(download) => download,
-                };
-
-                let file_path =
-                    Utf8PathBuf::try_from(destination_path).map_err(|e| e.into_io_error())?;
+                let file_path = Utf8PathBuf::try_from(destination_path)
+                    .map_err(|e| e.into_io_error())
+                    .context("Could not parse destination path as utf-8")?;
                 let event_type = command.payload.config_type.clone();
 
                 // Upload the file to C8y
@@ -194,7 +173,8 @@ impl OperationContext {
                         event_type,
                         None,
                     )
-                    .await?;
+                    .await
+                    .context("Could not upload config file to C8y")?;
 
                 let smartrest_response = super::get_smartrest_response_for_upload_result(
                     upload_result,
@@ -202,32 +182,18 @@ impl OperationContext {
                     CumulocitySupportedOperations::C8yUploadConfigFile,
                 );
 
-                let c8y_notification = MqttMessage::new(&smartrest_topic, smartrest_response);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
+                let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
 
-                vec![c8y_notification, clear_local_cmd]
+                Ok(OperationOutcome::Finished {
+                    messages: vec![c8y_notification],
+                })
             }
-            CommandStatus::Failed { reason } => {
-                let smartrest_operation_status =
-                    fail_operation(CumulocitySupportedOperations::C8yUploadConfigFile, &reason);
-                let c8y_notification =
-                    MqttMessage::new(&smartrest_topic, smartrest_operation_status);
-                let clear_local_cmd = MqttMessage::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-                vec![c8y_notification, clear_local_cmd]
-            }
+            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
             _ => {
-                vec![] // Do nothing as other components might handle those states
+                // Do nothing as other components might handle those states
+                Ok(OperationOutcome::Ignored)
             }
-        };
-
-        Ok((
-            messages,
-            Some(command.into_generic_command(&self.mqtt_schema)),
-        ))
+        }
     }
 }
 
