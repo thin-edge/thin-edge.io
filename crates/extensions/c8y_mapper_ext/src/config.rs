@@ -1,3 +1,4 @@
+use crate::operations::OperationHandler;
 use crate::Capabilities;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::smartrest::error::OperationsError;
@@ -198,24 +199,11 @@ impl C8yMapperConfig {
             topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(cmd)));
         }
 
-        if capabilities.log_upload {
-            topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
-                &mqtt_schema,
-            ));
-        }
-        if capabilities.config_snapshot {
-            topics.add_all(crate::operations::config_snapshot::topic_filter(
-                &mqtt_schema,
-            ));
-        }
-        if capabilities.config_update {
-            topics.add_all(crate::operations::config_update::topic_filter(&mqtt_schema));
-        }
-        if capabilities.firmware_update {
-            topics.add_all(
-                crate::operations::firmware_update::firmware_update_topic_filter(&mqtt_schema),
-            );
-        }
+        let operation_topics = OperationHandler::topic_filter(&capabilities)
+            .into_iter()
+            .map(|(e, c)| mqtt_schema.topics(e, c))
+            .collect();
+        topics.add_all(operation_topics);
 
         // Add user configurable external topic filters
         for topic in tedge_config.c8y.topics.0.clone() {

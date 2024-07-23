@@ -8,6 +8,7 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::actor::PublishMessage;
 use crate::availability::AvailabilityBuilder;
+use crate::operations::OperationHandler;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -2779,13 +2780,20 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let mut topics =
         C8yMapperConfig::default_internal_topic_filter(tmp_dir.path(), &"c8y".try_into().unwrap())
             .unwrap();
-    topics.add_all(crate::operations::log_upload::log_upload_topic_filter(
-        &mqtt_schema,
-    ));
-    topics.add_all(crate::operations::config_snapshot::topic_filter(
-        &mqtt_schema,
-    ));
-    topics.add_all(crate::operations::config_update::topic_filter(&mqtt_schema));
+
+    let capabilities = Capabilities {
+        log_upload: true,
+        config_snapshot: true,
+        config_update: true,
+        firmware_update: true,
+    };
+
+    let operation_topics = OperationHandler::topic_filter(&capabilities)
+        .into_iter()
+        .map(|(e, c)| mqtt_schema.topics(e, c))
+        .collect();
+    topics.add_all(operation_topics);
+
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     C8yMapperConfig::new(
@@ -2801,7 +2809,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         c8y_host,
         tedge_http_host,
         topics,
-        Capabilities::default(),
+        capabilities,
         auth_proxy_addr,
         auth_proxy_port,
         Protocol::Http,

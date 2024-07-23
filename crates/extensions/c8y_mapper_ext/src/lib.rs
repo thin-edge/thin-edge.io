@@ -17,10 +17,10 @@ mod tests;
 
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 pub struct Capabilities {
-    log_upload: bool,
-    config_snapshot: bool,
-    config_update: bool,
-    firmware_update: bool,
+    pub log_upload: bool,
+    pub config_snapshot: bool,
+    pub config_update: bool,
+    pub firmware_update: bool,
 }
 
 #[cfg(test)]

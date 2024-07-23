@@ -13,9 +13,8 @@ use tedge_uploader_ext::UploadResult;
 use time::OffsetDateTime;
 use url::Url;
 
+use super::handlers::OperationContext;
 use crate::error::ConversionError;
-
-use super::OperationContext;
 
 impl OperationContext {
     #[allow(clippy::too_many_arguments)]

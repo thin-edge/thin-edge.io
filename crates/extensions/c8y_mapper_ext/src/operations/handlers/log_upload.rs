@@ -1,84 +1,16 @@
 use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
-use crate::converter::CumulocityConverter;
-use crate::error::ConversionError;
-use crate::error::CumulocityMapperError;
-use crate::operations::OperationOutcome;
+use super::OperationOutcome;
 use anyhow::Context;
-use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use camino::Utf8PathBuf;
 use tedge_api::commands::CommandStatus;
-use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmd;
-use tedge_api::commands::LogUploadCmdPayload;
-use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::ChannelFilter::Command;
-use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
-use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
-use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::TopicFilter;
-use tracing::log::error;
 use tracing::log::warn;
-
-pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
-    [
-        mqtt_schema.topics(AnyEntity, Command(OperationType::LogUpload)),
-        mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::LogUpload)),
-    ]
-    .into_iter()
-    .collect()
-}
-
-impl CumulocityConverter {
-    /// Convert c8y_LogfileRequest operation to a ThinEdge log_upload command
-    pub fn convert_log_upload_request(
-        &self,
-        device_xid: String,
-        cmd_id: String,
-        log_request: C8yLogfileRequest,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let target = self
-            .entity_store
-            .try_get_by_external_id(&device_xid.into())?;
-
-        let channel = Channel::Command {
-            operation: OperationType::LogUpload,
-            cmd_id: cmd_id.clone(),
-        };
-        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
-
-        let tedge_url = format!(
-            "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
-            &self.config.tedge_http_host,
-            target.external_id.as_ref(),
-            log_request.log_file,
-            cmd_id
-        );
-
-        let request = LogUploadCmdPayload {
-            status: CommandStatus::Init,
-            tedge_url,
-            log_type: log_request.log_file,
-            date_from: log_request.date_from,
-            date_to: log_request.date_to,
-            search_text: Some(log_request.search_text).filter(|s| !s.is_empty()),
-            lines: log_request.maximum_lines,
-            log_path: None,
-        };
-
-        // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
-    }
-}
 
 impl OperationContext {
     /// Address a received log_upload command. If its status is
@@ -182,43 +114,6 @@ impl OperationContext {
                 Ok(OperationOutcome::Ignored)
             }
         }
-    }
-}
-
-impl CumulocityConverter {
-    /// Converts a log_upload metadata message to
-    /// - supported operation "c8y_LogfileRequest"
-    /// - supported log types
-    pub fn convert_log_metadata(
-        &mut self,
-        topic_id: &EntityTopicId,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if !self.config.capabilities.log_upload {
-            warn!("Received log_upload metadata, however, log_upload feature is disabled");
-            return Ok(vec![]);
-        }
-
-        let mut messages = match self.register_operation(topic_id, "c8y_LogfileRequest") {
-            Err(err) => {
-                error!(
-                    "Failed to register `c8y_LogfileRequest` operation for {topic_id} due to: {err}"
-                );
-                return Ok(vec![]);
-            }
-            Ok(messages) => messages,
-        };
-
-        // To SmartREST supported log types
-        let metadata = LogMetadata::from_json(message.payload_str()?)?;
-        let mut types = metadata.types;
-        types.sort();
-        let supported_log_types = types.join(",");
-        let payload = format!("118,{supported_log_types}");
-        let c8y_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-        messages.push(MqttMessage::new(&c8y_topic, payload));
-
-        Ok(messages)
     }
 }
 

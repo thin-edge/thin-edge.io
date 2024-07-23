@@ -2,81 +2,17 @@ use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
 use super::OperationOutcome;
-use crate::converter::CumulocityConverter;
-use crate::error::ConversionError;
-use crate::error::CumulocityMapperError;
 use anyhow::Context;
-use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::FirmwareInfo;
 use tedge_api::commands::FirmwareUpdateCmd;
-use tedge_api::commands::FirmwareUpdateCmdPayload;
-use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::ChannelFilter::Command;
-use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
-use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
-use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::mqtt_topics::OperationType;
 use tedge_api::CommandStatus;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
-use tedge_mqtt_ext::TopicFilter;
-use tracing::error;
 use tracing::warn;
-
-pub fn firmware_update_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
-    [
-        mqtt_schema.topics(AnyEntity, Command(OperationType::FirmwareUpdate)),
-        mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::FirmwareUpdate)),
-    ]
-    .into_iter()
-    .collect()
-}
-
-impl CumulocityConverter {
-    /// Convert c8y_Firmware JSON over MQTT operation to ThinEdge firmware_update command.
-    pub fn convert_firmware_update_request(
-        &self,
-        device_xid: String,
-        cmd_id: String,
-        firmware_request: C8yFirmware,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let entity_xid: EntityExternalId = device_xid.into();
-
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
-
-        let channel = Channel::Command {
-            operation: OperationType::FirmwareUpdate,
-            cmd_id,
-        };
-        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
-
-        let tedge_url =
-            if let Some(c8y_url) = self.c8y_endpoint.maybe_tenant_url(&firmware_request.url) {
-                self.auth_proxy.proxy_url(c8y_url).to_string()
-            } else {
-                firmware_request.url.clone()
-            };
-
-        let request = FirmwareUpdateCmdPayload {
-            status: CommandStatus::Init,
-            tedge_url: Some(tedge_url),
-            remote_url: firmware_request.url,
-            name: firmware_request.name,
-            version: firmware_request.version,
-            log_path: None,
-        };
-
-        // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
-    }
-}
 
 impl OperationContext {
     /// Address a received ThinEdge firmware_update command. If its status is
@@ -143,28 +79,6 @@ impl OperationContext {
             }
             CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
             _ => Ok(OperationOutcome::Ignored),
-        }
-    }
-}
-
-impl CumulocityConverter {
-    pub fn register_firmware_update_operation(
-        &mut self,
-        topic_id: &EntityTopicId,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if !self.config.capabilities.firmware_update {
-            warn!(
-                "Received firmware_update metadata, however, firmware_update feature is disabled"
-            );
-            return Ok(vec![]);
-        }
-
-        match self.register_operation(topic_id, "c8y_Firmware") {
-            Err(err) => {
-                error!("Failed to register `c8y_Firmware` operation for {topic_id} due to: {err}");
-                Ok(vec![])
-            }
-            Ok(messages) => Ok(messages),
         }
     }
 }
