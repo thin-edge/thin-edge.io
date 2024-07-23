@@ -51,7 +51,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
@@ -79,7 +79,7 @@ pub(crate) struct AgentConfig {
     pub tedge_http_host: Arc<str>,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
-    pub root_cert_client: RootCertClient,
+    pub cloud_root_certs: CloudRootCerts,
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
@@ -151,7 +151,7 @@ impl AgentConfig {
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let root_cert_client = tedge_config.root_cert_client();
+        let cloud_root_certs = tedge_config.cloud_root_certs();
 
         let is_sudo_enabled = tedge_config.sudo.enable;
 
@@ -184,7 +184,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             tedge_http_host,
             identity,
-            root_cert_client,
+            cloud_root_certs,
             fts_url,
             is_sudo_enabled,
             service: tedge_config.service.clone(),
@@ -283,11 +283,11 @@ impl Agent {
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
         let mut downloader_actor_builder = DownloaderActor::new(
             self.config.identity.clone(),
-            self.config.root_cert_client.clone(),
+            self.config.cloud_root_certs.clone(),
         )
         .builder();
         let mut uploader_actor_builder =
-            UploaderActor::new(self.config.identity, self.config.root_cert_client).builder();
+            UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
 
         // Instantiate config manager actor if config_snapshot or both operations are enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =

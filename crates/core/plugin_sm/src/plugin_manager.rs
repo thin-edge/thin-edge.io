@@ -210,7 +210,7 @@ impl ExternalPlugins {
                             config.software.plugin.exclude.or_none().cloned(),
                             config.software.plugin.include.or_none().cloned(),
                             identity,
-                            config.root_cert_client(),
+                            config.cloud_root_certs(),
                         );
                         self.plugin_map.insert(plugin_name.into(), plugin);
                     }

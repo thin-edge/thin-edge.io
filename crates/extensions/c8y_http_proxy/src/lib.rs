@@ -22,7 +22,7 @@ use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 
 mod actor;
 pub mod credentials;
@@ -40,7 +40,7 @@ pub struct C8YHttpConfig {
     pub device_id: String,
     pub tmp_dir: PathBuf,
     identity: Option<Identity>,
-    root_cert_client: RootCertClient,
+    cloud_root_certs: CloudRootCerts,
     retry_interval: Duration,
 }
 
@@ -53,7 +53,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
         let identity = tedge_config.http.client.auth.identity()?;
-        let root_cert_client = tedge_config.root_cert_client();
+        let cloud_root_certs = tedge_config.cloud_root_certs();
         let retry_interval = Duration::from_secs(5);
 
         Ok(Self {
@@ -62,7 +62,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
             device_id,
             tmp_dir,
             identity,
-            root_cert_client,
+            cloud_root_certs,
             retry_interval,
         })
     }

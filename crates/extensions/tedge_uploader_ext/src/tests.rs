@@ -6,7 +6,7 @@ use camino::Utf8Path;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynError;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use tokio::time::timeout;
 use upload::Auth;
 
@@ -20,7 +20,7 @@ async fn spawn_uploader_actor() -> ClientMessageBox<(String, UploadRequest), (St
 {
     let identity = None;
     let mut uploader_actor_builder =
-        UploaderActor::new(identity, RootCertClient::from([])).builder();
+        UploaderActor::new(identity, CloudRootCerts::from([])).builder();
     let requester = ClientMessageBox::new(&mut uploader_actor_builder);
 
     tokio::spawn(uploader_actor_builder.run());

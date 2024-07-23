@@ -37,17 +37,17 @@ impl HttpActor {
         )
     }
 
-    pub fn with_capacity(self, capacity: usize, tedge_config: &TEdgeConfig) -> Self {
+    pub fn with_capacity(self, capacity: usize) -> Self {
         Self {
             config: self.config.with_capacity(capacity),
-            ..Self::new(tedge_config)
+            ..self
         }
     }
 
-    pub fn with_max_concurrency(self, max_concurrency: usize, tedge_config: &TEdgeConfig) -> Self {
+    pub fn with_max_concurrency(self, max_concurrency: usize) -> Self {
         Self {
             config: self.config.with_max_concurrency(max_concurrency),
-            ..Self::new(tedge_config)
+            ..self
         }
     }
 }

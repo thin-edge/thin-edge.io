@@ -24,7 +24,7 @@ use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
@@ -117,9 +117,9 @@ impl Downloader {
     pub fn new(
         target_path: PathBuf,
         identity: Option<Identity>,
-        root_cert_client: RootCertClient,
+        cloud_root_certs: CloudRootCerts,
     ) -> Self {
-        let mut client_builder = root_cert_client.builder();
+        let mut client_builder = cloud_root_certs.client_builder();
         if let Some(identity) = identity {
             client_builder = client_builder.identity(identity);
         }
@@ -139,9 +139,9 @@ impl Downloader {
         target_path: PathBuf,
         target_permission: PermissionEntry,
         identity: Option<Identity>,
-        root_cert_client: RootCertClient,
+        cloud_root_certs: CloudRootCerts,
     ) -> Self {
-        let mut client_builder = root_cert_client.builder();
+        let mut client_builder = cloud_root_certs.client_builder();
         if let Some(identity) = identity {
             client_builder = client_builder.identity(identity);
         }
@@ -534,7 +534,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let mut downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let mut downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -564,7 +564,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path.clone(), None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_path.clone(), None, CloudRootCerts::from([]));
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_path).unwrap();
@@ -594,7 +594,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(err, DownloadError::InsufficientSpace));
     }
@@ -617,7 +617,7 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         // empty filename
-        let downloader = Downloader::new("".into(), None, RootCertClient::from([]));
+        let downloader = Downloader::new("".into(), None, CloudRootCerts::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -626,7 +626,7 @@ mod tests {
 
         // invalid unicode filename
         let path = unsafe { String::from_utf8_unchecked(b"\xff".to_vec()) };
-        let downloader = Downloader::new(path.into(), None, RootCertClient::from([]));
+        let downloader = Downloader::new(path.into(), None, CloudRootCerts::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -634,7 +634,7 @@ mod tests {
         ));
 
         // relative path filename
-        let downloader = Downloader::new("myfile.txt".into(), None, RootCertClient::from([]));
+        let downloader = Downloader::new("myfile.txt".into(), None, CloudRootCerts::from([]));
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -661,7 +661,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_file_path.clone(), None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_file_path.clone(), None, CloudRootCerts::from([]));
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_file_path).unwrap();
@@ -688,7 +688,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
 
         downloader.download(&url).await.unwrap();
 
@@ -715,7 +715,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         downloader.download(&url).await.unwrap();
 
         let log_content = std::fs::read(downloader.filename()).unwrap();
@@ -736,7 +736,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         downloader.download(&url).await.unwrap();
 
         assert_eq!("".as_bytes(), std::fs::read(downloader.filename()).unwrap());
@@ -826,7 +826,7 @@ mod tests {
         let tmpdir = TempDir::new().unwrap();
         let target_path = tmpdir.path().join("partial_download");
 
-        let downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
 
         downloader.download(&url).await.unwrap();
@@ -934,7 +934,7 @@ mod tests {
         };
 
         let target_path = target_dir_path.path().join("test_download");
-        let mut downloader = Downloader::new(target_path, None, RootCertClient::from([]));
+        let mut downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()

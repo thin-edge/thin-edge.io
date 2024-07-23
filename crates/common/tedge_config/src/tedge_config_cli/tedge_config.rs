@@ -42,7 +42,7 @@ use tedge_config_macros::struct_field_paths;
 pub use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
 use tedge_utils::certificates::read_trust_store;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use toml::Table;
 use tracing::error;
 
@@ -969,7 +969,7 @@ define_tedge_config! {
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 
 impl TEdgeConfigReader {
-    pub fn root_cert_client(&self) -> RootCertClient {
+    pub fn cloud_root_certs(&self) -> CloudRootCerts {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = read_trust_store(&self.c8y.root_cert_path).unwrap_or_else(move |e| {
                 error!(
@@ -999,7 +999,7 @@ impl TEdgeConfigReader {
                 .collect()
         });
 
-        RootCertClient::from(roots.clone())
+        CloudRootCerts::from(roots.clone())
     }
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {

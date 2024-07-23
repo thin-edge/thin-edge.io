@@ -3,7 +3,7 @@ use download::Auth;
 use std::time::Duration;
 use tedge_actors::ClientMessageBox;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
 
@@ -111,7 +111,7 @@ async fn download_with_permission() {
 async fn spawn_downloader_actor(
 ) -> ClientMessageBox<(String, DownloadRequest), (String, DownloadResult)> {
     let mut downloader_actor_builder =
-        DownloaderActor::new(None, RootCertClient::from([])).builder();
+        DownloaderActor::new(None, CloudRootCerts::from([])).builder();
     let requester = ClientMessageBox::new(&mut downloader_actor_builder);
 
     tokio::spawn(downloader_actor_builder.run());
@@ -162,7 +162,7 @@ struct TestDownloadKey {
 async fn spawn_downloader_actor_with_struct(
 ) -> ClientMessageBox<(TestDownloadKey, DownloadRequest), (TestDownloadKey, DownloadResult)> {
     let mut downloader_actor_builder =
-        DownloaderActor::new(None, RootCertClient::from([])).builder();
+        DownloaderActor::new(None, CloudRootCerts::from([])).builder();
     let requester = ClientMessageBox::new(&mut downloader_actor_builder);
 
     tokio::spawn(downloader_actor_builder.run());

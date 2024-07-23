@@ -517,7 +517,7 @@ impl C8YHttpProxyActor {
             request.file_path,
             request.file_permissions,
             self.config.identity.clone(),
-            self.config.root_cert_client.clone(),
+            self.config.cloud_root_certs.clone(),
         );
         downloader.download(&download_info).await?;
 

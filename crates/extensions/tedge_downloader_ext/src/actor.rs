@@ -13,7 +13,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -71,7 +71,7 @@ pub struct DownloaderActor<T> {
     config: ServerConfig,
     key: std::marker::PhantomData<T>,
     identity: Option<Identity>,
-    root_cert_client: RootCertClient,
+    cloud_root_certs: CloudRootCerts,
 }
 
 impl<T> Clone for DownloaderActor<T> {
@@ -80,18 +80,18 @@ impl<T> Clone for DownloaderActor<T> {
             config: self.config,
             key: self.key,
             identity: self.identity.clone(),
-            root_cert_client: self.root_cert_client.clone(),
+            cloud_root_certs: self.cloud_root_certs.clone(),
         }
     }
 }
 
 impl<T: Message + Default> DownloaderActor<T> {
-    pub fn new(identity: Option<Identity>, root_cert_client: RootCertClient) -> Self {
+    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudRootCerts) -> Self {
         DownloaderActor {
             config: <_>::default(),
             key: PhantomData,
             identity,
-            root_cert_client,
+            cloud_root_certs,
         }
     }
 
@@ -99,17 +99,10 @@ impl<T: Message + Default> DownloaderActor<T> {
         ServerActorBuilder::new(self.clone(), &ServerConfig::new(), Sequential)
     }
 
-    pub fn with_capacity(
-        self,
-        capacity: usize,
-        identity: Option<Identity>,
-        root_cert_client: RootCertClient,
-    ) -> Self {
+    pub fn with_capacity(self, capacity: usize) -> Self {
         Self {
             config: self.config.with_capacity(capacity),
-            key: self.key,
-            identity,
-            root_cert_client,
+            ..self
         }
     }
 }
@@ -137,13 +130,13 @@ impl<T: Message> Server for DownloaderActor<T> {
                 request.file_path.clone(),
                 permission,
                 self.identity.clone(),
-                self.root_cert_client.clone(),
+                self.cloud_root_certs.clone(),
             )
         } else {
             Downloader::new(
                 request.file_path.clone(),
                 self.identity.clone(),
-                self.root_cert_client.clone(),
+                self.cloud_root_certs.clone(),
             )
         };
 

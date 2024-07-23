@@ -17,7 +17,7 @@ use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use tokio::io::AsyncWriteExt;
 use tracing::error;
 
@@ -73,7 +73,7 @@ pub trait Plugin {
                             command_log,
                             download_path,
                             self.identity(),
-                            self.root_cert_client().clone(),
+                            self.cloud_root_certs().clone(),
                         )
                         .await?
                     }
@@ -87,7 +87,7 @@ pub trait Plugin {
     }
 
     fn identity(&self) -> Option<&Identity>;
-    fn root_cert_client(&self) -> &RootCertClient;
+    fn cloud_root_certs(&self) -> &CloudRootCerts;
 
     async fn apply_all(
         &self,
@@ -118,7 +118,7 @@ pub trait Plugin {
                     command_log.as_deref_mut(),
                     download_path,
                     self.identity(),
-                    self.root_cert_client().clone(),
+                    self.cloud_root_certs().clone(),
                 )
                 .await
                 {
@@ -172,7 +172,7 @@ pub trait Plugin {
         mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
-        root_cert_client: RootCertClient,
+        cloud_root_certs: CloudRootCerts,
     ) -> Result<(), SoftwareError> {
         let downloader = Self::download_from_url(
             module,
@@ -180,7 +180,7 @@ pub trait Plugin {
             command_log.as_deref_mut(),
             download_path,
             identity,
-            root_cert_client,
+            cloud_root_certs,
         )
         .await?;
         let result = self.install(module, command_log.as_deref_mut()).await;
@@ -195,11 +195,11 @@ pub trait Plugin {
         mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
-        root_cert_client: RootCertClient,
+        cloud_root_certs: CloudRootCerts,
     ) -> Result<Downloader, SoftwareError> {
         let sm_path = sm_path(&module.name, &module.version, download_path);
         let downloader =
-            Downloader::new(sm_path, identity.map(|id| id.to_owned()), root_cert_client);
+            Downloader::new(sm_path, identity.map(|id| id.to_owned()), cloud_root_certs);
 
         if let Some(ref mut logger) = command_log {
             logger
@@ -274,7 +274,7 @@ pub struct ExternalPluginCommand {
     exclude: Option<String>,
     include: Option<String>,
     identity: Option<Identity>,
-    root_cert_client: RootCertClient,
+    cloud_root_certs: CloudRootCerts,
 }
 
 impl ExternalPluginCommand {
@@ -287,7 +287,7 @@ impl ExternalPluginCommand {
         exclude: Option<String>,
         include: Option<String>,
         identity: Option<Identity>,
-        root_cert_client: RootCertClient,
+        cloud_root_certs: CloudRootCerts,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
@@ -297,7 +297,7 @@ impl ExternalPluginCommand {
             exclude,
             include,
             identity,
-            root_cert_client,
+            cloud_root_certs,
         }
     }
 
@@ -584,8 +584,8 @@ impl Plugin for ExternalPluginCommand {
         self.identity.as_ref()
     }
 
-    fn root_cert_client(&self) -> &RootCertClient {
-        &self.root_cert_client
+    fn cloud_root_certs(&self) -> &CloudRootCerts {
+        &self.cloud_root_certs
     }
 }
 

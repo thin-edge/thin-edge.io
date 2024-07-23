@@ -1,8 +1,0 @@
-disallowed-types = [
-    #    "reqwest::ClientBuilder",
-    #    "reqwest::Client",
-]
-
-disallowed-methods = [
-    "reqwest::Client::builder"
-]

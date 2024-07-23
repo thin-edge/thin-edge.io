@@ -7,7 +7,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_utils::certificates::RootCertClient;
+use tedge_utils::certificates::CloudRootCerts;
 use upload::Auth;
 use upload::ContentType;
 use upload::UploadError;
@@ -85,15 +85,15 @@ pub type UploadResult = Result<UploadResponse, UploadError>;
 pub struct UploaderActor {
     config: ServerConfig,
     identity: Option<Identity>,
-    root_cert_client: RootCertClient,
+    cloud_root_certs: CloudRootCerts,
 }
 
 impl UploaderActor {
-    pub fn new(identity: Option<Identity>, root_cert_client: RootCertClient) -> Self {
+    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudRootCerts) -> Self {
         Self {
             config: ServerConfig::default(),
             identity,
-            root_cert_client,
+            cloud_root_certs,
         }
     }
     pub fn builder(self) -> ServerActorBuilder<UploaderActor, Sequential> {
@@ -131,7 +131,7 @@ impl Server for UploaderActor {
         let uploader = Uploader::new(
             request.file_path.clone(),
             self.identity.clone(),
-            self.root_cert_client.clone(),
+            self.cloud_root_certs.clone(),
         );
 
         info!(

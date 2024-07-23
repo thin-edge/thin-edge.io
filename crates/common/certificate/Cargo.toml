@@ -10,6 +10,7 @@ repository = { workspace = true }
 
 [dependencies]
 rcgen = { workspace = true }
+reqwest = { workspace = true }
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
 rustls-pemfile = { workspace = true }

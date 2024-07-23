@@ -838,6 +838,7 @@ dependencies = [
  "assert_matches",
  "base64 0.13.1",
  "rcgen",
+ "reqwest",
  "rustls 0.21.11",
  "rustls-native-certs",
  "rustls-pemfile 1.0.4",

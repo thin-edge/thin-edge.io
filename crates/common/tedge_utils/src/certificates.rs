@@ -2,33 +2,33 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use reqwest::Certificate;
-use reqwest::ClientBuilder;
 use std::fs::File;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-pub struct RootCertClient {
+pub struct CloudRootCerts {
     certificates: Arc<[Certificate]>,
 }
 
-impl RootCertClient {
-    pub fn builder(&self) -> ClientBuilder {
+impl CloudRootCerts {
+    #[allow(clippy::disallowed_types)]
+    pub fn client_builder(&self) -> reqwest::ClientBuilder {
         self.certificates
             .iter()
             .cloned()
-            .fold(ClientBuilder::new(), |builder, cert| {
+            .fold(reqwest::ClientBuilder::new(), |builder, cert| {
                 builder.add_root_certificate(cert)
             })
     }
 }
 
-impl From<Arc<[Certificate]>> for RootCertClient {
+impl From<Arc<[Certificate]>> for CloudRootCerts {
     fn from(certificates: Arc<[Certificate]>) -> Self {
         Self { certificates }
     }
 }
 
-impl From<[Certificate; 0]> for RootCertClient {
+impl From<[Certificate; 0]> for CloudRootCerts {
     fn from(certificates: [Certificate; 0]) -> Self {
         Self {
             certificates: Arc::new(certificates),
