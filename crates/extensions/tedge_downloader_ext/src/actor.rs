@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use certificate::CloudRootCerts;
 use download::Auth;
 use download::DownloadError;
 use download::DownloadInfo;
@@ -13,7 +14,6 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use certificate::CloudRootCerts;
 use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Eq, PartialEq)]

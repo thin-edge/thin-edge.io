@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use certificate::CloudRootCerts;
 use csv::ReaderBuilder;
 use download::Downloader;
 use regex::Regex;
@@ -17,7 +18,6 @@ use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
-use certificate::CloudRootCerts;
 use tokio::io::AsyncWriteExt;
 use tracing::error;
 

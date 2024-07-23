@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
 
+    use certificate::CloudRootCerts;
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::sm_path;
     use plugin_sm::plugin::ExternalPluginCommand;
@@ -13,7 +14,6 @@ mod tests {
     use tedge_api::SoftwareModule;
     use tedge_config::SudoCommandBuilder;
     use tedge_config::TEdgeConfigLocation;
-    use certificate::CloudRootCerts;
     use test_case::test_case;
 
     #[test_case("abc", Some("1.0")  ; "with version")]

@@ -1,9 +1,9 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use reqwest::Certificate;
 use std::fs::File;
 use std::sync::Arc;
-use reqwest::Certificate;
 
 #[derive(Debug, Clone)]
 pub struct CloudRootCerts {
@@ -23,7 +23,9 @@ impl CloudRootCerts {
 
     #[allow(clippy::disallowed_types)]
     pub fn client(&self) -> reqwest::Client {
-       self.client_builder().build().expect("Valid reqwest client builder configuration") 
+        self.client_builder()
+            .build()
+            .expect("Valid reqwest client builder configuration")
     }
 
     #[allow(clippy::disallowed_types)]
@@ -40,7 +42,9 @@ impl CloudRootCerts {
     #[allow(clippy::disallowed_types)]
     #[cfg(feature = "reqwest-blocking")]
     pub fn blocking_client(&self) -> reqwest::blocking::Client {
-        self.blocking_client_builder().build().expect("Valid reqwest client builder configuration") 
+        self.blocking_client_builder()
+            .build()
+            .expect("Valid reqwest client builder configuration")
     }
 }
 

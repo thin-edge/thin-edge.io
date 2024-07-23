@@ -3,10 +3,10 @@ use std::io::Write;
 use std::time::Duration;
 
 use camino::Utf8Path;
+use certificate::CloudRootCerts;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynError;
 use tedge_test_utils::fs::TempTedgeDir;
-use certificate::CloudRootCerts;
 use tokio::time::timeout;
 use upload::Auth;
 

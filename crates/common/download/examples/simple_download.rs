@@ -1,7 +1,7 @@
 use anyhow::Result;
+use certificate::CloudRootCerts;
 use download::DownloadInfo;
 use download::Downloader;
-use certificate::CloudRootCerts;
 
 /// This example shows how to use the `downloader`.
 #[tokio::main]

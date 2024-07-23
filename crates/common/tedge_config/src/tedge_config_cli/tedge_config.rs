@@ -16,7 +16,9 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::client_config_for_ca_certificates;
 use certificate::parse_root_certificate::create_tls_config;
+use certificate::read_trust_store;
 use certificate::CertificateError;
+use certificate::CloudRootCerts;
 use certificate::PemCertificate;
 use doku::Document;
 use doku::Type;
@@ -41,8 +43,6 @@ use tedge_config_macros::struct_field_aliases;
 use tedge_config_macros::struct_field_paths;
 pub use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
-use certificate::read_trust_store;
-use certificate::CloudRootCerts;
 use toml::Table;
 use tracing::error;
 

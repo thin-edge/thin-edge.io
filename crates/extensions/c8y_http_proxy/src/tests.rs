@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
+use certificate::CloudRootCerts;
 use http::StatusCode;
 use mockito::Matcher;
 use std::collections::HashMap;
@@ -29,7 +30,6 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
 use tedge_test_utils::fs::TempTedgeDir;
-use certificate::CloudRootCerts;
 use time::macros::datetime;
 
 #[tokio::test]

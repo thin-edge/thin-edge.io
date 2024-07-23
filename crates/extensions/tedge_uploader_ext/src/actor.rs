@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use certificate::CloudRootCerts;
 use log::info;
 use reqwest::Identity;
 use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use certificate::CloudRootCerts;
 use upload::Auth;
 use upload::ContentType;
 use upload::UploadError;
