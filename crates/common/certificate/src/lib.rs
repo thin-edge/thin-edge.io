@@ -9,6 +9,11 @@ use std::path::PathBuf;
 use time::Duration;
 use time::OffsetDateTime;
 use zeroize::Zeroizing;
+#[cfg(feature = "reqwest")]
+mod cloud_root_certificate;
+#[cfg(feature = "reqwest")]
+pub use cloud_root_certificate::*;
+
 pub mod device_id;
 pub mod parse_root_certificate;
 pub struct PemCertificate {

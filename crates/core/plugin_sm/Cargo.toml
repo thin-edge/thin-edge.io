@@ -12,6 +12,7 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 csv = { workspace = true }
 download = { workspace = true }
 regex = { workspace = true }

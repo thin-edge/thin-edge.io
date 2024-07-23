@@ -13,6 +13,7 @@ repository = { workspace = true }
 axum_tls = { workspace = true, features = ["error-matching"] }
 backoff = { workspace = true }
 camino = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 log = { workspace = true }
 mime = { workspace = true }
 mime_guess = { workspace = true }
@@ -21,7 +22,6 @@ reqwest = { workspace = true, features = [
     "rustls-tls-native-roots",
     "multipart",
 ] }
-tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { workspace = true, features = ["codec"] }

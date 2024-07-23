@@ -13,6 +13,7 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 c8y_api = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 download = { workspace = true }
 http = { workspace = true }
 hyper = { workspace = true }

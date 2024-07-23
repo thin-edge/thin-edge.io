@@ -24,7 +24,7 @@ use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;

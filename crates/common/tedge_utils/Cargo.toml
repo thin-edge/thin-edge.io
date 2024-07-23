@@ -25,7 +25,6 @@ mqtt_channel = { workspace = true }
 nix = { workspace = true }
 notify = { workspace = true, optional = true }
 notify-debouncer-full = { workspace = true, optional = true }
-reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 rustls-pemfile = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }

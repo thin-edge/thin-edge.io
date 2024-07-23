@@ -4,12 +4,11 @@ use crate::command::Command;
 use camino::Utf8PathBuf;
 use reqwest::StatusCode;
 use reqwest::Url;
+use certificate::CloudRootCerts;
 use std::io::prelude::*;
-use std::io::ErrorKind;
 use std::path::Path;
 use tedge_config::HostPort;
 use tedge_config::HTTPS_PORT;
-use tedge_utils::certificates::read_trust_store;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
@@ -30,7 +29,7 @@ pub struct UploadCertCmd {
     pub path: Utf8PathBuf,
     pub host: HostPort<HTTPS_PORT>,
     pub username: String,
-    pub root_cert_path: Utf8PathBuf,
+    pub cloud_root_certs: CloudRootCerts,
     pub password: String,
 }
 
@@ -70,21 +69,7 @@ impl UploadCertCmd {
             self.password.clone()
         };
 
-        let mut client_builder = reqwest::blocking::Client::builder();
-        if let Err(e) = std::fs::metadata(&self.root_cert_path) {
-            let e = match e.kind() {
-                ErrorKind::NotFound => {
-                    CertError::RootCertificatePathDoesNotExist(self.root_cert_path.to_string())
-                }
-                _ => CertError::IoError(e),
-            };
-            return Err(e);
-        }
-
-        for certificate in read_trust_store(&self.root_cert_path)? {
-            client_builder = client_builder.add_root_certificate(certificate);
-        }
-        let client = client_builder.build()?;
+        let client = self.cloud_root_certs.blocking_client();
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
@@ -196,6 +181,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn get_tenant_id_blocking_should_return_error_given_wrong_credentials() {
         let client = reqwest::blocking::Client::new();
 
@@ -220,6 +206,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn get_tenant_id_blocking_returns_correct_response() {
         let client = reqwest::blocking::Client::new();
 
@@ -247,6 +234,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn get_tenant_id_blocking_response_should_return_error_when_response_has_no_name_field() {
         let client = reqwest::blocking::Client::new();
 

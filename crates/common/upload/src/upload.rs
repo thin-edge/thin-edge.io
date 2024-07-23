@@ -13,7 +13,7 @@ use reqwest::multipart;
 use reqwest::Body;
 use reqwest::Identity;
 use std::time::Duration;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;

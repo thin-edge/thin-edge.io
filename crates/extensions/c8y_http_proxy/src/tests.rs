@@ -29,7 +29,7 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use time::macros::datetime;
 
 #[tokio::test]

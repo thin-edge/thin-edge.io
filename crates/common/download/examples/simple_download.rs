@@ -1,7 +1,7 @@
 use anyhow::Result;
 use download::DownloadInfo;
 use download::Downloader;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 
 /// This example shows how to use the `downloader`.
 #[tokio::main]

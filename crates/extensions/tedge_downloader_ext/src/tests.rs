@@ -3,7 +3,7 @@ use download::Auth;
 use std::time::Duration;
 use tedge_actors::ClientMessageBox;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
 

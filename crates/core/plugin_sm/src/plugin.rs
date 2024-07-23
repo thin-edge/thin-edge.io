@@ -17,7 +17,7 @@ use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use tokio::io::AsyncWriteExt;
 use tracing::error;
 

@@ -6,7 +6,7 @@ use camino::Utf8Path;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynError;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use tokio::time::timeout;
 use upload::Auth;
 

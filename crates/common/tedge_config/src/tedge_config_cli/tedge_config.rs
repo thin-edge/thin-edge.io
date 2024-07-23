@@ -41,8 +41,8 @@ use tedge_config_macros::struct_field_aliases;
 use tedge_config_macros::struct_field_paths;
 pub use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
-use tedge_utils::certificates::read_trust_store;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::read_trust_store;
+use certificate::CloudRootCerts;
 use toml::Table;
 use tracing::error;
 

@@ -1,9 +1,12 @@
 disallowed-types = [
-    { path = "reqwest::ClientBuilder", reason = "Use certificate::CloudRootCerts type instead to take root_cert_path configurations into account" }
+    { path = "reqwest::ClientBuilder", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
+    { path = "reqwest::blocking::ClientBuilder", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
 ]
 disallowed-methods = [
-    { path = "reqwest::Client::builder", reason = "Use certificate::CloudRootCerts type instead to take root_cert_path configurations into account" },
-    { path = "reqwest::Client::new", reason = "Use certificate::CloudRootCerts type instead to take root_cert_path configurations into account" },
+    { path = "reqwest::Client::builder", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
+    { path = "reqwest::blocking::Client::builder", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
+    { path = "reqwest::blocking::Client::new", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
+    { path = "reqwest::Client::new", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
     { path = "hyper::client::Client::new", reason = "Use Client::builder()" },
     { path = "hyper_rustls::HttpsConnectorBuilder::with_native_roots", reason = "Use .with_tls_config(tedge_config.cloud_client_tls_config()) instead to use configured root certificate paths for the connected cloud" },
 ]

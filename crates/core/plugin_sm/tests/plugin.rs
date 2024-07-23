@@ -13,7 +13,7 @@ mod tests {
     use tedge_api::SoftwareModule;
     use tedge_config::SudoCommandBuilder;
     use tedge_config::TEdgeConfigLocation;
-    use tedge_utils::certificates::CloudRootCerts;
+    use certificate::CloudRootCerts;
     use test_case::test_case;
 
     #[test_case("abc", Some("1.0")  ; "with version")]

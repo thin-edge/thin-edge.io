@@ -4,6 +4,7 @@ use crate::credentials::JwtResult;
 use crate::credentials::JwtRetriever;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
+use certificate::CloudRootCerts;
 use reqwest::Identity;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -22,7 +23,6 @@ use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
-use tedge_utils::certificates::CloudRootCerts;
 
 mod actor;
 pub mod credentials;

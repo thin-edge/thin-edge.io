@@ -209,7 +209,7 @@ impl TEdgeEnv {
 
     fn provider(&self) -> figment::providers::Env {
         static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
-        figment::providers::Env::prefixed(self.prefix).map(move |name| {
+        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR"]).map(move |name| {
             let lowercase_name = name.as_str().to_ascii_lowercase();
             Uncased::new(
                 tracing::subscriber::with_default(
@@ -220,11 +220,11 @@ impl TEdgeEnv {
                 .map_err(|err| {
                     let is_read_only_key = matches!(err, crate::ParseKeyError::ReadOnly(_));
                     if is_read_only_key && !WARNINGS.lock().unwrap().insert(lowercase_name.clone()) {
-                            tracing::error!(
-                                "Failed to configure tedge with environment variable `TEDGE_{name}`: {}",
-                                err.to_string().replace('\n', " ")
-                            )
-         }
+                        tracing::error!(
+                            "Failed to configure tedge with environment variable `TEDGE_{name}`: {}",
+                            err.to_string().replace('\n', " ")
+                        )
+                    }
                 })
                 .unwrap_or(lowercase_name),
             )
@@ -240,6 +240,25 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn config_dir_environment_variable_does_not_generate_a_warning() {
+        #[derive(Deserialize)]
+        struct Config {}
+
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("TEDGE_CONFIG_DIR", "/etc/moved-tedge");
+
+            let env = TEdgeEnv::default();
+            let figment = Figment::new()
+                .merge(Toml::file("tedge.toml"))
+                .merge(env.provider());
+
+            let warnings = unused_value_warnings::<Config>(&figment, &env).unwrap();
+            assert_eq!(dbg!(warnings).len(), 0);
+
+            Ok(())
+        })
+    }
     #[test]
     fn environment_variables_override_config_file() {
         #[derive(Deserialize)]

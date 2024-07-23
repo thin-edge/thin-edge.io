@@ -7,7 +7,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_utils::certificates::CloudRootCerts;
+use certificate::CloudRootCerts;
 use upload::Auth;
 use upload::ContentType;
 use upload::UploadError;

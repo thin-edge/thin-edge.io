@@ -41,7 +41,7 @@ impl C8yAuthProxyBuilder {
         config: &TEdgeConfig,
         jwt: &mut ServerActorBuilder<C8YJwtRetriever, Sequential>,
     ) -> anyhow::Result<Self> {
-        let reqwest_client = config.cloud_root_certs().client_builder().build().unwrap();
+        let reqwest_client = config.cloud_root_certs().client();
         let app_data = AppData {
             is_https: true,
             host: config.c8y.http.or_config_not_set()?.to_string(),

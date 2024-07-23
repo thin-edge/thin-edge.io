@@ -9,6 +9,5 @@ pub mod futures;
 #[cfg(feature = "fs-notify")]
 pub mod notify;
 
-pub mod certificates;
 #[cfg(feature = "timestamp")]
 pub mod timestamp;
