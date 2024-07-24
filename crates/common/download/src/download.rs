@@ -123,8 +123,7 @@ impl Downloader {
         if let Some(identity) = identity {
             client_builder = client_builder.identity(identity);
         }
-        // TODO don't unwrap
-        let client = client_builder.build().unwrap();
+        let client = client_builder.build().expect("Client builder is valid");
         Self {
             target_filename: target_path,
             target_permission: PermissionEntry::default(),
@@ -145,8 +144,7 @@ impl Downloader {
         if let Some(identity) = identity {
             client_builder = client_builder.identity(identity);
         }
-        // TODO no unwrap
-        let client = client_builder.build().unwrap();
+        let client = client_builder.build().expect("Client builder is valid");
         Self {
             target_filename: target_path,
             target_permission,
