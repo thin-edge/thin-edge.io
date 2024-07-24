@@ -686,6 +686,13 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
+            C8yDeviceControlOperation::DeviceProfile(request) => {
+                if self.config.capabilities.device_profile {
+                    vec![]
+                } else {
+                    vec![]
+                }
+            }
             C8yDeviceControlOperation::Custom => {
                 // Ignores custom and static template operations unsupported by thin-edge
                 // However, these operations can be addressed by SmartREST that is published together with JSON over MQTT

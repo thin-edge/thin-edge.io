@@ -21,6 +21,7 @@ pub struct Capabilities {
     pub config_snapshot: bool,
     pub config_update: bool,
     pub firmware_update: bool,
+    pub device_profile: bool,
 }
 
 #[cfg(test)]
@@ -31,6 +32,7 @@ impl Default for Capabilities {
             config_snapshot: true,
             config_update: true,
             firmware_update: true,
+            device_profile: true,
         }
     }
 }
