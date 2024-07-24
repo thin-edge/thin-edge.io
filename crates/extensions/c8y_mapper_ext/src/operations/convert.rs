@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use c8y_api::json_c8y_deserializer::C8yDeviceProfile;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
@@ -13,6 +14,7 @@ use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::commands::FirmwareUpdateCmdPayload;
 use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmdPayload;
+use tedge_api::device_profile::DeviceProfileCmdPayload;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::mqtt_topics::Channel;
@@ -308,5 +310,47 @@ impl CumulocityConverter {
         messages.push(MqttMessage::new(&sm_topic, payload));
 
         Ok(messages)
+    }
+
+    /// Convert c8y_DeviceProfile JSON over MQTT operation to ThinEdge device_profile command.
+    pub fn convert_device_profile_request(
+        &self,
+        device_xid: String,
+        cmd_id: String,
+        device_profile_request: C8yDeviceProfile,
+        profile_name: String,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let entity_xid: EntityExternalId = device_xid.into();
+
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+
+        let channel = Channel::Command {
+            operation: OperationType::DeviceProfile,
+            cmd_id,
+        };
+        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
+
+        let mut request = DeviceProfileCmdPayload {
+            status: CommandStatus::Init,
+            name: profile_name,
+            operations: Vec::new(),
+        };
+
+        if let Some(firmware) = device_profile_request.firmware {
+            request.add_firmware(firmware.into());
+        }
+
+        if let Some(software) = device_profile_request.software {
+            request.add_software(software.try_into()?);
+        }
+
+        for config in device_profile_request.configuration {
+            request.add_config(config.into());
+        }
+
+        // Command messages must be retained
+        Ok(vec![
+            MqttMessage::new(&topic, request.to_json()).with_retain()
+        ])
     }
 }

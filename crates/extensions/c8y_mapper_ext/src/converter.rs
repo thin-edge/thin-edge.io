@@ -688,8 +688,19 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::DeviceProfile(request) => {
                 if self.config.capabilities.device_profile {
-                    vec![]
+                    if let Some(profile_name) = extras.get("profileName") {
+                        self.convert_device_profile_request(
+                            device_xid,
+                            cmd_id,
+                            request,
+                            serde_json::from_value(profile_name.clone())?,
+                        )?
+                    } else {
+                        error!("Received a c8y_DeviceProfile without a profile name");
+                        vec![]
+                    }
                 } else {
+                    warn!("Received a c8y_DeviceProfile operation, however, device_profile feature is disabled");
                     vec![]
                 }
             }

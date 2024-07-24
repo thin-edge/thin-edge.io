@@ -57,3 +57,35 @@ pub enum OperationPayload {
     #[serde(rename = "payload")]
     Config(ConfigInfo),
 }
+
+impl DeviceProfileCmdPayload {
+    pub fn add_firmware(&mut self, firmware: FirmwareInfo) {
+        let firmware_operation = DeviceProfileOperation {
+            operation: OperationType::FirmwareUpdate,
+            skip: false,
+            payload: OperationPayload::Firmware(firmware),
+        };
+
+        self.operations.push(firmware_operation);
+    }
+
+    pub fn add_software(&mut self, software: SoftwareInfo) {
+        let software_operation = DeviceProfileOperation {
+            operation: OperationType::SoftwareUpdate,
+            skip: false,
+            payload: OperationPayload::Software(software),
+        };
+
+        self.operations.push(software_operation);
+    }
+
+    pub fn add_config(&mut self, config: ConfigInfo) {
+        let config_operation = DeviceProfileOperation {
+            operation: OperationType::ConfigUpdate,
+            skip: false,
+            payload: OperationPayload::Config(config),
+        };
+
+        self.operations.push(config_operation);
+    }
+}

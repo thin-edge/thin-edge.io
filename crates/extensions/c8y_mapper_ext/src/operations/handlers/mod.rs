@@ -2,6 +2,7 @@
 
 mod config_snapshot;
 mod config_update;
+mod device_profile;
 mod firmware_update;
 mod log_upload;
 mod restart;
