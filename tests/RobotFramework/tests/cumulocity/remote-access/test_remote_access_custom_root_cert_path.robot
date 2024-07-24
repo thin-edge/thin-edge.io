@@ -12,8 +12,8 @@ Test Teardown    Get Logs
 Execute ssh command with a custom root certificate path
     ${KEY_FILE}=    Configure SSH
     Add Remote Access Passthrough Configuration
-    ${stdout}=    Execute Remote Access Command    command=tedge --version    exp_exit_code=0    user=root    key_file=${KEY_FILE}
-    Should Match Regexp    ${stdout}    tedge .+
+    ${stdout}=    Execute Remote Access Command    command=sh -c 'echo foobar'    exp_exit_code=0    user=root    key_file=${KEY_FILE}
+    Should Contain    ${stdout}    foobar
 
 *** Keywords ***
 
