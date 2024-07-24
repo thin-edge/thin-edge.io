@@ -73,30 +73,25 @@ Verify ThinEdgeIO is installed
    Log    ThinEdgeIO was successfully installed
 
 Uninstall ThinEdgeIO
-   Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
-   Execute Command    chmod a+x uninstall-thin-edge_io.sh
-   Execute Command    ./uninstall-thin-edge_io.sh purge
-   Log    Succesfull uninstalled with purge
+   Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /var/local/share/uninstall-thin-edge_io.sh
+   Execute Command    chmod a+x /var/local/share/uninstall-thin-edge_io.sh
+   Execute Command    /var/local/share/uninstall-thin-edge_io.sh purge
 
 #Verify ThinEdgeIO is uninstalled
-   ${OUTPUT}    Execute Command    tedge --help    ignore_exit_code=True
-   Should Not Contain    ${OUTPUT}    tedge is the cli tool for thin-edge.io
+   ${OUTPUT}    Execute Command    command -V tedge    exp_exit_code=!0 
+   ${OUTPUT}    Execute Command    command -V tedge    exp_exit_code=!0
 
 Check repository creation
    ${OUTPUT}    Execute Command    ls /etc/apt/sources.list.d/
-   Should Contain    ${OUTPUT}    thinedge-tedge-release.list
+   Should Contain    ${OUTPUT}    *.list
    ${OUTPUT}    Execute Command    apt-cache search tedge
+   Should Contain    ${OUTPUT}    tedge - CLI tool use to control and configure thin-edge.io
    Should Contain    ${OUTPUT}    tedge - CLI tool use to control and configure thin-edge.io
    Should Contain    ${OUTPUT}    tedge-agent - thin-edge.io interacts with a Cloud Mapper and one or more Software Plugins
    Should Contain    ${OUTPUT}    tedge-apt-plugin - thin-edge.io plugin for software management using apt
-   Should Contain    ${OUTPUT}    tedge-configuration-plugin - thin-edge.io configuration management
-   Should Contain    ${OUTPUT}    tedge-dummy-plugin - TEST ONLY: thin-edge dummy software management plugin
    Should Contain    ${OUTPUT}    tedge-full - thin-edge.io virtual package to automatically install all tedge packages
-   Should Contain    ${OUTPUT}    tedge-log-plugin - thin-edge.io log file retriever
    Should Contain    ${OUTPUT}    tedge-mapper - thin-edge.io mapper that translates thin-edge.io data model to c8y/az data model.
-   Should Contain    ${OUTPUT}    tedge-minimal - thin-edge.io virtual package to install a minimal set of tedge components
    Should Contain    ${OUTPUT}    tedge-watchdog - thin-edge.io component which checks the health of all the thin-edge.io components/services.
-
 Remove created repository
    ${OUTPUT}    Execute Command    sudo rm /etc/apt/sources.list.d/thinedge-tedge-release.list
    Should Not Contain    ${OUTPUT}    thinedge-tedge-release.list

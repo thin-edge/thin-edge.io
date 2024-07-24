@@ -40,8 +40,8 @@ Raise Alarm Keyword
     ...                and severity to the device using ThinEdgeIO MQTT. 
     ...                Verifies that the alarm is present on the device.
     [Arguments]    ${alarm_type}    ${text}    ${severity}
-    ${payload}=    Set Variable    "text": "${text}", "severity": "${severity}"
-    Execute Command    tedge mqtt pub te/device/main///a/${alarm_type} '{${payload}}' -r -q 2
+    ${payload}=    Set Variable    {"text": "${text}", "severity": "${severity}"}
+    Execute Command    tedge mqtt pub te/device/main///a/${alarm_type} '${payload}' -r -q 2
     Device Should Have Alarm/s    minimum=1    maximum=1    expected_text=${text}    type=${alarm_type}    severity=${severity}
 
 Raise Alarm With Timestamp Keyword
