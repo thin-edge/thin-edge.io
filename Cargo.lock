@@ -704,7 +704,6 @@ dependencies = [
  "tedge_config",
  "tedge_config_macros",
  "tedge_http_ext",
- "tedge_utils",
  "tokio",
  "tokio-tungstenite",
  "tracing",
@@ -4202,7 +4201,6 @@ version = "1.1.1"
 dependencies = [
  "anyhow",
  "assert_matches",
- "camino",
  "doku",
  "futures",
  "maplit",
@@ -4211,7 +4209,6 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "once_cell",
- "rustls-pemfile 1.0.4",
  "serde",
  "serde_json",
  "strum",

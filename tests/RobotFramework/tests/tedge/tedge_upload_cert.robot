@@ -63,7 +63,7 @@ tedge cert upload c8y command fails
     Execute Command    tedge config set c8y.root_cert_path /etc/ssl/certs_test    
     ${output}=    Execute Command    sudo env C8YPASS\='password' tedge cert upload c8y --user testuser    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
     Execute Command    tedge config unset c8y.root_cert_path
-    Should Contain    ${output}    Root certificate path /etc/ssl/certs_test does not exist
+    Should Contain    ${output}    Unable to read certificates from c8y.root_cert_path: failed to read from path "/etc/ssl/certs_test"
 
 *** Keywords ***
 Setup With Self-Signed Certificate

@@ -23,7 +23,6 @@ rustls = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 tedge_config_macros = { workspace = true }
-tedge_utils = { workspace = true }
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",

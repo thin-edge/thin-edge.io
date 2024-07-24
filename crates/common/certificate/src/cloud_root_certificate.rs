@@ -73,9 +73,14 @@ pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certifi
             continue;
         }
 
-        let Ok(mut pem_file) = File::open(&path).map(std::io::BufReader::new) else {
-            continue;
+        let mut pem_file = match File::open(&path).map(std::io::BufReader::new) {
+            Ok(pem_file) => pem_file,
+            err if path == ca_dir_or_file => {
+                err.with_context(|| format!("failed to read from path {path:?}"))?
+            }
+            Err(_other_unreadable_file) => continue,
         };
+
         let ders = rustls_pemfile::certs(&mut pem_file)
             .with_context(|| format!("reading {path}"))?
             .into_iter()

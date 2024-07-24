@@ -973,21 +973,21 @@ impl TEdgeConfigReader {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = read_trust_store(&self.c8y.root_cert_path).unwrap_or_else(move |e| {
                 error!(
-                    "Unable to read certificates from {}: {e}",
+                    "Unable to read certificates from {}: {e:?}",
                     ReadableKey::C8yRootCertPath
                 );
                 vec![]
             });
             let az_roots = read_trust_store(&self.az.root_cert_path).unwrap_or_else(move |e| {
                 error!(
-                    "Unable to read certificates from {}: {e}",
+                    "Unable to read certificates from {}: {e:?}",
                     ReadableKey::AzRootCertPath
                 );
                 vec![]
             });
             let aws_roots = read_trust_store(&self.aws.root_cert_path).unwrap_or_else(move |e| {
                 error!(
-                    "Unable to read certificates from {}: {e}",
+                    "Unable to read certificates from {}: {e:?}",
                     ReadableKey::AwsRootCertPath
                 );
                 vec![]
