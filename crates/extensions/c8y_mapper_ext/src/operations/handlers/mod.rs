@@ -134,6 +134,9 @@ impl OperationContext {
                 self.handle_firmware_update_state_change(&entity, &cmd_id, &message)
                     .await
             }
+            OperationType::DeviceProfile => {
+                Ok(OperationOutcome::Ignored) // to do handle state change for device profile
+            }
         };
 
         let mut mqtt_publisher = self.mqtt_publisher.clone();
@@ -257,6 +260,7 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::ConfigUpdate => Some(CumulocitySupportedOperations::C8yDownloadConfigFile),
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
+        OperationType::DeviceProfile => Some(CumulocitySupportedOperations::C8yDeviceProfile),
         // software list is not an c8y, only a fragment, but is a local operation that is spawned as
         // part of C8y_SoftwareUpdate operation
         OperationType::SoftwareList => None,
