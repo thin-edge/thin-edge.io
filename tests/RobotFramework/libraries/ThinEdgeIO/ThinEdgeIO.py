@@ -841,10 +841,11 @@ class ThinEdgeIO(DeviceLibrary):
         proc.wait(timeout)
 
         stdout = proc.stdout.read()
+        stderr = proc.stderr.read()
         if exp_exit_code is not None:
             assert (
                 proc.returncode == exp_exit_code
-            ), f"Failed to connect via remote access.\n{stdout}"
+            ), f"Failed to connect via remote access.\nstdout: <<EOT{stdout}\nEOT\n\nstderr <<EOT\n{stderr}\nEOT"
 
         log.info(f"Command:\n%s", stdout)
         return stdout
