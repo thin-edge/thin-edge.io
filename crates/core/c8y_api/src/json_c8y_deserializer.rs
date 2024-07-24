@@ -3,6 +3,12 @@ use download::DownloadInfo;
 use mqtt_channel::Topic;
 use serde::Deserialize;
 use std::collections::HashMap;
+use tedge_api::commands::ConfigInfo;
+use tedge_api::commands::FirmwareInfo;
+use tedge_api::commands::SoftwareInfo;
+use tedge_api::commands::SoftwareModuleAction;
+use tedge_api::commands::SoftwareModuleItem;
+use tedge_api::commands::SoftwareRequestResponseSoftwareList;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareModuleUpdate;
@@ -34,6 +40,7 @@ pub enum C8yDeviceControlOperation {
     UploadConfigFile(C8yUploadConfigFile),
     DownloadConfigFile(C8yDownloadConfigFile),
     Firmware(C8yFirmware),
+    DeviceProfile(C8yDeviceProfile),
     Custom,
 }
 
@@ -61,6 +68,10 @@ impl C8yDeviceControlOperation {
             )?)
         } else if let Some(value) = hashmap.get("c8y_Firmware") {
             C8yDeviceControlOperation::Firmware(C8yFirmware::from_json_value(value.clone())?)
+        } else if let Some(value) = hashmap.get("c8y_DeviceProfile") {
+            C8yDeviceControlOperation::DeviceProfile(C8yDeviceProfile::from_json_value(
+                value.clone(),
+            )?)
         } else {
             C8yDeviceControlOperation::Custom
         };
@@ -195,6 +206,54 @@ pub struct C8yRestart {}
 #[serde(transparent)]
 pub struct C8ySoftwareUpdate {
     pub lists: Vec<C8ySoftwareUpdateModule>,
+}
+
+impl TryFrom<C8ySoftwareUpdate> for SoftwareInfo {
+    type Error = C8yJsonOverMqttDeserializerError;
+
+    fn try_from(value: C8ySoftwareUpdate) -> Result<Self, Self::Error> {
+        let mut software_info = SoftwareInfo {
+            update_list: Vec::new(),
+        };
+
+        for module in value.lists {
+            let plugin_type = module
+                .get_module_version_and_type()
+                .1
+                .unwrap_or_else(SoftwareModule::default_type);
+
+            let version = module.get_module_version_and_type().0;
+            let url = module.get_url();
+
+            let item = SoftwareModuleItem {
+                name: module.name,
+                version,
+                url,
+                action: match module.action.clone().try_into()? {
+                    C8ySoftwareUpdateAction::Install => Some(SoftwareModuleAction::Install),
+                    C8ySoftwareUpdateAction::Delete => Some(SoftwareModuleAction::Remove),
+                },
+                reason: None,
+            };
+
+            if let Some(list) = software_info
+                .update_list
+                .iter_mut()
+                .find(|list| list.plugin_type == plugin_type)
+            {
+                list.modules.push(item);
+            } else {
+                software_info
+                    .update_list
+                    .push(SoftwareRequestResponseSoftwareList {
+                        plugin_type,
+                        modules: vec![item],
+                    });
+            }
+        }
+
+        Ok(software_info)
+    }
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
@@ -389,6 +448,15 @@ pub struct C8yDownloadConfigFile {
     pub url: String,
 }
 
+impl From<C8yDownloadConfigFile> for ConfigInfo {
+    fn from(value: C8yDownloadConfigFile) -> Self {
+        ConfigInfo {
+            config_type: value.config_type,
+            remote_url: Some(value.url),
+        }
+    }
+}
+
 /// Representation of c8y_Firmware JSON object
 ///
 /// ```rust
@@ -405,12 +473,72 @@ pub struct C8yDownloadConfigFile {
 /// // Parse the data
 /// let req: C8yFirmware = serde_json::from_str(data).unwrap();
 /// ```
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yFirmware {
     pub name: String,
     pub version: String,
     pub url: String,
+}
+
+impl From<C8yFirmware> for FirmwareInfo {
+    fn from(value: C8yFirmware) -> Self {
+        FirmwareInfo {
+            name: Some(value.name),
+            version: Some(value.version),
+            remote_url: Some(value.url),
+        }
+    }
+}
+
+/// Representation of c8y_DeviceProfile JSON object
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yDeviceProfile;
+///
+/// // Example input from c8y
+/// let data = r#"
+/// {
+///     "firmware": {
+///         "name": "foo",
+///         "version": "1.0.2",
+///         "url": "https://dummy.url/firmware.zip"
+///     },
+///     "software": [
+///         {
+///             "softwareType": "dummy",
+///             "name": "foo",
+///             "action": "install",
+///             "version": "2.0.0",
+///             "url": "https://example.cumulocity.com/inventory/binaries/757538"
+///         },
+///         {
+///             "name": "bar",
+///             "action": "delete",
+///             "version": "1.0.1"
+///         }
+///     ],
+///     "configuration": [
+///         {
+///             "name": "tedge.toml",
+///             "type": "/etc/tedge/tedge.toml",
+///             "url": "https://example.cumulocity.com/inventory/binaries/757538"
+///         }
+///     ]
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yDeviceProfile = serde_json::from_str(data).unwrap();
+/// ```
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yDeviceProfile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub firmware: Option<C8yFirmware>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub software: Option<C8ySoftwareUpdate>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configuration: Vec<C8yDownloadConfigFile>,
 }
 
 pub trait C8yDeviceControlOperationHelper {
@@ -434,6 +562,8 @@ impl C8yDeviceControlOperationHelper for C8yDownloadConfigFile {}
 
 impl C8yDeviceControlOperationHelper for C8yFirmware {}
 
+impl C8yDeviceControlOperationHelper for C8yDeviceProfile {}
+
 #[derive(thiserror::Error, Debug)]
 pub enum C8yJsonOverMqttDeserializerError {
     #[error("Parameter {parameter} is not recognized. {hint}")]
@@ -447,12 +577,15 @@ pub enum C8yJsonOverMqttDeserializerError {
 #[cfg(test)]
 mod tests {
     use crate::json_c8y_deserializer::C8yDeviceControlOperationHelper;
+    use crate::json_c8y_deserializer::C8yDeviceProfile;
     use crate::json_c8y_deserializer::C8yOperation;
     use crate::json_c8y_deserializer::C8ySoftwareUpdate;
     use crate::json_c8y_deserializer::C8ySoftwareUpdateModule;
     use assert_json_diff::assert_json_eq;
     use serde_json::json;
+    use tedge_api::device_profile::DeviceProfileCmdPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::CommandStatus;
     use tedge_api::Jsonify;
     use tedge_api::SoftwareModule;
     use tedge_api::SoftwareModuleUpdate;
@@ -786,5 +919,138 @@ mod tests {
         ];
 
         assert_eq!(update_software.modules(), &expected_vec);
+    }
+
+    #[test]
+    fn from_json_over_mqtt_device_profile_to_device_profile_cmd() {
+        let json_over_mqtt_payload = json!({
+          "delivery": {
+            "log": [],
+            "time": "2024-07-22T10:26:31.457Z",
+            "status": "PENDING"
+          },
+          "agentId": "98523229",
+          "creationTime": "2024-07-22T10:26:31.441Z",
+          "deviceId": "98523229",
+          "id": "523244",
+          "status": "PENDING",
+          "profileName": "prod-profile-v2",
+          "description": "Assign device profile prod-profile-v2 to device TST_char_humane_exception",
+          "profileId": "50523216",
+          "c8y_DeviceProfile": {
+            "software": [
+              {
+                "name": "c8y-command-plugin",
+                "action": "install",
+                "version": "latest",
+                "url": " "
+              },
+              {
+                "name": "collectd",
+                "action": "install",
+                "version": "latest",
+                "url": " "
+              }
+            ],
+            "configuration": [
+              {
+                "name": "collectd-v2",
+                "type": "collectd.conf",
+                "url": "http://www.example.url/inventory/binaries/88395"
+              }
+            ],
+            "firmware": {
+              "name": "core-image-tedge-rauc",
+              "version": "20240430.1139",
+              "url": "http://www.example.url/inventory/binaries/43226"
+            }
+          },
+          "externalSource": {
+            "externalId": "TST_char_humane_exception",
+            "type": "c8y_Serial"
+          }
+        });
+
+        let op: C8yOperation = serde_json::from_str(&json_over_mqtt_payload.to_string()).unwrap();
+        let req = C8yDeviceProfile::from_json_value(
+            op.extras
+                .get("c8y_DeviceProfile")
+                .expect("c8y_DeviceProfile field is missing")
+                .to_owned(),
+        )
+        .expect("Failed to deserialize");
+
+        let name = serde_json::from_value(
+            op.extras
+                .get("profileName")
+                .expect("profileName field is missing")
+                .to_owned(),
+        )
+        .expect("failed to convert profileName to string");
+
+        let mut thin_edge_json = DeviceProfileCmdPayload {
+            status: CommandStatus::Init,
+            name,
+            operations: Vec::new(),
+        };
+
+        thin_edge_json.add_firmware(req.firmware.unwrap().into());
+        thin_edge_json.add_software(
+            req.software
+                .unwrap()
+                .try_into()
+                .expect("failed to extract software info"),
+        );
+        for config in req.configuration {
+            thin_edge_json.add_config(config.into());
+        }
+        let expected_thin_edge_json = json!({
+            "status": "init",
+            "name": "prod-profile-v2",
+            "operations": [
+                {
+                    "operation": "firmware_update",
+                    "skip": false,
+                    "payload": {
+                        "name": "core-image-tedge-rauc",
+                        "version": "20240430.1139",
+                        "url": "http://www.example.url/inventory/binaries/43226"
+                    }
+                },
+                {
+                    "operation": "software_update",
+                    "skip": false,
+                    "payload": {
+                        "updateList": [
+                        {
+                            "type": "default",
+                            "modules": [
+                            {
+                                "name": "c8y-command-plugin",
+                                "action": "install",
+                                "version": "latest",
+                            },
+                            {
+                                "name": "collectd",
+                                "action": "install",
+                                "version": "latest",
+                            }
+                            ]
+                        }
+                        ]
+                    }
+                },
+                {
+                "operation": "config_update",
+                "skip": false,
+                "payload": {
+                    "type": "collectd.conf",
+                    "remoteUrl": "http://www.example.url/inventory/binaries/88395"
+                }
+                }
+            ]
+        });
+
+        assert_eq!(thin_edge_json.to_value(), expected_thin_edge_json);
     }
 }
