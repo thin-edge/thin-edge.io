@@ -57,9 +57,7 @@ impl UploadCertCmd {
             std::io::stdin()
                 .read_line(&mut input)
                 .expect("Invalid username");
-            input
-                .trim_end_matches(|c| c == '\n' || c == '\r')
-                .to_string()
+            input.trim_end_matches(['\n', '\r']).to_string()
         } else {
             self.username.clone()
         };
