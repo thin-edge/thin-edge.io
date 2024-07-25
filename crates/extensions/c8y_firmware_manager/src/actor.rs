@@ -263,7 +263,7 @@ impl FirmwareManagerActor {
 
         for entry in fs::read_dir(firmware_dir_path.clone())? {
             match entry {
-                Ok(file_path) => match FirmwareOperationEntry::read_from_file(&file_path.path()) {
+                Ok(file_path) => match FirmwareOperationEntry::read_from_file(file_path.path()) {
                     Ok(recorded_entry) => {
                         if recorded_entry.child_id == smartrest_request.device
                             && recorded_entry.name == smartrest_request.name
