@@ -415,7 +415,8 @@ impl Downloader {
             if let Some(Auth::Bearer(token)) = &url.auth {
                 request = request.bearer_auth(token)
             } else if let Some(Auth::Basic(username, password)) = &url.auth {
-                request = request.basic_auth(username.clone().unwrap(), Some(password.clone().unwrap()))
+                request =
+                    request.basic_auth(username.clone().unwrap(), Some(password.clone().unwrap()))
             }
 
             if range_start != 0 {

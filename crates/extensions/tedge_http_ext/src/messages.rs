@@ -142,10 +142,21 @@ impl HttpRequestBuilder {
         self.header(http::header::AUTHORIZATION, header_value)
     }
 
-    pub fn with_auth(self, token: Option<String>, username: Option<String>, password: Option<String>) -> Self
-    {
+    pub fn with_auth(
+        self,
+        token: Option<String>,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Self {
         let header_value = if username.is_some() && password.is_some() {
-            format!("Basic {}", base64::encode(format!("{}:{}", username.unwrap_or_default(), password.unwrap_or_default())))
+            format!(
+                "Basic {}",
+                base64::encode(format!(
+                    "{}:{}",
+                    username.unwrap_or_default(),
+                    password.unwrap_or_default()
+                ))
+            )
         } else {
             format!("Bearer {}", token.unwrap_or_default())
         };

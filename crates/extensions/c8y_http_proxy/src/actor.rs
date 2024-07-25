@@ -207,7 +207,11 @@ impl C8YHttpProxyActor {
         loop {
             attempt += 1;
             let request = HttpRequestBuilder::get(&url_get_id)
-                .with_auth(self.end_point.token.clone(), self.config.c8y_username.clone(), self.config.c8y_password.clone())
+                .with_auth(
+                    self.end_point.token.clone(),
+                    self.config.c8y_username.clone(),
+                    self.config.c8y_password.clone(),
+                )
                 .build()?;
             let endpoint = request.uri().path().to_owned();
             let method = request.method().to_owned();
@@ -265,7 +269,11 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .with_auth(self.end_point.token.clone(), self.config.c8y_username.clone(), self.config.c8y_password.clone())
+            .with_auth(
+                self.end_point.token.clone(),
+                self.config.c8y_username.clone(),
+                self.config.c8y_password.clone(),
+            )
             .build()?;
         let endpoint = request.uri().path().to_owned();
         let method = request.method().to_owned();
@@ -311,7 +319,11 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .with_auth(self.end_point.token.clone(), self.config.c8y_username.clone(), self.config.c8y_password.clone())
+            .with_auth(
+                self.end_point.token.clone(),
+                self.config.c8y_username.clone(),
+                self.config.c8y_password.clone(),
+            )
             .build()?;
         // retry the request
         Ok(self.peers.http.await_response(request).await?)
@@ -330,7 +342,11 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .with_auth(self.end_point.token.clone(), self.config.c8y_username.clone(), self.config.c8y_password.clone())
+            .with_auth(
+                self.end_point.token.clone(),
+                self.config.c8y_username.clone(),
+                self.config.c8y_password.clone(),
+            )
             .build()?;
         Ok(self.peers.http.await_response(request).await?)
     }
@@ -510,7 +526,18 @@ impl C8YHttpProxyActor {
         {
             let token = self.get_and_set_jwt_token().await?;
             if self.config.c8y_username.is_some() && self.config.c8y_password.is_some() {
-                download_info.auth = Some(Auth::new_basic(self.config.c8y_username.clone().unwrap_or_default().as_str(), self.config.c8y_password.clone().unwrap_or_default().as_str()));
+                download_info.auth = Some(Auth::new_basic(
+                    self.config
+                        .c8y_username
+                        .clone()
+                        .unwrap_or_default()
+                        .as_str(),
+                    self.config
+                        .c8y_password
+                        .clone()
+                        .unwrap_or_default()
+                        .as_str(),
+                ));
             } else {
                 download_info.auth = Some(Auth::new_bearer(token.as_str()));
             }

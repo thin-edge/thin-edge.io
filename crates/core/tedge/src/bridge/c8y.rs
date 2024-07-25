@@ -55,12 +55,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             r#"s/ds in 2 c8y/ """#.into(),
             // Debug
             r#"s/e in 0 c8y/ """#.into(),
-            // SmartRest1 (to support customers with existing solutions based on SmartRest 1)
-            // r#"s/ul/# out 2 c8y/ """#.into(),
-            // r#"t/ul/# out 2 c8y/ """#.into(),
-            // r#"q/ul/# out 2 c8y/ """#.into(),
-            // r#"c/ul/# out 2 c8y/ """#.into(),
-            // r#"s/dl/# in 2 c8y/ """#.into(),
             // SmartRest2
             r#"s/uc/# out 2 c8y/ """#.into(),
             r#"t/uc/# out 2 c8y/ """#.into(),
@@ -110,7 +104,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"q/ul/# out 2 c8y/ """#.into(),
                 r#"c/ul/# out 2 c8y/ """#.into(),
                 r#"s/dl/# in 2 c8y/ """#.into(),
-                r#"s/ol/# in 2 c8y/ """#.into(),
             ]);
 
             // TODO: Add support for smartrest one topics

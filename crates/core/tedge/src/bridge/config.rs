@@ -65,7 +65,6 @@ impl BridgeConfig {
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
 
-        // TODO:
         let use_legacy_auth = self.remote_username.is_some() && self.remote_password.is_some();
         if use_legacy_auth {
             match &self.remote_password {

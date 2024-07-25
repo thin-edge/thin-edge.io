@@ -254,9 +254,16 @@ pub fn bridge_config(
                 mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 bridge_root_cert_path: config.c8y.root_cert_path.clone(),
-                // TODO: now
-                remote_username: if config.c8y.username.is_empty() { None } else { Some(config.c8y.username.clone()) },
-                remote_password: if config.c8y.password.is_empty() { None } else { Some(config.c8y.password.clone()) },
+                remote_username: if config.c8y.username.is_empty() {
+                    None
+                } else {
+                    Some(config.c8y.username.clone())
+                },
+                remote_password: if config.c8y.password.is_empty() {
+                    None
+                } else {
+                    Some(config.c8y.password.clone())
+                },
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
@@ -581,8 +588,7 @@ fn new_bridge(
 
         if let Err(err) = write_bridge_config_to_file(config_location, bridge_config) {
             // We want to preserve previous errors and therefore discard result of this function.
-            // TODO: Debugging bridge configuration
-            // let _ = clean_up(config_location, bridge_config);
+            let _ = clean_up(config_location, bridge_config);
             return Err(err);
         }
     } else {
