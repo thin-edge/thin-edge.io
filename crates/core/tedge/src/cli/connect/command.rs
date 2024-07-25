@@ -286,6 +286,12 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
 
+    if tedge_config.use_legacy_auth() {
+        // TODO: Check how to verify the connection when using credentials
+        // instead of a certificate
+        return Ok(DeviceStatus::AlreadyExists);
+    }
+
     let mut mqtt_options = tedge_config
         .mqtt_config()?
         .with_session_name(CLIENT_ID)
