@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use http::header::HeaderName;
 use http::header::HeaderValue;
 use http::Method;
+use log::info;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
@@ -129,6 +130,26 @@ impl HttpRequestBuilder {
         T: std::fmt::Display,
     {
         let header_value = format!("Bearer {}", token);
+        self.header(http::header::AUTHORIZATION, header_value)
+    }
+
+    /// Add basic authentication (e.g. a JWT token)
+    pub fn basic_auth<T>(self, username: T, password: T) -> Self
+    where
+        T: std::fmt::Display,
+    {
+        let header_value = format!("Basic {}", base64::encode(format!("{username}:{password}")));
+        self.header(http::header::AUTHORIZATION, header_value)
+    }
+
+    pub fn with_auth(self, token: Option<String>, username: Option<String>, password: Option<String>) -> Self
+    {
+        let header_value = if username.is_some() && password.is_some() {
+            format!("Basic {}", base64::encode(format!("{}:{}", username.unwrap_or_default(), password.unwrap_or_default())))
+        } else {
+            format!("Bearer {}", token.unwrap_or_default())
+        };
+        info!("Using header | Authorization: {header_value}");
         self.header(http::header::AUTHORIZATION, header_value)
     }
 }

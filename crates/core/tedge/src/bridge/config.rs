@@ -16,6 +16,7 @@ pub struct BridgeConfig {
     pub connection: String,
     pub address: HostPort<MQTT_TLS_PORT>,
     pub remote_username: Option<String>,
+    pub remote_password: Option<String>,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub remote_clientid: String,
     pub local_clientid: String,
@@ -63,8 +64,20 @@ impl BridgeConfig {
 
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
-        writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
-        writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
+
+        // TODO:
+        let use_legacy_auth = self.remote_username.is_some() && self.remote_password.is_some();
+        if use_legacy_auth {
+            match &self.remote_password {
+                Some(value) => {
+                    writeln!(writer, "remote_password {}", value)?;
+                }
+                None => {}
+            }
+        } else {
+            writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
+            writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
+        }
         writeln!(writer, "try_private {}", self.try_private)?;
         writeln!(writer, "start_type {}", self.start_type)?;
         writeln!(writer, "cleansession {}", self.clean_session)?;
@@ -156,6 +169,7 @@ mod test {
             connection: "edge_to_test".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "test".into(),
@@ -223,6 +237,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_test".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "test".into(),
@@ -289,6 +304,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_az".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
+            remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "Azure".into(),
@@ -410,6 +426,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_az/c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::from_str("test.com").unwrap(),
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: "".into(),
             bridge_certfile: "".into(),
             bridge_keyfile: "".into(),

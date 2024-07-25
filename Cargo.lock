@@ -690,6 +690,7 @@ dependencies = [
  "axum 0.6.20",
  "axum-server",
  "axum_tls",
+ "base64 0.13.1",
  "c8y_http_proxy",
  "camino",
  "env_logger",
@@ -4056,10 +4057,12 @@ name = "tedge_http_ext"
 version = "1.1.1"
 dependencies = [
  "async-trait",
+ "base64 0.13.1",
  "futures",
  "http 0.2.11",
  "hyper 0.14.28",
  "hyper-rustls",
+ "log",
  "mockito",
  "rustls 0.21.11",
  "serde",

@@ -157,6 +157,11 @@ impl C8yMqttJwtTokenRetriever {
     }
 
     pub async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, JwtError> {
+        // TODO: Remove this hack
+        if std::env::var("C8Y_DEVICE_TENANT").is_ok() && std::env::var("C8Y_DEVICE_USER").is_ok() && std::env::var("C8Y_DEVICE_PASSWORD").is_ok() {
+            return Ok(SmartRestJwtResponse::try_new("71,111111")?);
+        }
+        
         let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
         let pub_topic = format!("{}/s/uat", self.topic_prefix);
 

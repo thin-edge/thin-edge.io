@@ -105,7 +105,10 @@ impl TEdgeComponent for CumulocityMapper {
             )?;
             tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
             tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+            
+            if tedge_config.use_legacy_auth() {
+                tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+            }
 
             let c8y = tedge_config.c8y.mqtt.or_config_not_set()?;
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(

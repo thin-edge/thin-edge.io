@@ -40,6 +40,7 @@ impl Server for C8YJwtRetriever {
     }
 
     async fn handle(&mut self, _request: Self::Request) -> Self::Response {
+        // TODO: Support skipping when using legacy auth
         let response = self.mqtt_retriever.get_jwt_token().await?;
         Ok(response.token())
     }

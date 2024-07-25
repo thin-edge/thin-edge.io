@@ -94,11 +94,16 @@ impl DownloadInfo {
 pub enum Auth {
     /// HTTP Bearer authentication
     Bearer(String),
+    Basic(Option<String>, Option<String>),
 }
 
 impl Auth {
     pub fn new_bearer(token: &str) -> Self {
         Self::Bearer(token.into())
+    }
+
+    pub fn new_basic(username: &str, password: &str) -> Self {
+        Self::Basic(Some(username.to_string()), Some(password.to_string()))
     }
 }
 
@@ -409,6 +414,8 @@ impl Downloader {
             let mut request = self.client.get(url.url());
             if let Some(Auth::Bearer(token)) = &url.auth {
                 request = request.bearer_auth(token)
+            } else if let Some(Auth::Basic(username, password)) = &url.auth {
+                request = request.basic_auth(username.clone().unwrap(), Some(password.clone().unwrap()))
             }
 
             if range_start != 0 {

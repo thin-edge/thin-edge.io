@@ -74,6 +74,10 @@ impl TEdgeConfig {
         Self(TEdgeConfigReader::from_dto(dto, location))
     }
 
+    pub fn use_legacy_auth(&self) -> bool {
+        return std::env::var("C8Y_DEVICE_TENANT").is_ok() && std::env::var("C8Y_DEVICE_USER").is_ok() && std::env::var("C8Y_DEVICE_PASSWORD").is_ok();
+    }
+
     pub fn mqtt_config(&self) -> Result<mqtt_channel::Config, CertificateError> {
         let host = self.mqtt.client.host.as_str();
         let port = u16::from(self.mqtt.client.port);
@@ -464,6 +468,16 @@ define_tedge_config! {
         #[tedge_config(example = "/etc/tedge/c8y-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
+
+        /// Cumulocity Username
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
+        #[tedge_config(example = "t12345/device_tedge001", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
+        username: String,
+
+        /// Cumulocity Password
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
+        #[tedge_config(example = "d8aj1d8j1.81", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
+        password: String,
 
         smartrest: {
             /// Set of SmartREST template IDs the device should subscribe to

@@ -16,6 +16,7 @@ test_helpers = []
 
 [dependencies]
 async-trait = { workspace = true }
+base64  = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 hyper = { workspace = true, default-features = false, features = [
@@ -25,6 +26,7 @@ hyper = { workspace = true, default-features = false, features = [
     "tcp",
 ] }
 hyper-rustls = { workspace = true }
+log = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

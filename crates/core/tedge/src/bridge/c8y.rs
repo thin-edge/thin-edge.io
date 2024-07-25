@@ -15,6 +15,8 @@ pub struct BridgeConfigC8yParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
     pub config_file: String,
     pub remote_clientid: String,
+    pub remote_username: Option<String>,
+    pub remote_password: Option<String>,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
@@ -31,6 +33,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             config_file,
             bridge_root_cert_path,
             remote_clientid,
+            remote_username,
+            remote_password,
             bridge_certfile,
             bridge_keyfile,
             smartrest_templates,
@@ -70,10 +74,16 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             r#"alarm/alarms/create out 2 c8y/ """#.into(),
             r#"devicecontrol/notifications in 2 c8y/ """#.into(),
             r#"error in 2 c8y/ """#.into(),
-            // c8y JWT token retrieval
-            r#"s/uat out 0 c8y/ """#.into(),
-            r#"s/dat in 0 c8y/ """#.into(),
         ];
+
+        let use_legacy_auth = remote_username.is_some() && remote_password.is_some();
+        if use_legacy_auth {
+            topics.extend(vec![
+                // c8y JWT token retrieval
+                r#"s/uat out 0 c8y/ """#.into(),
+                r#"s/dat in 0 c8y/ """#.into(),
+            ])
+        }
 
         let templates_set = smartrest_templates
             .0
@@ -100,6 +110,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 r#"q/ul/# out 2 c8y/ """#.into(),
                 r#"c/ul/# out 2 c8y/ """#.into(),
                 r#"s/dl/# in 2 c8y/ """#.into(),
+                r#"s/ol/# in 2 c8y/ """#.into(),
             ]);
 
             // TODO: Add support for smartrest one topics
@@ -131,7 +142,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             config_file,
             connection: "edge_to_c8y".into(),
             address: mqtt_host,
-            remote_username: None,
+            remote_username,
+            remote_password,
             bridge_root_cert_path,
             remote_clientid,
             local_clientid: "Cumulocity".into(),
@@ -196,6 +208,8 @@ mod tests {
             mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             config_file: C8Y_CONFIG_FILENAME.into(),
             remote_clientid: "alpha".into(),
+            remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
@@ -213,6 +227,7 @@ mod tests {
             connection: "edge_to_c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             remote_clientid: "alpha".into(),
             local_clientid: "Cumulocity".into(),

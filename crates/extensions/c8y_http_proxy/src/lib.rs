@@ -37,6 +37,8 @@ mod tests;
 pub struct C8YHttpConfig {
     pub c8y_http_host: String,
     pub c8y_mqtt_host: String,
+    pub c8y_username: Option<String>,
+    pub c8y_password: Option<String>,
     pub device_id: String,
     pub tmp_dir: PathBuf,
     identity: Option<Identity>,
@@ -50,6 +52,8 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
         let c8y_http_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let c8y_mqtt_host = tedge_config.c8y.mqtt.or_config_not_set()?.to_string();
+        let c8y_username = Some(tedge_config.c8y.username.clone());
+        let c8y_password = Some(tedge_config.c8y.password.clone());
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
         let identity = tedge_config.http.client.auth.identity()?;
@@ -59,6 +63,8 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
         Ok(Self {
             c8y_http_host,
             c8y_mqtt_host,
+            c8y_username,
+            c8y_password,
             device_id,
             tmp_dir,
             identity,
