@@ -10,12 +10,6 @@ pub struct SecondsOrHumanTime {
     input: DeserializeTime,
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("Invalid seconds number: '{input}'.")]
-pub struct InvalidSecondsNumber {
-    input: String,
-}
-
 impl From<SecondsOrHumanTime> for String {
     fn from(value: SecondsOrHumanTime) -> Self {
         value.to_string()
