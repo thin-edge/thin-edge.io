@@ -82,8 +82,9 @@ Uninstall ThinEdgeIO
    ${OUTPUT}    Execute Command    command -V tedge    exp_exit_code=!0
 
 Check repository creation
+   ${OUTPUT}    Execute Command    ls /etc/apt/sources.list.d/
+   Should Contain    ${OUTPUT}    *.list
    ${OUTPUT}    Execute Command    apt-cache search tedge
-   Should Contain    ${OUTPUT}    tedge - CLI tool use to control and configure thin-edge.io
    Should Contain    ${OUTPUT}    tedge - CLI tool use to control and configure thin-edge.io
    Should Contain    ${OUTPUT}    tedge-full - thin-edge.io virtual package to automatically install all tedge packages
    Should Contain    ${OUTPUT}    tedge-mapper - thin-edge.io mapper that translates thin-edge.io data model to c8y/az data model.
