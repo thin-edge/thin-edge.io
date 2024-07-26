@@ -102,6 +102,7 @@ impl BuildCommand for TEdgeCertCli {
                         device_id: config.device.id.try_read(&config)?.clone(),
                         path: config.device.cert_path.clone(),
                         host: config.c8y.http.or_err()?.to_owned(),
+                        cloud_root_certs: config.cloud_root_certs(),
                         username,
                         password,
                     },

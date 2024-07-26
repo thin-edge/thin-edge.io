@@ -2,13 +2,12 @@ use super::error::get_webpki_error_from_reqwest;
 use super::error::CertError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
+use certificate::CloudRootCerts;
 use reqwest::StatusCode;
 use reqwest::Url;
 use std::io::prelude::*;
 use std::path::Path;
 use tedge_config::HostPort;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_config::HTTPS_PORT;
 
 #[derive(Debug, serde::Deserialize)]
@@ -30,6 +29,7 @@ pub struct UploadCertCmd {
     pub path: Utf8PathBuf,
     pub host: HostPort<HTTPS_PORT>,
     pub username: String,
+    pub cloud_root_certs: CloudRootCerts,
     pub password: String,
 }
 
@@ -69,30 +69,7 @@ impl UploadCertCmd {
             self.password.clone()
         };
 
-        let config = TEdgeConfig::try_new(TEdgeConfigLocation::default())?;
-        let root_cert = &config.c8y.root_cert_path;
-        let client_builder = reqwest::blocking::Client::builder();
-        let res = match std::fs::metadata(root_cert) {
-            Ok(res) => res,
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => {
-                    return Err(CertError::RootCertificatePathDoesNotExist(
-                        root_cert.to_string(),
-                    ))
-                }
-                e => return Err(CertError::IoError(e.into())),
-            },
-        };
-
-        let client = match res.is_file() {
-            true => {
-                let cert = std::fs::read(root_cert);
-
-                let cert_pem = reqwest::Certificate::from_pem(&cert?)?;
-                client_builder.add_root_certificate(cert_pem).build()?
-            }
-            false => client_builder.build()?,
-        };
+        let client = self.cloud_root_certs.blocking_client();
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
@@ -204,6 +181,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn get_tenant_id_blocking_should_return_error_given_wrong_credentials() {
         let client = reqwest::blocking::Client::new();
 
@@ -228,6 +206,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn get_tenant_id_blocking_returns_correct_response() {
         let client = reqwest::blocking::Client::new();
 
@@ -255,6 +234,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn get_tenant_id_blocking_response_should_return_error_when_response_has_no_name_field() {
         let client = reqwest::blocking::Client::new();
 

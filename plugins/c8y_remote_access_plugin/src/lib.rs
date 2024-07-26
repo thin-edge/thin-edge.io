@@ -165,8 +165,10 @@ async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Res
     let jwt = Jwt::retrieve(&config)
         .await
         .context("Failed when requesting JWT from Cumulocity")?;
+    let client_config = config.cloud_client_tls_config();
 
-    let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt).await?;
+    let proxy =
+        WebsocketSocketProxy::connect(&url, command.target_address(), jwt, client_config).await?;
 
     proxy.run().await;
     Ok(())

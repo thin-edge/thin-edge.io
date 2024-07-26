@@ -38,7 +38,7 @@ env_logger = { workspace = true }
 httparse = { workspace = true }
 mockito = { workspace = true }
 rcgen = { workspace = true }
-rustls = { workspace = true, features = ["dangerous_configuration"] }
+rustls = { workspace = true }
 tedge_http_ext = { workspace = true, features = ["test_helpers"] }
 
 [lints]

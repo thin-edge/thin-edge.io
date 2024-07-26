@@ -321,10 +321,7 @@ mod tests {
             let app = Router::new().route("/test", get(|| async { "it works!" }));
 
             let task = tokio::spawn(crate::start_tls_server(listener, config, app));
-            let client = reqwest::Client::builder()
-                .add_root_certificate(cert)
-                .build()
-                .unwrap();
+            let client = client_builder().add_root_certificate(cert).build().unwrap();
             assert_eq!(
                 client
                     .get(format!("https://localhost:{port}/test"))
@@ -337,6 +334,11 @@ mod tests {
                 "it works!"
             );
             task.abort();
+        }
+
+        #[allow(clippy::disallowed_methods, clippy::disallowed_types)]
+        fn client_builder() -> reqwest::ClientBuilder {
+            reqwest::Client::builder()
         }
 
         fn listener() -> (u16, std::net::TcpListener) {

@@ -190,7 +190,7 @@ impl TEdgeComponent for CumulocityMapper {
             mqtt_config.clone(),
             tedge_config.c8y.bridge.topic_prefix.clone(),
         );
-        let mut http_actor = HttpActor::new().builder();
+        let mut http_actor = HttpActor::new(&tedge_config).builder();
         let c8y_http_config = (&tedge_config).try_into()?;
         let mut c8y_http_proxy_actor =
             C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
@@ -201,8 +201,10 @@ impl TEdgeComponent for CumulocityMapper {
         let mut timer_actor = TimerActor::builder();
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let mut uploader_actor = UploaderActor::new(identity.clone()).builder();
-        let mut downloader_actor = DownloaderActor::new(identity).builder();
+        let cloud_root_certs = tedge_config.cloud_root_certs();
+        let mut uploader_actor =
+            UploaderActor::new(identity.clone(), cloud_root_certs.clone()).builder();
+        let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
 
         // MQTT client dedicated to monitor the c8y-bridge client status and also
         // set service down status on shutdown, using a last-will message.

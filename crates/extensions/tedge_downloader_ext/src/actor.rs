@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use certificate::CloudRootCerts;
 use download::Auth;
 use download::DownloadError;
 use download::DownloadInfo;
@@ -70,6 +71,7 @@ pub struct DownloaderActor<T> {
     config: ServerConfig,
     key: std::marker::PhantomData<T>,
     identity: Option<Identity>,
+    cloud_root_certs: CloudRootCerts,
 }
 
 impl<T> Clone for DownloaderActor<T> {
@@ -78,16 +80,18 @@ impl<T> Clone for DownloaderActor<T> {
             config: self.config,
             key: self.key,
             identity: self.identity.clone(),
+            cloud_root_certs: self.cloud_root_certs.clone(),
         }
     }
 }
 
 impl<T: Message + Default> DownloaderActor<T> {
-    pub fn new(identity: Option<Identity>) -> Self {
+    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudRootCerts) -> Self {
         DownloaderActor {
             config: <_>::default(),
             key: PhantomData,
             identity,
+            cloud_root_certs,
         }
     }
 
@@ -95,11 +99,10 @@ impl<T: Message + Default> DownloaderActor<T> {
         ServerActorBuilder::new(self.clone(), &ServerConfig::new(), Sequential)
     }
 
-    pub fn with_capacity(self, capacity: usize, identity: Option<Identity>) -> Self {
+    pub fn with_capacity(self, capacity: usize) -> Self {
         Self {
             config: self.config.with_capacity(capacity),
-            key: self.key,
-            identity,
+            ..self
         }
     }
 }
@@ -127,9 +130,14 @@ impl<T: Message> Server for DownloaderActor<T> {
                 request.file_path.clone(),
                 permission,
                 self.identity.clone(),
+                self.cloud_root_certs.clone(),
             )
         } else {
-            Downloader::new(request.file_path.clone(), self.identity.clone())
+            Downloader::new(
+                request.file_path.clone(),
+                self.identity.clone(),
+                self.cloud_root_certs.clone(),
+            )
         };
 
         info!(

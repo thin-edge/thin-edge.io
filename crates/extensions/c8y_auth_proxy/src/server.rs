@@ -133,11 +133,13 @@ pub(crate) struct AppData {
     pub is_https: bool,
     pub host: String,
     pub token_manager: SharedTokenManager,
+    pub client: reqwest::Client,
 }
 
 #[derive(Clone)]
 struct AppState {
     target_host: TargetHost,
+    client: reqwest::Client,
     token_manager: SharedTokenManager,
 }
 
@@ -156,6 +158,7 @@ impl From<AppData> for AppState {
                 without_scheme: host.into(),
             },
             token_manager: value.token_manager,
+            client: value.client,
         }
     }
 }
@@ -169,6 +172,12 @@ impl FromRef<AppState> for TargetHost {
 impl FromRef<AppState> for SharedTokenManager {
     fn from_ref(input: &AppState) -> Self {
         input.token_manager.clone()
+    }
+}
+
+impl FromRef<AppState> for reqwest::Client {
+    fn from_ref(input: &AppState) -> Self {
+        input.client.clone()
     }
 }
 
@@ -372,6 +381,7 @@ where
 #[allow(clippy::too_many_arguments)]
 async fn respond_to(
     State(host): State<TargetHost>,
+    State(client): State<reqwest::Client>,
     retrieve_token: State<SharedTokenManager>,
     path: Option<Path<String>>,
     uri: hyper::Uri,
@@ -409,7 +419,6 @@ async fn respond_to(
         let path = path.to_owned();
         return Ok(ws.on_upgrade(|socket| proxy_ws(socket, host, retrieve_token, headers, path)));
     }
-    let client = reqwest::Client::new();
     let (body, body_clone) = small_body.try_clone();
     if body_clone.is_none() {
         let destination = format!("{}/tenant/currentTenant", host.http);
@@ -549,11 +558,7 @@ mod tests {
 
         let proxy_port = start_server_port(target.port(), vec!["unused token"]);
         tokio::spawn(async move {
-            let client = reqwest::Client::builder()
-                .danger_accept_invalid_certs(true)
-                .build()
-                .unwrap();
-            client
+            reqwest_client()
                 .get(format!("http://127.0.0.1:{proxy_port}/c8y/test"))
                 .send()
                 .await
@@ -825,11 +830,7 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let res = client
+        let res = reqwest_client()
             .get(format!("https://localhost:{port}/c8y/hello"))
             .send()
             .await
@@ -853,6 +854,7 @@ mod tests {
 
         let port = start_server_with_certificate(&server, vec!["test-token"], certificate, None);
 
+        #[allow(clippy::disallowed_methods)]
         let client = reqwest::Client::builder()
             .add_root_certificate(reqwest::tls::Certificate::from_der(&cert_der).unwrap())
             .build()
@@ -876,11 +878,7 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let res = client
+        let res = reqwest_client()
             .get(format!("https://localhost:{port}/c8y/not-a-known-url"))
             .send()
             .await
@@ -899,11 +897,7 @@ mod tests {
             None,
         );
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let res = client
+        let res = reqwest_client()
             .get(format!("https://localhost:{port}/c8y/not-a-known-url"))
             .send()
             .await
@@ -923,11 +917,7 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let res = client
+        let res = reqwest_client()
             .get(format!(
                 "https://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
             ))
@@ -949,11 +939,7 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let res = client
+        let res = reqwest_client()
             .get(format!(
                 "https://localhost:{port}/c8y/inventory/managedObjects"
             ))
@@ -983,12 +969,8 @@ mod tests {
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
         let body = "A body";
-        let res = client
+        let res = reqwest_client()
             .put(format!("https://localhost:{port}/c8y/hello"))
             .header("Content-Length", body.bytes().len())
             .body(body)
@@ -1019,12 +1001,8 @@ mod tests {
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
         let body = "A body";
-        let res = client
+        let res = reqwest_client()
             .put(format!("https://localhost:{port}/c8y/hello"))
             .body(reqwest::Body::wrap_stream(once(ready(Ok::<
                 _,
@@ -1058,17 +1036,21 @@ mod tests {
 
         let port = start_server(&server, vec!["stale-token", "test-token"]);
 
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let res = client
+        let res = reqwest_client()
             .get(format!("https://localhost:{port}/c8y/hello"))
             .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 200);
         assert_eq!(res.bytes().await.unwrap(), Bytes::from("Succeeded"));
+    }
+
+    #[allow(clippy::disallowed_methods)]
+    fn reqwest_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap()
     }
 
     fn start_server(server: &mockito::Server, tokens: Vec<impl Into<Cow<'static, str>>>) -> u16 {
@@ -1100,6 +1082,7 @@ mod tests {
         start_proxy_to_url(host, tokens, certificate, ca_dir)
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn start_proxy_to_url(
         target_host: &str,
         tokens: Vec<impl Into<Cow<'static, str>>>,
@@ -1113,6 +1096,7 @@ mod tests {
                 is_https: false,
                 host: target_host.into(),
                 token_manager: TokenManager::new(JwtRetriever::new(&mut retriever)).shared(),
+                client: reqwest::Client::new(),
             };
             let trust_store = ca_dir
                 .as_ref()

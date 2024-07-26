@@ -15,7 +15,7 @@ test = []
 [dependencies]
 anyhow = { workspace = true }
 camino = { workspace = true, features = ["serde", "serde1"] }
-certificate = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
 humantime = { workspace = true }

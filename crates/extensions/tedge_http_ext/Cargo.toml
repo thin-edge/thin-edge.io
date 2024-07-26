@@ -18,24 +18,27 @@ test_helpers = []
 async-trait = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
-hyper = { workspace = true, default_features = false, features = [
+hyper = { workspace = true, default-features = false, features = [
     "client",
     "http1",
     "http2",
     "tcp",
 ] }
 hyper-rustls = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
+tedge_config = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, default_features = false, features = [
+tokio = { workspace = true, default-features = false, features = [
     "macros",
     "rt",
 ] }
 
 [dev-dependencies]
 mockito = { workspace = true }
+tedge_test_utils = { workspace = true }
 
 [lints]
 workspace = true

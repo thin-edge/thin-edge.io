@@ -4,6 +4,7 @@ use crate::credentials::JwtResult;
 use crate::credentials::JwtRetriever;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
+use certificate::CloudRootCerts;
 use reqwest::Identity;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -32,13 +33,14 @@ pub mod messages;
 mod tests;
 
 /// Configuration of C8Y REST API
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct C8YHttpConfig {
     pub c8y_http_host: String,
     pub c8y_mqtt_host: String,
     pub device_id: String,
     pub tmp_dir: PathBuf,
     identity: Option<Identity>,
+    cloud_root_certs: CloudRootCerts,
     retry_interval: Duration,
 }
 
@@ -51,6 +53,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
         let identity = tedge_config.http.client.auth.identity()?;
+        let cloud_root_certs = tedge_config.cloud_root_certs();
         let retry_interval = Duration::from_secs(5);
 
         Ok(Self {
@@ -59,6 +62,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
             device_id,
             tmp_dir,
             identity,
+            cloud_root_certs,
             retry_interval,
         })
     }

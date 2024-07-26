@@ -12,6 +12,7 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 csv = { workspace = true }
 download = { workspace = true }
 regex = { workspace = true }
@@ -20,6 +21,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["process", "rt"] }
