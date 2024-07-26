@@ -175,7 +175,6 @@ async fn bridge_disconnect_while_sending() {
             .unwrap();
     }
 
-    // tokio::time::sleep(Duration::from_secs(5)).await;
     let mut local = poll_local.stop_polling().await;
     cloud
         .publish("s/ds", QoS::AtLeastOnce, true, "test")
@@ -467,7 +466,7 @@ impl Proxy {
                         };
 
                         write_socket.shutdown().await.unwrap();
-                        let _ = write_conn.shutdown().await; //.await.unwrap();
+                        let _ = write_conn.shutdown().await;
                     });
                 }
             }

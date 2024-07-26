@@ -37,7 +37,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tracing::info;
-use tracing::log::debug;
+use tracing::debug;
 
 pub type MqttConfig = mqtt_channel::Config;
 
