@@ -14,12 +14,16 @@ use anyhow::anyhow;
 use anyhow::ensure;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::client_config_for_ca_certificates;
 use certificate::parse_root_certificate::create_tls_config;
+use certificate::read_trust_store;
 use certificate::CertificateError;
+use certificate::CloudRootCerts;
 use certificate::PemCertificate;
 use doku::Document;
 use doku::Type;
 use once_cell::sync::Lazy;
+use reqwest::Certificate;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::fmt;
@@ -32,6 +36,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tedge_config_macros::all_or_nothing;
 use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
@@ -39,6 +44,7 @@ use tedge_config_macros::struct_field_paths;
 pub use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
 use toml::Table;
+use tracing::error;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
@@ -958,7 +964,53 @@ define_tedge_config! {
         #[tedge_config(default(value = true), example = "true", example = "false")]
         enable: bool,
     },
+}
 
+static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
+
+impl TEdgeConfigReader {
+    pub fn cloud_root_certs(&self) -> CloudRootCerts {
+        let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
+            let c8y_roots = read_trust_store(&self.c8y.root_cert_path).unwrap_or_else(move |e| {
+                error!(
+                    "Unable to read certificates from {}: {e:?}",
+                    ReadableKey::C8yRootCertPath
+                );
+                vec![]
+            });
+            let az_roots = read_trust_store(&self.az.root_cert_path).unwrap_or_else(move |e| {
+                error!(
+                    "Unable to read certificates from {}: {e:?}",
+                    ReadableKey::AzRootCertPath
+                );
+                vec![]
+            });
+            let aws_roots = read_trust_store(&self.aws.root_cert_path).unwrap_or_else(move |e| {
+                error!(
+                    "Unable to read certificates from {}: {e:?}",
+                    ReadableKey::AwsRootCertPath
+                );
+                vec![]
+            });
+            c8y_roots
+                .into_iter()
+                .chain(az_roots)
+                .chain(aws_roots)
+                .collect()
+        });
+
+        CloudRootCerts::from(roots.clone())
+    }
+
+    pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {
+        // TODO do we want to unwrap here?
+        client_config_for_ca_certificates([
+            &self.c8y.root_cert_path,
+            &self.az.root_cert_path,
+            &self.aws.root_cert_path,
+        ])
+        .unwrap()
+    }
 }
 
 fn c8y_topic_prefix() -> TopicPrefix {

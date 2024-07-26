@@ -15,6 +15,7 @@ use crate::Capabilities;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use certificate::CloudRootCerts;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
@@ -78,6 +79,7 @@ pub(crate) struct AgentConfig {
     pub tedge_http_host: Arc<str>,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
+    pub cloud_root_certs: CloudRootCerts,
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
@@ -149,6 +151,7 @@ impl AgentConfig {
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
+        let cloud_root_certs = tedge_config.cloud_root_certs();
 
         let is_sudo_enabled = tedge_config.sudo.enable;
 
@@ -181,6 +184,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             tedge_http_host,
             identity,
+            cloud_root_certs,
             fts_url,
             is_sudo_enabled,
             service: tedge_config.service.clone(),
@@ -277,9 +281,13 @@ impl Agent {
         let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
 
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
-        let mut downloader_actor_builder =
-            DownloaderActor::new(self.config.identity.clone()).builder();
-        let mut uploader_actor_builder = UploaderActor::new(self.config.identity).builder();
+        let mut downloader_actor_builder = DownloaderActor::new(
+            self.config.identity.clone(),
+            self.config.cloud_root_certs.clone(),
+        )
+        .builder();
+        let mut uploader_actor_builder =
+            UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
 
         // Instantiate config manager actor if config_snapshot or both operations are enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =

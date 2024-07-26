@@ -120,6 +120,7 @@ rumqttc = "0.23"
 # TODO: used git rev version to fix `unknown feature stdsimd` error: replace with 0.20 version after the release
 rumqttd = { git = "https://github.com/bytebeamio/rumqtt", rev = "0767080715699c34d8fe90b843716ba5ec12f8b9" }
 rustls = "0.21.11"
+rustls-native-certs = "0.6.3"
 rustls-pemfile = "1.0.1"
 serde = "1.0"
 serde_ignored = "0.1"

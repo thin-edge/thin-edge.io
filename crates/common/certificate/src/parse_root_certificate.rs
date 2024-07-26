@@ -28,6 +28,46 @@ pub fn create_tls_config(
         .with_client_auth_cert(cert_chain, pvt_key)?)
 }
 
+pub fn client_config_for_ca_certificates<P>(
+    root_certificates: impl IntoIterator<Item = P>,
+) -> Result<ClientConfig, std::io::Error>
+where
+    P: AsRef<Path>,
+{
+    let mut roots = RootCertStore::empty();
+    for cert_path in root_certificates {
+        rec_add_root_cert(&mut roots, cert_path.as_ref());
+    }
+
+    let (mut valid_count, mut invalid_count) = (0, 0);
+    for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
+        match roots.add(&Certificate(cert.0)) {
+            Ok(_) => valid_count += 1,
+            Err(err) => {
+                tracing::debug!("certificate parsing failed: {:?}", err);
+                invalid_count += 1
+            }
+        }
+    }
+    tracing::debug!(
+        "with_native_roots processed {} valid and {} invalid certs",
+        valid_count,
+        invalid_count
+    );
+    if roots.is_empty() {
+        tracing::debug!("no valid root CA certificates found");
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("no valid root CA certificates found ({invalid_count} invalid)"),
+        ))?
+    }
+
+    Ok(ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(roots)
+        .with_no_client_auth())
+}
+
 pub fn add_certs_from_file(
     root_store: &mut RootCertStore,
     cert_file: impl AsRef<Path>,

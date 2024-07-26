@@ -6,12 +6,15 @@ use input::parse_arguments;
 use miette::miette;
 use miette::Context;
 use miette::IntoDiagnostic;
+use std::io;
 use std::process::Stdio;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::net::UnixStream;
 use url::Url;
 
 use crate::auth::Jwt;
@@ -24,6 +27,8 @@ mod auth;
 mod csv;
 mod input;
 mod proxy;
+
+const UNIX_SOCKFILE: &str = "/run/c8y-remote-access-plugin.sock";
 
 pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let config_dir = opt.get_config_location();
@@ -45,6 +50,20 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
         }
         Command::Connect(command) => proxy(command, tedge_config).await,
         Command::SpawnChild(command) => spawn_child(command, config_dir.tedge_config_root_path()).await,
+        Command::TryConnectUnixSocket(command) => {
+            match UnixStream::connect(UNIX_SOCKFILE).await {
+               Ok(mut unix_stream) => {
+                   eprintln!("sock: Connected to Unix socket at {UNIX_SOCKFILE}");
+                   write_request_and_shutdown(&mut unix_stream, command).await?;
+                   read_from_stream(&mut unix_stream).await?;
+                   Ok(())
+               }
+               Err(_e) => {
+                   eprintln!("sock: Could not connect to Unix socket at {UNIX_SOCKFILE}. Falling back to spawning a child process");
+                   spawn_child(command, config_dir.tedge_config_root_path()).await
+               }
+           }
+        },
     }
 }
 
@@ -154,6 +173,84 @@ async fn spawn_child(command: String, config_dir: &Utf8Path) -> miette::Result<(
     }
 }
 
+#[derive(miette::Diagnostic, Debug, thiserror::Error)]
+#[error("Failed while {1}")]
+#[diagnostic(help("Check if Unix Socket is readable and writable."))]
+struct UnixSocketError<E: std::error::Error + 'static>(#[source] E, &'static str);
+
+async fn write_request_and_shutdown(
+    unix_stream: &mut UnixStream,
+    command: String,
+) -> miette::Result<()> {
+    unix_stream
+        .writable()
+        .await
+        .into_diagnostic()
+        .context("sock: Socket is not writable")?;
+
+    eprintln!("sock: Writing message ({command}) to socket");
+    unix_stream
+        .write_all(command.as_bytes())
+        .await
+        .into_diagnostic()
+        .context("sock: Could not write to socket")?;
+    eprintln!("sock: Message sent");
+
+    eprintln!("sock: Shutting down writing on the stream, waiting for response...");
+    unix_stream
+        .shutdown()
+        .await
+        .into_diagnostic()
+        .context("sock: Could not shutdown writing on the stream")?;
+    eprintln!("sock: Shut down successful");
+
+    Ok(())
+}
+
+async fn read_from_stream(unix_stream: &mut UnixStream) -> miette::Result<()> {
+    unix_stream
+        .readable()
+        .await
+        .into_diagnostic()
+        .context("sock: Socket is not readable")?;
+
+    eprintln!("sock: Reading response...");
+    let stream = BufReader::new(unix_stream);
+    let mut lines = stream.lines();
+
+    while let Ok(maybe_line) = lines.next_line().await {
+        match maybe_line {
+            Some(line) => {
+                eprintln!("sock: Received line: {line}");
+                match line.as_str() {
+                    str if str == SUCCESS_MESSAGE => {
+                        eprintln!("sock: Detected successful response");
+                        return Ok(());
+                    }
+                    "STOPPING" => {
+                        eprintln!("sock: Detected error response");
+                        break;
+                    }
+                    _ => continue,
+                }
+            }
+            None => {
+                eprintln!("sock: Connection closed by peer");
+                break;
+            }
+        }
+    }
+
+    Err(UnixSocketError(
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("sock: Did not receive expected response from socket. Expected = '{SUCCESS_MESSAGE}'"),
+        ),
+        "checking the response from the unix socket",
+    )
+    .into())
+}
+
 async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
     let host = config
         .c8y
@@ -165,8 +262,10 @@ async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Res
     let jwt = Jwt::retrieve(&config)
         .await
         .context("Failed when requesting JWT from Cumulocity")?;
+    let client_config = config.cloud_client_tls_config();
 
-    let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt).await?;
+    let proxy =
+        WebsocketSocketProxy::connect(&url, command.target_address(), jwt, client_config).await?;
 
     proxy.run().await;
     Ok(())

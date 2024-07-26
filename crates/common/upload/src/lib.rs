@@ -25,8 +25,9 @@
 //!     );
 //!
 //!     let identity = unimplemented!("Get client certificate from configuration");
+//!     let cloud_root_certs = unimplemented!("Get cloud_root_certs from configuration");
 //!     // Create uploader instance with source file path.
-//!     let uploader = Uploader::new("/tmp/test_upload".into(), identity);
+//!     let uploader = Uploader::new("/tmp/test_upload".into(), identity, cloud_root_certs);
 //!
 //!     // Call `upload` method to send data to url.
 //!     uploader.upload(&url_data).await?;

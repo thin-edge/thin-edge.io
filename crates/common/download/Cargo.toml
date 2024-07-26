@@ -13,6 +13,7 @@ repository = { workspace = true }
 anyhow = { workspace = true, features = ["backtrace"] }
 axum_tls = { workspace = true, features = ["error-matching"] }
 backoff = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 hyper = { workspace = true }
 log = { workspace = true }
 nix = { workspace = true }

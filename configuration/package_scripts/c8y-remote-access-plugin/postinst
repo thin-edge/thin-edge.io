@@ -1,5 +1,7 @@
 #!/bin/sh
 set -e
 
+#LINUXHELPER#
+
 ### Create supported operation files
 c8y-remote-access-plugin --init

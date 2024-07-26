@@ -23,6 +23,32 @@ deb:
 depends:
   - tedge
 
+contents:
+# service definitions
+  - src: ./configuration/init/systemd/c8y-remote-access-plugin.socket
+    dst: /lib/systemd/system/c8y-remote-access-plugin.socket
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/c8y-remote-access-plugin.socket
+    dst: /lib/systemd/system/c8y-remote-access-plugin.socket
+    file_info:
+      mode: 0644
+    packager: rpm
+  
+  - src: ./configuration/init/systemd/c8y-remote-access-plugin@.service
+    dst: /lib/systemd/system/c8y-remote-access-plugin@.service
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/c8y-remote-access-plugin@.service
+    dst: /lib/systemd/system/c8y-remote-access-plugin@.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
 overrides:
   apk:
     scripts:

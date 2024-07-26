@@ -1,5 +1,7 @@
 use crate::*;
 use tedge_actors::ClientMessageBox;
+use tedge_config::TEdgeConfigLocation;
+use tedge_test_utils::fs::TempTedgeDir;
 
 #[tokio::test]
 async fn get_over_https() {
@@ -18,7 +20,10 @@ async fn get_over_https() {
 }
 
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
-    let mut builder = HttpActor::new().builder();
+    let ttd = TempTedgeDir::new();
+    let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+    let config = config_loc.load().unwrap();
+    let mut builder = HttpActor::new(&config).builder();
     let handle = ClientMessageBox::new(&mut builder);
 
     tokio::spawn(builder.run());

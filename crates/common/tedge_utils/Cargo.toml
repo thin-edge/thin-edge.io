@@ -17,7 +17,7 @@ fs-notify = ["strum", "notify", "notify-debouncer-full"]
 timestamp = ["strum", "time", "serde", "serde_json"]
 
 [dependencies]
-anyhow = "1.0.71"
+anyhow = { workspace = true }
 doku = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
