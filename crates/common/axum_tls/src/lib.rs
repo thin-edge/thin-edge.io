@@ -6,10 +6,10 @@
 //!
 //! - Services should use **HTTP by default**, as this makes it easy to get thin-edge up and running
 //! - Customers should have **the option to enable HTTPS**, which allows clients to trust they are connecting
-//! to the intended host, as well as encrypting any sensitive communication that may occur between
-//! the two
+//!   to the intended host, as well as encrypting any sensitive communication that may occur between
+//!   the two
 //! - Customers should have **the option to enable authentication**, which allows servers to decide whether a
-//! client is trusted before granting them access to potentially sensitive information
+//!   client is trusted before granting them access to potentially sensitive information
 //!
 //! Additionally, when enabling HTTPS, clients shouldn't need to establish whether the server
 //! is HTTPS enabled or not (e.g. if I visit <http://google.com> in my browser, it redirects me to

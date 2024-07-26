@@ -48,7 +48,7 @@ where
 
     match OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339) {
         Ok(result) => Ok(result),
-        Err(e) => Err(D::Error::custom(&format!("Error: {}", e))),
+        Err(e) => Err(D::Error::custom(format!("Error: {}", e))),
     }
 }
 

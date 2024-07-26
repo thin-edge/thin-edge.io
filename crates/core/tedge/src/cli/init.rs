@@ -143,7 +143,7 @@ trait FileSystem {
         // busybox, bsd etc.
         let res = std::process::Command::new("chown")
             .arg("-h")
-            .arg(&format!("{uid}:{gid}"))
+            .arg(format!("{uid}:{gid}"))
             .arg(link)
             .output()
             .with_context(|| {

@@ -111,7 +111,7 @@ pub async fn publish(
 ///
 /// 1. Subscribe to the `sub_topic`,
 /// 2. Wait for the acknowledgment of the subscription
-/// 3  Publish the `pub_message` on the `pub_topic`,
+/// 3. Publish the `pub_message` on the `pub_topic`,
 /// 4. Return the first received message
 /// 5. or give up after `timeout_sec` secondes.
 pub async fn wait_for_response_on_publish(
