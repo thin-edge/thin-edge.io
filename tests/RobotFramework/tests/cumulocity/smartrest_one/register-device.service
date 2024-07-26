@@ -1,0 +1,14 @@
+[Unit]
+Description=Cumulocity device registration service
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge
+EnvironmentFile=-/etc/tedge/c8y-bootstrap.env
+ExecStart=/usr/bin/register-device.sh
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
