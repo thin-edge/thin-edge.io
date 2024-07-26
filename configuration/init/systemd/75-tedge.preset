@@ -5,6 +5,7 @@
 #
 # Device management
 enable c8y-firmware-plugin.service
+enable c8y-remote-access-plugin.socket
 
 # Agent
 disable tedge-agent.service

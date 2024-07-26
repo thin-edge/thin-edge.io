@@ -6,7 +6,11 @@
     ],
     "packages": {
         "tedge": {},
-        "c8y-remote-access-plugin": {},
+        "c8y-remote-access-plugin": {
+            "services": [
+                {"name": "c8y-remote-access-plugin.socket", "enable": true, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": false}
+            ]
+        },
         "tedge-agent": {
             "services": [
                 // Don't stop or restart service when upgrading as the old agent

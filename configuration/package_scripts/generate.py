@@ -104,6 +104,11 @@ def write_script(
     output_file.write_text(contents, encoding="utf8")
     return contents
 
+def format_unit_name(name: str, default_suffix = ".service") -> str:
+    if "." not in name:
+        return name + default_suffix
+    return name
+
 
 def process_package(name: str, manifest: dict, package_type: str, out_dir: Path):
     services = [Service(**service) for service in manifest.get("services", [])]
@@ -113,7 +118,7 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
     prerm = []
     postrm = []
 
-    service_names = [(service.name or name) + ".service" for service in services]
+    service_names = [format_unit_name((service.name or name), ".service") for service in services]
     log.info("Processing package: %s, type=%s", name, package_type)
 
     variables = {
@@ -123,7 +128,7 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
     service = None
 
     for service in services:
-        service_name = (service.name or name) + ".service"
+        service_name = format_unit_name((service.name or name), ".service")
         log.info(
             "Processing service: package=%s, service=%s, type=%s",
             name,

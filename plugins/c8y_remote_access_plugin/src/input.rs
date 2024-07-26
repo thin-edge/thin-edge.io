@@ -7,10 +7,12 @@ use serde::Deserialize;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
+use tedge_config::Path;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 use crate::csv::deserialize_csv_record;
+use crate::UNIX_SOCKFILE;
 
 #[derive(Parser, Deserialize, Debug, PartialEq, Eq)]
 pub struct RemoteAccessConnect {
@@ -63,6 +65,7 @@ pub enum Command {
     Init,
     Cleanup,
     SpawnChild(String),
+    TryConnectUnixSocket(String),
     Connect(RemoteAccessConnect),
 }
 
@@ -79,7 +82,13 @@ impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
             C8yRemoteAccessPluginOpt {
                 connect_string: Some(message),
                 ..
-            } => Ok(Command::SpawnChild(message)),
+            } => {
+                if Path::new(UNIX_SOCKFILE).exists() {
+                    Ok(Command::TryConnectUnixSocket(message))
+                } else {
+                    Ok(Command::SpawnChild(message))
+                }
+            }
             C8yRemoteAccessPluginOpt {
                 child: Some(message),
                 ..
