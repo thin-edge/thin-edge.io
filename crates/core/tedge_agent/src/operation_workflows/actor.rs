@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
 use log::info;
+use serde_json::json;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -27,8 +28,10 @@ use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
+use tedge_api::workflow::IterateHandlers;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::StateExcerpt;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::CommandLog;
@@ -361,6 +364,25 @@ impl WorkflowActor {
 
                 Ok(())
             }
+            OperationAction::Iterate(target_json_path, output_excerpt, handlers) => {
+                match self.process_iterate(
+                    state.clone(),
+                    target_json_path,
+                    output_excerpt,
+                    handlers.clone(),
+                ) {
+                    Ok(next_state) => {
+                        self.publish_command_state(next_state, &mut log_file)
+                            .await?
+                    }
+                    Err(err) => {
+                        error!("Iteration failed due to: {err}");
+                        let new_state = state.update(handlers.on_error);
+                        self.publish_command_state(new_state, &mut log_file).await?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -465,6 +487,72 @@ impl WorkflowActor {
             _ => Err(CommandTopicError::InvalidCommandTopic),
         }
     }
+
+    fn process_iterate(
+        &mut self,
+        state: GenericCommandState,
+        target_json_path: String,
+        _output_excerpt: StateExcerpt,
+        handlers: IterateHandlers,
+    ) -> Result<GenericCommandState, IterationError> {
+        let Some(json_path) = GenericCommandState::extract_path(&target_json_path) else {
+            return Err(IterationError::InvalidPathExpression(target_json_path));
+        };
+
+        // Extract the array
+        let Some(target) = state.extract_value(json_path) else {
+            return Err(IterationError::InvalidTarget(json_path.to_string()));
+        };
+
+        let Some(operations) = target.as_array() else {
+            return Err(IterationError::TargetNotArray(json_path.to_string()));
+        };
+
+        if operations.is_empty() {
+            info!("Nothing to iterate as operations array is empty");
+            return Ok(state.update(handlers.on_success));
+        }
+
+        // Check for the presence of the next_operation key
+        let next_operation = if let Some(next_operation) = state.payload.get("@next") {
+            let mut next_operation = next_operation.clone();
+            let index = next_operation
+                .get("index")
+                .and_then(|i| i.as_u64())
+                .unwrap_or(0) as usize;
+
+            // Validate the index
+            if index >= operations.len() {
+                return Err(IterationError::IndexOutOfBounds(index));
+            }
+
+            let next_index = index + 1;
+            if next_index >= operations.len() {
+                info!("Iteration finished");
+                return Ok(state.update(handlers.on_success));
+            }
+
+            next_operation["index"] = json!(next_index);
+            next_operation["operation"] = operations[next_index].clone();
+
+            next_operation.clone()
+        } else {
+            // If next_operation does not exist, create it with index 0
+            json!({
+                "index": 0,
+                "operation": operations[0].clone()
+            })
+        };
+
+        let next_operation_json = json!({
+            "@next": next_operation
+        });
+        let new_state = state.update_with_json(next_operation_json);
+
+        let new_state = new_state.update(handlers.on_next);
+
+        Ok(new_state)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -474,4 +562,19 @@ enum CommandTopicError {
 
     #[error("Not a command topic")]
     InvalidCommandTopic,
+}
+
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+enum IterationError {
+    #[error("The provided target {0} is not a valid path expression.")]
+    InvalidPathExpression(String),
+
+    #[error("No object found at {0}")]
+    InvalidTarget(String),
+
+    #[error("Object found at {0} is not an array")]
+    TargetNotArray(String),
+
+    #[error("Index: {0} is out of bounds")]
+    IndexOutOfBounds(usize),
 }

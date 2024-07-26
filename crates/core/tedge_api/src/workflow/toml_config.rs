@@ -4,6 +4,7 @@ use crate::workflow::BgExitHandlers;
 use crate::workflow::DefaultHandlers;
 use crate::workflow::ExitHandlers;
 use crate::workflow::GenericStateUpdate;
+use crate::workflow::IterateHandlers;
 use crate::workflow::OperationAction;
 use crate::workflow::OperationWorkflow;
 use crate::workflow::ScriptDefinitionError;
@@ -72,6 +73,7 @@ pub enum TomlOperationAction {
     BackgroundScript(ShellScript),
     Action(String),
     Operation(String),
+    Iterate(String),
 }
 
 impl Default for TomlOperationAction {
@@ -126,6 +128,15 @@ impl TryFrom<TomlOperationState> for OperationAction {
                     operation,
                     input_script,
                     cmd_input,
+                    handlers,
+                ))
+            }
+            TomlOperationAction::Iterate(target_json_path) => {
+                let handlers = TryInto::<IterateHandlers>::try_into(input.handlers)?;
+                let cmd_output = input.output.try_into()?;
+                Ok(OperationAction::Iterate(
+                    target_json_path,
+                    cmd_output,
                     handlers,
                 ))
             }
@@ -212,6 +223,9 @@ pub struct TomlExitHandlers {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     on_exec: Option<TomlStateUpdate>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_next: Option<TomlStateUpdate>,
 }
 
 impl TryFrom<TomlExitHandlers> for ExitHandlers {
@@ -273,6 +287,29 @@ impl TryFrom<TomlExitHandlers> for AwaitHandlers {
             on_error,
             on_timeout,
         })
+    }
+}
+
+impl TryFrom<TomlExitHandlers> for IterateHandlers {
+    type Error = WorkflowDefinitionError;
+
+    fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+        let on_next = value.on_next.map(|u| u.into()).ok_or_else(|| {
+            WorkflowDefinitionError::MissingState {
+                state: "on_next".to_string(),
+            }
+        })?;
+        let on_success = value.on_success.map(|u| u.into()).ok_or_else(|| {
+            WorkflowDefinitionError::MissingState {
+                state: "on_success".to_string(),
+            }
+        })?;
+        let on_error = value.on_error.map(|u| u.into()).ok_or_else(|| {
+            WorkflowDefinitionError::MissingState {
+                state: "on_error".to_string(),
+            }
+        })?;
+        Ok(IterateHandlers::new(on_next, on_success, on_error))
     }
 }
 
@@ -399,6 +436,7 @@ on_kill = { status = "failed", reason = "killed"}         # next status when kil
                 on_timeout: None,
                 on_stdout: Vec::new(),
                 on_exec: None,
+                on_next: None,
             }
         )
     }

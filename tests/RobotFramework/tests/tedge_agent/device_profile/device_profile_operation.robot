@@ -107,11 +107,11 @@ Send device profile operation locally
     ...            "remoteUrl": ""
     ...          }
     ...        },
-    ...        {
-    ...          "operation": "restart",
-    ...          "skip": false,
-    ...          "payload": {}
-    ...        },
+    # ...        {
+    # ...          "operation": "restart",
+    # ...          "skip": false,
+    # ...          "payload": {}
+    # ...        },
     ...        {
     ...          "operation": "software_update",
     ...          "skip": false,
