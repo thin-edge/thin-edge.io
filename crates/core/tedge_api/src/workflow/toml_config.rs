@@ -393,6 +393,7 @@ impl FromStr for ExitCodes {
 mod tests {
     use super::*;
     use crate::workflow::GenericStateUpdate;
+    use assert_matches::assert_matches;
     use ExitCodes::*;
 
     #[test]
@@ -619,5 +620,97 @@ script = "/some/script/which/fails"
                 ),
             }
         )
+    }
+
+    #[test]
+    fn parse_iterate_toml() {
+        let file = r#"
+operation = "custom_operation"
+
+[init]
+action = "proceed"
+on_success = "apply_operation"
+
+[apply_operation]
+iterate = "{.payload.target}"
+on_next = "next_operation"
+on_success = "successful"
+on_error = "failed"
+
+[next_operation]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("apply_operation").unwrap() {
+            OperationAction::Iterate(
+                target,
+                _state_excerpt,
+                IterateHandlers {
+                    on_next,
+                    on_success,
+                    on_error,
+                },
+            ) => {
+                assert_eq!(target, "{.payload.target}");
+                assert_eq!(on_next, &"next_operation".into());
+                assert_eq!(on_success, &"successful".into());
+                assert_eq!(on_error, &"failed".into());
+            }
+            other => panic!("Expected iterate action, but got {other}"),
+        }
+    }
+
+    #[test]
+    fn iterate_parse_fails_without_on_next() {
+        let file = r#"
+operation = "custom_operation"
+
+[apply_operation]
+iterate = "{.payload.target}"
+on_success = "successful"
+on_error = "failed"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let res = OperationWorkflow::try_from(input);
+        assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_next");
+    }
+
+    #[test]
+    fn iterate_parse_fails_without_on_success() {
+        let file = r#"
+operation = "custom_operation"
+
+[apply_operation]
+iterate = "{.payload.target}"
+on_next = "next_operation"
+on_error = "failed"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let res = OperationWorkflow::try_from(input);
+        assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_success");
+    }
+
+    #[test]
+    fn iterate_parse_fails_without_on_error() {
+        let file = r#"
+operation = "custom_operation"
+
+[apply_operation]
+iterate = "{.payload.target}"
+on_next = "next_operation"
+on_success = "successful"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let res = OperationWorkflow::try_from(input);
+        assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_error");
     }
 }
