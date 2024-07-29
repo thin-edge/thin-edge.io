@@ -250,7 +250,7 @@ async fn bridge_reconnects_successfully_after_cloud_connection_interrupted() {
 
 #[tokio::test]
 async fn bridge_reconnects_successfully_after_local_connection_interrupted() {
-    std::env::set_var("RUST_LOG", "tedge_mqtt_bridge=info");
+    std::env::set_var("RUST_LOG", "tedge_mqtt_bridge=info,bridge=info");
     let _ = env_logger::try_init();
     let local_broker_port = free_port().await;
     let cloud_broker_port = free_port().await;
@@ -551,12 +551,57 @@ async fn await_subscription(event_loop: &mut EventLoop) {
 
 async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Publish> {
     loop {
-        if let Ok(Event::Incoming(Incoming::Publish(publish))) =
-            timeout(DEFAULT_TIMEOUT, event_loop.poll())
-                .await
-                .context("timed-out waiting for received message")?
-        {
-            break Ok(publish);
+        let response = timeout(DEFAULT_TIMEOUT, event_loop.poll())
+            .await
+            .context("timed-out waiting for received message")?;
+
+        match response {
+            // Incoming messages
+            Ok(Event::Incoming(Incoming::Publish(publish))) => break Ok(publish),
+            Ok(Event::Incoming(Incoming::ConnAck(v))) => {
+                info!("Incoming::ConnAck: ({:?}, {})", v.code, v.session_present)
+            }
+            Ok(Event::Incoming(Incoming::Connect(v))) => info!(
+                "Incoming::Connect: client_id={}, clean_session={}",
+                v.client_id, v.clean_session
+            ),
+            Ok(Event::Incoming(Incoming::Disconnect)) => info!("Incoming::Disconnect"),
+            Ok(Event::Incoming(Incoming::PingReq)) => info!("Incoming::PingReq"),
+            Ok(Event::Incoming(Incoming::PingResp)) => info!("Incoming::PingResp"),
+            Ok(Event::Incoming(Incoming::PubAck(v))) => info!("Incoming::PubAck: pkid={}", v.pkid),
+            Ok(Event::Incoming(Incoming::PubComp(v))) => {
+                info!("Incoming::PubComp: pkid={}", v.pkid)
+            }
+            Ok(Event::Incoming(Incoming::PubRec(v))) => info!("Incoming::PubRec: pkid={}", v.pkid),
+            Ok(Event::Incoming(Incoming::PubRel(v))) => info!("Incoming::PubRel: pkid={}", v.pkid),
+            Ok(Event::Incoming(Incoming::SubAck(v))) => info!("Incoming::SubAck: pkid={}", v.pkid),
+            Ok(Event::Incoming(Incoming::Subscribe(v))) => {
+                info!("Incoming::Subscribe: pkid={}", v.pkid)
+            }
+            Ok(Event::Incoming(Incoming::UnsubAck(v))) => {
+                info!("Incoming::UnsubAck: pkid={}", v.pkid)
+            }
+            Ok(Event::Incoming(Incoming::Unsubscribe(v))) => {
+                info!("Incoming::Unsubscribe: pkid={}", v.pkid)
+            }
+
+            // Outgoing messages
+            Ok(Event::Outgoing(Outgoing::PingReq)) => info!("Outgoing::PingReq"),
+            Ok(Event::Outgoing(Outgoing::PingResp)) => info!("Outgoing::PingResp"),
+            Ok(Event::Outgoing(Outgoing::Publish(v))) => info!("Outgoing::Publish: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::Subscribe(v))) => info!("Outgoing::Subscribe: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::Unsubscribe(v))) => {
+                info!("outgoing Unsubscribe: pkid={v}")
+            }
+            Ok(Event::Outgoing(Outgoing::PubAck(v))) => info!("Outgoing::PubAck: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::PubRec(v))) => info!("Outgoing::PubRec: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::PubRel(v))) => info!("Outgoing::PubRel: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::PubComp(v))) => info!("Outgoing::PubComp: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::Disconnect)) => info!("Outgoing::Disconnect"),
+            Ok(Event::Outgoing(Outgoing::AwaitAck(v))) => info!("Outgoing::AwaitAck: pkid={v}"),
+            Err(err) => {
+                info!("Connection error (ignoring). {err}");
+            }
         }
     }
 }
