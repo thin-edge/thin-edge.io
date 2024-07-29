@@ -22,6 +22,7 @@ use rumqttc::Publish;
 use rumqttc::SubscribeFilter;
 use rumqttc::Transport;
 use std::borrow::Cow;
+use std::collections::hash_map;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::convert::Infallible;
@@ -35,6 +36,7 @@ use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tracing::debug;
 use tracing::info;
 
 pub type MqttConfig = mqtt_channel::Config;
@@ -329,6 +331,7 @@ async fn half_bridge(
                 continue;
             }
         };
+        debug!("Received notification ({name}) {notification:?}");
 
         match notification {
             Event::Incoming(Incoming::ConnAck(_)) => {
@@ -373,19 +376,25 @@ async fn half_bridge(
             }
 
             // Keep track of packet IDs so we can acknowledge messages
-            Event::Outgoing(Outgoing::Publish(pkid)) => match companion_bridge_half.recv().await {
-                // A message was forwarded by the other bridge half, note the packet id
-                Some(Some((topic, msg))) => {
-                    loop_breaker.forward_on_topic(topic, &msg);
-                    forward_pkid_to_received_msg.insert(pkid, msg);
+            Event::Outgoing(Outgoing::Publish(pkid)) => {
+                if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
+                    match companion_bridge_half.recv().await {
+                        // A message was forwarded by the other bridge half, note the packet id
+                        Some(Some((topic, msg))) => {
+                            loop_breaker.forward_on_topic(topic, &msg);
+                            e.insert(msg);
+                        }
+
+                        // A healthcheck message was published, ignore this packet id
+                        Some(None) => {}
+
+                        // The other bridge half has disconnected, break the loop and shut down the bridge
+                        None => break,
+                    }
+                } else {
+                    info!("Bridge cloud connection {name} ignoring already known pkid={pkid}");
                 }
-
-                // A healthcheck message was published, ignore this packet id
-                Some(None) => {}
-
-                // The other bridge half has disconnected, break the loop and shut down the bridge
-                None => break,
-            },
+            }
             _ => {}
         }
     }
