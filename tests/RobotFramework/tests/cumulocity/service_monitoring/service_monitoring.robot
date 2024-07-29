@@ -28,7 +28,8 @@ Test if all c8y services are up
     c8y-firmware-plugin
 
 Test bridge service status up
-    External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-c8y-bridge    show_info=False
+    ${SERVICE_NAME}=    Get Bridge Service Name    cloud=c8y
+    External Identity Should Exist    ${DEVICE_SN}:device:main:service:${SERVICE_NAME}    show_info=False
     Cumulocity.Managed Object Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
 
 Test mosquitto bridge service status mapping

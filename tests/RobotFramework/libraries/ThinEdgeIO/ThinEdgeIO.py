@@ -879,6 +879,20 @@ class ThinEdgeIO(DeviceLibrary):
         )
         return str(key)
 
+    @keyword("Get Bridge Service Name")
+    def get_bridge_service_name(self, cloud: str) -> str:
+        """Get the name of the bridge service.
+
+        The service name will depend if the built-in bridge
+        has been activated or not (on the device).
+        """
+        output = self.execute_command("tedge config get mqtt.bridge.built_in", strip=True, ignore_exit_code=True)
+        if output == "true":
+            return f"tedge-mapper-bridge-{cloud}"
+
+        # Legacy mosquitto bridge
+        return f"mosquitto-{cloud}-bridge"
+
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
