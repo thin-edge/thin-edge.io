@@ -24,6 +24,7 @@ use tedge_test_utils::fs::TempTedgeDir;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use tokio::time::sleep;
 use tokio::time::timeout;
 use tracing::info;
 use tracing::warn;
@@ -272,6 +273,13 @@ async fn bridge_reconnects_successfully_after_local_connection_interrupted() {
     wait_until_health_status_is("up", &mut ev_local)
         .await
         .unwrap();
+
+    // TODO (flaky): Investigate why adding this sleep makes the test more reliable.
+    // Current theory: If a sub-ack is not received, then the subscription
+    // is not remembered by the client and not resubscribed after
+    // a connection outage
+    sleep(Duration::from_millis(100)).await;
+
     local_proxy.interrupt_connections();
     wait_until_health_status_is("up", &mut ev_local)
         .await
