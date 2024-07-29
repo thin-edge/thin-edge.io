@@ -647,7 +647,7 @@ fn get_rumqttd_config(port: u16) -> Config {
 
     let server_config = ServerSettings {
         name: port.to_string(),
-        listen: ([0, 0, 0, 0], port).into(),
+        listen: ([127, 0, 0, 1], port).into(),
         tls: None,
         next_connection_delay_ms: 1,
         connections: connections_settings,
