@@ -24,7 +24,8 @@ Non-root users should be able to read the mosquitto configuration files #2154
     Execute Command    sudo tedge reconnect c8y
     Should Have File Permissions    /etc/tedge/mosquitto-conf/tedge-mosquitto.conf    644 root:root
     Should Have File Permissions    /etc/tedge/mosquitto-conf/c8y-bridge.conf    644 root:root
-    Execute Command    sudo tedge config set mqtt.bridge.built_in true # Reset things after running the test
+    # Reset things after running the test
+    [Teardown]    Execute Command    sudo tedge config unset mqtt.bridge.built_in
 
 
 tedge_connect_test_negative
