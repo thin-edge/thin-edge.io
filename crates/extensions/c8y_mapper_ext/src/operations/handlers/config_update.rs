@@ -1,46 +1,15 @@
-use crate::converter::CumulocityConverter;
-use crate::error::ConversionError;
-use crate::error::CumulocityMapperError;
 use anyhow::Context;
-use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use std::sync::Arc;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigUpdateCmd;
-use tedge_api::commands::ConfigUpdateCmdPayload;
-use tedge_api::entity_store::EntityExternalId;
-use tedge_api::entity_store::EntityMetadata;
-use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::ChannelFilter;
-use tedge_api::mqtt_topics::EntityFilter;
-use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::mqtt_topics::OperationType;
-use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
 use super::error::OperationError;
 use super::EntityTarget;
 use super::OperationContext;
 use super::OperationOutcome;
-
-pub fn topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
-    [
-        mqtt_schema.topics(
-            EntityFilter::AnyEntity,
-            ChannelFilter::Command(OperationType::ConfigUpdate),
-        ),
-        mqtt_schema.topics(
-            EntityFilter::AnyEntity,
-            ChannelFilter::CommandMetadata(OperationType::ConfigUpdate),
-        ),
-    ]
-    .into_iter()
-    .collect()
-}
 
 impl OperationContext {
     /// Address a received ThinEdge config_update command. If its status is
@@ -91,71 +60,6 @@ impl OperationContext {
                 Ok(OperationOutcome::Ignored) // Do nothing as other components might handle those states
             }
         }
-    }
-}
-
-impl CumulocityConverter {
-    /// Upon receiving a SmartREST c8y_DownloadConfigFile request, convert it to a message on the
-    /// command channel.
-    pub async fn convert_config_update_request(
-        &self,
-        device_xid: String,
-        cmd_id: String,
-        config_download_request: C8yDownloadConfigFile,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let entity_xid: EntityExternalId = device_xid.into();
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
-
-        let message =
-            self.create_config_update_cmd(cmd_id.into(), &config_download_request, target);
-        Ok(message)
-    }
-
-    /// Converts a config_update metadata message to
-    /// - supported operation "c8y_DownloadConfigFile"
-    /// - supported config types
-    pub fn convert_config_update_metadata(
-        &mut self,
-        topic_id: &EntityTopicId,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if !self.config.capabilities.config_update {
-            warn!("Received config_update metadata, however, config_update feature is disabled");
-            return Ok(vec![]);
-        }
-        self.convert_config_metadata(topic_id, message, "c8y_DownloadConfigFile")
-    }
-
-    fn create_config_update_cmd(
-        &self,
-        cmd_id: Arc<str>,
-        config_download_request: &C8yDownloadConfigFile,
-        target: &EntityMetadata,
-    ) -> Vec<MqttMessage> {
-        let channel = Channel::Command {
-            operation: OperationType::ConfigUpdate,
-            cmd_id: cmd_id.to_string(),
-        };
-        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
-
-        let proxy_url = self
-            .c8y_endpoint
-            .maybe_tenant_url(&config_download_request.url)
-            .map(|cumulocity_url| self.auth_proxy.proxy_url(cumulocity_url).into());
-
-        let remote_url = proxy_url.unwrap_or(config_download_request.url.to_string());
-
-        let request = ConfigUpdateCmdPayload {
-            status: CommandStatus::Init,
-            tedge_url: None,
-            remote_url,
-            config_type: config_download_request.config_type.clone(),
-            path: None,
-            log_path: None,
-        };
-
-        // Command messages must be retained
-        vec![MqttMessage::new(&topic, request.to_json()).with_retain()]
     }
 }
 
