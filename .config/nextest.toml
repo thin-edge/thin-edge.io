@@ -1,0 +1,3 @@
+[profile.default]
+retries = 0
+test-threads = "num-cpus"
