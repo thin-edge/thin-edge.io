@@ -65,10 +65,18 @@ check TARGET=DEFAULT_TARGET:
 release *ARGS:
     ci/build_scripts/build.sh {{ARGS}}
 
+# Run unit and doc tests
+test *ARGS:
+    just -f {{justfile()}} test-unit {{ARGS}}
+    just -f {{justfile()}} test-docs
+
 # Run unit tests
-test:
-    cargo nextest run --no-fail-fast --all-features --all-targets
-    cargo test --doc --no-fail-fast --all-features
+test-unit *ARGS:
+    cargo nextest run --no-fail-fast --all-features --all-targets {{ARGS}}
+
+# Run doc tests
+test-docs *ARGS:
+    cargo test --doc --no-fail-fast --all-features {{ARGS}}
 
 # Install integration test dependencies
 setup-integration-test *ARGS:
