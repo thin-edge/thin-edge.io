@@ -259,11 +259,14 @@ jobs:
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
+
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: cargo llvm-cov
-        run: cargo llvm-cov --no-fail-fast --locked --all-features --all-targets --codecov --output-path codecov.json
+        run: cargo llvm-cov nextest --no-fail-fast --locked --all-features --all-targets --codecov --output-path codecov.json
 
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc

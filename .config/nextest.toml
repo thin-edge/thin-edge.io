@@ -1,0 +1,8 @@
+[profile.default]
+retries = 0
+test-threads = "num-cpus"
+
+[[profile.default.overrides]]
+# Remove once https://github.com/thin-edge/thin-edge.io/issues/3021 is resolved
+filter = 'test(bridge_reconnects_successfully_after_local_connection_interrupted)'
+retries = 4
