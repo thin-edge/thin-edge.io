@@ -27,6 +27,7 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -80,6 +81,9 @@ pub struct C8yMapperActor {
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+    // these handlers require entity metadata, so the entity already has to be registered
+    registered_message_handlers:
+        HashMap<ChannelFilter, Vec<LoggingSender<(MqttMessage, EntityMetadata)>>>,
 }
 
 #[async_trait]
@@ -140,6 +144,10 @@ impl C8yMapperActor {
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+        registered_message_handlers: HashMap<
+            ChannelFilter,
+            Vec<LoggingSender<(MqttMessage, EntityMetadata)>>,
+        >,
     ) -> Self {
         Self {
             converter,
@@ -148,6 +156,7 @@ impl C8yMapperActor {
             timer_sender,
             bridge_status_messages,
             message_handlers,
+            registered_message_handlers,
         }
     }
 
@@ -267,6 +276,25 @@ impl C8yMapperActor {
                 sender.send(message.clone()).await?;
             }
         }
+
+        if let Some(message_handler) = self.registered_message_handlers.get_mut(&channel.into()) {
+            let (entity, _) = self
+                .converter
+                .mqtt_schema
+                .entity_channel_of(&message.topic)
+                .expect("message should've been confirmed to be using MQTT topic scheme v1");
+
+            let entity = self
+                .converter
+                .entity_store
+                .get(&entity)
+                .expect("entity should've already been registered");
+
+            for sender in message_handler {
+                sender.send((message.clone(), entity.clone())).await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -336,6 +364,8 @@ pub struct C8yMapperBuilder {
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+    registered_message_handlers:
+        HashMap<ChannelFilter, Vec<LoggingSender<(MqttMessage, EntityMetadata)>>>,
 }
 
 impl C8yMapperBuilder {
@@ -382,6 +412,7 @@ impl C8yMapperBuilder {
         );
 
         let message_handlers = HashMap::new();
+        let registered_message_handlers = HashMap::new();
 
         Ok(Self {
             config,
@@ -394,6 +425,7 @@ impl C8yMapperBuilder {
             auth_proxy,
             bridge_monitor_builder,
             message_handlers,
+            registered_message_handlers,
         })
     }
 
@@ -419,6 +451,22 @@ impl MessageSource<MqttMessage, Vec<ChannelFilter>> for C8yMapperBuilder {
         let sender = LoggingSender::new("Mapper MQTT".into(), peer.get_sender());
         for channel in config {
             self.message_handlers
+                .entry(channel)
+                .or_default()
+                .push(sender.clone());
+        }
+    }
+}
+
+impl MessageSource<(MqttMessage, EntityMetadata), Vec<ChannelFilter>> for C8yMapperBuilder {
+    fn connect_sink(
+        &mut self,
+        config: Vec<ChannelFilter>,
+        peer: &impl MessageSink<(MqttMessage, EntityMetadata)>,
+    ) {
+        let sender = LoggingSender::new("Mapper MQTT".into(), peer.get_sender());
+        for channel in config {
+            self.registered_message_handlers
                 .entry(channel)
                 .or_default()
                 .push(sender.clone());
@@ -459,6 +507,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             timer_sender,
             bridge_monitor_box,
             self.message_handlers,
+            self.registered_message_handlers,
         ))
     }
 }
