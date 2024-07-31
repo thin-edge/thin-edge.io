@@ -27,6 +27,7 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
+    let mut c8y_url: Option<String> = None;
 
     client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
@@ -49,7 +50,8 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
                 // We got a response
                 let token = String::from_utf8(response.payload.to_vec()).unwrap();
                 let connected_url = decode_jwt_token(token.as_str())?;
-                return Ok(connected_url);
+                c8y_url = Some(connected_url);
+                break;
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
@@ -66,6 +68,19 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
             }
             _ => {}
         }
+    }
+
+    // Cleanly disconnect client
+    client.disconnect()?;
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if let Some(c8y_url) = c8y_url {
+        return Ok(c8y_url);
     }
 
     if acknowledged {

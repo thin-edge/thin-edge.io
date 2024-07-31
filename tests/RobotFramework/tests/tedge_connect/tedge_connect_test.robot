@@ -7,7 +7,7 @@ Resource    ../../resources/common.resource
 Library    ThinEdgeIO
 
 Test Tags    theme:cli    theme:mqtt    theme:c8y
-Suite Setup            Setup
+Suite Setup            Suite Setup
 Suite Teardown         Get Logs
 
 *** Test Cases ***
@@ -58,7 +58,18 @@ tedge reconnect restarts mapper
     ${pid_after}=  Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y
     Should Not Be Equal    ${pid_before}    ${pid_after}
 
+Check absence of OpenSSL Error messages #3024
+    ${SuiteStart}=    Get Suite Start Time
+    # Only checkout output if mosquitto is being used
+    ${output}=    Execute Command    systemctl is-active mosquitto && journalctl -u mosquitto -n 5000 --since "@${SuiteStartSeconds}" || true
+    Should Not Contain    ${output}    OpenSSL Error
+
 *** Keywords ***
+
+Suite Setup
+    Setup
+    ${SuiteStartSeconds}=    Get Unix Timestamp
+    Set Suite Variable    $SuiteStartSeconds
 
 Should Have File Permissions
     [Arguments]    ${file}    ${expected_permissions}

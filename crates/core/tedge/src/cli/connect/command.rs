@@ -289,6 +289,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
+    let mut exists = false;
 
     client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
@@ -312,7 +313,8 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
                 let token = String::from_utf8(response.payload.to_vec()).unwrap();
                 // FIXME: what does this magic number mean?
                 if token.contains("71") {
-                    return Ok(DeviceStatus::AlreadyExists);
+                    exists = true;
+                    break;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
@@ -330,6 +332,19 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             }
             _ => {}
         }
+    }
+
+    // Cleanly disconnect client
+    client.disconnect()?;
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if exists {
+        return Ok(DeviceStatus::AlreadyExists);
     }
 
     if acknowledged {
@@ -363,6 +378,7 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
 
     let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
+    let mut exists = false;
 
     client.subscribe(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM, AtLeastOnce)?;
 
@@ -385,7 +401,8 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
                 // We got a response
                 if response.topic.contains(REGISTRATION_OK) {
                     println!("Received expected response message.");
-                    return Ok(DeviceStatus::AlreadyExists);
+                    exists = true;
+                    break;
                 } else {
                     break;
                 }
@@ -405,6 +422,19 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
             }
             _ => {}
         }
+    }
+
+    // Cleanly disconnect client
+    client.disconnect()?;
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if exists {
+        return Ok(DeviceStatus::AlreadyExists);
     }
 
     if acknowledged {
@@ -430,6 +460,7 @@ fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
 
     let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
+    let mut exists = false;
 
     client.subscribe(AWS_TOPIC_SUB_CHECK_CONNECTION, AtLeastOnce)?;
 
@@ -451,7 +482,8 @@ fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 println!("Received expected response on topic {}.", response.topic);
-                return Ok(DeviceStatus::AlreadyExists);
+                exists = true;
+                break;
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
@@ -468,6 +500,19 @@ fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
             }
             _ => {}
         }
+    }
+
+    // Cleanly disconnect client
+    client.disconnect()?;
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if exists {
+        return Ok(DeviceStatus::AlreadyExists);
     }
 
     if acknowledged {
