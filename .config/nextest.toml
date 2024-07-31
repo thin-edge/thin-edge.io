@@ -6,3 +6,8 @@ test-threads = "num-cpus"
 # Remove once https://github.com/thin-edge/thin-edge.io/issues/3021 is resolved
 filter = 'test(bridge_reconnects_successfully_after_local_connection_interrupted) or test(bridge_reconnects_successfully_after_cloud_connection_interrupted)'
 retries = 4
+
+[[profile.default.overrides]]
+# Remove once https://github.com/thin-edge/thin-edge.io/issues/3030 is resolved
+filter = 'test(uploaded_file_can_be_downloaded_from_the_api)'
+retries = 4
