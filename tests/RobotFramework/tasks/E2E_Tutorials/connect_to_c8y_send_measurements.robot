@@ -44,7 +44,7 @@ Sending complex measurements
     Send Three Phase Current Measurement
     Verify Measurement In Cumulocity    type=environment 
     Send Combined Measurement
-    Verify Combined Measurement In Cumulocity
+    Verify Measurement In Cumulocity    type=environment
 
 Sending child device measurements
     [Documentation]    Send a temperature measurement to a child device.
@@ -138,11 +138,6 @@ Verify Measurement In Cumulocity
     [Arguments]        ${type} 
     Device Should Have Measurements    type=${type}    minimum=1    maximum=1
 
-Verify Combined Measurement In Cumulocity
-    [Documentation]    Verify the combined measurement in Cumulocity.
-    # Add implementation for checking the combined measurement in Cumulocity
-    Log    Verified combined measurement in Cumulocity
-
 Verify Child Device Measurement In Cumulocity
     [Arguments]    ${child_id}    ${type}    ${value}
     [Documentation]    Verify the child device measurement in Cumulocity.
@@ -167,26 +162,27 @@ Custom Setup
     ...    ELSE    Log    Unsupported architecture: ${arch}
 
     # Install packages
-    Execute Command    sudo dpkg -i *.deb
+    Execute Command    sudo dpkg -i /var/local/share/*.deb
+
     Log    Installed new packages on device
 
 Transfer Aarch64 Packages
     [Documentation]    Transfers Aarch64 architecture packages to the device.
-    ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
+    ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /var/local/share/
     Log    Transferred Aarch64 packages to device
 
 Transfer Armv7l Packages
     [Documentation]    Transfers ARMv7l architecture packages to the device.
-    ${log}    Transfer To Device    target/armv7-unknown-linux-musleabihf/packages/*.deb    /home/pi/
+    ${log}    Transfer To Device    target/armv7-unknown-linux-musleabihf/packages/*.deb    /var/local/share/
     Log    Transferred ARMv7l packages to device
 
 Custom Teardown
     [Documentation]    Cleans up the device environment. 
     ...                Uninstalls ThinEdgeIO, removes packages and scripts, and retrieves logs.
-    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /home/pi/uninstall-thin-edge_io.sh
-    Execute Command    sudo chmod a+x uninstall-thin-edge_io.sh
-    Execute Command    ./uninstall-thin-edge_io.sh purge
+    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /var/local/share/uninstall-thin-edge_io.sh 
+    Execute Command    sudo chmod a+x /var/local/share/uninstall-thin-edge_io.sh
+    Execute Command    sudo /var/local/share/uninstall-thin-edge_io.sh
     Log    Successfully uninstalled with purge
-    Execute Command    sudo rm -rf /home/pi/*.deb
-    Execute Command    sudo rm -rf /home/pi/*.sh
+    Execute Command    sudo rm -rf /var/local/share/*.deb
+    Transfer To Device    ${CURDIR}/uninstall-thin-edge_io.sh    /var/local/share/uninstall-thin-edge_io.sh
     Get Logs
