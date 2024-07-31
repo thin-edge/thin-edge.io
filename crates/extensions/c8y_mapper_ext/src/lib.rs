@@ -9,7 +9,7 @@ pub mod error;
 mod fragments;
 mod inventory;
 pub mod json;
-mod operations;
+pub mod operations;
 mod serializer;
 pub mod service_monitor;
 #[cfg(test)]

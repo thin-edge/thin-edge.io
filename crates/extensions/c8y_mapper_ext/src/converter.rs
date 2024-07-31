@@ -4,13 +4,9 @@ use super::config::MQTT_MESSAGE_SIZE_THRESHOLD;
 use super::error::CumulocityMapperError;
 use super::service_monitor;
 use crate::actor::CmdId;
-use crate::actor::IdDownloadRequest;
-use crate::actor::IdDownloadResult;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
-use crate::operations;
-use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -58,7 +54,6 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::commands::RestartCommand;
@@ -86,8 +81,6 @@ use tedge_config::TEdgeConfigError;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tedge_uploader_ext::UploadRequest;
-use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
@@ -186,8 +179,6 @@ pub struct CumulocityConverter {
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
-
-    pub operation_handler: OperationHandler,
 }
 
 impl CumulocityConverter {
@@ -196,8 +187,6 @@ impl CumulocityConverter {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
-        uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
-        downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -247,15 +236,6 @@ impl CumulocityConverter {
 
         let command_id = config.id_generator();
 
-        let operation_handler = OperationHandler::new(
-            &config,
-            downloader,
-            uploader,
-            mqtt_publisher.clone(),
-            http_proxy.clone(),
-            auth_proxy.clone(),
-        );
-
         Ok(CumulocityConverter {
             size_threshold,
             config: Arc::new(config),
@@ -276,7 +256,6 @@ impl CumulocityConverter {
             auth_proxy,
             command_id,
             active_commands: HashSet::new(),
-            operation_handler,
         })
     }
 
@@ -1186,16 +1165,6 @@ impl CumulocityConverter {
             Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
 
-                let entity = self.entity_store.try_get(&source)?;
-                let external_id = entity.external_id.clone();
-                let entity = operations::EntityTarget {
-                    topic_id: entity.topic_id.clone(),
-                    external_id: external_id.clone(),
-                    smartrest_publish_topic: self
-                        .smartrest_publish_topic_for_entity(&entity.topic_id)?,
-                };
-
-                self.operation_handler.handle(entity, message.clone()).await;
                 Ok(vec![])
             }
 
@@ -1514,10 +1483,6 @@ pub fn get_local_child_devices_list(path: &Path) -> Result<HashSet<String>, Cumu
 #[cfg(test)]
 pub(crate) mod tests {
     use super::CumulocityConverter;
-    use crate::actor::IdDownloadRequest;
-    use crate::actor::IdDownloadResult;
-    use crate::actor::IdUploadRequest;
-    use crate::actor::IdUploadResult;
     use crate::config::C8yMapperConfig;
     use crate::Capabilities;
     use anyhow::Result;
@@ -1538,7 +1503,6 @@ pub(crate) mod tests {
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
-    use tedge_actors::ClientMessageBox;
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
@@ -3145,23 +3109,8 @@ pub(crate) mod tests {
         let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
 
-        let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
-            FakeServerBox::builder();
-        let uploader = ClientMessageBox::new(&mut uploader_builder);
-
-        let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
-            FakeServerBox::builder();
-        let downloader = ClientMessageBox::new(&mut downloader_builder);
-
-        let converter = CumulocityConverter::new(
-            config,
-            mqtt_publisher,
-            http_proxy,
-            auth_proxy,
-            uploader,
-            downloader,
-        )
-        .unwrap();
+        let converter =
+            CumulocityConverter::new(config, mqtt_publisher, http_proxy, auth_proxy).unwrap();
 
         (converter, c8y_proxy_builder.build())
     }

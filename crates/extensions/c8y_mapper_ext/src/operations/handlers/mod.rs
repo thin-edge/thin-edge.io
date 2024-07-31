@@ -31,7 +31,7 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::LoggingSender;
+use tedge_actors::DynSender;
 use tedge_actors::Sender;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -42,7 +42,6 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tracing::debug;
 use tracing::error;
@@ -55,6 +54,7 @@ pub(super) struct OperationContext {
     pub(super) tmp_dir: Arc<Utf8Path>,
     pub(super) mqtt_schema: MqttSchema,
     pub(super) software_management_api: SoftwareManagementApiFlag,
+
     pub(super) command_id: IdGenerator,
     pub(super) smart_rest_use_operation_id: bool,
 
@@ -64,11 +64,33 @@ pub(super) struct OperationContext {
 
     pub(super) downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     pub(super) uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    pub(super) mqtt_publisher: LoggingSender<MqttMessage>,
+    pub(super) mqtt_publisher: DynSender<MqttMessage>,
 }
 
 impl OperationContext {
+    // will be removed
     pub async fn update(&self, message: OperationMessage) {
+        let outcome = self.report(message.clone()).await;
+        let mut mqtt_publisher = self.mqtt_publisher.sender_clone();
+
+        match outcome {
+            OperationOutcome::Ignored => {}
+            OperationOutcome::Executing { extra_messages } => {
+                for message in extra_messages {
+                    mqtt_publisher.send(message).await.unwrap();
+                }
+            }
+            OperationOutcome::Finished { messages } => {
+                for message in messages {
+                    mqtt_publisher.send(message).await.unwrap();
+                }
+                let clearing_message = MqttMessage::new(&message.message.topic, []).with_retain();
+                mqtt_publisher.send(clearing_message).await.unwrap();
+            }
+        }
+    }
+
+    pub async fn report(&self, message: OperationMessage) -> OperationOutcome {
         let OperationMessage {
             entity,
             cmd_id,
@@ -81,7 +103,7 @@ impl OperationContext {
             Ok(command) => command,
             Err(err) => {
                 error!(%err, ?message, "could not parse command payload");
-                return;
+                return OperationOutcome::Ignored;
             }
         };
 
@@ -105,22 +127,17 @@ impl OperationContext {
             OperationType::SoftwareList => {
                 let result = self.publish_software_list(&entity, &cmd_id, &message).await;
 
-                let mut mqtt_publisher = self.mqtt_publisher.clone();
                 match result {
                     Err(err) => {
                         error!("Fail to list installed software packages: {err}");
+                        return OperationOutcome::Finished { messages: vec![] };
                     }
                     Ok(OperationOutcome::Finished { messages }) => {
-                        for message in messages {
-                            mqtt_publisher.send(message).await.unwrap();
-                        }
+                        return OperationOutcome::Finished { messages };
                     }
                     // command is not yet finished, avoid clearing the command topic
-                    Ok(_) => return,
+                    Ok(outcome) => return outcome,
                 }
-
-                clear_command_topic(command, &mut mqtt_publisher).await;
-                return;
             }
             OperationType::SoftwareUpdate => {
                 self.publish_software_update_status(&entity, &cmd_id, &message)
@@ -148,8 +165,6 @@ impl OperationContext {
             }
         };
 
-        let mut mqtt_publisher = self.mqtt_publisher.clone();
-
         // unwrap is safe: at this point all local operations that are not regular c8y
         // operations should be handled above
         let c8y_operation = to_c8y_operation(&operation).unwrap();
@@ -160,7 +175,7 @@ impl OperationContext {
             &entity.smartrest_publish_topic,
             &cmd_id,
         ) {
-            OperationOutcome::Ignored => {}
+            OperationOutcome::Ignored => OperationOutcome::Ignored,
             OperationOutcome::Executing { mut extra_messages } => {
                 let c8y_state_executing_payload = match self.get_operation_id(&cmd_id) {
                     Some(op_id) if self.smart_rest_use_operation_id => {
@@ -175,11 +190,12 @@ impl OperationContext {
                 let mut messages = vec![c8y_state_executing_message];
                 messages.append(&mut extra_messages);
 
-                for message in messages {
-                    mqtt_publisher.send(message).await.unwrap();
+                OperationOutcome::Executing {
+                    extra_messages: messages,
                 }
             }
             OperationOutcome::Finished { messages } => {
+                // TODO(marcel): uploading logs should be pulled out
                 if let Err(e) = self
                     .upload_operation_log(&external_id, &cmd_id, &operation, &command)
                     .await
@@ -187,11 +203,7 @@ impl OperationContext {
                     error!("failed to upload operation logs: {e}");
                 }
 
-                for message in messages {
-                    mqtt_publisher.send(message).await.unwrap();
-                }
-
-                clear_command_topic(command, &mut mqtt_publisher).await;
+                OperationOutcome::Finished { messages }
             }
         }
     }
@@ -256,18 +268,6 @@ impl OperationContext {
             .and_then(|s| s.parse::<u32>().ok()) // Ensure the operation ID is numeric
             .map(|s| s.to_string())
     }
-}
-
-async fn clear_command_topic(
-    command: GenericCommandState,
-    mqtt_publisher: &mut LoggingSender<MqttMessage>,
-) {
-    let command = command.clear();
-    let clearing_message = command.into_message();
-    assert!(clearing_message.payload_bytes().is_empty());
-    assert!(clearing_message.retain);
-    assert_eq!(clearing_message.qos, QoS::AtLeastOnce);
-    mqtt_publisher.send(clearing_message).await.unwrap();
 }
 
 /// Result of an update of operation's state.

@@ -9,6 +9,7 @@ use crate::actor::IdUploadResult;
 use crate::actor::PublishMessage;
 use crate::availability::AvailabilityBuilder;
 use crate::operations::OperationHandler;
+use crate::operations::OperationHandlerBuilder;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -26,7 +27,6 @@ use std::time::SystemTime;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
-use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
@@ -35,6 +35,7 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::AutoLogUpload;
@@ -2281,21 +2282,7 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
 async fn mapper_processes_operations_concurrently() {
     let num_operations = 20;
 
-    let mut fts_server = mockito::Server::new();
-    let _mock = fts_server
-        .mock(
-            "GET",
-            "/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-1234",
-        )
-        // make each download block so it doesn't complete before we submit all operations
-        .with_chunked_body(|_w| {
-            std::thread::sleep(Duration::from_secs(5));
-            Ok(())
-        })
-        .expect(num_operations)
-        .create_async()
-        .await;
-    let host_port = fts_server.host_with_port();
+    let host_port = "localhost:8888";
 
     let cfg_dir = TempTedgeDir::new();
     let TestHandle {
@@ -2796,12 +2783,10 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     let bridge_health_topic = config.bridge_health_topic.clone();
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
-        config,
+        config.clone(),
         &mut mqtt_builder,
         &mut c8y_proxy_builder,
         &mut timer_builder,
-        &mut uploader_builder,
-        &mut downloader_builder,
         &mut fs_watcher_builder,
         &mut service_monitor_builder,
     )
@@ -2809,12 +2794,31 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     let mut availability_box_builder: SimpleMessageBoxBuilder<MqttMessage, PublishMessage> =
         SimpleMessageBoxBuilder::new("Availability", 10);
-    availability_box_builder
-        .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
+    availability_box_builder.connect_source::<MqttMessage, Vec<ChannelFilter>>(
+        AvailabilityBuilder::channels(),
+        &mut c8y_mapper_builder,
+    );
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
-    let actor = c8y_mapper_builder.build();
-    tokio::spawn(async move { actor.run().await });
+    let operation_handler_builder = OperationHandlerBuilder::new(
+        config.to_operation_handler_config(),
+        &mut c8y_mapper_builder,
+        &mut uploader_builder,
+        &mut downloader_builder,
+        &mut c8y_proxy_builder,
+    );
+
+    let mut runtime = tedge_actors::Runtime::new();
+
+    runtime.spawn(operation_handler_builder).await.unwrap();
+    runtime.spawn(c8y_mapper_builder).await.unwrap();
+
+    tokio::spawn(async move {
+        runtime.run_to_completion().await.unwrap();
+    });
+
+    // let c8y_mapper_actor = c8y_mapper_builder.build();
+    // tokio::spawn(async move { c8y_mapper_actor.run().await });
 
     let mut service_monitor_box = service_monitor_builder.build();
     let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");

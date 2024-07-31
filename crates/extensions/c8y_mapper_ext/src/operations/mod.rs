@@ -26,3 +26,7 @@ mod handlers;
 pub use handlers::EntityTarget;
 
 mod upload;
+
+mod actor;
+mod builder;
+pub use builder::OperationHandlerBuilder;
