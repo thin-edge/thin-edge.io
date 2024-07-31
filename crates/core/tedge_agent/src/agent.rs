@@ -138,8 +138,11 @@ impl AgentConfig {
         let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
 
         // Operation Workflow config
-        let operation_config =
-            OperationConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)?;
+        let operation_config = OperationConfig::from_tedge_config(
+            mqtt_topic_root.to_string(),
+            &mqtt_device_topic_id,
+            tedge_config_location,
+        )?;
 
         // For flockfile
         let run_dir = tedge_config.run.path.clone();
