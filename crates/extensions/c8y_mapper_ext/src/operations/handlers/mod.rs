@@ -136,7 +136,8 @@ impl OperationContext {
                     .await
             }
             OperationType::DeviceProfile => {
-                Ok(OperationOutcome::Ignored) // to do handle state change for device profile
+                self.handle_device_profile_state_change(&entity, &cmd_id, &message)
+                    .await
             }
         };
 

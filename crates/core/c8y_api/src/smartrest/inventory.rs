@@ -141,6 +141,13 @@ impl From<C8ySmartRestSetInterval117> for MqttMessage {
     }
 }
 
+/// Create a SmartREST payload for setting/updating the current state of the target profile
+/// in its own managed object. When all individual operations are finished (i.e. firmware update, software update
+/// and configuration update), the `profile_executed` field should be set to `true`, otherwise it should be `false`.
+pub fn set_c8y_profile_target_payload(profile_executed: bool) -> String {
+    fields_to_csv_string(&["121", &profile_executed.to_string()])
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("Field `{field_name}` contains invalid value: {value:?}")]
 pub struct InvalidValueError {
