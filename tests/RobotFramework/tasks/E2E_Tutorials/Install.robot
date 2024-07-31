@@ -31,13 +31,13 @@ Update using a package manager
 
 Optional: Linux distributions without systemd curl
    ${OUTPUT}    Execute Command    curl -fsSL https://thin-edge.io/install-services.sh | sh -s    ignore_exit_code=True
-   #Not verifiing this test step because the test running in container already exists: tests/RobotFramework/tests/installation/install_on_linux.robot
+   #Skip verification step as system tests already exist: tests/RobotFramework/tests/installation/install_on_linux.robot
    #Checking only that the link is correct
    Should Contain    ${OUTPUT}    Welcome to the thin-edge.io community!
 
 Optional: Linux distributions without systemd wget
    ${OUTPUT}    Execute Command    wget -O - https://thin-edge.io/install-services.sh | sh -s
-   #Not verifiing this test step because the test running in container already exists: tests/RobotFramework/tests/installation/install_on_linux.robot
+   #Skip verification step as system tests already exist: tests/RobotFramework/tests/installation/install_on_linux.robot
    #Checking only that the link is correct
    Should Contain    ${OUTPUT}    Welcome to the thin-edge.io community!
 

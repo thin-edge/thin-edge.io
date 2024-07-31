@@ -37,12 +37,12 @@ Connect the device
 Sending simple measurements
     [Documentation]    Send a simple temperature measurement to Cumulocity IoT.
     Send Temperature Measurement
-    Verify Measurement In Cumulocity
+    Verify Measurement In Cumulocity    type=environment 
 
 Sending complex measurements
     [Documentation]    Send a complex measurement (three_phase_current and combined) to Cumulocity IoT.
     Send Three Phase Current Measurement
-    Verify Measurement In Cumulocity
+    Verify Measurement In Cumulocity    type=environment 
     Send Combined Measurement
     Verify Combined Measurement In Cumulocity
 
@@ -135,7 +135,8 @@ Send Child Device Temperature Measurement
     Log    Sent temperature measurement to child device: 25°C
 
 Verify Measurement In Cumulocity
-    Device Should Have Measurements    type=environment    minimum=1    maximum=1
+    [Arguments]        ${type} 
+    Device Should Have Measurements    type=${type}    minimum=1    maximum=1
 
 Verify Combined Measurement In Cumulocity
     [Documentation]    Verify the combined measurement in Cumulocity.
@@ -178,16 +179,6 @@ Transfer Armv7l Packages
     [Documentation]    Transfers ARMv7l architecture packages to the device.
     ${log}    Transfer To Device    target/armv7-unknown-linux-musleabihf/packages/*.deb    /home/pi/
     Log    Transferred ARMv7l packages to device
-
-# Custom Setup
-#     [Documentation]    Initializes the device environment. 
-#     ...                Sets up the device, transfers necessary packages, 
-#     ...                installs them, and configures Cumulocity for connectivity.
-#     ${DEVICE_SN}=    Setup    skip_bootstrap=True
-#     Set Suite Variable    ${DEVICE_SN}
-#     ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
-#     Execute Command    sudo dpkg -i *.deb
-#     Log    Installed new packages on device
 
 Custom Teardown
     [Documentation]    Cleans up the device environment. 
