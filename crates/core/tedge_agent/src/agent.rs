@@ -280,9 +280,6 @@ impl Agent {
             &self.config.service,
         );
 
-        // Tedge to Te topic converter
-        let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
-
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
         let mut downloader_actor_builder = DownloaderActor::new(
             self.config.identity.clone(),
@@ -347,6 +344,8 @@ impl Agent {
         if is_main_device {
             info!("Running as a main device, starting tedge_to_te_converter and File Transfer Service");
 
+            // Tedge to Te topic converter
+            let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
             runtime.spawn(tedge_to_te_converter).await?;
 
             let file_transfer_server_builder =
