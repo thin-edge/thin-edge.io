@@ -37,12 +37,12 @@ Connect the device
 Sending simple measurements
     [Documentation]    Send a simple temperature measurement to Cumulocity IoT.
     Send Temperature Measurement
-    Verify Measurement In Cumulocity    temperature    25
+    Verify Measurement In Cumulocity
 
 Sending complex measurements
     [Documentation]    Send a complex measurement (three_phase_current and combined) to Cumulocity IoT.
     Send Three Phase Current Measurement
-    Verify Measurement In Cumulocity    three_phase_current    {"L1": 9.5, "L2": 10.3, "L3": 8.8}
+    Verify Measurement In Cumulocity
     Send Combined Measurement
     Verify Combined Measurement In Cumulocity
 
@@ -135,10 +135,7 @@ Send Child Device Temperature Measurement
     Log    Sent temperature measurement to child device: 25°C
 
 Verify Measurement In Cumulocity
-    [Arguments]    ${type}    ${value}
-    [Documentation]    Verify the measurement in Cumulocity.
-    # Add implementation for checking the measurement in Cumulocity
-    Log    Verified ${type} measurement with value ${value} in Cumulocity
+    Device Should Have Measurements    type=environment    minimum=1    maximum=1
 
 Verify Combined Measurement In Cumulocity
     [Documentation]    Verify the combined measurement in Cumulocity.
@@ -151,15 +148,46 @@ Verify Child Device Measurement In Cumulocity
     # Add implementation for checking the child device measurement in Cumulocity
     Log    Verified ${type} measurement for child device ${child_id} with value ${value} in Cumulocity
 
+
 Custom Setup
     [Documentation]    Initializes the device environment. 
     ...                Sets up the device, transfers necessary packages, 
     ...                installs them, and configures Cumulocity for connectivity.
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
     Set Suite Variable    ${DEVICE_SN}
-    ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
+
+    # Determine the device architecture
+    ${output}    Execute Command    uname -m
+    ${arch}    Set Variable    ${output.strip()}
+
+    # Conditional file transfer based on architecture
+    Run Keyword If    '${arch}' == 'aarch64'    Transfer Aarch64 Packages
+    ...    ELSE IF    '${arch}' == 'armv7l'    Transfer Armv7l Packages
+    ...    ELSE    Log    Unsupported architecture: ${arch}
+
+    # Install packages
     Execute Command    sudo dpkg -i *.deb
     Log    Installed new packages on device
+
+Transfer Aarch64 Packages
+    [Documentation]    Transfers Aarch64 architecture packages to the device.
+    ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
+    Log    Transferred Aarch64 packages to device
+
+Transfer Armv7l Packages
+    [Documentation]    Transfers ARMv7l architecture packages to the device.
+    ${log}    Transfer To Device    target/armv7-unknown-linux-musleabihf/packages/*.deb    /home/pi/
+    Log    Transferred ARMv7l packages to device
+
+# Custom Setup
+#     [Documentation]    Initializes the device environment. 
+#     ...                Sets up the device, transfers necessary packages, 
+#     ...                installs them, and configures Cumulocity for connectivity.
+#     ${DEVICE_SN}=    Setup    skip_bootstrap=True
+#     Set Suite Variable    ${DEVICE_SN}
+#     ${log}    Transfer To Device    target/aarch64-unknown-linux-musl/packages/*.deb    /home/pi/
+#     Execute Command    sudo dpkg -i *.deb
+#     Log    Installed new packages on device
 
 Custom Teardown
     [Documentation]    Cleans up the device environment. 
