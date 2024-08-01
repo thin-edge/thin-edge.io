@@ -441,7 +441,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          just generate-changelog
+          if ! just generate-changelog --from-tags; then
+            echo "Warning: Failed to generate changelog, but it should not block a release" > _CHANGELOG.md
+          fi
       - name: Release
         uses: softprops/action-gh-release@v2
         env:

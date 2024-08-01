@@ -20,7 +20,7 @@ Examples
     # Generate the changelog since the last release
 
     $0 --from-tags
-    # Generate the changelog from the latest official release (using )
+    # Generate the changelog from the latest official release (detected from git tags)
 
     $0 1.1.1 HEAD
     # Generate the changelog between version 1.1.1 and the current unreleased version (using the new version)
