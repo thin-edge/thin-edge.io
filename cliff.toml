@@ -106,6 +106,7 @@ commit_parsers = [
     { message = "version bump", skip = true },
     { message = "prepare for release", skip = true },
     { message = "Merge branch 'main' into", skip = true },
+    { message = "Merge remote-tracking branch 'origin/main' into", skip = true },
 
     # classify commits into sections
     { message = "feat", group = "<!-- 0 -->:rocket: Features" },
