@@ -13,7 +13,9 @@ body = """
 {%- endmacro -%}
 
 {%- macro pr_link(num) -%}
-    [#{{ num }}]({{ self::remote_url() }}/pull/{{ num }})\
+    {%- if num -%}
+    {% raw %} {% endraw %}- [#{{ num }}]({{ self::remote_url() }}/pull/{{ num }})\
+    {% endif -%}
 {%- endmacro -%}
 
 {% for group, commits in commits | group_by(attribute="group") %}
@@ -51,11 +53,11 @@ body = """
         {%- endif -%}
 
         {%- if themes -%}
-            - *{{ themes | join(sep="|") | replace(from="theme:", to="") }}*: {{ commit_message }} - {{ self::pr_link(num=commit.github.pr_number) }}
+            - *{{ themes | join(sep="|") | replace(from="theme:", to="") }}*: {{ commit_message }}{{ self::pr_link(num=commit.github.pr_number) }}
         {% elif commit.scope -%}
-            - *{{ commit.scope }}*: {{ commit_message }} - {{ self::pr_link(num=commit.github.pr_number) }}
+            - *{{ commit.scope }}*: {{ commit_message }}{{ self::pr_link(num=commit.github.pr_number) }}
         {% else -%}
-            - *{{ default_scope }}*: {{ commit_message }} - {{ self::pr_link(num=commit.github.pr_number) }}
+            - *{{ default_scope }}*: {{ commit_message }}{{ self::pr_link(num=commit.github.pr_number) }}
         {% endif -%}
     {%- endfor -%}
 {% endfor %}
