@@ -13,7 +13,9 @@ body = """
 {%- endmacro -%}
 
 {%- macro pr_link(num) -%}
-    [#{{ num }}]({{ self::remote_url() }}/pull/{{ num }})\
+    {%- if num -%}
+    {% raw %} {% endraw %}- [#{{ num }}]({{ self::remote_url() }}/pull/{{ num }})\
+    {% endif -%}
 {%- endmacro -%}
 
 {% for group, commits in commits | group_by(attribute="group") %}
@@ -51,11 +53,11 @@ body = """
         {%- endif -%}
 
         {%- if themes -%}
-            - *{{ themes | join(sep="|") | replace(from="theme:", to="") }}*: {{ commit_message }} - {{ self::pr_link(num=commit.github.pr_number) }}
+            - *{{ themes | join(sep="|") | replace(from="theme:", to="") }}*: {{ commit_message }}{{ self::pr_link(num=commit.github.pr_number) }}
         {% elif commit.scope -%}
-            - *{{ commit.scope }}*: {{ commit_message }} - {{ self::pr_link(num=commit.github.pr_number) }}
+            - *{{ commit.scope }}*: {{ commit_message }}{{ self::pr_link(num=commit.github.pr_number) }}
         {% else -%}
-            - *{{ default_scope }}*: {{ commit_message }} - {{ self::pr_link(num=commit.github.pr_number) }}
+            - *{{ default_scope }}*: {{ commit_message }}{{ self::pr_link(num=commit.github.pr_number) }}
         {% endif -%}
     {%- endfor -%}
 {% endfor %}
@@ -104,19 +106,19 @@ commit_parsers = [
     { message = "version bump", skip = true },
     { message = "prepare for release", skip = true },
     { message = "Merge branch 'main' into", skip = true },
+    { message = "Merge remote-tracking branch 'origin/main' into", skip = true },
 
     # classify commits into sections
-    { message = "feat", group = "<!-- 0 -->:rocket: Features" },
-    { message = "doc", group = "<!-- 2 -->:notebook: Documentation" },
-    { message = "fix", group = "<!-- 1 -->:bug: Bug Fixes" },
-    { message = "perf", group = "<!-- 3 -->:runner: Performance" },
-    { message = "refactor", group = "<!-- 4 -->:sailboat: Refactor" },
-    { message = "style", group = "<!-- 5 -->:nail_care: Styling" },
-    { message = "test", group = "<!-- 6 -->:mag_right: Testing" },
-    { message = "ci:", group = "<!-- 9 -->:mag_right: CI/CD" },
-    { message = "chore", group = "<!-- 7 -->:clipboard: Miscellaneous Tasks" },
+    { message = "feat(\\(.+\\))?:", group = "<!-- 0 -->:rocket: Features" },
+    { message = "(doc|docs)(\\(.+\\))?:", group = "<!-- 2 -->:notebook: Documentation" },
+    { message = "fix(\\(.+\\))?:", group = "<!-- 1 -->:bug: Bug Fixes" },
+    { message = "perf(\\(.+\\))?:", group = "<!-- 3 -->:runner: Performance" },
+    { message = "(refactor|refactoring)(\\(.+\\))?:", group = "<!-- 4 -->:sailboat: Refactor" },
+    { message = "style(\\(.+\\))?:", group = "<!-- 5 -->:nail_care: Styling" },
+    { message = "(test|tests|testing)(\\(.+\\))?:", group = "<!-- 6 -->:mag_right: Testing" },
+    { message = "ci(\\(.+\\))?:", group = "<!-- 9 -->:mag_right: CI/CD" },
+    { message = "chore(\\(.+\\))?:", group = "<!-- 7 -->:clipboard: Miscellaneous Tasks" },
     { body = ".*security", group = "<!-- 8 -->:lock: Security" },
-    { message = ".*(deps|Bump).*", group = "Dependencies"},
     { message = ".*", group = "<!-- 7 -->:clipboard: Miscellaneous Tasks"},
 ]
 
