@@ -14,6 +14,12 @@ Run agent with a custom topic prefix #3031
     Should Not Contain    ${output}    te/
     Should Contain    ${output}    custom_root/device/customname//
 
+tedge-agent should not subscribe to legacy topics when running as a child device #3034
+    # Only run tedge-agent for a few seconds
+    ${output}=    Execute Command    timeout 5 tedge-agent --mqtt-device-topic-id "device/pump//" 2>&1    ignore_exit_code=${True}
+    Should Contain    ${output}    Running as a child device, tedge_to_te_converter and File Transfer Service disabled
+    Should Not Contain    ${output}    item=${SPACE}tedge/
+
 
 *** Keywords ***
 
