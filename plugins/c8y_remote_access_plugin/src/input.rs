@@ -156,12 +156,16 @@ mod tests {
     }
 
     #[test]
-    fn parses_spawn_child_if_no_flag_is_provided() {
+    fn parses_spawn_child_or_connect_unix_socket_if_no_flag_is_provided() {
         let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
 
         let command = try_parse_arguments(&[input]).unwrap();
 
-        assert_eq!(command, Command::SpawnChild(input.to_owned()))
+        if Path::new(UNIX_SOCKFILE).exists() {
+            assert_eq!(command, Command::TryConnectUnixSocket(input.to_owned()))
+        } else {
+            assert_eq!(command, Command::SpawnChild(input.to_owned()))
+        }
     }
 
     #[test]
