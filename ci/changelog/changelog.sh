@@ -10,12 +10,17 @@ $0 [FROM_VERSION] [TO_VERSION]
 
 
 Flags
+    --from-tags                     Detect from/to versions are detected
+                                    from the most recent two git tags (version sorted)
     --help | -h                     Show this help
 
 Examples
 
     $0
     # Generate the changelog since the last release
+
+    $0 --from-tags
+    # Generate the changelog from the latest official release (detected from git tags)
 
     $0 1.1.1 HEAD
     # Generate the changelog between version 1.1.1 and the current unreleased version (using the new version)
@@ -27,12 +32,16 @@ EOT
 
 FROM_VERSION=
 TO_VERSION=
+FROM_TAGS=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --help|-h)
             usage
             exit 0
+            ;;
+        --from-tags)
+            FROM_TAGS=1
             ;;
         --*|-*)
             echo "Unknown flag" >&2
@@ -70,6 +79,13 @@ if [ -z "$GITHUB_TOKEN" ]; then
     echo >&2
     echo "   export GITHUB_TOKEN=$(gh auth token)"
     echo >&2
+fi
+
+# Lookup the from/to versions using git --tag (with version sorting)
+if [ "$FROM_TAGS" = 1 ]; then
+    echo "Detecting from/to version from git tags" >&2
+    FROM_VERSION=$(git tag --list | sort -V | grep "^[0-9]" | tail -n2 | head -n1)
+    TO_VERSION=$(git tag --list | sort -V | grep "^[0-9]" | tail -n1)
 fi
 
 if [ -z "$FROM_VERSION" ]; then
