@@ -138,7 +138,7 @@ impl OperationHandler {
         let running_operation = self.running_operations.remove(&topic);
 
         let running_operation =
-            running_operation.unwrap_or(RunningOperation::spawn(Arc::clone(&self.context)));
+            running_operation.unwrap_or_else(|| RunningOperation::spawn(Arc::clone(&self.context)));
 
         let operation_status = running_operation
             .update(message)
