@@ -49,7 +49,9 @@ impl OperationContext {
         let sm_topic = &target.smartrest_publish_topic;
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationOutcome::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing {
+                extra_messages: vec![],
+            }),
             CommandStatus::Successful => {
                 let smartrest_operation_status =
                     succeed_operation_no_payload(CumulocitySupportedOperations::C8yFirmware);

@@ -45,7 +45,9 @@ impl OperationContext {
         let smartrest_topic = &target.smartrest_publish_topic;
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationOutcome::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing {
+                extra_messages: vec![],
+            }),
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);

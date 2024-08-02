@@ -39,7 +39,9 @@ impl OperationContext {
                 // The command has not been processed yet
                 Ok(OperationOutcome::Ignored)
             }
-            CommandStatus::Executing => Ok(OperationOutcome::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing {
+                extra_messages: vec![],
+            }),
             CommandStatus::Successful => {
                 let smartrest_set_operation =
                     smartrest::smartrest_serializer::succeed_operation_no_payload(
