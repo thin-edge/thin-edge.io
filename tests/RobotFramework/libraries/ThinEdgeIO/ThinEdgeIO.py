@@ -893,6 +893,33 @@ class ThinEdgeIO(DeviceLibrary):
         # Legacy mosquitto bridge
         return f"mosquitto-{cloud}-bridge"
 
+    def _get_device_sn(self, name):
+        device = self.current
+        if name:
+            if name in self.devices:
+                device = self.devices.get(name)
+
+        return name or device.get_id()
+
+    @keyword("Delete SmartREST 1.0 Template")
+    def delete_smartrest_one_template(self, template_id: str):
+        try:
+            mo_id = c8y_lib.c8y.identity.get_id(
+                template_id, "c8y_SmartRestDeviceIdentifier"
+            )
+            log.info(
+                "Deleting SmartREST 1.0 template. external_id=%s, managed_object_id=%s",
+                template_id,
+                mo_id,
+            )
+            c8y_lib.c8y.inventory.delete(mo_id)
+        except Exception as ex:
+            log.warning(
+                "Could not deleted SmartREST 1.0 template. id=%s, ex=%s",
+                template_id,
+                ex,
+            )
+
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):

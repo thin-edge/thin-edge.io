@@ -2,6 +2,7 @@ use super::ConnectError;
 use crate::bridge::BridgeConfig;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use certificate::parse_root_certificate::create_tls_config;
+use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
 use rumqttc::tokio_rustls::rustls::Error;
@@ -33,11 +34,25 @@ pub fn create_device_with_direct_connection(
     );
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
-    let tls_config = create_tls_config(
-        &bridge_config.bridge_root_cert_path,
-        &bridge_config.bridge_keyfile,
-        &bridge_config.bridge_certfile,
-    )?;
+    let use_legacy_auth =
+        bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
+    if use_legacy_auth {
+        mqtt_options.set_credentials(
+            bridge_config.remote_username.clone().unwrap_or_default(),
+            bridge_config.remote_password.clone().unwrap_or_default(),
+        );
+    }
+
+    let tls_config = if use_legacy_auth {
+        create_tls_config_without_client_cert(&bridge_config.bridge_root_cert_path)?
+    } else {
+        create_tls_config(
+            &bridge_config.bridge_root_cert_path,
+            &bridge_config.bridge_keyfile,
+            &bridge_config.bridge_certfile,
+        )?
+    };
+
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);

@@ -254,10 +254,21 @@ pub fn bridge_config(
                 mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                 config_file: C8Y_CONFIG_FILENAME.into(),
                 bridge_root_cert_path: config.c8y.root_cert_path.clone(),
+                remote_username: if config.c8y.username.is_empty() {
+                    None
+                } else {
+                    Some(config.c8y.username.clone())
+                },
+                remote_password: if config.c8y.password.is_empty() {
+                    None
+                } else {
+                    Some(config.c8y.password.clone())
+                },
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 smartrest_templates: config.c8y.smartrest.templates.clone(),
+                smartrest_one_templates: config.c8y.smartrest1.templates.clone(),
                 include_local_clean_session: config.c8y.bridge.include.local_cleansession.clone(),
                 bridge_location,
             };
@@ -274,6 +285,12 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
+
+    if tedge_config.use_legacy_auth() {
+        // TODO: Check how to verify the connection when using credentials
+        // instead of a certificate
+        return Ok(DeviceStatus::AlreadyExists);
+    }
 
     let mut mqtt_options = tedge_config
         .mqtt_config()?

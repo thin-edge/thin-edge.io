@@ -1,6 +1,7 @@
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 use certificate::parse_root_certificate::create_tls_config;
+use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::valid_filter;
 use rumqttc::valid_topic;
 use rumqttc::MqttOptions;
@@ -20,6 +21,18 @@ pub fn use_key_and_cert(
         &tedge_config.device.cert_path,
     )?;
     config.set_transport(Transport::tls_with_config(tls_config.into()));
+    Ok(())
+}
+
+pub fn use_credentials(
+    config: &mut MqttOptions,
+    root_cert_path: impl AsRef<Path>,
+    username: String,
+    password: String,
+) -> anyhow::Result<()> {
+    let tls_config = create_tls_config_without_client_cert(root_cert_path)?;
+    config.set_transport(Transport::tls_with_config(tls_config.into()));
+    config.set_credentials(username, password);
     Ok(())
 }
 
