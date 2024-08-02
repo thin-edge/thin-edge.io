@@ -126,6 +126,11 @@ impl OperationHandler {
             return;
         };
 
+        // don't process sub-workflow calls
+        if cmd_id.starts_with("sub:") {
+            return;
+        }
+
         let message = OperationMessage {
             operation,
             entity,
@@ -301,6 +306,55 @@ mod tests {
         sut.handle(entity_target, message_wrong_channel).await;
 
         assert_eq!(sut.running_operations.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn handle_ignores_subcommand_topics_3048() {
+        let test_handle = setup_operation_handler();
+        let mut sut = test_handle.operation_handler;
+        let mqtt = test_handle.mqtt;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        let mqtt_schema = sut.context.mqtt_schema.clone();
+
+        let entity_topic_id = EntityTopicId::default_main_device();
+        let entity_target = EntityTarget {
+            topic_id: entity_topic_id.clone(),
+            external_id: EntityExternalId::from("anything"),
+            smartrest_publish_topic: Topic::new("anything").unwrap(),
+        };
+
+        // Using a firmware operation here, but should hold for any operation type
+        let sub_workflow_topic = mqtt_schema.topic_for(
+            &entity_topic_id,
+            &Channel::Command {
+                operation: OperationType::Restart,
+                cmd_id: "sub:firmware_update:c8y-mapper-192481".to_string(),
+            },
+        );
+        let sub_workflow_message =
+            MqttMessage::new(&sub_workflow_topic, r#"{"status":"executing"}"#);
+
+        sut.handle(entity_target.clone(), sub_workflow_message)
+            .await;
+
+        assert_eq!(sut.running_operations.len(), 0);
+
+        let topic = mqtt_schema.topic_for(
+            &entity_topic_id,
+            &Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            },
+        );
+        let message_wrong_channel = MqttMessage::new(&topic, []);
+        sut.handle(entity_target, message_wrong_channel).await;
+
+        assert_eq!(
+            sut.running_operations.len(),
+            0,
+            "task shouldn't be spawned for sub-workflow"
+        );
+        assert_eq!(mqtt.recv().await, None);
     }
 
     #[tokio::test]
