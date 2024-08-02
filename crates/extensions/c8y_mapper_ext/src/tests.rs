@@ -2453,6 +2453,33 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
 }
 
 #[tokio::test]
+async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle {
+        mqtt, mut timer, ..
+    } = test_handle;
+
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+
+    // should hold for any operation type
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked(
+            "te/device/rpizero2-d83add42f121///cmd/restart/sub:firmware_update:c8y-mapper-192481",
+        ),
+        r#"{"logPath":"/var/log/tedge/agent/workflow-firmware_update-c8y-mapper-192481.log","status":"executing"}"#,
+    )).await.unwrap();
+
+    while let Some(msg) = dbg!(mqtt.recv().await) {
+        assert_ne!(msg.payload_str().unwrap(), "501,c8y_Restart");
+    }
+}
+
+#[tokio::test]
 async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
