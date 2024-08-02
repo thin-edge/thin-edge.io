@@ -49,7 +49,9 @@ impl OperationContext {
         let cmd_id = command.cmd_id.as_str();
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationOutcome::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing {
+                extra_messages: vec![],
+            }),
             CommandStatus::Successful => {
                 // Send a request to the Downloader to download the file asynchronously from FTS
                 let config_filename = format!(

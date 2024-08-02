@@ -33,7 +33,9 @@ impl OperationContext {
         let topic = &target.smartrest_publish_topic;
 
         match command.status() {
-            CommandStatus::Executing => Ok(OperationOutcome::Executing),
+            CommandStatus::Executing => Ok(OperationOutcome::Executing {
+                extra_messages: vec![],
+            }),
             CommandStatus::Successful => {
                 let smartrest_set_operation =
                     smartrest::smartrest_serializer::succeed_operation_no_payload(

@@ -148,14 +148,17 @@ impl OperationContext {
             &entity.smartrest_publish_topic,
         ) {
             OperationOutcome::Ignored => UpdateStatus::Ongoing,
-            OperationOutcome::Executing => {
+            OperationOutcome::Executing { mut extra_messages } => {
                 let c8y_state_executing_payload = set_operation_executing(c8y_operation);
                 let c8y_state_executing_message =
                     MqttMessage::new(&entity.smartrest_publish_topic, c8y_state_executing_payload);
-                mqtt_publisher
-                    .send(c8y_state_executing_message)
-                    .await
-                    .unwrap();
+
+                let mut messages = vec![c8y_state_executing_message];
+                messages.append(&mut extra_messages);
+
+                for message in messages {
+                    mqtt_publisher.send(message).await.unwrap();
+                }
 
                 UpdateStatus::Ongoing
             }
@@ -209,7 +212,8 @@ pub(super) enum OperationOutcome {
     Ignored,
 
     /// Update C8y operation state to `EXECUTING`.
-    Executing,
+    /// `extra_messages` can be used if an operation requires more than the status update message.
+    Executing { extra_messages: Vec<MqttMessage> },
 
     /// Operation is terminated.
     ///
