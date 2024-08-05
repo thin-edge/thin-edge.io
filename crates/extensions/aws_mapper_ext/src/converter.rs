@@ -7,6 +7,7 @@ use tedge_actors::Converter;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_utils::timestamp::TimeFormat;
@@ -23,6 +24,7 @@ pub struct AwsConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub mqtt_schema: MqttSchema,
     pub time_format: TimeFormat,
+    pub topic_prefix: TopicPrefix,
 }
 
 impl AwsConverter {
@@ -31,6 +33,7 @@ impl AwsConverter {
         clock: Box<dyn Clock>,
         mqtt_schema: MqttSchema,
         time_format: TimeFormat,
+        topic_prefix: TopicPrefix,
     ) -> Self {
         let size_threshold = SizeThreshold(AWS_MQTT_THRESHOLD);
         AwsConverter {
@@ -39,6 +42,7 @@ impl AwsConverter {
             size_threshold,
             mqtt_schema: mqtt_schema.clone(),
             time_format,
+            topic_prefix,
         }
     }
 
@@ -102,8 +106,9 @@ impl AwsConverter {
             _ => panic!("Not a health message"),
         }
 
+        let topic_prefix = &self.topic_prefix;
         let source = normalize_name(source);
-        let out_topic = format!("aws/td/{source}/status/health");
+        let out_topic = format!("{topic_prefix}/td/{source}/status/health");
         let payload = self.with_timestamp(input)?;
         let output = MqttMessage::new(&Topic::new(&out_topic).unwrap(), payload);
 
@@ -116,18 +121,19 @@ impl AwsConverter {
         source: EntityTopicId,
         telemetry_type: &String,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let topic_prefix = &self.topic_prefix;
         let payload = self.with_timestamp(input)?;
         let source = normalize_name(&source);
         // XXX: should match on `Channel` instead
         let out_topic = match input.topic.name.split('/').collect::<Vec<_>>()[..] {
             [_, _, _, _, _, "m", _] => {
-                Topic::new_unchecked(&format!("aws/td/{source}/m/{telemetry_type}"))
+                Topic::new_unchecked(&format!("{topic_prefix}/td/{source}/m/{telemetry_type}"))
             }
             [_, _, _, _, _, "e", _] => {
-                Topic::new_unchecked(&format!("aws/td/{source}/e/{telemetry_type}"))
+                Topic::new_unchecked(&format!("{topic_prefix}/td/{source}/e/{telemetry_type}"))
             }
             [_, _, _, _, _, "a", _] => {
-                Topic::new_unchecked(&format!("aws/td/{source}/a/{telemetry_type}"))
+                Topic::new_unchecked(&format!("{topic_prefix}/td/{source}/a/{telemetry_type}"))
             }
             _ => return Ok(vec![]),
         };
@@ -224,6 +230,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = "Invalid JSON";
@@ -244,6 +251,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = "This is not Thin Edge JSON";
@@ -258,6 +266,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         )
         .with_threshold(SizeThreshold(1));
 
@@ -284,6 +293,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -311,6 +321,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -339,6 +350,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -368,6 +380,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -397,6 +410,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -419,12 +433,33 @@ mod tests {
     }
 
     #[test]
+    fn converting_input_uses_custom_topic_prefix(
+    ) {
+        let mut converter = AwsConverter::new(
+            true,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+            TopicPrefix::try_from("custom-prefix").unwrap(),
+        );
+
+        let input = r#"{
+            "temperature": 23.0
+        }"#;
+
+        let output = converter.convert(&new_tedge_message(input)).unwrap();
+        assert_json_eq!(output[0].topic.name, "custom-prefix/td/device:main/m/");
+    }
+
+
+    #[test]
     fn converting_input_with_measurement_type() {
         let mut converter = AwsConverter::new(
             true,
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -453,6 +488,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -484,6 +520,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -518,6 +555,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -552,6 +590,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = "0";
@@ -570,6 +609,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -603,6 +643,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -636,6 +677,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -672,6 +714,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -708,6 +751,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -743,6 +787,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -781,6 +826,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -816,6 +862,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{
@@ -854,6 +901,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{"pid":1234,"status":"up"}"#;
@@ -877,6 +925,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
         );
 
         let input = r#"{"pid":1234,"status":"up"}"#;

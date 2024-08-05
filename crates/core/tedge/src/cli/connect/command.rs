@@ -246,6 +246,7 @@ pub fn bridge_config(
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 bridge_location,
+                topic_prefix: config.aws.bridge.topic_prefix.clone(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -450,8 +451,9 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
 }
 
 fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-    const AWS_TOPIC_PUB_CHECK_CONNECTION: &str = r#"aws/test-connection"#;
-    const AWS_TOPIC_SUB_CHECK_CONNECTION: &str = r#"aws/connection-success"#;
+    let topic_prefix = &tedge_config.aws.bridge.topic_prefix;
+    let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
+    let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");
     const CLIENT_ID: &str = "check_connection_aws";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
 
@@ -465,14 +467,14 @@ fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
     let mut acknowledged = false;
     let mut exists = false;
 
-    client.subscribe(AWS_TOPIC_SUB_CHECK_CONNECTION, AtLeastOnce)?;
+    client.subscribe(&aws_topic_sub_check_connection, AtLeastOnce)?;
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
                 client.publish(
-                    AWS_TOPIC_PUB_CHECK_CONNECTION,
+                    &aws_topic_pub_check_connection,
                     AtLeastOnce,
                     false,
                     REGISTRATION_PAYLOAD,
