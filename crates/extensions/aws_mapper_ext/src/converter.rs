@@ -433,8 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn converting_input_uses_custom_topic_prefix(
-    ) {
+    fn converting_input_uses_custom_topic_prefix() {
         let mut converter = AwsConverter::new(
             true,
             Box::new(TestClock),
@@ -450,7 +449,6 @@ mod tests {
         let output = converter.convert(&new_tedge_message(input)).unwrap();
         assert_json_eq!(output[0].topic.name, "custom-prefix/td/device:main/m/");
     }
-
 
     #[test]
     fn converting_input_with_measurement_type() {

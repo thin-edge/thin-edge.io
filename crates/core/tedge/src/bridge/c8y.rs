@@ -1,11 +1,11 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
-use tedge_config::TopicPrefix;
 use std::process::Command;
 use tedge_config::AutoFlag;
 use tedge_config::HostPort;
 use tedge_config::TemplatesSet;
+use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
 use which::which;
 

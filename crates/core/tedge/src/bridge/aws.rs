@@ -39,7 +39,8 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
         let sub_msg_topic = format!("cmd/# in 1 {topic_prefix}/ thinedge/{remote_clientid}/");
 
         // topic to interact with the shadow of the device
-        let shadow_topic = format!("shadow/# both 1 {topic_prefix}/ $aws/things/{remote_clientid}/");
+        let shadow_topic =
+            format!("shadow/# both 1 {topic_prefix}/ $aws/things/{remote_clientid}/");
 
         // echo topic mapping to check the connection
         let connection_check_pub_msg_topic = format!(

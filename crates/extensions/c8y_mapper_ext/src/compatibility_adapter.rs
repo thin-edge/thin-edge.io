@@ -22,7 +22,6 @@
 //! - make sure `te` messages are retained and `tedge` messages are not.
 
 use serde_json::Value;
-use tedge_config::TopicPrefix;
 use std::convert::Infallible;
 use tedge_actors::Converter;
 use tedge_actors::ConvertingActor;
@@ -30,6 +29,7 @@ use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
@@ -45,9 +45,12 @@ impl OldAgentAdapter {
         topic_prefix: &TopicPrefix,
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> ConvertingActorBuilder<OldAgentAdapter> {
-        let mut builder = ConvertingActor::builder("OldAgentAdapter", OldAgentAdapter {
-            prefix: format!("{topic_prefix}-mapper")
-        });
+        let mut builder = ConvertingActor::builder(
+            "OldAgentAdapter",
+            OldAgentAdapter {
+                prefix: format!("{topic_prefix}-mapper"),
+            },
+        );
         builder.connect_source(old_and_new_command_topics(), mqtt);
         builder.connect_sink(NoConfig, mqtt);
         builder

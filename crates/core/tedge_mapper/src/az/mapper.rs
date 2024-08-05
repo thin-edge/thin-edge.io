@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
-use tedge_config::TopicPrefix;
 use std::borrow::Cow;
 use std::str::FromStr;
 use tedge_actors::ConvertingActor;
@@ -15,6 +14,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -108,13 +108,24 @@ fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
     topics
 }
 
-fn built_in_bridge_rules(remote_clientid: &str, local_prefix: &TopicPrefix) -> anyhow::Result<BridgeConfig> {
+fn built_in_bridge_rules(
+    remote_clientid: &str,
+    local_prefix: &TopicPrefix,
+) -> anyhow::Result<BridgeConfig> {
     let local_prefix: Cow<str> = Cow::Owned(format!("{local_prefix}/"));
     let iothub_prefix = "$iothub/";
     let device_id_prefix = format!("devices/{remote_clientid}/");
     let mut bridge = BridgeConfig::new();
-    bridge.forward_from_local("messages/events/#", local_prefix.clone(), device_id_prefix.clone())?;
-    bridge.forward_from_remote("messages/devicebound/#", local_prefix.clone(), device_id_prefix)?;
+    bridge.forward_from_local(
+        "messages/events/#",
+        local_prefix.clone(),
+        device_id_prefix.clone(),
+    )?;
+    bridge.forward_from_remote(
+        "messages/devicebound/#",
+        local_prefix.clone(),
+        device_id_prefix,
+    )?;
     // Direct methods (request/response)
     bridge.forward_from_local("methods/res/#", local_prefix.clone(), iothub_prefix)?;
     bridge.forward_from_remote("methods/POST/#", local_prefix.clone(), iothub_prefix)?;

@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
-use tedge_config::TopicPrefix;
 use std::str::FromStr;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
@@ -14,6 +13,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -100,7 +100,10 @@ fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
     topics
 }
 
-fn built_in_bridge_rules(remote_client_id: &str, topic_prefix: &TopicPrefix) -> Result<BridgeConfig, anyhow::Error> {
+fn built_in_bridge_rules(
+    remote_client_id: &str,
+    topic_prefix: &TopicPrefix,
+) -> Result<BridgeConfig, anyhow::Error> {
     let local_prefix = format!("{topic_prefix}/");
     let device_id_prefix = format!("thinedge/{remote_client_id}/");
     let things_prefix = format!("$aws/things/{remote_client_id}/");
@@ -115,7 +118,11 @@ fn built_in_bridge_rules(remote_client_id: &str, topic_prefix: &TopicPrefix) -> 
     bridge.forward_bidirectionally("shadow/#", local_prefix.clone(), things_prefix.clone())?;
 
     // echo topic mapping to check the connection
-    bridge.forward_from_local("", format!("{local_prefix}test-connection"), conn_check.clone())?;
+    bridge.forward_from_local(
+        "",
+        format!("{local_prefix}test-connection"),
+        conn_check.clone(),
+    )?;
     bridge.forward_from_remote("", format!("{local_prefix}connection-success"), conn_check)?;
 
     Ok(bridge)
