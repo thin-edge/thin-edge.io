@@ -1,6 +1,7 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
+use tedge_config::TopicPrefix;
 use std::process::Command;
 use tedge_config::AutoFlag;
 use tedge_config::HostPort;
@@ -21,6 +22,7 @@ pub struct BridgeConfigC8yParams {
     pub smartrest_templates: TemplatesSet,
     pub include_local_clean_session: AutoFlag,
     pub bridge_location: BridgeLocation,
+    pub topic_prefix: TopicPrefix,
 }
 
 impl From<BridgeConfigC8yParams> for BridgeConfig {
@@ -35,36 +37,37 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             smartrest_templates,
             include_local_clean_session,
             bridge_location,
+            topic_prefix,
         } = params;
 
         let mut topics: Vec<String> = vec![
             // Templates
-            r#"s/dt in 2 c8y/ """#.into(),
-            r#"s/ut/# out 2 c8y/ """#.into(),
+            format!(r#"s/dt in 2 {topic_prefix}/ """#),
+            format!(r#"s/ut/# out 2 {topic_prefix}/ """#),
             // Static templates
-            r#"s/us/# out 2 c8y/ """#.into(),
-            r#"t/us/# out 2 c8y/ """#.into(),
-            r#"q/us/# out 2 c8y/ """#.into(),
-            r#"c/us/# out 2 c8y/ """#.into(),
-            r#"s/ds in 2 c8y/ """#.into(),
+            format!(r#"s/us/# out 2 {topic_prefix}/ """#),
+            format!(r#"t/us/# out 2 {topic_prefix}/ """#),
+            format!(r#"q/us/# out 2 {topic_prefix}/ """#),
+            format!(r#"c/us/# out 2 {topic_prefix}/ """#),
+            format!(r#"s/ds in 2 {topic_prefix}/ """#),
             // Debug
-            r#"s/e in 0 c8y/ """#.into(),
+            format!(r#"s/e in 0 {topic_prefix}/ """#),
             // SmartRest2
-            r#"s/uc/# out 2 c8y/ """#.into(),
-            r#"t/uc/# out 2 c8y/ """#.into(),
-            r#"q/uc/# out 2 c8y/ """#.into(),
-            r#"c/uc/# out 2 c8y/ """#.into(),
-            r#"s/dc/# in 2 c8y/ """#.into(),
+            format!(r#"s/uc/# out 2 {topic_prefix}/ """#),
+            format!(r#"t/uc/# out 2 {topic_prefix}/ """#),
+            format!(r#"q/uc/# out 2 {topic_prefix}/ """#),
+            format!(r#"c/uc/# out 2 {topic_prefix}/ """#),
+            format!(r#"s/dc/# in 2 {topic_prefix}/ """#),
             // c8y JSON
-            r#"inventory/managedObjects/update/# out 2 c8y/ """#.into(),
-            r#"measurement/measurements/create out 2 c8y/ """#.into(),
-            r#"event/events/create out 2 c8y/ """#.into(),
-            r#"alarm/alarms/create out 2 c8y/ """#.into(),
-            r#"devicecontrol/notifications in 2 c8y/ """#.into(),
-            r#"error in 2 c8y/ """#.into(),
+            format!(r#"inventory/managedObjects/update/# out 2 {topic_prefix}/ """#),
+            format!(r#"measurement/measurements/create out 2 {topic_prefix}/ """#),
+            format!(r#"event/events/create out 2 {topic_prefix}/ """#),
+            format!(r#"alarm/alarms/create out 2 {topic_prefix}/ """#),
+            format!(r#"devicecontrol/notifications in 2 {topic_prefix}/ """#),
+            format!(r#"error in 2 {topic_prefix}/ """#),
             // c8y JWT token retrieval
-            r#"s/uat out 0 c8y/ """#.into(),
-            r#"s/dat in 0 c8y/ """#.into(),
+            format!(r#"s/uat out 0 {topic_prefix}/ """#),
+            format!(r#"s/dat in 0 {topic_prefix}/ """#),
         ];
 
         let templates_set = smartrest_templates
@@ -165,6 +168,7 @@ mod tests {
             smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
             include_local_clean_session: AutoFlag::False,
             bridge_location: BridgeLocation::Mosquitto,
+            topic_prefix: "c8y".try_into().unwrap(),
         };
 
         let bridge = BridgeConfig::from(params);
