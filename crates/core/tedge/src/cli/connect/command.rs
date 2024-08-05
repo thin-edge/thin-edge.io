@@ -229,6 +229,7 @@ pub fn bridge_config(
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 bridge_location,
+                topic_prefix: config.az.bridge.topic_prefix.clone(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -260,6 +261,7 @@ pub fn bridge_config(
                 smartrest_templates: config.c8y.smartrest.templates.clone(),
                 include_local_clean_session: config.c8y.bridge.include.local_cleansession.clone(),
                 bridge_location,
+                topic_prefix: config.c8y.bridge.topic_prefix.clone(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -363,8 +365,9 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
 // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
 // Here if the status is 200 then it's success.
 fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-    const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
-    const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
+    let topic_prefix = &tedge_config.az.bridge.topic_prefix;
+    let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);
+    let azure_topic_device_twin_upstream = format!(r#"{topic_prefix}/twin/GET/?$rid=1"#);
     const CLIENT_ID: &str = "check_connection_az";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
     const REGISTRATION_OK: &str = "200";
@@ -380,14 +383,14 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
     let mut acknowledged = false;
     let mut exists = false;
 
-    client.subscribe(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM, AtLeastOnce)?;
+    client.subscribe(&azure_topic_device_twin_downstream, AtLeastOnce)?;
 
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
                 client.publish(
-                    AZURE_TOPIC_DEVICE_TWIN_UPSTREAM,
+                    &azure_topic_device_twin_upstream,
                     AtLeastOnce,
                     false,
                     REGISTRATION_PAYLOAD,

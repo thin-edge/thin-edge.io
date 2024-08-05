@@ -555,7 +555,7 @@ define_tedge_config! {
 
             /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
-            /// forwarded by to Cumulocity on the `s/us` topic
+            /// forwarded to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
             topic_prefix: TopicPrefix,
         },
@@ -623,6 +623,14 @@ define_tedge_config! {
             #[tedge_config(example = "unix")]
             #[tedge_config(default(variable = "TimeFormat::Unix"))]
             timestamp_format: TimeFormat,
+        },
+
+        bridge: {
+            /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
+            /// if this is set to "az", then messages published to `az/twin/GET/#` will be
+            /// forwarded to Azure on the `$iothub/twin/GET/#` topic
+            #[tedge_config(example = "az", default(function = "az_topic_prefix"))]
+            topic_prefix: TopicPrefix,
         },
 
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
@@ -1015,6 +1023,10 @@ impl TEdgeConfigReader {
 
 fn c8y_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("c8y").unwrap()
+}
+
+fn az_topic_prefix() -> TopicPrefix {
+    TopicPrefix::try_new("az").unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]

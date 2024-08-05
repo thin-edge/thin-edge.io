@@ -4,6 +4,7 @@ use clock::Clock;
 use log::error;
 use serde_json::Map;
 use serde_json::Value;
+use tedge_config::TopicPrefix;
 use std::convert::Infallible;
 use tedge_actors::Converter;
 use tedge_api::mqtt_topics::Channel;
@@ -37,9 +38,10 @@ impl AzureConverter {
         clock: Box<dyn Clock>,
         mqtt_schema: MqttSchema,
         time_format: TimeFormat,
+        topic_prefix: &TopicPrefix,
     ) -> Self {
         let mapper_config = MapperConfig {
-            out_topic: Topic::new_unchecked("az/messages/events/"),
+            out_topic: Topic::new_unchecked(&format!("{topic_prefix}/messages/events/")),
             errors_topic: mqtt_schema.error_topic(),
             time_format,
         };
@@ -177,6 +179,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = "Invalid JSON";
@@ -197,6 +200,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = "This is not Thin Edge JSON";
@@ -212,6 +216,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         )
         .with_threshold(SizeThreshold(1));
 
@@ -238,6 +243,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{
@@ -265,6 +271,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{
@@ -294,6 +301,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{
@@ -323,6 +331,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{
@@ -351,6 +360,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{
@@ -380,6 +390,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{
@@ -478,6 +489,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
         let input_message = MqttMessage::new(&Topic::new_unchecked(input_topic), input);
 
@@ -494,6 +506,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = "0";
@@ -512,6 +525,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Unix,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{"pid":1234,"status":"up","time":1694586060}"#;
@@ -532,6 +546,7 @@ mod tests {
             Box::new(TestClock),
             MqttSchema::default(),
             TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
         );
 
         let input = r#"{"pid":1234,"status":"up"}"#;
