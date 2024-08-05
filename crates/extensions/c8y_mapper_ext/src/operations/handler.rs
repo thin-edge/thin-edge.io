@@ -18,7 +18,6 @@ use tedge_actors::LoggingSender;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
-use tedge_api::mqtt_topics::IdGenerator;
 use tedge_mqtt_ext::MqttMessage;
 use tokio::task::JoinError;
 
@@ -67,7 +66,7 @@ impl OperationHandler {
 
                 // TODO(marcel): would be good not to generate new ids from running operations, see if
                 // we can remove it somehow
-                command_id: IdGenerator::new(crate::converter::REQUESTER_NAME),
+                command_id: c8y_mapper_config.id_generator(),
 
                 downloader,
                 uploader,

@@ -6,6 +6,7 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::Protocol;
 use camino::Utf8Path;
+use tedge_api::mqtt_topics::IdGenerator;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -280,6 +281,10 @@ impl C8yMapperConfig {
         ]
         .try_into()
         .unwrap()
+    }
+
+    pub fn id_generator(&self) -> IdGenerator {
+        IdGenerator::new(&format!("{}-mapper", self.c8y_prefix))
     }
 }
 
