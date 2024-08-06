@@ -196,6 +196,13 @@ impl OperationHandler {
             ]);
         }
 
+        if capabilities.device_profile {
+            topics.extend([
+                (AnyEntity, Command(OperationType::DeviceProfile)),
+                (AnyEntity, CommandMetadata(OperationType::DeviceProfile)),
+            ]);
+        }
+
         topics
     }
 }
