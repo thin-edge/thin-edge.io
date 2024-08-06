@@ -1159,6 +1159,7 @@ impl CumulocityConverter {
                     OperationType::FirmwareUpdate => {
                         self.register_firmware_update_operation(&source)
                     }
+                    OperationType::DeviceProfile => self.register_device_profile_operation(&source),
                     OperationType::Custom(c8y_op_name) => {
                         self.register_custom_operation(&source, c8y_op_name)
                     }
@@ -2770,6 +2771,7 @@ pub(crate) mod tests {
     #[test_case("log_upload")]
     #[test_case("config_snapshot")]
     #[test_case("config_update")]
+    #[test_case("device_profile")]
     #[test_case("custom_op")]
     #[tokio::test]
     async fn operations_not_supported_for_services(op_type: &str) {

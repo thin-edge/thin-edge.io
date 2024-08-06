@@ -79,6 +79,7 @@ mod tests {
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
+    use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -87,6 +88,89 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+
+    #[tokio::test]
+    async fn create_device_profile_operation_file_for_main_device() {
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate device_profile cmd metadata message
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/device_profile"),
+            "{}",
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_DeviceProfile")]).await;
+
+        // Validate if the supported operation file is created
+        assert!(ttd.path().join("operations/c8y/c8y_DeviceProfile").exists());
+    }
+
+    #[tokio::test]
+    async fn create_device_profile_operation_file_for_child_device() {
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate device_profile cmd metadata message
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/device_profile"),
+            "{}",
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect auto-registration message
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/child1//",
+                json!({"@type":"child-device","@id":"test-device:device:child1"}),
+            )],
+        )
+        .await;
+
+        assert_received_contains_str(
+            &mut mqtt,
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child",
+                ),
+                (
+                    "c8y/s/us/test-device:device:child1",
+                    "114,c8y_DeviceProfile",
+                ),
+            ],
+        )
+        .await;
+
+        // Validate if the supported operation file is created
+        assert!(ttd
+            .path()
+            .join("operations/c8y/test-device:device:child1/c8y_DeviceProfile")
+            .exists());
+
+        // Duplicate device_profile cmd metadata message
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/device_profile"),
+            "{}",
+        ))
+        .await
+        .expect("Send failed");
+
+        // Assert that the supported ops message is not duplicated
+        assert_eq!(mqtt.recv().await, None);
+    }
 
     #[tokio::test]
     async fn mapper_converts_device_profile_operation_for_main_device() {

@@ -353,4 +353,25 @@ impl CumulocityConverter {
             MqttMessage::new(&topic, request.to_json()).with_retain()
         ])
     }
+
+    /// Converts a device_profile metadata message to supported operation "c8y_DeviceProfile"
+    pub fn register_device_profile_operation(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.device_profile {
+            warn!("Received device_profile metadata, however, device_profile feature is disabled");
+            return Ok(vec![]);
+        }
+
+        match self.register_operation(topic_id, "c8y_DeviceProfile") {
+            Err(err) => {
+                error!(
+                    "Failed to register `device_profile` operation for {topic_id} due to: {err}"
+                );
+                Ok(vec![])
+            }
+            Ok(messages) => Ok(messages),
+        }
+    }
 }
