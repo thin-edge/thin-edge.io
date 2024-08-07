@@ -87,6 +87,7 @@ pub enum CumulocitySupportedOperations {
     C8yUploadConfigFile,
     C8yDownloadConfigFile,
     C8yFirmware,
+    C8yDeviceProfile,
 }
 
 impl From<CumulocitySupportedOperations> for &'static str {
@@ -98,6 +99,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
             CumulocitySupportedOperations::C8yUploadConfigFile => "c8y_UploadConfigFile",
             CumulocitySupportedOperations::C8yDownloadConfigFile => "c8y_DownloadConfigFile",
             CumulocitySupportedOperations::C8yFirmware => "c8y_Firmware",
+            CumulocitySupportedOperations::C8yDeviceProfile => "c8y_DeviceProfile",
         }
     }
 }

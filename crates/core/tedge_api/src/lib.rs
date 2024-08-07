@@ -1,5 +1,6 @@
 pub mod alarm;
 pub mod commands;
+pub mod device_profile;
 pub mod entity_store;
 pub mod error;
 pub mod event;

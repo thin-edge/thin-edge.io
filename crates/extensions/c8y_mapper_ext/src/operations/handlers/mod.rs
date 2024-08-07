@@ -2,6 +2,7 @@
 
 mod config_snapshot;
 mod config_update;
+mod device_profile;
 mod firmware_update;
 mod log_upload;
 mod restart;
@@ -134,6 +135,10 @@ impl OperationContext {
                 self.handle_firmware_update_state_change(&entity, &cmd_id, &message)
                     .await
             }
+            OperationType::DeviceProfile => {
+                self.handle_device_profile_state_change(&entity, &cmd_id, &message)
+                    .await
+            }
         };
 
         let mut mqtt_publisher = self.mqtt_publisher.clone();
@@ -257,6 +262,7 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::ConfigUpdate => Some(CumulocitySupportedOperations::C8yDownloadConfigFile),
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
+        OperationType::DeviceProfile => Some(CumulocitySupportedOperations::C8yDeviceProfile),
         // software list is not an c8y, only a fragment, but is a local operation that is spawned as
         // part of C8y_SoftwareUpdate operation
         OperationType::SoftwareList => None,

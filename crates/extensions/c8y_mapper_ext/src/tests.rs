@@ -2808,12 +2808,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         C8yMapperConfig::default_internal_topic_filter(tmp_dir.path(), &"c8y".try_into().unwrap())
             .unwrap();
 
-    let capabilities = Capabilities {
-        log_upload: true,
-        config_snapshot: true,
-        config_update: true,
-        firmware_update: true,
-    };
+    let capabilities = Capabilities::default();
 
     let operation_topics = OperationHandler::topic_filter(&capabilities)
         .into_iter()
