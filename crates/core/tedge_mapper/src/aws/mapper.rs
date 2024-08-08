@@ -43,7 +43,7 @@ impl TEdgeComponent for AwsMapper {
             let device_id = tedge_config.device.id.try_read(&tedge_config)?;
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
-            let rules = built_in_bridge_rules(device_id, &"aws".try_into().unwrap())?;
+            let rules = built_in_bridge_rules(device_id, &tedge_config.aws.bridge.topic_prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 tedge_config.device.id.try_read(&tedge_config)?,
