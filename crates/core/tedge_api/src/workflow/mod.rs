@@ -23,6 +23,7 @@ pub use supervisor::*;
 pub type OperationName = String;
 pub type StateName = String;
 pub type CommandId = String;
+pub type JsonPath = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
@@ -116,6 +117,20 @@ pub enum OperationAction {
 
     /// The command has been fully processed and needs to be cleared
     Clear,
+
+    /// Extract the next item from the specified target array in the state payload.
+    /// The next item is captured into a `@next` fragment in the state payload output,
+    /// with an `index` field having an initial value of zero.
+    ///
+    /// ```toml
+    /// iterate = "next in ${.payload.operations}"
+    /// iterate.next = ""
+    /// output.@next = "${.payload.next_operation}"
+    /// on_next = "apply_operation"
+    /// on_success = "successful"
+    /// on_error = "failed"
+    /// ```
+    Iterate(JsonPath, StateExcerpt, IterateHandlers),
 }
 
 impl Display for OperationAction {
@@ -137,6 +152,9 @@ impl Display for OperationAction {
                 "await sub-operation completion".to_string()
             }
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
+            OperationAction::Iterate(json_path, _, _) => {
+                format!("iterate over {json_path}").to_string()
+            }
         };
         f.write_str(&str)
     }
