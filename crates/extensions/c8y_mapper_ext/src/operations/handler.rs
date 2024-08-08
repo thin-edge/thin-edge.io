@@ -14,7 +14,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::LoggingSender;
+use tedge_actors::DynSender;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
@@ -53,7 +53,7 @@ impl OperationHandler {
 
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
         uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-        mqtt_publisher: LoggingSender<MqttMessage>,
+        mqtt_publisher: DynSender<MqttMessage>,
 
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
@@ -65,7 +65,7 @@ impl OperationHandler {
                 tedge_http_host: c8y_mapper_config.tedge_http_host.clone(),
                 tmp_dir: c8y_mapper_config.tmp_dir.clone(),
                 mqtt_schema: c8y_mapper_config.mqtt_schema.clone(),
-                mqtt_publisher: mqtt_publisher.clone(),
+                mqtt_publisher: mqtt_publisher.sender_clone(),
                 software_management_api: c8y_mapper_config.software_management_api,
 
                 // TODO(marcel): would be good not to generate new ids from running operations, see if
@@ -249,6 +249,11 @@ impl OperationHandler {
                 (AnyEntity, CommandMetadata(OperationType::FirmwareUpdate)),
             ]);
         }
+        topics.extend([
+            (AnyEntity, Command(OperationType::Restart)),
+            (AnyEntity, Command(OperationType::SoftwareList)),
+            (AnyEntity, Command(OperationType::SoftwareUpdate)),
+        ]);
 
         if capabilities.device_profile {
             topics.extend([
@@ -260,6 +265,8 @@ impl OperationHandler {
         topics
     }
 }
+
+#[derive(Debug)]
 struct RunningOperation {
     handle: tokio::task::JoinHandle<()>,
     status: String,
@@ -294,6 +301,7 @@ mod tests {
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Builder;
+    use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
     use tedge_actors::MessageSink;
     use tedge_actors::Sender;
@@ -809,7 +817,7 @@ mod tests {
             &c8y_mapper_config,
             downloader,
             uploader,
-            mqtt_publisher,
+            mqtt_publisher.into(),
             c8y_proxy,
             auth_proxy,
         );

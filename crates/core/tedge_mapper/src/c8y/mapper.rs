@@ -3,6 +3,7 @@ use crate::core::mapper::start_basic_actors;
 use anyhow::Context;
 use async_trait::async_trait;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
+use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
@@ -238,6 +239,16 @@ impl TEdgeComponent for CumulocityMapper {
             None
         };
 
+        let auth_proxy = ProxyUrlGenerator::from_tedge_config(&tedge_config);
+        let operation_handler_actor = c8y_mapper_ext::operations::OperationHandlerActorBuilder::new(
+            &C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?,
+            &mut c8y_mapper_actor,
+            &mut uploader_actor,
+            &mut downloader_actor,
+            &mut c8y_http_proxy_actor,
+            auth_proxy,
+        );
+
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(jwt_actor).await?;
         runtime.spawn(http_actor).await?;
@@ -253,6 +264,7 @@ impl TEdgeComponent for CumulocityMapper {
         if let Some(availability_actor) = availability_actor {
             runtime.spawn(availability_actor).await?;
         }
+        runtime.spawn(operation_handler_actor).await?;
         runtime.run_to_completion().await?;
 
         Ok(())

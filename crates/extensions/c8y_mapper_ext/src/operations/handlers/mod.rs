@@ -25,7 +25,7 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::LoggingSender;
+use tedge_actors::DynSender;
 use tedge_actors::Sender;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -57,7 +57,7 @@ pub(super) struct OperationContext {
 
     pub(super) downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     pub(super) uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    pub(super) mqtt_publisher: LoggingSender<MqttMessage>,
+    pub(super) mqtt_publisher: DynSender<MqttMessage>,
 }
 
 impl OperationContext {
@@ -98,7 +98,7 @@ impl OperationContext {
             OperationType::SoftwareList => {
                 let result = self.publish_software_list(&entity, &cmd_id, &message).await;
 
-                let mut mqtt_publisher = self.mqtt_publisher.clone();
+                let mut mqtt_publisher = self.mqtt_publisher.sender_clone();
                 match result {
                     Err(err) => {
                         error!("Fail to list installed software packages: {err}");
@@ -141,7 +141,7 @@ impl OperationContext {
             }
         };
 
-        let mut mqtt_publisher = self.mqtt_publisher.clone();
+        let mut mqtt_publisher = self.mqtt_publisher.sender_clone();
 
         // unwrap is safe: at this point all local operations that are not regular c8y
         // operations should be handled above
@@ -185,7 +185,7 @@ impl OperationContext {
 
 async fn clear_command_topic(
     command: GenericCommandState,
-    mqtt_publisher: &mut LoggingSender<MqttMessage>,
+    mqtt_publisher: &mut DynSender<MqttMessage>,
 ) {
     let command = command.clear();
     let clearing_message = command.into_message();

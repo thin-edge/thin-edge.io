@@ -9,8 +9,6 @@ use crate::actor::IdDownloadResult;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
-use crate::operations;
-use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -185,8 +183,6 @@ pub struct CumulocityConverter {
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
-
-    pub operation_handler: OperationHandler,
 }
 
 impl CumulocityConverter {
@@ -246,15 +242,6 @@ impl CumulocityConverter {
 
         let command_id = IdGenerator::new(REQUESTER_NAME);
 
-        let operation_handler = OperationHandler::new(
-            &config,
-            downloader,
-            uploader,
-            mqtt_publisher.clone(),
-            http_proxy.clone(),
-            auth_proxy.clone(),
-        );
-
         Ok(CumulocityConverter {
             size_threshold,
             config: Arc::new(config),
@@ -275,7 +262,6 @@ impl CumulocityConverter {
             auth_proxy,
             command_id,
             active_commands: HashSet::new(),
-            operation_handler,
         })
     }
 
@@ -1170,16 +1156,6 @@ impl CumulocityConverter {
             Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
 
-                let entity = self.entity_store.try_get(&source)?;
-                let external_id = entity.external_id.clone();
-                let entity = operations::EntityTarget {
-                    topic_id: entity.topic_id.clone(),
-                    external_id: external_id.clone(),
-                    smartrest_publish_topic: self
-                        .smartrest_publish_topic_for_entity(&entity.topic_id)?,
-                };
-
-                self.operation_handler.handle(entity, message.clone()).await;
                 Ok(vec![])
             }
 
