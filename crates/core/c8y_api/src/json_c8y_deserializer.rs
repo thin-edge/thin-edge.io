@@ -248,6 +248,7 @@ impl TryFrom<C8ySoftwareUpdate> for SoftwareInfo {
                     .push(SoftwareRequestResponseSoftwareList {
                         plugin_type,
                         modules: vec![item],
+                        errors: vec![],
                     });
             }
         }

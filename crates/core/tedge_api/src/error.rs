@@ -1,4 +1,5 @@
 use crate::software::SoftwareModule;
+use crate::software::SoftwareModuleUpdate;
 use crate::software::SoftwareName;
 use crate::software::SoftwareType;
 use crate::software::SoftwareVersion;
@@ -73,8 +74,11 @@ pub enum SoftwareError {
         name: SoftwareName,
     },
 
-    #[error("Unknown software type: {software_type:?}")]
-    UnknownSoftwareType { software_type: SoftwareType },
+    #[error("Unknown software type: {software_type:?}. The affected packages are: {:?}", module_names(.updates))]
+    UnknownSoftwareType {
+        software_type: SoftwareType,
+        updates: Vec<SoftwareModuleUpdate>,
+    },
 
     #[error("Unexpected module type: {actual:?}, should be: {expected:?}")]
     WrongModuleType {
@@ -103,6 +107,13 @@ pub enum SoftwareError {
 
     #[error("Regex error: {reason:?}")]
     RegexError { reason: String },
+}
+
+fn module_names(updates: &[SoftwareModuleUpdate]) -> Vec<String> {
+    updates
+        .iter()
+        .map(|update| update.module().name.to_owned())
+        .collect()
 }
 
 impl From<serde_json::Error> for SoftwareError {

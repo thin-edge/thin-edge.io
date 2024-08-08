@@ -468,6 +468,7 @@ impl SoftwareUpdateCommand {
                 .update_list
                 .push(SoftwareRequestResponseSoftwareList {
                     plugin_type,
+                    errors: vec![],
                     modules: vec![update.into()],
                 });
         }
@@ -478,6 +479,7 @@ impl SoftwareUpdateCommand {
             .update_list
             .push(SoftwareRequestResponseSoftwareList {
                 plugin_type: plugin_type.to_string(),
+                errors: vec![],
                 modules: updates
                     .into_iter()
                     .map(|update| update.into())
@@ -533,9 +535,10 @@ impl SoftwareUpdateCommand {
             .failures
             .push(SoftwareRequestResponseSoftwareList {
                 plugin_type: plugin_type.to_string(),
+                errors: errors.iter().map(|e| e.to_string()).collect(),
                 modules: errors
                     .into_iter()
-                    .filter_map(|update| update.into())
+                    .flat_map(Vec::<SoftwareModuleItem>::from)
                     .collect::<Vec<SoftwareModuleItem>>(),
             })
     }
@@ -559,6 +562,8 @@ pub struct SoftwareRequestResponseSoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
     pub modules: Vec<SoftwareModuleItem>,
+    #[serde(skip)]
+    pub errors: Vec<String>,
 }
 
 /// Variants represent Software Operations Supported actions.
@@ -623,24 +628,44 @@ impl From<SoftwareModuleUpdate> for SoftwareModuleItem {
     }
 }
 
-impl From<SoftwareError> for Option<SoftwareModuleItem> {
+impl From<SoftwareError> for Vec<SoftwareModuleItem> {
     fn from(error: SoftwareError) -> Self {
         match error {
-            SoftwareError::Install { module, reason } => Some(SoftwareModuleItem {
+            SoftwareError::Install { module, reason } => vec![SoftwareModuleItem {
                 name: module.name,
                 version: module.version,
                 url: module.url,
                 action: Some(SoftwareModuleAction::Install),
                 reason: Some(reason),
-            }),
-            SoftwareError::Remove { module, reason } => Some(SoftwareModuleItem {
+            }],
+            SoftwareError::Remove { module, reason } => vec![SoftwareModuleItem {
                 name: module.name,
                 version: module.version,
                 url: module.url,
                 action: Some(SoftwareModuleAction::Remove),
                 reason: Some(reason),
-            }),
-            _ => None,
+            }],
+            SoftwareError::UnknownSoftwareType {
+                updates,
+                software_type,
+            } => {
+                let reason = format!("Unknown software type: {software_type:?}");
+                updates
+                    .into_iter()
+                    .map(|update| {
+                        let action = update.action();
+                        let module = update.into_module();
+                        SoftwareModuleItem {
+                            name: module.name,
+                            version: module.version,
+                            url: module.url,
+                            action: Some(action),
+                            reason: Some(reason.clone()),
+                        }
+                    })
+                    .collect()
+            }
+            _ => vec![],
         }
     }
 }
@@ -1004,6 +1029,7 @@ mod tests {
         let debian_list = SoftwareRequestResponseSoftwareList {
             plugin_type: "debian".into(),
             modules: vec![debian_module1, debian_module2],
+            errors: vec![],
         };
 
         let docker_module1 = SoftwareModuleItem {
@@ -1017,6 +1043,7 @@ mod tests {
         let docker_list = SoftwareRequestResponseSoftwareList {
             plugin_type: "docker".into(),
             modules: vec![docker_module1],
+            errors: vec![],
         };
 
         let request = SoftwareUpdateCommandPayload {

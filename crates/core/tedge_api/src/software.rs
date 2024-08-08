@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use download::DownloadInfo;
 
+use crate::commands::SoftwareModuleAction;
+
 pub type SoftwareType = String;
 pub type SoftwareName = String;
 pub type SoftwareVersion = String;
@@ -82,7 +84,22 @@ impl SoftwareModuleUpdate {
         SoftwareModuleUpdate::Remove { module }
     }
 
+    pub fn action(&self) -> SoftwareModuleAction {
+        match self {
+            SoftwareModuleUpdate::Install { .. } => SoftwareModuleAction::Install,
+            SoftwareModuleUpdate::Remove { .. } => SoftwareModuleAction::Remove,
+        }
+    }
+
     pub fn module(&self) -> &SoftwareModule {
+        match self {
+            SoftwareModuleUpdate::Install { module } | SoftwareModuleUpdate::Remove { module } => {
+                module
+            }
+        }
+    }
+
+    pub fn into_module(self) -> SoftwareModule {
         match self {
             SoftwareModuleUpdate::Install { module } | SoftwareModuleUpdate::Remove { module } => {
                 module
