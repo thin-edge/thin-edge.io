@@ -245,7 +245,7 @@ impl ExternalPlugins {
             }
         }
 
-        if let Some(reason) = ExternalPlugins::error_message(error_count, command_log) {
+        if let Some(reason) = ExternalPlugins::error_message(error_count, None, command_log) {
             response.with_error(reason)
         } else {
             response.with_status(CommandStatus::Successful)
@@ -279,17 +279,30 @@ impl ExternalPlugins {
             }
         }
 
-        if let Some(reason) = ExternalPlugins::error_message(error_count, command_log) {
+        let message = response
+            .payload
+            .failures
+            .iter()
+            .filter_map(|f| f.errors.as_deref())
+            .collect::<Vec<_>>()
+            .join(",");
+        if let Some(reason) =
+            ExternalPlugins::error_message(error_count, Some(message), command_log)
+        {
             response.with_error(reason)
         } else {
             response.with_status(CommandStatus::Successful)
         }
     }
 
-    fn error_message(error_count: i32, command_log: Option<CommandLog>) -> Option<String> {
+    fn error_message(
+        error_count: i32,
+        message: Option<String>,
+        command_log: Option<CommandLog>,
+    ) -> Option<String> {
         if error_count > 0 {
             let reason = if error_count == 1 {
-                "1 error".into()
+                message.unwrap_or_else(|| "1 error".into())
             } else {
                 format!("{} errors", error_count)
             };

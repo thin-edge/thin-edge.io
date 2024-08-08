@@ -468,6 +468,7 @@ impl SoftwareUpdateCommand {
                 .update_list
                 .push(SoftwareRequestResponseSoftwareList {
                     plugin_type,
+                    errors: None,
                     modules: vec![update.into()],
                 });
         }
@@ -478,6 +479,7 @@ impl SoftwareUpdateCommand {
             .update_list
             .push(SoftwareRequestResponseSoftwareList {
                 plugin_type: plugin_type.to_string(),
+                errors: None,
                 modules: updates
                     .into_iter()
                     .map(|update| update.into())
@@ -533,6 +535,13 @@ impl SoftwareUpdateCommand {
             .failures
             .push(SoftwareRequestResponseSoftwareList {
                 plugin_type: plugin_type.to_string(),
+                errors: Some(
+                    errors
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join("\n"),
+                ),
                 modules: errors
                     .into_iter()
                     .filter_map(|update| update.into())
@@ -559,6 +568,7 @@ pub struct SoftwareRequestResponseSoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
     pub modules: Vec<SoftwareModuleItem>,
+    pub errors: Option<String>,
 }
 
 /// Variants represent Software Operations Supported actions.
