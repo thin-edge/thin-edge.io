@@ -381,28 +381,16 @@ async fn half_bridge(
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
-                if pkid == 0 {
-                    // Messages with pkid 0 (meaning QoS=0) should not be added to the hashmap
-                    // as multiple messages with the pkid=0 can be received
+                if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
                     match companion_bridge_half.recv().await {
                         // A message was forwarded by the other bridge half, note the packet id
                         Some(Some((topic, msg))) => {
                             loop_breaker.forward_on_topic(topic, &msg);
-                        }
-
-                        // A healthcheck message was published, ignore this packet id
-                        Some(None) => {}
-
-                        // The other bridge half has disconnected, break the loop and shut down the bridge
-                        None => break,
-                    }
-                } else if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid)
-                {
-                    match companion_bridge_half.recv().await {
-                        // A message was forwarded by the other bridge half, note the packet id
-                        Some(Some((topic, msg))) => {
-                            loop_breaker.forward_on_topic(topic, &msg);
-                            e.insert(msg);
+                            if pkid != 0 {
+                                // Messages with pkid 0 (meaning QoS=0) should not be added to the hashmap
+                                // as multiple messages with the pkid=0 can be received
+                                e.insert(msg);
+                            }
                         }
 
                         // A healthcheck message was published, ignore this packet id
