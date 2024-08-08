@@ -57,6 +57,8 @@ use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 pub use config::*;
 
+const MAX_PACKET_SIZE: usize = 10 * 1024 * 1024;
+
 pub struct MqttBridgeActorBuilder {}
 
 impl MqttBridgeActorBuilder {
@@ -90,6 +92,7 @@ impl MqttBridgeActorBuilder {
         if let Some(tls_config) = local_tls_config {
             local_config.set_transport(Transport::tls_with_config(tls_config.into()));
         }
+        local_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic.name,
@@ -102,6 +105,7 @@ impl MqttBridgeActorBuilder {
         let reconnect_policy = tedge_config.mqtt.bridge.reconnect_policy.clone();
 
         cloud_config.set_manual_acks(true);
+        cloud_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
         let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, 10);
