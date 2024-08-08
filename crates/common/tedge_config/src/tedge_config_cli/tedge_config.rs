@@ -503,6 +503,10 @@ define_tedge_config! {
             /// Enable firmware_update feature
             #[tedge_config(example = "true", default(value = false))]
             firmware_update: bool,
+
+            /// Enable device_profile feature
+            #[tedge_config(example = "true", default(value = false))]
+            device_profile: bool,
         },
 
         proxy: {

@@ -685,6 +685,24 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
+            C8yDeviceControlOperation::DeviceProfile(request) => {
+                if self.config.capabilities.device_profile {
+                    if let Some(profile_name) = extras.get("profileName") {
+                        self.convert_device_profile_request(
+                            device_xid,
+                            cmd_id,
+                            request,
+                            serde_json::from_value(profile_name.clone())?,
+                        )?
+                    } else {
+                        error!("Received a c8y_DeviceProfile without a profile name");
+                        vec![]
+                    }
+                } else {
+                    warn!("Received a c8y_DeviceProfile operation, however, device_profile feature is disabled");
+                    vec![]
+                }
+            }
             C8yDeviceControlOperation::Custom => {
                 // Ignores custom and static template operations unsupported by thin-edge
                 // However, these operations can be addressed by SmartREST that is published together with JSON over MQTT
@@ -1140,6 +1158,7 @@ impl CumulocityConverter {
                     OperationType::FirmwareUpdate => {
                         self.register_firmware_update_operation(&source)
                     }
+                    OperationType::DeviceProfile => self.register_device_profile_operation(&source),
                     OperationType::Custom(c8y_op_name) => {
                         self.register_custom_operation(&source, c8y_op_name)
                     }
@@ -2751,6 +2770,7 @@ pub(crate) mod tests {
     #[test_case("log_upload")]
     #[test_case("config_snapshot")]
     #[test_case("config_update")]
+    #[test_case("device_profile")]
     #[test_case("custom_op")]
     #[tokio::test]
     async fn operations_not_supported_for_services(op_type: &str) {

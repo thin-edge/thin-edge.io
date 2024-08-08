@@ -2480,6 +2480,43 @@ async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
 }
 
 #[tokio::test]
+async fn mapper_doesnt_send_duplicate_operation_status() {
+    tedge_config::system_services::set_log_level(tracing::Level::DEBUG);
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle {
+        mqtt, mut timer, ..
+    } = test_handle;
+
+    // Complete sync phase so that alarm mapping starts
+    trigger_timeout(&mut timer).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+
+    for _ in 0..3 {
+        mqtt.send(
+            MqttMessage::new(
+                &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1"),
+                r#"{"status":"executing", "type": "typeA"}"#,
+            )
+            .with_retain(),
+        )
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(
+        mqtt.recv().await.unwrap().payload_str().unwrap(),
+        "501,c8y_UploadConfigFile"
+    );
+
+    while let Some(msg) = mqtt.recv().await {
+        assert_ne!(msg.payload_str().unwrap(), "501,c8y_UploadConfigFile");
+    }
+}
+
+#[tokio::test]
 async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
@@ -2808,12 +2845,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         C8yMapperConfig::default_internal_topic_filter(tmp_dir.path(), &"c8y".try_into().unwrap())
             .unwrap();
 
-    let capabilities = Capabilities {
-        log_upload: true,
-        config_snapshot: true,
-        config_update: true,
-        firmware_update: true,
-    };
+    let capabilities = Capabilities::default();
 
     let operation_topics = OperationHandler::topic_filter(&capabilities)
         .into_iter()

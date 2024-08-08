@@ -2,6 +2,7 @@
 
 mod config_snapshot;
 mod config_update;
+mod device_profile;
 mod firmware_update;
 mod log_upload;
 mod restart;
@@ -60,7 +61,7 @@ pub(super) struct OperationContext {
 }
 
 impl OperationContext {
-    pub async fn update(&self, message: OperationMessage) -> UpdateStatus {
+    pub async fn update(&self, message: OperationMessage) {
         let OperationMessage {
             entity,
             cmd_id,
@@ -73,7 +74,7 @@ impl OperationContext {
             Ok(command) => command,
             Err(err) => {
                 error!(%err, ?message, "could not parse command payload");
-                return UpdateStatus::Terminated;
+                return;
             }
         };
 
@@ -108,11 +109,11 @@ impl OperationContext {
                         }
                     }
                     // command is not yet finished, avoid clearing the command topic
-                    Ok(_) => return UpdateStatus::Ongoing,
+                    Ok(_) => return,
                 }
 
                 clear_command_topic(command, &mut mqtt_publisher).await;
-                return UpdateStatus::Terminated;
+                return;
             }
             OperationType::SoftwareUpdate => {
                 self.publish_software_update_status(&entity, &cmd_id, &message)
@@ -134,6 +135,10 @@ impl OperationContext {
                 self.handle_firmware_update_state_change(&entity, &cmd_id, &message)
                     .await
             }
+            OperationType::DeviceProfile => {
+                self.handle_device_profile_state_change(&entity, &cmd_id, &message)
+                    .await
+            }
         };
 
         let mut mqtt_publisher = self.mqtt_publisher.clone();
@@ -147,7 +152,7 @@ impl OperationContext {
             c8y_operation,
             &entity.smartrest_publish_topic,
         ) {
-            OperationOutcome::Ignored => UpdateStatus::Ongoing,
+            OperationOutcome::Ignored => {}
             OperationOutcome::Executing { mut extra_messages } => {
                 let c8y_state_executing_payload = set_operation_executing(c8y_operation);
                 let c8y_state_executing_message =
@@ -159,8 +164,6 @@ impl OperationContext {
                 for message in messages {
                     mqtt_publisher.send(message).await.unwrap();
                 }
-
-                UpdateStatus::Ongoing
             }
             OperationOutcome::Finished { messages } => {
                 if let Err(e) = self
@@ -175,17 +178,9 @@ impl OperationContext {
                 }
 
                 clear_command_topic(command, &mut mqtt_publisher).await;
-
-                UpdateStatus::Terminated
             }
         }
     }
-}
-
-/// Whether or not this operation requires more messages to be handled or is it terminated.
-pub enum UpdateStatus {
-    Ongoing,
-    Terminated,
 }
 
 async fn clear_command_topic(
@@ -257,6 +252,7 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::ConfigUpdate => Some(CumulocitySupportedOperations::C8yDownloadConfigFile),
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
+        OperationType::DeviceProfile => Some(CumulocitySupportedOperations::C8yDeviceProfile),
         // software list is not an c8y, only a fragment, but is a local operation that is spawned as
         // part of C8y_SoftwareUpdate operation
         OperationType::SoftwareList => None,
@@ -270,6 +266,7 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
 ///
 /// These are MQTT messages that contain operation payloads. These messages need to be passed to
 /// tasks that handle a given operation to advance the operation and eventually complete it.
+#[derive(Debug, Clone)]
 pub(super) struct OperationMessage {
     pub(super) operation: OperationType,
     pub(super) entity: EntityTarget,

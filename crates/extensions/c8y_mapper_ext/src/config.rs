@@ -177,6 +177,7 @@ impl C8yMapperConfig {
             config_snapshot: tedge_config.c8y.enable.config_snapshot,
             config_update: tedge_config.c8y.enable.config_update,
             firmware_update: tedge_config.c8y.enable.firmware_update,
+            device_profile: tedge_config.c8y.enable.device_profile,
         };
         let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
 
