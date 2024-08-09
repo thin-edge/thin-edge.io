@@ -29,19 +29,28 @@ use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::error;
 
-pub struct OldAgentAdapter;
+pub struct OldAgentAdapter {
+    prefix: String,
+}
 
 impl OldAgentAdapter {
     pub fn builder(
+        topic_prefix: &TopicPrefix,
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> ConvertingActorBuilder<OldAgentAdapter> {
-        let mut builder = ConvertingActor::builder("OldAgentAdapter", OldAgentAdapter);
+        let mut builder = ConvertingActor::builder(
+            "OldAgentAdapter",
+            OldAgentAdapter {
+                prefix: format!("{topic_prefix}-mapper"),
+            },
+        );
         builder.connect_source(old_and_new_command_topics(), mqtt);
         builder.connect_sink(NoConfig, mqtt);
         builder
@@ -54,7 +63,7 @@ impl Converter for OldAgentAdapter {
     type Error = Infallible;
 
     fn convert(&mut self, input: &Self::Input) -> Result<Vec<Self::Output>, Self::Error> {
-        match try_convert(input) {
+        match try_convert(&self.prefix, input) {
             Ok(Some(output)) => Ok(vec![output]),
             Ok(None) => Ok(vec![]),
             Err(error) => {
@@ -80,18 +89,18 @@ fn old_and_new_command_topics() -> TopicFilter {
     .collect()
 }
 
-fn try_convert(input: &MqttMessage) -> Result<Option<MqttMessage>, String> {
+fn try_convert(prefix: &str, input: &MqttMessage) -> Result<Option<MqttMessage>, String> {
     let topic = input.topic.name.as_str();
     let payload = input.payload_bytes();
     match topic.split('/').collect::<Vec<&str>>()[..] {
         ["tedge", "commands", "res", "control", "restart"] => {
-            convert_from_old_agent_response("restart", payload)
+            convert_from_old_agent_response(prefix, "restart", payload)
         }
         ["tedge", "commands", "res", "software", "list"] => {
-            convert_from_old_agent_response("software_list", payload)
+            convert_from_old_agent_response(prefix, "software_list", payload)
         }
         ["tedge", "commands", "res", "software", "update"] => {
-            convert_from_old_agent_response("software_update", payload)
+            convert_from_old_agent_response(prefix, "software_update", payload)
         }
         [_, "device", "main", "", "", "cmd", "restart", cmd_id] => {
             convert_to_old_agent_request("control/restart", cmd_id, payload)
@@ -140,16 +149,17 @@ fn convert_to_old_agent_request(
 }
 
 fn convert_from_old_agent_response(
+    prefix: &str,
     cmd_type: &str,
     payload: &[u8],
 ) -> Result<Option<MqttMessage>, String> {
     if let Ok(Value::Object(response)) = serde_json::from_slice(payload) {
         if let Some(Value::String(cmd_id)) = response.get("id") {
             // The new mapper expects command ids with a specific prefix
-            let topic_name = if cmd_id.starts_with("c8y-mapper") {
+            let topic_name = if cmd_id.starts_with(prefix) {
                 format!("te/device/main///cmd/{cmd_type}/{cmd_id}")
             } else {
-                format!("te/device/main///cmd/{cmd_type}/c8y-mapper-{cmd_id}")
+                format!("te/device/main///cmd/{cmd_type}/{prefix}-{cmd_id}")
             };
             if let Ok(topic) = Topic::new(&topic_name) {
                 return Ok(Some(

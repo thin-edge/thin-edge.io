@@ -104,7 +104,6 @@ const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
-pub const REQUESTER_NAME: &str = "c8y-mapper";
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug)]
@@ -244,7 +243,7 @@ impl CumulocityConverter {
         )
         .unwrap();
 
-        let command_id = IdGenerator::new(REQUESTER_NAME);
+        let command_id = config.id_generator();
 
         let operation_handler = OperationHandler::new(
             &config,

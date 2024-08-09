@@ -2,6 +2,7 @@ use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::HostPort;
+use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
 
 const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-az-bridge/status/health";
@@ -15,6 +16,7 @@ pub struct BridgeConfigAzureParams {
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
     pub bridge_location: BridgeLocation,
+    pub topic_prefix: TopicPrefix,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -27,6 +29,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             bridge_certfile,
             bridge_keyfile,
             bridge_location,
+            topic_prefix,
         } = params;
 
         let address = mqtt_host.clone();
@@ -35,11 +38,10 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             mqtt_host.host(),
             remote_clientid
         );
-        let pub_msg_topic = format!("messages/events/# out 1 az/ devices/{}/", remote_clientid);
-        let sub_msg_topic = format!(
-            "messages/devicebound/# in 1 az/ devices/{}/",
-            remote_clientid
-        );
+        let pub_msg_topic =
+            format!("messages/events/# out 1 {topic_prefix}/ devices/{remote_clientid}/");
+        let sub_msg_topic =
+            format!("messages/devicebound/# in 1 {topic_prefix}/ devices/{remote_clientid}/");
         Self {
             cloud_name: "az".into(),
             config_file,
@@ -68,12 +70,12 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 pub_msg_topic,
                 sub_msg_topic,
                 // Direct methods (request/response)
-                "methods/POST/# in 1 az/ $iothub/".into(),
-                "methods/res/# out 1 az/ $iothub/".into(),
+                format!("methods/POST/# in 1 {topic_prefix}/ $iothub/"),
+                format!("methods/res/# out 1 {topic_prefix}/ $iothub/"),
                 // Digital twin
-                "twin/res/# in 1 az/ $iothub/".into(),
-                "twin/GET/# out 1 az/ $iothub/".into(),
-                "twin/PATCH/# out 1 az/ $iothub/".into(),
+                format!("twin/res/# in 1 {topic_prefix}/ $iothub/"),
+                format!("twin/GET/# out 1 {topic_prefix}/ $iothub/"),
+                format!("twin/PATCH/# out 1 {topic_prefix}/ $iothub/"),
             ],
             bridge_location,
             connection_check_attempts: 1,
@@ -93,6 +95,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         bridge_location: BridgeLocation::Mosquitto,
+        topic_prefix: "az".try_into().unwrap(),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -118,6 +121,63 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
             "twin/res/# in 1 az/ $iothub/".into(),
             "twin/GET/# out 1 az/ $iothub/".into(),
             "twin/PATCH/# out 1 az/ $iothub/".into(),
+        ],
+        try_private: false,
+        start_type: "automatic".into(),
+        clean_session: false,
+        include_local_clean_session: false,
+        local_clean_session: false,
+        notifications: true,
+        notifications_local_only: true,
+        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+        bridge_attempt_unsubscribe: false,
+        bridge_location: BridgeLocation::Mosquitto,
+        connection_check_attempts: 1,
+    };
+
+    assert_eq!(bridge, expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
+    use std::convert::TryFrom;
+
+    let params = BridgeConfigAzureParams {
+        mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
+        config_file: "az-bridge.conf".into(),
+        remote_clientid: "alpha".into(),
+        bridge_root_cert_path: "./test_root.pem".into(),
+        bridge_certfile: "./test-certificate.pem".into(),
+        bridge_keyfile: "./test-private-key.pem".into(),
+        bridge_location: BridgeLocation::Mosquitto,
+        topic_prefix: "custom".try_into().unwrap(),
+    };
+
+    let bridge = BridgeConfig::from(params);
+
+    let expected = BridgeConfig {
+        cloud_name: "az".into(),
+        config_file: "az-bridge.conf".to_string(),
+        connection: "edge_to_az".into(),
+        address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
+        remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
+        bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
+        remote_clientid: "alpha".into(),
+        local_clientid: "Azure".into(),
+        bridge_certfile: "./test-certificate.pem".into(),
+        bridge_keyfile: "./test-private-key.pem".into(),
+        use_mapper: true,
+        use_agent: false,
+        topics: vec![
+            "messages/events/# out 1 custom/ devices/alpha/".into(),
+            "messages/devicebound/# in 1 custom/ devices/alpha/".into(),
+            "methods/POST/# in 1 custom/ $iothub/".into(),
+            "methods/res/# out 1 custom/ $iothub/".into(),
+            "twin/res/# in 1 custom/ $iothub/".into(),
+            "twin/GET/# out 1 custom/ $iothub/".into(),
+            "twin/PATCH/# out 1 custom/ $iothub/".into(),
         ],
         try_private: false,
         start_type: "automatic".into(),

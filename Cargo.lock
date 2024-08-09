@@ -266,6 +266,7 @@ dependencies = [
  "serde_json",
  "tedge_actors",
  "tedge_api",
+ "tedge_config",
  "tedge_mqtt_ext",
  "tedge_utils",
  "thiserror",
