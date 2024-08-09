@@ -1,8 +1,8 @@
 # ref: https://docs.codecov.com/docs/codecovyml-reference
 coverage:
-  range: 70..100
+  range: 60..80
   round: down
-  precision: 1
+  precision: 2
   status:
     # ref: https://docs.codecov.com/docs/commit-status
     project:
@@ -17,6 +17,8 @@ ignore:
   - "tests"
 
 # Make comments less noisy
+# https://docs.codecov.com/docs/pull-request-comments
 comment:
-  layout: "files"
+  layout: "condensed_header, condensed_files, condensed_footer"
+  hide_project_coverage: TRUE
   require_changes: yes
