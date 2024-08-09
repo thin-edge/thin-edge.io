@@ -589,7 +589,7 @@ mod tests {
 
         let config_snapshot_operation = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-229394".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Executing,
                 tedge_url: Some("asdf".to_string()),
@@ -636,7 +636,7 @@ mod tests {
 
         let config_snapshot_operation = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-123456".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Executing,
                 tedge_url: Some("asdf".to_string()),
@@ -688,7 +688,7 @@ mod tests {
 
         let failed_message = ConfigSnapshotCmd {
             target: entity_topic_id.clone(),
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-284842".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Failed {
                     reason: "test".to_string(),
@@ -702,7 +702,7 @@ mod tests {
 
         let successful_message = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-2".to_string(),
+            cmd_id: "c8y-mapper-28433842".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Successful,
                 tedge_url: Some("asdf".to_string()),
