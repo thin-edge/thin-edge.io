@@ -74,6 +74,10 @@ impl TEdgeConfig {
         Self(TEdgeConfigReader::from_dto(dto, location))
     }
 
+    pub fn use_legacy_auth(&self) -> bool {
+        !self.c8y.username.is_empty() && !self.c8y.password.is_empty()
+    }
+
     pub fn mqtt_config(&self) -> Result<mqtt_channel::Config, CertificateError> {
         let host = self.mqtt.client.host.as_str();
         let port = u16::from(self.mqtt.client.port);
@@ -465,12 +469,27 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
+        /// Cumulocity Username
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
+        #[tedge_config(example = "t12345/device_tedge001", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
+        username: String,
+
+        /// Cumulocity Password
+        #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
+        #[tedge_config(example = "d8aj1d8j1.81", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
+        password: String,
+
         smartrest: {
             /// Set of SmartREST template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
             templates: TemplatesSet,
         },
 
+        smartrest1: {
+            /// Set of SmartREST 1.0 template IDs the device should subscribe to
+            #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
+            templates: TemplatesSet,
+        },
 
         /// HTTP Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "http.your-tenant.cumulocity.com:1234")]

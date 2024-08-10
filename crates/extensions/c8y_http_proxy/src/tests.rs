@@ -362,6 +362,8 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
     let config = C8YHttpConfig {
         c8y_http_host: target_url.clone(),
         c8y_mqtt_host: target_url.clone(),
+        c8y_username: None,
+        c8y_password: None,
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         identity: None,
@@ -431,6 +433,8 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     let config = C8YHttpConfig {
         c8y_http_host: target_url.clone(),
         c8y_mqtt_host: target_url.clone(),
+        c8y_username: None,
+        c8y_password: None,
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         identity: None,
@@ -676,6 +680,8 @@ async fn spawn_c8y_http_proxy(
     let config = C8YHttpConfig {
         c8y_http_host: c8y_host.clone(),
         c8y_mqtt_host: c8y_host,
+        c8y_username: None,
+        c8y_password: None,
         device_id,
         tmp_dir,
         identity: None,
