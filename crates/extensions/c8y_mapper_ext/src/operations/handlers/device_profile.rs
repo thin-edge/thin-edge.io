@@ -511,6 +511,117 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mapper_converts_device_profile_operation_with_tenant_url() {
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
+        mqtt.send(MqttMessage::new(
+            &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
+            json!({
+                "id": "123456",
+                "profileName": "test-profile",
+                "c8y_DeviceProfile": {
+                    "software": [
+                        {
+                            "softwareType": "apt",
+                            "name": "test-software-1",
+                            "action": "install",
+                            "version": "latest",
+                            "url": "http://test.c8y.io/test/software/123456"
+                        },
+                        {
+                            "softwareType": "apt",
+                            "name": "test-software-2",
+                            "action": "install",
+                            "version": "latest",
+                            "url": " "
+                        }
+                    ],
+                    "configuration": [
+                        {
+                            "name": "test-software-1",
+                            "type": "path/config/test-software-1",
+                            "url": "http://test.c8y.io/test/config/123456"
+                        }
+                    ],
+                    "firmware": {
+                        "name": "test-firmware",
+                        "version": "1.0",
+                        "url": "http://test.c8y.io/test/firmware/123456"
+                    }
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/device_profile/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "name": "test-profile",
+                    "operations": [
+                        {
+                            "operation": "firmware_update",
+                            "skip": false,
+                            "payload": {
+                                "name": "test-firmware",
+                                "version": "1.0",
+                                "url": "http://127.0.0.1:8001/c8y/test/firmware/123456"
+                            }
+                        },
+                        {
+                            "operation": "software_update",
+                            "skip": false,
+                            "payload": {
+                                "updateList": [
+                                    {
+                                        "type": "apt",
+                                        "modules": [
+                                            {
+                                                "name": "test-software-1",
+                                                "version": "latest",
+                                                "action": "install",
+                                                "url": "http://127.0.0.1:8001/c8y/test/software/123456"
+                                            },
+                                            {
+                                                "name": "test-software-2",
+                                                "version": "latest",
+                                                "action": "install"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "operation": "config_update",
+                            "skip": false,
+                            "payload": {
+                                "type": "path/config/test-software-1",
+                                "remoteUrl":"http://127.0.0.1:8001/c8y/test/config/123456"
+                            }
+                        }
+                    ]
+                }),
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn mapper_converts_device_profile_operation_with_missing_software_type() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
