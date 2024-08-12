@@ -60,10 +60,28 @@ impl OperationContext {
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
 
                 Ok(OperationOutcome::Finished {
-                    messages: vec![c8y_target_profile, c8y_notification],
+                    messages: vec![
+                        c8y_target_profile,
+                        c8y_notification,
+                        self.request_software_list(&target.topic_id),
+                    ],
                 })
             }
-            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
+            CommandStatus::Failed { reason } => {
+                let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
+                    CumulocitySupportedOperations::C8yDeviceProfile,
+                    &reason,
+                );
+
+                let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
+
+                Ok(OperationOutcome::Finished {
+                    messages: vec![
+                        c8y_notification,
+                        self.request_software_list(&target.topic_id),
+                    ],
+                })
+            }
             _ => Ok(OperationOutcome::Ignored),
         }
     }
@@ -1121,6 +1139,16 @@ mod tests {
             [("c8y/s/us", "502,c8y_DeviceProfile,Something went wrong")],
         )
         .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1267,6 +1295,16 @@ mod tests {
             )],
         )
         .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/child1///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1337,6 +1375,16 @@ mod tests {
 
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_DeviceProfile")]).await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1418,5 +1466,15 @@ mod tests {
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "503,c8y_DeviceProfile")])
             .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/child1///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 }
