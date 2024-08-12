@@ -60,10 +60,28 @@ impl OperationContext {
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
 
                 Ok(OperationOutcome::Finished {
-                    messages: vec![c8y_target_profile, c8y_notification],
+                    messages: vec![
+                        c8y_target_profile,
+                        c8y_notification,
+                        self.request_software_list(&target.topic_id),
+                    ],
                 })
             }
-            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
+            CommandStatus::Failed { reason } => {
+                let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
+                    CumulocitySupportedOperations::C8yDeviceProfile,
+                    &reason,
+                );
+
+                let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
+
+                Ok(OperationOutcome::Finished {
+                    messages: vec![
+                        c8y_notification,
+                        self.request_software_list(&target.topic_id),
+                    ],
+                })
+            }
             _ => Ok(OperationOutcome::Ignored),
         }
     }
@@ -501,6 +519,117 @@ mod tests {
                             "payload": {
                                 "type": "path/config/test-software-1",
                                 "remoteUrl":"http://www.my.url"
+                            }
+                        }
+                    ]
+                }),
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn mapper_converts_device_profile_operation_with_tenant_url() {
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
+        mqtt.send(MqttMessage::new(
+            &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
+            json!({
+                "id": "123456",
+                "profileName": "test-profile",
+                "c8y_DeviceProfile": {
+                    "software": [
+                        {
+                            "softwareType": "apt",
+                            "name": "test-software-1",
+                            "action": "install",
+                            "version": "latest",
+                            "url": "http://test.c8y.io/test/software/123456"
+                        },
+                        {
+                            "softwareType": "apt",
+                            "name": "test-software-2",
+                            "action": "install",
+                            "version": "latest",
+                            "url": " "
+                        }
+                    ],
+                    "configuration": [
+                        {
+                            "name": "test-software-1",
+                            "type": "path/config/test-software-1",
+                            "url": "http://test.c8y.io/test/config/123456"
+                        }
+                    ],
+                    "firmware": {
+                        "name": "test-firmware",
+                        "version": "1.0",
+                        "url": "http://test.c8y.io/test/firmware/123456"
+                    }
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/device_profile/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "name": "test-profile",
+                    "operations": [
+                        {
+                            "operation": "firmware_update",
+                            "skip": false,
+                            "payload": {
+                                "name": "test-firmware",
+                                "version": "1.0",
+                                "url": "http://127.0.0.1:8001/c8y/test/firmware/123456"
+                            }
+                        },
+                        {
+                            "operation": "software_update",
+                            "skip": false,
+                            "payload": {
+                                "updateList": [
+                                    {
+                                        "type": "apt",
+                                        "modules": [
+                                            {
+                                                "name": "test-software-1",
+                                                "version": "latest",
+                                                "action": "install",
+                                                "url": "http://127.0.0.1:8001/c8y/test/software/123456"
+                                            },
+                                            {
+                                                "name": "test-software-2",
+                                                "version": "latest",
+                                                "action": "install"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "operation": "config_update",
+                            "skip": false,
+                            "payload": {
+                                "type": "path/config/test-software-1",
+                                "remoteUrl":"http://127.0.0.1:8001/c8y/test/config/123456"
                             }
                         }
                     ]
@@ -1010,6 +1139,16 @@ mod tests {
             [("c8y/s/us", "502,c8y_DeviceProfile,Something went wrong")],
         )
         .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1156,6 +1295,16 @@ mod tests {
             )],
         )
         .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/child1///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1226,6 +1375,16 @@ mod tests {
 
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_DeviceProfile")]).await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1307,5 +1466,15 @@ mod tests {
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "503,c8y_DeviceProfile")])
             .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/child1///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
     }
 }

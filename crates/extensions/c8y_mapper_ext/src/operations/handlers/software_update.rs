@@ -72,7 +72,7 @@ impl OperationContext {
         }
     }
 
-    fn request_software_list(&self, target: &EntityTopicId) -> MqttMessage {
+    pub fn request_software_list(&self, target: &EntityTopicId) -> MqttMessage {
         let cmd_id = self.command_id.new_id();
         let request = SoftwareListCommand::new(target, cmd_id);
         request.command_message(&self.mqtt_schema)

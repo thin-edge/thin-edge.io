@@ -336,15 +336,28 @@ impl CumulocityConverter {
             operations: Vec::new(),
         };
 
-        if let Some(firmware) = device_profile_request.firmware {
+        if let Some(mut firmware) = device_profile_request.firmware {
+            if let Some(cumulocity_url) = self.c8y_endpoint.maybe_tenant_url(&firmware.url) {
+                firmware.url = self.auth_proxy.proxy_url(cumulocity_url).into();
+            }
             request.add_firmware(firmware.into());
         }
 
-        if let Some(software) = device_profile_request.software {
+        if let Some(mut software) = device_profile_request.software {
+            software.lists.iter_mut().for_each(|module| {
+                if let Some(url) = &mut module.url {
+                    if let Some(cumulocity_url) = self.c8y_endpoint.maybe_tenant_url(url) {
+                        *url = self.auth_proxy.proxy_url(cumulocity_url).into();
+                    }
+                }
+            });
             request.add_software(software.try_into()?);
         }
 
-        for config in device_profile_request.configuration {
+        for mut config in device_profile_request.configuration {
+            if let Some(cumulocity_url) = self.c8y_endpoint.maybe_tenant_url(&config.url) {
+                config.url = self.auth_proxy.proxy_url(cumulocity_url).into();
+            }
             request.add_config(config.into());
         }
 
