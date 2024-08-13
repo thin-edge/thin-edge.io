@@ -57,7 +57,7 @@ use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 pub use config::*;
 
-const MAX_PACKET_SIZE: usize = 10 * 1024 * 1024;
+const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 
 pub struct MqttBridgeActorBuilder {}
 
