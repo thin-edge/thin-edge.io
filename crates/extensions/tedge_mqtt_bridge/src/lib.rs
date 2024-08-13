@@ -57,6 +57,8 @@ use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 pub use config::*;
 
+const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
+
 pub struct MqttBridgeActorBuilder {}
 
 impl MqttBridgeActorBuilder {
@@ -90,6 +92,7 @@ impl MqttBridgeActorBuilder {
         if let Some(tls_config) = local_tls_config {
             local_config.set_transport(Transport::tls_with_config(tls_config.into()));
         }
+        local_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
         local_config.set_manual_acks(true);
         local_config.set_last_will(LastWill::new(
             &health_topic.name,
@@ -102,6 +105,7 @@ impl MqttBridgeActorBuilder {
         let reconnect_policy = tedge_config.mqtt.bridge.reconnect_policy.clone();
 
         cloud_config.set_manual_acks(true);
+        cloud_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
         let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, 10);
@@ -377,28 +381,16 @@ async fn half_bridge(
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
-                if pkid == 0 {
-                    // Messages with pkid 0 (meaning QoS=0) should not be added to the hashmap
-                    // as multiple messages with the pkid=0 can be received
+                if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
                     match companion_bridge_half.recv().await {
                         // A message was forwarded by the other bridge half, note the packet id
                         Some(Some((topic, msg))) => {
                             loop_breaker.forward_on_topic(topic, &msg);
-                        }
-
-                        // A healthcheck message was published, ignore this packet id
-                        Some(None) => {}
-
-                        // The other bridge half has disconnected, break the loop and shut down the bridge
-                        None => break,
-                    }
-                } else if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid)
-                {
-                    match companion_bridge_half.recv().await {
-                        // A message was forwarded by the other bridge half, note the packet id
-                        Some(Some((topic, msg))) => {
-                            loop_breaker.forward_on_topic(topic, &msg);
-                            e.insert(msg);
+                            if pkid != 0 {
+                                // Messages with pkid 0 (meaning QoS=0) should not be added to the hashmap
+                                // as multiple messages with the pkid=0 can be received
+                                e.insert(msg);
+                            }
                         }
 
                         // A healthcheck message was published, ignore this packet id
