@@ -147,11 +147,14 @@ impl ExitHandlers {
         if self.timeout.is_none() {
             self.timeout = default.timeout
         }
+        if self.on_success.is_none() && self.on_stdout.is_empty() {
+            self.on_success = Some(default.on_success.clone())
+        }
         if self.on_kill.is_none() {
-            self.on_kill.clone_from(&default.on_timeout)
+            self.on_kill = Some(default.on_timeout.clone())
         }
         if self.on_error.is_none() {
-            self.on_error.clone_from(&default.on_error)
+            self.on_error = Some(default.on_error.clone())
         }
 
         self
@@ -337,10 +340,10 @@ impl AwaitHandlers {
             self.timeout = default.timeout
         }
         if self.on_timeout.is_none() {
-            self.on_timeout.clone_from(&default.on_timeout)
+            self.on_timeout = Some(default.on_timeout.clone())
         }
         if self.on_error.is_none() {
-            self.on_error.clone_from(&default.on_error)
+            self.on_error = Some(default.on_error.clone())
         }
 
         self
@@ -381,24 +384,38 @@ impl IterateHandlers {
 }
 
 /// Define default handlers for all state of an operation workflow
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DefaultHandlers {
     pub timeout: Option<Duration>,
-    pub on_timeout: Option<GenericStateUpdate>,
-    pub on_error: Option<GenericStateUpdate>,
+    pub on_success: GenericStateUpdate,
+    pub on_error: GenericStateUpdate,
+    pub on_timeout: GenericStateUpdate,
 }
 
 impl DefaultHandlers {
-    pub fn try_new(
+    pub fn new(
         timeout: Option<Duration>,
-        on_timeout: Option<GenericStateUpdate>,
+        on_success: Option<GenericStateUpdate>,
         on_error: Option<GenericStateUpdate>,
-    ) -> Result<Self, ScriptDefinitionError> {
-        Ok(DefaultHandlers {
+        on_timeout: Option<GenericStateUpdate>,
+    ) -> Self {
+        DefaultHandlers {
             timeout,
-            on_timeout,
-            on_error,
-        })
+            on_success: on_success.unwrap_or_else(GenericStateUpdate::successful),
+            on_error: on_error.unwrap_or_else(GenericStateUpdate::unknown_error),
+            on_timeout: on_timeout.unwrap_or_else(GenericStateUpdate::timeout),
+        }
+    }
+}
+
+impl Default for DefaultHandlers {
+    fn default() -> Self {
+        DefaultHandlers {
+            timeout: None,
+            on_success: GenericStateUpdate::successful(),
+            on_error: GenericStateUpdate::unknown_error(),
+            on_timeout: GenericStateUpdate::timeout(),
+        }
     }
 }
 
@@ -680,7 +697,21 @@ on_exit._ = "oops"
     fn inject_default_values() {
         let handlers_unset = handlers_from_toml("");
         let handlers = handlers_from_toml(r#"on_success = "ok""#);
+        let handlers_with_default_defaults = handlers_from_toml(
+            r#"
+on_success = "successful"
+on_kill = { "status" = "failed", reason = "timeout" }
+on_error = "failed"
+"#,
+        );
         let handlers_with_defaults = handlers_from_toml(
+            r#"
+on_success = "ok"
+on_kill = { "status" = "failed", reason = "timeout" }
+on_error = "failed"
+"#,
+        );
+        let handlers_with_user_defaults = handlers_from_toml(
             r#"
 timeout_second = 15
 on_success = "ok"
@@ -689,32 +720,42 @@ on_error = "error"
 "#,
         );
 
-        let no_defaults = DefaultHandlers::default();
-        let defaults = DefaultHandlers::try_new(
+        let default_defaults = DefaultHandlers::default();
+        let user_defaults = DefaultHandlers::new(
             Some(Duration::from_secs(15)),
-            Some(TomlStateUpdate::Simple("timeout".to_string()).into()),
+            Some(TomlStateUpdate::Simple("ok".to_string()).into()),
             Some(TomlStateUpdate::Simple("error".to_string()).into()),
-        )
-        .unwrap();
+            Some(TomlStateUpdate::Simple("timeout".to_string()).into()),
+        );
 
         assert_eq!(
-            &handlers_unset,
-            &handlers_unset.clone().with_default(&no_defaults)
+            &handlers_with_default_defaults,
+            &handlers_unset.clone().with_default(&default_defaults)
         );
-        assert_eq!(&handlers, &handlers.clone().with_default(&no_defaults));
         assert_eq!(
             &handlers_with_defaults,
-            &handlers_with_defaults.clone().with_default(&no_defaults)
+            &handlers.clone().with_default(&default_defaults)
         );
-        /* FIXME: `with_default` should also set on_success.
         assert_eq!(
-            &handlers_with_defaults,
-            &handlers_unset.with_default(&defaults)
-        ); */
-        assert_eq!(&handlers_with_defaults, &handlers.with_default(&defaults));
+            &handlers_with_user_defaults,
+            &handlers_with_user_defaults
+                .clone()
+                .with_default(&default_defaults)
+        );
+
         assert_eq!(
-            &handlers_with_defaults,
-            &handlers_with_defaults.clone().with_default(&defaults)
+            &handlers_with_user_defaults,
+            &handlers_unset.with_default(&user_defaults)
+        );
+        assert_eq!(
+            &handlers_with_user_defaults,
+            &handlers.with_default(&user_defaults)
+        );
+        assert_eq!(
+            &handlers_with_user_defaults,
+            &handlers_with_user_defaults
+                .clone()
+                .with_default(&user_defaults)
         );
     }
 

@@ -198,7 +198,7 @@ impl OperationWorkflow {
         if action_on_error != &OperationAction::Clear {
             return Err(WorkflowDefinitionError::InvalidAction {
                 state: "failed".to_string(),
-                action: format!("{action_on_error:?}"),
+                action: format!("{action_on_error}"),
             });
         }
 

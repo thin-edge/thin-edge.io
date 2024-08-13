@@ -315,10 +315,13 @@ impl TryFrom<TomlExitHandlers> for DefaultHandlers {
 
     fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
         let timeout = value.timeout_second.map(Duration::from_secs);
+        let on_success = value.on_success.map(|u| u.into());
         let on_timeout = value.on_timeout.map(|u| u.into());
         let on_error = value.on_error.map(|u| u.into());
 
-        DefaultHandlers::try_new(timeout, on_timeout, on_error)
+        Ok(DefaultHandlers::new(
+            timeout, on_success, on_error, on_timeout,
+        ))
     }
 }
 
@@ -606,7 +609,7 @@ script = "/some/script/which/fails"
             WorkflowDefinitionError::InvalidAction {
                 state: "failed".to_string(),
                 action: format!(
-                    "{:?}",
+                    "{}",
                     OperationAction::Script(
                         ShellScript {
                             command: "/some/script/which/fails".to_string(),
