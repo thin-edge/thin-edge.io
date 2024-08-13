@@ -18,7 +18,6 @@ use tedge_actors::LoggingSender;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
-use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::workflow::GenericCommandState;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::debug;
@@ -70,7 +69,7 @@ impl OperationHandler {
 
                 // TODO(marcel): would be good not to generate new ids from running operations, see if
                 // we can remove it somehow
-                command_id: IdGenerator::new(crate::converter::REQUESTER_NAME),
+                command_id: c8y_mapper_config.id_generator(),
 
                 downloader,
                 uploader,
@@ -131,6 +130,10 @@ impl OperationHandler {
 
         // don't process sub-workflow calls
         if cmd_id.starts_with("sub:") {
+            return;
+        }
+
+        if !self.context.command_id.is_generator_of(&cmd_id) {
             return;
         }
 
@@ -346,6 +349,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_ignores_topic_from_different_mapper_instance() {
+        let test_handle = setup_operation_handler();
+        let mut sut = test_handle.operation_handler;
+
+        let mqtt_schema = sut.context.mqtt_schema.clone();
+
+        let entity_topic_id = EntityTopicId::default_main_device();
+        let entity_target = EntityTarget {
+            topic_id: entity_topic_id.clone(),
+            external_id: EntityExternalId::from("anything"),
+            smartrest_publish_topic: Topic::new("anything").unwrap(),
+        };
+
+        // Using a firmware operation here, but should hold for any operation type
+        let different_mapper_topic = mqtt_schema.topic_for(
+            &entity_topic_id,
+            &Channel::Command {
+                operation: OperationType::Restart,
+                cmd_id: "different-prefix-mapper-1923738".to_string(),
+            },
+        );
+        let different_mapper_message =
+            MqttMessage::new(&different_mapper_topic, r#"{"status":"executing"}"#);
+
+        sut.handle(entity_target.clone(), different_mapper_message)
+            .await;
+
+        assert_eq!(sut.running_operations.len(), 0);
+    }
+
+    #[tokio::test]
     async fn handle_ignores_subcommand_topics_3048() {
         let test_handle = setup_operation_handler();
         let mut sut = test_handle.operation_handler;
@@ -426,7 +460,7 @@ mod tests {
         // TODO(marcel): don't assume operation implementations when testing the handler
         let config_snapshot_operation = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-1273384".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Successful,
                 tedge_url: Some("asdf".to_string()),
@@ -555,7 +589,7 @@ mod tests {
 
         let config_snapshot_operation = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-229394".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Executing,
                 tedge_url: Some("asdf".to_string()),
@@ -602,7 +636,7 @@ mod tests {
 
         let config_snapshot_operation = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-123456".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Executing,
                 tedge_url: Some("asdf".to_string()),
@@ -654,7 +688,7 @@ mod tests {
 
         let failed_message = ConfigSnapshotCmd {
             target: entity_topic_id.clone(),
-            cmd_id: "config-snapshot-1".to_string(),
+            cmd_id: "c8y-mapper-284842".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Failed {
                     reason: "test".to_string(),
@@ -668,7 +702,7 @@ mod tests {
 
         let successful_message = ConfigSnapshotCmd {
             target: entity_topic_id,
-            cmd_id: "config-snapshot-2".to_string(),
+            cmd_id: "c8y-mapper-28433842".to_string(),
             payload: ConfigSnapshotCmdPayload {
                 status: CommandStatus::Successful,
                 tedge_url: Some("asdf".to_string()),

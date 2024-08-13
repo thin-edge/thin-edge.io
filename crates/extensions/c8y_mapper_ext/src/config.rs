@@ -13,6 +13,7 @@ use tedge_api::mqtt_topics::ChannelFilter::Command;
 use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::TopicIdError;
@@ -281,6 +282,10 @@ impl C8yMapperConfig {
         ]
         .try_into()
         .unwrap()
+    }
+
+    pub fn id_generator(&self) -> IdGenerator {
+        IdGenerator::new(&format!("{}-mapper", self.c8y_prefix))
     }
 }
 

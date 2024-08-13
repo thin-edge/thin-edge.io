@@ -13,6 +13,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -42,7 +43,7 @@ impl TEdgeComponent for AwsMapper {
             let device_id = tedge_config.device.id.try_read(&tedge_config)?;
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
-            let rules = built_in_bridge_rules(device_id)?;
+            let rules = built_in_bridge_rules(device_id, &tedge_config.aws.bridge.topic_prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 tedge_config.device.id.try_read(&tedge_config)?,
@@ -75,6 +76,7 @@ impl TEdgeComponent for AwsMapper {
             clock,
             mqtt_schema,
             tedge_config.aws.mapper.timestamp_format,
+            tedge_config.aws.bridge.topic_prefix.clone(),
         );
         let mut aws_converting_actor = ConvertingActor::builder("AwsConverter", aws_converter);
 
@@ -98,28 +100,35 @@ fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
     topics
 }
 
-fn built_in_bridge_rules(remote_client_id: &str) -> Result<BridgeConfig, anyhow::Error> {
-    let local_prefix = "aws/";
+fn built_in_bridge_rules(
+    remote_client_id: &str,
+    topic_prefix: &TopicPrefix,
+) -> Result<BridgeConfig, anyhow::Error> {
+    let local_prefix = format!("{topic_prefix}/");
     let device_id_prefix = format!("thinedge/{remote_client_id}/");
     let things_prefix = format!("$aws/things/{remote_client_id}/");
     let conn_check = format!("thinedge/devices/{remote_client_id}/test-connection");
     let mut bridge = BridgeConfig::new();
 
     // telemetry/command topics for use by the user
-    bridge.forward_from_local("td/#", local_prefix, device_id_prefix.clone())?;
-    bridge.forward_from_remote("cmd/#", local_prefix, device_id_prefix)?;
+    bridge.forward_from_local("td/#", local_prefix.clone(), device_id_prefix.clone())?;
+    bridge.forward_from_remote("cmd/#", local_prefix.clone(), device_id_prefix)?;
 
     // topic to interact with the shadow of the device
-    bridge.forward_bidirectionally("shadow/#", local_prefix, things_prefix.clone())?;
+    bridge.forward_bidirectionally("shadow/#", local_prefix.clone(), things_prefix.clone())?;
 
     // echo topic mapping to check the connection
-    bridge.forward_from_local("", "aws/test-connection", conn_check.clone())?;
-    bridge.forward_from_remote("", "aws/connection-success", conn_check)?;
+    bridge.forward_from_local(
+        "",
+        format!("{local_prefix}test-connection"),
+        conn_check.clone(),
+    )?;
+    bridge.forward_from_remote("", format!("{local_prefix}connection-success"), conn_check)?;
 
     Ok(bridge)
 }
 
 #[test]
 fn bridge_rules_are_valid() {
-    built_in_bridge_rules("test-device-id").unwrap();
+    built_in_bridge_rules("test-device-id", &"aws".try_into().unwrap()).unwrap();
 }

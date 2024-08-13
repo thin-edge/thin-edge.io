@@ -557,9 +557,9 @@ define_tedge_config! {
                 local_cleansession: AutoFlag,
             },
 
-            /// The topic prefix that will be used for the mapper bridge MQTT topic. For instance,
+            /// The topic prefix that will be used for the bridge MQTT topic. For instance,
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
-            /// forwarded by to Cumulocity on the `s/us` topic
+            /// forwarded to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
             topic_prefix: TopicPrefix,
         },
@@ -629,6 +629,14 @@ define_tedge_config! {
             timestamp_format: TimeFormat,
         },
 
+        bridge: {
+            /// The topic prefix that will be used for the bridge MQTT topic. For instance,
+            /// if this is set to "az", then messages published to `az/twin/GET/#` will be
+            /// forwarded to Azure on the `$iothub/twin/GET/#` topic
+            #[tedge_config(example = "az", default(function = "az_topic_prefix"))]
+            topic_prefix: TopicPrefix,
+        },
+
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
         #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
@@ -657,6 +665,14 @@ define_tedge_config! {
             #[tedge_config(example = "unix")]
             #[tedge_config(default(variable = "TimeFormat::Unix"))]
             timestamp_format: TimeFormat,
+        },
+
+        bridge: {
+            /// The topic prefix that will be used for the bridge MQTT topic. For instance,
+            /// if this is set to "aws", then messages published to `aws/shadow/#` will be
+            /// forwarded to AWS on the `$aws/things/shadow/#` topic
+            #[tedge_config(example = "aws", default(function = "aws_topic_prefix"))]
+            topic_prefix: TopicPrefix,
         },
 
         /// Set of MQTT topics the AWS IoT mapper should subscribe to
@@ -1022,6 +1038,14 @@ impl TEdgeConfigReader {
 
 fn c8y_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("c8y").unwrap()
+}
+
+fn az_topic_prefix() -> TopicPrefix {
+    TopicPrefix::try_new("az").unwrap()
+}
+
+fn aws_topic_prefix() -> TopicPrefix {
+    TopicPrefix::try_new("aws").unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]

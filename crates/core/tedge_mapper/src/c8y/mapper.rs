@@ -224,9 +224,10 @@ impl TEdgeComponent for CumulocityMapper {
             &mut service_monitor_actor,
         )?;
 
+        let c8y_prefix = &tedge_config.c8y.bridge.topic_prefix;
         // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
-        let old_to_new_agent_adapter = OldAgentAdapter::builder(&mut mqtt_actor);
+        let old_to_new_agent_adapter = OldAgentAdapter::builder(c8y_prefix, &mut mqtt_actor);
 
         let availability_actor = if tedge_config.c8y.availability.enable {
             Some(AvailabilityBuilder::new(
