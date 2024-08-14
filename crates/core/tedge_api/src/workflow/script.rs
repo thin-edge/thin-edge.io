@@ -143,23 +143,6 @@ impl ExitHandlers {
         })
     }
 
-    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
-        if self.timeout.is_none() {
-            self.timeout = default.timeout
-        }
-        if self.on_success.is_none() && self.on_stdout.is_empty() {
-            self.on_success = Some(default.on_success.clone())
-        }
-        if self.on_kill.is_none() {
-            self.on_kill = Some(default.on_timeout.clone())
-        }
-        if self.on_error.is_none() {
-            self.on_error = Some(default.on_error.clone())
-        }
-
-        self
-    }
-
     pub fn state_update(
         &self,
         program: &str,
@@ -236,9 +219,12 @@ impl ExitHandlers {
     }
 
     fn state_update_on_unknown_exit_code(&self, program: &str, code: u8) -> GenericStateUpdate {
-        self.on_error.clone().unwrap_or_else(|| {
-            GenericStateUpdate::failed(format!("{program} returned exit code {code}"))
-        })
+        let mut state = self
+            .on_error
+            .clone()
+            .unwrap_or(GenericStateUpdate::unknown_error());
+        state.reason = Some(format!("{program} returned exit code {code}"));
+        state
     }
 
     pub fn state_update_on_kill(&self, program: &str, signal: u8) -> GenericStateUpdate {
@@ -334,22 +320,6 @@ pub struct AwaitHandlers {
     pub on_timeout: Option<GenericStateUpdate>,
 }
 
-impl AwaitHandlers {
-    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
-        if self.timeout.is_none() {
-            self.timeout = default.timeout
-        }
-        if self.on_timeout.is_none() {
-            self.on_timeout = Some(default.on_timeout.clone())
-        }
-        if self.on_error.is_none() {
-            self.on_error = Some(default.on_error.clone())
-        }
-
-        self
-    }
-}
-
 /// Define state transition on each iteration outcome
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct IterateHandlers {
@@ -369,17 +339,6 @@ impl IterateHandlers {
             on_success,
             on_error,
         }
-    }
-
-    pub fn with_default(mut self, default: &DefaultHandlers) -> Self {
-        if self.on_error.is_none() {
-            self.on_error = default
-                .on_error
-                .clone()
-                .or_else(|| Some(GenericStateUpdate::failed("Iteration failed".to_string())));
-        }
-
-        self
     }
 }
 
@@ -422,8 +381,8 @@ impl Default for DefaultHandlers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::toml_config::TomlStateUpdate;
     use crate::workflow::OperationAction;
+    use crate::workflow::OperationWorkflow;
     use serde_json::json;
     use std::process::Command;
 
@@ -585,7 +544,8 @@ on_error = "oops"
         assert_eq!(
             state_update,
             json! ({
-                "status": "oops"
+                "status": "oops",
+                "reason": "sh returned exit code 1"
             })
         )
     }
@@ -695,67 +655,126 @@ on_exit._ = "oops"
 
     #[test]
     fn inject_default_values() {
-        let handlers_unset = handlers_from_toml("");
-        let handlers = handlers_from_toml(r#"on_success = "ok""#);
-        let handlers_with_default_defaults = handlers_from_toml(
-            r#"
+        assert_eq!(
+            handlers_from_toml_with_defaults("", ""),
+            handlers_from_toml(""),
+        );
+
+        assert_eq!(
+            handlers_from_toml_with_defaults("", ""),
+            handlers_from_toml(
+                r#"
 on_success = "successful"
-on_kill = { "status" = "failed", reason = "timeout" }
+on_timeout = { "status" = "failed", reason = "timeout" }
 on_error = "failed"
-"#,
+"#
+            ),
         );
-        let handlers_with_defaults = handlers_from_toml(
-            r#"
+
+        assert_eq!(
+            handlers_from_toml_with_defaults("", r#"on_success = "ok""#),
+            handlers_from_toml(
+                r#"
 on_success = "ok"
-on_kill = { "status" = "failed", reason = "timeout" }
+on_timeout = { "status" = "failed", reason = "timeout" }
 on_error = "failed"
-"#,
+"#
+            ),
         );
-        let handlers_with_user_defaults = handlers_from_toml(
-            r#"
+
+        assert_eq!(
+            handlers_from_toml_with_defaults(r#"on_success = "ok""#, ""),
+            handlers_from_toml(
+                r#"
+on_success = "ok"
+on_timeout = { "status" = "failed", reason = "timeout" }
+on_error = "failed"
+"#
+            ),
+        );
+
+        assert_eq!(
+            handlers_from_toml_with_defaults(
+                "",
+                r#"
+on_success = "ok"
+on_kill = "killed"
+on_error = "error"
 timeout_second = 15
+"#
+            ),
+            handlers_from_toml(
+                r#"
+on_success = "ok"
+on_kill = "killed"
+on_error = "error"
+timeout_second = 15
+"#
+            ),
+        );
+
+        assert_eq!(
+            handlers_from_toml_with_defaults(
+                "timeout_second = 20",
+                r#"
+on_success = "ok"
+on_kill = "killed"
+on_error = "error"
+timeout_second = 15
+"#
+            ),
+            handlers_from_toml(
+                r#"
+on_success = "ok"
+on_kill = "killed"
+on_error = "error"
+timeout_second = 15
+"#
+            ),
+        );
+
+        assert_eq!(
+            handlers_from_toml_with_defaults(
+                "timeout_second = 20",
+                r#"
+on_success = "ok"
+on_kill = "killed"
+on_error = "error"
+"#
+            ),
+            handlers_from_toml(
+                r#"
+on_success = "ok"
+on_kill = "killed"
+on_error = "error"
+timeout_second = 20
+"#
+            ),
+        );
+
+        assert_eq!(
+            handlers_from_toml_with_defaults(
+                r#"
+on_success = "ok"
+on_timeout = "timeout"
+on_error = "error"
+timeout_second = 15
+"#,
+                r#"
 on_success = "ok"
 on_kill = "timeout"
 on_error = "error"
-"#,
-        );
-
-        let default_defaults = DefaultHandlers::default();
-        let user_defaults = DefaultHandlers::new(
-            Some(Duration::from_secs(15)),
-            Some(TomlStateUpdate::Simple("ok".to_string()).into()),
-            Some(TomlStateUpdate::Simple("error".to_string()).into()),
-            Some(TomlStateUpdate::Simple("timeout".to_string()).into()),
-        );
-
-        assert_eq!(
-            &handlers_with_default_defaults,
-            &handlers_unset.clone().with_default(&default_defaults)
-        );
-        assert_eq!(
-            &handlers_with_defaults,
-            &handlers.clone().with_default(&default_defaults)
-        );
-        assert_eq!(
-            &handlers_with_user_defaults,
-            &handlers_with_user_defaults
-                .clone()
-                .with_default(&default_defaults)
-        );
-
-        assert_eq!(
-            &handlers_with_user_defaults,
-            &handlers_unset.with_default(&user_defaults)
-        );
-        assert_eq!(
-            &handlers_with_user_defaults,
-            &handlers.with_default(&user_defaults)
-        );
-        assert_eq!(
-            &handlers_with_user_defaults,
-            &handlers_with_user_defaults
-                .clone()
-                .with_default(&user_defaults)
+timeout_second = 15
+"#
+            ),
+            handlers_from_toml(
+                r#"
+on_success = "ok"
+on_kill = "timeout"
+on_error = "error"
+timeout_second = 15
+"#
+            ),
         );
     }
 
@@ -806,5 +825,24 @@ script = "some-script"
 "#
         ));
         handlers
+    }
+
+    fn handlers_from_toml_with_defaults(defaults: &str, handlers: &str) -> ExitHandlers {
+        let file = format!(
+            r#"
+operation = "some-operation"
+{defaults}
+
+[init]
+script = "some-script"
+{handlers}
+"#
+        );
+        let workflow: OperationWorkflow = toml::from_str(&file).expect("Expect TOML input");
+        if let Some(OperationAction::Script(_, handlers)) = workflow.states.get("init") {
+            return handlers.clone();
+        }
+
+        panic!("Expect a script with handlers")
     }
 }
