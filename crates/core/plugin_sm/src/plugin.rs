@@ -66,7 +66,7 @@ pub trait Plugin {
             SoftwareModuleUpdate::Install { mut module } => {
                 let module_url = module.url.clone();
                 match module_url {
-                    Some(url) => {
+                    Some(url) if module.file_path.is_none() => {
                         self.install_from_url(
                             &mut module,
                             &url,
@@ -77,7 +77,7 @@ pub trait Plugin {
                         )
                         .await?
                     }
-                    None => self.install(&module, command_log).await?,
+                    _ => self.install(&module, command_log).await?,
                 }
 
                 Ok(())
