@@ -6,13 +6,21 @@ It currently support the creation of Docker devices only
 # pylint: disable=invalid-name
 
 import logging
+import boto3
+from botocore.exceptions import ClientError
 import json
+import tempfile
+import paho.mqtt.client as mqtt
+import ssl
 from typing import Any, Union, List, Dict
 import time
 from datetime import datetime
 import re
 import base64
 import os
+import paramiko
+import traceback
+import requests
 import shutil
 import subprocess
 from pathlib import Path
@@ -70,6 +78,10 @@ class ThinEdgeIO(DeviceLibrary):
 
         # Configure retries
         retry.configure_retry_on_members(self, "^_assert_")
+
+    def get_adapter(self):
+        """Return the current adapter type"""
+        return self.adapter
 
     def should_delete_device_certificate(self) -> bool:
         """Check if the certificate should be deleted or not
@@ -485,6 +497,168 @@ class ThinEdgeIO(DeviceLibrary):
                or (topic and mqtt_topic_match(mqtt_matcher, item["message"]["topic"]))
         ]
         return matching
+
+    #
+    #AWS
+    #
+
+    @keyword("Create Session With Keys")
+    def create_session_with_keys(self, aws_access_key_id, aws_secret_access_key, region_name=None):
+        """
+        Creates an AWS session using the provided access key, secret key, and optional region.
+        Returns a success message if the session creation is successful.
+        """
+        try:
+            self.session = boto3.Session(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region_name=region_name
+            )
+            # Try to create an IoT client to verify the session
+            iot_client = self.session.client('iot')
+            # Perform a simple operation like listing IoT policies to verify the connection
+            iot_client.list_policies()
+            return "AWS session creation successful"
+        except ClientError as e:
+            raise RuntimeError(f"Failed to create AWS session: {e}")
+
+    def get_iot_endpoint(self):
+        """
+        Retrieves the IoT endpoint for the AWS account.
+        """
+        iot_client = self.session.client('iot')
+        response = iot_client.describe_endpoint(endpointType='iot:Data-ATS')
+        return response['endpointAddress']
+
+    @keyword("Create New Policy")
+    def create_new_policy(self, policy_name, policy_file_path):
+        """
+        Creates a new IoT policy with the provided name and reads the policy document from a file.
+        """
+        try:
+            with open(policy_file_path, 'r') as policy_file:
+                policy_document = json.load(policy_file)
+
+            iot_client = self.session.client('iot')
+            response = iot_client.create_policy(
+                policyName=policy_name,
+                policyDocument=json.dumps(policy_document)
+            )
+            return response['policyArn']
+        except ClientError as e:
+            raise RuntimeError(f"Failed to create policy: {e}")
+        except FileNotFoundError:
+            raise RuntimeError(f"Policy file {policy_file_path} not found.")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Error decoding JSON from policy file {policy_file_path}.")
+
+    @keyword("Register Device")
+    def register_device(self, device_id):
+        """
+        Registers a new IoT Thing with the provided device ID.
+        """
+        try:
+            iot_client = self.session.client('iot')
+            response = iot_client.create_thing(
+                thingName=device_id
+            )
+            return response['thingArn']
+        except ClientError as e:
+            raise RuntimeError(f"Failed to register device: {e}")
+    
+    @keyword("Check Policy Exists")
+    def check_policy_exists(self, policy_name):
+        """
+        Checks if the specified IoT policy exists.
+        """
+        try:
+            iot_client = self.session.client('iot')
+            response = iot_client.get_policy(policyName=policy_name)
+            return True if response else False
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                return False
+            raise RuntimeError(f"Error checking if policy exists: {e}")
+
+    @keyword("Check Device Exists")
+    def check_device_exists(self, device_id):
+        """
+        Checks if the specified IoT device (thing) exists.
+        """
+        try:
+            iot_client = self.session.client('iot')
+            response = iot_client.describe_thing(thingName=device_id)
+            return True if response else False
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                return False
+            raise RuntimeError(f"Error checking if device exists: {e}")
+
+    @keyword("Configure Device")
+    def configure_device(self, device_id, policy_name):
+        """
+        Configures the device by creating keys and certificates, attaching the policy to the certificate,
+        and attaching the certificate to the device.
+        """
+        try:
+            iot_client = self.session.client('iot')
+            
+            # Create keys and certificate
+            response = iot_client.create_keys_and_certificate(setAsActive=True)
+            certificate_arn = response['certificateArn']
+            certificate_id = response['certificateId']
+            
+            # Attach policy to certificate
+            iot_client.attach_policy(
+                policyName=policy_name,
+                target=certificate_arn
+            )
+            
+            # Attach certificate to the device
+            iot_client.attach_thing_principal(
+                thingName=device_id,
+                principal=certificate_arn
+            )
+            
+            return {
+                'certificate_arn': certificate_arn,
+                'certificate_id': certificate_id,
+                'certificate_pem': response['certificatePem'],
+                'key_pair': response['keyPair']
+            }
+        except ClientError as e:
+            raise RuntimeError(f"Failed to configure device: {e}")
+       
+    @keyword("Teardown AWS Resources")
+    def teardown_aws_resources(self, policy_name, device_id):
+        """
+        Deletes the created IoT policy and the registered device (thing) in AWS IoT Core.
+        """
+        try:
+            iot_client = self.session.client('iot')
+            
+            # Detach policy from all principals
+            response = iot_client.list_targets_for_policy(policyName=policy_name)
+            targets = response.get('targets', [])
+            for target in targets:
+                iot_client.detach_policy(policyName=policy_name, target=target)
+            
+            # Delete the policy
+            iot_client.delete_policy(policyName=policy_name)
+            
+            # Detach all principals from the thing
+            response = iot_client.list_thing_principals(thingName=device_id)
+            principals = response.get('principals', [])
+            for principal in principals:
+                iot_client.detach_thing_principal(thingName=device_id, principal=principal)
+            
+            # Delete the thing (device)
+            iot_client.delete_thing(thingName=device_id)
+            
+            return "Teardown of AWS resources successful"
+        except ClientError as e:
+            raise RuntimeError(f"Failed to teardown AWS resources: {e}")
+
 
     #
     # Service Health Status

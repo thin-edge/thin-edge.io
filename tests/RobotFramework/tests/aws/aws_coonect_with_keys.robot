@@ -1,0 +1,78 @@
+*** Settings ***
+Documentation       Verify that thin-edge.io can successfully connect to AWS IoT Core
+...                 Test assumes that AWS credentials are added to the .env file
+...                 AWS_URL=
+...                 AWS_ACCESS_KEY=
+...                 AWS_SECRET_KEY=
+...                 AWS_REGION=
+...    
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO    adapter=ssh
+
+
+Suite Setup         Custom Setup
+Test Teardown      Custom Teardown
+
+Test Tags           theme:aws    test:on_demand
+
+*** Variables ***
+${POLICY_NAME}=       thinedge.io
+${CERT_PATH}=         /etc/tedge/device-certs/tedge-certificate.pem
+${ROOT_CA_PATH}=      /etc/tedge/device-certs/tedge-certificate.pem
+
+
+
+*** Test Cases ***
+
+Create AWS IoT Policy and Thing  
+    #Check addapter and run only if adapter is ssh
+    Run Command If SSH Adapter
+
+    # Verify the certificate creation
+    ${cert_details}=  Execute Command  sudo tedge cert show
+    Log  ${cert_details}
+    
+    # Create an AWS session
+    Create Session With Keys  ${AWS_CONFIG.access_key}  ${AWS_CONFIG.secret_key}  ${AWS_CONFIG.region}
+    
+    # Create a new IoT policy
+    ${policy_arn}=  Create New Policy  ${POLICY_NAME}  tests/RobotFramework/tests/aws/aws_iot_policy.json
+
+    # Verify that the policy was created
+    ${policy_exists}=  Check Policy Exists  ${POLICY_NAME}
+    Should Be True  ${policy_exists}  Policy ${POLICY_NAME} should exist after creation.
+    
+    # Register the device (thing) in AWS IoT
+    ${thing_arn}=  Register Device  ${DEVICE_SN}
+
+    # Verify that the device was created
+    ${device_exists}=  Check Device Exists  ${DEVICE_SN}
+    Log    ${device_exists}
+    Should Be True  ${device_exists}  Device ${DEVICE_SN} should exist after creation.
+    
+    # Configure the device by attaching the policy and the certificate
+    ${cert_data}=  Configure Device  ${DEVICE_SN}  ${POLICY_NAME}
+
+    # Connect the device to AWS IoT Core 
+    ${log}    Execute Command    sudo tedge connect aws
+
+
+
+*** Keywords ***
+
+Custom Setup
+    ${DEVICE_SN}=    Setup    skip_bootstrap=False
+    Set Suite Variable    ${DEVICE_SN}
+    ${log}    Execute Command    sudo tedge config set aws.url ${AWS_CONFIG.url}
+
+Custom Teardown
+    Teardown AWS Resources  ${POLICY_NAME}  ${DEVICE_SN}
+    Execute Command  sudo rm -f ${CERT_PATH} ${ROOT_CA_PATH}
+    Get Logs
+
+Run Command If SSH Adapter
+    ${thin_edge_io}=    Get Library Instance    ThinEdgeIO
+    ${adapter}=    Call Method    ${thin_edge_io}    get_adapter
+    Run Keyword If    '${adapter}' == 'ssh'    Run keyword and ignore error    Execute Command    sudo tedge cert remove | sudo tedge disconnect aws
+    Run Keyword If    '${adapter}' == 'ssh'    Execute Command    sudo tedge cert create --device-id ${DEVICE_SN}
+
