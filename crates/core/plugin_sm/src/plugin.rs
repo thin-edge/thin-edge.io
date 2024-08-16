@@ -20,6 +20,7 @@ use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
 use tokio::io::AsyncWriteExt;
 use tracing::error;
+use tracing::info;
 
 #[async_trait]
 pub trait Plugin {
@@ -66,7 +67,7 @@ pub trait Plugin {
             SoftwareModuleUpdate::Install { mut module } => {
                 let module_url = module.url.clone();
                 match module_url {
-                    Some(url) => {
+                    Some(url) if module.file_path.is_none() => {
                         self.install_from_url(
                             &mut module,
                             &url,
@@ -77,7 +78,7 @@ pub trait Plugin {
                         )
                         .await?
                     }
-                    None => self.install(&module, command_log).await?,
+                    _ => self.install(&module, command_log).await?,
                 }
 
                 Ok(())
@@ -134,7 +135,8 @@ pub trait Plugin {
         // Execute the updates
         if failed_updates.is_empty() {
             let outcome = self.update_list(&updates, command_log.as_deref_mut()).await;
-            if let Err(SoftwareError::UpdateListNotSupported(_)) = outcome {
+            if let Err(err @ SoftwareError::UpdateListNotSupported(_)) = outcome {
+                info!("{err}");
                 for update in updates.iter() {
                     if let Err(error) = self
                         .apply(update, command_log.as_deref_mut(), download_path)
