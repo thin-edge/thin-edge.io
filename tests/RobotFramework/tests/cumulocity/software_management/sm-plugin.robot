@@ -3,6 +3,7 @@
 Resource            ../../../resources/common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
+Library             Collections
 
 Test Setup         Custom Setup
 Test Teardown      Custom Teardown
@@ -118,6 +119,16 @@ Filter packages list using both patterns
     ...    {"name": "dummy2-0001", "version": "1.0.0", "softwareType": "dummy2"}
     ...    {"name": "dummy2-1500", "version": "1.0.0", "softwareType": "dummy2"}
     Length Should Be    ${software}    1504
+
+Software updates download software packages only once #3062
+    Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
+    ${file_url}=    Cumulocity.Create Inventory Binary    sm-plugin-test-file    software1    contents=Testing a thing
+    ${OPERATION}=    Install Software    dummy-software,1.0.0::dummy1,${file_url}
+    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+    ${op_id}=    Get From Dictionary    ${OPERATION}    id
+    ${count}=    Execute Command    grep Downloading /var/log/tedge/agent/workflow-software_update-c8y-mapper-${op_id}.log -c
+    Should Be Equal As Numbers    ${count}    1
 
 *** Keywords ***
 Custom Setup

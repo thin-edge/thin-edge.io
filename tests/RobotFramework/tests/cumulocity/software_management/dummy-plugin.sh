@@ -7,11 +7,18 @@ case "$1" in
       done
       exit 0
       ;;
+  install)
+      exit 0
+      ;;
+  remove)
+      exit 0
+      ;;
   prepare)
       exit 0
       ;;
   update-list)
-      exit 0
+      # means update-list is unsupported by this plugin
+      exit 1
       ;;
   finalize)
       exit 0
