@@ -346,7 +346,6 @@ impl IterateHandlers {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DefaultHandlers {
     pub timeout: Option<Duration>,
-    pub on_success: GenericStateUpdate,
     pub on_error: GenericStateUpdate,
     pub on_timeout: GenericStateUpdate,
 }
@@ -354,13 +353,11 @@ pub struct DefaultHandlers {
 impl DefaultHandlers {
     pub fn new(
         timeout: Option<Duration>,
-        on_success: Option<GenericStateUpdate>,
         on_error: Option<GenericStateUpdate>,
         on_timeout: Option<GenericStateUpdate>,
     ) -> Self {
         DefaultHandlers {
             timeout,
-            on_success: on_success.unwrap_or_else(GenericStateUpdate::successful),
             on_error: on_error.unwrap_or_else(GenericStateUpdate::unknown_error),
             on_timeout: on_timeout.unwrap_or_else(GenericStateUpdate::timeout),
         }
@@ -371,7 +368,6 @@ impl Default for DefaultHandlers {
     fn default() -> Self {
         DefaultHandlers {
             timeout: None,
-            on_success: GenericStateUpdate::successful(),
             on_error: GenericStateUpdate::unknown_error(),
             on_timeout: GenericStateUpdate::timeout(),
         }
@@ -664,7 +660,6 @@ on_exit._ = "oops"
             handlers_from_toml_with_defaults("", ""),
             handlers_from_toml(
                 r#"
-on_success = "successful"
 on_timeout = { "status" = "failed", reason = "timeout" }
 on_error = "failed"
 "#
@@ -683,12 +678,11 @@ on_error = "failed"
         );
 
         assert_eq!(
-            handlers_from_toml_with_defaults(r#"on_success = "ok""#, ""),
+            handlers_from_toml_with_defaults(r#"on_error = "broken""#, ""),
             handlers_from_toml(
                 r#"
-on_success = "ok"
 on_timeout = { "status" = "failed", reason = "timeout" }
-on_error = "failed"
+on_error = "broken"
 "#
             ),
         );

@@ -275,16 +275,6 @@ impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for ExitHandlers {
             })
             .collect();
 
-        // Inject defaults if no success state is given either with: on_success, on_exit.0, on_return
-        let on_success = if on_success.is_none()
-            && on_stdout.is_empty()
-            && !on_exit.iter().any(|(i, _, _)| *i == 0)
-        {
-            Some(defaults.on_success)
-        } else {
-            on_success
-        };
-
         // Inject defaults if no error state is given either with: on_error, on_exit._
         let on_error = if on_error.is_none() && wildcard.is_none() {
             Some(defaults.on_error)
@@ -327,7 +317,7 @@ impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for AwaitHandlers {
         let on_success: GenericStateUpdate = handlers
             .on_success
             .map(|u| u.into())
-            .unwrap_or(defaults.on_success);
+            .ok_or(ScriptDefinitionError::MissingOnSuccessHandler)?;
         let on_error = handlers
             .on_error
             .map(|u| u.into())
@@ -372,13 +362,10 @@ impl TryFrom<TomlExitHandlers> for DefaultHandlers {
 
     fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
         let timeout = value.timeout_second.map(Duration::from_secs);
-        let on_success = value.on_success.map(|u| u.into());
         let on_timeout = value.on_timeout.map(|u| u.into());
         let on_error = value.on_error.map(|u| u.into());
 
-        Ok(DefaultHandlers::new(
-            timeout, on_success, on_error, on_timeout,
-        ))
+        Ok(DefaultHandlers::new(timeout, on_error, on_timeout))
     }
 }
 

@@ -37,6 +37,9 @@ pub enum ScriptDefinitionError {
 
     #[error("Invalid exit code range '{from}-{to}' as {from}>{to}")]
     IncorrectRange { from: u8, to: u8 },
+
+    #[error("No handler is provided for 'on_success'")]
+    MissingOnSuccessHandler,
 }
 
 /// Error related to state excerpt definitions
