@@ -33,24 +33,34 @@ impl<'a> CopyOptions<'a> {
     ///
     /// Stdin and Stdout are UTF-8.
     pub fn copy(self) -> anyhow::Result<()> {
-        let output = self
-            .command()?
-            .output()
-            .context("Starting tedge-write process failed")?;
+        let mut command = self.command()?;
+
+        let output = command.output();
+
+        let program = command.get_program().to_string_lossy();
+        let output = output.with_context(|| format!("failed to start process '{program}'"))?;
 
         if !output.status.success() {
-            return Err(anyhow!(
-                String::from_utf8(output.stderr).expect("output should be utf-8")
-            ));
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr = stderr.trim();
+            let err = match output.status.code() {
+                Some(exit_code) => anyhow!(
+                    "process '{program}' returned non-zero exit code ({exit_code}); stderr=\"{stderr}\""
+                ),
+                None => anyhow!("process '{program}' was terminated; stderr=\"{stderr}\""),
+            };
+
+            return Err(err);
         }
 
         Ok(())
     }
 
-    fn command(&self) -> std::io::Result<Command> {
+    fn command(&self) -> anyhow::Result<Command> {
         let mut command = self.sudo.command(crate::TEDGE_WRITE_PATH);
 
-        let from_reader = std::fs::File::open(self.from)?;
+        let from_reader = std::fs::File::open(self.from)
+            .with_context(|| format!("could not open file for reading '{}'", self.from))?;
         command.stdin(from_reader).arg(self.to);
 
         if let Some(mode) = self.mode {
