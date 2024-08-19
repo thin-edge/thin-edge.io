@@ -331,11 +331,11 @@ impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for AwaitHandlers {
         let on_error = handlers
             .on_error
             .map(|u| u.into())
-            .or(Some(defaults.on_error));
+            .unwrap_or(defaults.on_error);
         let on_timeout = handlers
             .on_timeout
             .map(|u| u.into())
-            .or(Some(defaults.on_timeout));
+            .unwrap_or(defaults.on_timeout);
 
         Ok(AwaitHandlers {
             timeout,

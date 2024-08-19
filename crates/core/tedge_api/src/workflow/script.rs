@@ -312,12 +312,12 @@ impl BgExitHandlers {
 }
 
 /// Define how to await the completion of a command
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AwaitHandlers {
     pub timeout: Option<Duration>,
     pub on_success: GenericStateUpdate,
-    pub on_error: Option<GenericStateUpdate>,
-    pub on_timeout: Option<GenericStateUpdate>,
+    pub on_error: GenericStateUpdate,
+    pub on_timeout: GenericStateUpdate,
 }
 
 /// Define state transition on each iteration outcome
