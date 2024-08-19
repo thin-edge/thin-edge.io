@@ -88,6 +88,7 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
     let debian_list = SoftwareRequestResponseSoftwareList {
         plugin_type: "debian".into(),
         modules: vec![debian_module1],
+        errors: vec![],
     };
 
     let command = SoftwareUpdateCommand {

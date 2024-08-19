@@ -113,6 +113,7 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     let debian_list = SoftwareRequestResponseSoftwareList {
         plugin_type: "debian".into(),
         modules: vec![debian_module1],
+        errors: vec![],
     };
 
     // The output of converter => SoftwareUpdateCommand

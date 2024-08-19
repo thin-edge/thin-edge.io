@@ -182,6 +182,14 @@ Action:   {action}
         }
     }
 
+    pub async fn log_error(&mut self, msg: &str) {
+        error!("{msg}");
+        let line = format!("ERROR: {msg}\n");
+        if let Err(err) = self.write(&line).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
     pub async fn write_script_output(
         &mut self,
         command_line: &str,
