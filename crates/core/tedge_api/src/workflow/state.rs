@@ -64,6 +64,7 @@ pub struct GenericStateUpdate {
 
 const STATUS: &str = "status";
 const INIT: &str = "init";
+const EXECUTING: &str = "executing";
 const SUCCESSFUL: &str = "successful";
 const FAILED: &str = "failed";
 const REASON: &str = "reason";
@@ -421,15 +422,19 @@ impl GenericCommandState {
     }
 
     pub fn is_init(&self) -> bool {
-        matches!(self.status.as_str(), INIT)
+        self.status.as_str() == INIT
+    }
+
+    pub fn is_executing(&self) -> bool {
+        self.status.as_str() == EXECUTING
     }
 
     pub fn is_successful(&self) -> bool {
-        matches!(self.status.as_str(), SUCCESSFUL)
+        self.status.as_str() == SUCCESSFUL
     }
 
     pub fn is_failed(&self) -> bool {
-        matches!(self.status.as_str(), FAILED)
+        self.status.as_str() == FAILED
     }
 
     pub fn is_finished(&self) -> bool {
@@ -448,6 +453,13 @@ impl GenericStateUpdate {
 
     pub fn init_payload() -> Value {
         json!({STATUS: INIT})
+    }
+
+    pub fn executing() -> Self {
+        GenericStateUpdate {
+            status: EXECUTING.to_string(),
+            reason: None,
+        }
     }
 
     pub fn successful() -> Self {
@@ -583,6 +595,11 @@ pub enum StateExcerpt {
 }
 
 impl StateExcerpt {
+    /// Excerpt returning the whole payload of a command state
+    pub fn whole_payload() -> Self {
+        StateExcerpt::PathExpr("${.}".to_string())
+    }
+
     /// Extract a JSON value from the input state
     pub fn extract_value_from(&self, input: &GenericCommandState) -> Value {
         match self {

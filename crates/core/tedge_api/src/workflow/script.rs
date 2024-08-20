@@ -311,6 +311,14 @@ impl BgExitHandlers {
     }
 }
 
+impl BgExitHandlers {
+    pub fn builtin_default() -> Self {
+        BgExitHandlers {
+            on_exec: GenericStateUpdate::executing(),
+        }
+    }
+}
+
 /// Define how to await the completion of a command
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AwaitHandlers {
@@ -318,6 +326,17 @@ pub struct AwaitHandlers {
     pub on_success: GenericStateUpdate,
     pub on_error: GenericStateUpdate,
     pub on_timeout: GenericStateUpdate,
+}
+
+impl AwaitHandlers {
+    pub fn builtin_default() -> Self {
+        AwaitHandlers {
+            timeout: None,
+            on_success: GenericStateUpdate::successful(),
+            on_error: GenericStateUpdate::unknown_error(),
+            on_timeout: GenericStateUpdate::timeout(),
+        }
+    }
 }
 
 /// Define state transition on each iteration outcome

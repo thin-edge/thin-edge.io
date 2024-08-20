@@ -57,13 +57,18 @@ pub enum OperationAction {
     /// ```
     MoveTo(GenericStateUpdate),
 
-    /// The built-in behavior is used
+    /// Implied built-in operation (for backward compatibility)
+    ///
+    /// - the operation name is derived from the workflow
+    /// - the step (trigger vs await) is derived from the command status (scheduled vs executing)
     ///
     /// ```toml
     /// action = "builtin"
+    /// on_exec = "<state>"
     /// on_success = "<state>"
+    /// on_error = "<state>"
     /// ```
-    BuiltIn,
+    BuiltIn(BgExitHandlers, AwaitHandlers),
 
     /// Await agent restart
     ///
@@ -106,6 +111,14 @@ pub enum OperationAction {
         BgExitHandlers,
     ),
 
+    /// Trigger a built-in operation
+    ///
+    /// ```toml
+    /// operation = "<builtin:operation-name>"
+    /// on_exec = "<state>"
+    /// ```
+    BuiltInOperation(OperationName, BgExitHandlers),
+
     /// Await the completion of a sub-operation
     ///
     /// The sub-operation is stored in the command state.
@@ -140,7 +153,7 @@ impl Display for OperationAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
-            OperationAction::BuiltIn => "builtin".to_string(),
+            OperationAction::BuiltIn(_, _) => "builtin action".to_string(),
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
@@ -151,6 +164,9 @@ impl Display for OperationAction {
                     script
                 ),
             },
+            OperationAction::BuiltInOperation(operation, _) => {
+                format!("execute builtin:{operation}")
+            }
             OperationAction::AwaitOperationCompletion { .. } => {
                 "await sub-operation completion".to_string()
             }
@@ -212,10 +228,22 @@ impl OperationWorkflow {
 
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
+        let operation_name = operation.to_string();
+        let exec_handler = BgExitHandlers::builtin_default();
+        let await_handler = AwaitHandlers::builtin_default();
         let states = [
             ("init", OperationAction::MoveTo("scheduled".into())),
-            ("scheduled", OperationAction::BuiltIn),
-            ("executing", OperationAction::BuiltIn),
+            (
+                "scheduled",
+                OperationAction::BuiltInOperation(operation_name.clone(), exec_handler),
+            ),
+            (
+                "executing",
+                OperationAction::AwaitOperationCompletion(
+                    await_handler,
+                    StateExcerpt::whole_payload(),
+                ),
+            ),
             ("successful", OperationAction::Clear),
             ("failed", OperationAction::Clear),
         ]
@@ -383,6 +411,58 @@ impl OperationAction {
         let new_state = new_state.update(handlers.on_next);
 
         Ok(new_state)
+    }
+
+    /// Rewrite a command state before pushing it to a builtin operation actor
+    ///
+    /// Depending the action is to trigger or await the operation,
+    /// set the status to schedule or executing.
+    ///
+    /// Return the command state unchanged if there is no appropriate substitute.
+    pub fn adapt_builtin_request(&self, command_state: GenericCommandState) -> GenericCommandState {
+        match self {
+            OperationAction::BuiltInOperation(_, _) => command_state.update("scheduled".into()),
+            _ => command_state,
+        }
+    }
+
+    /// Rewrite the command state returned by a builtin operation actor
+    ///
+    /// Depending the operation is executing, successful or failed,
+    /// set the new state using the user provided handlers
+    ///
+    /// Return the command state unchanged if there is no appropriate handlers.
+    pub fn adapt_builtin_response(
+        &self,
+        command_state: GenericCommandState,
+    ) -> GenericCommandState {
+        match self {
+            OperationAction::BuiltIn(exec_handlers, _)
+            | OperationAction::BuiltInOperation(_, exec_handlers)
+                if command_state.is_executing() =>
+            {
+                command_state.update(exec_handlers.on_exec.clone())
+            }
+            OperationAction::BuiltIn(_, await_handlers)
+            | OperationAction::AwaitOperationCompletion(await_handlers, _)
+                if command_state.is_successful() =>
+            {
+                command_state.update(await_handlers.on_success.clone())
+            }
+            OperationAction::BuiltIn(_, await_handlers)
+            | OperationAction::AwaitOperationCompletion(await_handlers, _)
+                if command_state.is_failed() =>
+            {
+                let mut on_error = await_handlers.on_error.clone();
+                if on_error.reason.is_none() {
+                    if let Some(builtin_reason) = command_state.failure_reason() {
+                        on_error.reason = Some(builtin_reason.to_string());
+                    }
+                }
+                command_state.update(on_error)
+            }
+            _ => command_state,
+        }
     }
 }
 
