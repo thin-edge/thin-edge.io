@@ -10,7 +10,6 @@ Documentation       Verify that thin-edge.io can successfully connect to AWS IoT
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO    #adapter=ssh
 Library             OperatingSystem
-# Library             String
 
 Suite Setup         Custom Setup
 Test Teardown       Custom Teardown
