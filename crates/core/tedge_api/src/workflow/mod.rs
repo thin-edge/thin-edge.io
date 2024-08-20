@@ -57,13 +57,35 @@ pub enum OperationAction {
     /// ```
     MoveTo(GenericStateUpdate),
 
-    /// The built-in behavior is used
+    /// Implied built-in operation (for backward compatibility)
+    ///
+    /// - the operation name is derived from the workflow
+    /// - the step (trigger vs await) is derived from the command status (scheduled vs executing)
     ///
     /// ```toml
     /// action = "builtin"
+    /// on_exec = "<state>"
     /// on_success = "<state>"
+    /// on_error = "<state>"
     /// ```
-    BuiltIn,
+    BuiltIn(BgExitHandlers, AwaitHandlers),
+
+    /// Trigger a built-in operation
+    ///
+    /// ```toml
+    /// action = "<builtin-operation-name>"
+    /// on_exec = "<state>"
+    /// ```
+    BuiltInAction(OperationName, BgExitHandlers),
+
+    /// Await the outcome of a built-in operation
+    ///
+    /// ```toml
+    /// action = "await-<builtin-operation-name>"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    AwaitBuiltInAction(OperationName, AwaitHandlers),
 
     /// Await agent restart
     ///
@@ -140,7 +162,9 @@ impl Display for OperationAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
-            OperationAction::BuiltIn => "builtin".to_string(),
+            OperationAction::BuiltIn(_, _) => "builtin action".to_string(),
+            OperationAction::BuiltInAction(action, _) => format!("trigger {action}"),
+            OperationAction::AwaitBuiltInAction(action, _) => format!("await {action}"),
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
@@ -212,10 +236,19 @@ impl OperationWorkflow {
 
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
+        let operation_name = operation.to_string();
+        let exec_handler = BgExitHandlers::builtin_default();
+        let await_handler = AwaitHandlers::builtin_default();
         let states = [
             ("init", OperationAction::MoveTo("scheduled".into())),
-            ("scheduled", OperationAction::BuiltIn),
-            ("executing", OperationAction::BuiltIn),
+            (
+                "scheduled",
+                OperationAction::BuiltInAction(operation_name.clone(), exec_handler),
+            ),
+            (
+                "executing",
+                OperationAction::AwaitBuiltInAction(operation_name, await_handler),
+            ),
             ("successful", OperationAction::Clear),
             ("failed", OperationAction::Clear),
         ]

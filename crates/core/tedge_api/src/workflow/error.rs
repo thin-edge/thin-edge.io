@@ -15,9 +15,6 @@ pub enum WorkflowDefinitionError {
     #[error(transparent)]
     StateExcerptError(#[from] StateExcerptError),
 
-    #[error("Unknown action: {action}")]
-    UnknownAction { action: String },
-
     #[error("The provided target {0} is not a valid path expression")]
     InvalidPathExpression(String),
 }

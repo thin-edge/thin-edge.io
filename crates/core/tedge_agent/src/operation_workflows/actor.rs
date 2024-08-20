@@ -205,9 +205,25 @@ impl WorkflowActor {
                 let new_state = state.move_to(next_step);
                 self.publish_command_state(new_state, &mut log_file).await
             }
-            OperationAction::BuiltIn => {
+            OperationAction::BuiltIn(_, _) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
+
+                // TODO Honor the await and exit handlers
+                Ok(self.command_dispatcher.send(state).await?)
+            }
+            OperationAction::BuiltInAction(_, _) => {
+                let step = &state.status;
+                info!("Processing {operation} operation {step} step");
+
+                // TODO Inject or store the user provided handlers of the command into its state
+                Ok(self.command_dispatcher.send(state).await?)
+            }
+            OperationAction::AwaitBuiltInAction(_, _) => {
+                let step = &state.status;
+                info!("Awaiting {operation} operation {step} step");
+
+                // TODO Honor the exit handlers
                 Ok(self.command_dispatcher.send(state).await?)
             }
             OperationAction::AwaitingAgentRestart(handlers) => {
@@ -380,6 +396,10 @@ impl WorkflowActor {
         &mut self,
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
+        // TODO  rewrite the command status
+        //       depending the operation is executing, successful or failed
+        //       set the new state using the user provided handlers.
+
         if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
             error!("Fail to persist workflow operation state: {err}");
         }
