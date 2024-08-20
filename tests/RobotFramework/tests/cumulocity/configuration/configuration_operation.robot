@@ -30,7 +30,7 @@ Set Configuration when file does not exist
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    640    tedge:tedge    delete_file_before=${true}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
 
-Set Configuration when file exists
+Set Configuration when file exists and agent run normally
     [Tags]    \#2972
     [Template]    Set Configuration from Device
     [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
@@ -39,6 +39,20 @@ Set Configuration when file exists
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+
+Set Configuration when file exists and tedge run by root
+    [Tags]    \#3073
+    [Template]    Set Configuration from Device
+    [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
+    ...    should remain unchanged. If tedge-agent is run as root, it should not use tedge-agent for privilege elevation
+    Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
+    ...    agent_as_root=${true}
+    Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+    ...    agent_as_root=${true}
+    Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
+    ...    agent_as_root=${true}
+    Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+    ...    agent_as_root=${true}
 
 Set configuration with broken url
     [Template]    Set Configuration from URL
@@ -152,7 +166,7 @@ Config_snapshot operation request with the tedgeUrl created by agent
 
     ${output}=    Execute Command    curl -sSLf "http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333"    strip=${True}
     Should Match Regexp    ${output}    pattern=files\\s*=\\s*\\[.*\\]    flags=DOTALL
-    
+
 Manual config_update operation request
     Set Device Context    ${PARENT_SN}
     # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
@@ -228,7 +242,7 @@ Default plugin configuration
     ...    tedge-configuration-plugin
     ...    tedge.toml
     ...    tedge-log-plugin
-    
+
 
 *** Keywords ***
 Set Configuration from Device
@@ -242,20 +256,43 @@ Set Configuration from Device
     ...    ${permission}
     ...    ${ownership}
     ...    ${delete_file_before}=${true}
+    ...    ${agent_as_root}=${false}
 
     IF    ${delete_file_before}
         ThinEdgeIO.Set Device Context    ${device}
         Execute Command    rm -f ${device_file}
     END
 
-    Cumulocity.Set Device    ${external_id}
-    ${config_url}=    Cumulocity.Create Inventory Binary    temp_file    ${config_type}    file=${file}
-    ${operation}=    Cumulocity.Set Configuration    ${config_type}    url=${config_url}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    # we check that when `tedge` user has permissions to the configuration file's parent directory, tedge-write is not
+    # used to deploy the configuration file but a normal write is used; we change path of tedge-write so that test fails
+    # if its attempted to be used, the test fails
+    IF    ${agent_as_root} == ${true}
+        ThinEdgeIO.Set Device Context    ${device}
+        Execute Command    sed 's/User\=tedge/User\=root/' -i /lib/systemd/system/tedge-agent.service
+        Execute Command    systemctl daemon-reload
+        Execute Command    systemctl restart tedge-agent
+        Execute Command    mv /usr/bin/tedge-write /usr/bin/tedge-write.bak
+    END
 
-    ThinEdgeIO.Set Device Context    ${device}
-    File Checksum Should Be Equal    ${device_file}    ${file}
-    Path Should Have Permissions    ${device_file}    ${permission}    ${ownership}
+    TRY
+        Cumulocity.Set Device    ${external_id}
+        ${config_url}=    Cumulocity.Create Inventory Binary    temp_file    ${config_type}    file=${file}
+        ${operation}=    Cumulocity.Set Configuration    ${config_type}    url=${config_url}
+        ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+        ThinEdgeIO.Set Device Context    ${device}
+        File Checksum Should Be Equal    ${device_file}    ${file}
+        Path Should Have Permissions    ${device_file}    ${permission}    ${ownership}
+
+    FINALLY
+        IF    ${agent_as_root} == ${true}
+            ThinEdgeIO.Set Device Context    ${device}
+            Execute Command    mv /usr/bin/tedge-write.bak /usr/bin/tedge-write
+            Execute Command    sed 's/User\=root/User\=tedge/' -i /lib/systemd/system/tedge-agent.service
+            Execute Command    systemctl daemon-reload
+            Execute Command    systemctl restart tedge-agent
+        END
+    END
 
 Set Configuration from URL
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}    ${config_url}

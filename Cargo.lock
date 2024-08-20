@@ -3999,9 +3999,11 @@ dependencies = [
  "tedge_test_utils",
  "tedge_uploader_ext",
  "tedge_utils",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml 0.7.8",
+ "uzers",
 ]
 
 [[package]]
