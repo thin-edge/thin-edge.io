@@ -15,6 +15,9 @@ pub enum WorkflowDefinitionError {
 
     #[error("Unknown action: {action}")]
     UnknownAction { action: String },
+
+    #[error("The provided target {0} is not a valid path expression")]
+    InvalidPathExpression(String),
 }
 
 /// Error related to a script definition

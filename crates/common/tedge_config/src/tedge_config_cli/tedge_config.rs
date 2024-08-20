@@ -505,7 +505,7 @@ define_tedge_config! {
             firmware_update: bool,
 
             /// Enable device_profile feature
-            #[tedge_config(example = "true", default(value = false))]
+            #[tedge_config(example = "true", default(value = true))]
             device_profile: bool,
         },
 

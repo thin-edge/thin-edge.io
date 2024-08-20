@@ -1,3 +1,4 @@
+use crate::device_profile_manager::DeviceProfileManagerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
@@ -250,6 +251,8 @@ impl Agent {
 
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
+
+        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
 
         // Converter actor
         let mut converter_actor_builder = WorkflowActorBuilder::new(

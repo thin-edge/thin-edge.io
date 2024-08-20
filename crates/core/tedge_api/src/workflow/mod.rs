@@ -9,11 +9,13 @@ mod toml_config;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
+use ::log::info;
 pub use error::*;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 pub use script::*;
 use serde::Deserialize;
+use serde_json::json;
 pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -23,6 +25,7 @@ pub use supervisor::*;
 pub type OperationName = String;
 pub type StateName = String;
 pub type CommandId = String;
+pub type JsonPath = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
@@ -116,6 +119,21 @@ pub enum OperationAction {
 
     /// The command has been fully processed and needs to be cleared
     Clear,
+
+    /// Extract the next item from the specified target array in the state payload.
+    /// The next item is captured into a `@next` fragment in the state payload output,
+    /// with an `index` field having an initial value of zero.
+    /// If the input already contains the `@next` fragment with an `index` value,
+    /// that index is incremented and the corresponding value from the array is
+    /// extracted as the next item into the `@next` fragment.
+    ///
+    /// ```toml
+    /// iterate = "${.payload.operations}"
+    /// on_next = "apply_operation"
+    /// on_success = "successful"
+    /// on_error = "failed"
+    /// ```
+    Iterate(JsonPath, IterateHandlers),
 }
 
 impl Display for OperationAction {
@@ -137,6 +155,9 @@ impl Display for OperationAction {
                 "await sub-operation completion".to_string()
             }
             OperationAction::Clear => "wait for the requester to finalize the command".to_string(),
+            OperationAction::Iterate(json_path, _) => {
+                format!("iterate over {json_path}").to_string()
+            }
         };
         f.write_str(&str)
     }
@@ -218,7 +239,7 @@ impl OperationWorkflow {
     ) -> Option<MqttMessage> {
         match self.operation {
             // Custom operations (and restart) have a generic empty capability message
-            OperationType::Custom(_) | OperationType::Restart => {
+            OperationType::Custom(_) | OperationType::Restart | OperationType::DeviceProfile => {
                 let meta_topic = schema.capability_topic_for(target, self.operation.clone());
                 let payload = "{}".to_string();
                 Some(
@@ -263,6 +284,9 @@ impl OperationAction {
                     state_excerpt,
                 )
             }
+            OperationAction::Iterate(target_json_path, handlers) => {
+                OperationAction::Iterate(target_json_path, handlers.with_default(default))
+            }
             action => action,
         }
     }
@@ -298,5 +322,410 @@ impl OperationAction {
             command: state.inject_values_into_template(&script.command),
             args: state.inject_values_into_parameters(&script.args),
         }
+    }
+
+    pub fn process_iterate(
+        state: GenericCommandState,
+        json_path: &str,
+        handlers: IterateHandlers,
+    ) -> Result<GenericCommandState, IterationError> {
+        // Extract the array
+        let Some(target) = state.extract_value(json_path) else {
+            return Err(IterationError::InvalidTarget(json_path.to_string()));
+        };
+
+        let Some(items) = target.as_array() else {
+            return Err(IterationError::TargetNotArray(json_path.to_string()));
+        };
+
+        if items.is_empty() {
+            info!("Nothing to iterate as operations array is empty");
+            return Ok(state.update(handlers.on_success));
+        }
+
+        // Check for the presence of the next_operation key
+        let next_item = if let Some(next_item) = state.payload.get("@next") {
+            let mut next_item = next_item.clone();
+            let index = next_item.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+
+            // Validate the index
+            if index >= items.len() {
+                return Err(IterationError::IndexOutOfBounds(index));
+            }
+
+            let next_index = index + 1;
+            if next_index >= items.len() {
+                info!("Iteration finished");
+                return Ok(state.update(handlers.on_success));
+            }
+
+            next_item["index"] = json!(next_index);
+            next_item["item"] = items[next_index].clone();
+
+            next_item.clone()
+        } else {
+            // If next_operation does not exist, create it with index 0
+            json!({
+                "index": 0,
+                "item": items[0].clone()
+            })
+        };
+
+        let next_operation_json = json!({
+            "@next": next_item
+        });
+        let new_state = state.update_with_json(next_operation_json);
+
+        let new_state = new_state.update(handlers.on_next);
+
+        Ok(new_state)
+    }
+}
+
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum IterationError {
+    #[error("No object found at {0}")]
+    InvalidTarget(String),
+
+    #[error("Object found at {0} is not an array")]
+    TargetNotArray(String),
+
+    #[error("Index: {0} is out of bounds")]
+    IndexOutOfBounds(usize),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GenericCommandState;
+    use super::GenericStateUpdate;
+    use super::IterateHandlers;
+    use super::IterationError;
+    use super::OperationAction;
+    use assert_json_diff::assert_json_eq;
+    use assert_matches::assert_matches;
+    use serde_json::json;
+
+    #[test]
+    fn test_iterate_first_iteration() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": [
+                    {
+                        "operation": "software_update",
+                        "payload": {
+                            "key": "value"
+                        }
+                    }
+                ]
+            }),
+        );
+
+        let new_state =
+            OperationAction::process_iterate(state, ".payload.operations", handlers).unwrap();
+
+        assert_eq!(new_state.status, "apply_operation");
+        assert_json_eq!(
+            new_state.payload,
+            json!({
+                "status": "apply_operation",
+                "operations": [
+                    {
+                        "operation": "software_update",
+                        "payload": {
+                            "key": "value"
+                        }
+                    }
+                ],
+                "@next": {
+                    "index": 0,
+                    "item": {
+                        "operation": "software_update",
+                        "payload": {
+                            "key": "value"
+                        }
+                    }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn test_iterate_intermediate_iteration() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "payload": {
+                            "firmware_key": "firmware_value"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "payload": {
+                            "software_key": "software_value"
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                ],
+                "@next": {
+                    "index": 1,
+                    "item": {
+                        "operation": "software_update",
+                        "payload": {
+                            "software_key": "software_value"
+                        }
+                    }
+                }
+            }),
+        );
+        let new_state =
+            OperationAction::process_iterate(state, ".payload.operations", handlers).unwrap();
+
+        assert_eq!(new_state.status, "apply_operation");
+        assert_json_eq!(
+            new_state.payload,
+            json!({
+                "status": "apply_operation",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "payload": {
+                            "firmware_key": "firmware_value"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "payload": {
+                            "software_key": "software_value"
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                ],
+                "@next": {
+                    "index": 2,
+                    "item": {
+                        "operation": "config_update",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn test_iterate_final_iteration() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "payload": {
+                            "firmware_key": "firmware_value"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "payload": {
+                            "software_key": "software_value"
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                ],
+                "@next": {
+                    "index": 2,
+                    "item": {
+                        "operation": "config_update",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                }
+            }),
+        );
+
+        let new_state =
+            OperationAction::process_iterate(state, ".payload.operations", handlers).unwrap();
+
+        let expected_payload = json!({
+            "status": "successful",
+            "operations": [
+                {
+                    "operation": "firmware_update",
+                    "payload": {
+                        "firmware_key": "firmware_value"
+                    }
+                },
+                {
+                    "operation": "software_update",
+                    "payload": {
+                        "software_key": "software_value"
+                    }
+                },
+                {
+                    "operation": "config_update",
+                    "payload": {
+                        "config_key": "config_value"
+                    }
+                }
+            ],
+            "@next": {
+                "index": 2,
+                "item": {
+                    "operation": "config_update",
+                    "payload": {
+                        "config_key": "config_value"
+                    }
+                }
+            }
+        });
+
+        assert_eq!(new_state.status, "successful");
+        assert_json_eq!(new_state.payload, expected_payload);
+    }
+
+    #[test]
+    fn test_iterate_failed_iteration() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": [
+                    {
+                        "operation": "config_update",
+                        "payload": {}
+                    }
+                ],
+                "@next": {
+                    "index": 1
+                }
+            }),
+        );
+
+        let res = OperationAction::process_iterate(state, ".payload.operations", handlers);
+        assert_matches!(res, Err(IterationError::IndexOutOfBounds(1)))
+    }
+
+    #[test]
+    fn test_iterate_empty_array() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": []
+            }),
+        );
+
+        let new_state =
+            OperationAction::process_iterate(state, ".payload.operations", handlers).unwrap();
+
+        assert_eq!(new_state.status, "successful");
+        assert_json_eq!(
+            new_state.payload,
+            json!({
+                "status": "successful",
+                "operations": []
+            })
+        );
+    }
+
+    #[test]
+    fn test_iterate_target_not_array() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": {}
+            }),
+        );
+
+        let res = OperationAction::process_iterate(state, ".payload.operations", handlers);
+        assert_matches!(res, Err(IterationError::TargetNotArray(_)))
+    }
+
+    #[test]
+    fn test_iterate_invalid_target() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            Some(GenericStateUpdate::failed("bad input".to_string())),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": []
+            }),
+        );
+
+        let res = OperationAction::process_iterate(state, ".bad.json.path", handlers);
+        assert_matches!(res, Err(IterationError::InvalidTarget(_)))
     }
 }
