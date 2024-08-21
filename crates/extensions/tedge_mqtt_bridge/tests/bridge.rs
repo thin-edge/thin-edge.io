@@ -501,7 +501,12 @@ impl Proxy {
                 let mut stop = stop_rx.clone();
                 stop.mark_unchanged();
                 if let Ok((mut socket, _)) = listener.accept().await {
-                    let mut conn = tokio::net::TcpStream::connect(&target).await.unwrap();
+                    let mut conn = loop {
+                        let Ok(conn) = tokio::net::TcpStream::connect(&target).await else {
+                            continue;
+                        };
+                        break conn;
+                    };
                     tokio::spawn(async move {
                         let (mut read_socket, mut write_socket) = socket.split();
                         let (mut read_conn, mut write_conn) = conn.split();
