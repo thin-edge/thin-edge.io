@@ -389,7 +389,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -442,7 +442,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -527,7 +527,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -612,7 +612,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -641,7 +641,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -671,7 +671,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -692,7 +692,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(

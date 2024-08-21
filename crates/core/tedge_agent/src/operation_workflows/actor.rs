@@ -367,8 +367,7 @@ impl WorkflowActor {
                     }
                     Err(err) => {
                         error!("Iteration failed due to: {err}");
-                        let new_state = state
-                            .update(handlers.on_error.expect("on_error target can not be none"));
+                        let new_state = state.update(handlers.on_error);
                         self.publish_command_state(new_state, &mut log_file).await?;
                     }
                 }

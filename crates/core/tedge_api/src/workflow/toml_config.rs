@@ -352,8 +352,12 @@ impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for IterateHandlers {
                 state: "on_success".to_string(),
             }
         })?;
-        let on_error = value.on_error.map(|u| u.into()).or(Some(default.on_error));
-        Ok(IterateHandlers::new(on_next, on_success, on_error))
+        let on_error = value.on_error.map(|u| u.into()).unwrap_or(default.on_error);
+        Ok(IterateHandlers {
+            on_next,
+            on_success,
+            on_error,
+        })
     }
 }
 
@@ -706,7 +710,7 @@ action = "cleanup"
                 assert_eq!(target, ".payload.target");
                 assert_eq!(on_next, &"next_operation".into());
                 assert_eq!(on_success, &"successful".into());
-                assert_eq!(on_error, &Some("failed".into()));
+                assert_eq!(on_error, &"failed".into());
             }
             other => panic!("Expected iterate action, but got {other}"),
         }

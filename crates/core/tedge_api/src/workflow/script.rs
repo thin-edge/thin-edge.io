@@ -325,14 +325,14 @@ pub struct AwaitHandlers {
 pub struct IterateHandlers {
     pub on_next: GenericStateUpdate,
     pub on_success: GenericStateUpdate,
-    pub on_error: Option<GenericStateUpdate>,
+    pub on_error: GenericStateUpdate,
 }
 
 impl IterateHandlers {
     pub fn new(
         on_next: GenericStateUpdate,
         on_success: GenericStateUpdate,
-        on_error: Option<GenericStateUpdate>,
+        on_error: GenericStateUpdate,
     ) -> Self {
         Self {
             on_next,
