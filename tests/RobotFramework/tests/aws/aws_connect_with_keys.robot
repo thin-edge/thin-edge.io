@@ -8,7 +8,7 @@ Documentation       Verify that thin-edge.io can successfully connect to AWS IoT
 ...                 AWS_ACCOUNT=
    
 Resource            ../../resources/common.resource
-Library             ThinEdgeIO    #adapter=ssh
+Library             ThinEdgeIO
 Library             OperatingSystem
 
 Suite Setup         Custom Setup
@@ -24,9 +24,6 @@ ${ROOT_CA_PATH}=      /etc/tedge/device-certs/tedge-certificate.pem
 *** Test Cases ***
 
 Create AWS IoT Policy and Thing  
-    # Check adapter and run only if adapter is ssh
-    Run Command If SSH Adapter
-
     # Verify the certificate creation
     ${cert_details}=  Execute Command  sudo tedge cert show
     Log  ${cert_details}
@@ -122,9 +119,3 @@ Custom Teardown
     Execute Command  sudo rm -f ${CERT_PATH} ${ROOT_CA_PATH}
     OperatingSystem.Remove File    ${POLICY_FILE}
     Get Logs
-
-Run Command If SSH Adapter
-    ${thin_edge_io}=    Get Library Instance    ThinEdgeIO
-    ${adapter}=    Call Method    ${thin_edge_io}    get_adapter
-    Run Keyword If    '${adapter}' == 'ssh'    Run keyword and ignore error    Execute Command    sudo tedge cert remove | sudo tedge disconnect aws
-    Run Keyword If    '${adapter}' == 'ssh'    Execute Command    sudo tedge cert create --device-id ${DEVICE_SN}
