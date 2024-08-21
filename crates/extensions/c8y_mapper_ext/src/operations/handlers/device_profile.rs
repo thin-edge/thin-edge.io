@@ -1,5 +1,4 @@
 use anyhow::Context;
-use c8y_api::smartrest;
 use c8y_api::smartrest::inventory::set_c8y_profile_target_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::device_profile::DeviceProfileCmd;
@@ -53,10 +52,10 @@ impl OperationContext {
                 let c8y_target_profile =
                     MqttMessage::new(sm_topic, set_c8y_profile_target_payload(true)); // Set the target profile as executed
 
-                let smartrest_set_operation =
-                    smartrest::smartrest_serializer::succeed_operation_no_payload(
-                        CumulocitySupportedOperations::C8yDeviceProfile,
-                    );
+                let smartrest_set_operation = self.get_smartrest_successful_status_payload(
+                    CumulocitySupportedOperations::C8yDeviceProfile,
+                    cmd_id,
+                );
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
 
                 Ok(OperationOutcome::Finished {
@@ -68,11 +67,11 @@ impl OperationContext {
                 })
             }
             CommandStatus::Failed { reason } => {
-                let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
+                let smartrest_set_operation = self.get_smartrest_failed_status_payload(
                     CumulocitySupportedOperations::C8yDeviceProfile,
                     &reason,
+                    cmd_id,
                 );
-
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
 
                 Ok(OperationOutcome::Finished {
@@ -89,8 +88,11 @@ impl OperationContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::C8yMapperConfig;
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::spawn_c8y_mapper_actor_with_config;
+    use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
 
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -1308,6 +1310,149 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_config_update_executing_and_failed_cmd_with_op_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_snapshot command with "executing" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
+            json!({
+                "status": "executing",
+                "name": "test-profile",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "skip": false,
+                        "payload": {
+                            "name": "test-firmware",
+                            "version": "1.0",
+                            "url": "http://www.my.url"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "skip": false,
+                        "payload": {
+                            "updateList": [
+                                {
+                                    "type": "apt",
+                                    "modules": [
+                                        {
+                                            "name": "test-software-1",
+                                            "version": "latest",
+                                            "action": "install"
+                                        },
+                                        {
+                                            "name": "test-software-2",
+                                            "version": "latest",
+                                            "action": "install"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "skip": false,
+                        "payload": {
+                            "type": "path/config/test-software-1",
+                            "remoteUrl":"http://www.my.url"
+                        }
+                    }
+                ]
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `504` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,123456")]).await;
+
+        // Expect `121` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "121,false")]).await;
+
+        // Simulate config_snapshot command with "failed" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
+            json!({
+                "status": "failed",
+                "reason": "Something went wrong",
+                "name": "test-profile",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "skip": false,
+                        "payload": {
+                            "name": "test-firmware",
+                            "version": "1.0",
+                            "url": "http://www.my.url"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "skip": false,
+                        "payload": {
+                            "updateList": [
+                                {
+                                    "type": "apt",
+                                    "modules": [
+                                        {
+                                            "name": "test-software-1",
+                                            "version": "latest",
+                                            "action": "install"
+                                        },
+                                        {
+                                            "name": "test-software-2",
+                                            "version": "latest",
+                                            "action": "install"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "skip": false,
+                        "payload": {
+                            "type": "path/config/test-software-1",
+                            "remoteUrl":"http://www.my.url"
+                        }
+                    }
+                ]
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `505` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "505,123456,Something went wrong")])
+            .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn handle_device_profile_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
@@ -1472,6 +1617,90 @@ mod tests {
             &mut mqtt,
             [(
                 "te/device/child1///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn handle_device_profile_successful_cmd_with_op_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_update command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
+            json!({
+                "status": "successful",
+                "name": "test-profile",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "skip": false,
+                        "payload": {
+                            "name": "test-firmware",
+                            "version": "1.0",
+                            "url": "http://www.my.url"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "skip": false,
+                        "payload": {
+                            "updateList": [
+                                {
+                                    "type": "apt",
+                                    "modules": [
+                                        {
+                                            "name": "test-software-1",
+                                            "version": "latest",
+                                            "action": "install"
+                                        },
+                                        {
+                                            "name": "test-software-2",
+                                            "version": "latest",
+                                            "action": "install"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "skip": false,
+                        "payload": {
+                            "type": "path/config/test-software-1",
+                            "remoteUrl":"http://www.my.url"
+                        }
+                    }
+                ]
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `121` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "121,true")]).await;
+
+        // Expect `506` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,123456")]).await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
                 r#"{"status":"init"}"#,
             )],
         )

@@ -549,8 +549,8 @@ Publish and Verify Local Command
     IF    "${c8y_fragment}"
         # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
         Should Have MQTT Messages
-        ...    c8y/s/ds
-        ...    message_pattern=^(501|502|503),${c8y_fragment}.*
+        ...    c8y/s/us
+        ...    message_pattern=^(501|502|503|504|505|506),${c8y_fragment}.*
         ...    minimum=0
         ...    maximum=0
     END

@@ -112,6 +112,8 @@ impl OperationContext {
                     upload_result,
                     c8y_binary_url.as_str(),
                     CumulocitySupportedOperations::C8yUploadConfigFile,
+                    self.smart_rest_use_operation_id,
+                    self.get_operation_id(cmd_id),
                 );
 
                 let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
@@ -356,6 +358,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_config_snapshot_executing_and_failed_cmd_with_op_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_snapshot command with "executing" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
+            json!({
+            "status": "executing",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-c8y-mapper-1234",
+            "type": "typeA",
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Expect `504` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+
+        // Simulate config_snapshot command with "failed" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
+            json!({
+            "status": "failed",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-c8y-mapper-1234",
+            "type": "typeA",
+            "reason": "Something went wrong"
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Expect `505` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "505,1234,Something went wrong")])
+            .await;
+    }
+
+    #[tokio::test]
     async fn handle_config_snapshot_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
@@ -504,6 +554,82 @@ mod tests {
             )],
         )
             .await;
+    }
+
+    #[tokio::test]
+    async fn handle_config_snapshot_successful_cmd_with_op_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle {
+            mqtt, http, ul, dl, ..
+        } = test_handle;
+        spawn_dummy_c8y_http_proxy(http);
+
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
+        let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_snapshot command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
+            json!({
+            "status": "successful",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            "type": "path/type/A",
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Downloader gets a download request
+        let download_request = dl.recv().await.expect("timeout");
+        assert_eq!(download_request.0, "c8y-mapper-1234"); // Command ID
+
+        // simulate downloader returns result
+        dl.send((
+            download_request.0,
+            Ok(DownloadResponse {
+                url: download_request.1.url,
+                file_path: download_request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
+        // Uploader gets a download request and assert them
+        let request = ul.recv().await.expect("timeout");
+        assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
+        assert_eq!(
+            request.1.url,
+            "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
+        );
+
+        // Simulate Uploader returns a result
+        ul.send((
+            request.0,
+            Ok(UploadResponse {
+                url: request.1.url,
+                file_path: request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
+        // Expect `506` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "c8y/s/us",
+                "506,1234,https://test.c8y.io/event/events/dummy-event-id-1234/binaries",
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]

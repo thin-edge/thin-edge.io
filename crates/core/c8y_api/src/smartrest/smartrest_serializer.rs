@@ -1,14 +1,11 @@
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::error::SmartRestSerializerError;
-use crate::smartrest::topic::C8yTopic;
 use csv::StringRecord;
-use mqtt_channel::MqttMessage;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
 use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareModule;
-use tedge_config::TopicPrefix;
 use tracing::warn;
 
 pub type SmartRest = String;
@@ -18,36 +15,70 @@ pub fn request_pending_operations() -> &'static str {
 }
 
 /// Generates a SmartREST message to set the provided operation to executing
-pub fn set_operation_executing(operation: impl C8yOperation) -> String {
+pub fn set_operation_executing_with_name(operation: impl C8yOperation) -> String {
     fields_to_csv_string(&["501", operation.name()])
 }
 
+/// Generates a SmartREST message to set the provided operation ID to executing
+pub fn set_operation_executing_with_id(op_id: &str) -> String {
+    fields_to_csv_string(&["504", op_id])
+}
+
 /// Generates a SmartREST message to set the provided operation to failed with the provided reason
-pub fn fail_operation(operation: impl C8yOperation, reason: &str) -> String {
+pub fn fail_operation_with_name(operation: impl C8yOperation, reason: &str) -> String {
+    fail_operation("502", operation.name(), reason)
+}
+
+/// Generates a SmartREST message to set the provided operation ID to failed with the provided reason
+pub fn fail_operation_with_id(op_id: &str, reason: &str) -> String {
+    fail_operation("505", op_id, reason)
+}
+
+fn fail_operation(template_id: &str, operation: &str, reason: &str) -> String {
     // If the failure reason exceeds 500 bytes, trancuate it
     if reason.len() <= 500 {
-        fields_to_csv_string(&["502", operation.name(), reason])
+        fields_to_csv_string(&[template_id, operation, reason])
     } else {
         warn!("Failure reason too long, message trancuated to 500 bytes");
-        fields_to_csv_string(&["502", operation.name(), &reason[..500]])
+        fields_to_csv_string(&[template_id, operation, &reason[..500]])
     }
 }
 
 /// Generates a SmartREST message to set the provided operation to successful without a payload
-pub fn succeed_operation_no_payload(operation: CumulocitySupportedOperations) -> String {
-    succeed_static_operation(operation, None::<&str>)
+pub fn succeed_operation_with_name_no_parameters(
+    operation: CumulocitySupportedOperations,
+) -> String {
+    succeed_static_operation_with_name(operation, None::<&str>)
 }
 
 /// Generates a SmartREST message to set the provided operation to successful with an optional payload
-pub fn succeed_static_operation(
+pub fn succeed_static_operation_with_name(
     operation: CumulocitySupportedOperations,
+    payload: Option<impl AsRef<str>>,
+) -> String {
+    succeed_static_operation("503", operation.name(), payload)
+}
+
+/// Generates a SmartREST message to set the provided operation ID to successful without a payload
+pub fn succeed_operation_with_id_no_parameters(op_id: &str) -> String {
+    succeed_static_operation_with_id(op_id, None::<&str>)
+}
+
+/// Generates a SmartREST message to set the provided operation ID to successful with an optional payload
+pub fn succeed_static_operation_with_id(op_id: &str, payload: Option<impl AsRef<str>>) -> String {
+    succeed_static_operation("506", op_id, payload)
+}
+
+fn succeed_static_operation(
+    template_id: &str,
+    operation: &str,
     payload: Option<impl AsRef<str>>,
 ) -> String {
     let mut wtr = csv::Writer::from_writer(vec![]);
     // Serialization will never fail for text
     match payload {
-        Some(payload) => wtr.serialize(("503", operation.name(), payload.as_ref())),
-        None => wtr.serialize(("503", operation.name())),
+        Some(payload) => wtr.serialize((template_id, operation, payload.as_ref())),
+        None => wtr.serialize((template_id, operation)),
     }
     .unwrap();
     let mut output = wtr.into_inner().unwrap();
@@ -288,30 +319,6 @@ where
     }
 }
 
-/// Helper to generate a SmartREST operation status message
-pub trait OperationStatusMessage {
-    fn executing(prefix: &TopicPrefix) -> MqttMessage {
-        Self::create_message(Self::status_executing(), prefix)
-    }
-
-    fn successful(parameter: Option<&str>, prefix: &TopicPrefix) -> MqttMessage {
-        Self::create_message(Self::status_successful(parameter), prefix)
-    }
-
-    fn failed(failure_reason: &str, prefix: &TopicPrefix) -> MqttMessage {
-        Self::create_message(Self::status_failed(failure_reason), prefix)
-    }
-
-    fn create_message(payload: SmartRest, prefix: &TopicPrefix) -> MqttMessage {
-        let topic = C8yTopic::SmartRestResponse.to_topic(prefix).unwrap(); // never fail
-        MqttMessage::new(&topic, payload)
-    }
-
-    fn status_executing() -> SmartRest;
-    fn status_successful(parameter: Option<&str>) -> SmartRest;
-    fn status_failed(failure_reason: &str) -> SmartRest;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,24 +340,35 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_set_operation_to_executing() {
-        let smartrest = set_operation_executing(CumulocitySupportedOperations::C8ySoftwareUpdate);
+        let smartrest =
+            set_operation_executing_with_name(CumulocitySupportedOperations::C8ySoftwareUpdate);
         assert_eq!(smartrest, "501,c8y_SoftwareUpdate");
+
+        let smartrest = set_operation_executing_with_id("1234");
+        assert_eq!(smartrest, "504,1234");
     }
 
     #[test]
     fn serialize_smartrest_set_operation_to_successful() {
-        let smartrest =
-            succeed_operation_no_payload(CumulocitySupportedOperations::C8ySoftwareUpdate);
+        let smartrest = succeed_operation_with_name_no_parameters(
+            CumulocitySupportedOperations::C8ySoftwareUpdate,
+        );
         assert_eq!(smartrest, "503,c8y_SoftwareUpdate");
+
+        let smartrest = succeed_operation_with_id_no_parameters("1234");
+        assert_eq!(smartrest, "506,1234");
     }
 
     #[test]
     fn serialize_smartrest_set_operation_to_successful_with_payload() {
-        let smartrest = succeed_static_operation(
+        let smartrest = succeed_static_operation_with_name(
             CumulocitySupportedOperations::C8ySoftwareUpdate,
             Some("a payload"),
         );
         assert_eq!(smartrest, "503,c8y_SoftwareUpdate,a payload");
+
+        let smartrest = succeed_static_operation_with_id("1234", Some("a payload"));
+        assert_eq!(smartrest, "506,1234,a payload");
     }
 
     #[test]
@@ -394,7 +412,7 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_set_operation_to_failed() {
-        let smartrest = fail_operation(
+        let smartrest = fail_operation_with_name(
             CumulocitySupportedOperations::C8ySoftwareUpdate,
             "Failed due to permission.",
         );
@@ -402,17 +420,23 @@ mod tests {
             smartrest,
             "502,c8y_SoftwareUpdate,Failed due to permission."
         );
+
+        let smartrest = fail_operation_with_id("1234", "Failed due to permission.");
+        assert_eq!(smartrest, "505,1234,Failed due to permission.");
     }
 
     #[test]
     fn serialize_smartrest_set_custom_operation_to_failed() {
-        let smartrest = fail_operation("c8y_Custom", "Something went wrong");
+        let smartrest = fail_operation_with_name("c8y_Custom", "Something went wrong");
         assert_eq!(smartrest, "502,c8y_Custom,Something went wrong");
+
+        let smartrest = fail_operation_with_id("1234", "Something went wrong");
+        assert_eq!(smartrest, "505,1234,Something went wrong");
     }
 
     #[test]
     fn serialize_smartrest_set_operation_to_failed_with_quotes() {
-        let smartrest = fail_operation(
+        let smartrest = fail_operation_with_name(
             CumulocitySupportedOperations::C8ySoftwareUpdate,
             "Failed due to permi\"ssion.",
         );
@@ -420,11 +444,14 @@ mod tests {
             smartrest,
             "502,c8y_SoftwareUpdate,\"Failed due to permi\"\"ssion.\""
         );
+
+        let smartrest = fail_operation_with_id("1234", "Failed due to permi\"ssion.");
+        assert_eq!(smartrest, "505,1234,\"Failed due to permi\"\"ssion.\"");
     }
 
     #[test]
     fn serialize_smartrest_set_operation_to_failed_with_comma_reason() {
-        let smartrest = fail_operation(
+        let smartrest = fail_operation_with_name(
             CumulocitySupportedOperations::C8ySoftwareUpdate,
             "Failed to install collectd, modbus, and golang.",
         );
@@ -432,12 +459,23 @@ mod tests {
             smartrest,
             "502,c8y_SoftwareUpdate,\"Failed to install collectd, modbus, and golang.\""
         );
+
+        let smartrest =
+            fail_operation_with_id("1234", "Failed to install collectd, modbus, and golang.");
+        assert_eq!(
+            smartrest,
+            "505,1234,\"Failed to install collectd, modbus, and golang.\""
+        );
     }
 
     #[test]
     fn serialize_smartrest_set_operation_to_failed_with_empty_reason() {
-        let smartrest = fail_operation(CumulocitySupportedOperations::C8ySoftwareUpdate, "");
+        let smartrest =
+            fail_operation_with_name(CumulocitySupportedOperations::C8ySoftwareUpdate, "");
         assert_eq!(smartrest, "502,c8y_SoftwareUpdate,");
+
+        let smartrest = fail_operation_with_id("1234", "");
+        assert_eq!(smartrest, "505,1234,");
     }
 
     #[test]

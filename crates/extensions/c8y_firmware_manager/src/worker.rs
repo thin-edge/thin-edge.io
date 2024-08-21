@@ -1,5 +1,4 @@
 use crate::error::FirmwareManagementError;
-use crate::message::DownloadFirmwareStatusMessage;
 use crate::message::FirmwareOperationRequest;
 use crate::message::FirmwareOperationResponse;
 use crate::mpsc;
@@ -7,7 +6,10 @@ use crate::operation::FirmwareOperationEntry;
 use crate::operation::OperationKey;
 use crate::FirmwareManagerConfig;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
-use c8y_api::smartrest::smartrest_serializer::OperationStatusMessage;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::credentials::JwtRetriever;
 use camino::Utf8PathBuf;
@@ -371,10 +373,8 @@ impl FirmwareManagerWorker {
 
         let c8y_child_topic = C8yTopic::ChildSmartRestResponse(child_id.to_string())
             .to_topic(&self.config.c8y_prefix)?;
-        let executing_msg = MqttMessage::new(
-            &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_executing(),
-        );
+        let payload = set_operation_executing_with_name(CumulocitySupportedOperations::C8yFirmware);
+        let executing_msg = MqttMessage::new(&c8y_child_topic, payload);
         self.mqtt_publisher.send(executing_msg).await?;
         Ok(())
     }
@@ -388,10 +388,9 @@ impl FirmwareManagerWorker {
         }
         let c8y_child_topic = C8yTopic::ChildSmartRestResponse(child_id.to_string())
             .to_topic(&self.config.c8y_prefix)?;
-        let successful_msg = MqttMessage::new(
-            &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_successful(None),
-        );
+        let payload =
+            succeed_operation_with_name_no_parameters(CumulocitySupportedOperations::C8yFirmware);
+        let successful_msg = MqttMessage::new(&c8y_child_topic, payload);
         self.mqtt_publisher.send(successful_msg).await?;
         Ok(())
     }
@@ -406,10 +405,9 @@ impl FirmwareManagerWorker {
         }
         let c8y_child_topic = C8yTopic::ChildSmartRestResponse(child_id.to_string())
             .to_topic(&self.config.c8y_prefix)?;
-        let failed_msg = MqttMessage::new(
-            &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_failed(failure_reason),
-        );
+        let payload =
+            fail_operation_with_name(CumulocitySupportedOperations::C8yFirmware, failure_reason);
+        let failed_msg = MqttMessage::new(&c8y_child_topic, payload);
         self.mqtt_publisher.send(failed_msg).await?;
         Ok(())
     }
