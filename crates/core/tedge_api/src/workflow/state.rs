@@ -447,6 +447,13 @@ impl GenericStateUpdate {
         }
     }
 
+    pub fn unknown_error() -> Self {
+        GenericStateUpdate {
+            status: FAILED.to_string(),
+            reason: None,
+        }
+    }
+
     pub fn failed(reason: String) -> Self {
         GenericStateUpdate {
             status: FAILED.to_string(),

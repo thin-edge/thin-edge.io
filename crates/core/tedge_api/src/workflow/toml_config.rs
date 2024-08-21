@@ -111,18 +111,28 @@ impl From<TomlStateUpdate> for GenericStateUpdate {
 impl TryFrom<TomlOperationState> for OperationAction {
     type Error = WorkflowDefinitionError;
 
-    fn try_from(input: TomlOperationState) -> Result<Self, Self::Error> {
+    fn try_from(value: TomlOperationState) -> Result<Self, Self::Error> {
+        Self::try_from((value, DefaultHandlers::default()))
+    }
+}
+
+impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
+    type Error = WorkflowDefinitionError;
+
+    fn try_from(
+        (input, defaults): (TomlOperationState, DefaultHandlers),
+    ) -> Result<Self, Self::Error> {
         match input.action {
             TomlOperationAction::Script(script) => {
-                let handlers = TryInto::<ExitHandlers>::try_into(input.handlers)?;
+                let handlers = TryInto::<ExitHandlers>::try_into((input.handlers, defaults))?;
                 Ok(OperationAction::Script(script, handlers))
             }
             TomlOperationAction::BackgroundScript(script) => {
-                let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
+                let handlers = TryInto::<BgExitHandlers>::try_into((input.handlers, defaults))?;
                 Ok(OperationAction::BgScript(script, handlers))
             }
             TomlOperationAction::Operation(operation) => {
-                let handlers = TryInto::<BgExitHandlers>::try_into(input.handlers)?;
+                let handlers = TryInto::<BgExitHandlers>::try_into((input.handlers, defaults))?;
                 let input_script = input.input_script;
                 let cmd_input = input.input.try_into()?;
                 Ok(OperationAction::Operation(
@@ -133,7 +143,7 @@ impl TryFrom<TomlOperationState> for OperationAction {
                 ))
             }
             TomlOperationAction::Iterate(target_json_path) => {
-                let handlers = TryInto::<IterateHandlers>::try_into(input.handlers)?;
+                let handlers = TryInto::<IterateHandlers>::try_into((input.handlers, defaults))?;
                 let Some(json_path) = GenericCommandState::extract_path(&target_json_path) else {
                     return Err(WorkflowDefinitionError::InvalidPathExpression(
                         target_json_path,
@@ -153,11 +163,11 @@ impl TryFrom<TomlOperationState> for OperationAction {
                     Ok(OperationAction::MoveTo(on_success.status))
                 }
                 "await-agent-restart" => {
-                    let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
+                    let handlers = TryInto::<AwaitHandlers>::try_into((input.handlers, defaults))?;
                     Ok(OperationAction::AwaitingAgentRestart(handlers))
                 }
                 "await-operation-completion" => {
-                    let handlers = TryInto::<AwaitHandlers>::try_into(input.handlers)?;
+                    let handlers = TryInto::<AwaitHandlers>::try_into((input.handlers, defaults))?;
                     let cmd_output = input.output.try_into()?;
                     Ok(OperationAction::AwaitOperationCompletion(
                         handlers, cmd_output,
@@ -177,8 +187,9 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
         let default_handlers = TryInto::<DefaultHandlers>::try_into(input.handlers)?;
         let mut states = HashMap::new();
         for (state, action_spec) in input.states.into_iter() {
-            let action = TryInto::<OperationAction>::try_into(action_spec)?;
-            states.insert(state, action.with_default(&default_handlers));
+            let action =
+                TryInto::<OperationAction>::try_into((action_spec, default_handlers.clone()))?;
+            states.insert(state, action);
         }
 
         OperationWorkflow::try_new(operation, default_handlers, states)
@@ -233,6 +244,16 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
     type Error = ScriptDefinitionError;
 
     fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+        Self::try_from((value, DefaultHandlers::default()))
+    }
+}
+
+impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for ExitHandlers {
+    type Error = ScriptDefinitionError;
+
+    fn try_from(
+        (value, defaults): (TomlExitHandlers, DefaultHandlers),
+    ) -> Result<Self, Self::Error> {
         let on_error = value.on_error.map(|u| u.into());
         let on_success = value.on_success.map(|u| u.into());
         let on_kill = value.on_kill.map(|u| u.into());
@@ -253,7 +274,18 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
                 }
             })
             .collect();
-        let timeout = value.timeout_second.map(Duration::from_secs);
+
+        // Inject defaults if no error state is given either with: on_error, on_exit._
+        let on_error = if on_error.is_none() && wildcard.is_none() {
+            Some(defaults.on_error)
+        } else {
+            on_error
+        };
+
+        let timeout = value
+            .timeout_second
+            .map(Duration::from_secs)
+            .or(defaults.timeout);
 
         ExitHandlers::try_new(
             on_exit, on_success, on_error, on_kill, on_stdout, wildcard, timeout,
@@ -261,26 +293,39 @@ impl TryFrom<TomlExitHandlers> for ExitHandlers {
     }
 }
 
-impl TryFrom<TomlExitHandlers> for BgExitHandlers {
+impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for BgExitHandlers {
     type Error = ScriptDefinitionError;
 
-    fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+    fn try_from(
+        (value, _defaults): (TomlExitHandlers, DefaultHandlers),
+    ) -> Result<Self, Self::Error> {
         let on_exec = value.on_exec.map(|u| u.into());
         BgExitHandlers::try_new(on_exec)
     }
 }
 
-impl TryFrom<TomlExitHandlers> for AwaitHandlers {
+impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for AwaitHandlers {
     type Error = ScriptDefinitionError;
 
-    fn try_from(handlers: TomlExitHandlers) -> Result<Self, Self::Error> {
-        let timeout = handlers.timeout_second.map(Duration::from_secs);
+    fn try_from(
+        (handlers, defaults): (TomlExitHandlers, DefaultHandlers),
+    ) -> Result<Self, Self::Error> {
+        let timeout = handlers
+            .timeout_second
+            .map(Duration::from_secs)
+            .or(defaults.timeout);
         let on_success: GenericStateUpdate = handlers
             .on_success
             .map(|u| u.into())
-            .unwrap_or_else(GenericStateUpdate::successful);
-        let on_error = handlers.on_error.map(|u| u.into());
-        let on_timeout = handlers.on_timeout.map(|u| u.into());
+            .ok_or(ScriptDefinitionError::MissingOnSuccessHandler)?;
+        let on_error = handlers
+            .on_error
+            .map(|u| u.into())
+            .unwrap_or(defaults.on_error);
+        let on_timeout = handlers
+            .on_timeout
+            .map(|u| u.into())
+            .unwrap_or(defaults.on_timeout);
 
         Ok(AwaitHandlers {
             timeout,
@@ -291,10 +336,12 @@ impl TryFrom<TomlExitHandlers> for AwaitHandlers {
     }
 }
 
-impl TryFrom<TomlExitHandlers> for IterateHandlers {
+impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for IterateHandlers {
     type Error = WorkflowDefinitionError;
 
-    fn try_from(value: TomlExitHandlers) -> Result<Self, Self::Error> {
+    fn try_from(
+        (value, default): (TomlExitHandlers, DefaultHandlers),
+    ) -> Result<Self, Self::Error> {
         let on_next = value.on_next.map(|u| u.into()).ok_or_else(|| {
             WorkflowDefinitionError::MissingState {
                 state: "on_next".to_string(),
@@ -305,8 +352,12 @@ impl TryFrom<TomlExitHandlers> for IterateHandlers {
                 state: "on_success".to_string(),
             }
         })?;
-        let on_error = value.on_error.map(|u| u.into());
-        Ok(IterateHandlers::new(on_next, on_success, on_error))
+        let on_error = value.on_error.map(|u| u.into()).unwrap_or(default.on_error);
+        Ok(IterateHandlers {
+            on_next,
+            on_success,
+            on_error,
+        })
     }
 }
 
@@ -318,7 +369,7 @@ impl TryFrom<TomlExitHandlers> for DefaultHandlers {
         let on_timeout = value.on_timeout.map(|u| u.into());
         let on_error = value.on_error.map(|u| u.into());
 
-        DefaultHandlers::try_new(timeout, on_timeout, on_error)
+        Ok(DefaultHandlers::new(timeout, on_error, on_timeout))
     }
 }
 
@@ -606,7 +657,7 @@ script = "/some/script/which/fails"
             WorkflowDefinitionError::InvalidAction {
                 state: "failed".to_string(),
                 action: format!(
-                    "{:?}",
+                    "{}",
                     OperationAction::Script(
                         ShellScript {
                             command: "/some/script/which/fails".to_string(),
@@ -659,7 +710,7 @@ action = "cleanup"
                 assert_eq!(target, ".payload.target");
                 assert_eq!(on_next, &"next_operation".into());
                 assert_eq!(on_success, &"successful".into());
-                assert_eq!(on_error, &Some("failed".into()));
+                assert_eq!(on_error, &"failed".into());
             }
             other => panic!("Expected iterate action, but got {other}"),
         }

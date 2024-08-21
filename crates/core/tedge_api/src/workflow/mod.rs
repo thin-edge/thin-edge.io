@@ -198,7 +198,7 @@ impl OperationWorkflow {
         if action_on_error != &OperationAction::Clear {
             return Err(WorkflowDefinitionError::InvalidAction {
                 state: "failed".to_string(),
-                action: format!("{action_on_error:?}"),
+                action: format!("{action_on_error}"),
             });
         }
 
@@ -270,27 +270,6 @@ impl OperationWorkflow {
 }
 
 impl OperationAction {
-    pub fn with_default(self, default: &DefaultHandlers) -> Self {
-        match self {
-            OperationAction::Script(script, handlers) => {
-                OperationAction::Script(script, handlers.with_default(default))
-            }
-            OperationAction::AwaitingAgentRestart(handlers) => {
-                OperationAction::AwaitingAgentRestart(handlers.with_default(default))
-            }
-            OperationAction::AwaitOperationCompletion(handlers, state_excerpt) => {
-                OperationAction::AwaitOperationCompletion(
-                    handlers.with_default(default),
-                    state_excerpt,
-                )
-            }
-            OperationAction::Iterate(target_json_path, handlers) => {
-                OperationAction::Iterate(target_json_path, handlers.with_default(default))
-            }
-            action => action,
-        }
-    }
-
     pub fn inject_state(&self, state: &GenericCommandState) -> Self {
         match self {
             OperationAction::Script(script, handlers) => OperationAction::Script(
@@ -410,7 +389,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -463,7 +442,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -548,7 +527,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -633,7 +612,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -662,7 +641,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -692,7 +671,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(
@@ -713,7 +692,7 @@ mod tests {
         let handlers = IterateHandlers::new(
             "apply_operation".into(),
             GenericStateUpdate::successful(),
-            Some(GenericStateUpdate::failed("bad input".to_string())),
+            GenericStateUpdate::failed("bad input".to_string()),
         );
 
         let state = GenericCommandState::new(

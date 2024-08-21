@@ -217,11 +217,7 @@ impl WorkflowActor {
                 sleep(handlers.timeout.unwrap_or_default() + Duration::from_secs(60)).await;
                 // As the sleep completes, it means the agent was not restarted
                 // hence the operation is moved to its `on_timeout` target state
-                let new_state = state.update(
-                    handlers
-                        .on_timeout
-                        .unwrap_or_else(GenericStateUpdate::timeout),
-                );
+                let new_state = state.update(handlers.on_timeout);
                 self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::Script(script, handlers) => {
@@ -338,9 +334,7 @@ impl WorkflowActor {
                                     sub_state.failure_reason().unwrap_or_default()
                                 ))
                                 .await;
-                            state.update(handlers.on_error.unwrap_or_else(|| {
-                                GenericStateUpdate::failed("sub-operation failed".to_string())
-                            }))
+                            state.update(handlers.on_error)
                         };
                         self.publish_command_state(new_state, &mut log_file).await?;
                         self.publish_command_state(sub_state.clear(), &mut log_file)
@@ -373,8 +367,7 @@ impl WorkflowActor {
                     }
                     Err(err) => {
                         error!("Iteration failed due to: {err}");
-                        let new_state = state
-                            .update(handlers.on_error.expect("on_error target can not be none"));
+                        let new_state = state.update(handlers.on_error);
                         self.publish_command_state(new_state, &mut log_file).await?;
                     }
                 }
