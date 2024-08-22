@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 /// Error preventing a workflow to be registered
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum WorkflowDefinitionError {
@@ -82,4 +84,10 @@ pub enum WorkflowExecutionError {
 
     #[error("No such step is defined for {operation}: {step}")]
     UnknownStep { operation: String, step: String },
+}
+
+/// Struct used to recover the bare minimum information from an ill-formed workflow TOML file.
+#[derive(Deserialize)]
+pub struct IllFormedOperationWorkflow {
+    pub operation: String,
 }

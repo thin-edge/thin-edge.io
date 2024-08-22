@@ -1,0 +1,16 @@
+# An operation workflow with a typo
+operation = "issue-3079"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]          
+# Oops: the action is missing!
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

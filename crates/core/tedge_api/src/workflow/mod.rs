@@ -231,6 +231,31 @@ impl OperationWorkflow {
         }
     }
 
+    /// Create a workflow that systematically fail any command with a static error
+    ///
+    /// The point is to raise an error to the user when a workflow definition cannot be parsed,
+    /// instead of silently ignoring the commands.
+    pub fn ill_formed(operation: String, reason: String) -> Self {
+        let states = [
+            ("init", OperationAction::MoveTo("executing".into())),
+            (
+                "executing",
+                OperationAction::MoveTo(GenericStateUpdate::failed(reason)),
+            ),
+            ("failed", OperationAction::Clear),
+        ]
+        .into_iter()
+        .map(|(state, action)| (state.to_string(), action))
+        .collect();
+
+        OperationWorkflow {
+            built_in: true,
+            operation: operation.as_str().into(),
+            handlers: DefaultHandlers::default(),
+            states,
+        }
+    }
+
     /// Return the MQTT message to register support for the operation described by this workflow
     pub fn capability_message(
         &self,
