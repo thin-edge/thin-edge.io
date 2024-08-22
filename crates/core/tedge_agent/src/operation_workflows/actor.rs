@@ -51,7 +51,7 @@ pub struct WorkflowActor {
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
-    pub(crate) command_dispatcher: CommandDispatcher,
+    pub(crate) builtin_command_dispatcher: CommandDispatcher,
     pub(crate) command_sender: DynSender<InternalCommandState>,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
@@ -73,16 +73,15 @@ impl Actor for WorkflowActor {
                     self.process_mqtt_message(message).await?;
                 }
                 AgentInput::InternalCommandState(InternalCommandState(command_state)) => {
-                    self.process_internal_state_update(command_state).await?;
+                    self.process_command_update(command_state).await?;
                 }
                 AgentInput::GenericCommandData(GenericCommandData::State(new_state)) => {
-                    self.process_command_state_update(new_state).await?;
+                    self.process_builtin_command_update(new_state).await?;
                 }
                 AgentInput::GenericCommandData(GenericCommandData::Metadata(
                     GenericCommandMetadata { operation, payload },
                 )) => {
-                    self.publish_operation_capability(operation, payload)
-                        .await?;
+                    self.publish_builtin_capability(operation, payload).await?;
                 }
             }
         }
@@ -101,7 +100,7 @@ impl WorkflowActor {
         Ok(())
     }
 
-    async fn publish_operation_capability(
+    async fn publish_builtin_capability(
         &mut self,
         operation: OperationName,
         payload: serde_json::Value,
@@ -117,6 +116,11 @@ impl WorkflowActor {
         Ok(())
     }
 
+    /// Process a command update received from MQTT
+    ///
+    /// Beware, these updates are coming from external components (the mapper inits and clears commands),
+    /// but also from *this* actor as all its state transitions are published over MQTT.
+    /// Only the former will be actually processed with [Self::process_command_update].
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         let Ok((operation, cmd_id)) = self.extract_command_identifiers(&message.topic.name) else {
             log::error!("Unknown command channel: {}", &message.topic.name);
@@ -136,7 +140,7 @@ impl WorkflowActor {
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
                 if new_state.is_init() {
-                    self.process_internal_state_update(new_state.set_log_path(&log_file.path))
+                    self.process_command_update(new_state.set_log_path(&log_file.path))
                         .await?;
                 }
             }
@@ -152,7 +156,13 @@ impl WorkflowActor {
         Ok(())
     }
 
-    async fn process_internal_state_update(
+    /// Process a command state update taking any action as defined by the workflow
+    ///
+    /// A new state can be received:
+    /// - from MQTT as for init and clear messages
+    /// - from the engine itself when a progress is made
+    /// - from one of the builtin operation actors
+    async fn process_command_update(
         &mut self,
         state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
@@ -210,21 +220,21 @@ impl WorkflowActor {
                 info!("Processing {operation} operation {step} step");
 
                 // TODO Honor the await and exit handlers
-                Ok(self.command_dispatcher.send(state).await?)
+                Ok(self.builtin_command_dispatcher.send(state).await?)
             }
             OperationAction::BuiltInAction(_, _) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
 
                 // TODO Inject or store the user provided handlers of the command into its state
-                Ok(self.command_dispatcher.send(state).await?)
+                Ok(self.builtin_command_dispatcher.send(state).await?)
             }
             OperationAction::AwaitBuiltInAction(_, _) => {
                 let step = &state.status;
                 info!("Awaiting {operation} operation {step} step");
 
                 // TODO Honor the exit handlers
-                Ok(self.command_dispatcher.send(state).await?)
+                Ok(self.builtin_command_dispatcher.send(state).await?)
             }
             OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
@@ -392,7 +402,10 @@ impl WorkflowActor {
         }
     }
 
-    async fn process_command_state_update(
+    /// Pre-process an update received from a builtin operation actor
+    ///
+    /// The actual work will be done by [Self::process_command_update].
+    async fn process_builtin_command_update(
         &mut self,
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
@@ -407,7 +420,7 @@ impl WorkflowActor {
         self.mqtt_publisher
             .send(new_state.clone().into_message())
             .await?;
-        self.process_internal_state_update(new_state).await
+        self.process_command_update(new_state).await
     }
 
     fn open_command_log(
@@ -460,7 +473,7 @@ impl WorkflowActor {
         match self.state_repository.load().await {
             Ok(Some(pending_commands)) => {
                 for command in self.workflows.load_pending_commands(pending_commands) {
-                    self.process_internal_state_update(command.clone()).await?;
+                    self.process_command_update(command.clone()).await?;
                 }
             }
             Ok(None) => {}
