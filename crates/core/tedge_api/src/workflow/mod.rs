@@ -55,7 +55,7 @@ pub enum OperationAction {
     /// action = "proceed"
     /// on_success = "<state>"
     /// ```
-    MoveTo(StateName),
+    MoveTo(GenericStateUpdate),
 
     /// The built-in behavior is used
     ///
@@ -213,7 +213,7 @@ impl OperationWorkflow {
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
         let states = [
-            ("init", OperationAction::MoveTo("scheduled".to_string())),
+            ("init", OperationAction::MoveTo("scheduled".into())),
             ("scheduled", OperationAction::BuiltIn),
             ("executing", OperationAction::BuiltIn),
             ("successful", OperationAction::Clear),

@@ -207,8 +207,13 @@ impl GenericCommandState {
     }
 
     /// Update the command state with a new status describing the next state
-    pub fn move_to(mut self, status: String) -> Self {
+    pub fn move_to(mut self, update: GenericStateUpdate) -> Self {
+        let status = update.status;
         GenericCommandState::inject_text_property(&mut self.payload, STATUS, &status);
+
+        if let Some(reason) = update.reason {
+            GenericCommandState::inject_text_property(&mut self.payload, REASON, &reason);
+        }
 
         GenericCommandState { status, ..self }
     }
@@ -511,6 +516,12 @@ impl From<&str> for GenericStateUpdate {
     }
 }
 
+impl Display for GenericStateUpdate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.status.fmt(f)
+    }
+}
+
 impl From<GenericStateUpdate> for Value {
     fn from(update: GenericStateUpdate) -> Self {
         match update.reason {
@@ -674,7 +685,7 @@ mod tests {
             }
         );
 
-        let update_cmd = cmd.move_to("executing".to_string());
+        let update_cmd = cmd.move_to("executing".into());
         assert_eq!(
             update_cmd,
             GenericCommandState {
