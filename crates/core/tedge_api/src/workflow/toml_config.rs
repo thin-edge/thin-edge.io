@@ -1,7 +1,7 @@
 use crate::mqtt_topics::OperationType;
 use crate::workflow::AwaitHandlers;
-use crate::workflow::BgExitHandlers;
 use crate::workflow::DefaultHandlers;
+use crate::workflow::ExecHandlers;
 use crate::workflow::ExitHandlers;
 use crate::workflow::GenericCommandState;
 use crate::workflow::GenericStateUpdate;
@@ -128,12 +128,12 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                 Ok(OperationAction::Script(script, handlers))
             }
             TomlOperationAction::BackgroundScript(script) => {
-                let handlers = TryInto::<BgExitHandlers>::try_into((input.handlers, defaults))?;
+                let handlers = TryInto::<ExecHandlers>::try_into((input.handlers, defaults))?;
                 Ok(OperationAction::BgScript(script, handlers))
             }
             TomlOperationAction::Operation(operation) => match operation.strip_prefix("builtin:") {
                 None => {
-                    let handlers = TryInto::<BgExitHandlers>::try_into((input.handlers, defaults))?;
+                    let handlers = TryInto::<ExecHandlers>::try_into((input.handlers, defaults))?;
                     let input_script = input.input_script;
                     let cmd_input = input.input.try_into()?;
                     Ok(OperationAction::Operation(
@@ -144,7 +144,7 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     ))
                 }
                 Some(builtin_operation_name) => {
-                    let handlers = TryInto::<BgExitHandlers>::try_into((input.handlers, defaults))?;
+                    let handlers = TryInto::<ExecHandlers>::try_into((input.handlers, defaults))?;
                     Ok(OperationAction::BuiltInOperation(
                         builtin_operation_name.to_string(),
                         handlers,
@@ -182,9 +182,9 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     ))
                 }
                 "builtin" => {
-                    let exec_handlers = TryInto::<BgExitHandlers>::try_into((
+                    let exec_handlers = TryInto::<ExecHandlers>::try_into((
                         input.handlers.clone(),
-                        BgExitHandlers::builtin_default(),
+                        ExecHandlers::builtin_default(),
                     ))?;
                     let await_handlers = TryInto::<AwaitHandlers>::try_into((
                         input.handlers,
@@ -312,25 +312,23 @@ impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for ExitHandlers {
     }
 }
 
-impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for BgExitHandlers {
+impl TryFrom<(TomlExitHandlers, DefaultHandlers)> for ExecHandlers {
     type Error = ScriptDefinitionError;
 
     fn try_from(
         (value, _defaults): (TomlExitHandlers, DefaultHandlers),
     ) -> Result<Self, Self::Error> {
         let on_exec = value.on_exec.map(|u| u.into());
-        BgExitHandlers::try_new(on_exec)
+        ExecHandlers::try_new(on_exec)
     }
 }
 
-impl TryFrom<(TomlExitHandlers, BgExitHandlers)> for BgExitHandlers {
+impl TryFrom<(TomlExitHandlers, ExecHandlers)> for ExecHandlers {
     type Error = ScriptDefinitionError;
 
-    fn try_from(
-        (value, defaults): (TomlExitHandlers, BgExitHandlers),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((value, defaults): (TomlExitHandlers, ExecHandlers)) -> Result<Self, Self::Error> {
         let on_exec = value.on_exec.map(|u| u.into()).or(Some(defaults.on_exec));
-        BgExitHandlers::try_new(on_exec)
+        ExecHandlers::try_new(on_exec)
     }
 }
 
