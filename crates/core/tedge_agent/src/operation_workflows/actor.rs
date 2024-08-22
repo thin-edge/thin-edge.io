@@ -219,14 +219,20 @@ impl WorkflowActor {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
 
-                // TODO Honor the await and exit handlers
                 Ok(self.builtin_command_dispatcher.send(state).await?)
             }
-            OperationAction::BuiltInOperation(ref builtin_op, _) => {
+            OperationAction::BuiltInOperation(ref builtin_op, ref handlers) => {
                 let step = &state.status;
                 info!("Executing builtin:{builtin_op} operation {step} step");
 
-                let builtin_state = action.adapt_builtin_request(state);
+                // Fork a builtin state
+                let builtin_state = action.adapt_builtin_request(state.clone());
+
+                // Move to the next state to await the builtin operation outcome
+                let new_state = state.update(handlers.on_exec.clone());
+                self.publish_command_state(new_state, &mut log_file).await?;
+
+                // Forward the command to the builtin operation actor
                 Ok(self.builtin_command_dispatcher.send(builtin_state).await?)
             }
             OperationAction::AwaitingAgentRestart(handlers) => {
@@ -326,7 +332,7 @@ impl WorkflowActor {
             }
             OperationAction::AwaitOperationCompletion(handlers, output_excerpt) => {
                 let step = &state.status;
-                info!("{operation} operation {step} waiting for sub-operation completion");
+                info!("{operation} operation {step}: waiting for sub-operation completion");
 
                 // Get the sub-operation state and resume this command when the sub-operation is in a terminal state
                 if let Some(sub_state) = self
@@ -368,8 +374,6 @@ impl WorkflowActor {
                             ))
                             .await;
                     }
-                } else {
-                    log_file.log_info("=> sub-operation not yet launched").await;
                 };
 
                 Ok(())
@@ -402,18 +406,32 @@ impl WorkflowActor {
         &mut self,
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        // TODO  rewrite the command status
-        //       depending the operation is executing, successful or failed
-        //       set the new state using the user provided handlers.
+        if new_state.is_finished() {
+            self.finalize_builtin_command_update(new_state).await
+        } else {
+            // As not finalized, the builtin state is sent back
+            // to the builtin operation actor for further processing.
+            let builtin_state = new_state.clone();
+            Ok(self.builtin_command_dispatcher.send(builtin_state).await?)
+        }
+    }
 
-        if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
+    /// Finalize a builtin operation
+    ///
+    /// Moving to the next step calling [Self::process_command_update].
+    async fn finalize_builtin_command_update(
+        &mut self,
+        new_state: GenericCommandState,
+    ) -> Result<(), RuntimeError> {
+        let adapted_state = self.workflows.adapt_builtin_response(new_state);
+        if let Err(err) = self.workflows.apply_internal_update(adapted_state.clone()) {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
         self.mqtt_publisher
-            .send(new_state.clone().into_message())
+            .send(adapted_state.clone().into_message())
             .await?;
-        self.process_command_update(new_state).await
+        self.process_command_update(adapted_state).await
     }
 
     fn open_command_log(

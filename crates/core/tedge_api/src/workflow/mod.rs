@@ -415,13 +415,12 @@ impl OperationAction {
 
     /// Rewrite a command state before pushing it to a builtin operation actor
     ///
-    /// Depending the action is to trigger or await the operation,
-    /// set the status to schedule or executing.
-    ///
     /// Return the command state unchanged if there is no appropriate substitute.
     pub fn adapt_builtin_request(&self, command_state: GenericCommandState) -> GenericCommandState {
         match self {
-            OperationAction::BuiltInOperation(_, _) => command_state.update("scheduled".into()),
+            OperationAction::BuiltInOperation(_, _) => {
+                command_state.update(GenericStateUpdate::scheduled())
+            }
             _ => command_state,
         }
     }

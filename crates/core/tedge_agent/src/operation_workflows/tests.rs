@@ -204,13 +204,13 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
         SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string());
     let software_list_response = software_list_request
         .clone()
-        .with_status(CommandStatus::Executing);
+        .with_status(CommandStatus::Successful);
     software_box.send(software_list_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/software_list/1234"),
-            r#"{"status":"executing"}"#,
+            r#"{"status":"successful"}"#,
         )
         .with_retain()])
         .await;
@@ -286,13 +286,13 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
     // Simulate SoftwareUpdate response message received.
     let software_update_request =
         SoftwareUpdateCommand::new(&EntityTopicId::default_main_device(), "1234".to_string());
-    let software_update_response = software_update_request.with_status(CommandStatus::Executing);
+    let software_update_response = software_update_request.with_status(CommandStatus::Successful);
     software_box.send(software_update_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/software_update/1234"),
-            r#"{"status":"executing"}"#,
+            r#"{"status":"successful"}"#,
         )
         .with_retain()])
         .await;
@@ -325,7 +325,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     let executing_response = RestartCommand {
         target: EntityTopicId::default_main_device(),
         cmd_id: "abc".to_string(),
-        payload: RestartCommandPayload::new(CommandStatus::Executing),
+        payload: RestartCommandPayload::new(CommandStatus::Successful),
     };
     restart_box.send(executing_response).await?;
 
@@ -335,7 +335,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
         .map(|msg| (msg.topic, msg.payload))
         .expect("MqttMessage");
     assert_eq!(topic.name, "te/device/main///cmd/restart/abc");
-    assert!(format!("{:?}", payload).contains(r#"status":"executing"#));
+    assert!(format!("{:?}", payload).contains(r#"status":"successful"#));
 
     Ok(())
 }

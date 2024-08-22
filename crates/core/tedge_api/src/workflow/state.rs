@@ -64,6 +64,7 @@ pub struct GenericStateUpdate {
 
 const STATUS: &str = "status";
 const INIT: &str = "init";
+const SCHEDULED: &str = "scheduled";
 const EXECUTING: &str = "executing";
 const SUCCESSFUL: &str = "successful";
 const FAILED: &str = "failed";
@@ -205,6 +206,19 @@ impl GenericCommandState {
     ) -> Self {
         let json_update = handlers.state_update(&script, output);
         self.update_with_json(json_update)
+    }
+
+    /// Merge this state into a more complete state overriding all values defined both side
+    pub fn merge_into(self, mut state: Self) -> Self {
+        state.status = self.status;
+        if let Some(properties) = state.payload.as_object_mut() {
+            if let Value::Object(new_properties) = self.payload {
+                for (key, value) in new_properties.into_iter() {
+                    properties.insert(key, value);
+                }
+            }
+        }
+        state
     }
 
     /// Update the command state with a new status describing the next state
@@ -453,6 +467,13 @@ impl GenericStateUpdate {
 
     pub fn init_payload() -> Value {
         json!({STATUS: INIT})
+    }
+
+    pub fn scheduled() -> Self {
+        GenericStateUpdate {
+            status: SCHEDULED.to_string(),
+            reason: None,
+        }
     }
 
     pub fn executing() -> Self {
