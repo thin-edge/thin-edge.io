@@ -20,32 +20,26 @@ use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
-const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
-const BUILT_IN_BRIDGE_NAME: &str = "tedge-mapper-bridge-az";
-
 pub struct AzureMapper;
 
 #[async_trait]
 impl TEdgeComponent for AzureMapper {
-    fn session_name(&self) -> &str {
-        AZURE_MAPPER_NAME
-    }
-
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
+        let prefix = &tedge_config.az.bridge.topic_prefix;
+        let az_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(self.session_name(), &tedge_config).await?;
+            start_basic_actors(&az_mapper_name, &tedge_config).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
 
         if tedge_config.mqtt.bridge.built_in {
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
             let remote_clientid = tedge_config.device.id.try_read(&tedge_config)?;
-            let topic_prefix = &tedge_config.az.bridge.topic_prefix;
-            let rules = built_in_bridge_rules(remote_clientid, topic_prefix)?;
+            let rules = built_in_bridge_rules(remote_clientid, prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 remote_clientid,
@@ -66,12 +60,13 @@ impl TEdgeComponent for AzureMapper {
                 &tedge_config,
             )?;
 
+            let built_in_bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic =
-                service_health_topic(&mqtt_schema, &device_topic_id, BUILT_IN_BRIDGE_NAME);
+                service_health_topic(&mqtt_schema, &device_topic_id, &built_in_bridge_name);
 
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
-                BUILT_IN_BRIDGE_NAME,
+                &built_in_bridge_name,
                 &health_topic,
                 rules,
                 cloud_config,
@@ -85,7 +80,7 @@ impl TEdgeComponent for AzureMapper {
             Box::new(WallClock),
             mqtt_schema,
             tedge_config.az.mapper.timestamp_format,
-            &tedge_config.az.bridge.topic_prefix,
+            prefix,
         );
         let mut az_converting_actor = ConvertingActor::builder("AzConverter", az_converter);
         az_converting_actor.connect_source(get_topic_filter(&tedge_config), &mut mqtt_actor);

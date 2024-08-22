@@ -19,31 +19,26 @@ use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
-const AWS_MAPPER_NAME: &str = "tedge-mapper-aws";
-const BUILT_IN_BRIDGE_NAME: &str = "tedge-mapper-bridge-aws";
-
 pub struct AwsMapper;
 
 #[async_trait]
 impl TEdgeComponent for AwsMapper {
-    fn session_name(&self) -> &str {
-        AWS_MAPPER_NAME
-    }
-
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
+        let prefix = &tedge_config.aws.bridge.topic_prefix;
+        let aws_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(self.session_name(), &tedge_config).await?;
+            start_basic_actors(&aws_mapper_name, &tedge_config).await?;
 
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         if tedge_config.mqtt.bridge.built_in {
             let device_id = tedge_config.device.id.try_read(&tedge_config)?;
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
-            let rules = built_in_bridge_rules(device_id, &tedge_config.aws.bridge.topic_prefix)?;
+            let rules = built_in_bridge_rules(device_id, prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 tedge_config.device.id.try_read(&tedge_config)?,
@@ -57,12 +52,12 @@ impl TEdgeComponent for AwsMapper {
                 &tedge_config,
             )?;
 
-            let health_topic =
-                service_health_topic(&mqtt_schema, &device_topic_id, BUILT_IN_BRIDGE_NAME);
+            let bridge_name = format!("tedge-mapper-bridge-{prefix}");
+            let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_name);
 
             let bridge_actor = MqttBridgeActorBuilder::new(
                 &tedge_config,
-                BUILT_IN_BRIDGE_NAME,
+                &bridge_name,
                 &health_topic,
                 rules,
                 cloud_config,
@@ -76,7 +71,7 @@ impl TEdgeComponent for AwsMapper {
             clock,
             mqtt_schema,
             tedge_config.aws.mapper.timestamp_format,
-            tedge_config.aws.bridge.topic_prefix.clone(),
+            prefix.clone(),
         );
         let mut aws_converting_actor = ConvertingActor::builder("AwsConverter", aws_converter);
 

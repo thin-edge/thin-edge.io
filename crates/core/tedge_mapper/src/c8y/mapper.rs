@@ -28,23 +28,19 @@ use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
 
-const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
-
 pub struct CumulocityMapper;
 
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
-    fn session_name(&self) -> &str {
-        CUMULOCITY_MAPPER_NAME
-    }
-
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
         cfg_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
+        let prefix = &tedge_config.c8y.bridge.topic_prefix;
+        let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(self.session_name(), &tedge_config).await?;
+            start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
 
         let mqtt_config = tedge_config.mqtt_config()?;
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
@@ -143,7 +139,7 @@ impl TEdgeComponent for CumulocityMapper {
                 .context("Invalid device_topic_id")?;
 
             let mapper_service_topic_id = entity_topic_id
-                .default_service_for_device(CUMULOCITY_MAPPER_NAME)
+                .default_service_for_device(&c8y_mapper_name)
                 .context("Can't derive service name if device topic id not in default scheme")?;
 
             let mapper_service_external_id = CumulocityConverter::map_to_c8y_external_id(
@@ -154,7 +150,7 @@ impl TEdgeComponent for CumulocityMapper {
             let last_will_message_mapper =
                 c8y_api::smartrest::inventory::service_creation_message_payload(
                     mapper_service_external_id.as_ref(),
-                    CUMULOCITY_MAPPER_NAME,
+                    &c8y_mapper_name,
                     service_type.as_str(),
                     "down",
                 )?;
@@ -210,8 +206,10 @@ impl TEdgeComponent for CumulocityMapper {
         // set service down status on shutdown, using a last-will message.
         // A separate MQTT actor/client is required as the last will message of the main MQTT actor
         // is used to send down status to health topic.
-        let mut service_monitor_actor =
-            MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
+        let mut service_monitor_actor = MqttActorBuilder::new(service_monitor_client_config(
+            &c8y_mapper_name,
+            &tedge_config,
+        )?);
 
         let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
@@ -260,7 +258,10 @@ impl TEdgeComponent for CumulocityMapper {
     }
 }
 
-pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Config, anyhow::Error> {
+pub fn service_monitor_client_config(
+    c8y_mapper_name: &str,
+    tedge_config: &TEdgeConfig,
+) -> Result<Config, anyhow::Error> {
     let main_device_xid: EntityExternalId = tedge_config.device.id.try_read(tedge_config)?.into();
     let service_type = &tedge_config.service.ty;
     let service_type = if service_type.is_empty() {
@@ -281,7 +282,7 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
         .context("Invalid device_topic_id")?;
 
     let mapper_service_topic_id = entity_topic_id
-        .default_service_for_device(CUMULOCITY_MAPPER_NAME)
+        .default_service_for_device(c8y_mapper_name)
         .context("Can't derive service name if device topic id not in default scheme")?;
 
     let mapper_service_external_id =
@@ -289,7 +290,7 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
 
     let last_will_message = c8y_api::smartrest::inventory::service_creation_message(
         mapper_service_external_id.as_ref(),
-        CUMULOCITY_MAPPER_NAME,
+        c8y_mapper_name,
         service_type.as_str(),
         "down",
         &[],

@@ -28,17 +28,13 @@ impl CollectdMapper {
 
 #[async_trait]
 impl TEdgeComponent for CollectdMapper {
-    fn session_name(&self) -> &str {
-        COLLECTD_MAPPER_NAME
-    }
-
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(self.session_name(), &tedge_config).await?;
+            start_basic_actors(COLLECTD_MAPPER_NAME, &tedge_config).await?;
 
         let input_topic = CollectdMapper::input_topics();
         let output_topic = CollectdMapper::output_topic();
