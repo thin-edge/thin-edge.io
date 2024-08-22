@@ -297,23 +297,23 @@ fn extract_script_output(stdout: String) -> Option<String> {
     None
 }
 
-/// Define how to handle a background script
+/// Define how to handle background scripts and actions
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct BgExitHandlers {
+pub struct ExecHandlers {
     pub on_exec: GenericStateUpdate,
 }
 
-impl BgExitHandlers {
+impl ExecHandlers {
     pub fn try_new(on_exec: Option<GenericStateUpdate>) -> Result<Self, ScriptDefinitionError> {
-        Ok(BgExitHandlers {
+        Ok(ExecHandlers {
             on_exec: on_exec.unwrap_or_else(GenericStateUpdate::successful),
         })
     }
 }
 
-impl BgExitHandlers {
+impl ExecHandlers {
     pub fn builtin_default() -> Self {
-        BgExitHandlers {
+        ExecHandlers {
             on_exec: GenericStateUpdate::executing(),
         }
     }

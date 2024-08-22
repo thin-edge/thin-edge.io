@@ -68,7 +68,7 @@ pub enum OperationAction {
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    BuiltIn(BgExitHandlers, AwaitHandlers),
+    BuiltIn(ExecHandlers, AwaitHandlers),
 
     /// Trigger a built-in operation
     ///
@@ -76,7 +76,7 @@ pub enum OperationAction {
     /// action = "<builtin-operation-name>"
     /// on_exec = "<state>"
     /// ```
-    BuiltInAction(OperationName, BgExitHandlers),
+    BuiltInAction(OperationName, ExecHandlers),
 
     /// Await the outcome of a built-in operation
     ///
@@ -111,7 +111,7 @@ pub enum OperationAction {
     /// background_script = "sudo systemctl restart tedge-agent"
     /// on_exec = "<state>"
     /// ```
-    BgScript(ShellScript, BgExitHandlers),
+    BgScript(ShellScript, ExecHandlers),
 
     /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
     ///
@@ -125,7 +125,7 @@ pub enum OperationAction {
         OperationName,
         Option<ShellScript>,
         StateExcerpt,
-        BgExitHandlers,
+        ExecHandlers,
     ),
 
     /// Await the completion of a sub-operation
@@ -237,7 +237,7 @@ impl OperationWorkflow {
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
         let operation_name = operation.to_string();
-        let exec_handler = BgExitHandlers::builtin_default();
+        let exec_handler = ExecHandlers::builtin_default();
         let await_handler = AwaitHandlers::builtin_default();
         let states = [
             ("init", OperationAction::MoveTo("scheduled".into())),
