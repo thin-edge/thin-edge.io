@@ -131,6 +131,33 @@ impl WorkflowSupervisor {
         self.commands.get_state(command).map(|(_, state)| state)
     }
 
+    /// Rewrite the command state returned by a builtin operation actor
+    ///
+    /// Depending the operation is executing, successful or failed,
+    /// set the new state using the user provided handlers
+    ///
+    /// This method also takes care of the fact that the builtin operations
+    /// only return the state properties they care about.
+    /// Hence the command state is merged into the persisted state of the command.
+    ///
+    /// Return the command state unchanged if there is an error or no appropriate handlers.
+    pub fn adapt_builtin_response(
+        &self,
+        command_state: GenericCommandState,
+    ) -> GenericCommandState {
+        let command_id = &command_state.topic;
+        if let Some(current_state) = self.get_state(command_id.as_ref()) {
+            let new_state = command_state.merge_into(current_state.clone());
+            if let Ok(current_action) = self.get_action(current_state) {
+                return current_action.adapt_builtin_response(new_state);
+            } else {
+                return new_state;
+            }
+        };
+
+        command_state
+    }
+
     /// Return the state of the invoking command of a command, if any
     pub fn invoking_command_state(
         &self,

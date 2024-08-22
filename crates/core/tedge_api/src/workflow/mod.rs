@@ -417,6 +417,63 @@ impl OperationAction {
 
         Ok(new_state)
     }
+
+    /// Rewrite a command state before pushing it to a builtin operation actor
+    ///
+    /// Depending the action is to trigger or await the operation,
+    /// set the status to schedule or executing.
+    ///
+    /// Return the command state unchanged if there is no appropriate substitute.
+    pub fn adapt_builtin_request(&self, command_state: GenericCommandState) -> GenericCommandState {
+        match self {
+            OperationAction::BuiltInAction(_, _) => {
+                command_state.update(GenericStateUpdate::scheduled())
+            }
+            OperationAction::AwaitBuiltInAction(_, _) => {
+                command_state.update(GenericStateUpdate::executing())
+            }
+            _ => command_state,
+        }
+    }
+
+    /// Rewrite the command state returned by a builtin operation actor
+    ///
+    /// Depending the operation is executing, successful or failed,
+    /// set the new state using the user provided handlers
+    ///
+    /// Return the command state unchanged if there is no appropriate handlers.
+    pub fn adapt_builtin_response(
+        &self,
+        command_state: GenericCommandState,
+    ) -> GenericCommandState {
+        match self {
+            OperationAction::BuiltIn(exec_handlers, _)
+            | OperationAction::BuiltInAction(_, exec_handlers)
+                if command_state.is_executing() =>
+            {
+                command_state.update(exec_handlers.on_exec.clone())
+            }
+            OperationAction::BuiltIn(_, await_handlers)
+            | OperationAction::AwaitBuiltInAction(_, await_handlers)
+                if command_state.is_successful() =>
+            {
+                command_state.update(await_handlers.on_success.clone())
+            }
+            OperationAction::BuiltIn(_, await_handlers)
+            | OperationAction::AwaitBuiltInAction(_, await_handlers)
+                if command_state.is_failed() =>
+            {
+                let mut on_error = await_handlers.on_error.clone();
+                if on_error.reason.is_none() {
+                    if let Some(builtin_reason) = command_state.failure_reason() {
+                        on_error.reason = Some(builtin_reason.to_string());
+                    }
+                }
+                command_state.update(on_error)
+            }
+            _ => command_state,
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]

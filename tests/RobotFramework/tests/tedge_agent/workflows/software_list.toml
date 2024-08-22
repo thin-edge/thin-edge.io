@@ -6,10 +6,18 @@ on_stdout = ["scheduled"]
 
 [scheduled]
 action = "builtin"
+on_exec = "preprocess"
+
+[preprocess]
+script = "/etc/tedge/operations/echo-as-json.sh preprocess ready"
 on_success = "executing"
 
 [executing]
 action = "builtin"
+on_success = "postprocess"
+
+[postprocess]
+script = "/etc/tedge/operations/echo-as-json.sh postprocess done"
 on_success = "successful"
 
 [successful]

@@ -26,6 +26,10 @@ Override Built-In Operation
     Should Contain      ${software_list[0]}    "currentSoftwareList"
     Should Contain      ${software_list[0]}    "mosquitto"
     Should Contain      ${software_list[0]}    "tedge"
+    Should Contain      ${software_list[0]}    "preprocess"
+    Should Contain      ${software_list[0]}    "ready"
+    Should Contain      ${software_list[0]}    "postprocess"
+    Should Contain      ${software_list[0]}    "done"
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 ''
 
 Trigger Device Restart Using A Sub-Command

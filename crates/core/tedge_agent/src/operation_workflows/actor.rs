@@ -219,22 +219,14 @@ impl WorkflowActor {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
 
-                // TODO Honor the await and exit handlers
                 Ok(self.builtin_command_dispatcher.send(state).await?)
             }
-            OperationAction::BuiltInAction(_, _) => {
+            OperationAction::BuiltInAction(_, _) | OperationAction::AwaitBuiltInAction(_, _) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step");
 
-                // TODO Inject or store the user provided handlers of the command into its state
-                Ok(self.builtin_command_dispatcher.send(state).await?)
-            }
-            OperationAction::AwaitBuiltInAction(_, _) => {
-                let step = &state.status;
-                info!("Awaiting {operation} operation {step} step");
-
-                // TODO Honor the exit handlers
-                Ok(self.builtin_command_dispatcher.send(state).await?)
+                let builtin_state = action.adapt_builtin_request(state);
+                Ok(self.builtin_command_dispatcher.send(builtin_state).await?)
             }
             OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
@@ -409,18 +401,15 @@ impl WorkflowActor {
         &mut self,
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        // TODO  rewrite the command status
-        //       depending the operation is executing, successful or failed
-        //       set the new state using the user provided handlers.
-
-        if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
+        let adapted_state = self.workflows.adapt_builtin_response(new_state);
+        if let Err(err) = self.workflows.apply_internal_update(adapted_state.clone()) {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
         self.mqtt_publisher
-            .send(new_state.clone().into_message())
+            .send(adapted_state.clone().into_message())
             .await?;
-        self.process_command_update(new_state).await
+        self.process_command_update(adapted_state).await
     }
 
     fn open_command_log(
