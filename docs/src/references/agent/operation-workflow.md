@@ -597,20 +597,33 @@ Here is a customized version of the same operation.
 operation = "software_update"                             # a customized workflow
 
 [init]
-script = "/usr/bin/schedule-software-update.sh ${.}"      # checking is the software update command is timely
-on_success = ["scheduled"]
+script = "/usr/bin/schedule-software-update.sh ${.}"      # one can override any `proceed` action  - here with a checking step
+on_success = "scheduled"
 on_error = { status = "failed", reason = "not timely" }
 
 [scheduled]
-action = "builtin"                                        # the software installation steps are unchanged
+action = "builtin"                                        # one must keep the built-in behavior of the scheduled step
+on_exec = "logging"                                       # but the chaining rules can be adapted 
+
+[logging]
+script = "/usr/bin/log-software-update.sh ${.}"           # one can add extra steps - here a logging step
 on_success = "executing"
 
 [executing]
-action = "builtin"
+action = "builtin"                                        # one must keep the built-in behavior of the executing step
+on_success = "commit"                                     # but the chaining rules can be adapted
+on_error = "rollback"
+
+[commit]
+script = "/usr/bin/commit-software-update.sh ${.}"        # one can add extra steps - here a commit step
 on_success = "successful"
 
+[rollback]
+script = "/usr/bin/rollback-software-update.sh ${.}"      # one can add extra steps - here a rollback step
+on_success = "failed"
+
 [successful]
-action = "cleanup"
+action = "cleanup"                                        # terminal steps cannot be changed
 
 [failed]
 action = "cleanup"
