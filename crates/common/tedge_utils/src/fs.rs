@@ -2,9 +2,9 @@ use nix::NixPath;
 use std::fs as std_fs;
 use std::io::Read;
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
-
 use tokio::fs as tokio_fs;
 use tokio::io::AsyncWriteExt;
 
@@ -40,40 +40,28 @@ impl<T, E: Into<std::io::Error>> ErrContext<T> for Result<T, E> {
     }
 }
 
-pub struct TempFile(PathBuf);
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = std_fs::remove_file(&self.0);
-    }
-}
-
 /// Write file to filesystem atomically using std::fs synchronously.
+///
+/// Resulting destination file will have file mode 644. If a file already exists under the
+/// destination path, its ownership and mode will be overwritten.
 pub fn atomically_write_file_sync(
     dest: impl AsRef<Path>,
     mut reader: impl Read,
 ) -> Result<(), AtomFileError> {
     let dest_dir = parent_dir(dest.as_ref());
-    // FIXME: `.with_extension` replaces file extension, so if we used this
-    // function to write files `file.txt`, `file.bin`, `file.jpg`, etc.
-    // concurrently, then this will result in an error
-    let tempfile = TempFile(PathBuf::from(dest.as_ref()).with_extension("tmp"));
 
-    // Write the content on a temp file
-    let mut file = std_fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&tempfile.0)
-        .with_context(
-            || format!("could not create the temporary file {:?}", tempfile.0),
-            &dest,
-        )?;
+    // removed on drop
+    let mut file = tempfile::Builder::new()
+        .rand_bytes(6)
+        .permissions(std_fs::Permissions::from_mode(0o644))
+        .tempfile_in(&dest_dir)
+        .with_context(|| "could not create temporary file".to_string(), &dest_dir)?;
 
     std::io::copy(&mut reader, &mut file).with_context(
         || {
             format!(
                 "could not copy the content to the temporary file {:?}",
-                tempfile.0,
+                file.path(),
             )
         },
         &dest,
@@ -84,28 +72,25 @@ pub fn atomically_write_file_sync(
         || {
             format!(
                 "could not flush the content of the temporary file {:?}",
-                tempfile.0,
+                file.path(),
             )
         },
         &dest,
     )?;
 
-    file.sync_all().with_context(
-        || format!("could not save the temporary file {:?} to disk", tempfile.0,),
+    file.as_file().sync_all().with_context(
+        || {
+            format!(
+                "could not save the temporary file {:?} to disk",
+                file.path(),
+            )
+        },
         &dest,
     )?;
 
     // Move the temp file to its destination
-    std_fs::rename(&tempfile.0, &dest).with_context(
-        || {
-            format!(
-                "could not move the file from {:?} to {:?}",
-                tempfile.0,
-                dest.as_ref(),
-            )
-        },
-        &dest,
-    )?;
+    file.persist(&dest)
+        .with_context(|| "could not write to destination file".to_string(), &dest)?;
 
     // Ensure the new name reach the disk
     let dir = std::fs::File::open(dest_dir)
@@ -118,62 +103,47 @@ pub fn atomically_write_file_sync(
 }
 
 /// Write file to filesystem atomically using tokio::fs asynchronously.
+///
+/// Resulting destination file will have file mode 644. If a file already exists under the
+/// destination path, its ownership and mode will be overwritten.
 pub async fn atomically_write_file_async(
     dest: impl AsRef<Path>,
     content: &[u8],
 ) -> Result<(), AtomFileError> {
     let dest_dir = parent_dir(dest.as_ref());
-    let tempfile = PathBuf::from(dest.as_ref()).with_extension("tmp");
 
-    // Write the content on a temp file
-    let mut file = tokio_fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&tempfile)
-        .await
-        .with_context(
-            || format!("could not create the temporary file {tempfile:?}"),
-            &dest,
-        )?;
+    // removed on drop if not persisted
+    let mut file = tempfile::Builder::new()
+        .rand_bytes(6)
+        .permissions(std_fs::Permissions::from_mode(0o644))
+        .make_in(&dest_dir, |path| {
+            let file = std_fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path);
+            file.map(tokio_fs::File::from_std)
+        })
+        .with_context(|| "could not create the temporary file".to_string(), &dest)?;
 
-    if let Err(err) = file.write_all(content).await.with_context(
-        || format!("could not write the content to the temporary file {tempfile:?}",),
+    file.as_file_mut().write_all(content).await.with_context(
+        || format!("could not write the content to the temporary file {file:?}",),
         &dest,
-    ) {
-        let _ = tokio_fs::remove_file(&tempfile).await;
-        return Err(err);
-    }
+    )?;
 
     // Ensure the content reach the disk
-    if let Err(err) = file.flush().await.with_context(
-        || format!("could not flush the content of the temporary file {tempfile:?}",),
+    file.as_file_mut().flush().await.with_context(
+        || format!("could not flush the content of the temporary file {file:?}",),
         &dest,
-    ) {
-        let _ = tokio_fs::remove_file(&tempfile).await;
-        return Err(err);
-    }
+    )?;
 
-    if let Err(err) = file.sync_all().await.with_context(
-        || format!("could not save the temporary file {tempfile:?} to disk",),
+    file.as_file().sync_all().await.with_context(
+        || format!("could not save the temporary file {file:?} to disk",),
         &dest,
-    ) {
-        let _ = tokio_fs::remove_file(&tempfile).await;
-        return Err(err);
-    }
+    )?;
 
     // Move the temp file to its destination
-    if let Err(err) = tokio_fs::rename(&tempfile, &dest).await.with_context(
-        || {
-            format!(
-                "could not move the file from {tempfile:?} to {:?}",
-                dest.as_ref()
-            )
-        },
-        &dest,
-    ) {
-        let _ = tokio_fs::remove_file(&tempfile).await;
-        return Err(err);
-    }
+    file.persist(&dest)
+        .with_context(|| "could not create destination file".to_string(), &dest)?;
 
     // Ensure the new name reach the disk
     let dir = tokio_fs::File::open(&dest_dir)
