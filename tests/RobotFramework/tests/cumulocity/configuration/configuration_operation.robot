@@ -562,6 +562,7 @@ Copy Configuration Files
 
 Customize Operation Workflows
     [Arguments]    ${device}
+    ThinEdgeIO.Set Device Context    ${device}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_config_snapshot.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_config_update.toml    /etc/tedge/operations/
     Restart Service    tedge-agent
