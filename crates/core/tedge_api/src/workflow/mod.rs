@@ -55,7 +55,7 @@ pub enum OperationAction {
     /// action = "proceed"
     /// on_success = "<state>"
     /// ```
-    MoveTo(StateName),
+    MoveTo(GenericStateUpdate),
 
     /// The built-in behavior is used
     ///
@@ -213,7 +213,7 @@ impl OperationWorkflow {
     /// Create a built-in operation workflow
     pub fn built_in(operation: OperationType) -> Self {
         let states = [
-            ("init", OperationAction::MoveTo("scheduled".to_string())),
+            ("init", OperationAction::MoveTo("scheduled".into())),
             ("scheduled", OperationAction::BuiltIn),
             ("executing", OperationAction::BuiltIn),
             ("successful", OperationAction::Clear),
@@ -226,6 +226,31 @@ impl OperationWorkflow {
         OperationWorkflow {
             built_in: true,
             operation,
+            handlers: DefaultHandlers::default(),
+            states,
+        }
+    }
+
+    /// Create a workflow that systematically fail any command with a static error
+    ///
+    /// The point is to raise an error to the user when a workflow definition cannot be parsed,
+    /// instead of silently ignoring the commands.
+    pub fn ill_formed(operation: String, reason: String) -> Self {
+        let states = [
+            ("init", OperationAction::MoveTo("executing".into())),
+            (
+                "executing",
+                OperationAction::MoveTo(GenericStateUpdate::failed(reason)),
+            ),
+            ("failed", OperationAction::Clear),
+        ]
+        .into_iter()
+        .map(|(state, action)| (state.to_string(), action))
+        .collect();
+
+        OperationWorkflow {
+            built_in: true,
+            operation: operation.as_str().into(),
             handlers: DefaultHandlers::default(),
             states,
         }

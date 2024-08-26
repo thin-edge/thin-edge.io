@@ -113,6 +113,13 @@ Command steps should not be executed twice
         Should Be Equal    ${workflow_log}    ${expected_log}
     END
 
+Placeholder workflow created for ill-defined operations
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-3079/test-1 '{"status":"init"}'
+    ${cmd_messages}    Should Have MQTT Messages    te/device/main///cmd/issue-3079/test-1    message_pattern=.*Invalid operation workflow definition.*
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-3079/test-1 ''
+    ${workflow_log}=   Execute Command    cat /var/log/tedge/agent/workflow-issue-3079-test-1.log
+    Should Contain     ${workflow_log}    item=TOML parse error
+
 *** Keywords ***
 
 Custom Test Setup
@@ -148,3 +155,4 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_software_update.toml          /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-2896.toml                    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3079.toml                    /etc/tedge/operations/

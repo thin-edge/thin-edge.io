@@ -3,6 +3,7 @@ use camino::Utf8PathBuf;
 use log::error;
 use std::ffi::OsStr;
 use std::path::Path;
+use tedge_api::workflow::IllFormedOperationWorkflow;
 use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::WorkflowSupervisor;
 use tracing::info;
@@ -35,7 +36,7 @@ pub async fn load_operation_workflows(
                     );
                 }
                 Err(err) => {
-                    error!("Ignoring operation workflow definition from {file:?}: {err:?}")
+                    error!("Ignoring {file:?}: {err:?}")
                 }
             };
         }
@@ -44,12 +45,19 @@ pub async fn load_operation_workflows(
 }
 
 async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyhow::Error> {
-    let bytes = tokio::fs::read(path)
-        .await
-        .context("Reading file content")?;
-    let input = std::str::from_utf8(&bytes).context("Expecting UTF8 content")?;
-    let workflow = toml::from_str::<OperationWorkflow>(input).context("Parsing TOML content")?;
-    Ok(workflow)
+    let bytes = tokio::fs::read(path).await.context("Fail to read file")?;
+    let input = std::str::from_utf8(&bytes).context("Fail to extract UTF8 content")?;
+
+    toml::from_str::<OperationWorkflow>(input)
+        .context("Fail to parse TOML")
+        .or_else(|err| {
+            error!("Ill-formed operation workflow definition from {path:?}: {err:?}");
+            let workflow = toml::from_str::<IllFormedOperationWorkflow>(input)
+                .context("Extracting operation name")?;
+
+            let reason = format!("Invalid operation workflow definition {path:?}: {err:?}");
+            Ok(OperationWorkflow::ill_formed(workflow.operation, reason))
+        })
 }
 
 fn load_operation_workflow(

@@ -159,8 +159,8 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                         .handlers
                         .on_success
                         .map(|u| u.into())
-                        .unwrap_or_else(|| "successful".to_string().into());
-                    Ok(OperationAction::MoveTo(on_success.status))
+                        .unwrap_or_else(GenericStateUpdate::successful);
+                    Ok(OperationAction::MoveTo(on_success))
                 }
                 "await-agent-restart" => {
                     let handlers = TryInto::<AwaitHandlers>::try_into((input.handlers, defaults))?;
