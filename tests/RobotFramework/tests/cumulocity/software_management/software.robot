@@ -2,6 +2,7 @@
 Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
+Library    Collections
 
 Test Tags    theme:c8y    theme:software    theme:plugins
 Test Setup       Custom Setup
@@ -124,6 +125,33 @@ Workflow log includes plugin output
     ${operation_log_file}=    Execute Command    ls -t /var/log/tedge/agent/workflow-software_update-* | head -n 1    strip=${True}
     ${log_output}=     Execute Command    cat ${operation_log_file}
     Should Contain    ${log_output}    Executing command: "apt-get" "--quiet" "--yes" "update"
+
+Backward compatibility using 501-503 templates to update status
+    Execute Command    tedge config set c8y.smartrest.use_operation_id false
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+    ${OPERATION}=    Install Software        c8y-remote-access-plugin
+    Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
+    Device Should Have Installed Software    c8y-remote-access-plugin
+    Should Have MQTT Messages    c8y/s/us    message_pattern=^(501|502|503),c8y_SoftwareUpdate.*    minimum=1
+
+Operation gets updated regardless of the order of the creation time
+    Stop Service    tedge-agent
+    ${OPERATION1}=    Install Software        non-existent-package1
+    ${OPERATION2}=    Install Software        non-existent-package2
+    ${op1dict}=    Operation Should Be PENDING    ${OPERATION1}
+    ${op2dict}=    Operation Should Be PENDING    ${OPERATION2}
+    ${op_id1}=    Get From Dictionary    ${op1dict}    id
+    ${op_id2}=    Get From Dictionary    ${op2dict}    id
+    Execute Command    tedge mqtt pub -r te/device/main///cmd/software_update/c8y-mapper-${op_id2} '{"status":"executing","updateList":[{"type":"default","modules":[{"name":"non-existent-package2","action":"install"}]}]}'
+    Operation Should Be PENDING    ${OPERATION1}    timeout=60    # The older operation status shouldn't be updated
+    Operation Should Be EXECUTING    ${OPERATION2}    timeout=60
+    Execute Command    tedge mqtt pub -r te/device/main///cmd/software_update/c8y-mapper-${op_id2} '{"status":"successful","updateList":[{"type":"default","modules":[{"name":"non-existent-package2","action":"install"}]}]}'
+    Operation Should Be SUCCESSFUL    ${OPERATION2}    timeout=60
+    Execute Command    tedge mqtt pub -r te/device/main///cmd/software_update/c8y-mapper-${op_id1} '{"status":"executing","updateList":[{"type":"default","modules":[{"name":"non-existent-package1","action":"install"}]}]}'
+    Operation Should Be EXECUTING    ${OPERATION1}    timeout=60
+    Execute Command    tedge mqtt pub -r te/device/main///cmd/software_update/c8y-mapper-${op_id1} '{"status":"successful","updateList":[{"type":"default","modules":[{"name":"non-existent-package1","action":"install"}]}]}'
+    Operation Should Be SUCCESSFUL    ${OPERATION1}    timeout=60
 
 *** Keywords ***
 
