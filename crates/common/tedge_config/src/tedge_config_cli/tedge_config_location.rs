@@ -13,8 +13,10 @@ use crate::TEdgeConfigReader;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Serialize;
+use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tracing::debug;
+use tracing::warn;
 
 pub const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
@@ -142,7 +144,6 @@ impl TEdgeConfigLocation {
         Ok((dto, warnings))
     }
 
-    // TODO: Explicitly set the file permissions in this function and file ownership!
     fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
 
@@ -151,7 +152,20 @@ impl TEdgeConfigLocation {
             fs::create_dir(self.tedge_config_root_path())?;
         }
 
-        atomically_write_file_sync(self.toml_path(), toml.as_bytes())?;
+        let toml_path = self.toml_path();
+
+        atomically_write_file_sync(toml_path, toml.as_bytes())?;
+
+        let entry = PermissionEntry {
+            user: Some("tedge".to_string()),
+            group: Some("tedge".to_string()),
+            mode: Some(0o644),
+        };
+
+        if let Err(err) = entry.apply(toml_path.as_std_path()) {
+            warn!("failed to set file ownership and permissions for '{toml_path}': {err}");
+        }
+
         Ok(())
     }
 }
