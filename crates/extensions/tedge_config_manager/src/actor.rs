@@ -2,7 +2,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use log::debug;
 use log::error;
 use log::info;
 use serde_json::json;
@@ -11,10 +10,11 @@ use std::io::ErrorKind;
 use std::os::unix::fs::fchown;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
+use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::DynSender;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -53,7 +53,7 @@ pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
 pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
 pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(ConfigInput[ConfigOperation, FsWatchEvent, ConfigDownloadResult, ConfigUploadResult] : Debug);
+fan_in_message_type!(ConfigInput[ConfigOperation, FsWatchEvent] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
@@ -61,8 +61,8 @@ pub struct ConfigManagerActor {
     pending_operations: HashMap<String, ConfigOperation>,
     input_receiver: LoggingReceiver<ConfigInput>,
     output_sender: LoggingSender<ConfigOperationData>,
-    download_sender: DynSender<ConfigDownloadRequest>,
-    upload_sender: DynSender<ConfigUploadRequest>,
+    downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
+    uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
 }
 
 #[async_trait]
@@ -72,20 +72,25 @@ impl Actor for ConfigManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        self.reload_supported_config_types().await?;
+        let mut worker = ConfigManagerWorker {
+            config: Arc::from(self.config),
+            plugin_config: self.plugin_config,
+            pending_operations: self.pending_operations,
+            output_sender: self.output_sender,
+            downloader: self.downloader,
+            uploader: self.uploader,
+        };
+
+        worker.reload_supported_config_types().await?;
 
         while let Some(event) = self.input_receiver.recv().await {
             let result = match event {
                 ConfigInput::ConfigOperation(request) => {
-                    self.process_operation_request(request).await
+                    let mut worker = worker.clone();
+                    tokio::spawn(async move { worker.process_operation_request(request).await });
+                    Ok(())
                 }
-                ConfigInput::FsWatchEvent(event) => self.process_file_watch_events(event).await,
-                ConfigInput::ConfigDownloadResult((topic, result)) => {
-                    Ok(self.process_downloaded_config(&topic, result).await?)
-                }
-                ConfigInput::ConfigUploadResult((topic, result)) => {
-                    self.process_uploaded_config(&topic, result).await
-                }
+                ConfigInput::FsWatchEvent(event) => worker.process_file_watch_events(event).await,
             };
 
             if let Err(err) = result {
@@ -103,8 +108,8 @@ impl ConfigManagerActor {
         plugin_config: PluginConfig,
         input_receiver: LoggingReceiver<ConfigInput>,
         output_sender: LoggingSender<ConfigOperationData>,
-        download_sender: DynSender<ConfigDownloadRequest>,
-        upload_sender: DynSender<ConfigUploadRequest>,
+        downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
+        uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
     ) -> Self {
         ConfigManagerActor {
             config,
@@ -112,11 +117,23 @@ impl ConfigManagerActor {
             pending_operations: HashMap::new(),
             input_receiver,
             output_sender,
-            download_sender,
-            upload_sender,
+            downloader,
+            uploader,
         }
     }
+}
 
+#[derive(Clone)]
+struct ConfigManagerWorker {
+    config: Arc<ConfigManagerConfig>,
+    plugin_config: PluginConfig,
+    pending_operations: HashMap<String, ConfigOperation>,
+    output_sender: LoggingSender<ConfigOperationData>,
+    downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
+    uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
+}
+
+impl ConfigManagerWorker {
     async fn process_operation_request(
         &mut self,
         request: ConfigOperation,
@@ -192,11 +209,14 @@ impl ConfigManagerActor {
             .execute_config_snapshot_request(&topic, &mut request)
             .await
         {
-            Ok(_) => {
+            Ok(upload_result) => {
                 self.pending_operations.insert(
                     topic.name.clone(),
-                    ConfigOperation::Snapshot(topic, request),
+                    ConfigOperation::Snapshot(topic.clone(), request),
                 );
+
+                self.process_uploaded_config(&topic.name, upload_result)
+                    .await?;
             }
             Err(error) => {
                 let error_message = format!(
@@ -215,7 +235,7 @@ impl ConfigManagerActor {
         &mut self,
         topic: &Topic,
         request: &mut ConfigSnapshotCmdPayload,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<UploadResult, ConfigManagementError> {
         let file_entry = self
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
@@ -238,11 +258,12 @@ impl ConfigManagerActor {
             request.config_type, tedge_url
         );
 
-        self.upload_sender
-            .send((topic.name.clone(), upload_request))
+        let (_, upload_result) = self
+            .uploader
+            .await_response((topic.name.clone(), upload_request))
             .await?;
 
-        Ok(())
+        Ok(upload_result)
     }
 
     fn create_tedge_url_for_config_operation(
@@ -320,9 +341,14 @@ impl ConfigManagerActor {
         mut request: ConfigUpdateCmdPayload,
     ) -> Result<(), ChannelError> {
         match self.execute_config_update_request(&topic, &request).await {
-            Ok(_) => {
-                self.pending_operations
-                    .insert(topic.name.clone(), ConfigOperation::Update(topic, request));
+            Ok(download_result) => {
+                self.pending_operations.insert(
+                    topic.name.clone(),
+                    ConfigOperation::Update(topic.clone(), request),
+                );
+
+                self.process_downloaded_config(&topic.name, download_result)
+                    .await?;
             }
             Err(error) => {
                 let error_message = format!(
@@ -342,7 +368,7 @@ impl ConfigManagerActor {
         &mut self,
         topic: &Topic,
         request: &ConfigUpdateCmdPayload,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<DownloadResult, ConfigManagementError> {
         let file_entry = self
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
@@ -352,8 +378,7 @@ impl ConfigManagerActor {
         let temp_path = &self.config.tmp_path.join(&file_entry.config_type);
 
         let Some(tedge_url) = &request.tedge_url else {
-            debug!("tedge_url not present in config update payload, ignoring");
-            return Ok(());
+            return Err(anyhow::anyhow!("tedge_url not present in config update payload").into());
         };
 
         let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path())
@@ -364,18 +389,19 @@ impl ConfigManagerActor {
             request.config_type, tedge_url
         );
 
-        self.download_sender
-            .send((topic.name.clone(), download_request))
+        let (_, download_result) = self
+            .downloader
+            .await_response((topic.name.clone(), download_request))
             .await?;
 
-        Ok(())
+        Ok(download_result)
     }
 
     async fn process_downloaded_config(
         &mut self,
         topic: &str,
         result: DownloadResult,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<(), ChannelError> {
         let Some(ConfigOperation::Update(topic, mut request)) =
             self.pending_operations.remove(topic)
         else {
