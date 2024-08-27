@@ -198,7 +198,6 @@ Custom Setup
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/software_list.toml    /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/init-software-list.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-download.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/schedule-download.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/launch-download.sh    /etc/tedge/operations/
