@@ -2880,6 +2880,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         SoftwareManagementApiFlag::Advanced,
         true,
         AutoLogUpload::Never,
+        false,
     )
 }
 

@@ -3,7 +3,6 @@ use super::EntityTarget;
 use super::OperationContext;
 use super::OperationOutcome;
 use anyhow::Context;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::FirmwareInfo;
 use tedge_api::commands::FirmwareUpdateCmd;
@@ -53,8 +52,10 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                let smartrest_operation_status =
-                    succeed_operation_no_payload(CumulocitySupportedOperations::C8yFirmware);
+                let smartrest_operation_status = self.get_smartrest_successful_status_payload(
+                    CumulocitySupportedOperations::C8yFirmware,
+                    cmd_id,
+                );
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
                 let twin_metadata_topic = self.mqtt_schema.topic_for(
@@ -87,6 +88,7 @@ impl OperationContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::C8yMapperConfig;
     use crate::tests::*;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
@@ -440,6 +442,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_firmware_update_executing_and_failed_cmd_with_op_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
+
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate firmware_update command with "executing" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/firmware_update/c8y-mapper-1234"),
+            json!({
+                "status": "executing",
+                "name": "myFirmware",
+                "version": "1.0",
+                "remoteUrl": "http://www.my.url",
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `504` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+
+        // Simulate log_upload command with "failed" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/firmware_update/c8y-mapper-1234"),
+            json!({
+                "status": "failed",
+                "name": "myFirmware",
+                "version": "1.0",
+                "remoteUrl": "http://www.my.url",
+                "reason": "Something went wrong"
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `505` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "505,1234,Something went wrong")])
+            .await;
+    }
+
+    #[tokio::test]
     async fn handle_firmware_update_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
@@ -516,6 +569,50 @@ mod tests {
                     r#"{"name":"myFirmware","version":"1.0","url":"http://www.my.url"}"#,
                 ), // Twin firmware metadata
                 ("te/device/child1///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn handle_firmware_update_successful_cmd_with_op_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, http, .. } = test_handle;
+        spawn_dummy_c8y_http_proxy(http);
+
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate firmware_update command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/firmware_update/c8y-mapper-1234"),
+            json!({
+            "status": "successful",
+            "name": "myFirmware",
+            "version": "1.0",
+            "remoteUrl": "http://www.my.url",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/firmware_update/myFirmware-c8y-mapper-1234",
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Assert MQTT messages
+        assert_received_contains_str(
+            &mut mqtt,
+            [
+                ("c8y/s/us", "506,1234"), // SmartREST successful
+                (
+                    "te/device/main///twin/firmware",
+                    r#"{"name":"myFirmware","version":"1.0","url":"http://www.my.url"}"#,
+                ), // Twin firmware metadata
+                ("te/device/main///cmd/firmware_update/c8y-mapper-1234", ""), // Clear cmd
             ],
         )
         .await;

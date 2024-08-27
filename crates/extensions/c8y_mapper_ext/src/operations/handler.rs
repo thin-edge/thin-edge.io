@@ -66,6 +66,7 @@ impl OperationHandler {
                 mqtt_schema: c8y_mapper_config.mqtt_schema.clone(),
                 mqtt_publisher: mqtt_publisher.clone(),
                 software_management_api: c8y_mapper_config.software_management_api,
+                smart_rest_use_operation_id: c8y_mapper_config.smartrest_use_operation_id,
 
                 // TODO(marcel): would be good not to generate new ids from running operations, see if
                 // we can remove it somehow

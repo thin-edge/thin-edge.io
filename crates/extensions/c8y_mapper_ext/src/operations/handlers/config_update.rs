@@ -1,5 +1,4 @@
 use anyhow::Context;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_no_payload;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigUpdateCmd;
@@ -48,8 +47,9 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                let smartrest_operation_status = succeed_operation_no_payload(
+                let smartrest_operation_status = self.get_smartrest_successful_status_payload(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
+                    cmd_id,
                 );
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
@@ -67,8 +67,11 @@ impl OperationContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::C8yMapperConfig;
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::spawn_c8y_mapper_actor_with_config;
+    use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
@@ -296,6 +299,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_config_update_executing_and_failed_cmd_with_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_snapshot command with "executing" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
+            json!({
+            "status": "executing",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
+            "remoteUrl": "http://www.my.url",
+            "type": "typeA",
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Expect `504` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+
+        // Simulate config_update command with "failed" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
+            json!({
+            "status": "failed",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
+            "remoteUrl": "http://www.my.url",
+            "type": "typeA",
+            "reason": "Something went wrong"
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Expect `505` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "505,1234,Something went wrong")])
+            .await;
+    }
+
+    #[tokio::test]
     async fn handle_config_update_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
@@ -361,5 +414,36 @@ mod tests {
             [("c8y/s/us/child1", "503,c8y_DownloadConfigFile")],
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn handle_config_update_successful_cmd_with_id() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_update command with "executing" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
+            json!({
+            "status": "successful",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234",
+            "remoteUrl": "http://www.my.url",
+            "type": "path/type/A",
+        })
+                .to_string(),
+        ))
+            .await
+            .expect("Send failed");
+
+        // Expect `503` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234")]).await;
     }
 }

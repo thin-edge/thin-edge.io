@@ -1,5 +1,4 @@
 use anyhow::Context;
-use c8y_api::smartrest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::CommandStatus;
 use tedge_api::RestartCommand;
@@ -37,10 +36,10 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                let smartrest_set_operation =
-                    smartrest::smartrest_serializer::succeed_operation_no_payload(
-                        CumulocitySupportedOperations::C8yRestartRequest,
-                    );
+                let smartrest_set_operation = self.get_smartrest_successful_status_payload(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                    cmd_id,
+                );
 
                 Ok(OperationOutcome::Finished {
                     messages: vec![MqttMessage::new(topic, smartrest_set_operation)],

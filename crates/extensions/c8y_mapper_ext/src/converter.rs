@@ -34,9 +34,11 @@ use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation;
 use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
@@ -633,7 +635,7 @@ impl CumulocityConverter {
         let result = self
             .process_json_over_mqtt(device_xid, cmd_id, &operation.extras)
             .await;
-        let output = self.handle_c8y_operation_result(&result);
+        let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
 
         Ok(output)
     }
@@ -720,7 +722,7 @@ impl CumulocityConverter {
         let mut output: Vec<MqttMessage> = Vec::new();
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
             let result = self.process_smartrest(smartrest_message.as_str()).await;
-            let mut msgs = self.handle_c8y_operation_result(&result);
+            let mut msgs = self.handle_c8y_operation_result(&result, None);
             output.append(&mut msgs)
         }
         Ok(output)
@@ -729,6 +731,7 @@ impl CumulocityConverter {
     fn handle_c8y_operation_result(
         &mut self,
         result: &Result<Vec<MqttMessage>, CumulocityMapperError>,
+        op_id: Option<String>,
     ) -> Vec<MqttMessage> {
         match result {
             Err(
@@ -746,8 +749,22 @@ impl CumulocityConverter {
                 let topic = C8yTopic::SmartRestResponse
                     .to_topic(&self.config.c8y_prefix)
                     .unwrap();
-                let msg1 = MqttMessage::new(&topic, set_operation_executing(operation));
-                let msg2 = MqttMessage::new(&topic, fail_operation(operation, &err.to_string()));
+
+                let (payload1, payload2) =
+                    if let (Some(op_id), true) = (op_id, self.config.smartrest_use_operation_id) {
+                        (
+                            set_operation_executing_with_id(&op_id),
+                            fail_operation_with_id(&op_id, &err.to_string()),
+                        )
+                    } else {
+                        (
+                            set_operation_executing_with_name(operation),
+                            fail_operation_with_name(operation, &err.to_string()),
+                        )
+                    };
+
+                let msg1 = MqttMessage::new(&topic, payload1);
+                let msg2 = MqttMessage::new(&topic, payload2);
                 error!("{err}");
                 vec![msg1, msg2]
             }
@@ -904,7 +921,7 @@ impl CumulocityConverter {
 
                     // mqtt client publishes executing
                     let topic = C8yTopic::SmartRestResponse.to_topic(&c8y_prefix).unwrap();
-                    let executing_str = set_operation_executing(op_name);
+                    let executing_str = set_operation_executing_with_name(op_name);
                     mqtt_publisher
                         .send(MqttMessage::new(&topic, executing_str.as_str()))
                         .await
@@ -939,7 +956,7 @@ impl CumulocityConverter {
                                             error!("Failed to publish a message: {message}. Error: {err}")
                                         }),
                                     Err(e) => {
-                                        let fail_message = fail_operation(
+                                        let fail_message = fail_operation_with_name(
                                             op_name,
                                             &format!("{:?}", anyhow::Error::from(e).context("Custom operation process exited successfully, but couldn't convert output to valid SmartREST message")));
                                         mqtt_publisher.send(MqttMessage::new(&topic, fail_message.as_str())).await.unwrap_or_else(|err| {
@@ -953,7 +970,7 @@ impl CumulocityConverter {
                                     &output.stderr,
                                     MAX_PAYLOAD_LIMIT_IN_BYTES,
                                 );
-                                let payload = fail_operation(op_name, &failure_reason);
+                                let payload = fail_operation_with_name(op_name, &failure_reason);
 
                                 mqtt_publisher
                                     .send(MqttMessage::new(&topic, payload.as_bytes()))
@@ -3106,6 +3123,7 @@ pub(crate) mod tests {
             SoftwareManagementApiFlag::Advanced,
             true,
             AutoLogUpload::Never,
+            false,
         )
     }
 

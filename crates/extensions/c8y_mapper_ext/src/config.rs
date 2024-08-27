@@ -58,6 +58,7 @@ pub struct C8yMapperConfig {
     pub auto_log_upload: AutoLogUpload,
     pub bridge_service_name: String,
     pub bridge_health_topic: Topic,
+    pub smartrest_use_operation_id: bool,
 
     pub data_dir: DataDir,
     pub config_dir: Arc<Utf8Path>,
@@ -95,6 +96,7 @@ impl C8yMapperConfig {
         software_management_api: SoftwareManagementApiFlag,
         software_management_with_types: bool,
         auto_log_upload: AutoLogUpload,
+        smartrest_use_operation_id: bool,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -134,6 +136,7 @@ impl C8yMapperConfig {
             auto_log_upload,
             bridge_service_name,
             bridge_health_topic,
+            smartrest_use_operation_id,
 
             config_dir,
             logs_path,
@@ -190,6 +193,7 @@ impl C8yMapperConfig {
         let software_management_with_types = tedge_config.c8y.software_management.with_types;
 
         let auto_log_upload = tedge_config.c8y.operations.auto_log_upload;
+        let smartrest_use_operation_id = tedge_config.c8y.smartrest.use_operation_id;
 
         // Add feature topic filters
         for cmd in [
@@ -241,6 +245,7 @@ impl C8yMapperConfig {
             software_management_api,
             software_management_with_types,
             auto_log_upload,
+            smartrest_use_operation_id,
         ))
     }
 

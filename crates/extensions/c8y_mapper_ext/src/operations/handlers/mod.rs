@@ -17,8 +17,14 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
-use c8y_api::smartrest::smartrest_serializer::fail_operation;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id_no_parameters;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_id;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -50,6 +56,7 @@ pub(super) struct OperationContext {
     pub(super) mqtt_schema: MqttSchema,
     pub(super) software_management_api: SoftwareManagementApiFlag,
     pub(super) command_id: IdGenerator,
+    pub(super) smart_rest_use_operation_id: bool,
 
     pub(super) http_proxy: C8YHttpProxy,
     pub(super) c8y_endpoint: C8yEndPoint,
@@ -147,14 +154,21 @@ impl OperationContext {
         // operations should be handled above
         let c8y_operation = to_c8y_operation(&operation).unwrap();
 
-        match to_response(
+        match self.to_response(
             operation_result,
             c8y_operation,
             &entity.smartrest_publish_topic,
+            &cmd_id,
         ) {
             OperationOutcome::Ignored => {}
             OperationOutcome::Executing { mut extra_messages } => {
-                let c8y_state_executing_payload = set_operation_executing(c8y_operation);
+                let c8y_state_executing_payload = match self.get_operation_id(&cmd_id) {
+                    Some(op_id) if self.smart_rest_use_operation_id => {
+                        set_operation_executing_with_id(&op_id)
+                    }
+                    _ => set_operation_executing_with_name(c8y_operation),
+                };
+
                 let c8y_state_executing_message =
                     MqttMessage::new(&entity.smartrest_publish_topic, c8y_state_executing_payload);
 
@@ -180,6 +194,67 @@ impl OperationContext {
                 clear_command_topic(command, &mut mqtt_publisher).await;
             }
         }
+    }
+
+    pub fn get_smartrest_successful_status_payload(
+        &self,
+        operation: CumulocitySupportedOperations,
+        cmd_id: &str,
+    ) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+        match self.get_operation_id(cmd_id) {
+            Some(op_id) if self.smart_rest_use_operation_id => {
+                succeed_operation_with_id_no_parameters(&op_id)
+            }
+            _ => succeed_operation_with_name_no_parameters(operation),
+        }
+    }
+
+    pub fn get_smartrest_failed_status_payload(
+        &self,
+        operation: CumulocitySupportedOperations,
+        reason: &str,
+        cmd_id: &str,
+    ) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+        match self.get_operation_id(cmd_id) {
+            Some(op_id) if self.smart_rest_use_operation_id => {
+                fail_operation_with_id(&op_id, reason)
+            }
+            _ => fail_operation_with_name(operation, reason),
+        }
+    }
+
+    /// Converts operation result to valid C8y response.
+    fn to_response(
+        &self,
+        result: Result<OperationOutcome, OperationError>,
+        operation_type: CumulocitySupportedOperations,
+        smartrest_publish_topic: &Topic,
+        cmd_id: &str,
+    ) -> OperationOutcome {
+        let err = match result {
+            Ok(res) => {
+                return res;
+            }
+            Err(err) => err,
+        };
+
+        // assuming `high level error: low level error: root cause error` error display impl
+        let set_operation_to_failed_payload =
+            self.get_smartrest_failed_status_payload(operation_type, &err.to_string(), cmd_id);
+
+        let set_operation_to_failed_message =
+            MqttMessage::new(smartrest_publish_topic, set_operation_to_failed_payload);
+
+        let messages = vec![set_operation_to_failed_message];
+
+        OperationOutcome::Finished { messages }
+    }
+
+    fn get_operation_id(&self, cmd_id: &str) -> Option<String> {
+        self.command_id
+            .get_value(cmd_id)
+            .and_then(|s| s.parse::<u32>().ok()) // Ensure the operation ID is numeric
+            .map(|s| s.to_string())
     }
 }
 
@@ -215,30 +290,6 @@ pub(super) enum OperationOutcome {
     /// Operation state is either `SUCCESSFUL` or `FAILED`. Report state to C8y, send operation log,
     /// clean local MQTT topic.
     Finished { messages: Vec<MqttMessage> },
-}
-
-/// Converts operation result to valid C8y response.
-fn to_response(
-    result: Result<OperationOutcome, OperationError>,
-    operation_type: CumulocitySupportedOperations,
-    smartrest_publish_topic: &Topic,
-) -> OperationOutcome {
-    let err = match result {
-        Ok(res) => {
-            return res;
-        }
-        Err(err) => err,
-    };
-
-    // assuming `high level error: low level error: root cause error` error display impl
-    let set_operation_to_failed_payload = fail_operation(operation_type, &err.to_string());
-
-    let set_operation_to_failed_message =
-        MqttMessage::new(smartrest_publish_topic, set_operation_to_failed_payload);
-
-    let messages = vec![set_operation_to_failed_message];
-
-    OperationOutcome::Finished { messages }
 }
 
 /// For a given `OperationType`, obtain a matching `C8ySupportedOperations`.
@@ -289,15 +340,21 @@ pub fn get_smartrest_response_for_upload_result(
     upload_result: tedge_uploader_ext::UploadResult,
     binary_url: &str,
     operation: c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations,
+    use_operation_id: bool,
+    op_id: Option<String>,
 ) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
     match upload_result {
-        Ok(_) => c8y_api::smartrest::smartrest_serializer::succeed_static_operation(
-            operation,
-            Some(binary_url),
-        ),
-        Err(err) => c8y_api::smartrest::smartrest_serializer::fail_operation(
-            operation,
-            &format!("Upload failed with {err}"),
-        ),
+        Ok(_) => match op_id {
+            Some(op_id) if use_operation_id => {
+                succeed_static_operation_with_id(&op_id, Some(binary_url))
+            }
+            _ => succeed_static_operation_with_name(operation, Some(binary_url)),
+        },
+        Err(err) => match op_id {
+            Some(op_id) if use_operation_id => {
+                fail_operation_with_id(&op_id, &format!("Upload failed with {err}"))
+            }
+            _ => fail_operation_with_name(operation, &format!("Upload failed with {err}")),
+        },
     }
 }

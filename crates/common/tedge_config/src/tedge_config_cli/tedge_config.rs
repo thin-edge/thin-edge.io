@@ -469,6 +469,10 @@ define_tedge_config! {
             /// Set of SmartREST template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
             templates: TemplatesSet,
+
+            /// Switch using 501-503 (without operation ID) or 504-506 (with operation ID) SmartREST messages for operation status update
+            #[tedge_config(example = "true", default(value = true))]
+            use_operation_id: bool,
         },
 
 

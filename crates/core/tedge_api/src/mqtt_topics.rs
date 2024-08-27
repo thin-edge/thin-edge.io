@@ -803,6 +803,12 @@ impl IdGenerator {
     pub fn is_generator_of(&self, cmd_id: &str) -> bool {
         cmd_id.contains(&self.prefix)
     }
+
+    pub fn get_value<'a>(&self, cmd_id: &'a str) -> Option<&'a str> {
+        cmd_id
+            .strip_prefix(&self.prefix)
+            .and_then(|s| s.strip_prefix('-'))
+    }
 }
 
 #[cfg(test)]
@@ -1011,5 +1017,15 @@ mod tests {
             mqtt_schema.topic_for(&device, &Channel::Health),
             mqtt_channel::Topic::new_unchecked("te/device/main///status/health")
         );
+    }
+
+    #[test_case("abc-1234", Some("1234"))]
+    #[test_case("abc-", Some(""))]
+    #[test_case("abc", None)]
+    #[test_case("1234", None)]
+    fn extract_value_from_cmd_id(cmd_id: &str, expected: Option<&str>) {
+        let id_generator = IdGenerator::new("abc");
+        let maybe_id = id_generator.get_value(cmd_id);
+        assert_eq!(maybe_id, expected);
     }
 }

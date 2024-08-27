@@ -1,5 +1,4 @@
 use anyhow::Context;
-use c8y_api::smartrest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::CommandStatus;
@@ -43,10 +42,10 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                let smartrest_set_operation =
-                    smartrest::smartrest_serializer::succeed_operation_no_payload(
-                        CumulocitySupportedOperations::C8ySoftwareUpdate,
-                    );
+                let smartrest_set_operation = self.get_smartrest_successful_status_payload(
+                    CumulocitySupportedOperations::C8ySoftwareUpdate,
+                    cmd_id,
+                );
 
                 Ok(OperationOutcome::Finished {
                     messages: vec![
@@ -57,9 +56,10 @@ impl OperationContext {
             }
             // TODO(marcel): use simpler error handling once software list request extracted to converter
             CommandStatus::Failed { reason } => {
-                let smartrest_set_operation = smartrest::smartrest_serializer::fail_operation(
+                let smartrest_set_operation = self.get_smartrest_failed_status_payload(
                     CumulocitySupportedOperations::C8ySoftwareUpdate,
                     &reason,
+                    cmd_id,
                 );
 
                 Ok(OperationOutcome::Finished {
@@ -81,10 +81,9 @@ impl OperationContext {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
+    use std::time::Duration;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Sender;
     use tedge_api::mqtt_topics::EntityTopicId;
@@ -96,9 +95,12 @@ mod tests {
     use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
 
+    use crate::config::C8yMapperConfig;
     use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
+    use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::spawn_dummy_c8y_http_proxy;
+    use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -217,6 +219,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mapper_publishes_software_update_status_onto_c8y_topic_with_op_id() {
+        // The test assures SM Mapper correctly receives software update response message on `te/device/main///cmd/software_update/123`
+        // and publishes status of the operation `504` on `c8y/s/us`
+
+        // Start SM Mapper
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, http, .. } = test_handle;
+        spawn_dummy_c8y_http_proxy(http);
+
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        skip_init_messages(&mut mqtt).await;
+
+        // Prepare and publish a software update status response message `executing` on `te/device/main///cmd/software_update/123`.
+        let mqtt_schema = MqttSchema::default();
+        let device = EntityTopicId::default_main_device();
+        let request = SoftwareUpdateCommand::new(&device, "c8y-mapper-123".to_string());
+        let response = request.with_status(CommandStatus::Executing);
+        mqtt.send(response.command_message(&mqtt_schema))
+            .await
+            .expect("Send failed");
+
+        // Expect `504` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,123")]).await;
+
+        // Prepare and publish a software update response `successful`.
+        let response = response.with_status(CommandStatus::Successful);
+        mqtt.send(response.command_message(&mqtt_schema))
+            .await
+            .expect("Send failed");
+
+        // Expect `506` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,123")]).await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
+
+        // The successful state is cleared
+        assert_received_contains_str(
+            &mut mqtt,
+            [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         // Start SM Mapper
         let ttd = TempTedgeDir::new();
@@ -241,6 +300,57 @@ mod tests {
             [(
                 "c8y/s/us",
                 "502,c8y_SoftwareUpdate,Partial failure: Couldn't install collectd and nginx",
+            )],
+        )
+        .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
+
+        // The failed state is cleared
+        assert_received_contains_str(
+            &mut mqtt,
+            [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn mapper_publishes_software_update_failed_status_onto_c8y_topic_with_op_id() {
+        // Start SM Mapper
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        skip_init_messages(&mut mqtt).await;
+
+        // The agent publish an error
+        let mqtt_schema = MqttSchema::default();
+        let device = EntityTopicId::default_main_device();
+        let response = SoftwareUpdateCommand::new(&device, "c8y-mapper-123".to_string())
+            .with_error("Partial failure: Couldn't install collectd and nginx".to_string());
+        mqtt.send(response.command_message(&mqtt_schema))
+            .await
+            .expect("Send failed");
+
+        // `505` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "c8y/s/us",
+                "505,123,Partial failure: Couldn't install collectd and nginx",
             )],
         )
         .await;
