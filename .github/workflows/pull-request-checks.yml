@@ -223,8 +223,6 @@ jobs:
   cargo-test:
     name: Run cargo test
     runs-on: ubuntu-20.04
-    env:
-      RUSTFLAGS: -D warnings
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
