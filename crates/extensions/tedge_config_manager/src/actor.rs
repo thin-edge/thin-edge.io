@@ -5,7 +5,6 @@ use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use serde_json::json;
-use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::os::unix::fs::fchown;
 use std::os::unix::fs::MetadataExt;
@@ -58,7 +57,6 @@ fan_in_message_type!(ConfigInput[ConfigOperation, FsWatchEvent] : Debug);
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
     plugin_config: PluginConfig,
-    pending_operations: HashMap<String, ConfigOperation>,
     input_receiver: LoggingReceiver<ConfigInput>,
     output_sender: LoggingSender<ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
@@ -75,7 +73,6 @@ impl Actor for ConfigManagerActor {
         let mut worker = ConfigManagerWorker {
             config: Arc::from(self.config),
             plugin_config: self.plugin_config,
-            pending_operations: self.pending_operations,
             output_sender: self.output_sender,
             downloader: self.downloader,
             uploader: self.uploader,
@@ -114,7 +111,6 @@ impl ConfigManagerActor {
         ConfigManagerActor {
             config,
             plugin_config,
-            pending_operations: HashMap::new(),
             input_receiver,
             output_sender,
             downloader,
@@ -127,7 +123,6 @@ impl ConfigManagerActor {
 struct ConfigManagerWorker {
     config: Arc<ConfigManagerConfig>,
     plugin_config: PluginConfig,
-    pending_operations: HashMap<String, ConfigOperation>,
     output_sender: LoggingSender<ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
     uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
@@ -210,12 +205,7 @@ impl ConfigManagerWorker {
             .await
         {
             Ok(upload_result) => {
-                self.pending_operations.insert(
-                    topic.name.clone(),
-                    ConfigOperation::Snapshot(topic.clone(), request),
-                );
-
-                self.process_uploaded_config(&topic.name, upload_result)
+                self.process_uploaded_config(topic, upload_result, request)
                     .await?;
             }
             Err(error) => {
@@ -303,32 +293,29 @@ impl ConfigManagerWorker {
 
     async fn process_uploaded_config(
         &mut self,
-        topic: &str,
+        topic: Topic,
         result: UploadResult,
+        mut request: ConfigSnapshotCmdPayload,
     ) -> Result<(), ChannelError> {
-        if let Some(ConfigOperation::Snapshot(topic, mut request)) =
-            self.pending_operations.remove(topic)
-        {
-            match result {
-                Ok(response) => {
-                    request.successful(response.file_path.as_str());
-                    info!(
-                        "Config Snapshot request processed for config type: {}.",
-                        request.config_type
-                    );
-                    self.publish_command_status(ConfigOperation::Snapshot(topic, request))
-                        .await?;
-                }
-                Err(err) => {
-                    let error_message = format!(
-                        "config-manager failed uploading configuration snapshot: {}",
-                        err
-                    );
-                    request.failed(&error_message);
-                    error!("{}", error_message);
-                    self.publish_command_status(ConfigOperation::Snapshot(topic, request))
-                        .await?;
-                }
+        match result {
+            Ok(response) => {
+                request.successful(response.file_path.as_str());
+                info!(
+                    "Config Snapshot request processed for config type: {}.",
+                    request.config_type
+                );
+                self.publish_command_status(ConfigOperation::Snapshot(topic, request))
+                    .await?;
+            }
+            Err(err) => {
+                let error_message = format!(
+                    "config-manager failed uploading configuration snapshot: {}",
+                    err
+                );
+                request.failed(&error_message);
+                error!("{}", error_message);
+                self.publish_command_status(ConfigOperation::Snapshot(topic, request))
+                    .await?;
             }
         }
 
@@ -342,12 +329,7 @@ impl ConfigManagerWorker {
     ) -> Result<(), ChannelError> {
         match self.execute_config_update_request(&topic, &request).await {
             Ok(download_result) => {
-                self.pending_operations.insert(
-                    topic.name.clone(),
-                    ConfigOperation::Update(topic.clone(), request),
-                );
-
-                self.process_downloaded_config(&topic.name, download_result)
+                self.process_downloaded_config(topic, download_result, request)
                     .await?;
             }
             Err(error) => {
@@ -399,15 +381,10 @@ impl ConfigManagerWorker {
 
     async fn process_downloaded_config(
         &mut self,
-        topic: &str,
+        topic: Topic,
         result: DownloadResult,
+        mut request: ConfigUpdateCmdPayload,
     ) -> Result<(), ChannelError> {
-        let Some(ConfigOperation::Update(topic, mut request)) =
-            self.pending_operations.remove(topic)
-        else {
-            return Ok(());
-        };
-
         let response = match result {
             Ok(response) => response,
             Err(err) => {
