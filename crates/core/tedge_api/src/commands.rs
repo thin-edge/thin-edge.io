@@ -548,12 +548,6 @@ impl SoftwareUpdateCommand {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SoftwareInfo {
-    pub update_list: Vec<SoftwareRequestResponseSoftwareList>,
-}
-
 /// Sub list of modules grouped by plugin type.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -932,14 +926,6 @@ impl ConfigUpdateCmdPayload {
         self.status = CommandStatus::Successful;
         self.path = Some(path.into())
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigInfo {
-    #[serde(rename = "type")]
-    pub config_type: String,
-    pub remote_url: Option<String>,
 }
 
 /// Command to update the device firmware

@@ -3,12 +3,12 @@ use download::DownloadInfo;
 use mqtt_channel::Topic;
 use serde::Deserialize;
 use std::collections::HashMap;
-use tedge_api::commands::ConfigInfo;
-use tedge_api::commands::FirmwareInfo;
-use tedge_api::commands::SoftwareInfo;
 use tedge_api::commands::SoftwareModuleAction;
 use tedge_api::commands::SoftwareModuleItem;
 use tedge_api::commands::SoftwareRequestResponseSoftwareList;
+use tedge_api::device_profile::ConfigPayload;
+use tedge_api::device_profile::FirmwarePayload;
+use tedge_api::device_profile::SoftwarePayload;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareModuleUpdate;
@@ -208,11 +208,11 @@ pub struct C8ySoftwareUpdate {
     pub lists: Vec<C8ySoftwareUpdateModule>,
 }
 
-impl TryFrom<C8ySoftwareUpdate> for SoftwareInfo {
+impl TryFrom<C8ySoftwareUpdate> for SoftwarePayload {
     type Error = C8yJsonOverMqttDeserializerError;
 
     fn try_from(value: C8ySoftwareUpdate) -> Result<Self, Self::Error> {
-        let mut software_info = SoftwareInfo {
+        let mut software_info = SoftwarePayload {
             update_list: Vec::new(),
         };
 
@@ -449,9 +449,9 @@ pub struct C8yDownloadConfigFile {
     pub url: String,
 }
 
-impl From<C8yDownloadConfigFile> for ConfigInfo {
+impl From<C8yDownloadConfigFile> for ConfigPayload {
     fn from(value: C8yDownloadConfigFile) -> Self {
-        ConfigInfo {
+        ConfigPayload {
             config_type: value.config_type,
             remote_url: Some(value.url),
         }
@@ -482,9 +482,9 @@ pub struct C8yFirmware {
     pub url: String,
 }
 
-impl From<C8yFirmware> for FirmwareInfo {
+impl From<C8yFirmware> for FirmwarePayload {
     fn from(value: C8yFirmware) -> Self {
-        FirmwareInfo {
+        FirmwarePayload {
             name: Some(value.name),
             version: Some(value.version),
             remote_url: Some(value.url),
@@ -1015,7 +1015,7 @@ mod tests {
                     "payload": {
                         "name": "core-image-tedge-rauc",
                         "version": "20240430.1139",
-                        "url": "http://www.example.url/inventory/binaries/43226"
+                        "remoteUrl": "http://www.example.url/inventory/binaries/43226"
                     }
                 },
                 {
