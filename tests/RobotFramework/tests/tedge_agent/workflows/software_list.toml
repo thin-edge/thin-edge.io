@@ -1,7 +1,7 @@
 operation = "software_list"                            # A built in operation can be overridden 
 
 [init]
-script = "/etc/tedge/operations/init-software-list.sh ${.topic}" # The json output of the script is used for the next step
+script = "/etc/tedge/operations/echo-as-json.sh status scheduled"
 on_stdout = ["scheduled"]
 
 [scheduled]
