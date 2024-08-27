@@ -24,13 +24,11 @@ Send device profile operation from Cumulocity IoT
     ${PROFILE_NAME}=    Set Variable    Test Profile
     ${PROFILE_PAYLOAD}=    Catenate    SEPARATOR=\n    {
     ...    "c8y_DeviceProfile":{
-    # ...        "firmware":[
-    # ...            {
-    # ...                "name":"tedge-core",
-    # ...                "version":"1.0.0",
-    # ...                "url":""
-    # ...            }
-    # ...        ],
+    ...        "firmware": {
+    ...            "name":"tedge-core",
+    ...            "version":"1.0.0",
+    ...            "url":"https://abc.com/some/firmware/url"
+    ...        },
     ...        "software":[
     ...            {
     ...                "name":"jq",
@@ -73,15 +71,15 @@ Send device profile operation locally
     ...      "name": "dev-profile",
     ...      "version": "v2",
     ...      "operations": [
-    # ...        {
-    # ...          "operation": "firmware_update",
-    # ...          "skip": true,
-    # ...          "payload": {
-    # ...            "name": "core-image-tedge-rauc",
-    # ...            "remoteUrl": "https://abc.com/some/firmware/url",
-    # ...            "version": "20240430.1139"
-    # ...          }
-    # ...        },
+    ...        {
+    ...          "operation": "firmware_update",
+    ...          "skip": false,
+    ...          "payload": {
+    ...            "name": "tedge-core",
+    ...            "remoteUrl": "https://abc.com/some/firmware/url",
+    ...            "version": "1.0.0"
+    ...          }
+    ...        },
     ...        {
     ...          "operation": "software_update",
     ...          "skip": false,

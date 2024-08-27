@@ -261,7 +261,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url"
                             }
                         },
                         {
@@ -381,7 +381,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url"
                             }
                         },
                         {
@@ -489,7 +489,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url"
                             }
                         },
                         {
@@ -599,7 +599,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://127.0.0.1:8001/c8y/test/firmware/123456"
+                                "remoteUrl": "http://127.0.0.1:8001/c8y/test/firmware/123456"
                             }
                         },
                         {
@@ -708,7 +708,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url"
                             }
                         },
                         {
@@ -898,7 +898,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url"
                             }
                         },
                         {
@@ -978,7 +978,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "url": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url"
                             }
                         },
                         {
@@ -1094,7 +1094,7 @@ mod tests {
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
-                            "url": "http://www.my.url"
+                            "remoteUrl": "http://www.my.url"
                         }
                     },
                     {
@@ -1185,7 +1185,7 @@ mod tests {
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
-                            "url": "http://www.my.url"
+                            "remoteUrl": "http://www.my.url"
                         }
                     },
                     {
@@ -1247,7 +1247,7 @@ mod tests {
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
-                            "url": "http://www.my.url"
+                            "remoteUrl": "http://www.my.url"
                         }
                     },
                     {
@@ -1474,7 +1474,7 @@ mod tests {
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
-                            "url": "http://www.my.url"
+                            "remoteUrl": "http://www.my.url"
                         }
                     },
                     {
@@ -1564,7 +1564,7 @@ mod tests {
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
-                            "url": "http://www.my.url"
+                            "remoteUrl": "http://www.my.url"
                         }
                     },
                     {
