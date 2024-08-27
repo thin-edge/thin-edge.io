@@ -549,3 +549,58 @@ async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), an
 
     Ok(())
 }
+
+/// Check that requests are processed concurrently by publishing many requests at once and verifying
+/// that download/upload requests for all of them are also sent immediately.
+#[tokio::test]
+async fn config_manager_processes_concurrently() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, mut downloader, mut uploader) =
+        spawn_config_manager_actor(tempdir.path()).await;
+
+    let num_requests = 5;
+
+    // Let's ignore the reload messages sent on start
+    mqtt.skip(2).await;
+
+    let snapshot_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
+
+    let snapshot_request = r#"
+        {
+            "status": "executing",
+            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234",
+            "type": "type_two"
+        }"#;
+
+    let update_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
+
+    let update_request = r#"
+        {
+            "status": "executing",
+            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234",
+            "remoteUrl": "http://www.remote.url",
+            "type": "type_two"
+        }"#;
+
+    for _ in 0..num_requests {
+        mqtt.send(MqttMessage::new(&snapshot_topic, snapshot_request).with_retain())
+            .await?;
+
+        mqtt.send(MqttMessage::new(&update_topic, update_request).with_retain())
+            .await?;
+    }
+
+    // Assert we started downloads/upload on all requests.
+    for _ in 0..num_requests {
+        uploader
+            .recv()
+            .await
+            .expect("upload request should've been sent by config manager for config snapshot");
+        downloader
+            .recv()
+            .await
+            .expect("download request should've been sent by config manager for config update");
+    }
+
+    Ok(())
+}
