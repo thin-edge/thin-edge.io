@@ -204,16 +204,18 @@ impl ConfigManagerWorker {
             .execute_config_snapshot_request(&topic, &mut request)
             .await
         {
-            Ok(upload_result) => {
-                self.process_uploaded_config(topic, upload_result, request)
+            Ok(file_path) => {
+                request.successful(file_path.as_str());
+                info!(
+                    "Config Snapshot request processed for config type: {}.",
+                    request.config_type
+                );
+                self.publish_command_status(ConfigOperation::Snapshot(topic, request))
                     .await?;
             }
             Err(error) => {
-                let error_message = format!(
-                    "Failed to initiate configuration snapshot upload to file-transfer service: {error}",
-                );
-                request.failed(&error_message);
-                error!("{}", error_message);
+                request.failed(error.to_string());
+                error!("config-manager failed to process config snapshot: {error}");
                 self.publish_command_status(ConfigOperation::Snapshot(topic, request))
                     .await?;
             }
@@ -225,7 +227,7 @@ impl ConfigManagerWorker {
         &mut self,
         topic: &Topic,
         request: &mut ConfigSnapshotCmdPayload,
-    ) -> Result<UploadResult, ConfigManagementError> {
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
         let file_entry = self
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
@@ -253,7 +255,10 @@ impl ConfigManagerWorker {
             .await_response((topic.name.clone(), upload_request))
             .await?;
 
-        Ok(upload_result)
+        let upload_response =
+            upload_result.context("config-manager failed uploading configuration snapshot")?;
+
+        Ok(upload_response.file_path)
     }
 
     fn create_tedge_url_for_config_operation(
@@ -291,54 +296,24 @@ impl ConfigManagerWorker {
         ))
     }
 
-    async fn process_uploaded_config(
-        &mut self,
-        topic: Topic,
-        result: UploadResult,
-        mut request: ConfigSnapshotCmdPayload,
-    ) -> Result<(), ChannelError> {
-        match result {
-            Ok(response) => {
-                request.successful(response.file_path.as_str());
-                info!(
-                    "Config Snapshot request processed for config type: {}.",
-                    request.config_type
-                );
-                self.publish_command_status(ConfigOperation::Snapshot(topic, request))
-                    .await?;
-            }
-            Err(err) => {
-                let error_message = format!(
-                    "config-manager failed uploading configuration snapshot: {}",
-                    err
-                );
-                request.failed(&error_message);
-                error!("{}", error_message);
-                self.publish_command_status(ConfigOperation::Snapshot(topic, request))
-                    .await?;
-            }
-        }
-
-        Ok(())
-    }
-
     async fn handle_config_update_request(
         &mut self,
         topic: Topic,
         mut request: ConfigUpdateCmdPayload,
     ) -> Result<(), ChannelError> {
         match self.execute_config_update_request(&topic, &request).await {
-            Ok(download_result) => {
-                self.process_downloaded_config(topic, download_result, request)
+            Ok(deployed_to_path) => {
+                request.successful(deployed_to_path);
+                info!(
+                    "Config Update request processed for config type: {}.",
+                    request.config_type
+                );
+                self.publish_command_status(ConfigOperation::Update(topic, request))
                     .await?;
             }
             Err(error) => {
-                let error_message = format!(
-                    "config-manager failed to start downloading configuration: {}",
-                    error
-                );
-                request.failed(&error_message);
-                error!("{}", error_message);
+                request.failed(error.to_string());
+                error!("config-manager failed to process config update: {error}");
                 self.publish_command_status(ConfigOperation::Update(topic, request))
                     .await?;
             }
@@ -350,7 +325,7 @@ impl ConfigManagerWorker {
         &mut self,
         topic: &Topic,
         request: &ConfigUpdateCmdPayload,
-    ) -> Result<DownloadResult, ConfigManagementError> {
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
         let file_entry = self
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
@@ -376,62 +351,18 @@ impl ConfigManagerWorker {
             .await_response((topic.name.clone(), download_request))
             .await?;
 
-        Ok(download_result)
-    }
+        let download_response =
+            download_result.context("config-manager failed downloading a file")?;
 
-    async fn process_downloaded_config(
-        &mut self,
-        topic: Topic,
-        result: DownloadResult,
-        mut request: ConfigUpdateCmdPayload,
-    ) -> Result<(), ChannelError> {
-        let response = match result {
-            Ok(response) => response,
-            Err(err) => {
-                let err =
-                    anyhow::Error::from(err).context("config-manager failed downloading a file");
-                let error_message = format!("{err:#}");
-                request.failed(&error_message);
-                error!("{}", error_message);
-                self.publish_command_status(ConfigOperation::Update(topic, request))
-                    .await?;
-                return Ok(());
-            }
-        };
-
-        // new config was downloaded into tmpdir, we need to write it into destination using tedge-write
-        let from = Utf8Path::from_path(response.file_path.as_path()).unwrap();
-
-        let deployed_to_path = match self.deploy_config_file(from, &request.config_type) {
-            Ok(path) => path,
-            Err(err) => {
-                let error_message =
-                    format!("config-manager failed writing updated configuration file: {err}",);
-
-                request.failed(&error_message);
-                error!("{}", error_message);
-                self.publish_command_status(ConfigOperation::Update(topic, request))
-                    .await?;
-
-                // TODO: source temporary file should be cleaned up automatically
-                let _ = std::fs::remove_file(from);
-
-                return Ok(());
-            }
-        };
-
-        request.successful(deployed_to_path);
-        info!(
-            "Config Update request processed for config type: {}.",
-            request.config_type
-        );
-        self.publish_command_status(ConfigOperation::Update(topic, request))
-            .await?;
+        let from = Utf8Path::from_path(download_response.file_path.as_path()).unwrap();
+        let deployed_to_path = self
+            .deploy_config_file(from, &request.config_type)
+            .context("failed to deploy configuration file")?;
 
         // TODO: source temporary file should be cleaned up automatically
         let _ = std::fs::remove_file(from);
 
-        Ok(())
+        Ok(deployed_to_path)
     }
 
     /// Deploys the new version of the configuration file and returns the path under which it was
