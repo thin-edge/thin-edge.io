@@ -23,7 +23,6 @@ Send device profile operation from Cumulocity IoT
 
     ${PROFILE_NAME}=    Set Variable    Test Profile
     ${PROFILE_PAYLOAD}=    Catenate    SEPARATOR=\n    {
-    ...    "c8y_DeviceProfile":{
     ...        "firmware": {
     ...            "name":"tedge-core",
     ...            "version":"1.0.0",
@@ -50,15 +49,13 @@ Send device profile operation from Cumulocity IoT
     ...                "url":"${config_url}"
     ...            }
     ...        ]
-    ...    }}
+    ...    }
 
-    ${operation}=    Create And Apply Device Profile    ${PROFILE_NAME}    ${PROFILE_PAYLOAD}    ${DEVICE_SN}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
-    ${profile_id}=    Get From Dictionary    ${operation}    profileId
-    Managed Object Should Have Fragment Values    c8y_Profile.profileName\=${PROFILE_NAME}    c8y_Profile.profileExecuted\=true
-    Execute Command    dpkg -l | grep jq
-    Execute Command    dpkg -l | grep tree
-    [Teardown]    Delete Managed Object    ${profile_id}
+    ${profile}=    Cumulocity.Create Device Profile    ${PROFILE_NAME}    ${PROFILE_PAYLOAD}
+    ${operation}=    Cumulocity.Install Device Profile    ${profile["id"]}
+    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Should Have Device Profile Installed    ${profile["id"]}
+    Device Should Have Installed Software    {"name": "jq"}    {"name": "tree"}
 
 Send device profile operation locally
     ${config_url}=    Set Variable    http://localhost:8000/tedge/file-transfer/main/config_update/robot-123

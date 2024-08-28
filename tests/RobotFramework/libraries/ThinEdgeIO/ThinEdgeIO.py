@@ -140,57 +140,6 @@ class ThinEdgeIO(DeviceLibrary):
         # self.remove_certificate_and_device(self.current)
         super().end_test(_data, result)
 
-    @keyword("Create And Apply Device Profile")
-    def create_and_apply_device_profile(
-        self,
-        profile_name: str,
-        profile_definition: Union[Dict[str, Any], str],
-        device_id: str,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Create a new device profile in Cumulocity and apply it
-
-        Args:
-            profile_name (str): Name of the device profile
-            profile_definition (Union[Dict[str, Any], str]): Fragments to be included in the profile body.
-                Defaults to {}
-
-        Returns:
-            Dict[str, Any]: The created device profile operation object
-        """
-        if profile_definition is None:
-            profile_definition = {}
-
-        if isinstance(profile_definition, str):
-            profile_definition = json.loads(profile_definition)
-
-        profile_body = {
-            "type": "c8y_Profile",
-            "name": profile_name,
-            "c8y_Filter": {}
-        }
-        profile_body.update(profile_definition)
-
-        url = f"{c8y_lib.c8y.base_url}/inventory/managedObjects"
-
-        response = c8y_lib.c8y.session.post(
-            url,
-            json=profile_body
-        )
-        response.raise_for_status()
-        profile_id = response.json()['id']
-
-        profile_operation = {
-            "profileId": profile_id,
-            "profileName": profile_name,
-        }
-        profile_operation.update(profile_definition)
-
-        c8y_lib.device_should_exist(device_id)
-        operation = c8y_lib.create_operation(fragments=profile_operation, description="Apply device profile " + profile_name)
-
-        return operation
-
     @keyword("Delete Managed Object")
     def delete_managed_object(self, internal_id: str, **kwargs) -> None:
         """Delete managed object and related device user

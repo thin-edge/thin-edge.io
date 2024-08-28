@@ -1,4 +1,3 @@
 
-[apt]
-name = "(tedge|c8y|python|wget|vim|curl|apt|mosquitto|ssh|sudo|rolldice).*"
-maintainer = ".*(thin-edge.io).*"
+[software]
+plugin.exclude = "^(glibc|lib|kernel-|iptables-module).*"

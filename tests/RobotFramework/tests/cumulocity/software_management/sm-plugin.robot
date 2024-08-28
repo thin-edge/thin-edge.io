@@ -76,6 +76,7 @@ sm-plugins download files from Cumulocity
     Should Be Equal    ${downloaded}    Testing a thing
 
 Filter packages list using include pattern
+    Execute Command    sudo tedge config unset software.plugin.exclude
     Execute Command    sudo tedge config set software.plugin.include "^dummy1-[0-1]00[2-4]$"
     Execute Command    sudo tedge config set software.plugin.max_packages 0
     Connect Mapper    c8y
