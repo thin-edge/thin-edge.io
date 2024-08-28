@@ -2,7 +2,7 @@ dateparser~=1.2.0
 paho-mqtt~=1.6.1
 python-dotenv~=1.0.0
 robotframework~=7.0.0
-robotframework-c8y @ git+https://github.com/reubenmiller/robotframework-c8y.git@0.35.2
+robotframework-c8y @ git+https://github.com/reubenmiller/robotframework-c8y.git@0.37.2
 robotframework-debuglibrary~=2.5.0
 robotframework-jsonlibrary~=0.5
 robotframework-pabot~=2.18.0
