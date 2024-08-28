@@ -3861,6 +3861,7 @@ dependencies = [
  "nix",
  "path-clean",
  "tedge_config",
+ "tedge_utils",
  "tempfile",
  "uzers",
  "which",

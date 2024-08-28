@@ -1,3 +1,4 @@
+pub mod atomic;
 pub mod file;
 pub mod fs;
 pub mod paths;

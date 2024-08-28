@@ -6,9 +6,6 @@ use log::error;
 use log::info;
 use serde_json::json;
 use std::io::ErrorKind;
-use std::os::unix::fs::fchown;
-use std::os::unix::fs::MetadataExt;
-use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -34,9 +31,9 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
+use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
 
-use crate::FileEntry;
 use crate::TedgeWriteStatus;
 
 use super::config::PluginConfig;
@@ -386,9 +383,39 @@ impl ConfigManagerWorker {
 
         let to = Utf8PathBuf::from(&file_entry.path);
 
-        let Err(err) = move_file_atomic_set_permissions_if_doesnt_exist(from, file_entry)
-            .with_context(|| format!("failed to deploy config file from '{from}' to '{to}'"))
-        else {
+        let permissions = MaybePermissions {
+            uid: file_entry
+                .file_permissions
+                .user
+                .as_ref()
+                .map(|u| {
+                    uzers::get_user_by_name(&u).with_context(|| format!("no such user: '{u}'"))
+                })
+                .transpose()?
+                .map(|u| u.uid()),
+
+            gid: file_entry
+                .file_permissions
+                .group
+                .as_ref()
+                .map(|g| {
+                    uzers::get_group_by_name(&g).with_context(|| format!("no such group: '{g}'"))
+                })
+                .transpose()?
+                .map(|g| g.gid()),
+
+            mode: file_entry.file_permissions.mode,
+        };
+
+        let src = std::fs::File::open(from)
+            .with_context(|| format!("failed to open source temporary file '{from}'"))?;
+
+        let Err(err) = tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
+            src,
+            &to,
+            &permissions,
+        )
+        .with_context(|| format!("failed to deploy config file from '{from}' to '{to}'")) else {
             return Ok(to);
         };
 
@@ -480,142 +507,6 @@ impl ConfigManagerWorker {
         let state = ConfigOperationData::State(operation);
         self.output_sender.send(state).await
     }
-}
-
-/// Writes a file atomically and optionally sets its permissions.
-///
-/// Setting permissions (owner and group) of a file is a privileged operation so it needs to be run
-/// as root. If the any of the filesystem operations fail due to not having permissions, the
-/// function will return an error.
-///
-/// If the file already exists, its content will be overwritten but its permissions will remain
-/// unchanged.
-///
-/// For deployment of configuration files, we need to create a file atomically because certain
-/// programs might watch configuration file for changes, so if it's not written atomically, then
-/// file might be only partially written and a program trying to read it may crash.
-///
-/// Atomic write of a file consists of creating a temporary file in the same directory, filling it
-/// with correct content and permissions, and only then renaming the temporary into the destination
-/// filename. Because we're never actually writing into the file, we don't need to write permissions
-/// for the destination file, even if it exists. Instead we need only write/execute permissions to
-/// the directory file is located in unless the directory has a sticky bit set. Overwriting a file
-/// will also change its uid/gid/mode, if writing process euid/egid is different from file's
-/// uid/gid. To keep uid/gid the same, after the write we need to do `chown`, and to do it we need
-/// sudo.
-///
-/// # Errors
-///
-/// - `src` doesn't exist
-/// - user or group doesn't exist
-/// - we have no write/execute permissions to the directory
-fn move_file_atomic_set_permissions_if_doesnt_exist(
-    src: &Utf8Path,
-    file_entry: &FileEntry,
-) -> anyhow::Result<()> {
-    let dest = Utf8Path::new(file_entry.path.as_str());
-
-    let target_permissions = config_file_target_permissions(file_entry, dest)
-        .context("failed to compute target permissions of the file")?;
-
-    let mut src_file = std::fs::File::open(src)
-        .with_context(|| format!("failed to open temporary source file '{src}'"))?;
-
-    // TODO: create tests to ensure writes we expect are atomic
-    let mut tempfile = tempfile::Builder::new()
-        .permissions(std::fs::Permissions::from_mode(0o600))
-        .tempfile_in(dest.parent().context("invalid path")?)
-        .with_context(|| format!("could not create temporary file at '{dest}'"))?;
-
-    std::io::copy(&mut src_file, &mut tempfile).context("failed to copy")?;
-
-    tempfile
-        .as_file()
-        .set_permissions(std::fs::Permissions::from_mode(target_permissions.mode))
-        .context("failed to set mode on the destination file")?;
-
-    fchown(
-        tempfile.as_file(),
-        Some(target_permissions.uid),
-        Some(target_permissions.gid),
-    )
-    .context("failed to change ownership of the destination file")?;
-
-    tempfile.as_file().sync_all()?;
-
-    tempfile
-        .persist(dest)
-        .context("failed to persist temporary file at destination")?;
-
-    Ok(())
-}
-
-/// Computes target permissions for deployment of the config file.
-///
-/// - if file exists preserve current permissions
-/// - if it doesn't exist apply permissions from `permissions` if they are defined
-/// - set to root:root with default umask otherwise
-///
-/// # Errors
-/// - if desired user/group doesn't exist on the system
-/// - no permission to read destination file
-fn config_file_target_permissions(
-    file_entry: &FileEntry,
-    dest: &Utf8Path,
-) -> anyhow::Result<Permissions> {
-    let current_file_permissions = match std::fs::metadata(dest) {
-        Err(err) => match err.kind() {
-            ErrorKind::PermissionDenied => return Err(err).context("no permissions"),
-            ErrorKind::NotFound => None,
-            _ => return Err(err).context("unexpected IO error"),
-        },
-        Ok(p) => Some(p),
-    };
-
-    let entry_uid = if let Some(ref u) = file_entry.file_permissions.user {
-        let uid = uzers::get_user_by_name(u)
-            .with_context(|| format!("no such user: '{u}'"))?
-            .uid();
-        Some(uid)
-    } else {
-        None
-    };
-
-    let entry_gid = if let Some(ref g) = file_entry.file_permissions.group {
-        let gid = uzers::get_group_by_name(g)
-            .with_context(|| format!("no such group: '{g}'"))?
-            .gid();
-        Some(gid)
-    } else {
-        None
-    };
-    let entry_mode = file_entry.file_permissions.mode;
-
-    let uid = current_file_permissions
-        .as_ref()
-        .map(|p| p.uid())
-        .or(entry_uid)
-        .unwrap_or(0);
-
-    let gid = current_file_permissions
-        .as_ref()
-        .map(|p| p.gid())
-        .or(entry_gid)
-        .unwrap_or(0);
-
-    let mode = current_file_permissions
-        .as_ref()
-        .map(|p| p.mode())
-        .or(entry_mode)
-        .unwrap_or(0o644);
-
-    Ok(Permissions { uid, gid, mode })
-}
-
-struct Permissions {
-    uid: u32,
-    gid: u32,
-    mode: u32,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
