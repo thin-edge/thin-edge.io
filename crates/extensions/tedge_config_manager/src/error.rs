@@ -35,7 +35,7 @@ pub enum ConfigManagementError {
     #[error(transparent)]
     FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
 
-    #[error(transparent)]
+    #[error("{0:#}")]
     Other(#[from] anyhow::Error),
 }
 

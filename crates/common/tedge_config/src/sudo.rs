@@ -46,6 +46,7 @@ impl SudoCommandBuilder {
     /// prepare a [`Command`](std::process::Command) using sudo. Otherwise,
     /// prepares a Command that starts `program` directly.
     pub fn command<S: AsRef<OsStr>>(&self, program: S) -> Command {
+        let program = program.as_ref();
         if !self.enabled {
             return Command::new(program);
         }
@@ -57,7 +58,7 @@ impl SudoCommandBuilder {
                 c
             }
             Err(_) => {
-                warn!("`sudo.enable` set to `true`, but sudo not found in $PATH");
+                warn!("`sudo.enable` set to `true`, but sudo not found in $PATH, invoking '{}' directly", program.to_string_lossy());
                 Command::new(program)
             }
         }
