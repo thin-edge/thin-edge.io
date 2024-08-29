@@ -11,7 +11,7 @@ use log::error;
 use serde_json::json;
 use std::path::PathBuf;
 use tedge_actors::Builder;
-use tedge_actors::CloneSender;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MappingSender;
@@ -48,8 +48,8 @@ pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
     plugin_config: PluginConfig,
     box_builder: SimpleMessageBoxBuilder<ConfigInput, ConfigOperationData>,
-    download_sender: DynSender<ConfigDownloadRequest>,
-    upload_sender: DynSender<ConfigUploadRequest>,
+    downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
+    uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
 }
 
 impl ConfigManagerBuilder {
@@ -64,10 +64,9 @@ impl ConfigManagerBuilder {
         let plugin_config = PluginConfig::new(config.plugin_config_path.as_path());
         let box_builder = SimpleMessageBoxBuilder::new("Tedge-Config-Manager", 16);
 
-        let download_sender =
-            downloader_actor.connect_client(box_builder.get_sender().sender_clone());
+        let downloader = ClientMessageBox::new(downloader_actor);
 
-        let upload_sender = uploader_actor.connect_client(box_builder.get_sender().sender_clone());
+        let uploader = ClientMessageBox::new(uploader_actor);
 
         fs_notify.connect_sink(
             ConfigManagerBuilder::watched_directory(&config),
@@ -78,8 +77,8 @@ impl ConfigManagerBuilder {
             config,
             plugin_config,
             box_builder,
-            download_sender,
-            upload_sender,
+            downloader,
+            uploader,
         })
     }
 
@@ -189,8 +188,8 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
             self.plugin_config,
             input_receiver,
             output_sender,
-            self.download_sender,
-            self.upload_sender,
+            self.downloader,
+            self.uploader,
         ))
     }
 }
