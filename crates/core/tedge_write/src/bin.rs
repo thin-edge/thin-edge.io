@@ -1,16 +1,10 @@
 // TODO: force `destination_path` to be the first argument in clap
 
-use std::fs;
-use std::io;
-use std::os::unix::fs::chown;
-use std::os::unix::fs::MetadataExt;
-use std::os::unix::fs::PermissionsExt;
-
 use anyhow::bail;
 use anyhow::Context;
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use clap::Parser;
+use tedge_utils::atomic::MaybePermissions;
 
 /// A binary used for writing to files which `tedge` user does not have write permissions for, using
 /// sudo.
@@ -62,133 +56,34 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         );
     }
 
-    let file_existed_before_write = target_filepath.is_file();
+    let mode = args
+        .mode
+        .map(|m| u32::from_str_radix(&m, 8).with_context(|| format!("invalid mode: {m}")))
+        .transpose()?;
 
-    write_stdin_to_file_atomic(&target_filepath)?;
+    let uid = args
+        .user
+        .map(|u| uzers::get_user_by_name(&*u).with_context(|| format!("no such user: '{u}'")))
+        .transpose()?
+        .map(|u| u.uid());
 
-    if file_existed_before_write {
-        return Ok(());
-    }
+    let gid = args
+        .group
+        .map(|g| uzers::get_group_by_name(&*g).with_context(|| format!("no such group: '{g}'")))
+        .transpose()?
+        .map(|g| g.gid());
 
-    if args.user.is_some() || args.group.is_some() {
-        chown_by_user_and_group_name(
-            &target_filepath,
-            args.user.as_deref(),
-            args.group.as_deref(),
-        )
-        .context("Changing ownership of destination file failed")?;
-    }
+    // what permissions we want to set if the file doesn't exist
+    let permissions = MaybePermissions { uid, gid, mode };
 
-    if let Some(mode) = args.mode {
-        let mode = u32::from_str_radix(&mode, 8).context("Parsing mode failed")?;
-        let permissions = fs::Permissions::from_mode(mode);
-        fs::set_permissions(args.destination_path.as_std_path(), permissions)
-            .context("Could not set new permissions")?;
-    }
+    let src = std::io::stdin().lock();
 
-    Ok(())
-}
-
-/// Writes contents of stdin into a file atomically.
-///
-/// To write a file atomically, stdin is written into a temporary file, which is then renamed into the target file.
-/// Because rename is only atomic if both source and destination are on the same filesystem, the temporary file is
-/// located in the same directory as the target file.
-///
-/// Using [`io::copy`], data should be copied using Linux-specific syscalls for copying between file descriptors,
-/// without unnecessary copying to and from a userspace buffer.
-fn write_stdin_to_file_atomic(target_filepath: &Utf8Path) -> anyhow::Result<()> {
-    let temp_filepath = {
-        let Some(temp_filename) = target_filepath.file_name().map(|f| format!("{f}.tmp")) else {
-            bail!("Destination path {target_filepath} does not name a valid filename");
-        };
-        target_filepath.with_file_name(temp_filename)
-    };
-
-    // can fail if no permissions or temporary file already exists
-    let mut temp_file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(temp_filepath.as_std_path())
-        .with_context(|| format!("Could not open temporary file `{temp_filepath}` for writing"))?;
-
-    // If the target file already exists, use the same permissions and uid/gid
-    if target_filepath.is_file() {
-        let target_metadata = target_filepath.metadata().with_context(|| {
-            format!("Could not fetch metadata of target file {target_filepath}")
-        })?;
-
-        let uid = target_metadata.uid();
-        let gid = target_metadata.gid();
-        chown(&temp_filepath, Some(uid), Some(gid))
-            .context("Could not set destination owner/group")?;
-
-        let target_permissions = target_metadata.permissions();
-        temp_file
-            .set_permissions(target_permissions)
-            .with_context(|| {
-                format!("Could not set permissions for temporary file {temp_filepath}")
-            })?;
-    }
-
-    let mut stdin = std::io::stdin().lock();
-    io::copy(&mut stdin, &mut temp_file)
-        .with_context(|| format!("Could not write to the temporary file `{temp_filepath}`"))?;
-
-    if let Err(e) = fs::rename(&temp_filepath, target_filepath)
-        .with_context(|| format!("Could not write to destination file `{target_filepath}`"))
-    {
-        let _ = fs::remove_file(&temp_filepath);
-        return Err(e);
-    }
-    Ok(())
-}
-
-fn chown_by_user_and_group_name(
-    filepath: &Utf8Path,
-    user: Option<&str>,
-    group: Option<&str>,
-) -> anyhow::Result<()> {
-    // if user and group contain only digits, then they're ids
-    let user_id = user.and_then(|u| u.parse::<u32>().ok());
-    let group_id = group.and_then(|g| g.parse::<u32>().ok());
-
-    let new_uid = match user {
-        Some(u) => {
-            if user_id.is_some() {
-                user_id
-            } else {
-                Some(
-                    uzers::get_user_by_name(u)
-                        .with_context(|| format!("User `{u}` does not exist"))?
-                        .uid(),
-                )
-            }
-        }
-        None => None,
-    };
-
-    let new_gid = match group {
-        Some(g) => {
-            if group_id.is_some() {
-                group_id
-            } else {
-                Some(
-                    uzers::get_group_by_name(g)
-                        .with_context(|| format!("Group `{g}` does not exist"))?
-                        .gid(),
-                )
-            }
-        }
-        None => None,
-    };
-
-    nix::unistd::chown(
-        filepath.as_std_path(),
-        new_uid.map(nix::unistd::Uid::from_raw),
-        new_gid.map(nix::unistd::Gid::from_raw),
+    tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
+        src,
+        &target_filepath,
+        &permissions,
     )
-    .with_context(|| format!("chown failed for file `{filepath}`"))?;
+    .with_context(|| format!("failed to write to destination file '{target_filepath}'"))?;
 
     Ok(())
 }
