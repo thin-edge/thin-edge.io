@@ -6,6 +6,8 @@ use camino::Utf8Path;
 use std::process::Command;
 use tedge_config::SudoCommandBuilder;
 
+use crate::TEDGE_WRITE_BINARY;
+
 /// Options for copying files using a `tedge-write` process.
 #[derive(Debug, PartialEq)]
 pub struct CopyOptions<'a> {
@@ -57,7 +59,11 @@ impl<'a> CopyOptions<'a> {
     }
 
     fn command(&self) -> anyhow::Result<Command> {
-        let mut command = self.sudo.command(crate::TEDGE_WRITE_PATH);
+        // if tedge-write is in PATH of tedge process, use it, if not, defer PATH lookup to sudo
+        let tedge_write_binary =
+            which::which_global(TEDGE_WRITE_BINARY).unwrap_or(TEDGE_WRITE_BINARY.into());
+
+        let mut command = self.sudo.command(tedge_write_binary);
 
         let from_reader = std::fs::File::open(self.from)
             .with_context(|| format!("could not open file for reading '{}'", self.from))?;

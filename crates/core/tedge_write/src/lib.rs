@@ -20,7 +20,7 @@
 //!
 //! https://github.com/thin-edge/thin-edge.io/issues/2456
 
-const TEDGE_WRITE_PATH: &str = "/usr/bin/tedge-write";
+const TEDGE_WRITE_BINARY: &str = "tedge-write";
 
 pub mod bin;
 
