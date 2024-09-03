@@ -111,14 +111,14 @@ Execute the following commands:
 
 ```sh
 sudo tedge config set mqtt.client.port 8883
-sudo tedge config set mqtt.client.cafile PATH_TO_CA_CERTIFICATE
+sudo tedge config set mqtt.client.auth.ca_file PATH_TO_CA_CERTIFICATE
 
 # optional
-sudo tedge config set mqtt.client.cadir PATH_TO_CA_CERTIFICATE_DIRECTORY
+sudo tedge config set mqtt.client.auth.ca_dir PATH_TO_CA_CERTIFICATE_DIRECTORY
 ```
 
-`mqtt.client.cafile` and `mqtt.client.cadir` options point to trusted CA
-certificate(s) used to verify the broker. If either is used, server
+`mqtt.client.auth.ca_file` and `mqtt.client.auth.ca_dir` options point to trusted CA
+certificate(s) used by the clients to verify the broker. If either is used, server
 authentication is enabled.
 
 ### Step 3: Restart services
@@ -144,9 +144,9 @@ restart mosquitto service:
 listener 8883
 allow_anonymous false
 require_certificate true
-cafile   PATH_TO_SERVER_CERTIFICATE
-certfile PATH_TO_SERVER_PRIVATE_KEY
-keyfile  PATH_TO_CLIENT_CA_CERTIFICATE
+cafile   PATH_TO_CLIENT_CA_CERTIFICATE
+certfile PATH_TO_SERVER_CERTIFICATE
+keyfile  PATH_TO_SERVER_PRIVATE_KEY
 ```
 
 - `allow_anonymous` disables anonymous access to the listener; connecting
