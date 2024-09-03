@@ -1,5 +1,5 @@
 ---
-title: Configuration Management
+title: Device profile
 tags: [Reference, Device Profile, Firmware Management, Software Management, Configuration Management]
 sidebar_position: 6
 description: Device profile API proposal
