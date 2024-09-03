@@ -54,6 +54,8 @@ impl SudoCommandBuilder {
         match which::which(self.sudo_program.as_ref()) {
             Ok(sudo) => {
                 let mut c = Command::new(sudo);
+                // non-interactive
+                c.arg("-n");
                 c.arg(program);
                 c
             }
