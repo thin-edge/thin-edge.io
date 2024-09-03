@@ -1,3 +1,4 @@
 black~=24.4.2
 invoke~=2.2.0
 pylint~=3.1.0
+robotframework-tidy~=4.14.0
