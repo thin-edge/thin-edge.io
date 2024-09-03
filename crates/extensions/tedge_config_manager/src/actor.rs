@@ -378,7 +378,7 @@ impl ConfigManagerWorker {
         &self,
         from: &Utf8Path,
         config_type: &str,
-    ) -> Result<Utf8PathBuf, ConfigManagementError> {
+    ) -> anyhow::Result<Utf8PathBuf> {
         let file_entry = self.plugin_config.get_file_entry_from_type(config_type)?;
 
         let to = Utf8PathBuf::from(&file_entry.path);
@@ -421,13 +421,13 @@ impl ConfigManagerWorker {
 
         if let Some(io_error) = err.downcast_ref::<std::io::Error>() {
             if io_error.kind() != ErrorKind::PermissionDenied {
-                return Err(err.into());
+                return Err(err);
             }
         }
 
         match self.config.use_tedge_write.clone() {
             TedgeWriteStatus::Disabled => {
-                return Err(err.into());
+                return Err(err);
             }
 
             TedgeWriteStatus::Enabled { sudo } => {
