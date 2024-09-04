@@ -10,7 +10,7 @@ Test Teardown    Get Logs
 *** Test Cases ***
 
 Full supported operations message has no duplicates
-    Should Have MQTT Messages    c8y/s/us    message_pattern=114,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile    minimum=1    maximum=1
+    Should Have MQTT Messages    c8y/s/us    message_pattern=114,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile    minimum=1    maximum=1
 
 Create and publish the tedge agent supported operations on mapper restart
     # stop mapper and remove the supported operations
