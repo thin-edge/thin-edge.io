@@ -239,6 +239,10 @@ impl Agent {
         // Runtime
         let mut runtime = Runtime::new();
 
+        // Load device profile manager before the workflow actor
+        // as it will create the device_profile workflow if it does not already exist
+        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
+
         // Operation workflows
         let workflows = load_operation_workflows(&self.config.operations_dir).await?;
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
@@ -251,8 +255,6 @@ impl Agent {
 
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
-
-        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
 
         // Converter actor
         let mut converter_actor_builder = WorkflowActorBuilder::new(
