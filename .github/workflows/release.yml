@@ -57,7 +57,7 @@ jobs:
         run: cargo release ${{ inputs.bump }} --no-publish --no-push --no-tag -vv --no-confirm --execute
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           commit-message: ${{ inputs.bump }} version bump
           delete-branch: true
