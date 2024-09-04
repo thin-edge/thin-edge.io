@@ -1,11 +1,9 @@
 ---
-title: Device profile
+title: Device profiles
 tags: [Reference, Device Profile, Firmware Management, Software Management, Configuration Management]
 sidebar_position: 6
 description: Device profile API proposal
 ---
-
-# Device profile
 
 A device profile defines any desired combination of firmware, software and associated configurations to be installed on a device.
 Device profiles are used to get a fleet of devices into a consistent and homogeneous state by having the same set of firmware,
