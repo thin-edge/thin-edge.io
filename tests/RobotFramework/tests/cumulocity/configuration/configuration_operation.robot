@@ -54,6 +54,13 @@ Set Configuration when file exists and tedge run by root
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
     ...    agent_as_root=${true}
 
+Set Configuration when tedge-write is in another location
+    [Template]    Set Configuration from Device with tedge-write at another location
+    Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
+    Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+    Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
+    Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+
 Set configuration with broken url
     [Template]    Set Configuration from URL
     Main Device    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
@@ -292,6 +299,62 @@ Set Configuration from Device
             Execute Command    systemctl daemon-reload
             Execute Command    systemctl restart tedge-agent
         END
+    END
+
+Set Configuration from Device with tedge-write at another location
+    [Documentation]
+    ...    Check if config_update still works if `tedge-write` binary is present at another location. For that we need
+    ...    to make sure that other location is in $PATH and that this new $PATH is inherited by tedge-agent, so for the
+    ...    purposes of the test we change $PATH at the tedge-agent systemd service level. We also add a sudoers entry
+    ...    with new path of tedge-write so sudo correcly elevates permissions.
+    [Arguments]
+    ...    ${test_desc}
+    ...    ${device}
+    ...    ${external_id}
+    ...    ${config_type}
+    ...    ${device_file}
+    ...    ${file}
+    ...    ${permission}
+    ...    ${ownership}
+    ...    ${delete_file_before}=${true}
+    [Setup]
+    [Teardown]
+ 
+    Set Device Context    ${device}
+
+    # Have /opt/tedge/bin in $PATH of tedge-agent 
+    Execute Command    mkdir -p /etc/systemd/system/tedge-agent.service.d
+    Execute Command    cmd=echo "[Service]\nEnvironment=\\"PATH=/opt/tedge/bin:$PATH\\"" > /etc/systemd/system/tedge-agent.service.d/10-override-path.conf
+    Execute Command    systemctl daemon-reload
+    Restart Service    tedge-agent
+
+    # put tedge-write in /opt/tedge/bin
+    Execute Command    mkdir -p /opt/tedge/bin
+    Execute Command    mv /usr/bin/tedge-write /opt/tedge/bin/
+    Execute Command
+    ...    echo 'tedge ALL \= (ALL) NOPASSWD: /opt/tedge/bin/tedge-write' > /etc/sudoers.d/20-tedge-opt
+
+    TRY
+        Set Configuration from Device
+        ...    ${test_desc}
+        ...    ${device}
+        ...    ${external_id}
+        ...    ${config_type}
+        ...    ${device_file}
+        ...    ${file}
+        ...    ${permission}
+        ...    ${ownership}
+        ...    ${delete_file_before}
+    FINALLY
+        # cleanup
+        Set Device Context    ${device}
+
+        Execute Command    mv /opt/tedge/bin/tedge-write /usr/bin/
+        Execute Command    rm /etc/sudoers.d/20-tedge-opt
+
+        Execute Command    rm -r /etc/systemd/system/tedge-agent.service.d
+        Execute Command    systemctl daemon-reload
+        Restart Service    tedge-agent
     END
 
 Set Configuration from URL
