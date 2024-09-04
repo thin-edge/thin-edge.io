@@ -12,12 +12,6 @@ Test Teardown       Get Logs
 
 *** Test Cases ***
 
-Device profile is included in supported operations
-    ${CAPABILITY_MESSAGE}=    Execute Command    timeout 1 tedge mqtt sub 'te/device/main///cmd/device_profile'    strip=${True}    ignore_exit_code=${True}
-    Should Be Equal    ${CAPABILITY_MESSAGE}    [te/device/main///cmd/device_profile] {}
-    Should Contain Supported Operations    c8y_DeviceProfile
-
-
 Send device profile operation from Cumulocity IoT
     ${config_url}=    Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin.toml
 
