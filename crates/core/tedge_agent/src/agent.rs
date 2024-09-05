@@ -1,4 +1,4 @@
-use crate::device_profile_manager::DeviceProfileManagerBuilder;
+use crate::device_profile_manager::builder::DeviceProfileManagerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
@@ -239,9 +239,7 @@ impl Agent {
         // Runtime
         let mut runtime = Runtime::new();
 
-        // Load device profile manager before the workflow actor
-        // as it will create the device_profile workflow if it does not already exist
-        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
+        let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
 
         // Operation workflows
         let workflows = load_operation_workflows(&self.config.operations_dir).await?;
@@ -253,8 +251,18 @@ impl Agent {
         // Mqtt actor
         let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config);
 
+        // device_profile_actor_builder.connect_sink(NoConfig, &mqtt_actor_builder);
+
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
+
+        // Load device profile manager before the workflow actor
+        // as it will create the device_profile workflow if it does not already exist
+        let mut device_profile_actor_builder = DeviceProfileManagerBuilder::try_new(
+            mqtt_schema.clone(),
+            &self.config.operations_dir,
+            &mut mqtt_actor_builder,
+        )?;
 
         // Converter actor
         let mut converter_actor_builder = WorkflowActorBuilder::new(
@@ -265,6 +273,7 @@ impl Agent {
         );
         converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         converter_actor_builder.register_builtin_operation(&mut software_update_builder);
+        converter_actor_builder.register_builtin_operation(&mut device_profile_actor_builder);
 
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
@@ -277,7 +286,6 @@ impl Agent {
             service_topic_id,
             device_topic_id: DeviceTopicId::new(self.config.mqtt_device_topic_id.clone()),
         };
-        let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
         let health_actor = HealthMonitorBuilder::from_service_topic_id(
             service,
             &mut mqtt_actor_builder,
@@ -383,6 +391,7 @@ impl Agent {
         }
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
+        runtime.spawn(device_profile_actor_builder).await?;
         runtime.spawn(script_runner).await?;
         runtime.spawn(converter_actor_builder).await?;
         runtime.spawn(health_actor).await?;

@@ -78,6 +78,15 @@ pub struct ConfigPayload {
     pub remote_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceProfileInfo {
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
+
+impl Jsonify for DeviceProfileInfo {}
+
 impl DeviceProfileCmdPayload {
     pub fn add_firmware(&mut self, firmware: FirmwarePayload) {
         let firmware_operation = DeviceProfileOperation {
