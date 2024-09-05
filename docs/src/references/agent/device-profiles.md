@@ -55,7 +55,7 @@ so that the existing profile information is propagated to the cloud as well.
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///twin/device_profile' '{
   "name": "prod-profile",
-  "version: "v1"
+  "version": "v1"
 }'
 ```
 
@@ -288,7 +288,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///twin/device_profile' '{
   "name": "prod-profile",
-  "version: "v2"
+  "version": "v2"
 }'
 ```
 
