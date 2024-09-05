@@ -1,5 +1,5 @@
 *** Comments ***
-#Command to execute:    robot -d \results --timestampoutputs --log http_file_transfer_api.html --report NONE -v BUILD:840 -v HOST:192.168.1.130 thin-edge.io/tests/RobotFramework/tedge/http_file_transfer_api.robot
+# Command to execute:    robot -d \results --timestampoutputs --log http_file_transfer_api.html --report NONE -v BUILD:840 -v HOST:192.168.1.130 thin-edge.io/tests/RobotFramework/tedge/http_file_transfer_api.robot
 
 
 *** Settings ***
@@ -9,12 +9,12 @@ Library             ThinEdgeIO
 Suite Setup         Custom Setup
 Suite Teardown      Custom Teardown
 
-Test Tags          theme:cli    theme:configuration    theme:childdevices
+Test Tags           theme:cli    theme:configuration    theme:childdevices
 
 
 *** Variables ***
-${DEVICE_SN}    # Parent device serial number
-${DEVICE_IP}    # Parent device host name which is reachable
+${DEVICE_SN}    ${EMPTY}    # Parent device serial number
+${DEVICE_IP}    ${EMPTY}    # Parent device host name which is reachable
 ${PORT}=        8000
 
 

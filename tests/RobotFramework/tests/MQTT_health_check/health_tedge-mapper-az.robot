@@ -1,22 +1,25 @@
-#Command to execute:    robot -d \results --timestampoutputs --log health_tedge-mapper-az.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge-mapper-az.robot
+*** Comments ***
+# Command to execute:    robot -d \results --timestampoutputs --log health_tedge-mapper-az.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge-mapper-az.robot
+
 
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Test Tags    theme:monitoring    theme:az
-Suite Setup       Setup
-Suite Teardown    Get Logs
+Suite Setup         Setup
+Suite Teardown      Get Logs
+
+Test Tags           theme:monitoring    theme:az
 
 
 *** Test Cases ***
-
 Stop tedge-mapper-az
     Execute Command    sudo systemctl stop tedge-mapper-az.service
 
 Update the service file
     Execute Command    cmd=sudo sed -i '10iWatchdogSec=30' /lib/systemd/system/tedge-mapper-az.service
-    Execute Command    cmd=sudo sed -i "s/\\\\[Service\\\\]/\\\\0\\\\nEnvironment=\"TEDGE_MQTT_BRIDGE_BUILT_IN=false\"/" /lib/systemd/system/tedge-mapper-az.service
+    Execute Command
+    ...    cmd=sudo sed -i "s/\\\\[Service\\\\]/\\\\0\\\\nEnvironment=\"TEDGE_MQTT_BRIDGE_BUILT_IN=false\"/" /lib/systemd/system/tedge-mapper-az.service
 
 Reload systemd files
     Execute Command    sudo systemctl daemon-reload
@@ -28,6 +31,7 @@ Start watchdog service
     Execute Command    sudo systemctl start tedge-watchdog.service
 
     Sleep    10s
+
 Check PID of tedge-mapper-az
     ${pid}=    Service Should Be Running    tedge-mapper-az
     Set Suite Variable    ${pid}
@@ -62,6 +66,5 @@ Watchdog does not kill mapper if it responds
     Sleep    10s
     ${pid_after_healthcheck}=    Service Should Be Running    tedge-mapper-az
 
-    Should Have MQTT Messages     topic=te/device/main/service/tedge-mapper-az/cmd/health/check    minimum=1
-    Should Be Equal               ${pid_before_healthcheck}    ${pid_after_healthcheck}
-
+    Should Have MQTT Messages    topic=te/device/main/service/tedge-mapper-az/cmd/health/check    minimum=1
+    Should Be Equal    ${pid_before_healthcheck}    ${pid_after_healthcheck}

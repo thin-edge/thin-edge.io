@@ -1,16 +1,16 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource        ../../../resources/common.resource
+Library         Cumulocity
+Library         ThinEdgeIO
 
-Test Tags    theme:c8y    theme:benchmarks    \#2326
-Suite Setup    Suite Setup
-Test Setup    Test Setup
+Suite Setup     Suite Setup
+Test Setup      Test Setup
 
+Test Tags       theme:c8y    theme:benchmarks    \#2326
 # Note: Don't get logs at the end of each test as the benchmarks cause too much noise
 
-*** Test Cases ***
 
+*** Test Cases ***
 Publish measurements varying period
     [Template]    Run Benchmark
     count=500    beats=100    beats_delay=0    period=0:25:100
@@ -30,14 +30,14 @@ Publish measurements varying beats_delay
 
 
 *** Keywords ***
-
 Suite Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
-    Device Should Exist                      ${DEVICE_SN}
+    Device Should Exist    ${DEVICE_SN}
 
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/benchmark.py         /usr/bin/
-    Execute Command    sudo apt-get update && sudo apt-get install -y python3-minimal python3-paho-mqtt --no-install-recommends
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/benchmark.py    /usr/bin/
+    Execute Command
+    ...    sudo apt-get update && sudo apt-get install -y python3-minimal python3-paho-mqtt --no-install-recommends
     Execute Command    benchmark.py configure
 
 Test Setup
@@ -46,4 +46,5 @@ Test Setup
 
 Run Benchmark
     [Arguments]    ${count}    ${beats}    ${beats_delay}    ${period}
-    Execute Command    benchmark.py run --count ${count} --beats ${beats} --beats-delay ${beats_delay} --period ${period} --pretty --qos 0 --verbose
+    Execute Command
+    ...    benchmark.py run --count ${count} --beats ${beats} --beats-delay ${beats_delay} --period ${period} --pretty --qos 0 --verbose

@@ -10,7 +10,6 @@ Test Tags           theme:ca_certificates
 
 
 *** Test Cases ***
-
 Verify Single Certificate File
     [Setup]    Setup With Self-Signed Certificate
     ThinEdgeIO.File Should Exist    /etc/tedge/device-certs/tedge-certificate.pem
@@ -28,13 +27,15 @@ Verify Multiple Certificates in Directory
     ThinEdgeIO.File Should Exist    /etc/tedge/device-certs/tedge-certificate.pem
     ${dir_contents}=    Execute Command    ls /etc/tedge/device-certs
     Log    ${dir_contents}
-    
+
     # List .pem files and check the result
     ${cert_files}=    Execute Command    ls /etc/tedge/device-certs/*.pem
     ${cert_files_list}=    Split String    ${cert_files}    \n
     @{filtered_cert_files}=    Create List
     FOR    ${file}    IN    @{cert_files_list}
-        Run Keyword If    '${file}' != ''    Append To List    ${filtered_cert_files}    ${file}
+        IF    '${file}' != ''
+            Append To List    ${filtered_cert_files}    ${file}
+        END
     END
 
     ${cert_files_length}=    Get Length    ${filtered_cert_files}
@@ -66,6 +67,8 @@ Should Contain Any Line
     [Arguments]    ${text}    ${cert_file}
     ${cert_present}=    Run Keyword And Return Status    Should Contain    ${text}    -----BEGIN CERTIFICATE-----
     ${key_present}=    Run Keyword And Return Status    Should Contain    ${text}    -----BEGIN PRIVATE KEY-----
-    Run Keyword If    ${cert_present}    Log    Certificate found in ${cert_file}
-    Run Keyword If    ${key_present}    Log    Private key found in ${cert_file}
-    Run Keyword If    not ${cert_present} and not ${key_present}    Fail    The file ${cert_file} does not contain a valid certificate or private key.
+    IF    ${cert_present}    Log    Certificate found in ${cert_file}
+    IF    ${key_present}    Log    Private key found in ${cert_file}
+    IF    not ${cert_present} and not ${key_present}
+        Fail    The file ${cert_file} does not contain a valid certificate or private key.
+    END

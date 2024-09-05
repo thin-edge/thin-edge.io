@@ -1,11 +1,13 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource            ../../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
 
-Test Tags    theme:c8y    theme:tokens
-Test Setup    Custom Setup
-Test Teardown    Get Logs
+Test Setup          Custom Setup
+Test Teardown       Get Logs
+
+Test Tags           theme:c8y    theme:tokens
+
 
 *** Test Cases ***
 Retrieve a JWT tokens
@@ -13,6 +15,7 @@ Retrieve a JWT tokens
     Execute Command    tedge mqtt pub c8y/s/uat ''
     ${messages}=    Should Have MQTT Messages    c8y/s/dat    maximum=1    date_from=${start_time}
     Should Contain    ${messages[0]}    71
+
 
 *** Keywords ***
 Custom Setup

@@ -1,13 +1,14 @@
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Test Tags    theme:cli    theme:configuration
-Suite Setup            Custom Setup
-Suite Teardown         Custom Teardown
+Suite Setup         Custom Setup
+Suite Teardown      Custom Teardown
+
+Test Tags           theme:cli    theme:configuration
+
 
 *** Test Cases ***
-
 Check existence of init directories
     [Documentation]    During Custom Setup these folders were removed
     ...    this test step is confirming the deletion of the folders
@@ -43,7 +44,7 @@ Check ownership of the folders
     Check Owner of Directory    /var/log/tedge    tedge:tedge
 
 Change user/group and check the change
-    [Documentation]    Running tedge init --user <user> --group <group>  is setting custom user/group
+    [Documentation]    Running tedge init --user <user> --group <group>    is setting custom user/group
     ...    this test step is confirming the custom values for user/group
     Execute Command    sudo tedge init --user petertest --group petertest
     Check Owner of Directory    /etc/tedge    petertest:petertest
@@ -66,8 +67,8 @@ Tedge init and check if default values are restored
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
 
-*** Keywords ***
 
+*** Keywords ***
 Custom Setup
     Setup
     Execute Command    sudo rm -rf /etc/tedge

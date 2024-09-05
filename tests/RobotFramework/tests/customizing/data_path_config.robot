@@ -1,5 +1,5 @@
 *** Comments ***
-#Command to execute:    robot -d \results --timestampoutputs --log data_path_config.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io/tests/RobotFramework/customizing/data_path_config.robot
+# Command to execute:    robot -d \results --timestampoutputs --log data_path_config.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io/tests/RobotFramework/customizing/data_path_config.robot
 
 
 *** Settings ***
@@ -13,7 +13,7 @@ Library             DebugLibrary
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs
 
-Test Tags          theme:cli    theme:configuration
+Test Tags           theme:cli    theme:configuration
 
 
 *** Test Cases ***

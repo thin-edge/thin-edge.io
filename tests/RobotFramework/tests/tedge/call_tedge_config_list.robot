@@ -25,7 +25,7 @@ Library             ThinEdgeIO
 Suite Setup         Setup
 Suite Teardown      Get Logs
 
-Test Tags          theme:cli    theme:configuration
+Test Tags           theme:cli    theme:configuration
 
 
 *** Test Cases ***
@@ -95,8 +95,10 @@ set/unset c8y.topics
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset c8y.topics
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    c8y.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
-    
+    Should Contain
+    ...    ${unset}
+    ...    c8y.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+
 set/unset c8y.proxy.bind.address
     Execute Command    sudo tedge config set c8y.proxy.bind.address 127.1.1.1    # Changing c8y.proxy.bind.address
     ${set}    Execute Command    tedge config list
@@ -139,7 +141,9 @@ set/unset c8y.proxy.client.port
 
 set/unset c8y.bridge.include.local_cleansession
     # Checking for true
-    Execute Command    sudo tedge config set c8y.bridge.include.local_cleansession true    # Changing c8y.bridge.include.local_cleansession
+    # Changing c8y.bridge.include.local_cleansession
+    Execute Command
+    ...    sudo tedge config set c8y.bridge.include.local_cleansession true
     ${set}    Execute Command    tedge config list
     Should Contain    ${set}    c8y.bridge.include.local_cleansession=true
 
@@ -149,7 +153,7 @@ set/unset c8y.bridge.include.local_cleansession
     Should Contain    ${set}    c8y.bridge.include.local_cleansession=false
 
     # Undo the change by using the 'unset' command, value returns to default one
-    Execute Command    sudo tedge config unset c8y.bridge.include.local_cleansession 
+    Execute Command    sudo tedge config unset c8y.bridge.include.local_cleansession
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    c8y.bridge.include.local_cleansession=auto
 
@@ -199,7 +203,9 @@ set/unset az.topics
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset az.topics
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    az.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+    Should Contain
+    ...    ${unset}
+    ...    az.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 set/unset aws.topics
     Execute Command    sudo tedge config set aws.topics topic1,topic2    # Changing aws.topics
@@ -209,7 +215,9 @@ set/unset aws.topics
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset aws.topics
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    aws.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+    Should Contain
+    ...    ${unset}
+    ...    aws.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 set/unset aws.url
     Execute Command    sudo tedge config set aws.url your-endpoint.amazonaws.com    # Changing aws.url
@@ -237,7 +245,7 @@ set/unset aws.mapper.timestamp
     Should Contain    ${set}    aws.mapper.timestamp=false
 
     # Undo the change by using the 'unset' command, value returns to default one
-        Execute Command    sudo tedge config unset aws.mapper.timestamp
+    Execute Command    sudo tedge config unset aws.mapper.timestamp
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    aws.mapper.timestamp=true
 
@@ -266,7 +274,7 @@ set/unset mqtt.device_topic_id
     ${set}    Execute Command    tedge config list
     Should Contain    ${set}    mqtt.device_topic_id=device/device//
 
-# Undo the change by using the 'unset' command, value returns to default one  
+# Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset mqtt.device_topic_id
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    mqtt.device_topic_id=device/main//
@@ -360,7 +368,7 @@ set/unset software.plugin.max_packages
     Execute Command    sudo tedge config unset software.plugin.max_packages
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    software.plugin.max_packages=1000
-    
+
 set/unset tmp.path
     Execute Command    sudo tedge config set tmp.path /tmp1    # Changing tmp.path
     ${set}    Execute Command    tedge config list
@@ -444,12 +452,12 @@ set/unset mqtt.external.bind.port
 
 mqtt.external.bind.address
     # Changing mqtt.external.bind.address
-    Execute Command     sudo tedge config set mqtt.external.bind.address 0.0.0.0
+    Execute Command    sudo tedge config set mqtt.external.bind.address 0.0.0.0
     ${set}    Execute Command    tedge config list
     Should Contain    ${set}    mqtt.external.bind.address=0.0.0.0
 
     # Undo the change by using the 'unset' command, value returns to default one
-    Execute Command     sudo tedge config unset mqtt.external.bind.address
+    Execute Command    sudo tedge config unset mqtt.external.bind.address
     ${unset}    Execute Command    tedge config list
     Should Not Contain    ${unset}    mqtt.external.bind.address=
 

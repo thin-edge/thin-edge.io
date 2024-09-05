@@ -36,7 +36,8 @@ Setup Child Device
 
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-log-plugin.toml    /etc/tedge/plugins/tedge-log-plugin.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
-    Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
+    Execute Command
+    ...    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
 
     Enable Service    tedge-agent
     Start Service    tedge-agent
@@ -46,7 +47,7 @@ Custom Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $PARENT_SN    ${parent_sn}
-    Execute Command           test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}
@@ -70,12 +71,20 @@ Custom Teardown
     Get Logs    ${CHILD_SN}
 
 Log File Contents Should Be Equal
-    [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8    ${expected_filename}=^${CHILD_XID}_[\\w\\W]+-c8y-mapper-\\d+$    ${expected_mime_type}=text/plain
+    [Arguments]
+    ...    ${operation}
+    ...    ${expected_contents}
+    ...    ${encoding}=utf-8
+    ...    ${expected_filename}=^${CHILD_XID}_[\\w\\W]+-c8y-mapper-\\d+$
+    ...    ${expected_mime_type}=text/plain
     ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
     ${event_id}=    Set Variable    ${event_url_parts}[-2]
     ${contents}=    Cumulocity.Event Should Have An Attachment
     ...    ${event_id}
     ...    expected_contents=${expected_contents}
     ...    encoding=${encoding}
-    ${event}=    Cumulocity.Event Attachment Should Have File Info    ${event_id}    name=${expected_filename}    mime_type=${expected_mime_type}
+    ${event}=    Cumulocity.Event Attachment Should Have File Info
+    ...    ${event_id}
+    ...    name=${expected_filename}
+    ...    mime_type=${expected_mime_type}
     RETURN    ${contents}

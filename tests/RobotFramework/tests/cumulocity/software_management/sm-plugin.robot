@@ -1,20 +1,19 @@
 *** Settings ***
-
 Resource            ../../../resources/common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
 Library             Collections
 
-Test Setup         Custom Setup
-Test Teardown      Custom Teardown
+Test Setup          Custom Setup
+Test Teardown       Custom Teardown
 
 Test Tags           theme:software
 
-*** Test Cases ***
 
+*** Test Cases ***
 Check max_packages default value
     [Documentation]    Don't put an explicit max value to make the test more flexible against future tweaks to the default value.
-    ...                The main point is to prevent accidentally using a small default value which is likely to truncate the packages unexpectedly
+    ...    The main point is to prevent accidentally using a small default value which is likely to truncate the packages unexpectedly
     Execute Command    sudo tedge config unset software.plugin.max_packages
     ${default_value}=    Execute Command    sudo tedge config get software.plugin.max_packages
     Should Be True    int(${default_value}) > 100
@@ -128,19 +127,21 @@ Software updates download software packages only once #3062
     ${OPERATION}=    Install Software    dummy-software,1.0.0::dummy1,${file_url}
     ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     ${op_id}=    Get From Dictionary    ${OPERATION}    id
-    ${count}=    Execute Command    grep Downloading /var/log/tedge/agent/workflow-software_update-c8y-mapper-${op_id}.log -c
+    ${count}=    Execute Command
+    ...    grep Downloading /var/log/tedge/agent/workflow-software_update-c8y-mapper-${op_id}.log -c
     Should Be Equal As Numbers    ${count}    1
+
 
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Set Test Variable    $DEVICE_SN
-    Execute Command           test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
     # Remove any existing packages to allow for exact assertions
-    Execute Command       rm -f /etc/tedge/sm-plugins/*
+    Execute Command    rm -f /etc/tedge/sm-plugins/*
     Transfer To Device    ${CURDIR}/dummy-plugin.sh    /etc/tedge/sm-plugins/dummy1
     Transfer To Device    ${CURDIR}/dummy-plugin.sh    /etc/tedge/sm-plugins/dummy2
-    Transfer To Device    ${CURDIR}/dummy-plugin-2.sh  /etc/tedge/sm-plugins/dummy3
+    Transfer To Device    ${CURDIR}/dummy-plugin-2.sh    /etc/tedge/sm-plugins/dummy3
 
 Custom Teardown
     # Restore sudo in case if the tests are run on a device (and not in a container)
@@ -150,5 +151,6 @@ Custom Teardown
 Set Service User
     [Arguments]    ${SERVICE_NAME}    ${SERVICE_USER}
     Execute Command    mkdir -p /etc/systemd/system/${SERVICE_NAME}.service.d/
-    Execute Command    cmd=printf "[Service]\nUser = ${SERVICE_USER}" | sudo tee /etc/systemd/system/${SERVICE_NAME}.service.d/10-user.conf
+    Execute Command
+    ...    cmd=printf "[Service]\nUser = ${SERVICE_USER}" | sudo tee /etc/systemd/system/${SERVICE_NAME}.service.d/10-user.conf
     Execute Command    systemctl daemon-reload

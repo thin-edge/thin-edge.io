@@ -1,14 +1,15 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource            ../../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
 
-Test Tags    theme:c8y    theme:monitoring
-Test Setup    Test Setup
-Test Teardown    Get Logs
+Test Setup          Test Setup
+Test Teardown       Get Logs
+
+Test Tags           theme:c8y    theme:monitoring
+
 
 *** Test Cases ***
-
 c8y_RequiredAvailability is set by default to an hour
     Execute Command    ./bootstrap.sh
 
@@ -48,17 +49,17 @@ c8y_RequiredAvailability is not set when disabled
     Register child
     Managed Object Should Not Have Fragments    c8y_RequiredAvailability
 
+
 *** Keywords ***
 Test Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
-    Set Test Variable     $DEVICE_SN
+    Set Test Variable    $DEVICE_SN
 
     ${CHILD_SN}=    Get Random Name
     Set Test Variable    $CHILD_SN
     Set Test Variable    $CHILD_XID    ${DEVICE_SN}:device:${CHILD_SN}
 
 Register child
-    [Arguments]
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
     Set Device    ${CHILD_XID}
     Device Should Exist    ${CHILD_XID}

@@ -1,14 +1,13 @@
 *** Settings ***
-Resource    ../../resources/common.resource
+Resource            ../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
+Library             DateTime
 
-Library    Cumulocity
-Library    ThinEdgeIO
-Library    DateTime
+Test Teardown       Get Logs
 
-Test Teardown    Get Logs
 
 *** Test Cases ***
-
 No unexpected child devices created with service autostart
     [Tags]    \#2584
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
@@ -47,9 +46,11 @@ Mapper restart does not alter device hierarchy
     Device Should Exist    ${DEVICE_SN}
 
     ${child_level1}=    Get Random Name
-    Execute Command    tedge mqtt pub --retain 'te/device/${child_level1}//' '{"@id":"${child_level1}","@type":"child-device","@parent":"device/main//","name":"${child_level1}"}'
+    Execute Command
+    ...    tedge mqtt pub --retain 'te/device/${child_level1}//' '{"@id":"${child_level1}","@type":"child-device","@parent":"device/main//","name":"${child_level1}"}'
     ${child_level2}=    Get Random Name
-    Execute Command    tedge mqtt pub --retain 'te/device/${child_level2}//' '{"@id":"${child_level2}","@type":"child-device","@parent":"device/${child_level1}//","name":"${child_level2}"}'
+    Execute Command
+    ...    tedge mqtt pub --retain 'te/device/${child_level2}//' '{"@id":"${child_level2}","@type":"child-device","@parent":"device/${child_level1}//","name":"${child_level2}"}'
 
     Set Device    ${DEVICE_SN}
     Device Should Have A Child Devices    ${child_level1}
@@ -80,4 +81,3 @@ Mapper started early does not miss supported operations
     ...    c8y_UploadConfigFile
     ...    c8y_DownloadConfigFile
     ...    c8y_LogfileRequest
-

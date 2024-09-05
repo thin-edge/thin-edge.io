@@ -1,26 +1,35 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource            ../../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
 
-Test Tags    theme:c8y    theme:software    theme:childdevices
-Test Setup       Custom Setup
-Test Teardown    Custom Teardown
+Test Setup          Custom Setup
+Test Teardown       Custom Teardown
+
+Test Tags           theme:c8y    theme:software    theme:childdevices
+
 
 *** Test Cases ***
 Supported software types should be declared during startup
-    [Documentation]    #2654 This test will be updated once advanced software management support is implemented
     ThinEdgeIO.Set Device Context    ${PARENT_SN}
-    Should Have MQTT Messages    topic=te/device/${CHILD_SN}///cmd/software_list    minimum=1    maximum=1    message_contains="types":["apt"]
-    Should Have MQTT Messages    topic=te/device/${CHILD_SN}///cmd/software_update    minimum=1    maximum=1    message_contains="types":["apt"]
+    Should Have MQTT Messages
+    ...    topic=te/device/${CHILD_SN}///cmd/software_list
+    ...    minimum=1
+    ...    maximum=1
+    ...    message_contains="types":["apt"]
+    Should Have MQTT Messages
+    ...    topic=te/device/${CHILD_SN}///cmd/software_update
+    ...    minimum=1
+    ...    maximum=1
+    ...    message_contains="types":["apt"]
 
 Software list should be populated during startup
     Cumulocity.Should Contain Supported Operations    c8y_SoftwareUpdate
     Device Should Have Installed Software    tedge    timeout=120
 
 Install software via Cumulocity
-    ${OPERATION}=    Install Software        rolldice
-    Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60
+    ${OPERATION}=    Install Software    rolldice
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software    rolldice
 
 
@@ -47,7 +56,7 @@ Custom Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $PARENT_SN    ${parent_sn}
-    Execute Command           test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}
@@ -68,4 +77,3 @@ Custom Setup
 Custom Teardown
     Get Logs    name=${PARENT_SN}
     Get Logs    name=${CHILD_SN}
-

@@ -1,9 +1,8 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    ThinEdgeIO
+Resource        ../../../resources/common.resource
+Library         ThinEdgeIO
 
-Suite Setup    Suite Setup
-
+Suite Setup     Suite Setup
 #
 # Testing against older mosquitto versions is difficult as the there is not
 # an easy way to installed older versions without changing the whole operating system
@@ -13,8 +12,8 @@ Suite Setup    Suite Setup
 # default in Debian bullseye and newer
 #
 
-*** Test Cases ***
 
+*** Test Cases ***
 Default local_cleansession setting
     Configure and Verify local_cleansession setting    default    local_cleansession false
 
@@ -29,19 +28,21 @@ Force exclusion of local_cleansession
 
 
 *** Keywords ***
-
 Configure and Verify local_cleansession setting
     [Arguments]    ${value}    ${expected_value}=${EMPTY}
 
     IF    $value == "default"
         Execute Command    tedge config unset c8y.bridge.include.local_cleansession
     ELSE
-        Execute Command    tedge config set c8y.bridge.include.local_cleansession ${value}    
+        Execute Command    tedge config set c8y.bridge.include.local_cleansession ${value}
     END
-    
+
     Execute Command    tedge reconnect c8y
     Execute Command    grep "^cleansession true" /etc/tedge/mosquitto-conf/c8y-bridge.conf
-    ${local_cleansesion}=    Execute Command    grep "^local_cleansession " /etc/tedge/mosquitto-conf/c8y-bridge.conf    ignore_exit_code=${True}    strip=${True}
+    ${local_cleansesion}=    Execute Command
+    ...    grep "^local_cleansession " /etc/tedge/mosquitto-conf/c8y-bridge.conf
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
     Should Be Equal    ${local_cleansesion}    ${expected_value}
 
     # mosquitto should be running (to validate the configuration)

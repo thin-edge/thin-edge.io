@@ -5,7 +5,7 @@ Library         OperatingSystem
 
 Suite Setup     Custom Setup
 
-Test Tags      theme:mqtt
+Test Tags       theme:mqtt
 
 
 *** Test Cases ***
