@@ -85,7 +85,7 @@ fn declare_supported_operation(config_dir: &Utf8Path) -> miette::Result<()> {
         0o644,
         Some(
             r#"[exec]
-command = "/usr/bin/c8y-remote-access-plugin"
+command = "c8y-remote-access-plugin"
 topic = "c8y/s/ds"
 on_message = "530"
 "#,
