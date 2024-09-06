@@ -12,7 +12,7 @@ Library             Cumulocity
 Library             ThinEdgeIO    adapter=docker
 Library             DebugLibrary
 
-Test Teardown       Get Logs
+Task Teardown       Get Logs
 
 
 *** Variables ***
