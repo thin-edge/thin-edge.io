@@ -260,8 +260,12 @@ Suite Teardown
     Get Logs    name=${CHILD_SN}
 
 Setup Child Device
-    [Arguments]    ${child_sn}    ${parent_ip}    ${install_package}    ${root_certificate}
-    ...    ${client_certificate}    ${client_key}
+    [Arguments]    ${child_sn}
+    ...    ${parent_ip}
+    ...    ${install_package}
+    ...    ${root_certificate}
+    ...    ${client_certificate}
+    ...    ${client_key}
 
     Set Device Context    ${CHILD_SN}
 
@@ -295,8 +299,11 @@ Setup Child Device
     RETURN    ${child_sn}
 
 Setup Main Device Agent
-    [Arguments]    ${root_certificate}    ${agent_certificate}    ${agent_key}
-    ...    ${client_certificate}    ${client_key}
+    [Arguments]    ${root_certificate}
+    ...    ${agent_certificate}
+    ...    ${agent_key}
+    ...    ${client_certificate}
+    ...    ${client_key}
     Set Device Context    ${FTS_SN}
 
     Execute Command    sudo dpkg -i packages/tedge_*.deb
