@@ -1,3 +1,7 @@
+*** Settings ***
+Documentation       Test parameterization
+
+
 *** Variables ***
 # Adapter settings
 ${DEVICE_ADAPTER}       %{DEVICE_ADAPTER=docker}
