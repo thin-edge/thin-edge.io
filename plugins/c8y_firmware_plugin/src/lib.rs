@@ -49,7 +49,7 @@ pub struct FirmwarePluginOpt {
     #[clap(short, long)]
     pub init: bool,
 
-    // [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
     #[clap(
         long = "config-dir",
         default_value = get_config_dir().into_os_string(),

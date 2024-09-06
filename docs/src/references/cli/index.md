@@ -13,7 +13,7 @@ USAGE:
     tedge [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
-        --config-dir <CONFIG_DIR>    [default: /etc/tedge]
+        --config-dir <CONFIG_DIR>    [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
     -h, --help                       Print help information
         --init                       Initialize the tedge
     -V, --version                    Print version information

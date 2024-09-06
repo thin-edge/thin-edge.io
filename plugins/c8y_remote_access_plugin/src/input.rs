@@ -31,7 +31,7 @@ about = clap::crate_description!(),
 arg_required_else_help(true),
 )]
 pub struct C8yRemoteAccessPluginOpt {
-    // [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
     #[clap(
         long = "config-dir",
         default_value = get_config_dir().into_os_string(),

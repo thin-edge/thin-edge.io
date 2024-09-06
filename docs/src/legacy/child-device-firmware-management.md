@@ -86,7 +86,7 @@ USAGE:
 
 OPTIONS:
         --config-dir <CONFIG_DIR>
-            [default: /etc/tedge]
+            [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
 
         --debug
             Turn-on the debug log level.

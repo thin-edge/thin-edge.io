@@ -107,9 +107,23 @@ sudo systemctl restart tedge-agent
 
 `/etc/tedge/tedge.toml` is the default location for %%te%% configuration.
 
-This can be changed by passing an explicit `--config-dir` to all the %%te%% command invocations.
+This can be changed either by setting the `TEDGE_CONFIG_DIR` environment variable, or by passing an explicit `--config-dir` to all the %%te%% command invocations.
 
-For instance, the following uses `/tmp/tedge.toml` to set the `c8y.url` and launch the Cumulocity mapper.
+For instance, the following uses the `TEDGE_CONFIG_DIR` environment variable to change the default configuration directory so that all binaries will the new path.
+
+```sh
+export TEDGE_CONFIG_DIR=/tmp
+tedge config set c8y.url mytenant.cumulocity.com
+tedge-mapper c8y
+
+# Revert back to the default config dir for once-off commands (e.g. /etc/tedge)
+TEDGE_CONFIG_DIR= tedge-mapper c8y
+
+# Or unset the environment variable
+unset TEDGE_CONFIG_DIR
+```
+
+Alternatively, the following sample shows how to use the `--config-dir` flag to change the configuration directory, where the `/tmp/tedge.toml` configuration file will be used to set the `c8y.url` and launch the Cumulocity mapper.
 
 ```sh
 tedge --config-dir /tmp config set c8y.url mytenant.cumulocity.com
