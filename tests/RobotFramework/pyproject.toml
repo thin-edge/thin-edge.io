@@ -17,6 +17,8 @@ exclude = [
 
     # Naming
     "not-allowed-char-in-name",
+    # Some Keywords are more descriptive with the usage of underscore
+    # as they can include important info like 'c8y_Firmware'
     "underscore-in-keyword-name",
     "non-local-variables-should-be-uppercase",
     "section-variable-not-uppercase",
@@ -26,13 +28,6 @@ exclude = [
     # Styling
     "not-capitalized-test-case-title",
     "wrong-case-in-keyword-name",
-
-    # Don't enfource RF 7.0 syntax
-    "replace-set-variable-with-var",
-    "replace-create-with-var",
-
-    # Cleanup
-    "unused-variable",
 ]
 
 configure = [
