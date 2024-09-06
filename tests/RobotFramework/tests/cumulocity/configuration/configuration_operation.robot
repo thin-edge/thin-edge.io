@@ -395,7 +395,7 @@ Get non existent configuration file From Device
     Operation Should Be FAILED    ${operation}    failure_reason=.*No such file or directory.*
 
 Get Configuration from Device
-    [Arguments]    ${test_name}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    [Arguments]    ${description}    ${device}    ${external_id}    ${config_type}    ${device_file}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
