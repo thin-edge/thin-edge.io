@@ -12,6 +12,11 @@ Test Teardown    Get Logs
 Install/uninstall c8y-remote-access-plugin
     Device Should Have Installed Software    c8y-remote-access-plugin
     File Should Exist    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
+
+    # Check that a command is used instead of an explicit path #3111
+    ${executable}=    Execute Command    cmd=grep "^command" /etc/tedge/operations/c8y/c8y_RemoteAccessConnect | cut -d= -f2-    strip=${True}    timeout=5
+    Should Match Regexp    ${executable}    pattern=^"c8y-remote-access-plugin\\b
+
     Execute Command    dpkg -r c8y-remote-access-plugin
     File Should Not Exist    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
 
