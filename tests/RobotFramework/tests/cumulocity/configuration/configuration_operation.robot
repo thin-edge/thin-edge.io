@@ -270,6 +270,7 @@ Set Configuration from Device
     ...    ${ownership}
     ...    ${delete_file_before}=${true}
     ...    ${agent_as_root}=${false}
+    Log    Description: ${test_desc}
 
     IF    ${delete_file_before}
         ThinEdgeIO.Set Device Context    ${device}
@@ -364,6 +365,7 @@ Set Configuration from Device with tedge-write at another location
 
 Set Configuration from URL
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}    ${config_url}
+    Log    Test Description: ${test_desc}
 
     ThinEdgeIO.Set Device Context    ${device}
     ${hash_before}=    Execute Command    md5sum ${device_file}
@@ -380,6 +382,7 @@ Set Configuration from URL
 
 Get Unknown Configuration Type From Device
     [Arguments]    ${test_desc}    ${external_id}    ${config_type}
+    Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
     Operation Should Be FAILED
@@ -388,6 +391,7 @@ Get Unknown Configuration Type From Device
 
 Get non existent configuration file From Device
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     ThinEdgeIO.Execute Command    rm -f ${device_file}
     Cumulocity.Set Device    ${external_id}
@@ -396,6 +400,7 @@ Get non existent configuration file From Device
 
 Get Configuration from Device
     [Arguments]    ${description}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    Log    Test Description: ${description}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
@@ -423,6 +428,7 @@ Get Configuration from Device
 
 Update configuration plugin config via cloud
     [Arguments]    ${test_desc}    ${external_id}
+    Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
@@ -445,6 +451,7 @@ Update configuration plugin config via cloud
 
 Modify configuration plugin config via local filesystem modify inplace
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
@@ -465,6 +472,7 @@ Modify configuration plugin config via local filesystem modify inplace
 
 Modify configuration plugin config via local filesystem overwrite
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -487,6 +495,7 @@ Modify configuration plugin config via local filesystem overwrite
 
 Update configuration plugin config via local filesystem copy
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -509,6 +518,7 @@ Update configuration plugin config via local filesystem copy
 
 Update configuration plugin config via local filesystem move (different directory)
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -531,6 +541,7 @@ Update configuration plugin config via local filesystem move (different director
 
 Update configuration plugin config via local filesystem move (same directory)
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -666,25 +677,21 @@ Publish and Verify Local Command
     [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
 
 Disable config update capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_update false
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Enable config update capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_update true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Disable config snapshot capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_snapshot false
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Enable config snapshot capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_snapshot true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent

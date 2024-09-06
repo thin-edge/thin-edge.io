@@ -15,14 +15,14 @@ thin-edge components support a custom config-dir location via flags
 
     ThinEdgeIO.Directory Should Not Exist    /etc/tedge
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-mapper --config-dir ${CONFIG_DIR} c8y
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-agent --config-dir ${CONFIG_DIR}
-    Should Not Contain Default Path    ${CONFIG_DIR}    c8y-firmware-plugin --config-dir ${CONFIG_DIR}
+    Should Not Contain Default Path    tedge-mapper --config-dir ${CONFIG_DIR} c8y
+    Should Not Contain Default Path    tedge-agent --config-dir ${CONFIG_DIR}
+    Should Not Contain Default Path    c8y-firmware-plugin --config-dir ${CONFIG_DIR}
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-log-plugin --config-dir ${CONFIG_DIR}
+    Should Not Contain Default Path    tedge-log-plugin --config-dir ${CONFIG_DIR}
     ThinEdgeIO.File Should Exist    ${CONFIG_DIR}/plugins/tedge-log-plugin.toml
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-configuration-plugin --config-dir ${CONFIG_DIR}
+    Should Not Contain Default Path    tedge-configuration-plugin --config-dir ${CONFIG_DIR}
     ThinEdgeIO.File Should Exist    ${CONFIG_DIR}/plugins/tedge-configuration-plugin.toml
 
 thin-edge components support a custom config-dir location via an environment variable
@@ -31,15 +31,14 @@ thin-edge components support a custom config-dir location via an environment var
 
     ThinEdgeIO.Directory Should Not Exist    /etc/tedge
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-mapper c8y    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-agent    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
-    Should Not Contain Default Path    ${CONFIG_DIR}    c8y-firmware-plugin    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
+    Should Not Contain Default Path    tedge-mapper c8y    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
+    Should Not Contain Default Path    tedge-agent    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
+    Should Not Contain Default Path    c8y-firmware-plugin    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-log-plugin    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
+    Should Not Contain Default Path    tedge-log-plugin    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
     ThinEdgeIO.File Should Exist    ${CONFIG_DIR}/plugins/tedge-log-plugin.toml
 
     Should Not Contain Default Path
-    ...    ${CONFIG_DIR}
     ...    tedge-configuration-plugin
     ...    env=TEDGE_CONFIG_DIR=${CONFIG_DIR}
     ThinEdgeIO.File Should Exist    ${CONFIG_DIR}/plugins/tedge-configuration-plugin.toml
@@ -88,7 +87,7 @@ Should Not Contain Default Path
     ...    path /etc/tedge
     ...    This is only a rough check, as there is not a clean way to check
     ...    the current configuration of a specific component
-    [Arguments]    ${CONFIG_DIR}    ${COMMAND}    ${env}=
+    [Arguments]    ${COMMAND}    ${env}=
 
     ${LOG_OUTPUT}=    Execute Command
     ...    ${env} timeout -s SIGKILL 5 ${COMMAND}

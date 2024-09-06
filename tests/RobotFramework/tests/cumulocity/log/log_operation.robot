@@ -241,13 +241,11 @@ Log Operation Attachment File Contains
     ...    encoding=utf-8
 
 Disable log upload capability of tedge-agent
-    [Arguments]    ${device_sn}=${DEVICE_SN}
     Execute Command    tedge config set agent.enable.log_upload false
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Enable log upload capability of tedge-agent
-    [Arguments]    ${device_sn}=${DEVICE_SN}
     Execute Command    tedge config set agent.enable.log_upload true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent

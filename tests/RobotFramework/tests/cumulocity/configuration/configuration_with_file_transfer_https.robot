@@ -62,11 +62,9 @@ Configuration operation fails when configuration-plugin does not supply client c
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    device=${CHILD_SN}
     ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
-    ...    device=${CHILD_SN}
     ...    failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8001/c8y/inventory/binaries/.+received fatal alert: CertificateRequired
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
 
@@ -75,7 +73,6 @@ Configuration snapshot fails when mapper does not supply client certificate
     Disable HTTP Client Certificate for Mapper
     Enable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    device=${CHILD_SN}
     ...    failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     [Teardown]    Re-enable HTTP Client Certificate for Mapper
@@ -105,13 +102,13 @@ Get Configuration Should Succeed
     RETURN    ${contents}
 
 Get Configuration Should Fail
-    [Arguments]    ${failure_reason}    ${device}    ${external_id}
+    [Arguments]    ${failure_reason}    ${external_id}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    tedge-configuration-plugin
     Operation Should Be FAILED    ${operation}    failure_reason=${failure_reason}    timeout=120
 
 Update Configuration Should Fail
-    [Arguments]    ${failure_reason}    ${device}    ${external_id}
+    [Arguments]    ${failure_reason}    ${external_id}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
@@ -250,7 +247,6 @@ Suite Setup
     # Child
     Setup Child Device    ${child_sn}    parent_ip=${parent_ip}    install_package=tedge-agent
     ...    root_certificate=${root_certificate}
-    ...    agent_certificate=${agent_certificate}    agent_private_key=${agent_key}
     ...    client_certificate=${client_certificate}    client_key=${client_key}
 
     Setup Main Device Agent    ${root_certificate}    ${agent_certificate}    ${agent_key}
@@ -265,7 +261,6 @@ Suite Teardown
 
 Setup Child Device
     [Arguments]    ${child_sn}    ${parent_ip}    ${install_package}    ${root_certificate}
-    ...    ${agent_certificate}    ${agent_private_key}
     ...    ${client_certificate}    ${client_key}
 
     Set Device Context    ${CHILD_SN}
