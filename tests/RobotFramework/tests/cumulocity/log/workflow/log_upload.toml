@@ -20,6 +20,10 @@ on_error = "failed"
 
 [executing]
   action = "builtin"
+  on_success = "postprocess"      # on_success & on_error can be customized for builtin actions
+
+[postprocess]
+  script = "/usr/bin/log_upload.sh ${.payload.status}"
   on_success = "successful"
 
 [successful]
