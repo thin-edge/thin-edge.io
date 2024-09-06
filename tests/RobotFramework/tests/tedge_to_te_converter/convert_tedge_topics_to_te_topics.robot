@@ -8,7 +8,7 @@ Library             JSONLibrary
 Suite Setup         Custom Setup
 Suite Teardown      Custom Teardown
 
-Test Tags           theme:mqtt    theme:tedge to te
+Test Tags           theme:mqtt    theme:tedge_to_te
 
 
 *** Test Cases ***
