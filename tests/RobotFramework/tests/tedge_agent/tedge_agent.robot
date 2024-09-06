@@ -6,10 +6,10 @@
 
 *** Settings ***
 Resource            ../../resources/common.resource
+Library             Collections
+Library             JSONLibrary
 Library             ThinEdgeIO
 Library             Cumulocity
-Library             JSONLibrary
-Library             Collections
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs    name=${PARENT_SN}

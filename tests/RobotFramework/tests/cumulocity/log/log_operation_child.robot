@@ -1,9 +1,9 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
-Library             Cumulocity
 Library             DateTime
-Library             ThinEdgeIO
 Library             String
+Library             Cumulocity
+Library             ThinEdgeIO
 
 Test Setup          Custom Setup
 Test Teardown       Custom Teardown

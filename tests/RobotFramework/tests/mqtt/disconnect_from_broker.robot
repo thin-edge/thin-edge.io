@@ -1,8 +1,8 @@
 *** Settings ***
 Resource            ../../resources/common.resource
-Library             ThinEdgeIO
-Library             OperatingSystem
 Library             String
+Library             OperatingSystem
+Library             ThinEdgeIO
 
 Suite Teardown      Get Logs
 Test Setup          Setup    skip_bootstrap=True

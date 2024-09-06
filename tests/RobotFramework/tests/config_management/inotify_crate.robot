@@ -4,9 +4,9 @@
 
 *** Settings ***
 Resource            ../../resources/common.resource
+Library             Collections
 Library             ThinEdgeIO
 Library             Cumulocity
-Library             Collections
 
 Test Teardown       Get Logs
 

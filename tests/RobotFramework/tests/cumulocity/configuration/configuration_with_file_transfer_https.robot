@@ -5,9 +5,9 @@ Documentation       This suite aims to test the configuration update and snapsho
 ...                 containers in total.
 
 Resource            ../../../resources/common.resource
+Library             OperatingSystem
 Library             ThinEdgeIO
 Library             Cumulocity
-Library             OperatingSystem
 
 Suite Setup         Suite Setup
 Suite Teardown      Suite Teardown

@@ -1,9 +1,9 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             Collections
+Library             OperatingSystem
 Library             ThinEdgeIO
 Library             Cumulocity
-Library             OperatingSystem
-Library             Collections
 
 Suite Setup         Custom Setup
 Test Setup          Custom Test Setup

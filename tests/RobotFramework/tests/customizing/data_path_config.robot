@@ -4,11 +4,11 @@
 
 *** Settings ***
 Resource            ../../resources/common.resource
-Library             ThinEdgeIO
-Library             Cumulocity
-Library             JSONLibrary
 Library             String
 Library             DebugLibrary
+Library             JSONLibrary
+Library             ThinEdgeIO
+Library             Cumulocity
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs

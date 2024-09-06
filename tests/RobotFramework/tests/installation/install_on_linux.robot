@@ -1,7 +1,7 @@
 *** Settings ***
 Resource        ../../resources/common.resource
-Library         ThinEdgeIO
 Library         Collections
+Library         ThinEdgeIO
 
 Test Tags       theme:installation    test:on_demand
 

@@ -1,8 +1,8 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             Collections
 Library             Cumulocity
 Library             ThinEdgeIO
-Library             Collections
 
 Test Setup          Custom Setup
 Test Teardown       Custom Teardown

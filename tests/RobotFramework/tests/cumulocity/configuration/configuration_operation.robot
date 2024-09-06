@@ -1,8 +1,8 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             OperatingSystem
 Library             ThinEdgeIO
 Library             Cumulocity
-Library             OperatingSystem
 
 Suite Setup         Suite Setup
 Suite Teardown      Get Logs    name=${PARENT_SN}

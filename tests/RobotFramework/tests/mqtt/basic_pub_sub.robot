@@ -1,7 +1,7 @@
 *** Settings ***
 Resource        ../../resources/common.resource
-Library         ThinEdgeIO
 Library         OperatingSystem
+Library         ThinEdgeIO
 
 Suite Setup     Custom Setup
 

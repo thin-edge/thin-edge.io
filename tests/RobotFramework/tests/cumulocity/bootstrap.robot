@@ -1,8 +1,8 @@
 *** Settings ***
 Resource            ../../resources/common.resource
+Library             DateTime
 Library             Cumulocity
 Library             ThinEdgeIO
-Library             DateTime
 
 Test Teardown       Get Logs
 

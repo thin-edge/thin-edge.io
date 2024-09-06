@@ -5,8 +5,8 @@ Documentation       Purpose of this test is to verify that the proper version nu
 ...                 will be shown
 
 Resource            ../../resources/common.resource
-Library             ThinEdgeIO
 Library             String
+Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs

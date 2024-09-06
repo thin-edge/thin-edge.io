@@ -4,8 +4,8 @@
 
 *** Settings ***
 Resource            ../../resources/common.resource
-Library             ThinEdgeIO
 Library             String
+Library             ThinEdgeIO
 Library             Cumulocity
 
 Suite Teardown      Get Logs
