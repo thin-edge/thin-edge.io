@@ -140,6 +140,8 @@ Send device profile operation locally
     # Validate updated config file
     Execute Command    grep "bad toml" /etc/tedge/plugins/tedge-configuration-plugin.toml
 
+    ${twin_messages}    Should Have MQTT Messages    te/device/main///twin/device_profile    message_pattern=.*"name": "dev-profile",.*"version": "v2"   maximum=1    timeout=60
+
     [Teardown]    Execute Command    tedge mqtt pub --retain te/device/main///cmd/device_profile/robot-123 ''
 
 *** Keywords ***

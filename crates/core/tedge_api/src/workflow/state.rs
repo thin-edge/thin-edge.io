@@ -322,6 +322,7 @@ impl GenericCommandState {
                 "payload": self.payload
             })),
             ".topic" => Some(self.topic.name.clone().into()),
+            ".topic.root_prefix" => self.root_prefix().map(|s| s.into()),
             ".topic.target" => self.target().map(|s| s.into()),
             ".topic.operation" => self.operation().map(|s| s.into()),
             ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
@@ -401,6 +402,10 @@ impl GenericCommandState {
         }
         operations.reverse();
         operations
+    }
+
+    pub fn root_prefix(&self) -> Option<String> {
+        MqttSchema::get_root_prefix(&self.topic)
     }
 
     pub fn target(&self) -> Option<String> {
