@@ -190,9 +190,9 @@ Re-enable HTTP Client Certificate for Mapper
     Execute Command    sudo systemctl restart tedge-mapper-c8y
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
-##
-## Setup
-##
+#
+# Setup
+#
 
 Suite Setup
     # Parent
