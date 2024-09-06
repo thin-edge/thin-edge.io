@@ -6,12 +6,11 @@ Library             ThinEdgeIO
 # Test Setup    Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:configuration
+Test Tags           theme:configuration    known-issue
 
 
 *** Test Cases ***
 Startup with invalid system.toml
-    [Tags]    known-issue
     Skip    msg=Known issue. tedge does not startup if the system.toml file contains invalid toml content
     Setup    skip_bootstrap=True
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
@@ -21,7 +20,6 @@ Startup with invalid system.toml
     Device Should Exist    ${DEVICE_SN}
 
 Startup with invalid tedge.toml
-    [Tags]    known-issue
     Skip    msg=Known issue. tedge does not startup if the tedge.toml file contains invalid toml content
     Setup    skip_bootstrap=True
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
