@@ -6,12 +6,13 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use tedge_utils::atomic::MaybePermissions;
 
-/// A binary used for writing to files which `tedge` user does not have write permissions for, using
-/// sudo.
+/// tee-like helper for writing to files which `tedge` user does not have write permissions to.
+///
+/// To be used in combination with sudo, passing the file content via standard input.
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
-#[command(about, version, long_about = None)]
+#[command(about, version, long_about)]
 pub struct Args {
-    /// A canonical path to a file which will be written to.
+    /// A canonical path to a file to which standard input will be written.
     ///
     /// If the file does not exist, it will be created with the specified owner/group/permissions.
     /// If the file does exist, it will be overwritten, but its owner/group/permissions will remain
