@@ -11,7 +11,7 @@ Test Tags           theme:c8y    theme:registration    theme:deregistration
 
 *** Test Cases ***
 Main device registration
-    ${mo}=    Device Should Exist    ${DEVICE_SN}
+    Device Should Exist    ${DEVICE_SN}
     ${mo}=    Cumulocity.Device Should Have Fragment Values    name\=${DEVICE_SN}
     Should Be Equal    ${mo["owner"]}    device_${DEVICE_SN}
     Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
@@ -20,7 +20,7 @@ Child device registration
     Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}"}'
 
     # Check registration
-    ${child_mo}=    Device Should Exist    ${CHILD_SN}
+    Device Should Exist    ${CHILD_SN}
     ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${CHILD_SN}
     Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}    # The parent is the owner of the child
     Should Be Equal    ${child_mo["name"]}    ${CHILD_SN}
@@ -496,7 +496,7 @@ Should Have Retained Message Count
 
 Check Child Device
     [Arguments]    ${parent_sn}    ${child_sn}    ${child_name}    ${child_type}
-    ${child_mo}=    Device Should Exist    ${child_sn}
+    Device Should Exist    ${child_sn}
 
     ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${child_name}
     Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}

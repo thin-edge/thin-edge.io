@@ -15,7 +15,7 @@ Install packages without overwriting config files
     # install package v1
     ${OPERATION}=    Install Software
     ...    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}
-    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
 
     # Modify the config file
     Execute Command    echo "Updated the config" | sudo tee -a /etc/sampledeb.cfg
@@ -35,7 +35,7 @@ Install packages overwrite config files
     # install package v1
     ${OPERATION}=    Install Software
     ...    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}
-    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
 
     # Modify the config file
     Execute Command    echo "Updated the config" | sudo tee -a /etc/sampledeb.cfg

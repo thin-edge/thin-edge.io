@@ -30,7 +30,7 @@ Normal case when the child device does not exist on c8y cloud
 
     # Check created alarm
     Set Device    ${CHILD_XID}
-    ${alarms}=    Device Should Have Alarm/s    minimum=1    maximum=1    # Should be the only alarm there
+    Device Should Have Alarm/s    minimum=1    maximum=1    # Should be the only alarm there
     ${alarms}=    Device Should Have Alarm/s
     ...    minimum=1
     ...    maximum=1
@@ -44,7 +44,7 @@ Normal case when the child device already exists
     ...    sudo tedge mqtt pub 'te/device/${CHILD_SN}///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-02T05:30:45+00:00" }' -q 2 -r
 
     # Check created second alarm
-    ${alarms}=    Device Should Have Alarm/s    minimum=1    maximum=1    updated_after=2021-01-02
+    Device Should Have Alarm/s    minimum=1    maximum=1    updated_after=2021-01-02
     ${alarms}=    Device Should Have Alarm/s
     ...    minimum=1
     ...    maximum=1
@@ -60,7 +60,7 @@ Reconciliation when the new alarm message arrives, restart the mapper
     Execute Command    sudo systemctl start tedge-mapper-c8y.service
 
     # Check created second alarm
-    ${alarms}=    Device Should Have Alarm/s    minimum=1    maximum=1    updated_after=2021-01-03
+    Device Should Have Alarm/s    minimum=1    maximum=1    updated_after=2021-01-03
     ${alarms}=    Device Should Have Alarm/s
     ...    minimum=1
     ...    maximum=1
