@@ -279,7 +279,7 @@ Set Configuration from Device
     # we check that when `tedge` user has permissions to the configuration file's parent directory, tedge-write is not
     # used to deploy the configuration file but a normal write is used; we change path of tedge-write so that test fails
     # if its attempted to be used, the test fails
-    IF    ${agent_as_root} == ${true}
+    IF    ${agent_as_root}
         ThinEdgeIO.Set Device Context    ${device}
         Execute Command    sed 's/User\=tedge/User\=root/' -i /lib/systemd/system/tedge-agent.service
         Execute Command    systemctl daemon-reload
@@ -297,7 +297,7 @@ Set Configuration from Device
         File Checksum Should Be Equal    ${device_file}    ${file}
         Path Should Have Permissions    ${device_file}    ${permission}    ${ownership}
     FINALLY
-        IF    ${agent_as_root} == ${true}
+        IF    ${agent_as_root}
             ThinEdgeIO.Set Device Context    ${device}
             Execute Command    mv /usr/bin/tedge-write.bak /usr/bin/tedge-write
             Execute Command    sed 's/User\=root/User\=tedge/' -i /lib/systemd/system/tedge-agent.service
