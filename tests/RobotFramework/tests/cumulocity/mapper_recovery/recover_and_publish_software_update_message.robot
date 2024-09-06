@@ -6,7 +6,7 @@ Library             ThinEdgeIO
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:c8y    theme:mapper recovery
+Test Tags           theme:c8y    theme:mapper_recovery
 
 
 *** Test Cases ***
