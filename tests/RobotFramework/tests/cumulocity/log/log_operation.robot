@@ -226,8 +226,6 @@ Create Log Request Operation
     ...    ${log_type}
     ...    ${search_text}=${EMPTY}
     ...    ${maximum_lines}=1000
-    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Cumulocity.Create Operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"${log_type}","searchText":"${search_text}","maximumLines":${maximum_lines}}}
