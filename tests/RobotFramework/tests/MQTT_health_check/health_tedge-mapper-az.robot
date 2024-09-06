@@ -1,7 +1,3 @@
-*** Comments ***
-# Command to execute:    robot -d \results --timestampoutputs --log health_tedge-mapper-az.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge-mapper-az.robot
-
-
 *** Settings ***
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO

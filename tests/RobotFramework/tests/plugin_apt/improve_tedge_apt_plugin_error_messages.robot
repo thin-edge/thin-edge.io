@@ -1,7 +1,3 @@
-*** Comments ***
-# Command to execute:    robot -d \results --timestampoutputs --log improve_tedge_apt_plugin_error_messages.html --report NONE --variable HOST:192.168.1.130 /thin-edge.io-fork/tests/RobotFramework/plugin_apt/improve_tedge_apt_plugin_error_messages.robot
-
-
 *** Settings ***
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
