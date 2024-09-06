@@ -39,11 +39,11 @@ Normal case when the child device does not exist on c8y cloud
     ...    severity=CRITICAL
 
 Normal case when the child device already exists
-# Sending child alarm again
+    # Sending child alarm again
     Execute Command
     ...    sudo tedge mqtt pub 'te/device/${CHILD_SN}///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-02T05:30:45+00:00" }' -q 2 -r
 
-# Check created second alarm
+    # Check created second alarm
     ${alarms}=    Device Should Have Alarm/s    minimum=1    maximum=1    updated_after=2021-01-02
     ${alarms}=    Device Should Have Alarm/s
     ...    minimum=1

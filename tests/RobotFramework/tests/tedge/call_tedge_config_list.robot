@@ -264,7 +264,7 @@ set/unset mqtt.topic_root
     ${set}    Execute Command    tedge config list
     Should Contain    ${set}    mqtt.topic_root=tt
 
-# Undo the change by using the 'unset' command, value returns to default one
+    # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset mqtt.topic_root    # Changing mqtt.topic_root
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    mqtt.topic_root=te
@@ -274,7 +274,7 @@ set/unset mqtt.device_topic_id
     ${set}    Execute Command    tedge config list
     Should Contain    ${set}    mqtt.device_topic_id=device/device//
 
-# Undo the change by using the 'unset' command, value returns to default one
+    # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset mqtt.device_topic_id
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    mqtt.device_topic_id=device/main//
