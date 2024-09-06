@@ -43,13 +43,13 @@ Update tedge version from previous using Cumulocity
 
     # Install desired version
     Create Local Repository
-    ${OPERATION}=    Install Software
+    ${operation}=    Install Software
     ...    tedge,${NEW_VERSION}
     ...    tedge-mapper,${NEW_VERSION}
     ...    tedge-agent,${NEW_VERSION}
     ...    tedge-watchdog,${NEW_VERSION}
     ...    tedge-apt-plugin,${NEW_VERSION}
-    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=180
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
     # Software list reported by the former agent, which is still running
     # but formatted with by the c8y-mapper, which has just been installed
