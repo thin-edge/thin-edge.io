@@ -1,8 +1,8 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
 Library             DateTime
-Library             String
 Library             OperatingSystem
+Library             String
 Library             Cumulocity
 Library             ThinEdgeIO
 

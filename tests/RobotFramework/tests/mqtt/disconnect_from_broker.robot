@@ -1,7 +1,7 @@
 *** Settings ***
 Resource            ../../resources/common.resource
-Library             String
 Library             OperatingSystem
+Library             String
 Library             ThinEdgeIO
 
 Suite Teardown      Get Logs
