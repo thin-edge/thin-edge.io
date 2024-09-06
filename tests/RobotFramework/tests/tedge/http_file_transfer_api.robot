@@ -15,7 +15,7 @@ Test Tags           theme:cli    theme:configuration    theme:childdevices
 *** Variables ***
 ${DEVICE_SN}    ${EMPTY}    # Parent device serial number
 ${DEVICE_IP}    ${EMPTY}    # Parent device host name which is reachable
-${PORT}=        8000
+${PORT}         8000
 
 
 *** Test Cases ***
