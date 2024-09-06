@@ -25,7 +25,7 @@ rumqttc = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, default_features = false, features = ["macros"] }
+tokio = { workspace = true, default-features = false, features = ["macros"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
