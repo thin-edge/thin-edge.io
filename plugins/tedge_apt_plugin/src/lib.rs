@@ -11,10 +11,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use tedge_config::get_config_dir;
 use tedge_config::AptConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -24,7 +24,13 @@ use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
     arg_required_else_help(true)
 )]
 pub struct AptCli {
-    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    #[clap(
+        long = "config-dir",
+        default_value = get_config_dir().into_os_string(),
+        hide_env_values = true,
+        hide_default_value = true,
+    )]
     config_dir: PathBuf,
 
     #[clap(subcommand)]

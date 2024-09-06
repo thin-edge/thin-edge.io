@@ -102,7 +102,7 @@ Arguments:
   <VALUE>  Configuration value
 
 Options:
-      --config-dir <CONFIG_DIR>  [default: /etc/tedge]
+      --config-dir <CONFIG_DIR>  [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
   -h, --help                     Print help
 ```
 
@@ -118,6 +118,6 @@ Arguments:
   <VALUE>  Configuration value
 
 Options:
-      --config-dir <CONFIG_DIR>  [default: /etc/tedge]
+      --config-dir <CONFIG_DIR>  [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
   -h, --help                     Print help
 ```

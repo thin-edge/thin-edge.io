@@ -7,9 +7,9 @@ use serde::Deserialize;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
+use tedge_config::get_config_dir;
 use tedge_config::Path;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 use crate::csv::deserialize_csv_record;
 use crate::UNIX_SOCKFILE;
@@ -31,7 +31,13 @@ about = clap::crate_description!(),
 arg_required_else_help(true),
 )]
 pub struct C8yRemoteAccessPluginOpt {
-    #[arg(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    #[clap(
+        long = "config-dir",
+        default_value = get_config_dir().into_os_string(),
+        hide_env_values = true,
+        hide_default_value = true,
+    )]
     config_dir: PathBuf,
 
     #[arg(long)]
