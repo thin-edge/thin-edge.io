@@ -9,7 +9,7 @@ Suite Setup         Custom Setup
 Test Setup          Custom Test Setup
 Test Teardown       Get Logs
 
-Test Tags          theme:tedge_agent
+Test Tags           theme:tedge_agent
 
 
 *** Test Cases ***
