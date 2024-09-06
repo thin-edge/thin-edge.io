@@ -1,6 +1,6 @@
 use std::path::PathBuf;
+use tedge_config::get_config_dir;
 use tedge_config::system_services::*;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 // on linux, we use systemd
 #[cfg(target_os = "linux")]
@@ -32,8 +32,13 @@ pub struct WatchdogOpt {
 
     /// Start the watchdog from custom path
     ///
-    /// WARNING: This is mostly used in testing.
-    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    // [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    #[clap(
+        long = "config-dir",
+        default_value = get_config_dir().into_os_string(),
+        hide_env_values = true,
+        hide_default_value = true,
+    )]
     pub config_dir: PathBuf,
 }
 

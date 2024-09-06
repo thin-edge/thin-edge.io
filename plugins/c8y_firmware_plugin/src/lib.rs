@@ -8,10 +8,10 @@ use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
+use tedge_config::get_config_dir;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::TEdgeConfig;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -49,7 +49,13 @@ pub struct FirmwarePluginOpt {
     #[clap(short, long)]
     pub init: bool,
 
-    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    // [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    #[clap(
+        long = "config-dir",
+        default_value = get_config_dir().into_os_string(),
+        hide_env_values = true,
+        hide_default_value = true,
+    )]
     pub config_dir: PathBuf,
 }
 

@@ -9,7 +9,7 @@ use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_config::get_config_dir;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
@@ -40,7 +40,14 @@ pub enum TEdgeOptMulticall {
         #[clap(subcommand)]
         cmd: TEdgeOpt,
 
-        #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH, global = true)]
+        // [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+        #[clap(
+            long = "config-dir",
+            default_value = get_config_dir().into_os_string(),
+            hide_env_values = true,
+            hide_default_value = true,
+            global = true,
+        )]
         config_dir: PathBuf,
     },
 

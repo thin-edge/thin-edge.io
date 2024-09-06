@@ -13,13 +13,28 @@ use crate::TEdgeConfigReader;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Serialize;
+use std::path::PathBuf;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tracing::debug;
 use tracing::warn;
 
-pub const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
+const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
+const ENV_TEDGE_CONFIG_DIR: &str = "TEDGE_CONFIG_DIR";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";
+
+/// Get the location of the configuration directory
+///
+/// Check if the TEDGE_CONFIG_DIR env variable is set and only
+/// use the value if it is not empty, otherwise use the default
+/// location, /etc/tedge
+pub fn get_config_dir() -> PathBuf {
+    match std::env::var(ENV_TEDGE_CONFIG_DIR) {
+        Ok(s) if !s.is_empty() => PathBuf::from(s),
+        _ => PathBuf::from(DEFAULT_TEDGE_CONFIG_PATH),
+    }
+}
+
 /// Information about where `tedge.toml` is located.
 ///
 /// Broadly speaking, we distinguish two different locations:

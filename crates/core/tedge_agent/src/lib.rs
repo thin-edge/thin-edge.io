@@ -15,9 +15,9 @@ use std::sync::Arc;
 
 use agent::AgentConfig;
 use camino::Utf8PathBuf;
+use tedge_config::get_config_dir;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tracing::log::warn;
 
 mod agent;
@@ -50,8 +50,13 @@ pub struct AgentOpt {
 
     /// Start the agent from custom path
     ///
-    /// WARNING: This is mostly used in testing.
-    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    // [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    #[clap(
+        long = "config-dir",
+        default_value = get_config_dir().into_os_string(),
+        hide_env_values = true,
+        hide_default_value = true,
+    )]
     pub config_dir: Utf8PathBuf,
 
     /// The device MQTT topic identifier
