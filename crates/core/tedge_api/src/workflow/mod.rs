@@ -218,6 +218,22 @@ impl OperationWorkflow {
             });
         }
 
+        let main_operation = operation.to_string();
+        for (_, action) in states.iter() {
+            match action {
+                // A `builtin:<operation>` can only be invoked from the same `<operation>`
+                OperationAction::BuiltInOperation(builtin_operation, _)
+                    if builtin_operation != &main_operation =>
+                {
+                    return Err(WorkflowDefinitionError::InvalidBuiltinOperation {
+                        main_operation,
+                        builtin_operation: builtin_operation.clone(),
+                    })
+                }
+                _ => continue,
+            }
+        }
+
         Ok(OperationWorkflow {
             operation,
             built_in: false,

@@ -20,6 +20,12 @@ pub enum WorkflowDefinitionError {
 
     #[error("The provided target {0} is not a valid path expression")]
     InvalidPathExpression(String),
+
+    #[error("The `builtin:{builtin_operation}` cannot be invoked from `{main_operation}`, but only from `{builtin_operation}`")]
+    InvalidBuiltinOperation {
+        main_operation: String,
+        builtin_operation: String,
+    },
 }
 
 /// Error related to a script definition
