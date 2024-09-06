@@ -280,6 +280,7 @@ pub fn service_monitor_client_config(
         .clone()
         .parse()
         .context("Invalid device_topic_id")?;
+    let prefix = &tedge_config.c8y.bridge.topic_prefix;
 
     let mapper_service_topic_id = entity_topic_id
         .default_service_for_device(c8y_mapper_name)
@@ -294,12 +295,12 @@ pub fn service_monitor_client_config(
         service_type.as_str(),
         "down",
         &[],
-        &tedge_config.c8y.bridge.topic_prefix,
+        prefix,
     )?;
 
     let mqtt_config = tedge_config
         .mqtt_config()?
-        .with_session_name("last_will_c8y_mapper")
+        .with_session_name(format!("last_will_{prefix}_mapper"))
         .with_last_will_message(last_will_message);
     Ok(mqtt_config)
 }
