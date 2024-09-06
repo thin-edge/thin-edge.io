@@ -75,7 +75,7 @@ http-body = "0.4"
 httparse = "1.9.3"
 humantime = "2.1.0"
 hyper = { version = "0.14", default-features = false }
-hyper-rustls = { version = "0.24", default_features = false, features = [
+hyper-rustls = { version = "0.24", default-features = false, features = [
     "tokio-runtime",
     "tls12",
     "rustls-native-certs",
