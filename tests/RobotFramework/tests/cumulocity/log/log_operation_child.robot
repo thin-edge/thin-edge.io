@@ -71,8 +71,7 @@ Custom Teardown
     Get Logs    ${CHILD_SN}
 
 Log File Contents Should Be Equal
-    [Arguments]
-    ...    ${operation}
+    [Arguments]    ${operation}
     ...    ${expected_contents}
     ...    ${encoding}=utf-8
     ...    ${expected_filename}=^${CHILD_XID}_[\\w\\W]+-c8y-mapper-\\d+$

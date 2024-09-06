@@ -201,8 +201,7 @@ Publish and Verify Local Command
     [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
 
 Log File Contents Should Be Equal
-    [Arguments]
-    ...    ${operation}
+    [Arguments]    ${operation}
     ...    ${expected_contents}
     ...    ${encoding}=utf-8
     ...    ${expected_filename}=^${DEVICE_SN}_[\\w\\W]+-c8y-mapper-\\d+$
@@ -220,8 +219,7 @@ Log File Contents Should Be Equal
     RETURN    ${contents}
 
 Create Log Request Operation
-    [Arguments]
-    ...    ${start_timestamp}
+    [Arguments]    ${start_timestamp}
     ...    ${end_timestamp}
     ...    ${log_type}
     ...    ${search_text}=${EMPTY}

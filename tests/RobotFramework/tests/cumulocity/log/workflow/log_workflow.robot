@@ -52,8 +52,7 @@ Setup LogFiles
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
 Log File Contents Should Be Equal
-    [Arguments]
-    ...    ${operation}
+    [Arguments]    ${operation}
     ...    ${expected_pattern}
     ...    ${encoding}=utf-8
     ...    ${expected_filename}=^${DEVICE_SN}_[\\w\\W]+-c8y-mapper-\\d+$
