@@ -15,7 +15,7 @@ on_success = "next_operation"
 [next_operation]
 iterate = "${.payload.operations}"
 on_next = "apply_operation"
-on_success = "successful"
+on_success = "twin_update"
 on_error = "rollback"
 
 [apply_operation]
@@ -27,6 +27,10 @@ on_exec = "awaiting_operation"
 action = "await-operation-completion"
 on_success = "next_operation"
 on_error = "rollback"
+
+[twin_update]
+script = "tedge mqtt pub -r ${.topic.root_prefix}/${.topic.target}/twin/device_profile  '{ \"name\": \"${.payload.name}\", \"version\": \"${.payload.version}\" }'"
+on_success = "successful"
 
 [rollback]
 action="proceed"

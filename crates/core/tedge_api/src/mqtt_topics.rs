@@ -200,6 +200,14 @@ impl MqttSchema {
         Topic::new_unchecked(&format!("{0}/errors", self.root))
     }
 
+    /// Extract the root prefix of a topic
+    pub fn get_root_prefix(topic: impl AsRef<str>) -> Option<String> {
+        match topic.as_ref().split('/').collect::<Vec<&str>>()[..] {
+            [root, ..] => Some(root.to_string()),
+            _ => None,
+        }
+    }
+
     /// Extract the entity identifier from a topic
     ///
     /// Note this function is not related to a specific topic root prefix
