@@ -1,4 +1,4 @@
-FROM alpine:3.18 as build
+FROM alpine:3.18 AS build
 # Use a build layer to avoid adding binaries from every target into a layer into the output image
 ARG TARGETPLATFORM
 
