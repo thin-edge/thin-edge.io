@@ -21,6 +21,10 @@ RUN case "${TARGETPLATFORM}" in \
 #
 FROM alpine:3.18
 
+ARG USERNAME=tedge
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
 ARG BUILDTIME
 ARG REVISION
 ARG VERSION
@@ -48,8 +52,8 @@ RUN apk add --no-cache \
 COPY --from=build build/* /usr/bin/
 
 # setup thin-edge.io
-RUN addgroup -S tedge \
-    && adduser -g '' -H -D tedge -G tedge \
+RUN addgroup -g "$USER_GID" -S "$USERNAME" \
+    && adduser -u "$USER_UID" -g '' -H -D "$USERNAME" -G "$USERNAME" \
     && /usr/bin/tedge init
 
 # Add custom config
@@ -62,5 +66,5 @@ ENV TEDGE_MQTT_CLIENT_HOST=mqtt-broker
 ENV TEDGE_HTTP_CLIENT_HOST=tedge
 ENV TEDGE_C8Y_PROXY_CLIENT_HOST=tedge-mapper-c8y
 
-USER "tedge"
+USER "$USER_UID:$USER_GID"
 CMD [ "/usr/bin/tedge-agent" ]
