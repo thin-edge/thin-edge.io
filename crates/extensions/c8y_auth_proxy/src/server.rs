@@ -256,21 +256,30 @@ async fn proxy_ws(
     use axum::extract::ws::CloseFrame;
     use tungstenite::error::Error;
     let uri = format!("{}/{path}", host.ws);
-    let mut token = retrieve_token.not_matching(None).await;
-    let c8y = match connect_to_websocket(&token, &headers, &uri, &host).await {
-        Ok(c8y) => Ok(c8y),
-        Err(Error::Http(res)) if res.status() == StatusCode::UNAUTHORIZED => {
-            token = retrieve_token.not_matching(Some(&token)).await;
-            match connect_to_websocket(&token, &headers, &uri, &host).await {
+
+    let c8y = {
+        match retrieve_token.not_matching(None).await {
+            Ok(token) => match connect_to_websocket(&token, &headers, &uri, &host).await {
                 Ok(c8y) => Ok(c8y),
-                Err(e) => {
-                    Err(anyhow::Error::from(e).context("Failed to connect to proxied websocket"))
+                Err(Error::Http(res)) if res.status() == StatusCode::UNAUTHORIZED => {
+                    match retrieve_token.not_matching(Some(&token)).await {
+                        Ok(token) => {
+                            match connect_to_websocket(&token, &headers, &uri, &host).await {
+                                Ok(c8y) => Ok(c8y),
+                                Err(e) => Err(anyhow::Error::from(e)
+                                    .context("Failed to connect to proxied websocket")),
+                            }
+                        }
+                        Err(e) => Err(e.context("Failed to retrieve JWT token")),
+                    }
                 }
-            }
+                Err(e) => Err(anyhow::Error::from(e)),
+            },
+            Err(e) => Err(e.context("Failed to retrieve JWT token")),
         }
-        Err(e) => Err(anyhow::Error::from(e)),
     }
     .context("Error connecting to proxied websocket");
+
     let c8y = match c8y {
         Err(e) => {
             let _ = ws
@@ -413,7 +422,10 @@ async fn respond_to(
         destination += query;
     }
 
-    let mut token = retrieve_token.not_matching(None).await;
+    let mut token = retrieve_token
+        .not_matching(None)
+        .await
+        .with_context(|| "failed to retrieve JWT token")?;
 
     if let Some(ws) = ws {
         let path = path.to_owned();
@@ -429,7 +441,10 @@ async fn respond_to(
             .await
             .with_context(|| format!("making HEAD request to {destination}"))?;
         if response.status() == StatusCode::UNAUTHORIZED {
-            token = retrieve_token.not_matching(Some(&token)).await;
+            token = retrieve_token
+                .not_matching(Some(&token))
+                .await
+                .with_context(|| "failed to retrieve JWT token")?;
         }
     }
 
@@ -448,7 +463,10 @@ async fn respond_to(
         .with_context(|| format!("making proxied request to {destination}"))?;
 
     if res.status() == StatusCode::UNAUTHORIZED {
-        token = retrieve_token.not_matching(Some(&token)).await;
+        token = retrieve_token
+            .not_matching(Some(&token))
+            .await
+            .with_context(|| "failed to retrieve JWT token")?;
         if let Some(body) = body_clone {
             res = send_request(Body::from(body), &token)
                 .await
