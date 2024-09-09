@@ -1,4 +1,4 @@
-FROM alpine:3.18 as build
+FROM alpine:3.18 AS build
 # Use a build layer to avoid adding binaries from every target into a layer into the output image
 ARG TARGETPLATFORM
 
@@ -55,12 +55,12 @@ RUN addgroup -S tedge \
 # Add custom config
 COPY system.toml /etc/tedge/
 
-ENV TEDGE_MQTT_BIND_ADDRESS 0.0.0.0
-ENV TEDGE_C8Y_PROXY_BIND_ADDRESS 0.0.0.0
-ENV TEDGE_HTTP_BIND_ADDRESS 0.0.0.0
-ENV TEDGE_MQTT_CLIENT_HOST mqtt-broker
-ENV TEDGE_HTTP_CLIENT_HOST tedge
-ENV TEDGE_C8Y_PROXY_CLIENT_HOST tedge-mapper-c8y
+ENV TEDGE_MQTT_BIND_ADDRESS=0.0.0.0
+ENV TEDGE_C8Y_PROXY_BIND_ADDRESS=0.0.0.0
+ENV TEDGE_HTTP_BIND_ADDRESS=0.0.0.0
+ENV TEDGE_MQTT_CLIENT_HOST=mqtt-broker
+ENV TEDGE_HTTP_CLIENT_HOST=tedge
+ENV TEDGE_C8Y_PROXY_CLIENT_HOST=tedge-mapper-c8y
 
 USER "tedge"
 CMD [ "/usr/bin/tedge-agent" ]
