@@ -1,22 +1,27 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource            ../../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
 
-Test Tags    theme:c8y    theme:troubleshooting    theme:plugins    adapter:docker
-Test Setup    Custom Setup
-Test Teardown    Get Logs
+Test Setup          Custom Setup
+Test Teardown       Get Logs
+
+Test Tags           theme:c8y    theme:troubleshooting    theme:plugins    adapter:docker
+
 
 *** Test Cases ***
-
 Execute ssh command with a custom root certificate path
     ${KEY_FILE}=    Configure SSH
     Add Remote Access Passthrough Configuration
-    ${stdout}=    Execute Remote Access Command    command=echo foobar    exp_exit_code=0    user=root    key_file=${KEY_FILE}
+    ${stdout}=    Execute Remote Access Command
+    ...    command=echo foobar
+    ...    exp_exit_code=0
+    ...    user=root
+    ...    key_file=${KEY_FILE}
     Should Contain    ${stdout}    foobar
 
-*** Keywords ***
 
+*** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN

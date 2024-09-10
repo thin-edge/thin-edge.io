@@ -1,11 +1,11 @@
 *** Settings ***
 Resource        ../../resources/common.resource
-Library         ThinEdgeIO
 Library         OperatingSystem
+Library         ThinEdgeIO
 
 Suite Setup     Custom Setup
 
-Test Tags      theme:mqtt
+Test Tags       theme:mqtt
 
 
 *** Test Cases ***

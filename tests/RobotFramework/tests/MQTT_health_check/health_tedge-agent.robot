@@ -1,16 +1,18 @@
-#Command to execute:    robot -d \results --timestampoutputs --log health_tedge-agent.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge-agent.robot
+*** Comments ***
+# Command to execute:    robot -d \results --timestampoutputs --log health_tedge-agent.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge-agent.robot
+
 
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Test Tags    theme:monitoring
-Suite Setup       Setup
-Suite Teardown    Get Logs
+Suite Setup         Setup
+Suite Teardown      Get Logs
+
+Test Tags           theme:monitoring
 
 
 *** Test Cases ***
-
 Stop tedge-agent
     Execute Command    sudo systemctl stop tedge-agent.service
 

@@ -21,43 +21,59 @@ Restart operation should be set to failed when an non-existent command is config
     Set Restart Command    ["/usr/bin/on_shutdown_does_not_exist.sh"]
     Set Restart Timeout    60
     ${operation}=    Cumulocity.Restart Device
-    Operation Should Be FAILED    ${operation}    failure_reason=Restart Failed: Fail to trigger a restart.*    timeout=30
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=Restart Failed: Fail to trigger a restart.*
+    ...    timeout=30
 
 Restart operation should be set to failed when command is not allowed by sudo
     Set Restart Command    ["/sbin/reboot"]
     Set Restart Timeout    60
     ${operation}=    Cumulocity.Restart Device
-    Operation Should Be FAILED    ${operation}    failure_reason=Restart Failed: Fail to trigger a restart.*    timeout=30
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=Restart Failed: Fail to trigger a restart.*
+    ...    timeout=30
 
 Restart operation should be set to failed when the command does not restart the device
     Set Restart Command    ["/usr/bin/on_shutdown_no_reboot.sh"]
     Set Restart Timeout    30
     ${operation}=    Cumulocity.Restart Device
-    Operation Should Be FAILED    ${operation}    failure_reason=Restart Failed: No shutdown has been triggered.*    timeout=60
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=Restart Failed: No shutdown has been triggered.*
+    ...    timeout=60
 
 Restart operation should be set to failed if the restart command times out
     [Documentation]    tedge should protect against commands which don't finish within a given time period (protect against hanging scripts)
     Set Restart Command    ["/usr/bin/on_shutdown.sh", "300"]
     Set Restart Timeout    5
     ${operation}=    Cumulocity.Restart Device
-    Operation Should Be FAILED    ${operation}    failure_reason=Restart Failed: Restart command still running after 5 seconds    timeout=30
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=Restart Failed: Restart command still running after 5 seconds
+    ...    timeout=30
 
 Restart operation should be set to failed when the command has been killed by a signal
     [Documentation]    If the restart command is killed, assume it did trigger a restart, and wait for the restart. Only fail the
-        ...            the operation if the "wait for restart" logic does not detect a restart. This is because sometimes a shutdown
-        ...            can trigger the script to be killed before it has a chance to exit successfully.
+    ...    the operation if the "wait for restart" logic does not detect a restart. This is because sometimes a shutdown
+    ...    can trigger the script to be killed before it has a chance to exit successfully.
     Set Restart Command    ["/usr/bin/on_shutdown_signal_interrupt.sh"]
     Set Restart Timeout    30
     ${operation}=    Cumulocity.Restart Device
-    Operation Should Be FAILED    ${operation}    failure_reason=Restart Failed: No shutdown has been triggered    timeout=60
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=Restart Failed: No shutdown has been triggered
+    ...    timeout=60
 
 Default restart timeout supports the default 60 second delay of the linux shutdown command
     [Documentation]    The shutdown -r command performs a device restart 60 seconds after being called. thin-edge.io should
-        ...            support this setting out of the box
+    ...    support this setting out of the box
     Set Restart Command    ["shutdown", "-r"]
     Set Restart Timeout    default
     ${operation}=    Cumulocity.Restart Device
     Operation Should Be SUCCESSFUL    ${operation}    timeout=180
+
 
 *** Keywords ***
 Setup Child Device
@@ -76,8 +92,10 @@ Setup Child Device
 
     Transfer To Device    ${CURDIR}/*.sh    /usr/bin/
     Transfer To Device    ${CURDIR}/*.service    /etc/systemd/system/
-    Execute Command    cmd=chmod a+x /usr/bin/*.sh && chmod 644 /etc/systemd/system/*.service && systemctl enable on_startup.service
-    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh, /usr/bin/on_shutdown_no_reboot.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_signal_interrupt.sh, !/sbin/reboot' > /etc/sudoers.d/tedge
+    Execute Command
+    ...    cmd=chmod a+x /usr/bin/*.sh && chmod 644 /etc/systemd/system/*.service && systemctl enable on_startup.service
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh, /usr/bin/on_shutdown_no_reboot.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_signal_interrupt.sh, !/sbin/reboot' > /etc/sudoers.d/tedge
     Set Restart Command    ["/usr/bin/on_shutdown.sh"]
     Set Restart Timeout    default
 
@@ -88,7 +106,7 @@ Custom Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $PARENT_SN    ${parent_sn}
-    Execute Command           test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}

@@ -46,10 +46,21 @@ check-tools:
         exit 1
     fi
 
-# Format code
+# Format code and tests
 format: check-tools
+    #!/usr/bin/env bash
+    set -e
+
     cargo +nightly fmt
     taplo fmt
+
+    if [ ! -d tests/RobotFramework/.venv ]; then
+        just -f {{justfile()}} setup-integration-test
+    fi
+    cd tests/RobotFramework
+    source .venv/bin/activate
+    echo Formatting tests...
+    invoke format-tests
 
 # Check code formatting
 format-check: check-tools
@@ -58,8 +69,19 @@ format-check: check-tools
 
 # Check code
 check TARGET=DEFAULT_TARGET:
+    #!/usr/bin/env bash
+    set -e
+
     {{CARGO}} check --target {{TARGET}}
     {{CARGO}} clippy --all-targets --all-features --target {{TARGET}}
+
+    if [ ! -d tests/RobotFramework/.venv ]; then
+        just -f {{justfile()}} setup-integration-test
+    fi
+    cd tests/RobotFramework
+    source .venv/bin/activate
+    echo Checking tests...
+    invoke lint-tests
 
 # Release, building all binaries and debian packages
 release *ARGS:

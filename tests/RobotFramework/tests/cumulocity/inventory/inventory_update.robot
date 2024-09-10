@@ -1,14 +1,15 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource            ../../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
 
-Test Tags    theme:c8y    theme:telemetry
-Suite Setup    Custom Setup
-Test Teardown    Get Logs
+Suite Setup         Custom Setup
+Test Teardown       Get Logs
+
+Test Tags           theme:c8y    theme:telemetry
+
 
 *** Test Cases ***
-
 Update Inventory data via inventory.json
     ${mo}=    Cumulocity.Device Should Have Fragments    customData    types
     Should Be Equal    ${mo["customData"]["mode"]}    ACTIVE
@@ -20,15 +21,15 @@ Update Inventory data via inventory.json
 Inventory includes the agent fragment with version information
     ${expected_version}=    Execute Command    tedge-mapper --version | cut -d' ' -f2    strip=${True}
     ${mo}=    Cumulocity.Device Should Have Fragments    c8y_Agent
-    Should Be Equal    ${mo["c8y_Agent"]["name"]}        thin-edge.io
-    Should Be Equal    ${mo["c8y_Agent"]["version"]}     ${expected_version}
-    Should Be Equal    ${mo["c8y_Agent"]["url"]}         https://thin-edge.io
+    Should Be Equal    ${mo["c8y_Agent"]["name"]}    thin-edge.io
+    Should Be Equal    ${mo["c8y_Agent"]["version"]}    ${expected_version}
+    Should Be Equal    ${mo["c8y_Agent"]["url"]}    https://thin-edge.io
+
 
 *** Keywords ***
-
 Custom Setup
-    ${DEVICE_SN}=                    Setup
-    Set Suite Variable               $DEVICE_SN
-    Device Should Exist              ${DEVICE_SN}
+    ${DEVICE_SN}=    Setup
+    Set Suite Variable    $DEVICE_SN
+    Device Should Exist    ${DEVICE_SN}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/inventory.json    /etc/tedge/device/
     ThinEdgeIO.Disconnect Then Connect Mapper    c8y

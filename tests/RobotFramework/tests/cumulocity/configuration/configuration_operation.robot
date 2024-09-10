@@ -1,8 +1,8 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             OperatingSystem
 Library             ThinEdgeIO
 Library             Cumulocity
-Library             OperatingSystem
 
 Suite Setup         Suite Setup
 Suite Teardown      Get Logs    name=${PARENT_SN}
@@ -21,30 +21,30 @@ ${CHILD_SN}     ${EMPTY}
 # Set configuration
 #
 Set Configuration when file does not exist
-    [Tags]    \#2318
-    [Template]    Set Configuration from Device
     [Documentation]    If the configuration file does not exist, it should be created, with owner and permissions
     ...    specified in `tedge-configuration-plugin.toml` file.
+    [Tags]    \#2318
+    [Template]    Set Configuration from Device
     Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    640    tedge:tedge    delete_file_before=${true}
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    640    tedge:tedge    delete_file_before=${true}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
 
 Set Configuration when file exists and agent run normally
-    [Tags]    \#2972
-    [Template]    Set Configuration from Device
     [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
     ...    should remain unchanged.
+    [Tags]    \#2972
+    [Template]    Set Configuration from Device
     Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
 
 Set Configuration when file exists and tedge run by root
-    [Tags]    \#3073
-    [Template]    Set Configuration from Device
     [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
     ...    should remain unchanged. If tedge-agent is run as root, it should not use tedge-agent for privilege elevation
+    [Tags]    \#3073
+    [Template]    Set Configuration from Device
     Text file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     ...    agent_as_root=${true}
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
@@ -140,12 +140,12 @@ Trigger config_snapshot operation from another operation
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
-    ${snapshot}    Execute Command    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111
-    ${config}      Get File    ${CURDIR}/tedge-configuration-plugin.toml
-    Should Be Equal    ${snapshot}     ${config}
+    ${snapshot}=    Execute Command
+    ...    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111
+    ${config}=    Get File    ${CURDIR}/tedge-configuration-plugin.toml
+    Should Be Equal    ${snapshot}    ${config}
 
 Trigger custom config_snapshot operation
-    [Teardown]    Restore config operations
     Set Device Context    ${PARENT_SN}
     Customize config operations
     Publish and Verify Local Command
@@ -153,9 +153,11 @@ Trigger custom config_snapshot operation
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
-    ${snapshot}    Execute Command    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111
-    ${config}      Get File    ${CURDIR}/tedge-configuration-plugin.toml
-    Should Be Equal    ${snapshot}     ${config}
+    ${snapshot}=    Execute Command
+    ...    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111
+    ${config}=    Get File    ${CURDIR}/tedge-configuration-plugin.toml
+    Should Be Equal    ${snapshot}    ${config}
+    [Teardown]    Restore config operations
 
 Config_snapshot operation request with the tedgeUrl created by agent
     Set Device Context    ${PARENT_SN}
@@ -171,7 +173,9 @@ Config_snapshot operation request with the tedgeUrl created by agent
     ...    message_contains=http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333
     ...    date_from=${timestamp}
 
-    ${output}=    Execute Command    curl -sSLf "http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333"    strip=${True}
+    ${output}=    Execute Command
+    ...    curl -sSLf "http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333"
+    ...    strip=${True}
     Should Match Regexp    ${output}    pattern=files\\s*=\\s*\\[.*\\]    flags=DOTALL
 
 Manual config_update operation request
@@ -186,33 +190,34 @@ Manual config_update operation request
 Trigger config_update operation from another workflow
     Set Device Context    ${PARENT_SN}
 
-    Execute Command     curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222"
+    Execute Command
+    ...    curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_config_update/sub-2222
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","type":"CONFIG1"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
-    ${update}           Execute Command    cat /etc/config1.json
-    Should Be Equal     ${update}     new content for CONFIG1
+    ${update}=    Execute Command    cat /etc/config1.json
+    Should Be Equal    ${update}    new content for CONFIG1
 
 Trigger custom config_update operation
-    [Teardown]    Restore config operations
     Set Device Context    ${PARENT_SN}
     Customize config operations
 
-    Execute Command     curl -X PUT --data-binary 'updated config' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222"
+    Execute Command
+    ...    curl -X PUT --data-binary 'updated config' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/custom-2222
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222","remoteUrl":"","type":"/tmp/config_update_target"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
-    ${update}           Execute Command    cat /tmp/config_update_target
-    Should Be Equal     ${update}     updated config
+    ${update}=    Execute Command    cat /tmp/config_update_target
+    Should Be Equal    ${update}    updated config
+    [Teardown]    Restore config operations
 
 Config update request not processed when operation is disabled for tedge-agent
-    [Teardown]    Enable config update capability of tedge-agent
     Set Device Context    ${PARENT_SN}
     Disable config update capability of tedge-agent
     Publish and Verify Local Command
@@ -220,9 +225,9 @@ Config update request not processed when operation is disabled for tedge-agent
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_DownloadConfigFile
+    [Teardown]    Enable config update capability of tedge-agent
 
 Config snapshot request not processed when operation is disabled for tedge-agent
-    [Teardown]    Enable config snapshot capability of tedge-agent
     Set Device Context    ${PARENT_SN}
     Disable config snapshot capability of tedge-agent
     Publish and Verify Local Command
@@ -230,6 +235,7 @@ Config snapshot request not processed when operation is disabled for tedge-agent
     ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_UploadConfigFile
+    [Teardown]    Enable config snapshot capability of tedge-agent
 
 Default plugin configuration
     Set Device Context    ${PARENT_SN}
@@ -239,7 +245,7 @@ Default plugin configuration
 
     # Agent restart should recreate the default plugin configuration
     Stop Service    tedge-agent
-    ${timestamp}=        Get Unix Timestamp
+    ${timestamp}=    Get Unix Timestamp
     Start Service    tedge-agent
     Service Should Be Running    tedge-agent
     Should Have MQTT Messages    c8y/s/us    message_contains=119,    date_from=${timestamp}
@@ -253,8 +259,7 @@ Default plugin configuration
 
 *** Keywords ***
 Set Configuration from Device
-    [Arguments]
-    ...    ${test_desc}
+    [Arguments]    ${test_desc}
     ...    ${device}
     ...    ${external_id}
     ...    ${config_type}
@@ -264,6 +269,7 @@ Set Configuration from Device
     ...    ${ownership}
     ...    ${delete_file_before}=${true}
     ...    ${agent_as_root}=${false}
+    Log    Description: ${test_desc}
 
     IF    ${delete_file_before}
         ThinEdgeIO.Set Device Context    ${device}
@@ -273,7 +279,7 @@ Set Configuration from Device
     # we check that when `tedge` user has permissions to the configuration file's parent directory, tedge-write is not
     # used to deploy the configuration file but a normal write is used; we change path of tedge-write so that test fails
     # if its attempted to be used, the test fails
-    IF    ${agent_as_root} == ${true}
+    IF    ${agent_as_root}
         ThinEdgeIO.Set Device Context    ${device}
         Execute Command    sed 's/User\=tedge/User\=root/' -i /lib/systemd/system/tedge-agent.service
         Execute Command    systemctl daemon-reload
@@ -290,9 +296,8 @@ Set Configuration from Device
         ThinEdgeIO.Set Device Context    ${device}
         File Checksum Should Be Equal    ${device_file}    ${file}
         Path Should Have Permissions    ${device_file}    ${permission}    ${ownership}
-
     FINALLY
-        IF    ${agent_as_root} == ${true}
+        IF    ${agent_as_root}
             ThinEdgeIO.Set Device Context    ${device}
             Execute Command    mv /usr/bin/tedge-write.bak /usr/bin/tedge-write
             Execute Command    sed 's/User\=root/User\=tedge/' -i /lib/systemd/system/tedge-agent.service
@@ -307,8 +312,7 @@ Set Configuration from Device with tedge-write at another location
     ...    to make sure that other location is in $PATH and that this new $PATH is inherited by tedge-agent, so for the
     ...    purposes of the test we change $PATH at the tedge-agent systemd service level. We also add a sudoers entry
     ...    with new path of tedge-write so sudo correcly elevates permissions.
-    [Arguments]
-    ...    ${test_desc}
+    [Arguments]    ${test_desc}
     ...    ${device}
     ...    ${external_id}
     ...    ${config_type}
@@ -317,14 +321,14 @@ Set Configuration from Device with tedge-write at another location
     ...    ${permission}
     ...    ${ownership}
     ...    ${delete_file_before}=${true}
-    [Setup]
-    [Teardown]
- 
+    [Setup]    NONE
+
     Set Device Context    ${device}
 
-    # Have /opt/tedge/bin in $PATH of tedge-agent 
+    # Have /opt/tedge/bin in $PATH of tedge-agent
     Execute Command    mkdir -p /etc/systemd/system/tedge-agent.service.d
-    Execute Command    cmd=echo "[Service]\nEnvironment=\\"PATH=/opt/tedge/bin:$PATH\\"" > /etc/systemd/system/tedge-agent.service.d/10-override-path.conf
+    Execute Command
+    ...    cmd=echo "[Service]\nEnvironment=\\"PATH=/opt/tedge/bin:$PATH\\"" > /etc/systemd/system/tedge-agent.service.d/10-override-path.conf
     Execute Command    systemctl daemon-reload
     Restart Service    tedge-agent
 
@@ -359,6 +363,7 @@ Set Configuration from Device with tedge-write at another location
 
 Set Configuration from URL
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}    ${config_url}
+    Log    Test Description: ${test_desc}
 
     ThinEdgeIO.Set Device Context    ${device}
     ${hash_before}=    Execute Command    md5sum ${device_file}
@@ -375,6 +380,7 @@ Set Configuration from URL
 
 Get Unknown Configuration Type From Device
     [Arguments]    ${test_desc}    ${external_id}    ${config_type}
+    Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
     Operation Should Be FAILED
@@ -383,6 +389,7 @@ Get Unknown Configuration Type From Device
 
 Get non existent configuration file From Device
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     ThinEdgeIO.Execute Command    rm -f ${device_file}
     Cumulocity.Set Device    ${external_id}
@@ -390,7 +397,8 @@ Get non existent configuration file From Device
     Operation Should Be FAILED    ${operation}    failure_reason=.*No such file or directory.*
 
 Get Configuration from Device
-    [Arguments]    ${test_name}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    [Arguments]    ${description}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    Log    Test Description: ${description}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
@@ -406,7 +414,9 @@ Get Configuration from Device
     ...    ${events[0]["id"]}
     ...    expected_md5=${expected_checksum}
 
-    ${event}=    Cumulocity.Event Attachment Should Have File Info    ${events[0]["id"]}    name=^${external_id}_[\\w\\W]+-c8y-mapper-\\d+$
+    ${event}=    Cumulocity.Event Attachment Should Have File Info
+    ...    ${events[0]["id"]}
+    ...    name=^${external_id}_[\\w\\W]+-c8y-mapper-\\d+$
 
     RETURN    ${contents}
 
@@ -416,6 +426,7 @@ Get Configuration from Device
 
 Update configuration plugin config via cloud
     [Arguments]    ${test_desc}    ${external_id}
+    Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
@@ -438,6 +449,7 @@ Update configuration plugin config via cloud
 
 Modify configuration plugin config via local filesystem modify inplace
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
@@ -458,6 +470,7 @@ Modify configuration plugin config via local filesystem modify inplace
 
 Modify configuration plugin config via local filesystem overwrite
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -480,6 +493,7 @@ Modify configuration plugin config via local filesystem overwrite
 
 Update configuration plugin config via local filesystem copy
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -502,6 +516,7 @@ Update configuration plugin config via local filesystem copy
 
 Update configuration plugin config via local filesystem move (different directory)
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -524,6 +539,7 @@ Update configuration plugin config via local filesystem move (different director
 
 Update configuration plugin config via local filesystem move (same directory)
     [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
     Cumulocity.Should Support Configurations
@@ -617,10 +633,11 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/binary-config1.tar.gz    /etc/
 
     # make sure initial files have the same permissions on systems with different umasks
-    Execute Command                  chmod 664 /etc/config1.json /etc/config2.json /etc/binary-config1.tar.gz
+    Execute Command    chmod 664 /etc/config1.json /etc/config2.json /etc/binary-config1.tar.gz
 
     # on a child device, user with uid 1000 doesn't exist, so make sure files we're testing on have a well defined user
-    Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json /etc/binary-config1.tar.gz
+    Execute Command
+    ...    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json /etc/binary-config1.tar.gz
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
 
 Customize Operation Workflows
@@ -658,25 +675,21 @@ Publish and Verify Local Command
     [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
 
 Disable config update capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_update false
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Enable config update capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_update true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Disable config snapshot capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_snapshot false
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Enable config snapshot capability of tedge-agent
-    [Arguments]    ${device_sn}=${PARENT_SN}
     Execute Command    tedge config set agent.enable.config_snapshot true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent

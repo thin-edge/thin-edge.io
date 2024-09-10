@@ -1,16 +1,14 @@
-#Command to execute:    robot -d \results --timestampoutputs --log health_tedge-mapper-collectd.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge-mapper-collectd.robot
-
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Test Tags    theme:monitoring
-Suite Setup       Setup
-Suite Teardown    Get Logs
+Suite Setup         Setup
+Suite Teardown      Get Logs
+
+Test Tags           theme:monitoring
 
 
 *** Test Cases ***
-
 Stop tedge-mapper-collectd
     Execute Command    sudo systemctl stop tedge-mapper-collectd.service
 
@@ -51,9 +49,12 @@ Remove entry from service file
 tedge-collectd-mapper health status
     Execute Command    sudo systemctl start tedge-mapper-collectd.service
 
-    Sleep    5s     reason=It fails without this! It needs a better way of queuing requests
+    Sleep    5s    reason=It fails without this! It needs a better way of queuing requests
     ${pid}=    Service Should Be Running    tedge-mapper-collectd
     Execute Command    sudo tedge mqtt pub 'te/device/main/service/tedge-mapper-collectd/cmd/health/check' ''
-    ${messages}=    Should Have MQTT Messages    te/device/main/service/tedge-mapper-collectd/status/health    minimum=1    maximum=2
+    ${messages}=    Should Have MQTT Messages
+    ...    te/device/main/service/tedge-mapper-collectd/status/health
+    ...    minimum=1
+    ...    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}
     Should Contain    ${messages[0]}    "status":"up"

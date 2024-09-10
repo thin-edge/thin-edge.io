@@ -1,10 +1,10 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
-Library             Cumulocity
 Library             DateTime
-Library             ThinEdgeIO
-Library             String
 Library             OperatingSystem
+Library             String
+Library             Cumulocity
+Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
@@ -13,7 +13,7 @@ Test Tags           theme:c8y    theme:log
 
 
 *** Test Cases ***
-Log operation ignore date range when log file has a static path   
+Log operation ignore date range when log file has a static path
     ${start_timestamp}=    Get Current Date    UTC    +10 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Cumulocity.Create Operation
@@ -47,19 +47,21 @@ Trigger log_upload operation from another operation
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_log_upload/example-1234
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"repeated","lines":3}
-    ${log_excerpt}     Execute Command    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234
-    Should Be Equal    ${log_excerpt}     filename: example.log\n13 repeated line\n14 repeated line\n15 repeated line\n
+    ${log_excerpt}=    Execute Command
+    ...    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234
+    Should Be Equal    ${log_excerpt}    filename: example.log\n13 repeated line\n14 repeated line\n15 repeated line\n
 
 Trigger custom log_upload operation
-    [Teardown]    Restore log_upload operation
     Customize log_upload operation
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/log_upload/custom-1234
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234","type":"example","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_LogfileRequest
-    ${log_excerpt}     Execute Command    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234
-    ${expected_log}    Get File    ${CURDIR}/example.log
-    Should Be Equal    ${log_excerpt}     ${expected_log}
+    ${log_excerpt}=    Execute Command
+    ...    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234
+    ${expected_log}=    Get File    ${CURDIR}/example.log
+    Should Be Equal    ${log_excerpt}    ${expected_log}
+    [Teardown]    Restore log_upload operation
 
 Log file request limits maximum number of lines with text filter
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -101,7 +103,6 @@ Log file request supports date/time filters and can search across multiple log f
     ...    filename: logfile.3.log\n${logfile3_contents}\nfilename: logfile.2.log\n${logfile2_contents}\n
 
 Log file request not processed if operation is disabled for tedge-agent
-    [Teardown]    Enable log upload capability of tedge-agent
     Disable log upload capability of tedge-agent
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%SZ
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
@@ -110,6 +111,7 @@ Log file request not processed if operation is disabled for tedge-agent
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    expected_status=init
     ...    c8y_fragment=c8y_LogfileRequest
+    [Teardown]    Enable log upload capability of tedge-agent
 
 Default plugin configuration
     Set Device Context    ${DEVICE_SN}
@@ -120,7 +122,7 @@ Default plugin configuration
     # Agent restart should recreate the default plugin configuration
     Stop Service    tedge-agent
     Service Should Be Stopped    tedge-agent
-    ${timestamp}=        Get Unix Timestamp
+    ${timestamp}=    Get Unix Timestamp
     Start Service    tedge-agent
     Service Should Be Running    tedge-agent
 
@@ -130,9 +132,13 @@ Default plugin configuration
 
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${operation}=    Create Log Request Operation    ${start_timestamp}    ${end_timestamp}    log_type=software-management
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=software-management
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Log Operation Attachment File Contains    ${operation}    expected_pattern=.*software_list @ successful
+
 
 *** Keywords ***
 Setup LogFiles
@@ -195,20 +201,29 @@ Publish and Verify Local Command
     [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
 
 Log File Contents Should Be Equal
-    [Arguments]    ${operation}    ${expected_contents}    ${encoding}=utf-8    ${expected_filename}=^${DEVICE_SN}_[\\w\\W]+-c8y-mapper-\\d+$    ${expected_mime_type}=text/plain
+    [Arguments]    ${operation}
+    ...    ${expected_contents}
+    ...    ${encoding}=utf-8
+    ...    ${expected_filename}=^${DEVICE_SN}_[\\w\\W]+-c8y-mapper-\\d+$
+    ...    ${expected_mime_type}=text/plain
     ${event_url_parts}=    Split String    ${operation["c8y_LogfileRequest"]["file"]}    separator=/
     ${event_id}=    Set Variable    ${event_url_parts}[-2]
     ${contents}=    Cumulocity.Event Should Have An Attachment
     ...    ${event_id}
     ...    expected_contents=${expected_contents}
     ...    encoding=${encoding}
-    ${event}=    Cumulocity.Event Attachment Should Have File Info    ${event_id}    name=${expected_filename}    mime_type=${expected_mime_type}
+    ${event}=    Cumulocity.Event Attachment Should Have File Info
+    ...    ${event_id}
+    ...    name=${expected_filename}
+    ...    mime_type=${expected_mime_type}
     RETURN    ${contents}
 
 Create Log Request Operation
-    [Arguments]    ${start_timestamp}    ${end_timestamp}    ${log_type}    ${search_text}=${EMPTY}    ${maximum_lines}=1000
-    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    [Arguments]    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    ${log_type}
+    ...    ${search_text}=${EMPTY}
+    ...    ${maximum_lines}=1000
     ${operation}=    Cumulocity.Create Operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"${log_type}","searchText":"${search_text}","maximumLines":${maximum_lines}}}
@@ -223,15 +238,12 @@ Log Operation Attachment File Contains
     ...    expected_pattern=${expected_pattern}
     ...    encoding=utf-8
 
-
 Disable log upload capability of tedge-agent
-    [Arguments]    ${device_sn}=${DEVICE_SN}
     Execute Command    tedge config set agent.enable.log_upload false
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Enable log upload capability of tedge-agent
-    [Arguments]    ${device_sn}=${DEVICE_SN}
     Execute Command    tedge config set agent.enable.log_upload true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent

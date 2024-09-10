@@ -1,0 +1,36 @@
+# See the robocop rules list for more information about the linting rules:
+# https://robocop.readthedocs.io/en/stable/rules_list.html
+[tool.robocop]
+exclude = [
+    # Docs
+    "missing-doc-suite",
+    "missing-doc-test-case",
+    "missing-doc-keyword",
+
+    # Size
+    "too-long-test-case",
+    "file-too-long",
+    "line-too-long",
+    "too-many-calls-in-test-case",
+    "too-many-calls-in-keyword",
+    "too-many-arguments",
+
+    # Naming
+    "not-allowed-char-in-name",
+    # Some Keywords are more descriptive with the usage of underscore
+    # as they can include important info like 'c8y_Firmware'
+    "underscore-in-keyword-name",
+    "non-local-variables-should-be-uppercase",
+    "section-variable-not-uppercase",
+    "inconsistent-variable-name",
+    "too-long-keyword",
+
+    # Styling
+    "not-capitalized-test-case-title",
+    "wrong-case-in-keyword-name",
+]
+
+configure = [
+    "line-too-long:line_length:220",
+    "todo-in-comment:severity:I"
+]

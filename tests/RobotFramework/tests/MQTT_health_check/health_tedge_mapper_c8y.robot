@@ -1,16 +1,18 @@
-#Command to execute:    robot -d \results --timestampoutputs --log health_tedge_mapper.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge_mapper.robot
+*** Comments ***
+# Command to execute:    robot -d \results --timestampoutputs --log health_tedge_mapper.html --report NONE --variable HOST:192.168.1.120 /thin-edge.io-fork/tests/RobotFramework/MQTT_health_check/health_tedge_mapper.robot
+
 
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Test Tags    theme:monitoring    theme:c8y
-Suite Setup       Setup
-Suite Teardown    Get Logs
+Suite Setup         Setup
+Suite Teardown      Get Logs
+
+Test Tags           theme:monitoring    theme:c8y
 
 
 *** Test Cases ***
-
 Stop tedge-mapper
     Execute Command    sudo systemctl stop tedge-mapper-c8y.service
 
@@ -27,6 +29,7 @@ Start watchdog service
     Execute Command    sudo systemctl start tedge-watchdog.service
 
     Sleep    10s
+
 Check PID of tedge-mapper
     ${pid}=    Service Should Be Running    tedge-mapper-c8y
     Set Suite Variable    ${pid}
@@ -61,5 +64,5 @@ Watchdog does not kill mapper if it responds
     Sleep    10s
     ${pid_after_healthcheck}=    Service Should Be Running    tedge-mapper-c8y
 
-    Should Have MQTT Messages     topic=te/device/main/service/tedge-mapper-c8y/cmd/health/check    minimum=1
-    Should Be Equal               ${pid_before_healthcheck}    ${pid_after_healthcheck}
+    Should Have MQTT Messages    topic=te/device/main/service/tedge-mapper-c8y/cmd/health/check    minimum=1
+    Should Be Equal    ${pid_before_healthcheck}    ${pid_after_healthcheck}

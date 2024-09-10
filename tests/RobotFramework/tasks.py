@@ -125,11 +125,26 @@ def lint(c):
     """Run linter"""
     c.run(f"{sys.executable} -m pylint libraries")
 
+@task
+def lint_tests(c, threshold="W"):
+    """Run RobotFramework Test Linter
+
+    Example:
+        $ invoke lint-tests --threshold I
+        # Run linting and include Info level messages
+    """
+    c.run(f"{sys.executable} -m robocop --report rules_by_error_type --threshold {threshold}")
 
 @task(name="format")
 def formatcode(c):
     """Format python code"""
     c.run(f"{sys.executable} -m black libraries")
+
+@task
+def format_tests(c):
+    """Format RobotFramework tests
+    """
+    c.run(f"{sys.executable} -m robotidy tests")
 
 
 @task(name="reports")

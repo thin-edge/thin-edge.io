@@ -1,10 +1,12 @@
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Test Tags    theme:installation
-Test Setup       Custom Setup
-Test Teardown    Get Logs
+Test Setup          Custom Setup
+Test Teardown       Get Logs
+
+Test Tags           theme:installation
+
 
 *** Test Cases ***
 Install latest via script (from current branch)
@@ -17,7 +19,7 @@ Install latest via script (from current branch)
 
 Install specific version via script (from current branch)
     [Documentation]    Remove the tedge.toml file as the software filter is not supported in older tedge versions
-    ...                and unknown configuration causes problems
+    ...    and unknown configuration causes problems
     # TODO: Remove reliance on the legacy get-thin-edge_io.sh script, however thin-edge.io/install.sh does not currently support installing a specific version
     Transfer To Device    ${CURDIR}/../../../../get-thin-edge_io.sh    /setup/
     Execute Command    [ -f /etc/tedge/tedge.toml ] && sed -i '/\\[software\\]/,/\\n/d' /etc/tedge/tedge.toml
@@ -43,11 +45,12 @@ Install then uninstall latest tedge via script (from main branch)
     Execute Command    dpkg -s c8y-remote-access-plugin
 
     # Uninstall
-    Execute Command    curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
+    Execute Command
+    ...    curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
     Tedge Should Not Be Installed
 
-*** Keywords ***
 
+*** Keywords ***
 Custom Setup
     Setup    skip_bootstrap=True
 

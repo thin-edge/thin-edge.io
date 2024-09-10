@@ -1,57 +1,57 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             String
+Library             JSONLibrary
 Library             Cumulocity
 Library             ThinEdgeIO
-Library             JSONLibrary
-Library             String
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs    name=${PARENT_SN}
 
-Test Tags          theme:firmware    theme:childdevices
+Test Tags           theme:firmware    theme:childdevices
 
 
 *** Variables ***
-${PARENT_IP}
+${PARENT_IP}                ${EMPTY}
 ${HTTP_PORT}                8000
 
-${PARENT_SN}
-${CHILD_SN}
+${PARENT_SN}                ${EMPTY}
+${CHILD_SN}                 ${EMPTY}
 
-${op_id}
-${cache_key}
-${file_url}
-${file_transfer_url}
-${file_creation_time}
+${op_id}                    ${EMPTY}
+${cache_key}                ${EMPTY}
+${file_url}                 ${EMPTY}
+${file_transfer_url}        ${EMPTY}
+${file_creation_time}       ${EMPTY}
 
 
 *** Test Cases ***
 Prerequisite Parent
-    Set Device Context    ${PARENT_SN}    #Creates ssh connection to the parent device
+    Set Device Context    ${PARENT_SN}    # Creates ssh connection to the parent device
     Execute Command    sudo tedge disconnect c8y
 
-    Delete child related content    #Delete any previous created child related configuration files/folders on the parent device
-    Check for child related content    #Checks if folders that will trigger child device creation are existing
-    Set external MQTT bind address    #Setting external MQTT bind address which child will use for communication
-    Set external MQTT port    #Setting external MQTT port which child will use for communication Default:1883
+    Delete child related content    # Delete any previous created child related configuration files/folders on the parent device
+    Check for child related content    # Checks if folders that will trigger child device creation are existing
+    Set external MQTT bind address    # Setting external MQTT bind address which child will use for communication
+    Set external MQTT port    # Setting external MQTT port which child will use for communication Default:1883
 
     Sleep    3s
     Restart Service    tedge-agent
     Execute Command    sudo tedge connect c8y
-    Restart Firmware plugin    #Stop and Start c8y-firmware-plugin
+    Restart Firmware plugin    # Stop and Start c8y-firmware-plugin
     Cumulocity.Log Device Info
 
 Prerequisite Child
-    Child device delete firmware file    #Delete previous downloaded firmware file
-    Create child device    #Let mapper to create a child device
-    Validate child Name    #This is to check the existence of the bug: https://github.com/thin-edge/thin-edge.io/issues/1569
+    Child device delete firmware file    # Delete previous downloaded firmware file
+    Create child device    # Let mapper to create a child device
+    Validate child Name    # This is to check the existence of the bug: https://github.com/thin-edge/thin-edge.io/issues/1569
 
 Child device firmware update
     Upload binary to Cumulocity
     ${OPERATION_FILTER_DATE_FROM}=    ThinEdgeIO.Get Unix Timestamp
     Create c8y_Firmware operation
     Validate firmware update request    ${OPERATION_FILTER_DATE_FROM}
-    Child device response on update request    #Child device is sending 'executing' and 'successful' MQTT responses
+    Child device response on update request    # Child device is sending 'executing' and 'successful' MQTT responses
     Validate Cumulocity operation status and MO
 
 Child device firmware update with cache
@@ -59,15 +59,15 @@ Child device firmware update with cache
     ${OPERATION_FILTER_DATE_FROM}=    ThinEdgeIO.Get Unix Timestamp
     Create c8y_Firmware operation
     Validate firmware update request    ${OPERATION_FILTER_DATE_FROM}
-    Child device response on update request    #Child device is sending 'executing' and 'successful' MQTT responses
+    Child device response on update request    # Child device is sending 'executing' and 'successful' MQTT responses
     Validate Cumulocity operation status and MO
     Validate if file is not newly downloaded
 
 
 *** Keywords ***
 Delete child related content
-    Execute Command    sudo rm -rf /etc/tedge/operations/c8y/TST*    #if folder exists, child device will be created
-    Execute Command    sudo rm -rf /etc/tedge/c8y/TST*    #if folder exists, child device will be created
+    Execute Command    sudo rm -rf /etc/tedge/operations/c8y/TST*    # if folder exists, child device will be created
+    Execute Command    sudo rm -rf /etc/tedge/c8y/TST*    # if folder exists, child device will be created
     Execute Command    sudo rm -rf /var/tedge/file-transfer/*
     Execute Command    sudo rm -rf /var/tedge/cache/*
     Execute Command    sudo rm -rf /var/tedge/firmware/*

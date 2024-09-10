@@ -3,12 +3,12 @@ Resource            ../../../resources/common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
 
-Test Teardown      Get Logs    name=${DEVICE_SN}
+Test Teardown       Get Logs    name=${DEVICE_SN}
 
-Test Tags          theme:troubleshooting    theme:installation
+Test Tags           theme:troubleshooting    theme:installation
+
 
 *** Test Cases ***
-
 Migrate Legacy Configuration Files
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $DEVICE_SN

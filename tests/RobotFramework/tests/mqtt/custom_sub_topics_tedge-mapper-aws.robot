@@ -11,14 +11,12 @@ Test Tags           theme:mqtt    theme:aws
 
 
 *** Test Cases ***
-
-
 Publish events to subscribed topic
-    ${timestamp}=        Get Unix Timestamp
+    ${timestamp}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub te/device/main///e/event-type '{"text": "someone logged-in"}'
     Should Have MQTT Messages    aws/td/device:main/e/event-type
 
-Publish measurements to unsubscribed topic   
+Publish measurements to unsubscribed topic
     Execute Command    tedge mqtt pub te/device/main///m/measurement-type '{"temperature": 30}'
     Sleep    5s    reason=If a message is not published in 5s, it will never be published.
     Should Have MQTT Messages    aws/td/device:main/m/measurement-type    minimum=0    maximum=0
