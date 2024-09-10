@@ -54,7 +54,8 @@ COPY --from=build build/* /usr/bin/
 # setup thin-edge.io
 RUN addgroup -g "$USER_GID" -S "$USERNAME" \
     && adduser -u "$USER_UID" -g '' -H -D "$USERNAME" -G "$USERNAME" \
-    && /usr/bin/tedge init
+    && /usr/bin/tedge init \
+    && /usr/bin/c8y-remote-access-plugin --init
 
 # Add custom config
 COPY system.toml /etc/tedge/
