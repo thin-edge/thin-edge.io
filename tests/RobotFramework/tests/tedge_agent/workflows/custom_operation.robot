@@ -38,6 +38,13 @@ Override Built-In Operation
     Should Contain      ${software_list[0]}    "done"
     Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 ''
 
+Override Built-In Operation Executing Step
+    # Trigger a software update using a custom software-update workflow with rollbacks
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/software_update/test-builtin-executing-step '{"status":"init","updateList":[{"type":"apt","modules":[{"name":"broken-package","version":"latest","action":"install"}]}]}'
+    Should Have MQTT Messages    te/device/main///cmd/software_update/test-builtin-executing-step    message_pattern=.*rollback.*   minimum=1
+    Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_update/test-builtin-executing-step ''
+
 Trigger Device Restart Using A Sub-Command
     [Documentation]    To detect if the device has been rebooted, a marker file is created in the /run directory
     ...    which should be deleted when the device is restarted
@@ -198,6 +205,7 @@ Custom Setup
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/software_list.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/software_update.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-download.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/schedule-download.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/launch-download.sh    /etc/tedge/operations/
