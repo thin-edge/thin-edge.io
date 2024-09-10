@@ -41,14 +41,14 @@ pub struct C8yRemoteAccessPluginOpt {
     config_dir: PathBuf,
 
     #[arg(long)]
-    /// Complete the installation of c8y-configuration-plugin by declaring the supported operation.
+    /// Complete the installation of c8y-remote-access-plugin by declaring the supported operation.
     init: bool,
 
     #[arg(long)]
-    /// Clean up c8y-configuration-plugin, deleting the supported operation from tedge.
+    /// Clean up c8y-remote-access-plugin, deleting the supported operation from tedge.
     cleanup: bool,
 
-    /// The SmartREST connect message, forwarded from mosquitto by tedge-mapper.
+    /// The SmartREST connect message, forwarded from Cumulocity by tedge-mapper.
     ///
     /// Can only be provided when neither '--init' nor '--cleanup' are provided.
     connect_string: Option<String>,
