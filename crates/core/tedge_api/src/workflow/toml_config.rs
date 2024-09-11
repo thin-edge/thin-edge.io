@@ -124,16 +124,16 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
     ) -> Result<Self, Self::Error> {
         match input.action {
             TomlOperationAction::Script(script) => {
-                let handlers = TryInto::<ExitHandlers>::try_into((input.handlers, defaults))?;
+                let handlers = ExitHandlers::try_from((input.handlers, defaults))?;
                 Ok(OperationAction::Script(script, handlers))
             }
             TomlOperationAction::BackgroundScript(script) => {
-                let handlers = TryInto::<ExecHandlers>::try_into((input.handlers, defaults))?;
+                let handlers = ExecHandlers::try_from((input.handlers, defaults))?;
                 Ok(OperationAction::BgScript(script, handlers))
             }
             TomlOperationAction::Operation(operation) => match operation.strip_prefix("builtin:") {
                 None => {
-                    let handlers = TryInto::<ExecHandlers>::try_into((input.handlers, defaults))?;
+                    let handlers = ExecHandlers::try_from((input.handlers, defaults))?;
                     let input_script = input.input_script;
                     let cmd_input = input.input.try_into()?;
                     Ok(OperationAction::Operation(
@@ -144,7 +144,7 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     ))
                 }
                 Some(builtin_operation_name) => {
-                    let handlers = TryInto::<ExecHandlers>::try_into((input.handlers, defaults))?;
+                    let handlers = ExecHandlers::try_from((input.handlers, defaults))?;
                     Ok(OperationAction::BuiltInOperation(
                         builtin_operation_name.to_string(),
                         handlers,
@@ -152,7 +152,7 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                 }
             },
             TomlOperationAction::Iterate(target_json_path) => {
-                let handlers = TryInto::<IterateHandlers>::try_into((input.handlers, defaults))?;
+                let handlers = IterateHandlers::try_from((input.handlers, defaults))?;
                 let Some(json_path) = GenericCommandState::extract_path(&target_json_path) else {
                     return Err(WorkflowDefinitionError::InvalidPathExpression(
                         target_json_path,
@@ -171,22 +171,22 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     Ok(OperationAction::MoveTo(on_success))
                 }
                 "await-agent-restart" => {
-                    let handlers = TryInto::<AwaitHandlers>::try_into((input.handlers, defaults))?;
+                    let handlers = AwaitHandlers::try_from((input.handlers, defaults))?;
                     Ok(OperationAction::AwaitingAgentRestart(handlers))
                 }
                 "await-operation-completion" => {
-                    let handlers = TryInto::<AwaitHandlers>::try_into((input.handlers, defaults))?;
+                    let handlers = AwaitHandlers::try_from((input.handlers, defaults))?;
                     let cmd_output = input.output.try_into()?;
                     Ok(OperationAction::AwaitOperationCompletion(
                         handlers, cmd_output,
                     ))
                 }
                 "builtin" => {
-                    let exec_handlers = TryInto::<ExecHandlers>::try_into((
+                    let exec_handlers = ExecHandlers::try_from((
                         input.handlers.clone(),
                         ExecHandlers::builtin_default(),
                     ))?;
-                    let await_handlers = TryInto::<AwaitHandlers>::try_into((
+                    let await_handlers = AwaitHandlers::try_from((
                         input.handlers,
                         AwaitHandlers::builtin_default(),
                     ))?;
@@ -203,11 +203,10 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
 
     fn try_from(input: TomlOperationWorkflow) -> Result<Self, Self::Error> {
         let operation = input.operation;
-        let default_handlers = TryInto::<DefaultHandlers>::try_into(input.handlers)?;
+        let default_handlers = DefaultHandlers::try_from(input.handlers)?;
         let mut states = HashMap::new();
         for (state, action_spec) in input.states.into_iter() {
-            let action =
-                TryInto::<OperationAction>::try_into((action_spec, default_handlers.clone()))?;
+            let action = OperationAction::try_from((action_spec, default_handlers.clone()))?;
             states.insert(state, action);
         }
 
@@ -585,7 +584,7 @@ on_exit.0 = "0"
 on_success = "success"
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        let error = ExitHandlers::try_from(input).unwrap_err();
         assert_eq!(error, ScriptDefinitionError::DuplicatedOnSuccessHandler)
     }
 
@@ -596,7 +595,7 @@ on_exit._ = "wildcard"
 on_error = "error"
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        let error = ExitHandlers::try_from(input).unwrap_err();
         assert_eq!(error, ScriptDefinitionError::DuplicatedOnErrorHandler)
     }
 
@@ -607,7 +606,7 @@ on_exit.1-5 = "1-5"
 on_exit.4-8 = "4-8"
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        let error = ExitHandlers::try_from(input).unwrap_err();
         assert_eq!(
             error,
             ScriptDefinitionError::OverlappingHandler {
@@ -623,7 +622,7 @@ on_exit.4-8 = "4-8"
 on_exit.5-1 = "oops"
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        let error = ExitHandlers::try_from(input).unwrap_err();
         assert_eq!(
             error,
             ScriptDefinitionError::IncorrectRange { from: 5, to: 1 }
@@ -637,7 +636,7 @@ on_success = "successful_state"
 on_stdout = ["other_successful_state_extracted_from_json"]
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        let error = ExitHandlers::try_from(input).unwrap_err();
         assert_eq!(error, ScriptDefinitionError::DuplicatedOnStdoutHandler)
     }
 
@@ -648,7 +647,7 @@ on_exit.0 = "successful_state"
 on_stdout = ["other_successful_state_extracted_from_json"]
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let error = TryInto::<ExitHandlers>::try_into(input).unwrap_err();
+        let error = ExitHandlers::try_from(input).unwrap_err();
         assert_eq!(error, ScriptDefinitionError::DuplicatedOnStdoutHandler)
     }
 
@@ -656,7 +655,7 @@ on_stdout = ["other_successful_state_extracted_from_json"]
     fn default_handlers() {
         let file = "";
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
-        let handlers = TryInto::<ExitHandlers>::try_into(input).unwrap();
+        let handlers = ExitHandlers::try_from(input).unwrap();
         assert_eq!(handlers.state_update_on_success().status, "successful");
         assert_eq!(
             handlers.state_update_on_exit("foo.sh", 1).reason.unwrap(),
