@@ -339,7 +339,7 @@ async fn half_bridge(
 
         match notification {
             Event::Incoming(Incoming::ConnAck(_)) => {
-                info!("Bridge cloud connection {name:?} subscribing to {topics:?}");
+                info!("Bridge {name} connection subscribing to {topics:?}");
                 let recv_client = recv_client.clone();
                 let topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
@@ -375,7 +375,13 @@ async fn half_bridge(
             ) => {
                 if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
                     let target = target.clone();
-                    tokio::spawn(async move { target.ack(&msg).await.unwrap() });
+                    tokio::spawn(async move {
+                        if let Err(err) = target.ack(&msg).await {
+                            info!("Bridge {name} connection failed to ack: {err:?}");
+                        }
+                    });
+                } else {
+                    info!("Bridge {name} connection received ack for unknown pkid={ack_pkid}");
                 }
             }
 
@@ -400,9 +406,18 @@ async fn half_bridge(
                         None => break,
                     }
                 } else {
-                    info!("Bridge cloud connection {name} ignoring already known pkid={pkid}");
+                    info!("Bridge {name} connection ignoring already known pkid={pkid}");
                 }
             }
+
+            Event::Outgoing(Outgoing::AwaitAck(pkid)) => {
+                info!("Bridge {name} connection still waiting ack for pkid={pkid}");
+            }
+
+            Event::Incoming(Incoming::Disconnect) => {
+                info!("Bridge {name} connection closed by peer");
+            }
+
             _ => {}
         }
     }
