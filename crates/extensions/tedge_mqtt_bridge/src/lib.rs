@@ -318,6 +318,13 @@ async fn half_bridge(
     let mut loop_breaker =
         MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
 
+    let mut received = 0; // Count of messages received by this half-bridge
+    let mut forwarded = 0; // Count of messages forwarded to the companion half-bridge
+    let mut published = 0; // Count of messages published (by the companion)
+    let mut acknowledged = 0; // Count of messages acknowledged (by the MQTT end-point of the companion)
+    let mut finalized = 0; // Count of messages fully processed by this half-bridge
+    let mut ignored = 0; // Count of messages published to soon by the companion (AwaitAck)
+
     loop {
         let res = recv_event_loop.poll().await;
         bridge_health.update(&res).await;
@@ -337,6 +344,9 @@ async fn half_bridge(
             }
         };
         debug!("Received notification ({name}) {notification:?}");
+        debug!("Bridge {name} connection: received={received} forwarded={forwarded} published={published} waiting={} acknowledged={acknowledged} finalized={finalized} ignored={ignored}",
+            forward_pkid_to_received_msg.len()
+        );
 
         match notification {
             Event::Incoming(Incoming::ConnAck(_)) => {
@@ -350,6 +360,7 @@ async fn half_bridge(
 
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
+                received += 1;
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
                         target
@@ -365,6 +376,7 @@ async fn half_bridge(
                             .send(Some((topic.into_owned(), publish)))
                             .await
                             .unwrap();
+                        forwarded += 1;
                     }
                 }
             }
@@ -374,9 +386,12 @@ async fn half_bridge(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
+                acknowledged += 1;
                 if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
                     if let Err(err) = target.ack(&msg).await {
                         info!("Bridge {name} connection failed to ack: {err:?}");
+                    } else {
+                        finalized += 1;
                     }
                 } else {
                     info!("Bridge {name} connection received ack for unknown pkid={ack_pkid}");
@@ -385,6 +400,7 @@ async fn half_bridge(
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
+                published += 1;
                 if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
                     match companion_bridge_half.recv().await {
                         // A message was forwarded by the other bridge half, note the packet id
@@ -405,6 +421,7 @@ async fn half_bridge(
                     }
                 } else {
                     info!("Bridge {name} connection ignoring already known pkid={pkid}");
+                    ignored += 1;
                 }
             }
 
