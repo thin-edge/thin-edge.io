@@ -29,6 +29,12 @@ Parameters:
 EOT
 }
 
+postprocess_sqlite() {
+      LOG_TYPE="$1"
+      TMP_LOG_FILE=/tmp/${LOG_TYPE}.log
+      rm -f "$TMP_LOG_FILE"
+}
+
 #
 # Main
 #
@@ -51,6 +57,9 @@ case "$COMMAND" in
                 echo "Log type does not require a pre-processing. type=$LOG_TYPE" >&2
                 ;;
         esac
+        ;;
+    postprocess)
+        postprocess_sqlite "$@"
         ;;
 esac
 

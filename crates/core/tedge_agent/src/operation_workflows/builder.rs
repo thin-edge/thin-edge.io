@@ -137,7 +137,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             state_repository: repository,
             log_dir: self.config.log_dir,
             input_receiver: self.input_receiver,
-            command_dispatcher: self.command_dispatcher,
+            builtin_command_dispatcher: self.command_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
             script_runner: self.script_runner,

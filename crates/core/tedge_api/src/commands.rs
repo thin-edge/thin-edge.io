@@ -731,23 +731,6 @@ pub enum CommandStatus {
     Unknown,
 }
 
-impl CommandStatus {
-    pub fn is_terminal_status(&self) -> bool {
-        matches!(
-            self,
-            CommandStatus::Successful | CommandStatus::Failed { reason: _ }
-        )
-    }
-
-    pub fn is_successful(&self) -> bool {
-        *self == CommandStatus::Successful
-    }
-
-    pub fn is_failed(&self) -> bool {
-        matches!(self, CommandStatus::Failed { reason: _ })
-    }
-}
-
 fn default_failure_reason() -> String {
     "Unknown reason".to_string()
 }

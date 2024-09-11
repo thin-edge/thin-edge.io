@@ -464,21 +464,20 @@ The set of accepted handlers for an action are the following:
 - `timeout_second = 3600` the number of second given to the action to execute
 - `on_timeout = { status = "<state>", reason = "<message>"}` defines the next state when the action is not be completed within the time limit 
 
-For some action, notably a device `restart`, the handlers are limited to one:
-- `on_exec = "<state>"` defines the next state once the action has been launched in the background.
-  The action outcome will have to be observed in this `on_exec` state.
-
 Currently, here are the available actions:
 
 - `await-agent-restart` awaits for **tedge-agent** to restart
 - `await-operation-completion` awaits for a sub-operation to reach a success, failure or timeout
-- `builtin` is used when a builtin operation is overwritten by a custom workflow and indicates that for that state
-  the builtin action has to be applied.
 - `proceed` is a no-op action, simply proceeding to the next state, which is useful when a builtin operation is customized
    but no specific behavior has to be added on a workflow extension point.
 - `cleanup` marks the terminal state of the workflow where the command has been fully processed
   and where the original requester is expected to clean up the command retained message storing its state.
-
+- ( *deprecated* ) `builtin` is used when a builtin operation is overwritten by a custom workflow and indicates that for that state
+  the builtin action has to be applied. For backward compatibility, this keyword is rewritten by the agent
+  as a combination of `operation = "builtin:<operation-name>"` and `action = "await-operation-completion"`.
+- ( *deprecated* ) `restart` trigger a device restart. For backward compatibility, this keyword is rewritten by the agent
+  as a combination of `operation = "restart"` and `action = "await-operation-completion"`.
+ 
 #### Awaiting the agent to restart
 
 When the expected outcome of a script is to restart the device or the agent,
@@ -555,62 +554,124 @@ action = "cleanup"
 action = "cleanup"
 ```
 
-#### Proceed and Builtin actions
+#### Proceed
 
-The `"proceed"` and `"builtin"` actions are useful when customizing a builtin operation
-(`software_list`, `software_update`, `restart`, `config_snapshot`, `config_update`, `log_upload`).
-Indeed, the first step is to start with a workflow specification which mimics the builtin behavior.
+`proceed` simply let the command proceeds to the next state.
 
-For instance, here is the builtin workflow for the `software_update` operation:
+Adding such a no-op step helps to later customize the workflow
+without changing the observable sequence of steps a command has to go through.
+
+This is notably used by all the builtin operations that proceed from the *init* state to the *scheduled* state:
 
 ```toml
-operation = "software_update"       # an operation for which tedge-agent provides an implementation
+[init]
+action = "proceed"
+on_success = "scheduled"
+```
+
+Adding some pre-processing step is then simply done by replacing the `proceed` action with something more specific:
+
+```toml
+[init]
+script = "/usr/bin/check-if-operation-is-timely.sh ${.}"
+on_success = "scheduled"
+on_error = { status = "failed", reason = "not timely" }
+```
+
+### 🚧 Customizing builtin operations
+
+:::info
+🚧 The syntax for customizing builtin workflows is still being finalized so please avoid using it in production environments.
+:::
+
+__tedge-agent__ supports out-of-the-box a set of so-called builtin operations:
+`software_list`, `software_update`, `restart`, `config_snapshot`, `config_update`, `log_upload`.
+
+The workflows of these builtin operations can be customized.
+
+For each, there are *two* workflows: an internal workflow and a customized version of the former.
+- The `builtin:<operation-name>` operation workflow describes the builtin behavior as provided by __tedge-agent__.
+- The `<operation-name>` operation workflow rules the actual behavior of __tedge-agent__,
+  possibly invoking `builtin:<operation-name>` behind the scene.
+- When a user or a mapper triggers a command over MQTT for that `<operation-name>`,
+  by publishing an init message on `te/+/+/+/+/cmd/builtin:<operation-name>/+`,
+  __tedge_agent__ uses the customized version of the workflow for that operation.
+  - From MQTT, there is no way to trigger directly the builtin version of an operation,
+    i.e. there is no `te/+/+/+/+/cmd/builtin:<operation-name>/+` command topic.
+  - The builtin versions are only internal triggered by the agent from a customized workflow. 
+- On a fresh install of %%te%%, the `<operation-name>` is simply a copy of `builtin:<operation-name>`.
+  - This copy is not materialized on the file system, but created in memory by the agent when no customized version is found.
+- A customized version for an `<operation-name>` is provided as a TOML workflow definition file in `/etc/tedge/operations`
+  for that operation, as for any user provided workflow.
+  - By convention, this file is named after the operation name, as in `/etc/tedge/operations/software_update.toml`.
+    However, this is not mandatory: the operation is determined by the `operation` property, e.g. `operation = "software_update"`.
+  - If this definition is valid, then it will be used by the agent as the `<operation-name>` workflow.
+- The customized version of an `<operation-name>` can invoke its builtin version
+  with a step triggering `operation = "builtin:<operation-name>"`.
+  - A customized workflow can also be a complete rework of the feature, ignoring the builtin behavior.
+  - However, the builtin behavior can only be invoked from the workflow for the same operation
+    (e.g. `builtin:sofware_update` can only be invoked from `sofware_update`).
+
+In order to customize a builtin operation, the first step is to materialize its definition in `/etc/tedge/operations`.
+For instance, here is the builtin workflow for the `software_update` operation:
+
+```toml title="/etc/tedge/operations/software_update.toml"
+operation = "software_update"            # any builtion operation can be customized
 
 ["init"]
-action = "proceed"                  # open to customization
+action = "proceed"                       # open to customization
 on_success = "scheduled"
 
 [scheduled]
-action = "builtin"                  # delegated to the tedge-agent
-on_success = "executing"
+operation = "builtin:software_update"    # trigger the built-in behavior for software update
+on_exec = "executing"
 
 [executing]
-action = "builtin"                  # delegated to the tedge-agent
+action = "await-operation-completion"    # awaiting the builtin operation to complete
 on_success = "successful"
 
 [successful]
-action = "cleanup"                  # waiting for the mapper to clean up the command
+action = "cleanup"                       # waiting for the mapper to clean up the command
 
 [failed]
-action = "cleanup"                  # waiting for the mapper to clean up the command
+action = "cleanup"                       # waiting for the mapper to clean up the command
 ```
 
 The action for the `"init"` state is a `"proceed"` action, meaning nothing specific is done by the __tedge-agent__
 and that a user can provide its own implementation.
 
-By contrast, the actions marked as `"builtin"` are those delegated to the __tedge-agent__
-and where the main task of the operation is performed, in that case, installing software.
+By contrast, for the `scheduled` and `executing` states, the work is delegated to the __tedge-agent__
+and this is where the main task of the operation is performed, in that case, installing software.
 
 Here is a customized version of the same operation. 
 
-```toml
+```toml title="/etc/tedge/operations/software_update.toml"
 operation = "software_update"                             # a customized workflow
 
 [init]
-script = "/usr/bin/schedule-software-update.sh ${.}"      # checking is the software update command is timely
-on_success = ["scheduled"]
+script = "/usr/bin/schedule-software-update.sh ${.}"      # one can override any `proceed` action  - here with a checking step
+on_success = "scheduled"
 on_error = { status = "failed", reason = "not timely" }
 
 [scheduled]
-action = "builtin"                                        # the software installation steps are unchanged
+operation = "builtin:software_update"                     # trigger the built-in behavior for software update
 on_success = "executing"
 
 [executing]
-action = "builtin"
+action = "await-operation-completion"                     # awaiting the builtin operation to complete
+on_success = "commit"                                     # with customized chaining rules
+on_error = "rollback"
+
+[commit]
+script = "/usr/bin/commit-software-update.sh ${.}"        # one can add extra steps - here a commit step
 on_success = "successful"
 
+[rollback]
+script = "/usr/bin/rollback-software-update.sh ${.}"      # one can add extra steps - here a rollback step
+on_success = "failed"
+
 [successful]
-action = "cleanup"
+action = "cleanup"                                        # terminal steps cannot be changed
 
 [failed]
 action = "cleanup"
