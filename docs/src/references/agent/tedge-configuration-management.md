@@ -216,6 +216,8 @@ Upon receiving a configuration update command, the agent performs the following 
    1. It performs a `GET` request to the `tedgeUrl` specified in the command to retrieve the content.
    2. The agent then uses the `type` information (`mosquitto`) to to look up the target path from the `tedge-configuration-plugin.toml` file
    and applies the new configuration content to the corresponding `path`(`/etc/mosquitto/mosquitto.conf`).
+   If `tedge` user/group does not have write permissions to the path and its parent directory,
+   [`tedge-write`](../tedge-write.md) will be used in combination with `sudo` for permission elevation.
 
 Throughout the process, the agent updates the command status via MQTT
 by publishing a retained message to the same `<root>/<identifier>/cmd/config_update/<id>` topic
