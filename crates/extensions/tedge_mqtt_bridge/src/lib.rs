@@ -107,7 +107,17 @@ impl MqttBridgeActorBuilder {
         cloud_config.set_manual_acks(true);
         cloud_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
+        // When configured with a low max inflight count of messages, rumqttc might reuse the pkid of message not acknowledged yet
+        // leading to the confusing messages:
+        // 2024-09-10T16:13:23.497043857Z  INFO rumqttc::state: Collision on packet id = 1
+        // 2024-09-10T16:13:23.497072791Z  INFO tedge_mqtt_bridge: Received notification (cloud) Outgoing(AwaitAck(1))
+        // 2024-09-10T16:13:23.497100479Z  INFO tedge_mqtt_bridge: Bridge cloud connection still waiting ack for pkid=1
+        // 2024-09-10T16:13:23.608007183Z  INFO tedge_mqtt_bridge: Received notification (cloud) Outgoing(Publish(1))
+        // 2024-09-10T16:13:23.608233911Z  INFO tedge_mqtt_bridge: Bridge cloud connection ignoring already known pkid=1
+        //
+        // To prevent that, rumqttc inflight is set far bigger than the number of expected inflight messages.
         let in_flight: u16 = 100;
+        cloud_config.set_inflight(in_flight * 5);
         let (local_client, local_event_loop) = AsyncClient::new(local_config, in_flight.into());
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, in_flight.into());
 
