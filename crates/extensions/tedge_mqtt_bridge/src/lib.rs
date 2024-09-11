@@ -107,8 +107,9 @@ impl MqttBridgeActorBuilder {
         cloud_config.set_manual_acks(true);
         cloud_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
-        let (local_client, local_event_loop) = AsyncClient::new(local_config, 10);
-        let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, 10);
+        let in_flight: u16 = 100;
+        let (local_client, local_event_loop) = AsyncClient::new(local_config, in_flight.into());
+        let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, in_flight.into());
 
         let local_topics: Vec<_> = rules
             .local_subscriptions()
@@ -119,7 +120,7 @@ impl MqttBridgeActorBuilder {
             .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
             .collect();
 
-        let [msgs_local, msgs_cloud] = bidirectional_channel(10);
+        let [msgs_local, msgs_cloud] = bidirectional_channel(in_flight.into());
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
             rules.converters_and_bidirectional_topic_filters();
         let (tx_status, monitor) =
@@ -374,12 +375,9 @@ async fn half_bridge(
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
                 if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
-                    let target = target.clone();
-                    tokio::spawn(async move {
-                        if let Err(err) = target.ack(&msg).await {
-                            info!("Bridge {name} connection failed to ack: {err:?}");
-                        }
-                    });
+                    if let Err(err) = target.ack(&msg).await {
+                        info!("Bridge {name} connection failed to ack: {err:?}");
+                    }
                 } else {
                     info!("Bridge {name} connection received ack for unknown pkid={ack_pkid}");
                 }
