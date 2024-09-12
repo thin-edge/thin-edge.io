@@ -30,3 +30,5 @@ mod upload;
 mod actor;
 mod builder;
 pub use builder::OperationHandlerBuilder;
+
+mod c8y_operations;

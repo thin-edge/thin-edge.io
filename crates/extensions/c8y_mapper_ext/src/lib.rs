@@ -1,3 +1,5 @@
+use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
+
 pub mod actor;
 pub mod alarm_converter;
 pub mod availability;
@@ -22,6 +24,19 @@ pub struct Capabilities {
     pub config_update: bool,
     pub firmware_update: bool,
     pub device_profile: bool,
+}
+
+impl Capabilities {
+    pub fn is_enabled(&self, operation: &C8yDeviceControlOperation) -> bool {
+        match operation {
+            C8yDeviceControlOperation::LogfileRequest(_) => self.log_upload,
+            C8yDeviceControlOperation::UploadConfigFile(_) => self.config_snapshot,
+            C8yDeviceControlOperation::DownloadConfigFile(_) => self.config_update,
+            C8yDeviceControlOperation::Firmware(_) => self.firmware_update,
+            C8yDeviceControlOperation::DeviceProfile(_) => self.device_profile,
+            _ => true,
+        }
+    }
 }
 
 #[cfg(test)]
