@@ -133,8 +133,7 @@ impl MqttBridgeActorBuilder {
         let [msgs_local, msgs_cloud] = bidirectional_channel(in_flight.into());
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
             rules.converters_and_bidirectional_topic_filters();
-        let (tx_status, monitor) =
-            BridgeHealthMonitor::new(local_client.clone(), health_topic.name.clone(), &msgs_cloud);
+        let (tx_status, monitor) = BridgeHealthMonitor::new(health_topic.name.clone(), &msgs_cloud);
         tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
             local_event_loop,
@@ -173,33 +172,63 @@ fn bidirectional_channel<T>(buffer: usize) -> [BidirectionalChannelHalf<T>; 2] {
     let (tx_first, rx_first) = mpsc::channel(buffer);
     let (tx_second, rx_second) = mpsc::channel(buffer);
     [
-        BidirectionalChannelHalf {
-            tx: tx_first,
-            rx: rx_second,
-        },
-        BidirectionalChannelHalf {
-            tx: tx_second,
-            rx: rx_first,
-        },
+        BidirectionalChannelHalf::new(tx_first, rx_second),
+        BidirectionalChannelHalf::new(tx_second, rx_first),
     ]
 }
 
 struct BidirectionalChannelHalf<T> {
-    tx: mpsc::Sender<T>,
-    rx: mpsc::Receiver<T>,
+    /// Sends messages to the other half
+    tx: mpsc::Sender<Option<T>>,
+    /// Receives messages from the other half
+    rx: mpsc::Receiver<Option<T>>,
+    /// Sends to a background task sending messages to the other half and over MQTT
+    unbounded_tx: mpsc::UnboundedSender<(T, Option<T>)>,
+    /// Used by the background task
+    unbounded_rx: Option<mpsc::UnboundedReceiver<(T, Option<T>)>>,
 }
 
 impl<'a, T> BidirectionalChannelHalf<T> {
-    pub fn send(&'a mut self, item: T) -> futures::sink::Send<'a, mpsc::Sender<T>, T> {
-        self.tx.send(item)
+    fn new(tx: mpsc::Sender<Option<T>>, rx: mpsc::Receiver<Option<T>>) -> Self {
+        let (unbounded_tx, unbounded_rx) = mpsc::unbounded::<(T, Option<T>)>();
+        BidirectionalChannelHalf {
+            tx,
+            rx,
+            unbounded_tx,
+            unbounded_rx: Some(unbounded_rx),
+        }
     }
 
-    pub fn recv(&mut self) -> futures::stream::Next<mpsc::Receiver<T>> {
+    pub fn send(
+        &'a mut self,
+        item: T,
+        duplicate: Option<T>,
+    ) -> futures::sink::Send<'a, mpsc::UnboundedSender<(T, Option<T>)>, (T, Option<T>)> {
+        self.unbounded_tx.send((item, duplicate))
+    }
+
+    pub fn recv(&mut self) -> futures::stream::Next<mpsc::Receiver<Option<T>>> {
         self.rx.next()
     }
 
-    pub fn clone_sender(&self) -> mpsc::Sender<T> {
-        self.tx.clone()
+    pub fn clone_sender(&self) -> mpsc::UnboundedSender<(T, Option<T>)> {
+        self.unbounded_tx.clone()
+    }
+}
+
+impl BidirectionalChannelHalf<(String, Publish)> {
+    pub fn spawn_publisher(&mut self, target: AsyncClient) {
+        let mut unbounded_rx = self.unbounded_rx.take().unwrap();
+        let mut tx = self.tx.clone();
+        tokio::spawn(async move {
+            while let Some(((topic, publish), duplicate)) = unbounded_rx.next().await {
+                tx.send(duplicate).await.unwrap();
+                target
+                    .publish(topic, publish.qos, publish.retain, publish.payload)
+                    .await
+                    .unwrap();
+            }
+        });
     }
 }
 
@@ -311,12 +340,14 @@ async fn half_bridge(
     recv_client: AsyncClient,
     transformer: TopicConverter,
     bidirectional_topic_filters: Vec<Cow<'static, str>>,
-    mut companion_bridge_half: BidirectionalChannelHalf<Option<(String, Publish)>>,
+    mut companion_bridge_half: BidirectionalChannelHalf<(String, Publish)>,
     tx_health: mpsc::Sender<(&'static str, Status)>,
     name: &'static str,
     topics: Vec<SubscribeFilter>,
     reconnect_policy: TEdgeConfigReaderMqttBridgeReconnectPolicy,
 ) {
+    companion_bridge_half.spawn_publisher(target.clone());
+
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
         reconnect_policy.initial_interval.duration(),
@@ -373,17 +404,9 @@ async fn half_bridge(
                 received += 1;
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
-                        target
-                            .publish(
-                                topic.clone(),
-                                publish.qos,
-                                publish.retain,
-                                publish.payload.clone(),
-                            )
-                            .await
-                            .unwrap();
+                        let duplicate = (topic.to_string(), publish.clone());
                         companion_bridge_half
-                            .send(Some((topic.into_owned(), publish)))
+                            .send((topic.to_string(), publish), Some(duplicate))
                             .await
                             .unwrap();
                         forwarded += 1;
