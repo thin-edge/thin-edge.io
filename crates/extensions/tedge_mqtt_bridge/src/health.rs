@@ -1,5 +1,5 @@
 use crate::overall_status;
-use crate::BidirectionalChannelHalf;
+use crate::BridgeAsyncClient;
 use crate::BridgeMessage;
 use crate::Status;
 use futures::channel::mpsc;
@@ -27,7 +27,7 @@ pub struct BridgeHealthMonitor {
 impl BridgeHealthMonitor {
     pub(crate) fn new(
         topic: String,
-        bridge_half: &BidirectionalChannelHalf,
+        bridge_half: &BridgeAsyncClient,
     ) -> (mpsc::Sender<(&'static str, Status)>, Self) {
         let (tx, rx_status) = mpsc::channel(10);
         (
