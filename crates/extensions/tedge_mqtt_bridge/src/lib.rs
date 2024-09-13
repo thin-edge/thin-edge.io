@@ -130,7 +130,8 @@ impl MqttBridgeActorBuilder {
             .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
             .collect();
 
-        let [msgs_local, msgs_cloud] = bidirectional_channel(in_flight.into());
+        let [msgs_local, msgs_cloud] =
+            bidirectional_channel(cloud_client.clone(), local_client.clone(), in_flight.into());
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
             rules.converters_and_bidirectional_topic_filters();
         let (tx_status, monitor) = BridgeHealthMonitor::new(health_topic.name.clone(), &msgs_cloud);
@@ -168,18 +169,22 @@ impl MqttBridgeActorBuilder {
     }
 }
 
-fn bidirectional_channel<T>(buffer: usize) -> [BidirectionalChannelHalf<T>; 2] {
+fn bidirectional_channel(
+    cloud_client: AsyncClient,
+    local_client: AsyncClient,
+    buffer: usize,
+) -> [BidirectionalChannelHalf<Publish>; 2] {
     let (tx_first, rx_first) = mpsc::channel(buffer);
     let (tx_second, rx_second) = mpsc::channel(buffer);
     [
-        BidirectionalChannelHalf::new(tx_first, rx_second),
-        BidirectionalChannelHalf::new(tx_second, rx_first),
+        BidirectionalChannelHalf::new(cloud_client, tx_first, rx_second),
+        BidirectionalChannelHalf::new(local_client, tx_second, rx_first),
     ]
 }
 
 struct BidirectionalChannelHalf<T> {
-    /// Sends messages to the companion half bridge
-    tx: mpsc::Sender<Option<(String, T)>>,
+    /// MQTT target for the messages
+    target: AsyncClient,
     /// Receives messages from the companion half bridge
     rx: mpsc::Receiver<Option<(String, T)>>,
     /// Sends to a background task that forwards the messages to the target and companion
@@ -194,22 +199,10 @@ struct BidirectionalChannelHalf<T> {
     /// }
     ///
     unbounded_tx: mpsc::UnboundedSender<(Option<String>, T)>,
-    /// Used by the background task
-    unbounded_rx: Option<mpsc::UnboundedReceiver<(Option<String>, T)>>,
 }
 
-impl<'a, T> BidirectionalChannelHalf<T> {
-    fn new(tx: mpsc::Sender<Option<(String, T)>>, rx: mpsc::Receiver<Option<(String, T)>>) -> Self {
-        let (unbounded_tx, unbounded_rx) = mpsc::unbounded::<(Option<String>, T)>();
-        BidirectionalChannelHalf {
-            tx,
-            rx,
-            unbounded_tx,
-            unbounded_rx: Some(unbounded_rx),
-        }
-    }
-
-    pub fn send(
+impl<T> BidirectionalChannelHalf<T> {
+    pub fn send<'a>(
         &'a mut self,
         target_topic: Option<String>,
         message: T,
@@ -228,9 +221,27 @@ impl<'a, T> BidirectionalChannelHalf<T> {
 }
 
 impl BidirectionalChannelHalf<Publish> {
-    pub fn spawn_publisher(&mut self, target: AsyncClient) {
-        let mut unbounded_rx = self.unbounded_rx.take().unwrap();
-        let mut tx = self.tx.clone();
+    fn new(
+        target: AsyncClient,
+        tx: mpsc::Sender<Option<(String, Publish)>>,
+        rx: mpsc::Receiver<Option<(String, Publish)>>,
+    ) -> Self {
+        let (unbounded_tx, unbounded_rx) = mpsc::unbounded();
+        let companion_bridge_half = BidirectionalChannelHalf {
+            target,
+            rx,
+            unbounded_tx,
+        };
+        companion_bridge_half.spawn_publisher(tx, unbounded_rx);
+        companion_bridge_half
+    }
+
+    fn spawn_publisher(
+        &self,
+        mut tx: mpsc::Sender<Option<(String, Publish)>>,
+        mut unbounded_rx: mpsc::UnboundedReceiver<(Option<String>, Publish)>,
+    ) {
+        let target = self.target.clone();
         tokio::spawn(async move {
             while let Some((target_topic, publish)) = unbounded_rx.next().await {
                 let topic = target_topic.clone().unwrap_or(publish.topic.clone());
@@ -359,8 +370,6 @@ async fn half_bridge(
     topics: Vec<SubscribeFilter>,
     reconnect_policy: TEdgeConfigReaderMqttBridgeReconnectPolicy,
 ) {
-    companion_bridge_half.spawn_publisher(target.clone());
-
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
         reconnect_policy.initial_interval.duration(),
