@@ -1,5 +1,6 @@
 use crate::overall_status;
 use crate::BidirectionalChannelHalf;
+use crate::BridgeMessage;
 use crate::Status;
 use futures::channel::mpsc;
 use futures::SinkExt;
@@ -17,16 +18,16 @@ use tracing::log::info;
 ///
 /// When [Self::monitor] runs, this will watch the status of the bridge halves, and notify the
 /// relevant MQTT topic about the overall health.
-pub struct BridgeHealthMonitor<T> {
+pub struct BridgeHealthMonitor {
     topic: String,
     rx_status: mpsc::Receiver<(&'static str, Status)>,
-    companion_bridge_half: mpsc::UnboundedSender<(Option<String>, T)>,
+    companion_bridge_half: mpsc::UnboundedSender<BridgeMessage>,
 }
 
-impl BridgeHealthMonitor<Publish> {
+impl BridgeHealthMonitor {
     pub(crate) fn new(
         topic: String,
-        bridge_half: &BidirectionalChannelHalf<Publish>,
+        bridge_half: &BidirectionalChannelHalf,
     ) -> (mpsc::Sender<(&'static str, Status)>, Self) {
         let (tx, rx_status) = mpsc::channel(10);
         (
@@ -57,7 +58,9 @@ impl BridgeHealthMonitor<Publish> {
                 // Publish the health message over MQTT, but with no duplicate
                 // in order to maintain synchronisation between the two bridge halves
                 self.companion_bridge_half
-                    .send((None, health_msg))
+                    .send(BridgeMessage::Pub {
+                        publish: health_msg,
+                    })
                     .await
                     .unwrap();
             }
