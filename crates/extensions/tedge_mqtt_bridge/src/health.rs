@@ -20,13 +20,13 @@ use tracing::log::info;
 pub struct BridgeHealthMonitor<T> {
     topic: String,
     rx_status: mpsc::Receiver<(&'static str, Status)>,
-    companion_bridge_half: mpsc::UnboundedSender<(T, Option<T>)>,
+    companion_bridge_half: mpsc::UnboundedSender<(Option<String>, T)>,
 }
 
-impl BridgeHealthMonitor<(String, Publish)> {
+impl BridgeHealthMonitor<Publish> {
     pub(crate) fn new(
         topic: String,
-        bridge_half: &BidirectionalChannelHalf<(String, Publish)>,
+        bridge_half: &BidirectionalChannelHalf<Publish>,
     ) -> (mpsc::Sender<(&'static str, Status)>, Self) {
         let (tx, rx_status) = mpsc::channel(10);
         (
@@ -57,7 +57,7 @@ impl BridgeHealthMonitor<(String, Publish)> {
                 // Publish the health message over MQTT, but with no duplicate
                 // in order to maintain synchronisation between the two bridge halves
                 self.companion_bridge_half
-                    .send(((self.topic.clone(), health_msg), None))
+                    .send((None, health_msg))
                     .await
                     .unwrap();
             }
