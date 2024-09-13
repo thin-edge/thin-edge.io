@@ -508,6 +508,10 @@ async fn half_bridge(
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
                         received += 1;
                         target.publish(topic.to_string(), publish).await;
+                    } else {
+                        // Being not forwarded to this bridge target
+                        // The message has to be acknowledged
+                        recv_client.ack(&publish).await.unwrap()
                     }
                 }
             }
