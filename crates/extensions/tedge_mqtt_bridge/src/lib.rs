@@ -213,18 +213,8 @@ struct BridgeAsyncClient {
     /// Receives messages from the companion half bridge
     rx: mpsc::Receiver<Option<(String, Publish)>>,
 
-    /// Sends to a background task that forwards the messages to the target and companion
-    ///
-    /// (None, message) => {
-    ///     - the message is published unchanged to the target
-    ///     - a None sentinel value is sent to the companion
-    /// }
-    /// (Some(topic), message) => {
-    ///     - the message is published to the target on the given topic
-    ///     - Some(topic, message.clone()) is sent to the companion
-    /// }
-    ///
-    unbounded_tx: mpsc::UnboundedSender<BridgeMessage>,
+    /// Sends messages to a background task that forwards the messages to the target and companion
+    sender: BridgeMessageSender,
 }
 
 impl BridgeAsyncClient {
@@ -232,8 +222,8 @@ impl BridgeAsyncClient {
         self.rx.next()
     }
 
-    pub fn clone_sender(&self) -> mpsc::UnboundedSender<BridgeMessage> {
-        self.unbounded_tx.clone()
+    pub fn clone_sender(&self) -> BridgeMessageSender {
+        self.sender.clone()
     }
 
     fn new(
@@ -245,27 +235,18 @@ impl BridgeAsyncClient {
         let companion_bridge_half = BridgeAsyncClient {
             target,
             rx,
-            unbounded_tx,
+            sender: BridgeMessageSender { unbounded_tx },
         };
         companion_bridge_half.spawn_publisher(tx, unbounded_rx);
         companion_bridge_half
     }
 
     async fn publish(&mut self, target_topic: String, publish: Publish) {
-        self.unbounded_tx
-            .send(BridgeMessage::BridgePub {
-                target_topic,
-                publish,
-            })
-            .await
-            .unwrap()
+        self.sender.publish(target_topic, publish).await
     }
 
     async fn ack(&mut self, publish: Publish) {
-        self.unbounded_tx
-            .send(BridgeMessage::BridgeAck { publish })
-            .await
-            .unwrap()
+        self.sender.ack(publish).await
     }
 
     fn spawn_publisher(
@@ -301,6 +282,37 @@ impl BridgeAsyncClient {
                 }
             }
         });
+    }
+}
+
+#[derive(Clone)]
+struct BridgeMessageSender {
+    unbounded_tx: mpsc::UnboundedSender<BridgeMessage>,
+}
+
+impl BridgeMessageSender {
+    async fn internal_publish(&mut self, publish: Publish) {
+        self.unbounded_tx
+            .send(BridgeMessage::Pub { publish })
+            .await
+            .unwrap()
+    }
+
+    async fn publish(&mut self, target_topic: String, publish: Publish) {
+        self.unbounded_tx
+            .send(BridgeMessage::BridgePub {
+                target_topic,
+                publish,
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn ack(&mut self, publish: Publish) {
+        self.unbounded_tx
+            .send(BridgeMessage::BridgeAck { publish })
+            .await
+            .unwrap()
     }
 }
 

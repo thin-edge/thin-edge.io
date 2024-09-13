@@ -1,6 +1,6 @@
 use crate::overall_status;
 use crate::BridgeAsyncClient;
-use crate::BridgeMessage;
+use crate::BridgeMessageSender;
 use crate::Status;
 use futures::channel::mpsc;
 use futures::SinkExt;
@@ -21,7 +21,7 @@ use tracing::log::info;
 pub struct BridgeHealthMonitor {
     topic: String,
     rx_status: mpsc::Receiver<(&'static str, Status)>,
-    companion_bridge_half: mpsc::UnboundedSender<BridgeMessage>,
+    companion_bridge_half: BridgeMessageSender,
 }
 
 impl BridgeHealthMonitor {
@@ -55,14 +55,11 @@ impl BridgeHealthMonitor {
                     Publish::new(&self.topic, QoS::AtLeastOnce, status.unwrap().json());
                 health_msg.retain = true;
 
-                // Publish the health message over MQTT, but with no duplicate
-                // in order to maintain synchronisation between the two bridge halves
+                // Publish the health message over MQTT, but with no duplicate for the companion
+                // as this message doesn't have to be acknowledged
                 self.companion_bridge_half
-                    .send(BridgeMessage::Pub {
-                        publish: health_msg,
-                    })
-                    .await
-                    .unwrap();
+                    .internal_publish(health_msg)
+                    .await;
             }
         }
     }
