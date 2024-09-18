@@ -18,7 +18,10 @@
 //! - an implementation of the `tedge-write` binary
 //! - tedge-write API meant to be called by other tedge-components
 //!
-//! https://github.com/thin-edge/thin-edge.io/issues/2456
+//! # References
+//!
+//! - https://github.com/thin-edge/thin-edge.io/issues/2456
+//! - docs/src/references/tedge-write.md
 
 const TEDGE_WRITE_BINARY: &str = "tedge-write";
 
