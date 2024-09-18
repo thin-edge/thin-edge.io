@@ -25,6 +25,7 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         .iter()
         .flat_map(|group| match group {
             input::FieldOrGroup::Group(group) => unfold_group(Vec::new(), group),
+            input::FieldOrGroup::Multi(group) => unfold_group(Vec::new(), group),
             input::FieldOrGroup::Field(field) => {
                 error.combine(syn::Error::new(
                     field.ident().span(),
@@ -152,6 +153,10 @@ fn unfold_group(
                         .unwrap_or_else(|| field.ident().to_string()),
                 );
                 output.push((name, field))
+            }
+            input::FieldOrGroup::Multi(group) => {
+                name.push("*".to_owned());
+                output.append(&mut unfold_group(name.clone(), group));
             }
             input::FieldOrGroup::Group(group) => {
                 output.append(&mut unfold_group(name.clone(), group));

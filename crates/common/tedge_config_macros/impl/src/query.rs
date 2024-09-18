@@ -237,7 +237,7 @@ fn keys_enum(
     let as_str_example = (!as_str_example.is_empty()).then(|| {
         quote! {
             /// ```compile_fail
-            /// // This doctest is compile_fail because we have no way import the
+            /// // This doctest is compile_fail because we have no way to import the
             /// // current type, but the example is still valuable
             #(
                 #[doc = #as_str_example]
@@ -450,7 +450,7 @@ fn configuration_paths_from(items: &[FieldOrGroup]) -> Vec<VecDeque<&FieldOrGrou
     for item in items.iter().filter(|item| !item.reader().skip) {
         match item {
             FieldOrGroup::Field(_) => res.push(VecDeque::from([item])),
-            FieldOrGroup::Group(group) => {
+            FieldOrGroup::Group(group) | FieldOrGroup::Multi(group) => {
                 for mut fields in configuration_paths_from(&group.contents) {
                     fields.push_front(item);
                     res.push(fields);

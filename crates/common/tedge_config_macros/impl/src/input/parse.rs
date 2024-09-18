@@ -37,6 +37,8 @@ pub struct ConfigurationAttributes {
     #[darling(default)]
     pub dto: GroupDtoSettings,
     #[darling(default)]
+    pub multi: bool,
+    #[darling(default)]
     pub reader: ReaderSettings,
     #[darling(default, multiple, rename = "deprecated_name")]
     pub deprecated_names: Vec<SpannedValue<String>>,
@@ -49,6 +51,7 @@ pub struct ConfigurationGroup {
     pub attrs: Vec<syn::Attribute>,
     pub dto: GroupDtoSettings,
     pub reader: ReaderSettings,
+    pub multi: bool,
     pub deprecated_names: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub ident: syn::Ident,
@@ -70,6 +73,7 @@ impl Parse for ConfigurationGroup {
             reader: known_attributes.reader,
             deprecated_names: known_attributes.deprecated_names,
             rename: known_attributes.rename,
+            multi: known_attributes.multi,
             ident: input.parse()?,
             colon_token: input.parse()?,
             brace: syn::braced!(content in input),

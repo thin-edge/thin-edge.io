@@ -3,10 +3,14 @@
 //! When reading the configuration, we want to see default values if nothing has
 //! been configured
 use std::iter;
+use std::iter::once;
 
+use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+use quote::ToTokens;
+use quote::TokenStreamExt;
 use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::punctuated::Punctuated;
@@ -36,7 +40,7 @@ pub fn try_generate(
 fn generate_structs(
     name: &proc_macro2::Ident,
     items: &[FieldOrGroup],
-    parents: Vec<syn::Ident>,
+    parents: Vec<PathItem>,
     doc_comment: &str,
 ) -> syn::Result<TokenStream> {
     let mut idents = Vec::new();
@@ -67,12 +71,38 @@ fn generate_structs(
                     false => parse_quote!(pub),
                 });
             }
+            // TODO skipping?
+            FieldOrGroup::Multi(group) => {
+                // TODO is this right?
+                let sub_reader_name = prefixed_type_name(name, group);
+                idents.push(&group.ident);
+                tys.push(parse_quote_spanned!(group.ident.span()=> ::std::collections::HashMap<String, #sub_reader_name>));
+                let mut parents = parents.clone();
+                parents.push(PathItem::Static(group.ident.clone()));
+                let count_dyn = parents.iter().filter_map(PathItem::as_dynamic).count();
+                // TODO rationalise this so it's not hardcoded where we use it
+                parents.push(PathItem::Dynamic(syn::Ident::new(
+                    &format!("key{count_dyn}"),
+                    Span::call_site(),
+                )));
+                sub_readers.push(Some(generate_structs(
+                    &sub_reader_name,
+                    &group.contents,
+                    parents,
+                    "",
+                )?));
+                attrs.push(group.attrs.to_vec());
+                vis.push(match group.reader.private {
+                    true => parse_quote!(),
+                    false => parse_quote!(pub),
+                });
+            }
             FieldOrGroup::Group(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
                 let mut parents = parents.clone();
-                parents.push(group.ident.clone());
+                parents.push(PathItem::Static(group.ident.clone()));
                 sub_readers.push(Some(generate_structs(
                     &sub_reader_name,
                     &group.contents,
@@ -176,7 +206,7 @@ fn find_field<'a>(
 
         let is_last_segment = i == key.len() - 1;
         match target {
-            FieldOrGroup::Group(group) => fields = &group.contents,
+            FieldOrGroup::Group(group) | FieldOrGroup::Multi(group) => fields = &group.contents,
             FieldOrGroup::Field(_) if is_last_segment => (),
             _ => {
                 let string_path = key.iter().map(<_>::to_string).collect::<Vec<_>>();
@@ -195,7 +225,7 @@ fn find_field<'a>(
     match current_field {
         // TODO test this appears
         None => Err(syn::Error::new(key.span(), "key is empty")),
-        Some(FieldOrGroup::Group(_)) => Err(syn::Error::new(
+        Some(FieldOrGroup::Group(_) | FieldOrGroup::Multi(_)) => Err(syn::Error::new(
             key.span(),
             // TODO test this too
             "path points to a group of fields, not a single field",
@@ -204,9 +234,40 @@ fn find_field<'a>(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathItem {
+    Static(syn::Ident),
+    Dynamic(syn::Ident),
+}
+
+impl PathItem {
+    pub fn as_static(&self) -> Option<&syn::Ident> {
+        match self {
+            Self::Static(s) => Some(s),
+            Self::Dynamic(_) => None,
+        }
+    }
+
+    pub fn as_dynamic(&self) -> Option<&syn::Ident> {
+        match self {
+            Self::Dynamic(d) => Some(d),
+            Self::Static(_) => None,
+        }
+    }
+}
+
+impl ToTokens for PathItem {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Static(s) => s.to_tokens(tokens),
+            Self::Dynamic(d) => tokens.append_all(quote!(get(#d).unwrap())),
+        }
+    }
+}
+
 fn reader_value_for_field<'a>(
     field: &'a ConfigurableField,
-    parents: &[syn::Ident],
+    parents: &[PathItem],
     root_fields: &[FieldOrGroup],
     mut observed_keys: Vec<&'a Punctuated<syn::Ident, Token![.]>>,
 ) -> syn::Result<TokenStream> {
@@ -215,6 +276,7 @@ fn reader_value_for_field<'a>(
         ConfigurableField::ReadWrite(field) => {
             let key = parents
                 .iter()
+                .filter_map(PathItem::as_static)
                 .map(|p| p.to_string())
                 .chain(iter::once(name.to_string()))
                 .collect::<Vec<_>>()
@@ -257,6 +319,7 @@ fn reader_value_for_field<'a>(
                             .iter()
                             .take(default_key.len() - 1)
                             .map(<_>::to_owned)
+                            .map(PathItem::Static)
                             .collect::<Vec<_>>(),
                         root_fields,
                         observed_keys,
@@ -318,11 +381,16 @@ fn reader_value_for_field<'a>(
 fn generate_conversions(
     name: &proc_macro2::Ident,
     items: &[FieldOrGroup],
-    parents: Vec<syn::Ident>,
+    parents: Vec<PathItem>,
     root_fields: &[FieldOrGroup],
 ) -> syn::Result<TokenStream> {
     let mut field_conversions = Vec::new();
     let mut rest = Vec::new();
+    let extra_args: Vec<_> = parents
+        .iter()
+        .filter_map(PathItem::as_dynamic)
+        .map(|name| quote!(#name: &str))
+        .collect();
 
     for item in items {
         match item {
@@ -336,13 +404,33 @@ fn generate_conversions(
                 let name = &group.ident;
 
                 let mut parents = parents.clone();
-                parents.push(group.ident.clone());
+                parents.push(PathItem::Static(group.ident.clone()));
                 field_conversions.push(quote!(#name: #sub_reader_name::from_dto(dto, location)));
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);
             }
-            FieldOrGroup::Group(_) => {
+            FieldOrGroup::Multi(group) if !group.reader.skip => {
+                let sub_reader_name = prefixed_type_name(name, group);
+                let name = &group.ident;
+
+                let mut parents = parents.clone();
+                parents.push(PathItem::Static(group.ident.clone()));
+                // TODO this is horrible
+                let l = extra_args.len();
+                let new_arg = syn::Ident::new(&format!("key{l}"), Span::call_site());
+                let extra_args: Vec<_> = parents
+                    .iter()
+                    .filter_map(PathItem::as_dynamic)
+                    .chain(once(&new_arg))
+                    .collect();
+                field_conversions.push(quote!(#name: dto.#(#parents).*.keys().map(|#new_arg| (#new_arg.to_owned(), #sub_reader_name::from_dto(dto, location, #(#extra_args),*))).collect()));
+                parents.push(PathItem::Dynamic(new_arg));
+                let sub_conversions =
+                    generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
+                rest.push(sub_conversions);
+            }
+            FieldOrGroup::Group(_) | FieldOrGroup::Multi(_) => {
                 // Skipped
             }
         }
@@ -353,7 +441,7 @@ fn generate_conversions(
             #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
             #[automatically_derived]
             /// Converts the provided [TEdgeConfigDto] into a reader
-            pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+            pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation, #(#extra_args,)*) -> Self {
                 Self {
                     #(#field_conversions),*
                 }
