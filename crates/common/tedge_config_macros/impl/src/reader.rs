@@ -76,7 +76,7 @@ fn generate_structs(
                 // TODO is this right?
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
-                tys.push(parse_quote_spanned!(group.ident.span()=> ::std::collections::HashMap<String, #sub_reader_name>));
+                tys.push(parse_quote_spanned!(group.ident.span()=> ::tedge_config_macros::Multi<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
                 let count_dyn = parents.iter().filter_map(PathItem::as_dynamic).count();
@@ -389,7 +389,7 @@ fn generate_conversions(
     let extra_args: Vec<_> = parents
         .iter()
         .filter_map(PathItem::as_dynamic)
-        .map(|name| quote!(#name: &str))
+        .map(|name| quote!(#name: Option<&str>))
         .collect();
 
     for item in items {
@@ -424,7 +424,7 @@ fn generate_conversions(
                     .filter_map(PathItem::as_dynamic)
                     .chain(once(&new_arg))
                     .collect();
-                field_conversions.push(quote!(#name: dto.#(#parents).*.keys().map(|#new_arg| (#new_arg.to_owned(), #sub_reader_name::from_dto(dto, location, #(#extra_args),*))).collect()));
+                field_conversions.push(quote!(#name: dto.#(#parents).*.map(|#new_arg| #sub_reader_name::from_dto(dto, location, #(#extra_args),*))));
                 parents.push(PathItem::Dynamic(new_arg));
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
