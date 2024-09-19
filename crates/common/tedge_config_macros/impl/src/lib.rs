@@ -238,6 +238,17 @@ mod tests {
     }
 
     #[test]
+    fn can_contain_multi_fields() {
+        generate_configuration(quote! {
+            #[multi]
+            c8y: {
+                url: String
+            },
+        })
+        .unwrap();
+    }
+
+    #[test]
     fn error_message_suggests_fix_in_case_of_invalid_value() {
         assert_eq!(generate_configuration(quote! {
             http: {

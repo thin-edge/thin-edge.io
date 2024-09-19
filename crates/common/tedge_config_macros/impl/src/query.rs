@@ -13,11 +13,19 @@ use syn::spanned::Spanned;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let paths = configuration_paths_from(items);
-    let (readonly_variant, write_error) = paths
+    let (readonly_variant, readonly_iter, readonly_destr, write_error): (
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+    ) = paths
         .iter()
         .filter_map(|field| {
+            let (enum_field, iter_field, destr_field) = variant_name(field);
             Some((
-                variant_name(field),
+                enum_field,
+                iter_field,
+                destr_field,
                 field
                     .back()?
                     .field()?
@@ -27,7 +35,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                     .as_str(),
             ))
         })
-        .unzip::<_, _, Vec<_>, Vec<_>>();
+        .multiunzip();
     let readable_args = configuration_strings(paths.iter());
     let readonly_args = configuration_strings(paths.iter().filter(|path| !is_read_write(path)));
     let writable_args = configuration_strings(paths.iter().filter(|path| is_read_write(path)));
@@ -49,7 +57,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             .cloned()
             .collect::<Vec<_>>(),
     );
-    let (static_alias, updated_key) = deprecated_keys(paths.iter());
+    let (static_alias, _, iter_updated, _) = deprecated_keys(paths.iter());
 
     quote! {
         #readable_keys
@@ -72,8 +80,10 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         impl ReadOnlyKey {
             fn write_error(self) -> &'static str {
                 match self {
+                    // TODO these should be underscores
                     #(
-                        Self::#readonly_variant => #write_error,
+                        #[allow(unused)]
+                        Self::#readonly_destr => #write_error,
                     )*
                 }
             }
@@ -100,8 +110,8 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                 let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
                 let mut aliases = struct_field_aliases(None, &fields);
                 #(
-                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), Cow::Borrowed(ReadableKey::#updated_key.as_str())) {
-                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#updated_key.as_str());
+                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), Cow::Borrowed(ReadableKey::#iter_updated.as_str())) {
+                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#iter_updated.as_str());
                     }
                 )*
                 aliases
@@ -130,24 +140,37 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
 
 fn configuration_strings<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
-) -> (Vec<String>, Vec<syn::Ident>) {
+) -> (
+    Vec<String>,
+    Vec<syn::Variant>,
+    Vec<syn::Expr>,
+    Vec<syn::Pat>,
+) {
     variants
         .map(|segments| {
+            let (x, y, z) = variant_name(segments);
             (
                 segments
                     .iter()
                     .map(|variant| variant.name())
                     .collect::<Vec<_>>()
                     .join("."),
-                variant_name(segments),
+                x,
+                y,
+                z,
             )
         })
-        .unzip()
+        .multiunzip()
 }
 
 fn deprecated_keys<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
-) -> (Vec<&'a str>, Vec<syn::Ident>) {
+) -> (
+    Vec<&'a str>,
+    Vec<syn::Variant>,
+    Vec<syn::Expr>,
+    Vec<syn::Pat>,
+) {
     variants
         .flat_map(|segments| {
             segments
@@ -156,22 +179,31 @@ fn deprecated_keys<'a>(
                 .field()
                 .unwrap()
                 .deprecated_keys()
-                .map(|key| (key, variant_name(segments)))
+                .map(|key| {
+                    let (x, y, z) = variant_name(segments);
+                    (key, x, y, z)
+                })
         })
-        .unzip()
+        .multiunzip()
 }
 
 fn generate_fromstr(
     type_name: syn::Ident,
-    (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
+    (configuration_string, enum_variant, iter_variant, match_variant): &(
+        Vec<String>,
+        Vec<syn::Variant>,
+        Vec<syn::Expr>,
+        Vec<syn::Pat>,
+    ),
     error_case: syn::Arm,
 ) -> TokenStream {
     let simplified_configuration_string = configuration_string
         .iter()
         .map(|s| s.replace('.', "_"))
-        .zip(variant_name.iter())
+        .zip(enum_variant)
         .map(|(s, v)| quote_spanned!(v.span()=> #s));
 
+    // TODO oh shit make this actually work!
     quote! {
         impl ::std::str::FromStr for #type_name {
             type Err = ParseKeyError;
@@ -184,7 +216,7 @@ fn generate_fromstr(
                             if (value != #configuration_string) {
                                 warn_about_deprecated_key(value.to_owned(), #configuration_string);
                             }
-                            Ok(Self::#variant_name)
+                            Ok(Self::#iter_variant)
                         },
                     )*
                     #error_case
@@ -196,7 +228,12 @@ fn generate_fromstr(
 
 fn generate_fromstr_readable(
     type_name: syn::Ident,
-    fields: &(Vec<String>, Vec<syn::Ident>),
+    fields: &(
+        Vec<String>,
+        Vec<syn::Variant>,
+        Vec<syn::Expr>,
+        Vec<syn::Pat>,
+    ),
 ) -> TokenStream {
     generate_fromstr(
         type_name,
@@ -208,7 +245,12 @@ fn generate_fromstr_readable(
 // TODO test the error messages actually appear
 fn generate_fromstr_writable(
     type_name: syn::Ident,
-    fields: &(Vec<String>, Vec<syn::Ident>),
+    fields: &(
+        Vec<String>,
+        Vec<syn::Variant>,
+        Vec<syn::Expr>,
+        Vec<syn::Pat>,
+    ),
 ) -> TokenStream {
     generate_fromstr(
         type_name,
@@ -225,13 +267,23 @@ fn generate_fromstr_writable(
 
 fn keys_enum(
     type_name: syn::Ident,
-    (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
+    (configuration_string, enum_variant, iter_variant, match_variant): &(
+        Vec<String>,
+        Vec<syn::Variant>,
+        Vec<syn::Expr>,
+        Vec<syn::Pat>,
+    ),
     doc_fragment: &'static str,
 ) -> TokenStream {
-    let as_str_example = variant_name
+    let as_str_example = iter_variant
         .iter()
         .zip(configuration_string.iter())
-        .map(|(ident, value)| format!("assert_eq!({type_name}::{ident}.as_str(), \"{value}\");\n"))
+        .map(|(ident, value)| {
+            format!(
+                "assert_eq!({type_name}::{ident}.as_str(), \"{value}\");\n",
+                ident = quote!(#ident)
+            )
+        })
         .take(10)
         .collect::<Vec<_>>();
     let as_str_example = (!as_str_example.is_empty()).then(|| {
@@ -259,7 +311,7 @@ fn keys_enum(
         pub enum #type_name {
             #(
                 #[doc = concat!("`", #configuration_string, "`")]
-                #variant_name,
+                #enum_variant,
             )*
         }
 
@@ -269,7 +321,7 @@ fn keys_enum(
             pub fn as_str(self) -> &'static str {
                 match self {
                     #(
-                        Self::#variant_name => #configuration_string,
+                        Self::#match_variant => #configuration_string,
                     )*
                 }
             }
@@ -278,7 +330,7 @@ fn keys_enum(
             pub fn iter() -> impl Iterator<Item = Self> {
                 [
                     #(
-                        Self::#variant_name,
+                        Self::#iter_variant,
                     )*
                 ].into_iter()
             }
@@ -297,31 +349,33 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let arms = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, variant_name)| -> syn::Arm {
+        .map(|(path, (enum_variant, iter_variant, match_variant))| -> syn::Arm {
             let field = path
                 .back()
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
+            // TODO get path
             let segments = path.iter().map(|thing| thing.ident());
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
+                    // TODO test whether the wrong type fails unit tests
                     parse_quote! {
-                        ReadableKey::#variant_name => Ok(self.#(#segments).*.try_read(self)?#to_string),
+                        ReadableKey::#match_variant => Ok(self.#(#segments).*.try_read(self)?#to_string),
                     }
                 } else {
                     parse_quote! {
-                        ReadableKey::#variant_name => Ok(self.#(#segments).*.read(self)#to_string),
+                        ReadableKey::#match_variant => Ok(self.#(#segments).*.read(self)#to_string),
                     }
                 }
             } else if field.has_guaranteed_default() {
                 parse_quote! {
-                    ReadableKey::#variant_name => Ok(self.#(#segments).*#to_string),
+                    ReadableKey::#match_variant => Ok(self.#(#segments).*#to_string),
                 }
             } else {
                 parse_quote! {
-                    ReadableKey::#variant_name => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
+                    ReadableKey::#match_variant => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
                 }
             }
         });
@@ -346,7 +400,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     ) = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, variant_name)| {
+        .map(|(path, (enum_variant, iter_variant, match_variant))| {
             let segments = path.iter().map(|thing| thing.ident()).collect::<Vec<_>>();
             let field = path
                 .iter()
@@ -373,16 +427,16 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
             (
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#variant_name => self.#(#segments).* = Some(value
+                    WritableKey::#match_variant => self.#(#segments).* = Some(value
                         .#parse
                         .#convert_to_field_ty
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#variant_name => self.#(#segments).* = None,
+                    WritableKey::#match_variant => self.#(#segments).* = None,
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#variant_name => self.#(#segments).* = <#ty as AppendRemoveItem>::append(
+                    WritableKey::#match_variant => self.#(#segments).* = <#ty as AppendRemoveItem>::append(
                         #current_value,
                         value
                         .#parse
@@ -390,7 +444,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#variant_name => self.#(#segments).* = <#ty as AppendRemoveItem>::remove(
+                    WritableKey::#match_variant => self.#(#segments).* = <#ty as AppendRemoveItem>::remove(
                         #current_value,
                         value
                         .#parse
@@ -433,14 +487,35 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     }
 }
 
-fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
-    syn::Ident::new(
+fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> (syn::Variant, syn::Expr, syn::Pat) {
+    let ident = syn::Ident::new(
         &segments
             .iter()
             .map(|segment| segment.name().to_upper_camel_case())
             .collect::<String>(),
         segments.iter().last().unwrap().ident().span(),
-    )
+    );
+    let count_multi = segments
+        .iter()
+        .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
+        .count();
+    if count_multi > 0 {
+        let opt_strs =
+            std::iter::repeat::<syn::Type>(parse_quote!(Option<String>)).take(count_multi);
+        let enum_field = parse_quote_spanned!(ident.span()=> #ident(#(#opt_strs),*));
+        let nones = std::iter::repeat::<syn::Path>(parse_quote!(None)).take(count_multi);
+        let iter_field = parse_quote_spanned!(ident.span()=> #ident(#(#nones),*));
+        let var_idents =
+            (0..count_multi).map(|i| syn::Ident::new(&format!("key{i}"), ident.span()));
+        let destructure_field = parse_quote_spanned!(ident.span()=> #ident(#(#var_idents),*));
+        (enum_field, iter_field, destructure_field)
+    } else {
+        (
+            parse_quote!(#ident),
+            parse_quote!(#ident),
+            parse_quote!(#ident),
+        )
+    }
 }
 
 /// Generates a list of the toml paths for each of the keys in the provided
@@ -467,4 +542,25 @@ fn is_read_write(path: &VecDeque<&FieldOrGroup>) -> bool {
         path.back(), // the field
         Some(FieldOrGroup::Field(ConfigurableField::ReadWrite(_))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_parses() {
+        syn::parse2::<syn::File>(generate_writable_keys(&[])).unwrap();
+    }
+
+    #[test]
+    fn output_parses_for_multi() {
+        let input: crate::input::Configuration = parse_quote! {
+            #[tedge_config(multi)]
+            c8y: {
+                url: String
+            }
+        };
+        syn::parse2::<syn::File>(generate_writable_keys(&input.groups)).unwrap();
+    }
 }
