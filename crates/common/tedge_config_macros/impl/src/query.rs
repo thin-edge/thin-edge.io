@@ -78,13 +78,15 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         }
 
         impl ReadOnlyKey {
-            fn write_error(self) -> &'static str {
+            fn write_error(&self) -> &'static str {
                 match self {
                     // TODO these should be underscores
                     #(
                         #[allow(unused)]
                         Self::#readonly_destr => #write_error,
                     )*
+                    // TODO make this conditional
+                    _ => unimplemented!("Cope with empty enum")
                 }
             }
         }
@@ -300,7 +302,7 @@ fn keys_enum(
     let type_name_str = type_name.to_string();
 
     quote! {
-        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+        #[derive(Clone, Debug, PartialEq, Eq)]
         #[non_exhaustive]
         #[allow(unused)]
         #[doc = concat!("A key that can be *", #doc_fragment, "* the configuration\n\n")]
@@ -318,11 +320,13 @@ fn keys_enum(
         impl #type_name {
             /// Converts this key to the canonical key used by `tedge config` and `tedge.toml`
             #as_str_example
-            pub fn as_str(self) -> &'static str {
+            pub fn as_str(&self) -> &'static str {
                 match self {
                     #(
                         Self::#match_variant => #configuration_string,
                     )*
+                    // TODO make this conditional
+                    _ => unimplemented!("Cope with empty enum")
                 }
             }
 
