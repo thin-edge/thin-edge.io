@@ -5,8 +5,6 @@ use std::num::NonZeroU16;
 // use std::path::PathBuf;
 use tedge_config_macros::*;
 
-static DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
-
 #[derive(thiserror::Error, Debug)]
 pub enum ReadError {
     #[error(transparent)]
@@ -43,28 +41,6 @@ define_tedge_config! {
         #[tedge_config(reader(private))]
         url: String,
     },
-}
-
-fn device_id(_reader: &TEdgeConfigReader) -> Result<String, ReadError> {
-    Ok("dummy-device-id".to_owned())
-}
-
-fn default_device_key(location: &TEdgeConfigLocation) -> Utf8PathBuf {
-    location
-        .tedge_config_root_path()
-        .join("device-certs")
-        .join("tedge-private-key.pem")
-}
-
-fn default_device_cert(location: &TEdgeConfigLocation) -> Utf8PathBuf {
-    location
-        .tedge_config_root_path()
-        .join("device-certs")
-        .join("tedge-certificate.pem")
-}
-
-fn default_mqtt_port() -> NonZeroU16 {
-    NonZeroU16::try_from(1883).unwrap()
 }
 
 fn main() {

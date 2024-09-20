@@ -1,6 +1,7 @@
 use crate::error::extract_type_from_result;
 use std::iter::once;
 use itertools::Either;
+use proc_macro2::Span;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
 use crate::reader::PathItem;
@@ -78,6 +79,8 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         pub enum WriteError {
             #[error("Failed to parse input")]
             ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
+            #[error(transparent)]
+            Multi(#[from] ::tedge_config_macros::MultiError),
         }
 
         impl ReadOnlyKey {
@@ -351,22 +354,46 @@ fn keys_enum(
     }
 }
 
+#[derive(Debug, Default)]
+struct NumericIdGenerator {
+    count: u32,
+}
+
+pub trait IdGenerator: Default {
+    fn next_id(&mut self, span: Span) -> syn::Ident;
+}
+
+impl IdGenerator for NumericIdGenerator {
+    fn next_id(&mut self, span: Span) -> syn::Ident {
+        let i = self.count;
+        self.count += 1;
+        syn::Ident::new(&format!("key{i}"), span)
+    }
+}
+
 fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let variant_names = paths.iter().map(variant_name);
     let arms = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, (enum_variant, iter_variant, match_variant))| -> syn::Arm {
+        .map(|(path, (_enum_variant, _iter_variant, match_variant))| -> syn::Arm {
             let field = path
                 .back()
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
-            let segments = path.iter().map(|&thing| match thing {
-                FieldOrGroup::Field(f) => { let ident = f.ident(); quote!(#ident) },
-                FieldOrGroup::Group(g) => { let ident = &g.ident; quote!(#ident) },
-                // TODO don't hardcode key0 that's stupid
-                FieldOrGroup::Multi(m) => { let ident = &m.ident; quote_spanned!(ident.span()=> #ident.get(key0.as_deref())?) },
+            let mut id_gen = NumericIdGenerator::default(); 
+            // TODO deduplicate this logic
+            let segments = path.iter().map(|&thing| {
+                let ident = thing.ident();
+                match thing {
+                    FieldOrGroup::Field(_) => quote!(#ident),
+                    FieldOrGroup::Group(_) => quote!(#ident),
+                    FieldOrGroup::Multi(_) => {
+                        let field = id_gen.next_id(ident.span());
+                        quote_spanned!(ident.span()=> #ident.get(#field.as_deref())?)
+                    },
+                }
             });
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             if field.read_only().is_some() {
@@ -411,8 +438,31 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     ) = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, (enum_variant, iter_variant, match_variant))| {
-            let segments = path.iter().map(|thing| thing.ident()).collect::<Vec<_>>();
+        .map(|(path, (_enum_variant, _iter_variant, match_variant))| {
+            let mut id_gen = NumericIdGenerator::default();
+            let read_segments = path.iter().map(|&thing| {
+                let ident = thing.ident();
+                match thing {
+                    FieldOrGroup::Field(_) => quote!(#ident),
+                    FieldOrGroup::Group(_) => quote!(#ident),
+                    FieldOrGroup::Multi(_) => {
+                        let field = id_gen.next_id(ident.span());
+                        quote_spanned!(ident.span()=> #ident.get(#field.as_deref())?)
+                    },
+                }
+            }).collect::<Vec<_>>();
+            let mut id_gen = NumericIdGenerator::default();
+            let write_segments = path.iter().map(|&thing| {
+                let ident = thing.ident();
+                match thing {
+                    FieldOrGroup::Field(_) => quote!(#ident),
+                    FieldOrGroup::Group(_) => quote!(#ident),
+                    FieldOrGroup::Multi(_) => {
+                        let field = id_gen.next_id(ident.span());
+                        quote_spanned!(ident.span()=> #ident.get_mut(#field.as_deref())?)
+                    },
+                }
+            }).collect::<Vec<_>>();
             let field = path
                 .iter()
                 .filter_map(|thing| thing.field())
@@ -426,28 +476,28 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
             let current_value = if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
-                    quote_spanned! {ty.span()=> reader.#(#segments).*.try_read(reader).ok()}
+                    quote_spanned! {ty.span()=> reader.#(#read_segments).*.try_read(reader).ok()}
                 } else {
-                    quote_spanned! {ty.span()=> Some(reader.#(#segments).*.read(reader))}
+                    quote_spanned! {ty.span()=> Some(reader.#(#read_segments).*.read(reader))}
                 }
             } else if field.has_guaranteed_default() {
-                quote_spanned! {ty.span()=> Some(reader.#(#segments).*.to_owned())}
+                quote_spanned! {ty.span()=> Some(reader.#(#read_segments).*.to_owned())}
             } else {
-                quote_spanned! {ty.span()=> reader.#(#segments).*.or_none().cloned()}
+                quote_spanned! {ty.span()=> reader.#(#read_segments).*.or_none().cloned()}
             };
 
             (
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => self.#(#segments).* = Some(value
+                    WritableKey::#match_variant => self.#(#write_segments).* = Some(value
                         .#parse
                         .#convert_to_field_ty
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => self.#(#segments).* = None,
+                    WritableKey::#match_variant => self.#(#write_segments).* = None,
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => self.#(#segments).* = <#ty as AppendRemoveItem>::append(
+                    WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::append(
                         #current_value,
                         value
                         .#parse
@@ -455,7 +505,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => self.#(#segments).* = <#ty as AppendRemoveItem>::remove(
+                    WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::remove(
                         #current_value,
                         value
                         .#parse
@@ -466,29 +516,31 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         })
         .multiunzip();
 
+        // TODO do we need an _ branch on these?
     quote! {
         impl TEdgeConfigDto {
-            pub fn try_update_str(&mut self, key: WritableKey, value: &str) -> Result<(), WriteError> {
+            pub fn try_update_str(&mut self, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#update_arms)*
                 };
                 Ok(())
             }
 
-            pub fn unset_key(&mut self, key: WritableKey) {
+            pub fn try_unset_key(&mut self, key: &WritableKey) -> Result<(), WriteError> {
                 match key {
                     #(#unset_arms)*
-                }
+                };
+                Ok(())
             }
 
-            pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: WritableKey, value: &str) -> Result<(), WriteError> {
+            pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#append_arms)*
                 };
                 Ok(())
             }
 
-            pub fn try_remove_str(&mut self, reader: &TEdgeConfigReader, key: WritableKey, value: &str) -> Result<(), WriteError> {
+            pub fn try_remove_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#remove_arms)*
                 };

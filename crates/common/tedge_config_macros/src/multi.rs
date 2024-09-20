@@ -40,6 +40,15 @@ impl<T> Multi<T> {
         }
     }
 
+    pub fn get_mut(&mut self, key: Option<&str>) -> Result<&mut T, MultiError> {
+        match (self, key) {
+            (Self::Single(val), None) => Ok(val),
+            (Self::Multi(map), Some(key)) => map.get_mut(key).ok_or(MultiError::MultiKeyNotFound),
+            (Self::Multi(_), None) => Err(MultiError::SingleNotMulti),
+            (Self::Single(_), Some(_key)) => Err(MultiError::MultiNotSingle),
+        }
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = Option<&str>> {
         match self {
             Self::Single(_) => itertools::Either::Left(std::iter::once(None)),
