@@ -1,8 +1,9 @@
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, doku::Document)]
 #[serde(untagged)]
 pub enum Multi<T> {
-    Single(T),
+    // TODO The ordering of fields is important since we have a default value for T - add a test for it
     Multi(::std::collections::HashMap<String, T>),
+    Single(T),
 }
 
 impl<T: Default> Default for Multi<T> {
@@ -35,8 +36,8 @@ impl<T> Multi<T> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
             (Self::Multi(map), Some(key)) => map.get(key).ok_or(MultiError::MultiKeyNotFound),
-            (Self::Multi(_), None) => Err(MultiError::SingleNotMulti),
-            (Self::Single(_), Some(_key)) => Err(MultiError::MultiNotSingle),
+            (Self::Multi(_), None) => Err(MultiError::MultiNotSingle),
+            (Self::Single(_), Some(_key)) => Err(MultiError::SingleNotMulti),
         }
     }
 
@@ -44,8 +45,8 @@ impl<T> Multi<T> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
             (Self::Multi(map), Some(key)) => map.get_mut(key).ok_or(MultiError::MultiKeyNotFound),
-            (Self::Multi(_), None) => Err(MultiError::SingleNotMulti),
-            (Self::Single(_), Some(_key)) => Err(MultiError::MultiNotSingle),
+            (Self::Multi(_), None) => Err(MultiError::MultiNotSingle),
+            (Self::Single(_), Some(_key)) => Err(MultiError::SingleNotMulti),
         }
     }
 

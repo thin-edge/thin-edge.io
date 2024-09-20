@@ -1,8 +1,3 @@
-use camino::Utf8PathBuf;
-// use std::net::IpAddr;
-// use std::net::Ipv4Addr;
-use std::num::NonZeroU16;
-// use std::path::PathBuf;
 use tedge_config_macros::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -35,7 +30,6 @@ impl<T> AppendRemoveItem for T {
     }
 }
 
-#[allow(dead_code)]
 define_tedge_config! {
     #[tedge_config(multi)]
     c8y: {
@@ -44,23 +38,38 @@ define_tedge_config! {
     },
 }
 
+fn url_for<'a>(reader: &'a TEdgeConfigReader, o: Option<&str>) -> &'a str {
+    reader.c8y.get(o).unwrap().url.or_config_not_set().unwrap()
+}
+
 fn main() {
-    // let dto = TEdgeConfigDto::default();
-    // dto.mqtt.bind.address = Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)));
+    let single_c8y_toml = "c8y.url = \"https://example.com\"";
+    let single_c8y_dto = toml::from_str(&single_c8y_toml).unwrap();
+    let single_c8y_reader = TEdgeConfigReader::from_dto(&single_c8y_dto, &TEdgeConfigLocation);
+    assert_eq!(url_for(&single_c8y_reader, None), "https://example.com");
 
-    // let config = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
+    let multi_c8y_toml = "c8y.cloud.url = \"https://cloud.example.com\"\nc8y.edge.url = \"https://edge.example.com\"";
+    let multi_c8y_dto = toml::from_str(&multi_c8y_toml).unwrap();
+    let multi_c8y_reader = TEdgeConfigReader::from_dto(&multi_c8y_dto, &TEdgeConfigLocation);
+    assert_eq!(
+        url_for(&multi_c8y_reader, Some("cloud")),
+        "https://cloud.example.com"
+    );
+    assert_eq!(
+        url_for(&multi_c8y_reader, Some("edge")),
+        "https://edge.example.com"
+    );
 
-    // Typed reads
-    // println!(
-    //     "Device id is {}.",
-    //     // We have to pass the config into try_read to avoid TEdgeConfigReader being
-    //     // self-referential
-    //     config.device.id.try_read(&config).as_ref().unwrap()
-    // );
-    // assert_eq!(u16::from(config.mqtt.bind.port), 1883);
-    // assert_eq!(config.mqtt.external.bind.port.or_none(), None);
-    // assert_eq!(
-    //     config.read_string(ReadableKey::DeviceId).unwrap(),
-    //     "dummy-device-id"
-    // );
+    assert!(matches!(
+        single_c8y_reader.c8y.get(Some("cloud")),
+        Err(MultiError::SingleNotMulti)
+    ));
+    assert!(matches!(
+        multi_c8y_reader.c8y.get(Some("unknown")),
+        Err(MultiError::MultiKeyNotFound)
+    ));
+    assert!(matches!(
+        multi_c8y_reader.c8y.get(None),
+        Err(MultiError::MultiNotSingle)
+    ));
 }

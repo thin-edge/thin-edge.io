@@ -21,6 +21,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true, features = ["rc"] }
+toml = { workspace = true }
 
 [lints]
 workspace = true
