@@ -39,7 +39,13 @@ define_tedge_config! {
 }
 
 fn url_for<'a>(reader: &'a TEdgeConfigReader, o: Option<&str>) -> &'a str {
-    reader.c8y.try_get(o).unwrap().url.or_config_not_set().unwrap()
+    reader
+        .c8y
+        .try_get(o)
+        .unwrap()
+        .url
+        .or_config_not_set()
+        .unwrap()
 }
 
 fn main() {

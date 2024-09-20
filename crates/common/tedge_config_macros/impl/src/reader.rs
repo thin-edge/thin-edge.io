@@ -248,9 +248,9 @@ impl PathItem {
     }
 }
 
-fn read_field<'a>(parents: &'a [PathItem]) -> impl Iterator<Item = TokenStream> + 'a {
+fn read_field(parents: &[PathItem]) -> impl Iterator<Item = TokenStream> + '_ {
     let mut id_gen = SequentialIdGenerator::default();
-    parents.into_iter().map(move |parent| match parent {
+    parents.iter().map(move |parent| match parent {
         PathItem::Static(name) => quote!(#name),
         PathItem::Dynamic(span) => {
             let id = id_gen.next_id(*span);
@@ -276,7 +276,7 @@ fn reader_value_for_field<'a>(
                 .chain(iter::once(name.to_string()))
                 .collect::<Vec<_>>()
                 .join(".");
-            let read_path = read_field(&parents);
+            let read_path = read_field(parents);
             match &field.default {
                 FieldDefault::None => quote! {
                     match &dto.#(#read_path).*.#name {

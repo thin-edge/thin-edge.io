@@ -14,12 +14,12 @@ use proc_macro2::Span;
 /// and we wish to generate code, such as
 ///
 /// ```
-/// #pub enum ReadableKey {
+/// # pub enum ReadableKey {
 /// #    C8yUrl(Option<String>),
 /// #    MqttBindPort,
 /// #    // ...
-/// #}
-///
+/// # }
+/// #
 /// fn do_something(k: &ReadableKey) {
 ///     match k {
 ///         ReadableKey::C8yUrl(key0) => todo!(),
@@ -34,12 +34,12 @@ use proc_macro2::Span;
 /// If we wanted to discard the data
 ///
 /// ```
-/// #pub enum ReadableKey {
-/// #    C8yUrl(Option<String>),
-/// #    MqttBindPort,
-/// #    // ...
-/// #}
-///
+/// # pub enum ReadableKey {
+/// #     C8yUrl(Option<String>),
+/// #     MqttBindPort,
+/// #     // ...
+/// # }
+/// #
 /// fn return_something(k: &ReadableKey) -> &'static str {
 ///     match k {
 ///         ReadableKey::C8yUrl(_) => "some independent result",
