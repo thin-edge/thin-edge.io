@@ -13,6 +13,8 @@ pub enum ReadError {
     ConfigNotSet(#[from] ConfigNotSet),
     #[error("Something went wrong: {0}")]
     GenericError(String),
+    #[error(transparent)]
+    Multi(#[from] tedge_config_macros::MultiError)
 }
 
 pub trait AppendRemoveItem {

@@ -18,11 +18,14 @@ impl<T: Default + PartialEq> Multi<T> {
 }
 
 // TODO possibly expand this with the key name
-// TODO use thiserror
-#[derive(Debug)]
+// TODO better error messages
+#[derive(Debug, thiserror::Error)]
 pub enum MultiError {
+    #[error("You are trying to access a named field, but the fields are not named")]
     SingleNotMulti,
+    #[error("You need a name for this field")]
     MultiNotSingle,
+    #[error("You need a name for this field")]
     MultiKeyNotFound,
 }
 

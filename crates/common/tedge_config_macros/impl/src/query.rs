@@ -1,6 +1,9 @@
 use crate::error::extract_type_from_result;
+use std::iter::once;
+use itertools::Either;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
+use crate::reader::PathItem;
 use heck::ToUpperCamelCase;
 use itertools::Itertools;
 use proc_macro2::TokenStream;
@@ -359,8 +362,12 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
-            // TODO get path
-            let segments = path.iter().map(|thing| thing.ident());
+            let segments = path.iter().map(|&thing| match thing {
+                FieldOrGroup::Field(f) => { let ident = f.ident(); quote!(#ident) },
+                FieldOrGroup::Group(g) => { let ident = &g.ident; quote!(#ident) },
+                // TODO don't hardcode key0 that's stupid
+                FieldOrGroup::Multi(m) => { let ident = &m.ident; quote_spanned!(ident.span()=> #ident.get(key0.as_deref())?) },
+            });
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
