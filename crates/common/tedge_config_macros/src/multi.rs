@@ -32,7 +32,7 @@ pub enum MultiError {
 
 impl<T> Multi<T> {
     // TODO rename this to something more rusty
-    pub fn get(&self, key: Option<&str>) -> Result<&T, MultiError> {
+    pub fn try_get(&self, key: Option<&str>) -> Result<&T, MultiError> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
             (Self::Multi(map), Some(key)) => map.get(key).ok_or(MultiError::MultiKeyNotFound),
@@ -41,7 +41,7 @@ impl<T> Multi<T> {
         }
     }
 
-    pub fn get_mut(&mut self, key: Option<&str>) -> Result<&mut T, MultiError> {
+    pub fn try_get_mut(&mut self, key: Option<&str>) -> Result<&mut T, MultiError> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
             (Self::Multi(map), Some(key)) => map.get_mut(key).ok_or(MultiError::MultiKeyNotFound),

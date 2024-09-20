@@ -39,7 +39,7 @@ define_tedge_config! {
 }
 
 fn url_for<'a>(reader: &'a TEdgeConfigReader, o: Option<&str>) -> &'a str {
-    reader.c8y.get(o).unwrap().url.or_config_not_set().unwrap()
+    reader.c8y.try_get(o).unwrap().url.or_config_not_set().unwrap()
 }
 
 fn main() {
@@ -61,15 +61,15 @@ fn main() {
     );
 
     assert!(matches!(
-        single_c8y_reader.c8y.get(Some("cloud")),
+        single_c8y_reader.c8y.try_get(Some("cloud")),
         Err(MultiError::SingleNotMulti)
     ));
     assert!(matches!(
-        multi_c8y_reader.c8y.get(Some("unknown")),
+        multi_c8y_reader.c8y.try_get(Some("unknown")),
         Err(MultiError::MultiKeyNotFound)
     ));
     assert!(matches!(
-        multi_c8y_reader.c8y.get(None),
+        multi_c8y_reader.c8y.try_get(None),
         Err(MultiError::MultiNotSingle)
     ));
 }

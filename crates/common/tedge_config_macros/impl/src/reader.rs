@@ -235,7 +235,7 @@ fn find_field<'a>(
 pub enum PathItem {
     /// A static field e.g. `c8y` or `topic_prefix`
     Static(syn::Ident),
-    /// A dynamic field that will be replaced by `.get(key0)` when reading the field
+    /// A dynamic field that will be replaced by `.try_get(key0)` when reading the field
     Dynamic(Span),
 }
 
@@ -254,7 +254,7 @@ fn read_field<'a>(parents: &'a [PathItem]) -> impl Iterator<Item = TokenStream> 
         PathItem::Static(name) => quote!(#name),
         PathItem::Dynamic(span) => {
             let id = id_gen.next_id(*span);
-            quote_spanned!(*span=> get(#id).unwrap())
+            quote_spanned!(*span=> try_get(#id).unwrap())
         }
     })
 }

@@ -351,7 +351,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
-            let segments = generate_field_accessor(path, "get");
+            let segments = generate_field_accessor(path, "try_get");
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             let match_variant = configuration_key.match_read_write;
             if field.read_only().is_some() {
@@ -401,8 +401,8 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         .iter()
         .zip(variant_names)
         .map(|(path, configuration_key)| {
-            let read_segments = generate_field_accessor(path, "get");
-            let write_segments = generate_field_accessor(path, "get_mut").collect::<Vec<_>>();
+            let read_segments = generate_field_accessor(path, "try_get");
+            let write_segments = generate_field_accessor(path, "try_get_mut").collect::<Vec<_>>();
             let field = path
                 .iter()
                 .filter_map(|thing| thing.field())
