@@ -1,0 +1,111 @@
+#PLEASE NOTE THIS PLUGIN IS STILL UNDER CONSTRUCTION
+
+#!/bin/sh
+# -*- sh -*-
+
+: << =cut
+
+=head1 NAME
+
+tedgecpuprocent - Monitor CPU % consumption of ThinEdge tasks mosquitto, tedge-agent, and tedge-mapper and send alarm if deviated
+
+=head1 AUTHOR
+
+Gligor Isaev
+
+=head1 LICENSE
+
+GPL-3.0-or-higher
+
+=head1 MAGIC MARKERS
+
+ #%# family=manual
+
+=cut
+. "$MUNIN_LIBDIR/plugins/plugin.sh"
+
+# Get the PIDs of mosquitto, tedge-agent, and tedge-mapper
+mosquitto_pid=$(pidof mosquitto)
+tedgeagent_pid=$(pidof tedge-agent)
+tedgemapper_pids=$(pidof tedge-mapper)
+
+tasks=""
+cpu=""
+mem_usage=""
+mem_prev=""
+
+# Fetch CPU and memory usage percentage for each process using ps
+for i in $mosquitto_pid $tedgeagent_pid; do
+    commcpu=$(ps -p $i -o comm=,%cpu=,%mem= | tr -s ' ')
+    comm=$(echo $commcpu | cut -d' ' -f1)     # Get the process name
+    cpu_usage=$(echo $commcpu | cut -d' ' -f2)  # Get the CPU percentage
+    mem_now=$(echo $commcpu | cut -d' ' -f3)    # Get the Memory percentage
+    tasks="$tasks $comm"
+    cpu="$cpu $cpu_usage"
+    mem_usage="$mem_usage $mem_now"
+    
+    # Check for memory increase threshold
+    mem_prev=$(cat /tmp/${comm}_mem_prev 2>/dev/null || echo "$mem_now")
+    mem_increase=$(echo "scale=2; $mem_now - $mem_prev" | bc)
+    threshold=20.0
+    
+    if [ "$(echo "$mem_increase > $threshold" | bc)" -eq 1 ]; then
+        # Raise MQTT alarm if memory increase is greater than 20%
+        tedge mqtt pub "te/device/main/a/memory_increase" '{
+          "text": "Memory consumption increased by more than 20% for '$comm'",
+          "severity": "major"
+        }' --retained
+    fi
+    
+    echo "$mem_now" > /tmp/${comm}_mem_prev  # Store the current memory for the next check
+done
+
+# Fetch CPU and memory usage percentage for tedge-mapper processes
+for i in $tedgemapper_pids; do
+    commcpu=$(ps -p $i -o args=,%cpu=,%mem= | tr -s ' ')
+    comm=$(echo $commcpu | cut -d/ -f4 | cut -d' ' -f1,2 | tr ' ' _)
+    cpu_usage=$(echo $commcpu | cut -d' ' -f3)
+    mem_now=$(echo $commcpu | cut -d' ' -f4)
+    tasks="$tasks $comm"
+    cpu="$cpu $cpu_usage"
+    mem_usage="$mem_usage $mem_now"
+    
+    mem_prev=$(cat /tmp/${comm}_mem_prev 2>/dev/null || echo "$mem_now")
+    mem_increase=$(echo "scale=2; $mem_now - $mem_prev" | bc)
+    
+    if [ "$(echo "$mem_increase > $threshold" | bc)" -eq 1 ]; then
+        tedge mqtt pub "te/device/main/a/memory_increase" '{
+          "text": "Memory consumption increased by more than 20% for '$comm'",
+          "severity": "major"
+        }' --retained
+    fi
+    
+    echo "$mem_now" > /tmp/${comm}_mem_prev
+done
+
+# Output graph configuration if requested
+if [ "$1" = "config" ]; then
+    echo 'graph_title Real-time CPU and Memory usage of ThinEdge.io tasks'
+    echo 'graph_args --base 1000 --vertical-label % -l 0'
+    echo 'graph_category thin-edge'
+    echo 'graph_vlabel CPU & Memory Usage (%)'
+    echo 'graph_scale no'
+    echo 'graph_info This graph shows CPU and Memory usage as a percentage for key ThinEdge.io processes.'
+    for i in $tasks; do
+        echo "$i_cpu.label $i CPU"
+        echo "$i_cpu.draw LINE2"
+        echo "$i_mem.label $i Memory"
+        echo "$i_mem.draw LINE2"
+    done
+    exit 0
+fi
+
+# Output the actual data for Munin to plot
+tasknum=$(echo "$tasks" | tr ' ' "\n" | wc -l)
+for i in $(seq 1 "$tasknum"); do
+    task=$(echo "$tasks" | cut -d' ' -f$i)
+    cpu_usage=$(echo "$cpu" | cut -d' ' -f$i)
+    mem_now=$(echo "$mem_usage" | cut -d' ' -f$i)
+    echo "$task_cpu.value $cpu_usage"
+    echo "$task_mem.value $mem_now"
+done

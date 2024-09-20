@@ -1,0 +1,27 @@
+name: Download SVGs
+
+on:
+  workflow_dispatch: # You can trigger the workflow manually, or set it on a schedule.
+
+jobs:
+  download-svgs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'  # Use Python 3.x
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run download_svgs.py
+        env:
+          MUNIN_USERNAME: ${{ secrets.MUNIN_USERNAME }}
+          MUNIN_PASSWORD: ${{ secrets.MUNIN_PASSWORD }}
+        run: |
+          python3 /ci/build_scripts/download_svgs.py
