@@ -11,6 +11,7 @@ use quote::quote_spanned;
 mod dto;
 mod error;
 mod input;
+mod namegen;
 mod optional_error;
 mod query;
 mod reader;

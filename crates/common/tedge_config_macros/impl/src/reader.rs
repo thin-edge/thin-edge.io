@@ -9,8 +9,6 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
-use quote::ToTokens;
-use quote::TokenStreamExt;
 use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::punctuated::Punctuated;
@@ -21,6 +19,8 @@ use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
 use crate::input::FieldDefault;
 use crate::input::FieldOrGroup;
+use crate::namegen::IdGenerator;
+use crate::namegen::SequentialIdGenerator;
 use crate::optional_error::OptionalError;
 use crate::prefixed_type_name;
 
@@ -71,20 +71,13 @@ fn generate_structs(
                     false => parse_quote!(pub),
                 });
             }
-            // TODO skipping?
-            FieldOrGroup::Multi(group) => {
-                // TODO is this right?
+            FieldOrGroup::Multi(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> ::tedge_config_macros::Multi<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
-                let count_dyn = parents.iter().filter_map(PathItem::as_dynamic).count();
-                // TODO rationalise this so it's not hardcoded where we use it
-                parents.push(PathItem::Dynamic(syn::Ident::new(
-                    &format!("key{count_dyn}"),
-                    Span::call_site(),
-                )));
+                parents.push(PathItem::Dynamic(group.ident.span()));
                 sub_readers.push(Some(generate_structs(
                     &sub_reader_name,
                     &group.contents,
@@ -116,7 +109,10 @@ fn generate_structs(
                 });
             }
             FieldOrGroup::Group(_) => {
-                // Skipped
+                // Explicitly skipped using `#[tedge_config(reader(skip))]`
+            }
+            FieldOrGroup::Multi(_) => {
+                // Explicitly skipped using `#[tedge_config(reader(skip))]`
             }
         }
     }
@@ -234,10 +230,13 @@ fn find_field<'a>(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+/// Part of a path in the DTO
 pub enum PathItem {
+    /// A static field e.g. `c8y` or `topic_prefix`
     Static(syn::Ident),
-    Dynamic(syn::Ident),
+    /// A dynamic field that will be replaced by `.get(key0)` when reading the field
+    Dynamic(Span),
 }
 
 impl PathItem {
@@ -247,22 +246,17 @@ impl PathItem {
             Self::Dynamic(_) => None,
         }
     }
-
-    pub fn as_dynamic(&self) -> Option<&syn::Ident> {
-        match self {
-            Self::Dynamic(d) => Some(d),
-            Self::Static(_) => None,
-        }
-    }
 }
 
-impl ToTokens for PathItem {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Static(s) => s.to_tokens(tokens),
-            Self::Dynamic(d) => tokens.append_all(quote!(get(#d).unwrap())),
+fn read_field<'a>(parents: &'a [PathItem]) -> impl Iterator<Item = TokenStream> + 'a {
+    let mut id_gen = SequentialIdGenerator::default();
+    parents.into_iter().map(move |parent| match parent {
+        PathItem::Static(name) => quote!(#name),
+        PathItem::Dynamic(span) => {
+            let id = id_gen.next_id(*span);
+            quote_spanned!(*span=> get(#id).unwrap())
         }
-    }
+    })
 }
 
 fn reader_value_for_field<'a>(
@@ -274,6 +268,7 @@ fn reader_value_for_field<'a>(
     let name = field.ident();
     Ok(match field {
         ConfigurableField::ReadWrite(field) => {
+            // TODO optionalconfig should contain the actual key
             let key = parents
                 .iter()
                 .filter_map(PathItem::as_static)
@@ -281,9 +276,10 @@ fn reader_value_for_field<'a>(
                 .chain(iter::once(name.to_string()))
                 .collect::<Vec<_>>()
                 .join(".");
+            let read_path = read_field(&parents);
             match &field.default {
                 FieldDefault::None => quote! {
-                    match &dto.#(#parents).*.#name {
+                    match &dto.#(#read_path).*.#name {
                         None => OptionalConfig::Empty(#key),
                         Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
                     }
@@ -336,32 +332,32 @@ fn reader_value_for_field<'a>(
                         };
 
                     quote_spanned! {name.span()=>
-                        match &dto.#(#parents).*.#name {
+                        match &dto.#(#read_path).*.#name {
                             Some(value) => #value,
                             None => #default,
                         }
                     }
                 }
                 FieldDefault::Function(function) => quote_spanned! {function.span()=>
-                    match &dto.#(#parents).*.#name {
+                    match &dto.#(#read_path).*.#name {
                         None => TEdgeConfigDefault::<TEdgeConfigDto, _>::call(#function, dto, location),
                         Some(value) => value.clone(),
                     }
                 },
                 FieldDefault::Value(default) => quote_spanned! {name.span()=>
-                    match &dto.#(#parents).*.#name {
+                    match &dto.#(#read_path).*.#name {
                         None => #default.into(),
                         Some(value) => value.clone(),
                     }
                 },
                 FieldDefault::Variable(default) => quote_spanned! {name.span()=>
-                    match &dto.#(#parents).*.#name {
+                    match &dto.#(#read_path).*.#name {
                         None => #default.into(),
                         Some(value) => value.clone(),
                     }
                 },
                 FieldDefault::FromStr(default) => quote_spanned! {name.span()=>
-                    match &dto.#(#parents).*.#name {
+                    match &dto.#(#read_path).*.#name {
                         None => #default.parse().unwrap(),
                         Some(value) => value.clone(),
                     }
@@ -386,10 +382,16 @@ fn generate_conversions(
 ) -> syn::Result<TokenStream> {
     let mut field_conversions = Vec::new();
     let mut rest = Vec::new();
+    let mut id_gen = SequentialIdGenerator::default();
     let extra_args: Vec<_> = parents
         .iter()
-        .filter_map(PathItem::as_dynamic)
-        .map(|name| quote!(#name: Option<&str>))
+        .filter_map(|path_item| match path_item {
+            PathItem::Static(_) => None,
+            PathItem::Dynamic(span) => {
+                let id = id_gen.next_id(*span);
+                Some(quote_spanned!(*span=> #id: Option<&str>))
+            }
+        })
         .collect();
 
     for item in items {
@@ -414,18 +416,22 @@ fn generate_conversions(
                 let sub_reader_name = prefixed_type_name(name, group);
                 let name = &group.ident;
 
+                let new_arg = PathItem::Dynamic(group.ident.span());
+                let mut id_gen = SequentialIdGenerator::default();
+                let extra_call_args: Vec<_> = parents
+                    .iter()
+                    .chain(once(&new_arg))
+                    .filter_map(|path_item| match path_item {
+                        PathItem::Static(_) => None,
+                        PathItem::Dynamic(span) => Some(id_gen.next_id(*span)),
+                    })
+                    .collect();
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
-                // TODO this is horrible
-                let l = extra_args.len();
-                let new_arg = syn::Ident::new(&format!("key{l}"), Span::call_site());
-                let extra_args: Vec<_> = parents
-                    .iter()
-                    .filter_map(PathItem::as_dynamic)
-                    .chain(once(&new_arg))
-                    .collect();
-                field_conversions.push(quote!(#name: dto.#(#parents).*.map(|#new_arg| #sub_reader_name::from_dto(dto, location, #(#extra_args),*))));
-                parents.push(PathItem::Dynamic(new_arg));
+                let read_path = read_field(&parents);
+                let new_arg2 = id_gen.replay(group.ident.span());
+                field_conversions.push(quote!(#name: dto.#(#read_path).*.map(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*))));
+                parents.push(new_arg);
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);

@@ -1,6 +1,9 @@
 use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
+use crate::namegen::IdGenerator;
+use crate::namegen::SequentialIdGenerator;
+use crate::namegen::UnderscoreIdGenerator;
 use heck::ToUpperCamelCase;
 use itertools::Itertools;
 use proc_macro2::Span;
@@ -315,46 +318,6 @@ fn keys_enum(
                 self.as_str().fmt(f)
             }
         }
-    }
-}
-
-#[derive(Debug, Default)]
-struct SequentialIdGenerator {
-    count: u32,
-}
-
-#[derive(Debug, Default)]
-struct UnderscoreIdGenerator;
-
-pub trait IdGenerator: Default {
-    fn next_id(&mut self, span: Span) -> syn::Ident;
-}
-
-impl IdGenerator for SequentialIdGenerator {
-    fn next_id(&mut self, span: Span) -> syn::Ident {
-        let i = self.count;
-        self.count += 1;
-        syn::Ident::new(&format!("key{i}"), span)
-    }
-}
-
-impl Iterator for SequentialIdGenerator {
-    type Item = syn::Ident;
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.next_id(Span::call_site()))
-    }
-}
-
-impl IdGenerator for UnderscoreIdGenerator {
-    fn next_id(&mut self, span: Span) -> syn::Ident {
-        syn::Ident::new("_", span)
-    }
-}
-
-impl Iterator for UnderscoreIdGenerator {
-    type Item = syn::Ident;
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.next_id(Span::call_site()))
     }
 }
 
