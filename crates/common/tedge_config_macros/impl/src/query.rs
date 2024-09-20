@@ -1,9 +1,9 @@
 use crate::error::extract_type_from_result;
-use proc_macro2::Span;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
 use heck::ToUpperCamelCase;
 use itertools::Itertools;
+use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
@@ -60,6 +60,11 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     );
     let (static_alias, _, iter_updated, _) = deprecated_keys(paths.iter());
 
+    let fallback_branch: Option<syn::Arm> = readonly_args
+        .0
+        .is_empty()
+        .then(|| parse_quote!(_ => unreachable!("ReadOnlyKey is uninhabited")));
+
     quote! {
         #readable_keys
         #readonly_keys
@@ -88,8 +93,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                         #[allow(unused)]
                         Self::#readonly_destr => #write_error,
                     )*
-                    // TODO make this conditional
-                    _ => unimplemented!("Cope with empty enum")
+                    #fallback_branch
                 }
             }
         }
@@ -379,7 +383,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
-            let mut id_gen = NumericIdGenerator::default(); 
+            let mut id_gen = NumericIdGenerator::default();
             // TODO deduplicate this logic
             let segments = path.iter().map(|&thing| {
                 let ident = thing.ident();
@@ -414,11 +418,15 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 }
             }
         });
+    let fallback_branch: Option<syn::Arm> = paths
+        .is_empty()
+        .then(|| parse_quote!(_ => unreachable!("ReadableKey is uninhabited")));
     quote! {
         impl TEdgeConfigReader {
             pub fn read_string(&self, key: &ReadableKey) -> Result<String, ReadError> {
                 match key {
                     #(#arms)*
+                    #fallback_branch
                 }
             }
         }
@@ -512,13 +520,16 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             )
         })
         .multiunzip();
+    let fallback_branch: Option<syn::Arm> = update_arms
+        .is_empty()
+        .then(|| parse_quote!(_ => unreachable!("WritableKey is uninhabited")));
 
-        // TODO do we need an _ branch on these?
     quote! {
         impl TEdgeConfigDto {
             pub fn try_update_str(&mut self, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#update_arms)*
+                    #fallback_branch
                 };
                 Ok(())
             }
@@ -526,6 +537,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             pub fn try_unset_key(&mut self, key: &WritableKey) -> Result<(), WriteError> {
                 match key {
                     #(#unset_arms)*
+                    #fallback_branch
                 };
                 Ok(())
             }
@@ -533,6 +545,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#append_arms)*
+                    #fallback_branch
                 };
                 Ok(())
             }
@@ -540,6 +553,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             pub fn try_remove_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#remove_arms)*
+                    #fallback_branch
                 };
                 Ok(())
             }

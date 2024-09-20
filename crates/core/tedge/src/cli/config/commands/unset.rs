@@ -13,9 +13,8 @@ impl Command for UnsetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        self.config_location.update_toml(&|dto, _reader| {
-            Ok(dto.try_unset_key(&self.key)?)
-        })?;
+        self.config_location
+            .update_toml(&|dto, _reader| Ok(dto.try_unset_key(&self.key)?))?;
         Ok(())
     }
 }

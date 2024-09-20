@@ -31,7 +31,7 @@ impl Command for ListConfigCommand {
 
 fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
     let mut keys_without_values = Vec::new();
-    // TODO fix this logic, it's just broken atm
+    // TODO fix this logic, it's just broken for multi variants atm
     for config_key in ReadableKey::iter() {
         match config.read_string(&config_key).ok() {
             Some(value) => {

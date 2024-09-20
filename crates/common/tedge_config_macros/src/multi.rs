@@ -2,10 +2,10 @@
 #[serde(untagged)]
 pub enum Multi<T> {
     Single(T),
-    Multi(::std::collections::HashMap<String, T>)
+    Multi(::std::collections::HashMap<String, T>),
 }
 
-impl<T: Default> Default for Multi<T>  {
+impl<T: Default> Default for Multi<T> {
     fn default() -> Self {
         Self::Single(T::default())
     }
@@ -60,7 +60,11 @@ impl<T> Multi<T> {
     pub fn map<U>(&self, f: impl Fn(Option<&str>) -> U) -> Multi<U> {
         match self {
             Self::Single(_) => Multi::Single(f(None)),
-            Self::Multi(map) => Multi::Multi(map.keys().map(|key| (key.to_owned(), f(Some(key)))).collect())
+            Self::Multi(map) => Multi::Multi(
+                map.keys()
+                    .map(|key| (key.to_owned(), f(Some(key))))
+                    .collect(),
+            ),
         }
     }
 }
