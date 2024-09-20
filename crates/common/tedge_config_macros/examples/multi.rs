@@ -44,12 +44,12 @@ fn url_for<'a>(reader: &'a TEdgeConfigReader, o: Option<&str>) -> &'a str {
 
 fn main() {
     let single_c8y_toml = "c8y.url = \"https://example.com\"";
-    let single_c8y_dto = toml::from_str(&single_c8y_toml).unwrap();
+    let single_c8y_dto = toml::from_str(single_c8y_toml).unwrap();
     let single_c8y_reader = TEdgeConfigReader::from_dto(&single_c8y_dto, &TEdgeConfigLocation);
     assert_eq!(url_for(&single_c8y_reader, None), "https://example.com");
 
     let multi_c8y_toml = "c8y.cloud.url = \"https://cloud.example.com\"\nc8y.edge.url = \"https://edge.example.com\"";
-    let multi_c8y_dto = toml::from_str(&multi_c8y_toml).unwrap();
+    let multi_c8y_dto = toml::from_str(multi_c8y_toml).unwrap();
     let multi_c8y_reader = TEdgeConfigReader::from_dto(&multi_c8y_dto, &TEdgeConfigLocation);
     assert_eq!(
         url_for(&multi_c8y_reader, Some("cloud")),

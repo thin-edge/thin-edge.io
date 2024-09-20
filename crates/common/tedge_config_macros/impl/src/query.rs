@@ -14,19 +14,12 @@ use syn::spanned::Spanned;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let paths = configuration_paths_from(items);
-    let (_readonly_variant, _readonly_iter, readonly_destr, write_error): (
-        Vec<_>,
-        Vec<_>,
-        Vec<_>,
-        Vec<_>,
-    ) = paths
+    let (readonly_destr, write_error): (Vec<_>, Vec<_>) = paths
         .iter()
         .filter_map(|field| {
-            let (enum_field, iter_field, destr_field) = variant_name(field);
+            let configuration = variant_name(field);
             Some((
-                enum_field,
-                iter_field,
-                destr_field,
+                configuration.match_shape,
                 field
                     .back()?
                     .field()?
@@ -58,7 +51,8 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             .cloned()
             .collect::<Vec<_>>(),
     );
-    let (static_alias, _, iter_updated, _) = deprecated_keys(paths.iter());
+    let (static_alias, deprecated_keys) = deprecated_keys(paths.iter());
+    let iter_updated = deprecated_keys.iter().map(|k| &k.iter_field);
 
     let fallback_branch: Option<syn::Arm> = readonly_args
         .0
@@ -88,11 +82,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         impl ReadOnlyKey {
             fn write_error(&self) -> &'static str {
                 match self {
-                    // TODO these should be underscores
-                    #(
-                        #[allow(unused)]
-                        Self::#readonly_destr => #write_error,
-                    )*
+                    #(Self::#readonly_destr => #write_error,)*
                     #fallback_branch
                 }
             }
@@ -149,37 +139,25 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
 
 fn configuration_strings<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
-) -> (
-    Vec<String>,
-    Vec<syn::Variant>,
-    Vec<syn::Expr>,
-    Vec<syn::Pat>,
-) {
+) -> (Vec<String>, Vec<ConfigurationKey>) {
     variants
         .map(|segments| {
-            let (x, y, z) = variant_name(segments);
+            let configuration_key = variant_name(segments);
             (
                 segments
                     .iter()
                     .map(|variant| variant.name())
                     .collect::<Vec<_>>()
                     .join("."),
-                x,
-                y,
-                z,
+                configuration_key,
             )
         })
-        .multiunzip()
+        .unzip()
 }
 
 fn deprecated_keys<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
-) -> (
-    Vec<&'a str>,
-    Vec<syn::Variant>,
-    Vec<syn::Expr>,
-    Vec<syn::Pat>,
-) {
+) -> (Vec<&'a str>, Vec<ConfigurationKey>) {
     variants
         .flat_map(|segments| {
             segments
@@ -189,8 +167,8 @@ fn deprecated_keys<'a>(
                 .unwrap()
                 .deprecated_keys()
                 .map(|key| {
-                    let (x, y, z) = variant_name(segments);
-                    (key, x, y, z)
+                    let configuration_key = variant_name(segments);
+                    (key, configuration_key)
                 })
         })
         .multiunzip()
@@ -198,19 +176,15 @@ fn deprecated_keys<'a>(
 
 fn generate_fromstr(
     type_name: syn::Ident,
-    (configuration_string, enum_variant, iter_variant, _match_variant): &(
-        Vec<String>,
-        Vec<syn::Variant>,
-        Vec<syn::Expr>,
-        Vec<syn::Pat>,
-    ),
+    (configuration_string, configuration_key): &(Vec<String>, Vec<ConfigurationKey>),
     error_case: syn::Arm,
 ) -> TokenStream {
     let simplified_configuration_string = configuration_string
         .iter()
         .map(|s| s.replace('.', "_"))
-        .zip(enum_variant)
+        .zip(configuration_key.iter().map(|k| &k.enum_variant))
         .map(|(s, v)| quote_spanned!(v.span()=> #s));
+    let iter_variant = configuration_key.iter().map(|k| &k.iter_field);
 
     // TODO oh shit make this actually work!
     quote! {
@@ -237,12 +211,7 @@ fn generate_fromstr(
 
 fn generate_fromstr_readable(
     type_name: syn::Ident,
-    fields: &(
-        Vec<String>,
-        Vec<syn::Variant>,
-        Vec<syn::Expr>,
-        Vec<syn::Pat>,
-    ),
+    fields: &(Vec<String>, Vec<ConfigurationKey>),
 ) -> TokenStream {
     generate_fromstr(
         type_name,
@@ -254,12 +223,7 @@ fn generate_fromstr_readable(
 // TODO test the error messages actually appear
 fn generate_fromstr_writable(
     type_name: syn::Ident,
-    fields: &(
-        Vec<String>,
-        Vec<syn::Variant>,
-        Vec<syn::Expr>,
-        Vec<syn::Pat>,
-    ),
+    fields: &(Vec<String>, Vec<ConfigurationKey>),
 ) -> TokenStream {
     generate_fromstr(
         type_name,
@@ -276,16 +240,12 @@ fn generate_fromstr_writable(
 
 fn keys_enum(
     type_name: syn::Ident,
-    (configuration_string, enum_variant, iter_variant, match_variant): &(
-        Vec<String>,
-        Vec<syn::Variant>,
-        Vec<syn::Expr>,
-        Vec<syn::Pat>,
-    ),
+    (configuration_string, configuration_key): &(Vec<String>, Vec<ConfigurationKey>),
     doc_fragment: &'static str,
 ) -> TokenStream {
-    let as_str_example = iter_variant
+    let as_str_example = configuration_key
         .iter()
+        .map(|k| &k.iter_field)
         .zip(configuration_string.iter())
         .map(|(ident, value)| {
             format!(
@@ -307,6 +267,9 @@ fn keys_enum(
         }
     });
     let type_name_str = type_name.to_string();
+    let enum_variant = configuration_key.iter().map(|k| &k.enum_variant);
+    let match_shape = configuration_key.iter().map(|k| &k.match_shape);
+    let iter_field = configuration_key.iter().map(|k| &k.iter_field);
 
     quote! {
         #[derive(Clone, Debug, PartialEq, Eq)]
@@ -330,7 +293,7 @@ fn keys_enum(
             pub fn as_str(&self) -> &'static str {
                 match self {
                     #(
-                        Self::#match_variant => #configuration_string,
+                        Self::#match_shape => #configuration_string,
                     )*
                     // TODO make this conditional
                     _ => unimplemented!("Cope with empty enum")
@@ -341,7 +304,7 @@ fn keys_enum(
             pub fn iter() -> impl Iterator<Item = Self> {
                 [
                     #(
-                        Self::#iter_variant,
+                        Self::#iter_field,
                     )*
                 ].into_iter()
             }
@@ -356,15 +319,18 @@ fn keys_enum(
 }
 
 #[derive(Debug, Default)]
-struct NumericIdGenerator {
+struct SequentialIdGenerator {
     count: u32,
 }
+
+#[derive(Debug, Default)]
+struct UnderscoreIdGenerator;
 
 pub trait IdGenerator: Default {
     fn next_id(&mut self, span: Span) -> syn::Ident;
 }
 
-impl IdGenerator for NumericIdGenerator {
+impl IdGenerator for SequentialIdGenerator {
     fn next_id(&mut self, span: Span) -> syn::Ident {
         let i = self.count;
         self.count += 1;
@@ -372,31 +338,59 @@ impl IdGenerator for NumericIdGenerator {
     }
 }
 
+impl Iterator for SequentialIdGenerator {
+    type Item = syn::Ident;
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_id(Span::call_site()))
+    }
+}
+
+impl IdGenerator for UnderscoreIdGenerator {
+    fn next_id(&mut self, span: Span) -> syn::Ident {
+        syn::Ident::new("_", span)
+    }
+}
+
+impl Iterator for UnderscoreIdGenerator {
+    type Item = syn::Ident;
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.next_id(Span::call_site()))
+    }
+}
+
+fn generate_field_accessor<'a>(
+    fields: &'a VecDeque<&FieldOrGroup>,
+    method: &'a str,
+) -> impl Iterator<Item = TokenStream> + 'a {
+    let mut id_gen = SequentialIdGenerator::default();
+    let method = syn::Ident::new(method, Span::call_site());
+    fields.iter().map(move |field| {
+        let ident = field.ident();
+        match field {
+            FieldOrGroup::Field(_) => quote!(#ident),
+            FieldOrGroup::Group(_) => quote!(#ident),
+            FieldOrGroup::Multi(_) => {
+                let field = id_gen.next_id(ident.span());
+                quote_spanned!(ident.span()=> #ident.#method(#field.as_deref())?)
+            }
+        }
+    })
+}
+
 fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let variant_names = paths.iter().map(variant_name);
     let arms = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, (_enum_variant, _iter_variant, match_variant))| -> syn::Arm {
+        .map(|(path, configuration_key)| -> syn::Arm {
             let field = path
                 .back()
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
-            let mut id_gen = NumericIdGenerator::default();
-            // TODO deduplicate this logic
-            let segments = path.iter().map(|&thing| {
-                let ident = thing.ident();
-                match thing {
-                    FieldOrGroup::Field(_) => quote!(#ident),
-                    FieldOrGroup::Group(_) => quote!(#ident),
-                    FieldOrGroup::Multi(_) => {
-                        let field = id_gen.next_id(ident.span());
-                        quote_spanned!(ident.span()=> #ident.get(#field.as_deref())?)
-                    },
-                }
-            });
+            let segments = generate_field_accessor(path, "get");
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
+            let match_variant = configuration_key.match_read_write;
             if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
                     // TODO test whether the wrong type fails unit tests
@@ -443,36 +437,15 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     ) = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, (_enum_variant, _iter_variant, match_variant))| {
-            let mut id_gen = NumericIdGenerator::default();
-            let read_segments = path.iter().map(|&thing| {
-                let ident = thing.ident();
-                match thing {
-                    FieldOrGroup::Field(_) => quote!(#ident),
-                    FieldOrGroup::Group(_) => quote!(#ident),
-                    FieldOrGroup::Multi(_) => {
-                        let field = id_gen.next_id(ident.span());
-                        quote_spanned!(ident.span()=> #ident.get(#field.as_deref())?)
-                    },
-                }
-            }).collect::<Vec<_>>();
-            let mut id_gen = NumericIdGenerator::default();
-            let write_segments = path.iter().map(|&thing| {
-                let ident = thing.ident();
-                match thing {
-                    FieldOrGroup::Field(_) => quote!(#ident),
-                    FieldOrGroup::Group(_) => quote!(#ident),
-                    FieldOrGroup::Multi(_) => {
-                        let field = id_gen.next_id(ident.span());
-                        quote_spanned!(ident.span()=> #ident.get_mut(#field.as_deref())?)
-                    },
-                }
-            }).collect::<Vec<_>>();
+        .map(|(path, configuration_key)| {
+            let read_segments = generate_field_accessor(path, "get");
+            let write_segments = generate_field_accessor(path, "get_mut").collect::<Vec<_>>();
             let field = path
                 .iter()
                 .filter_map(|thing| thing.field())
                 .next()
                 .unwrap();
+            let match_variant = configuration_key.match_read_write;
 
             let ty = field.ty();
             let parse_as = field.from().unwrap_or(field.ty());
@@ -561,14 +534,29 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     }
 }
 
-fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> (syn::Variant, syn::Expr, syn::Pat) {
-    let ident = syn::Ident::new(
+struct ConfigurationKey {
+    /// e.g. `C8yUrl(Option<String>)`
+    enum_variant: syn::Variant,
+    // TODO kill this when it's not used
+    iter_field: syn::Expr,
+    /// e.g. `C8yUrl(key0)`
+    match_read_write: syn::Pat,
+    /// e.g. `C8yUrl(_)`
+    match_shape: syn::Pat,
+}
+
+fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
+    syn::Ident::new(
         &segments
             .iter()
             .map(|segment| segment.name().to_upper_camel_case())
             .collect::<String>(),
         segments.iter().last().unwrap().ident().span(),
-    );
+    )
+}
+
+fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
+    let ident = ident_for(segments);
     let count_multi = segments
         .iter()
         .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
@@ -576,19 +564,26 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> (syn::Variant, syn::Expr,
     if count_multi > 0 {
         let opt_strs =
             std::iter::repeat::<syn::Type>(parse_quote!(Option<String>)).take(count_multi);
-        let enum_field = parse_quote_spanned!(ident.span()=> #ident(#(#opt_strs),*));
+        let enum_variant = parse_quote_spanned!(ident.span()=> #ident(#(#opt_strs),*));
         let nones = std::iter::repeat::<syn::Path>(parse_quote!(None)).take(count_multi);
         let iter_field = parse_quote_spanned!(ident.span()=> #ident(#(#nones),*));
-        let var_idents =
-            (0..count_multi).map(|i| syn::Ident::new(&format!("key{i}"), ident.span()));
-        let destructure_field = parse_quote_spanned!(ident.span()=> #ident(#(#var_idents),*));
-        (enum_field, iter_field, destructure_field)
+        let var_idents = SequentialIdGenerator::default().take(count_multi);
+        let match_read_write = parse_quote_spanned!(ident.span()=> #ident(#(#var_idents),*));
+        let underscores = UnderscoreIdGenerator.take(count_multi);
+        let match_shape = parse_quote_spanned!(ident.span()=> #ident(#(#underscores),*));
+        ConfigurationKey {
+            enum_variant,
+            iter_field,
+            match_shape,
+            match_read_write,
+        }
     } else {
-        (
-            parse_quote!(#ident),
-            parse_quote!(#ident),
-            parse_quote!(#ident),
-        )
+        ConfigurationKey {
+            enum_variant: parse_quote!(#ident),
+            iter_field: parse_quote!(#ident),
+            match_read_write: parse_quote!(#ident),
+            match_shape: parse_quote!(#ident),
+        }
     }
 }
 
