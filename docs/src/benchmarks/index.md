@@ -41,7 +41,7 @@ The graph allows you to visually track CPU performance trends and identify poten
 
 ### Detailed Metrics
 
-The following table provides a detailed breakdown of the CPU consumption for each task:
+The following table provides a detailed description of the CPU consumption of measured tasks:
 
 | Task                 | Description                                                    |
 |----------------------|----------------------------------------------------------------|
@@ -78,7 +78,7 @@ For each metric, the graph shows the current and historical values, allowing you
 
 ### Detailed Metrics
 
-The following table provides a breakdown of memory usage:
+The following table provides a description of memory usage metrics:
 
 | Metric           | Description                                                                 |
 |------------------|-----------------------------------------------------------------------------|
