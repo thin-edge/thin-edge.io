@@ -227,7 +227,7 @@ fn main() {
     assert_eq!(u16::from(config.mqtt.bind.port), 1883);
     assert_eq!(config.mqtt.external.bind.port.or_none(), None);
     assert_eq!(
-        config.read_string(ReadableKey::DeviceId).unwrap(),
+        config.read_string(&ReadableKey::DeviceId).unwrap(),
         "dummy-device-id"
     );
 }

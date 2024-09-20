@@ -35,6 +35,7 @@ impl<T> AppendRemoveItem for T {
     }
 }
 
+#[allow(dead_code)]
 define_tedge_config! {
     #[tedge_config(multi)]
     c8y: {

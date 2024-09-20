@@ -1,10 +1,7 @@
 use crate::error::extract_type_from_result;
-use std::iter::once;
-use itertools::Either;
 use proc_macro2::Span;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
-use crate::reader::PathItem;
 use heck::ToUpperCamelCase;
 use itertools::Itertools;
 use proc_macro2::TokenStream;
@@ -17,7 +14,7 @@ use syn::spanned::Spanned;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let paths = configuration_paths_from(items);
-    let (readonly_variant, readonly_iter, readonly_destr, write_error): (
+    let (_readonly_variant, _readonly_iter, readonly_destr, write_error): (
         Vec<_>,
         Vec<_>,
         Vec<_>,
@@ -197,7 +194,7 @@ fn deprecated_keys<'a>(
 
 fn generate_fromstr(
     type_name: syn::Ident,
-    (configuration_string, enum_variant, iter_variant, match_variant): &(
+    (configuration_string, enum_variant, iter_variant, _match_variant): &(
         Vec<String>,
         Vec<syn::Variant>,
         Vec<syn::Expr>,
@@ -419,7 +416,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         });
     quote! {
         impl TEdgeConfigReader {
-            pub fn read_string(&self, key: ReadableKey) -> Result<String, ReadError> {
+            pub fn read_string(&self, key: &ReadableKey) -> Result<String, ReadError> {
                 match key {
                     #(#arms)*
                 }

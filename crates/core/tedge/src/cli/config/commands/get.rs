@@ -13,7 +13,7 @@ impl Command for GetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        match self.config.read_string(self.key) {
+        match self.config.read_string(&self.key) {
             Ok(value) => {
                 println!("{}", value);
             }
