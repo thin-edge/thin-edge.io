@@ -15,7 +15,7 @@ if not MUNIN_USERNAME or not MUNIN_PASSWORD:
     raise EnvironmentError("Munin credentials are not set in the environment variables.")
 
 # List of SVG filenames to download
-svg_files = ['tedgecpuprocent-month.svg', 'memory-month.svg']
+svg_files = ['tedgecpuprocent-month.svg', 'tedgemem-month.svg']
 
 # URL of the Munin server
 base_url = 'https://munin.osadl.org/munin/osadl.org/rackfslot1.osadl.org/'

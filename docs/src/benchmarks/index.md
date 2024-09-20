@@ -55,24 +55,18 @@ The following table provides a detailed description of the CPU consumption of me
 
 ## Memory Usage
 
-In this section, we monitor the memory consumption of key system components to ensure efficient performance. The memory plugin tracks several metrics to provide a detailed view of how the system memory is being utilized.
+In this section, we monitor the memory consumption of key ThinEdge.io components to ensure efficient performance and to view how the system memory is being utilized.
 
 ### Graph of Memory Usage
 
-Below is a visual representation of the memory consumption on the device over the past month.
+Below is a visual representation of the memory consumption of ThinEdge.io tasks over the past month.
 
-![Memory Usage](./memory-month.svg)
+![Memory Usage](./tedgemem-month.svg)
 
 ### Monitored Metrics:
-- **Total Memory**: The total amount of memory available on the system.
-- **Free Memory**: Memory that is available for new processes.
-- **Buffers**: Memory used by the system for temporary storage, primarily for block devices (like hard disks).
-- **Cached Memory**: Memory that is cached for quicker access to frequently used data.
-- **Swap Memory**: Disk space used as virtual memory when physical memory is full.
-- **Slab Memory**: Memory used by the kernel for various internal data structures.
-- **Shared Memory (shmem)**: Memory used for shared memory segments and tmpfs (temporary file system).
-- **Swap Cache**: Memory that keeps track of pages that have been fetched from swap but not yet modified.
-- **Page Tables**: Memory used to map virtual memory addresses to physical addresses.
+- **Mosquitto Memory Usage**: Tracks the memory consumed by the mosquitto process, which manages MQTT messages and connections.
+- **Tedge-Agent Memory Usage**: Tracks the memory consumed by the tedge-agent process, which handles software updates, configurations, and telemetry operations.
+- **Tedge-Mapper Memory Usage**: Tracks the memory consumed by the tedge-mapper process, which converts telemetry data between MQTT and other protocols (e.g., Cumulocity, AWS). For multi-instance tedge-mapper, each instance is tracked individually.
 
 For each metric, the graph shows the current and historical values, allowing you to monitor how memory is utilized by the system.
 
@@ -80,17 +74,12 @@ For each metric, the graph shows the current and historical values, allowing you
 
 The following table provides a description of memory usage metrics:
 
-| Metric           | Description                                                                 |
-|------------------|-----------------------------------------------------------------------------|
-| **Total Memory**  | The total amount of memory available on the system.                         |
-| **Free Memory**   | Memory that is available for new processes.                                 |
-| **Buffers**       | Memory used for temporary storage for block devices (e.g., hard disks).     |
-| **Cached Memory** | Memory cached for quicker access to frequently used data.                   |
-| **Swap Memory**   | Disk space used as virtual memory.                                          |
-| **Slab Memory**   | Memory used by the kernel for internal data structures.                     |
-| **Shared Memory** | Memory used for shared memory segments and tmpfs.                           |
-| **Swap Cache**    | Memory keeping track of pages fetched from swap but not yet modified.       |
-| **Page Tables**   | Memory used to map virtual memory addresses to physical memory addresses.   |
+| Metric                   | Description                                                                 |
+|--------------------------|-----------------------------------------------------------------------------|
+| **Mosquitto Memory**     | Memory used by the mosquitto process, which manages MQTT messages and connections. |
+| **Tedge-Agent Memory**   | Memory used by the tedge-agent process, responsible for software updates, configurations, and telemetry operations |
+| **Tedge-Mapper Memory**  | Memory used by the tedge-mapper process, which converts telemetry data between MQTT and other protocols (e.g., Cumulocity, AWS). Each instance of tedge-mapper is monitored individually if multiple instances exist |
+
 
 > The values in this table are updated dynamically once per month.
 
@@ -98,4 +87,4 @@ By monitoring these metrics, we can ensure that the system is using memory effic
 
 ---
 
-This section now contains all relevant CPU and memory metrics, helping you track and analyse how system resources are allocated and used over time. These benchmarks are crucial for maintaining overall system performance.
+This section now contains all relevant memory metrics for ThinEdge tasks, helping you track and analyze how resources are allocated and used by mosquitto, tedge-agent, and tedge-mapper over time. These benchmarks are crucial for maintaining optimal performance of ThinEdge.io components and ensuring efficient memory usage across the system.
