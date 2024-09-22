@@ -616,7 +616,7 @@ te/device/main/service/my-service/status/health
 ```json5 title="Payload"
 {
   "status": "up",
-  "pid": "21037"
+  "pid": 21037
 }
 ```
 
