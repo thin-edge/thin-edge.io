@@ -1,4 +1,3 @@
-use crate::error::WatchdogError;
 use anyhow::Context;
 use freedesktop_entry_parser::parse_entry;
 use futures::channel::mpsc;
@@ -8,6 +7,9 @@ use futures::StreamExt;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value as JsonValue;
 use std::path::PathBuf;
 use std::process;
 use std::process::Command;
@@ -20,7 +22,6 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::HealthStatus;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::timestamp::IsoOrUnix;
 use time::OffsetDateTime;
@@ -28,6 +29,8 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+
+use crate::error::WatchdogError;
 
 const SERVICE_NAME: &str = "tedge-watchdog";
 
@@ -37,6 +40,16 @@ const SERVICE_NAME: &str = "tedge-watchdog";
 /// Notifications are sent more often to make sure we don't miss the notify interval due to
 /// a timing misalignment.
 const NOTIFY_SEND_FREQ_RATIO: u64 = 4;
+
+/// A subset of fields of health status payload required by the watchdog.
+///
+/// https://thin-edge.github.io/thin-edge.io/operate/troubleshooting/monitoring-service-health/
+#[derive(Debug, Serialize, Deserialize)]
+struct HealthStatusExt {
+    /// Used for tracking service restarts
+    pub pid: Option<u32>,
+    pub time: Option<JsonValue>,
+}
 
 pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
     // Send ready notification to systemd.
@@ -128,7 +141,6 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
 
                 let tedge_config_location = tedge_config_location.clone();
                 watchdog_tasks.push(tokio::spawn(async move {
-                    //
                     let interval = Duration::from_secs((interval / NOTIFY_SEND_FREQ_RATIO).max(1));
                     monitor_tedge_service(
                         tedge_config_location,
@@ -243,11 +255,11 @@ async fn monitor_tedge_service(
 async fn get_latest_health_status_message(
     request_timestamp: OffsetDateTime,
     messages: &mut mpsc::UnboundedReceiver<MqttMessage>,
-) -> Result<HealthStatus, WatchdogError> {
+) -> Result<HealthStatusExt, WatchdogError> {
     while let Some(message) = messages.next().await {
         if let Ok(message) = message.payload_str() {
             debug!("Health response received: {message}");
-            if let Ok(health_status) = serde_json::from_str::<HealthStatus>(message) {
+            if let Ok(health_status) = serde_json::from_str::<HealthStatusExt>(message) {
                 if health_status.time.is_none() {
                     error!("Ignoring invalid health response: {health_status:?} without a `time` field in it");
                     continue;
