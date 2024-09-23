@@ -110,7 +110,6 @@ impl AgentConfig {
 
         let mqtt_config = tedge_config
             .mqtt_config()?
-            .with_max_packet_size(10 * 1024 * 1024)
             .with_session_name(mqtt_session_name);
 
         // Tedge HTTP config

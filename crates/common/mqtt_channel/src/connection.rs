@@ -167,6 +167,11 @@ impl Connection {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     // Messages can be received before a sub ack
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
+                    if msg.payload.len() > config.max_packet_size {
+                        error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
+                            msg.topic, msg.payload.len(), config.max_packet_size);
+                        continue;
+                    }
                     let _ = message_sender.send(msg.into()).await;
                 }
 
@@ -199,6 +204,11 @@ impl Connection {
         loop {
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
+                    if msg.payload.len() > config.max_packet_size {
+                        error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
+                            msg.topic, msg.payload.len(), config.max_packet_size);
+                        continue;
+                    }
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     // One has to continue the loop though, because rumqttc relies on this polling.
                     let _ = message_sender.send(msg.into()).await;
