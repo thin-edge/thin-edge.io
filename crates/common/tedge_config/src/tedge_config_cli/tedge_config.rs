@@ -4,6 +4,7 @@ use crate::AutoFlag;
 use crate::AutoLogUpload;
 use crate::ConnectUrl;
 use crate::HostPort;
+use crate::MqttPayloadLimit;
 use crate::SecondsOrHumanTime;
 use crate::SoftwareManagementApiFlag;
 use crate::TEdgeConfigLocation;
@@ -47,6 +48,10 @@ use toml::Table;
 use tracing::error;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+
+pub const C8Y_MQTT_PAYLOAD_LIMIT: u32 = 16184; // 16 KB
+pub const AZ_MQTT_PAYLOAD_LIMIT: u32 = 262144; // 256 KB
+pub const AWS_MQTT_PAYLOAD_LIMIT: u32 = 131072; // 128 KB
 
 pub trait OptionalConfigError<T> {
     fn or_err(&self) -> Result<&T, ReadError>;
@@ -375,7 +380,8 @@ impl_append_remove_for_single_value!(
     NonZeroU16,
     SecondsOrHumanTime,
     u32,
-    AptConfig
+    AptConfig,
+    MqttPayloadLimit
 );
 
 impl AppendRemoveItem for TemplatesSet {
@@ -513,6 +519,14 @@ define_tedge_config! {
             device_profile: bool,
         },
 
+        mapper: {
+            mqtt: {
+                /// The maximum message payload size that can be mapped to the cloud via MQTT
+                #[tedge_config(example = "16184", default(function = "c8y_mqtt_payload_limit"))]
+                max_payload_size: MqttPayloadLimit,
+            }
+        },
+
         proxy: {
             bind: {
                 /// The IP address local Cumulocity HTTP proxy binds to
@@ -631,6 +645,12 @@ define_tedge_config! {
             #[tedge_config(example = "unix")]
             #[tedge_config(default(variable = "TimeFormat::Unix"))]
             timestamp_format: TimeFormat,
+
+            mqtt: {
+                /// The maximum message payload size that can be mapped to the cloud via MQTT
+                #[tedge_config(example = "262144", default(function = "az_mqtt_payload_limit"))]
+                max_payload_size: MqttPayloadLimit,
+            }
         },
 
         bridge: {
@@ -669,6 +689,12 @@ define_tedge_config! {
             #[tedge_config(example = "unix")]
             #[tedge_config(default(variable = "TimeFormat::Unix"))]
             timestamp_format: TimeFormat,
+
+            mqtt: {
+                /// The maximum message payload size that can be mapped to the cloud via MQTT
+                #[tedge_config(example = "131072", default(function = "aws_mqtt_payload_limit"))]
+                max_payload_size: MqttPayloadLimit,
+            }
         },
 
         bridge: {
@@ -1050,6 +1076,18 @@ fn az_topic_prefix() -> TopicPrefix {
 
 fn aws_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("aws").unwrap()
+}
+
+fn c8y_mqtt_payload_limit() -> MqttPayloadLimit {
+    C8Y_MQTT_PAYLOAD_LIMIT.try_into().unwrap()
+}
+
+fn az_mqtt_payload_limit() -> MqttPayloadLimit {
+    AZ_MQTT_PAYLOAD_LIMIT.try_into().unwrap()
+}
+
+fn aws_mqtt_payload_limit() -> MqttPayloadLimit {
+    AWS_MQTT_PAYLOAD_LIMIT.try_into().unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, serde::Serialize)]

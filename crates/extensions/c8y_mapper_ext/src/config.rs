@@ -30,7 +30,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
-pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 const STATE_DIR_NAME: &str = ".tedge-mapper-c8y";
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
@@ -66,6 +65,8 @@ pub struct C8yMapperConfig {
     pub ops_dir: Arc<Utf8Path>,
     pub state_dir: Arc<Utf8Path>,
     pub tmp_dir: Arc<Utf8Path>,
+
+    pub max_mqtt_payload_size: u32,
 }
 
 impl C8yMapperConfig {
@@ -97,6 +98,7 @@ impl C8yMapperConfig {
         software_management_with_types: bool,
         auto_log_upload: AutoLogUpload,
         smartrest_use_operation_id: bool,
+        max_mqtt_payload_size: u32,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -143,6 +145,8 @@ impl C8yMapperConfig {
             ops_dir,
             state_dir,
             tmp_dir,
+
+            max_mqtt_payload_size,
         }
     }
 
@@ -194,6 +198,7 @@ impl C8yMapperConfig {
 
         let auto_log_upload = tedge_config.c8y.operations.auto_log_upload;
         let smartrest_use_operation_id = tedge_config.c8y.smartrest.use_operation_id;
+        let max_mqtt_payload_size = tedge_config.c8y.mapper.mqtt.max_payload_size.0;
 
         // Add feature topic filters
         for cmd in [
@@ -246,6 +251,7 @@ impl C8yMapperConfig {
             software_management_with_types,
             auto_log_upload,
             smartrest_use_operation_id,
+            max_mqtt_payload_size,
         ))
     }
 

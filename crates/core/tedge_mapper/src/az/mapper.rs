@@ -81,6 +81,7 @@ impl TEdgeComponent for AzureMapper {
             mqtt_schema,
             tedge_config.az.mapper.timestamp_format,
             prefix,
+            tedge_config.az.mapper.mqtt.max_payload_size.0,
         );
         let mut az_converting_actor = ConvertingActor::builder("AzConverter", az_converter);
         az_converting_actor.connect_source(get_topic_filter(&tedge_config), &mut mqtt_actor);

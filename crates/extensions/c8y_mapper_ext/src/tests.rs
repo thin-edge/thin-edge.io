@@ -40,6 +40,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
+use tedge_config::C8Y_MQTT_PAYLOAD_LIMIT;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
@@ -2881,6 +2882,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         true,
         AutoLogUpload::Never,
         false,
+        C8Y_MQTT_PAYLOAD_LIMIT,
     )
 }
 

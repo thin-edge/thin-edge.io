@@ -14,7 +14,6 @@ use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
-const AZ_MQTT_THRESHOLD: usize = 1024 * 128;
 const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-az-bridge";
 
 #[derive(Debug)]
@@ -39,13 +38,14 @@ impl AzureConverter {
         mqtt_schema: MqttSchema,
         time_format: TimeFormat,
         topic_prefix: &TopicPrefix,
+        max_payload_size: u32,
     ) -> Self {
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked(&format!("{topic_prefix}/messages/events/")),
             errors_topic: mqtt_schema.error_topic(),
             time_format,
         };
-        let size_threshold = SizeThreshold(AZ_MQTT_THRESHOLD);
+        let size_threshold = SizeThreshold(max_payload_size as usize);
         AzureConverter {
             add_timestamp,
             clock,
@@ -153,6 +153,7 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
+    use tedge_config::AZ_MQTT_PAYLOAD_LIMIT;
     use test_case::test_case;
     use time::macros::datetime;
 
@@ -174,13 +175,7 @@ mod tests {
 
     #[test]
     fn convert_error() {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = "Invalid JSON";
 
@@ -195,13 +190,7 @@ mod tests {
 
     #[test]
     fn try_convert_invalid_json_returns_error() {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
@@ -217,8 +206,8 @@ mod tests {
             MqttSchema::default(),
             TimeFormat::Rfc3339,
             &TopicPrefix::try_from("az").unwrap(),
-        )
-        .with_threshold(SizeThreshold(1));
+            1,
+        );
 
         let _topic = "az/messages/events/".to_string();
         let input = r#"{
@@ -238,13 +227,7 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{
             "temperature": 23.0
@@ -266,13 +249,7 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
     {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -296,13 +273,7 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
     {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -326,13 +297,7 @@ mod tests {
     #[test]
     fn converting_input_with_unix_timestamp_produces_output_with_rfc3339_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "time" : 1702029646,
@@ -355,13 +320,7 @@ mod tests {
 
     #[test]
     fn converting_input_with_unix_timestamp_preserved() {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "time" : 1702029646,
@@ -385,13 +344,7 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "temperature": 23.0
@@ -484,13 +437,7 @@ mod tests {
         ; "child device service alarm"
     )]
     fn converting_az_telemetry(input_topic: &str, output_topic: &str, input: &str) {
-        let mut converter = AzureConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
         let input_message = MqttMessage::new(&Topic::new_unchecked(input_topic), input);
 
         let output = converter.convert(&input_message).unwrap();
@@ -501,13 +448,7 @@ mod tests {
 
     #[test]
     fn converting_bridge_health_status() {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
@@ -526,6 +467,7 @@ mod tests {
             MqttSchema::default(),
             TimeFormat::Unix,
             &TopicPrefix::try_from("az").unwrap(),
+            AZ_MQTT_PAYLOAD_LIMIT,
         );
 
         let input = r#"{"pid":1234,"status":"up","time":1694586060}"#;
@@ -541,13 +483,7 @@ mod tests {
 
     #[test]
     fn converting_service_health_status_down_message() {
-        let mut converter = AzureConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            &TopicPrefix::try_from("az").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{"pid":1234,"status":"up"}"#;
         let result = converter.try_convert(&MqttMessage::new(
@@ -558,5 +494,16 @@ mod tests {
         let expected_msg = MqttMessage::new(&Topic::new_unchecked("az/messages/events/"), input);
         let res = result.unwrap();
         assert_eq!(res[0], expected_msg);
+    }
+
+    fn create_test_converter(add_timestamp: bool) -> AzureConverter {
+        AzureConverter::new(
+            add_timestamp,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+            &TopicPrefix::try_from("az").unwrap(),
+            AZ_MQTT_PAYLOAD_LIMIT,
+        )
     }
 }

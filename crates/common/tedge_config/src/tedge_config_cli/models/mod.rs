@@ -9,6 +9,10 @@ pub mod port;
 pub mod seconds;
 pub mod templates_set;
 
+use doku::Document;
+use serde::Deserialize;
+use serde::Serialize;
+use std::fmt::Display;
 use std::str::FromStr;
 use strum::Display;
 
@@ -57,5 +61,69 @@ impl FromStr for AutoLogUpload {
                 input: input.to_string(),
             }),
         }
+    }
+}
+
+pub const MQTT_MAX_PAYLOAD_SIZE: u32 = 268435455;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Document)]
+pub struct MqttPayloadLimit(pub u32);
+
+#[derive(thiserror::Error, Debug)]
+#[error("Invalid MQTT payload size limit: {0}. Provide a value between 0 and 268435455 bytes")]
+pub struct InvalidMqttPayloadLimit(String);
+
+impl FromStr for MqttPayloadLimit {
+    type Err = InvalidMqttPayloadLimit;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let limit = value
+            .parse::<u32>()
+            .map_err(|_| InvalidMqttPayloadLimit(value.to_string()))?;
+        limit.try_into()
+    }
+}
+
+impl TryFrom<u32> for MqttPayloadLimit {
+    type Error = InvalidMqttPayloadLimit;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        if value == 0 || value > MQTT_MAX_PAYLOAD_SIZE {
+            return Err(InvalidMqttPayloadLimit(value.to_string()));
+        }
+
+        Ok(MqttPayloadLimit(value))
+    }
+}
+
+impl Display for MqttPayloadLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::InvalidMqttPayloadLimit;
+    use super::MqttPayloadLimit;
+    use assert_matches::assert_matches;
+
+    #[test]
+    fn test_mqtt_payload_limit() {
+        // Zero size is invalid
+        let res = MqttPayloadLimit::try_from(0);
+        assert_matches!(res, Err(InvalidMqttPayloadLimit(_)));
+
+        // Values higher than 256 MB are also invalid
+        let res = MqttPayloadLimit::try_from(268435455 + 1);
+        assert_matches!(res, Err(InvalidMqttPayloadLimit(_)));
+
+        // Max limit is valid
+        let res = MqttPayloadLimit::try_from(268435455);
+        assert_matches!(res.unwrap().0, 268435455);
+
+        // Anything less than that is also valid
+        let res = MqttPayloadLimit::try_from(268435455 - 1);
+        assert_matches!(res.unwrap().0, 268435454);
     }
 }
