@@ -26,24 +26,27 @@ Trigger Custom Download Operation
     Should Be Equal    ${actual_log}    ${expected_log}
 
 Override Built-In Operation
-    Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 '{"status":"init"}'
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 '{"status":"init"}'
     ${software_list}    Should Have MQTT Messages
     ...    te/device/main///cmd/software_list/robot-456
     ...    message_pattern=.*successful.*
     ...    maximum=1
-    Should Contain      ${software_list[0]}    "currentSoftwareList"
-    Should Contain      ${software_list[0]}    "mosquitto"
-    Should Contain      ${software_list[0]}    "tedge"
-    Should Contain      ${software_list[0]}    "postprocess"
-    Should Contain      ${software_list[0]}    "done"
-    Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 ''
+    Should Contain    ${software_list[0]}    "currentSoftwareList"
+    Should Contain    ${software_list[0]}    "mosquitto"
+    Should Contain    ${software_list[0]}    "tedge"
+    Should Contain    ${software_list[0]}    "postprocess"
+    Should Contain    ${software_list[0]}    "done"
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/software_list/robot-456 ''
 
 Override Built-In Operation Executing Step
     # Trigger a software update using a custom software-update workflow with rollbacks
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/software_update/test-builtin-executing-step '{"status":"init","updateList":[{"type":"apt","modules":[{"name":"broken-package","version":"latest","action":"install"}]}]}'
-    Should Have MQTT Messages    te/device/main///cmd/software_update/test-builtin-executing-step    message_pattern=.*rollback.*   minimum=1
-    Execute Command     tedge mqtt pub --retain te/device/main///cmd/software_update/test-builtin-executing-step ''
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/software_update/test-builtin-executing-step
+    ...    message_pattern=.*rollback.*
+    ...    minimum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/software_update/test-builtin-executing-step ''
 
 Trigger Device Restart Using A Sub-Command
     [Documentation]    To detect if the device has been rebooted, a marker file is created in the /run directory
