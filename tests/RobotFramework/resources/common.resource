@@ -21,4 +21,4 @@ ${DEVICE_ADAPTER}       %{DEVICE_ADAPTER=docker}
 &{C8Y_CONFIG}           host=%{C8Y_BASEURL= }    username=%{C8Y_USER= }    password=%{C8Y_PASSWORD= }
 
 # AWS settings
-&{AWS_CONFIG}           host=%{AWS_URL= }
+&{AWS_CONFIG}        access_key_id=%{AWS_ACCESS_KEY_ID= }    access_key=%{AWS_SECRET_ACCESS_KEY= }    region=%{AWS_REGION= }
