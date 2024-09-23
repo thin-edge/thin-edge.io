@@ -59,13 +59,21 @@ format: check-tools
     fi
     cd tests/RobotFramework
     source .venv/bin/activate
-    echo Formatting tests...
     invoke format-tests
 
 # Check code formatting
 format-check: check-tools
+    #!/usr/bin/env bash
+    set -e
     cargo +nightly fmt -- --check
     taplo fmt --check
+
+    if [ ! -d tests/RobotFramework/.venv ]; then
+        just -f {{justfile()}} setup-integration-test
+    fi
+    cd tests/RobotFramework
+    source .venv/bin/activate
+    invoke check-format-tests
 
 # Check code
 check TARGET=DEFAULT_TARGET:

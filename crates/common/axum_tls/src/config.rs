@@ -161,7 +161,10 @@ impl PemReader for InjectedValue<String> {
 }
 
 impl<P: AsRef<Path> + Debug + ?Sized> PemReader for P {
-    type Read<'a> = File where Self: 'a;
+    type Read<'a>
+        = File
+    where
+        Self: 'a;
     fn open(&self) -> io::Result<File> {
         File::open(self)
     }
