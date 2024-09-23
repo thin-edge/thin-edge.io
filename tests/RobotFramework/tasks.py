@@ -146,6 +146,13 @@ def format_tests(c):
     """
     c.run(f"{sys.executable} -m robotidy tests")
 
+@task
+def check_format_tests(c):
+    """Check format of RobotFramework tests (for CI)
+    """
+    print("Checking formatting of RobotFramework tests...", file=sys.stderr)
+    c.run(f"{sys.executable} -m robotidy tests --check")
+
 
 @task(name="reports")
 def start_server(c, port=9000):
