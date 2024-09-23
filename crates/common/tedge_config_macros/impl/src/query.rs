@@ -188,6 +188,27 @@ fn generate_fromstr(
         .zip(configuration_key.iter().map(|k| &k.enum_variant))
         .map(|(s, v)| quote_spanned!(v.span()=> #s));
     let iter_variant = configuration_key.iter().map(|k| &k.iter_field);
+    let regex_patterns = configuration_key
+        .iter()
+        .filter_map(|c| Some((c.regex_parser.clone()?, c)))
+        .map(|(mut r, c)| {
+            let match_read_write = &c.match_read_write;
+            let own_branches = c
+                .field_names
+                .iter()
+                .enumerate()
+                .map::<syn::Stmt, _>(|(n, id)| {
+                    let n = n + 1;
+                    parse_quote! {
+                        let #id = captures.get(#n).map(|m| m.as_str().to_owned());
+                    }
+                });
+            r.then_branch = parse_quote!({
+                #(#own_branches)*
+                return Ok(Self::#match_read_write);
+            });
+            r
+        });
 
     // TODO oh shit make this actually work!
     quote! {
@@ -196,17 +217,19 @@ fn generate_fromstr(
             fn from_str(value: &str) -> Result<Self, Self::Err> {
                 // If we get an unreachable pattern, it means we have the same key twice
                 #[deny(unreachable_patterns)]
-                match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
+                let res = match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
                     #(
                         #simplified_configuration_string => {
-                            if (value != #configuration_string) {
+                            if value != #configuration_string {
                                 warn_about_deprecated_key(value.to_owned(), #configuration_string);
                             }
-                            Ok(Self::#iter_variant)
+                            return Ok(Self::#iter_variant)
                         },
                     )*
                     #error_case
-                }
+                };
+                #(#regex_patterns;)*
+                res
             }
         }
     }
@@ -506,6 +529,20 @@ struct ConfigurationKey {
     match_read_write: syn::Pat,
     /// e.g. `C8yUrl(_)`
     match_shape: syn::Pat,
+    /// An if statement for extracting the multi field names out of value using a Regex
+    ///
+    /// This takes the string being matched using the identifier `value`, and binds `captures` if
+    /// to [Regex::captures] if the string matches the key in question. The captures can be read
+    /// using `captures.get(n)` where n is 1 for the first multi field, 2 for the second, etc.
+    /// If the user is using a single configuration inside the multi field, the relevant capture will
+    /// be `None`.
+    ///
+    /// If the field is not a "multi" field, `regex_parser` will be set to `None`
+    regex_parser: Option<syn::ExprIf>,
+    /// The number of multi fields
+    count_multi: usize,
+    /// The variable names assigned to the multi fields within this configuration
+    field_names: Vec<syn::Ident>,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -530,15 +567,30 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
         let enum_variant = parse_quote_spanned!(ident.span()=> #ident(#(#opt_strs),*));
         let nones = std::iter::repeat::<syn::Path>(parse_quote!(None)).take(count_multi);
         let iter_field = parse_quote_spanned!(ident.span()=> #ident(#(#nones),*));
-        let var_idents = SequentialIdGenerator::default().take(count_multi);
-        let match_read_write = parse_quote_spanned!(ident.span()=> #ident(#(#var_idents),*));
+        let field_names = SequentialIdGenerator::default()
+            .take(count_multi)
+            .collect::<Vec<_>>();
+        let match_read_write = parse_quote_spanned!(ident.span()=> #ident(#(#field_names),*));
         let underscores = UnderscoreIdGenerator.take(count_multi);
         let match_shape = parse_quote_spanned!(ident.span()=> #ident(#(#underscores),*));
+        let re = segments
+            .iter()
+            .map(|fog| match fog {
+                FieldOrGroup::Multi(m) => format!("{}(?:\\.([A-z_]+))?", m.ident),
+                FieldOrGroup::Field(f) => f.ident().to_string(),
+                FieldOrGroup::Group(g) => g.ident.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\\.");
+        let regex_parser = parse_quote_spanned!(ident.span()=> if let Some(captures) = ::regex::Regex::new(#re).unwrap().captures(value) {});
         ConfigurationKey {
             enum_variant,
             iter_field,
             match_shape,
             match_read_write,
+            regex_parser: Some(regex_parser),
+            count_multi,
+            field_names,
         }
     } else {
         ConfigurationKey {
@@ -546,6 +598,9 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             iter_field: parse_quote!(#ident),
             match_read_write: parse_quote!(#ident),
             match_shape: parse_quote!(#ident),
+            regex_parser: None,
+            count_multi,
+            field_names: vec![],
         }
     }
 }
@@ -594,5 +649,86 @@ mod tests {
             }
         };
         syn::parse2::<syn::File>(generate_writable_keys(&input.groups)).unwrap();
+    }
+
+    #[test]
+    fn from_str_does_not_generate_regex_matches_for_normal_fields() {
+        let input: crate::input::Configuration = parse_quote!(
+            c8y: {
+                url: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let c = configuration_strings(paths.iter());
+        let generated = generate_fromstr(
+            syn::Ident::new("ReadableKey", Span::call_site()),
+            &c,
+            parse_quote!(_ => unimplemented!("just a test")),
+        );
+        let expected = parse_quote!(
+            impl ::std::str::FromStr for ReadableKey {
+                type Err = ParseKeyError;
+                fn from_str(value: &str) -> Result<Self, Self::Err> {
+                    #[deny(unreachable_patterns)]
+                    let res = match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
+                        "c8y_url" => {
+                            if value != "c8y.url" {
+                                warn_about_deprecated_key(value.to_owned(), "c8y.url");
+                            }
+                            return Ok(Self::C8yUrl);
+                        },
+                        _ => unimplemented!("just a test"),
+                    };
+                    res
+                }
+            }
+        );
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&syn::parse2(generated).unwrap()),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn from_str_generates_regex_matches_for_multi_fields() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let c = configuration_strings(paths.iter());
+        let generated = generate_fromstr(
+            syn::Ident::new("ReadableKey", Span::call_site()),
+            &c,
+            parse_quote!(_ => unimplemented!("just a test")),
+        );
+        let expected = parse_quote!(
+            impl ::std::str::FromStr for ReadableKey {
+                type Err = ParseKeyError;
+                fn from_str(value: &str) -> Result<Self, Self::Err> {
+                    #[deny(unreachable_patterns)]
+                    let res = match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
+                        "c8y_url" => {
+                            if value != "c8y.url" {
+                                warn_about_deprecated_key(value.to_owned(), "c8y.url");
+                            }
+                            return Ok(Self::C8yUrl(None));
+                        },
+                        _ => unimplemented!("just a test"),
+                    };
+                    if let Some(captures) = ::regex::Regex::new("c8y(?:\\.([A-z_]+))?\\.url").unwrap().captures(value) {
+                        let key0 = captures.get(1usize).map(|m| m.as_str().to_owned());
+                        return Ok(Self::C8yUrl(key0));
+                    };
+                    res
+                }
+            }
+        );
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&syn::parse2(generated).unwrap()),
+            prettyplease::unparse(&expected)
+        );
     }
 }

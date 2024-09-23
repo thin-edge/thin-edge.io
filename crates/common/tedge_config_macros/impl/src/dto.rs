@@ -49,7 +49,6 @@ pub fn generate(
             FieldOrGroup::Multi(group) => {
                 if !group.dto.skip {
                     let sub_dto_name = prefixed_type_name(&name, group);
-                    // TODO check if skip serializing if is actually any use, I deleted it because it was complicated to implement
                     idents.push(&group.ident);
                     let field_ty = parse_quote_spanned!(group.ident.span()=> ::tedge_config_macros::Multi<#sub_dto_name>);
                     tys.push(field_ty);

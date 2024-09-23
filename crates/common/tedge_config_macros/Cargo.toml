@@ -13,6 +13,7 @@ camino = { workspace = true, features = ["serde1"] }
 doku = { workspace = true }
 itertools = { workspace = true }
 once_cell = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 tedge_config_macros-macro = { path = "macro" }
 thiserror = { workspace = true }

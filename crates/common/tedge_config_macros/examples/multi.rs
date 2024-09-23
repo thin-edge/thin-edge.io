@@ -35,6 +35,10 @@ define_tedge_config! {
     c8y: {
         #[tedge_config(reader(private))]
         url: String,
+        #[tedge_config(multi)]
+        something: {
+            test: String,
+        }
     },
 }
 
@@ -78,4 +82,34 @@ fn main() {
         multi_c8y_reader.c8y.try_get(None),
         Err(MultiError::MultiNotSingle)
     ));
+
+    assert_eq!(
+        "c8y.url".parse::<ReadableKey>().unwrap(),
+        ReadableKey::C8yUrl(None)
+    );
+    assert_eq!(
+        "c8y.cloud.url".parse::<ReadableKey>().unwrap(),
+        ReadableKey::C8yUrl(Some("cloud".to_owned()))
+    );
+    assert_eq!(
+        "c8y.cloud.something.test".parse::<ReadableKey>().unwrap(),
+        ReadableKey::C8ySomethingTest(Some("cloud".to_owned()), None)
+    );
+    assert_eq!(
+        "c8y.cloud.something.thing.test"
+            .parse::<ReadableKey>()
+            .unwrap(),
+        ReadableKey::C8ySomethingTest(Some("cloud".to_owned()), Some("thing".to_owned()))
+    );
+    assert_eq!(
+        "c8y.something.thing.test".parse::<ReadableKey>().unwrap(),
+        ReadableKey::C8ySomethingTest(None, Some("thing".to_owned()))
+    );
+    assert_eq!(
+        "c8y.cloud.not_a_real_key"
+            .parse::<ReadableKey>()
+            .unwrap_err()
+            .to_string(),
+        "Unknown key: 'c8y.cloud.not_a_real_key'"
+    );
 }
