@@ -51,7 +51,13 @@ c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 camino = "1.1"
 cap = "0.1"
 certificate = { path = "crates/common/certificate" }
-clap = { version = "4.4", features = ["cargo", "derive"] }
+clap = { version = "4.4", features = [
+    "cargo",
+    "derive",
+    "string",
+    "env",
+    "unstable-styles",
+] }
 clock = { path = "crates/common/clock" }
 collectd_ext = { path = "crates/extensions/collectd_ext" }
 csv = "1.1"
