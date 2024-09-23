@@ -144,6 +144,7 @@ def formatcode(c):
 def format_tests(c):
     """Format RobotFramework tests
     """
+    print("Formatting of RobotFramework tests...", file=sys.stderr)
     c.run(f"{sys.executable} -m robotidy tests")
 
 @task

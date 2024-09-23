@@ -59,7 +59,6 @@ format: check-tools
     fi
     cd tests/RobotFramework
     source .venv/bin/activate
-    echo Formatting tests...
     invoke format-tests
 
 # Check code formatting
