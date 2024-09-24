@@ -68,12 +68,12 @@ pub fn load_ssl_config(
 ) -> anyhow::Result<Option<rustls::ServerConfig>> {
     // TODO this could be moved somewhere more generic (e.g. where we initialize tracing subscriber)
     if !stderr().is_terminal() {
-        yansi::Paint::disable();
+        yansi::disable();
     }
 
     let enabled = Paint::green("enabled").bold();
     let disabled = Paint::red("disabled").bold();
-    let service_name = Paint::default(service_name).bold();
+    let service_name = service_name.bold();
     let cert_key = cert_path.key();
     let key_key = key_path.key();
     let ca_key = ca_path.key();

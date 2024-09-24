@@ -192,7 +192,7 @@ which = "4.2"
 whoami = "1.5.0"
 ws_stream_tungstenite = "0.11"
 x509-parser = "0.15"
-yansi = "0.5"
+yansi = "1.0.1"
 zeroize = "1.5"
 
 [profile.release]

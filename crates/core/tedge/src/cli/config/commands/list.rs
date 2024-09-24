@@ -5,6 +5,7 @@ use std::io::stdout;
 use std::io::IsTerminal;
 use tedge_config::TEdgeConfig;
 use tedge_config::READABLE_KEYS;
+use yansi::Paint;
 
 pub struct ListConfigCommand {
     pub is_all: bool,
@@ -51,7 +52,7 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
 
 fn print_config_doc(config: &TEdgeConfig) {
     if !stdout().is_terminal() {
-        yansi::Paint::disable();
+        yansi::disable();
     }
 
     let max_length = config
@@ -75,10 +76,9 @@ fn print_config_doc(config: &TEdgeConfig) {
 
         println!(
             "{}  {}",
-            yansi::Paint::yellow(
-                key.pad_to_width_with_alignment(max_length, pad::Alignment::Right)
-            ),
-            yansi::Paint::default(docs).italic()
+            key.pad_to_width_with_alignment(max_length, pad::Alignment::Right)
+                .yellow(),
+            docs.italic()
         );
 
         // TODO add a test to make sure people don't accidentally set the wrong meta name
