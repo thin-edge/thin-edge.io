@@ -395,14 +395,26 @@ impl EntityTopicId {
         }
     }
 
-    /// Returns the topic identifier of the parent of a service,
-    /// assuming `self` is the topic identifier of a device `device/+//
-    /// or a service `device/+/service/+`
+    /// Returns the topic identifier of the source device of an entity,
+    /// - for a service, this is the parent entity
+    /// - for a device, this is the device itself
     ///
-    /// Returns None if this is not a service or if the pattern doesn't apply.
-    pub fn default_parent_identifier(&self) -> Option<Self> {
+    /// Returns None if the pattern doesn't apply.
+    pub fn default_source_device_identifier(&self) -> Option<Self> {
         match self.0.split('/').collect::<Vec<&str>>()[..] {
             ["device", parent_id, "", ""] => Some(parent_id),
+            ["device", parent_id, "service", _] => Some(parent_id),
+            _ => None,
+        }
+        .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
+    }
+
+    /// Returns the topic identifier of the parent of a service,
+    /// assuming `self` is the topic identifier of a service `device/+/service/+`
+    ///
+    /// Returns None if this is not a service or if the pattern doesn't apply.
+    pub fn default_service_parent_identifier(&self) -> Option<Self> {
+        match self.0.split('/').collect::<Vec<&str>>()[..] {
             ["device", parent_id, "service", _] => Some(parent_id),
             _ => None,
         }
