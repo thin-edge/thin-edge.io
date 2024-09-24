@@ -10,11 +10,13 @@ use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
-use serde_json::Value as JsonValue;
 use std::fmt::Display;
 use std::process;
 use std::sync::Arc;
 use tedge_utils::timestamp::TimeFormat;
+
+mod health_status;
+pub use health_status::HealthStatus;
 
 pub fn service_health_topic(
     mqtt_schema: &MqttSchema,
@@ -97,13 +99,6 @@ impl ServiceHealthTopic {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct HealthStatus {
-    pub status: Status,
-    pub pid: Option<u32>,
-    pub time: Option<JsonValue>,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
@@ -133,37 +128,6 @@ impl Display for Status {
 
 #[derive(Debug)]
 pub struct HealthTopicError;
-
-impl HealthStatus {
-    pub fn try_from_health_status_message(
-        message: &MqttMessage,
-        mqtt_schema: &MqttSchema,
-    ) -> Result<Self, HealthTopicError> {
-        if let Ok((topic_id, Channel::Health)) = mqtt_schema.entity_channel_of(&message.topic) {
-            let health_status = if entity_is_mosquitto_bridge_service(&topic_id) {
-                let status = match message.payload_str() {
-                    Ok("1") => Status::Up,
-                    Ok("0") => Status::Down,
-                    _ => Status::default(),
-                };
-                HealthStatus {
-                    status,
-                    pid: None,
-                    time: None,
-                }
-            } else {
-                serde_json::from_slice(message.payload()).unwrap_or_default()
-            };
-            Ok(health_status)
-        } else {
-            Err(HealthTopicError)
-        }
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.status == Status::Up || self.status == Status::Down
-    }
-}
 
 pub fn entity_is_mosquitto_bridge_service(entity_topic_id: &EntityTopicId) -> bool {
     entity_topic_id

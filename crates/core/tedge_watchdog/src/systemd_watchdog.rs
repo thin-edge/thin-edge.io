@@ -1,4 +1,3 @@
-use crate::error::WatchdogError;
 use anyhow::Context;
 use freedesktop_entry_parser::parse_entry;
 use futures::channel::mpsc;
@@ -20,7 +19,6 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::HealthStatus;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::timestamp::IsoOrUnix;
 use time::OffsetDateTime;
@@ -28,6 +26,9 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+
+use crate::error::WatchdogError;
+use tedge_api::HealthStatus;
 
 const SERVICE_NAME: &str = "tedge-watchdog";
 
@@ -128,7 +129,6 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
 
                 let tedge_config_location = tedge_config_location.clone();
                 watchdog_tasks.push(tokio::spawn(async move {
-                    //
                     let interval = Duration::from_secs((interval / NOTIFY_SEND_FREQ_RATIO).max(1));
                     monitor_tedge_service(
                         tedge_config_location,
