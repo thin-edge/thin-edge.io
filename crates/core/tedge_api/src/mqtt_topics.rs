@@ -367,11 +367,6 @@ impl EntityTopicId {
         !default_topic_schema::parse(self).is_empty()
     }
 
-    /// Returns `true` if it's the topic identifier of the child device in default topic scheme.
-    pub fn is_default_child_device(&self) -> bool {
-        matches!(self.segments(), ["device", device_name, "", ""] if device_name != "main" && !device_name.is_empty())
-    }
-
     /// Returns the device name when the entity topic identifier is using the `device/+/service/+` pattern.
     ///
     /// Returns None otherwise.
@@ -393,20 +388,6 @@ impl EntityTopicId {
         }
     }
 
-    /// Returns the topic identifier of the source device of an entity,
-    /// - for a service, this is the parent entity
-    /// - for a device, this is the device itself
-    ///
-    /// Returns None if the pattern doesn't apply.
-    pub fn default_source_device_identifier(&self) -> Option<Self> {
-        match self.0.split('/').collect::<Vec<&str>>()[..] {
-            ["device", parent_id, "", ""] => Some(parent_id),
-            ["device", parent_id, "service", _] => Some(parent_id),
-            _ => None,
-        }
-        .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
-    }
-
     /// Returns the topic identifier of the parent of a service,
     /// assuming `self` is the topic identifier of a service `device/+/service/+`
     ///
@@ -422,11 +403,6 @@ impl EntityTopicId {
     /// Returns true if the current topic identifier matches that of the main device
     pub fn is_default_main_device(&self) -> bool {
         self == &Self::default_main_device()
-    }
-
-    /// Returns true if the current topic identifier matches that of the service
-    pub fn is_default_service(&self) -> bool {
-        self.default_service_name().is_some()
     }
 
     /// If `self` is a device topic id, return a service topic id under this
