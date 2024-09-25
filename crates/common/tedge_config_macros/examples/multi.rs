@@ -151,10 +151,16 @@ fn main() {
         "Unknown key: 'c8y.cloud.not_a_real_key'"
     );
 
-    assert_eq!(multi_c8y_reader.readable_keys().map(|r| r.to_string()).collect::<Vec<_>>(), [
-        "c8y.cloud.url",
-        "c8y.cloud.something.test",
-        "c8y.edge.url",
-        "c8y.edge.something.test",
-    ]);
+    assert_eq!(
+        multi_c8y_reader
+            .readable_keys()
+            .map(|r| r.to_string())
+            .collect::<Vec<_>>(),
+        [
+            "c8y.cloud.url",
+            "c8y.cloud.something.test",
+            "c8y.edge.url",
+            "c8y.edge.something.test",
+        ]
+    );
 }

@@ -22,7 +22,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let (readonly_destr, write_error): (Vec<_>, Vec<_>) = paths
         .iter()
         .filter_map(|field| {
-            let configuration = variant_name(field);
+            let configuration = enum_variant(field);
             Some((
                 configuration.match_shape,
                 field
@@ -185,7 +185,7 @@ fn configuration_strings<'a>(
 ) -> (Vec<String>, Vec<ConfigurationKey>) {
     variants
         .map(|segments| {
-            let configuration_key = variant_name(segments);
+            let configuration_key = enum_variant(segments);
             (
                 segments
                     .iter()
@@ -210,7 +210,7 @@ fn deprecated_keys<'a>(
                 .unwrap()
                 .deprecated_keys()
                 .map(|key| {
-                    let configuration_key = variant_name(segments);
+                    let configuration_key = enum_variant(segments);
                     (key, configuration_key)
                 })
         })
@@ -543,10 +543,10 @@ fn generate_field_accessor<'a>(
 }
 
 fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
-    let variant_names = paths.iter().map(variant_name);
+    let enum_variants = paths.iter().map(enum_variant);
     let arms = paths
         .iter()
-        .zip(variant_names)
+        .zip(enum_variants)
         .map(|(path, configuration_key)| -> syn::Arm {
             let field = path
                 .back()
@@ -593,7 +593,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 }
 
 fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
-    let variant_names = paths.iter().map(variant_name);
+    let enum_variants = paths.iter().map(enum_variant);
     let (update_arms, unset_arms, append_arms, remove_arms): (
         Vec<syn::Arm>,
         Vec<syn::Arm>,
@@ -601,7 +601,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         Vec<syn::Arm>,
     ) = paths
         .iter()
-        .zip(variant_names)
+        .zip(enum_variants)
         .map(|(path, configuration_key)| {
             let read_segments = generate_field_accessor(path, "try_get");
             let write_segments = generate_field_accessor(path, "try_get_mut").collect::<Vec<_>>();
@@ -733,7 +733,7 @@ fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
     )
 }
 
-fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
+fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
     let ident = ident_for(segments);
     let count_multi = segments
         .iter()
@@ -779,8 +779,7 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                     )
                 } else {
                     let none: syn::Pat = parse_quote!(None);
-                    let mut idents = field_names
-                        .iter().zip(options.iter());
+                    let mut idents = field_names.iter().zip(options.iter());
                     let format_str = segments
                         .iter()
                         .map(|segment| match segment {
@@ -797,7 +796,10 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                         })
                         .interleave(std::iter::repeat(".".to_owned()).take(segments.len() - 1))
                         .collect::<String>();
-                    (parse_quote!(#ident(#(#options),*)), parse_quote!(::std::borrow::Cow::Owned(format!(#format_str))))
+                    (
+                        parse_quote!(#ident(#(#options),*)),
+                        parse_quote!(::std::borrow::Cow::Owned(format!(#format_str))),
+                    )
                 }
             })
             .collect();
@@ -855,6 +857,7 @@ fn is_read_write(path: &VecDeque<&FieldOrGroup>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syn::ItemImpl;
 
     #[test]
     fn output_parses() {
@@ -884,7 +887,7 @@ mod tests {
         let generated = generate_fromstr(
             syn::Ident::new("ReadableKey", Span::call_site()),
             &c,
-            parse_quote!(_ => unimplemented!("just a test")),
+            parse_quote!(_ => unimplemented!("just a test, no error handling")),
         );
         let expected = parse_quote!(
             impl ::std::str::FromStr for ReadableKey {
@@ -898,7 +901,7 @@ mod tests {
                             }
                             return Ok(Self::C8yUrl);
                         },
-                        _ => unimplemented!("just a test"),
+                        _ => unimplemented!("just a test, no error handling"),
                     };
                     res
                 }
@@ -923,7 +926,7 @@ mod tests {
         let generated = generate_fromstr(
             syn::Ident::new("ReadableKey", Span::call_site()),
             &c,
-            parse_quote!(_ => unimplemented!("just a test")),
+            parse_quote!(_ => unimplemented!("just a test, no error handling")),
         );
         let expected = parse_quote!(
             impl ::std::str::FromStr for ReadableKey {
@@ -937,7 +940,7 @@ mod tests {
                             }
                             return Ok(Self::C8yUrl(None));
                         },
-                        _ => unimplemented!("just a test"),
+                        _ => unimplemented!("just a test, no error handling"),
                     };
                     if let Some(captures) = ::regex::Regex::new("c8y(?:\\.([A-z_]+))?\\.url").unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
@@ -1101,36 +1104,10 @@ mod tests {
         );
         let paths = configuration_paths_from(&input.groups);
         let config_keys = configuration_strings(paths.iter());
-        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
-        let generated_file: syn::File = syn::parse2(generated).unwrap();
-        let mut impl_block = generated_file
-            .items
-            .into_iter()
-            .find_map(|item| {
-                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
-                    Some(r#impl)
-                } else {
-                    None
-                }
-            })
-            .expect("Should generate an impl block for ReadableKey");
-        for item in &mut impl_block.items {
-            match item {
-                syn::ImplItem::Fn(f) => f
-                    .attrs
-                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
-                _ => (),
-            }
-        }
+        let impl_block = keys_enum_impl_block(&config_keys);
+
         let expected = parse_quote! {
             impl ReadableKey {
-                #[deprecated]
-                pub fn as_str(&self) -> &'static str {
-                    match self {
-                        Self::C8yUrl => "c8y.url",
-                    }
-                }
-
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::C8yUrl => ::std::borrow::Cow::Borrowed("c8y.url"),
@@ -1155,36 +1132,10 @@ mod tests {
         );
         let paths = configuration_paths_from(&input.groups);
         let config_keys = configuration_strings(paths.iter());
-        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
-        let generated_file: syn::File = syn::parse2(generated).unwrap();
-        let mut impl_block = generated_file
-            .items
-            .into_iter()
-            .find_map(|item| {
-                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
-                    Some(r#impl)
-                } else {
-                    None
-                }
-            })
-            .expect("Should generate an impl block for ReadableKey");
-        for item in &mut impl_block.items {
-            match item {
-                syn::ImplItem::Fn(f) => f
-                    .attrs
-                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
-                _ => (),
-            }
-        }
+        let impl_block = keys_enum_impl_block(&config_keys);
+
         let expected = parse_quote! {
             impl ReadableKey {
-                #[deprecated]
-                pub fn as_str(&self) -> &'static str {
-                    match self {
-                        Self::C8yUrl(_) => "c8y.url",
-                    }
-                }
-
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::C8yUrl(None) => ::std::borrow::Cow::Borrowed("c8y.url"),
@@ -1213,36 +1164,10 @@ mod tests {
         );
         let paths = configuration_paths_from(&input.groups);
         let config_keys = configuration_strings(paths.iter());
-        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
-        let generated_file: syn::File = syn::parse2(generated).unwrap();
-        let mut impl_block = generated_file
-            .items
-            .into_iter()
-            .find_map(|item| {
-                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
-                    Some(r#impl)
-                } else {
-                    None
-                }
-            })
-            .expect("Should generate an impl block for ReadableKey");
-        for item in &mut impl_block.items {
-            match item {
-                syn::ImplItem::Fn(f) => f
-                    .attrs
-                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
-                _ => (),
-            }
-        }
+        let impl_block = keys_enum_impl_block(&config_keys);
+
         let expected = parse_quote! {
             impl ReadableKey {
-                #[deprecated]
-                pub fn as_str(&self) -> &'static str {
-                    match self {
-                        Self::TopNestedField(_, _) => "top.nested.field",
-                    }
-                }
-
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::TopNestedField(None, None) => ::std::borrow::Cow::Borrowed("top.nested.field"),
@@ -1258,5 +1183,33 @@ mod tests {
             prettyplease::unparse(&parse_quote!(#impl_block)),
             prettyplease::unparse(&expected)
         );
+    }
+
+    fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {
+        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
+        let generated_file: syn::File = syn::parse2(generated).unwrap();
+        let mut impl_block = generated_file
+            .items
+            .into_iter()
+            .find_map(|item| {
+                if let syn::Item::Impl(r#impl @ ItemImpl { trait_: None, .. }) = item {
+                    Some(r#impl)
+                } else {
+                    None
+                }
+            })
+            .expect("Should generate an impl block for ReadableKey");
+
+        // Remove doc comments from items
+        for item in &mut impl_block.items {
+            match item {
+                syn::ImplItem::Fn(f) => f
+                    .attrs
+                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
+                _ => (),
+            }
+        }
+
+        impl_block
     }
 }

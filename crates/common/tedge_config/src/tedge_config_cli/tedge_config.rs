@@ -1201,7 +1201,10 @@ pub enum ReadError {
     },
 
     #[error("Derivation for `{key}` failed: {cause}")]
-    DerivationFailed { key: Cow<'static, str>, cause: String },
+    DerivationFailed {
+        key: Cow<'static, str>,
+        cause: String,
+    },
 }
 
 /// An abstraction over the possible default functions for tedge config values

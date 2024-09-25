@@ -1,8 +1,8 @@
 use crate::command::Command;
 use crate::ConfigError;
+use pad::PadStr;
 use std::io::stdout;
 use std::io::IsTerminal;
-use pad::PadStr;
 use tedge_config::TEdgeConfig;
 use tedge_config::READABLE_KEYS;
 
@@ -54,7 +54,8 @@ fn print_config_doc(config: &TEdgeConfig) {
         yansi::Paint::disable();
     }
 
-    let max_length = config.readable_keys()
+    let max_length = config
+        .readable_keys()
         .map(|c| c.to_cow_str().len())
         .max()
         .unwrap_or_default();
