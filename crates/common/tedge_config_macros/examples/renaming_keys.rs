@@ -67,10 +67,10 @@ fn main() {
     let parsed_deprecated_key = "mqtt.port".parse::<ReadableKey>().unwrap();
     let parsed_current_key = "mqtt.bind.port".parse::<ReadableKey>().unwrap();
     assert_eq!(parsed_deprecated_key, parsed_current_key);
-    assert_eq!(parsed_deprecated_key.as_str(), "mqtt.bind.port");
+    assert_eq!(parsed_deprecated_key.to_cow_str(), "mqtt.bind.port");
 
     let parsed_deprecated_key = "mqtt.client.auth.cafile".parse::<WritableKey>().unwrap();
     let parsed_current_key = "mqtt.client.auth.ca_file".parse::<WritableKey>().unwrap();
     assert_eq!(parsed_deprecated_key, parsed_current_key);
-    assert_eq!(parsed_deprecated_key.as_str(), "mqtt.client.auth.ca_file")
+    assert_eq!(parsed_deprecated_key.to_cow_str(), "mqtt.client.auth.ca_file")
 }

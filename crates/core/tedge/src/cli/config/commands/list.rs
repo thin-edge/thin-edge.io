@@ -1,9 +1,8 @@
 use crate::command::Command;
 use crate::ConfigError;
-use pad::PadStr;
 use std::io::stdout;
 use std::io::IsTerminal;
-use tedge_config::ReadableKey;
+use pad::PadStr;
 use tedge_config::TEdgeConfig;
 use tedge_config::READABLE_KEYS;
 
@@ -20,7 +19,7 @@ impl Command for ListConfigCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         if self.is_doc {
-            print_config_doc();
+            print_config_doc(&self.config);
         } else {
             print_config_list(&self.config, self.is_all)?;
         }
@@ -31,8 +30,7 @@ impl Command for ListConfigCommand {
 
 fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
     let mut keys_without_values = Vec::new();
-    // TODO fix this logic, it's just broken for multi variants atm
-    for config_key in ReadableKey::iter() {
+    for config_key in config.readable_keys() {
         match config.read_string(&config_key).ok() {
             Some(value) => {
                 println!("{}={}", config_key, value);
@@ -51,13 +49,13 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
     Ok(())
 }
 
-fn print_config_doc() {
+fn print_config_doc(config: &TEdgeConfig) {
     if !stdout().is_terminal() {
         yansi::Paint::disable();
     }
 
-    let max_length = ReadableKey::iter()
-        .map(|c| c.as_str().len())
+    let max_length = config.readable_keys()
+        .map(|c| c.to_cow_str().len())
         .max()
         .unwrap_or_default();
 

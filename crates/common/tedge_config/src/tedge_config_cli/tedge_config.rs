@@ -173,7 +173,7 @@ pub enum TomlMigrationStep {
 
     MoveKey {
         original: &'static str,
-        target: &'static str,
+        target: Cow<'static, str>,
     },
 
     RemoveTableIfEmpty {
@@ -284,7 +284,7 @@ impl TEdgeTomlVersion {
         use WritableKey::*;
         let mv = |original, target: WritableKey| TomlMigrationStep::MoveKey {
             original,
-            target: target.as_str(),
+            target: target.to_cow_str(),
         };
         let update_version_field = || TomlMigrationStep::UpdateFieldValue {
             key: "config.version",
@@ -1135,14 +1135,14 @@ fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
 
 fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
     let pem = PemCertificate::from_pem_file(&reader.device.cert_path)
-        .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.as_str(), err))?;
+        .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.to_cow_str(), err))?;
     let device_id = pem
         .subject_common_name()
-        .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.as_str(), err))?;
+        .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.to_cow_str(), err))?;
     Ok(device_id)
 }
 
-fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ReadError {
+fn cert_error_into_config_error(key: Cow<'static, str>, err: CertificateError) -> ReadError {
     match &err {
         CertificateError::IoError(io_err) => match io_err.kind() {
             std::io::ErrorKind::NotFound => ReadError::ReadOnlyNotFound {
@@ -1196,12 +1196,12 @@ pub enum ReadError {
 
     #[error("Config value {key}, cannot be read: {message} ")]
     ReadOnlyNotFound {
-        key: &'static str,
+        key: Cow<'static, str>,
         message: &'static str,
     },
 
     #[error("Derivation for `{key}` failed: {cause}")]
-    DerivationFailed { key: &'static str, cause: String },
+    DerivationFailed { key: Cow<'static, str>, cause: String },
 }
 
 /// An abstraction over the possible default functions for tedge config values

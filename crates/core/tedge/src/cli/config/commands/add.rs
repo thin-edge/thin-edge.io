@@ -12,7 +12,7 @@ impl Command for AddConfigCommand {
     fn description(&self) -> String {
         format!(
             "set the configuration key: '{}' with value: {}.",
-            self.key.as_str(),
+            self.key.to_cow_str(),
             self.value
         )
     }

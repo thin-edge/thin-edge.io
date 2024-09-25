@@ -216,7 +216,7 @@ impl TEdgeEnv {
                     tracing::subscriber::NoSubscriber::default(),
                     || lowercase_name.parse::<crate::WritableKey>(),
                 )
-                .map(|key| key.as_str().to_owned())
+                .map(|key| key.to_string())
                 .map_err(|err| {
                     let is_read_only_key = matches!(err, crate::ParseKeyError::ReadOnly(_));
                     if is_read_only_key && !WARNINGS.lock().unwrap().insert(lowercase_name.clone()) {

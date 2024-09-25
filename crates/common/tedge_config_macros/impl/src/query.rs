@@ -11,6 +11,7 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use syn::parse_quote;
 use syn::parse_quote_spanned;
@@ -70,14 +71,22 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let readonly_keys_iter = key_iterators(
         parse_quote!(TEdgeConfigReader),
         parse_quote!(ReadOnlyKey),
-        &paths_vec.iter().copied().filter(|r| r.last().unwrap().field().unwrap().read_only().is_some()).collect::<Vec<_>>(),
+        &paths_vec
+            .iter()
+            .copied()
+            .filter(|r| r.last().unwrap().field().unwrap().read_only().is_some())
+            .collect::<Vec<_>>(),
         "",
         &[],
     );
     let writable_keys_iter = key_iterators(
         parse_quote!(TEdgeConfigReader),
         parse_quote!(WritableKey),
-        &paths_vec.iter().copied().filter(|r| r.last().unwrap().field().unwrap().read_only().is_none()).collect::<Vec<_>>(),
+        &paths_vec
+            .iter()
+            .copied()
+            .filter(|r| r.last().unwrap().field().unwrap().read_only().is_none())
+            .collect::<Vec<_>>(),
         "",
         &[],
     );
@@ -143,8 +152,8 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                 let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
                 let mut aliases = struct_field_aliases(None, &fields);
                 #(
-                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), Cow::Borrowed(ReadableKey::#iter_updated.as_str())) {
-                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#iter_updated.as_str());
+                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), ReadableKey::#iter_updated.to_cow_str()) {
+                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#iter_updated.to_cow_str());
                     }
                 )*
                 aliases
@@ -219,27 +228,26 @@ fn generate_fromstr(
         .zip(configuration_key.iter().map(|k| &k.enum_variant))
         .map(|(s, v)| quote_spanned!(v.span()=> #s));
     let iter_variant = configuration_key.iter().map(|k| &k.iter_field);
-    let regex_patterns = configuration_key
-        .iter()
-        .filter_map(|c| Some((c.regex_parser.clone()?, c)))
-        .map(|(mut r, c)| {
-            let match_read_write = &c.match_read_write;
-            let own_branches = c
-                .field_names
-                .iter()
-                .enumerate()
-                .map::<syn::Stmt, _>(|(n, id)| {
-                    let n = n + 1;
-                    parse_quote! {
-                        let #id = captures.get(#n).map(|m| m.as_str().to_owned());
-                    }
+    let regex_patterns =
+        configuration_key
+            .iter()
+            .filter_map(|c| Some((c.regex_parser.clone()?, c)))
+            .map(|(mut r, c)| {
+                let match_read_write = &c.match_read_write;
+                let own_branches = c.field_names.iter().enumerate().map::<syn::Stmt, _>(
+                    |(n, id)| {
+                        let n = n + 1;
+                        parse_quote! {
+                            let #id = captures.get(#n).map(|re_match| re_match.as_str().to_owned());
+                        }
+                    },
+                );
+                r.then_branch = parse_quote!({
+                    #(#own_branches)*
+                    return Ok(Self::#match_read_write);
                 });
-            r.then_branch = parse_quote!({
-                #(#own_branches)*
-                return Ok(Self::#match_read_write);
+                r
             });
-            r
-        });
 
     // TODO oh shit make this actually work!
     quote! {
@@ -317,8 +325,8 @@ fn key_iterators<'a>(
     for (_, fields) in chunks.into_iter() {
         let fields = fields.collect::<Vec<_>>();
         let field = fields.first().unwrap();
-        match field.split_first() {
-            Some((FieldOrGroup::Multi(m), rest)) => {
+        match field.first() {
+            Some(FieldOrGroup::Multi(m)) => {
                 let ident = &m.ident;
                 let upper_ident = m.ident.to_string().to_upper_camel_case();
                 let sub_type_name =
@@ -368,7 +376,7 @@ fn key_iterators<'a>(
                     &args,
                 ));
             }
-            Some((FieldOrGroup::Group(g), rest)) => {
+            Some(FieldOrGroup::Group(g)) => {
                 let upper_ident = g.ident.to_string().to_upper_camel_case();
                 let sub_type_name =
                     syn::Ident::new(&format!("{reader_ty}{upper_ident}"), g.ident.span());
@@ -387,7 +395,7 @@ fn key_iterators<'a>(
                     self.#ident.#function_name(#(#args),*)
                 });
             }
-            Some((FieldOrGroup::Field(f), _nothing)) => {
+            Some(FieldOrGroup::Field(f)) => {
                 let ident = f.ident();
                 let field_name = syn::Ident::new(
                     &format!(
@@ -470,8 +478,10 @@ fn keys_enum(
     });
     let type_name_str = type_name.to_string();
     let enum_variant = configuration_key.iter().map(|k| &k.enum_variant);
-    let match_shape = configuration_key.iter().map(|k| &k.match_shape);
-    let iter_field = configuration_key.iter().map(|k| &k.iter_field);
+    let (fmt_match, fmt_ret): (Vec<_>, Vec<_>) = configuration_key
+        .iter()
+        .flat_map(|k| k.formatters.clone())
+        .unzip();
     let uninhabited_catch_all = configuration_key
         .is_empty()
         .then_some::<syn::Arm>(parse_quote!(_ => unimplemented!("Cope with empty enum")));
@@ -495,29 +505,19 @@ fn keys_enum(
         impl #type_name {
             /// Converts this key to the canonical key used by `tedge config` and `tedge.toml`
             #as_str_example
-            pub fn as_str(&self) -> &'static str {
+            pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                 match self {
                     #(
-                        Self::#match_shape => #configuration_string,
+                        Self::#fmt_match => #fmt_ret,
                     )*
                     #uninhabited_catch_all
                 }
-            }
-
-            /// Iterates through all the variants of this enum
-            #[deprecated]
-            pub fn iter() -> impl Iterator<Item = Self> {
-                [
-                    #(
-                        Self::#iter_field,
-                    )*
-                ].into_iter()
             }
         }
 
         impl ::std::fmt::Display for #type_name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error> {
-                self.as_str().fmt(f)
+                self.to_cow_str().fmt(f)
             }
         }
     }
@@ -720,6 +720,7 @@ struct ConfigurationKey {
     regex_parser: Option<syn::ExprIf>,
     /// The variable names assigned to the multi fields within this configuration
     field_names: Vec<syn::Ident>,
+    formatters: Vec<(syn::Pat, syn::Expr)>,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -738,6 +739,11 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
         .iter()
         .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
         .count();
+    let key_str = segments
+        .iter()
+        .map(|segment| segment.name())
+        .interleave(std::iter::repeat(Cow::Borrowed(".")).take(segments.len() - 1))
+        .collect::<String>();
     if count_multi > 0 {
         let opt_strs =
             std::iter::repeat::<syn::Type>(parse_quote!(Option<String>)).take(count_multi);
@@ -760,6 +766,41 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             .collect::<Vec<_>>()
             .join("\\.");
         let regex_parser = parse_quote_spanned!(ident.span()=> if let Some(captures) = ::regex::Regex::new(#re).unwrap().captures(value) {});
+        let formatters = field_names
+            .iter()
+            .map(|name| [parse_quote!(None), parse_quote!(Some(#name))])
+            .multi_cartesian_product()
+            .enumerate()
+            .map(|(i, options): (_, Vec<syn::Pat>)| {
+                if i == 0 {
+                    (
+                        parse_quote!(#ident(#(#options),*)),
+                        parse_quote!(::std::borrow::Cow::Borrowed(#key_str)),
+                    )
+                } else {
+                    let none: syn::Pat = parse_quote!(None);
+                    let mut idents = field_names
+                        .iter().zip(options.iter());
+                    let format_str = segments
+                        .iter()
+                        .map(|segment| match segment {
+                            FieldOrGroup::Multi(m) => {
+                                let (binding, opt) = idents.next().unwrap();
+                                if *opt == none {
+                                    m.ident.to_string()
+                                } else {
+                                    format!("{}.{{{}}}", m.ident, binding)
+                                }
+                            }
+                            FieldOrGroup::Group(g) => g.ident.to_string(),
+                            FieldOrGroup::Field(f) => f.ident().to_string(),
+                        })
+                        .interleave(std::iter::repeat(".".to_owned()).take(segments.len() - 1))
+                        .collect::<String>();
+                    (parse_quote!(#ident(#(#options),*)), parse_quote!(::std::borrow::Cow::Owned(format!(#format_str))))
+                }
+            })
+            .collect();
         ConfigurationKey {
             enum_variant,
             iter_field,
@@ -767,6 +808,7 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             match_read_write,
             regex_parser: Some(regex_parser),
             field_names,
+            formatters,
         }
     } else {
         ConfigurationKey {
@@ -776,6 +818,10 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             match_shape: parse_quote!(#ident),
             regex_parser: None,
             field_names: vec![],
+            formatters: vec![(
+                parse_quote!(#ident),
+                parse_quote!(::std::borrow::Cow::Borrowed(#key_str)),
+            )],
         }
     }
 }
@@ -894,7 +940,7 @@ mod tests {
                         _ => unimplemented!("just a test"),
                     };
                     if let Some(captures) = ::regex::Regex::new("c8y(?:\\.([A-z_]+))?\\.url").unwrap().captures(value) {
-                        let key0 = captures.get(1usize).map(|m| m.as_str().to_owned());
+                        let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         return Ok(Self::C8yUrl(key0));
                     };
                     res
@@ -930,7 +976,7 @@ mod tests {
         );
         let expected = parse_quote! {
             impl TEdgeConfigReader {
-                fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
                     let c8y_keys = if let ::tedge_config_macros::Multi::Multi(map) = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
@@ -946,7 +992,7 @@ mod tests {
             }
 
             impl TEdgeConfigReaderC8y {
-                fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
+                pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
                     let something_keys = if let ::tedge_config_macros::Multi::Multi(map) = &self.something {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
@@ -967,7 +1013,7 @@ mod tests {
             }
 
             impl TEdgeConfigReaderC8ySomething {
-                fn readable_keys(
+                pub fn readable_keys(
                     &self,
                     c8y: Option<String>,
                     something: Option<String>,
@@ -1005,13 +1051,13 @@ mod tests {
         );
         let expected = parse_quote! {
             impl TEdgeConfigReader {
-                fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
                     self.c8y.readable_keys()
                 }
             }
 
             impl TEdgeConfigReaderC8y {
-                fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
                     [ReadableKey::C8yUrl].into_iter()
                 }
             }
@@ -1024,19 +1070,7 @@ mod tests {
     }
 
     #[test]
-    fn iteration_of_empty_field_enum() {
-        // let input: crate::input::Configuration = parse_quote!(
-        //     #[tedge_config(multi)]
-        //     c8y: {
-        //         url: String,
-        //         #[tedge_config(multi)]
-        //         something: {
-        //             test: u16,
-        //         }
-        //     }
-        // );
-        // let mut paths = configuration_paths_from(&input.groups);
-        // let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
+    fn iteration_of_empty_field_enum_is_an_empty_iterator() {
         let generated = key_iterators(
             parse_quote!(TEdgeConfigReader),
             parse_quote!(ReadableKey),
@@ -1046,7 +1080,7 @@ mod tests {
         );
         let expected = parse_quote! {
             impl TEdgeConfigReader {
-                fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
                     std::iter::empty()
                 }
             }
@@ -1054,6 +1088,174 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             prettyplease::unparse(&syn::parse2(generated).unwrap()),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn impl_for_simple_group() {
+        let input: crate::input::Configuration = parse_quote!(
+            c8y: {
+                url: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let config_keys = configuration_strings(paths.iter());
+        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
+        let generated_file: syn::File = syn::parse2(generated).unwrap();
+        let mut impl_block = generated_file
+            .items
+            .into_iter()
+            .find_map(|item| {
+                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
+                    Some(r#impl)
+                } else {
+                    None
+                }
+            })
+            .expect("Should generate an impl block for ReadableKey");
+        for item in &mut impl_block.items {
+            match item {
+                syn::ImplItem::Fn(f) => f
+                    .attrs
+                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
+                _ => (),
+            }
+        }
+        let expected = parse_quote! {
+            impl ReadableKey {
+                #[deprecated]
+                pub fn as_str(&self) -> &'static str {
+                    match self {
+                        Self::C8yUrl => "c8y.url",
+                    }
+                }
+
+                pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
+                    match self {
+                        Self::C8yUrl => ::std::borrow::Cow::Borrowed("c8y.url"),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn impl_for_multi() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let config_keys = configuration_strings(paths.iter());
+        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
+        let generated_file: syn::File = syn::parse2(generated).unwrap();
+        let mut impl_block = generated_file
+            .items
+            .into_iter()
+            .find_map(|item| {
+                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
+                    Some(r#impl)
+                } else {
+                    None
+                }
+            })
+            .expect("Should generate an impl block for ReadableKey");
+        for item in &mut impl_block.items {
+            match item {
+                syn::ImplItem::Fn(f) => f
+                    .attrs
+                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
+                _ => (),
+            }
+        }
+        let expected = parse_quote! {
+            impl ReadableKey {
+                #[deprecated]
+                pub fn as_str(&self) -> &'static str {
+                    match self {
+                        Self::C8yUrl(_) => "c8y.url",
+                    }
+                }
+
+                pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
+                    match self {
+                        Self::C8yUrl(None) => ::std::borrow::Cow::Borrowed("c8y.url"),
+                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y.{key0}.url")),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn impl_for_nested_multi() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            top: {
+                #[tedge_config(multi)]
+                nested: {
+                    field: String,
+                }
+            }
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let config_keys = configuration_strings(paths.iter());
+        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
+        let generated_file: syn::File = syn::parse2(generated).unwrap();
+        let mut impl_block = generated_file
+            .items
+            .into_iter()
+            .find_map(|item| {
+                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
+                    Some(r#impl)
+                } else {
+                    None
+                }
+            })
+            .expect("Should generate an impl block for ReadableKey");
+        for item in &mut impl_block.items {
+            match item {
+                syn::ImplItem::Fn(f) => f
+                    .attrs
+                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
+                _ => (),
+            }
+        }
+        let expected = parse_quote! {
+            impl ReadableKey {
+                #[deprecated]
+                pub fn as_str(&self) -> &'static str {
+                    match self {
+                        Self::TopNestedField(_, _) => "top.nested.field",
+                    }
+                }
+
+                pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
+                    match self {
+                        Self::TopNestedField(None, None) => ::std::borrow::Cow::Borrowed("top.nested.field"),
+                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested.{key1}.field")),
+                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top.{key0}.nested.field")),
+                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top.{key0}.nested.{key1}.field")),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
             prettyplease::unparse(&expected)
         );
     }
