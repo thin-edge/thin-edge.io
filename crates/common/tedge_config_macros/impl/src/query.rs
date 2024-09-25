@@ -1272,8 +1272,7 @@ mod tests {
         // Remove doc comments from items
         for item in &mut impl_block.items {
             if let syn::ImplItem::Fn(f) = item {
-                f.attrs
-                    .retain(|f| *f.path().get_ident().unwrap() != "doc");
+                f.attrs.retain(|f| *f.path().get_ident().unwrap() != "doc");
             }
         }
 
