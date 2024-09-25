@@ -19,13 +19,7 @@ c8y-remote-access-plugin = { workspace = true }
 camino = { workspace = true }
 cap = { workspace = true }
 certificate = { workspace = true, features = ["reqwest-blocking"] }
-clap = { workspace = true, features = [
-    "cargo",
-    "derive",
-    "env",
-    "string",
-    "unstable-styles",
-] }
+clap = { workspace = true }
 doku = { workspace = true }
 hyper = { workspace = true, default-features = false }
 nix = { workspace = true }

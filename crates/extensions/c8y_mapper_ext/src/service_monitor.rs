@@ -32,11 +32,8 @@ pub fn convert_health_status_message(
         return vec![];
     }
 
-    let HealthStatus {
-        status,
-        pid: _,
-        time: _,
-    } = HealthStatus::try_from_health_status_message(message, mqtt_schema).unwrap();
+    let HealthStatus { status } =
+        HealthStatus::try_from_health_status_message(message, mqtt_schema).unwrap();
 
     let display_name = entity
         .other
@@ -82,6 +79,15 @@ mod tests {
         "c8y/s/us",
         r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,up"#;
         "service-monitoring-thin-edge-device"
+    )]
+    // If there are any problems with fields other than `status`, we want to ignore them and still send status update
+    #[test_case(
+        "test_device",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
+        r#"{"unrecognised_field": [42], "time": "invalid timestamp", "pid": "invalid pid", "status": "up"}"#,
+        "c8y/s/us",
+        r#"102,test_device:device:main:service:tedge-mapper-c8y,service,tedge-mapper-c8y,up"#;
+        "service-monitoring-thin-edge-device-optional-fields-invalid"
     )]
     #[test_case(
         "test_device",

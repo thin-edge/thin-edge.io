@@ -10,7 +10,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true }
 csv = { workspace = true }
 log = { workspace = true }
 regex = { workspace = true }

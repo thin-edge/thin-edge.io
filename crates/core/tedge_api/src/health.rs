@@ -10,7 +10,6 @@ use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
-use serde_json::Value as JsonValue;
 use std::fmt::Display;
 use std::process;
 use std::sync::Arc;
@@ -97,11 +96,16 @@ impl ServiceHealthTopic {
     }
 }
 
+/// Payload of the health status message.
+///
+/// Contains only fields required for the payload to be considered a valid health status message.
+/// Other components are free to require additional fields for their purposes.
+///
+/// https://thin-edge.github.io/thin-edge.io/operate/troubleshooting/monitoring-service-health/
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct HealthStatus {
+    /// Current status of the service, synced by the mapper to the cloud
     pub status: Status,
-    pub pid: Option<u32>,
-    pub time: Option<JsonValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -146,11 +150,7 @@ impl HealthStatus {
                     Ok("0") => Status::Down,
                     _ => Status::default(),
                 };
-                HealthStatus {
-                    status,
-                    pid: None,
-                    time: None,
-                }
+                HealthStatus { status }
             } else {
                 serde_json::from_slice(message.payload()).unwrap_or_default()
             };
