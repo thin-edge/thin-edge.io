@@ -496,7 +496,7 @@ impl EntityStore {
             EntityType::Service => message
                 .parent
                 .clone()
-                .or_else(|| topic_id.default_parent_identifier())
+                .or_else(|| topic_id.default_service_parent_identifier())
                 .or_else(|| Some(self.main_device.clone())),
         };
 
@@ -610,7 +610,7 @@ impl EntityStore {
             let mut register_messages = vec![];
 
             let parent_device_id = entity_topic_id
-                .default_parent_identifier()
+                .default_source_device_identifier()
                 .expect("device id must be present as the topic id follows the default scheme");
 
             if !parent_device_id.is_default_main_device() && self.get(&parent_device_id).is_none() {
