@@ -77,7 +77,7 @@ pub fn load_ssl_config(
     let cert_key = cert_path.key();
     let key_key = key_path.key();
     let ca_key = ca_path.key();
-    if let Some((cert, key)) = load_certificate_and_key(cert_path, key_path)? {
+    if let Some((cert, key)) = load_certificate_and_key(&cert_path, &key_path)? {
         let trust_store = match ca_path.or_none() {
             Some(path) => path
                 .load_trust_store()
@@ -103,8 +103,8 @@ pub fn load_ssl_config(
 type CertKeyPair = (Vec<Vec<u8>>, Vec<u8>);
 
 fn load_certificate_and_key(
-    cert_path: OptionalConfig<impl PemReader>,
-    key_path: OptionalConfig<impl PemReader>,
+    cert_path: &OptionalConfig<impl PemReader>,
+    key_path: &OptionalConfig<impl PemReader>,
 ) -> anyhow::Result<Option<CertKeyPair>> {
     let paths = tedge_config::all_or_nothing((cert_path.as_ref(), key_path.as_ref()))
         .map_err(|e| anyhow!("{e}"))?;

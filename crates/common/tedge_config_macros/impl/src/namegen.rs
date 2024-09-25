@@ -55,7 +55,7 @@ pub trait IdGenerator: Default {
 
 #[derive(Debug, Default)]
 pub struct SequentialIdGenerator {
-    count: u32,
+    pub count: u32,
 }
 
 impl SequentialIdGenerator {

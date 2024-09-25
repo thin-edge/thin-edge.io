@@ -3979,6 +3979,7 @@ dependencies = [
  "once_cell",
  "regex",
  "serde",
+ "serde_json",
  "tedge_config_macros-macro",
  "thiserror",
  "toml 0.7.8",

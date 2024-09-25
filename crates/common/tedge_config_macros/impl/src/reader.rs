@@ -5,6 +5,7 @@
 use std::iter;
 use std::iter::once;
 
+use itertools::Itertools;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -268,14 +269,34 @@ fn reader_value_for_field<'a>(
     let name = field.ident();
     Ok(match field {
         ConfigurableField::ReadWrite(field) => {
-            // TODO optionalconfig should contain the actual key
-            let key = parents
-                .iter()
-                .filter_map(PathItem::as_static)
-                .map(|p| p.to_string())
-                .chain(iter::once(name.to_string()))
-                .collect::<Vec<_>>()
-                .join(".");
+            let key: syn::Expr = if parents.iter().all(|p| p.as_static().is_some()) {
+                #[allow(unstable_name_collisions)]
+                let key_str = parents
+                    .iter()
+                    .map(|p| match p {
+                        PathItem::Static(p) => p.to_string(),
+                        PathItem::Dynamic(_) => {
+                            unreachable!("all pathitems are static in this if branch")
+                        }
+                    })
+                    .chain(iter::once(name.to_string()))
+                    .intersperse(".".to_owned())
+                    .collect::<String>();
+                parse_quote!(#key_str.into())
+            } else {
+                let mut id_gen = SequentialIdGenerator::default();
+                let elems = parents.iter().map::<syn::Expr, _>(|p| match p {
+                    PathItem::Static(p) => {
+                        let p_str = p.to_string();
+                        parse_quote!(Some(#p_str))
+                    }
+                    PathItem::Dynamic(span) => {
+                        let ident = id_gen.next_id(*span);
+                        parse_quote!(#ident)
+                    }
+                });
+                parse_quote!([#(#elems),*].into_iter().filter_map(|id| id).collect::<Vec<_>>().join(".").into())
+            };
             let read_path = read_field(parents);
             match &field.default {
                 FieldDefault::None => quote! {

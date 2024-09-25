@@ -249,7 +249,6 @@ fn generate_fromstr(
                 r
             });
 
-    // TODO oh shit make this actually work!
     quote! {
         impl ::std::str::FromStr for #type_name {
             type Err = ParseKeyError;
@@ -303,7 +302,7 @@ fn generate_fromstr_writable(
     )
 }
 
-fn key_iterators<'a>(
+fn key_iterators(
     reader_ty: syn::Ident,
     type_name: syn::Ident,
     fields: &[&[&FieldOrGroup]],
@@ -390,7 +389,6 @@ fn key_iterators<'a>(
                     args,
                 ));
                 let ident = &g.ident;
-                // TODO test the args are correct
                 exprs.push_back(parse_quote! {
                     self.#ident.#function_name(#(#args),*)
                 });
@@ -558,7 +556,6 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             let match_variant = configuration_key.match_read_write;
             if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
-                    // TODO test whether the wrong type fails unit tests
                     parse_quote! {
                         ReadableKey::#match_variant => Ok(self.#(#segments).*.try_read(self)?#to_string),
                     }
@@ -699,10 +696,13 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     }
 }
 
+/// A configuration key that is stored in an enum variant
+///
+/// The macro generates e.g. `ReadableKey` to list the variants
 struct ConfigurationKey {
     /// e.g. `C8yUrl(Option<String>)`
     enum_variant: syn::Variant,
-    // TODO kill this when it's not used
+    /// An example of each field, with any multi-value keys set to `None`
     iter_field: syn::Expr,
     /// e.g. `C8yUrl(key0)`
     match_read_write: syn::Pat,
@@ -720,6 +720,15 @@ struct ConfigurationKey {
     regex_parser: Option<syn::ExprIf>,
     /// The variable names assigned to the multi fields within this configuration
     field_names: Vec<syn::Ident>,
+    /// Format strings for each field e.g.
+    /// ```compile_fail
+    /// vec![
+    ///     (C8yUrl(None), Cow::Borrowed("c8y.url")),
+    ///     (C8yTopicPrefix(None), Cow::Borrowed("c8y.topic_prefix")),
+    ///     (C8yUrl(Some(c8y_name)), Cow::Owned(format!("c8y.{c8y_name}.url"))),
+    ///     (C8yTopicPrefix(Some(c8y_name)), Cow::Owned(format!("c8y.{c8y_name}.topic_prefix"))),
+    /// ]
+    /// ```
     formatters: Vec<(syn::Pat, syn::Expr)>,
 }
 
@@ -1096,6 +1105,66 @@ mod tests {
     }
 
     #[test]
+    fn iteration_of_non_multi_groups() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                nested: {
+                    field: String,
+                }
+            }
+        );
+        let mut paths = configuration_paths_from(&input.groups);
+        let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
+        let generated = key_iterators(
+            parse_quote!(TEdgeConfigReader),
+            parse_quote!(ReadableKey),
+            &paths.collect::<Vec<_>>(),
+            "",
+            &[],
+        );
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                    let c8y_keys = if let ::tedge_config_macros::Multi::Multi(map) = &self.c8y {
+                        map.keys().map(|k| Some(k.to_owned())).collect()
+                    } else {
+                        vec![None]
+                    };
+
+                    let c8y_keys = c8y_keys
+                        .into_iter()
+                        .flat_map(|c8y| self.c8y.try_get(c8y.as_deref()).unwrap().readable_keys(c8y));
+
+                    c8y_keys
+                }
+            }
+
+            impl TEdgeConfigReaderC8y {
+                pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
+                    self.nested.readable_keys(c8y)
+                }
+            }
+
+            impl TEdgeConfigReaderC8yNested {
+                pub fn readable_keys(
+                    &self,
+                    c8y: Option<String>,
+                ) -> impl Iterator<Item = ReadableKey> + '_ {
+                    [ReadableKey::C8yNestedField(
+                        c8y.clone(),
+                    )]
+                    .into_iter()
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&syn::parse2(generated).unwrap()),
+            prettyplease::unparse(&expected)
+        );
+    }
+    #[test]
     fn impl_for_simple_group() {
         let input: crate::input::Configuration = parse_quote!(
             c8y: {
@@ -1186,7 +1255,7 @@ mod tests {
     }
 
     fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {
-        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "DOC FRAGMENT");
+        let generated = keys_enum(parse_quote!(ReadableKey), config_keys, "DOC FRAGMENT");
         let generated_file: syn::File = syn::parse2(generated).unwrap();
         let mut impl_block = generated_file
             .items
@@ -1202,11 +1271,9 @@ mod tests {
 
         // Remove doc comments from items
         for item in &mut impl_block.items {
-            match item {
-                syn::ImplItem::Fn(f) => f
-                    .attrs
-                    .retain(|f| f.path().get_ident().unwrap().to_string() != "doc"),
-                _ => (),
+            if let syn::ImplItem::Fn(f) = item {
+                f.attrs
+                    .retain(|f| *f.path().get_ident().unwrap() != "doc");
             }
         }
 

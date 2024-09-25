@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::OptionalConfig;
 
 /// An abstraction over "all or nothing" configurations
@@ -12,8 +14,8 @@ pub trait MultiOption {
 
 /// The keys which were and weren't provided as part of an all or nothing group
 pub struct PartialConfiguration {
-    present: Vec<&'static str>,
-    missing: Vec<&'static str>,
+    present: Vec<Cow<'static, str>>,
+    missing: Vec<Cow<'static, str>>,
 }
 
 impl PartialConfiguration {
@@ -139,11 +141,11 @@ mod tests {
             all_or_nothing((
                 OptionalConfig::Present {
                     value: "first",
-                    key: "test.key"
+                    key: "test.key".into()
                 },
                 OptionalConfig::Present {
                     value: "second",
-                    key: "test.key2"
+                    key: "test.key2".into()
                 }
             )),
             Ok(Some(("first", "second")))
@@ -154,8 +156,8 @@ mod tests {
     fn all_or_nothing_returns_none_when_both_values_when_neither_value_is_configured() {
         assert_eq!(
             all_or_nothing((
-                OptionalConfig::<String>::Empty("first.key"),
-                OptionalConfig::<String>::Empty("second.key")
+                OptionalConfig::<String>::Empty("first.key".into()),
+                OptionalConfig::<String>::Empty("second.key".into())
             )),
             Ok(None)
         )
@@ -166,9 +168,9 @@ mod tests {
         assert!(all_or_nothing((
             OptionalConfig::Present {
                 value: "test",
-                key: "first.key"
+                key: "first.key".into()
             },
-            OptionalConfig::<String>::Empty("second.key")
+            OptionalConfig::<String>::Empty("second.key".into())
         ))
         .is_err())
     }
@@ -176,10 +178,10 @@ mod tests {
     #[test]
     fn all_or_nothing_returns_an_error_if_only_the_second_value_is_configured() {
         assert!(all_or_nothing((
-            OptionalConfig::<String>::Empty("first.key"),
+            OptionalConfig::<String>::Empty("first.key".into()),
             OptionalConfig::Present {
                 value: "test",
-                key: "second.key"
+                key: "second.key".into()
             },
         ))
         .is_err())
