@@ -52,44 +52,6 @@ fn url_for<'a>(reader: &'a TEdgeConfigReader, o: Option<&str>) -> &'a str {
         .unwrap()
 }
 
-// fn readable_keys(config: &TEdgeConfigReader) -> Vec<ReadableKey> {
-//     let c8y_keys = if let Multi::Multi(map) = &config.c8y {
-//         map.keys().map(|k| Some(k.to_owned())).collect()
-//     } else {
-//         vec![None]
-//     };
-
-//     c8y_keys.into_iter().flat_map(|c8y| readable_keys_c8y(config.c8y.try_get(c8y.as_deref()).unwrap(), c8y)).collect()
-// }
-
-// fn readable_keys_c8y(
-//     config: &TEdgeConfigReaderC8y,
-//     c8y: Option<String>,
-// ) -> impl Iterator<Item = ReadableKey> + '_ {
-//     let something_keys = if let Multi::Multi(map) = &config.something {
-//         map.keys().map(|k| Some(k.to_owned())).collect()
-//     } else {
-//         vec![None]
-//     };
-//     let something_keys = something_keys.into_iter().flat_map({
-//         let c8y = c8y.clone();
-//         move |something| readable_keys_c8y_something(config.something.try_get(something.as_deref()).unwrap(), c8y.clone(), something)
-//     });
-
-//     std::iter::once(ReadableKey::C8yUrl(c8y)).chain(something_keys)
-// }
-
-// fn readable_keys_c8y_something(
-//     _config: &TEdgeConfigReaderC8ySomething,
-//     c8y: Option<String>,
-//     something: Option<String>,
-// ) -> impl Iterator<Item = ReadableKey> + '_ {
-//     [ReadableKey::C8ySomethingTest(
-//         c8y.clone(),
-//         something.clone(),
-//     )].into_iter()
-// }
-
 fn main() {
     let single_c8y_toml = "c8y.url = \"https://example.com\"";
     let single_c8y_dto = toml::from_str(single_c8y_toml).unwrap();
