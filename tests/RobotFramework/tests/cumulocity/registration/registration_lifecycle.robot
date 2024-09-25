@@ -484,6 +484,18 @@ Entities send to cloud on restart
     ...    minimum=1
     ...    maximum=1
 
+Unexpected message doesn't cause a panic #3134
+    # Register a service on a device topic
+    Execute Command    tedge mqtt pub --retain 'te/device/child1//' '{"@type":"service"}'
+    External Identity Should Exist    ${DEVICE_SN}:device:child1    show_info=False
+    Cumulocity.Managed Object Should Have Fragment Values    status\=up
+    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    # Register a child device on a service topic
+    Execute Command    tedge mqtt pub --retain 'te/device/child2/service/foo' '{"@type":"child-device"}'
+    Device Should Exist    ${DEVICE_SN}:device:child2:service:foo
+    Service Health Status Should Be Up    tedge-mapper-c8y
+
 
 *** Keywords ***
 Should Have Retained Message Count
