@@ -15,7 +15,7 @@ use std::ops::Deref;
 /// use tedge_config_macros::*;
 ///
 /// assert_eq!(
-///     OptionalConfig::Present { value: "test", key: "device.type" }.or_none(),
+///     OptionalConfig::present("test", "device.type").or_none(),
 ///     Some(&"test"),
 /// );
 /// ```
@@ -70,11 +70,11 @@ impl<T> OptionalConfig<T> {
     /// use tedge_config_macros::*;
     ///
     /// assert_eq!(
-    ///     OptionalConfig::Present { value: "test", key: "device.type" }.or_none(),
+    ///     OptionalConfig::present("test", "device.type").or_none(),
     ///     Some(&"test"),
     /// );
     ///
-    /// assert_eq!(OptionalConfig::Empty::<&str>("device.type").or_none(), None);
+    /// assert_eq!(OptionalConfig::Empty::<&str>("device.type".into()).or_none(), None);
     /// ```
     pub fn or_none(&self) -> Option<&T> {
         match self {
