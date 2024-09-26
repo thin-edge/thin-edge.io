@@ -264,7 +264,10 @@ async fn get_latest_health_status_message(
                     error!("Ignoring invalid health response: {health_status:?} without a `time` field in it");
                     continue;
                 }
-                let datetime = IsoOrUnix::try_from(&health_status.time.clone().unwrap())?;
+                let Ok(datetime) = IsoOrUnix::try_from(&health_status.time.clone().unwrap()) else {
+                    error!("Ignoring invalid health response: failed to parse `time` field");
+                    continue;
+                };
 
                 // Compare to a slightly old timestamp to avoid false negatives from floating-point error in unix timestamps
                 if datetime.into_inner() >= request_timestamp - Duration::from_millis(10) {
