@@ -119,7 +119,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             #[error("Failed to parse input")]
             ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
             #[error(transparent)]
-            Multi(#[from] ::tedge_config_macros::MultiError),
+            Multi(#[from] MultiError),
         }
 
         impl ReadOnlyKey {
@@ -331,7 +331,7 @@ fn key_iterators(
                 let sub_type_name =
                     syn::Ident::new(&format!("{reader_ty}{upper_ident}"), m.ident.span());
                 let keys_ident = syn::Ident::new(&format!("{}_keys", ident), ident.span());
-                stmts.push(parse_quote!(let #keys_ident = if let ::tedge_config_macros::Multi::Multi(map) = &self.#ident {
+                stmts.push(parse_quote!(let #keys_ident = if let Multi::Multi(map) = &self.#ident {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -989,7 +989,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let ::tedge_config_macros::Multi::Multi(map) = &self.c8y {
+                    let c8y_keys = if let Multi::Multi(map) = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1005,7 +1005,7 @@ mod tests {
 
             impl TEdgeConfigReaderC8y {
                 pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let something_keys = if let ::tedge_config_macros::Multi::Multi(map) = &self.something {
+                    let something_keys = if let Multi::Multi(map) = &self.something {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1126,7 +1126,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let ::tedge_config_macros::Multi::Multi(map) = &self.c8y {
+                    let c8y_keys = if let Multi::Multi(map) = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]

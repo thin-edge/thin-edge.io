@@ -75,7 +75,7 @@ fn generate_structs(
             FieldOrGroup::Multi(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
-                tys.push(parse_quote_spanned!(group.ident.span()=> ::tedge_config_macros::Multi<#sub_reader_name>));
+                tys.push(parse_quote_spanned!(group.ident.span()=> Multi<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
                 parents.push(PathItem::Dynamic(group.ident.span()));
