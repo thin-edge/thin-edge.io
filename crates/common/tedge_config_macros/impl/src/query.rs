@@ -331,11 +331,13 @@ fn key_iterators(
                 let sub_type_name =
                     syn::Ident::new(&format!("{reader_ty}{upper_ident}"), m.ident.span());
                 let keys_ident = syn::Ident::new(&format!("{}_keys", ident), ident.span());
-                stmts.push(parse_quote!(let #keys_ident = if let Multi::Multi(map) = &self.#ident {
+                stmts.push(
+                    parse_quote!(let #keys_ident = if let Multi::Multi(map) = &self.#ident {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
-                    };));
+                    };),
+                );
                 let prefix = format!("{prefix}{upper_ident}");
                 let remaining_fields = fields.iter().map(|fs| &fs[1..]).collect::<Vec<_>>();
                 let arg_clone_stmts = args

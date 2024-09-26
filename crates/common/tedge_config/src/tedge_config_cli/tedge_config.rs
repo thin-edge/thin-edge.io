@@ -37,9 +37,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tedge_config_macros::*;
 pub use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
+use tedge_config_macros::*;
 use toml::Table;
 use tracing::error;
 
