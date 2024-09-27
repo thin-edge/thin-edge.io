@@ -15,7 +15,6 @@ use tedge_utils::timestamp::TimeFormat;
 use crate::error::ConversionError;
 use crate::size_threshold::SizeThreshold;
 
-const AWS_MQTT_THRESHOLD: usize = 1024 * 255;
 const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-aws-bridge";
 
 pub struct AwsConverter {
@@ -34,8 +33,9 @@ impl AwsConverter {
         mqtt_schema: MqttSchema,
         time_format: TimeFormat,
         topic_prefix: TopicPrefix,
+        max_payload_size: u32,
     ) -> Self {
-        let size_threshold = SizeThreshold(AWS_MQTT_THRESHOLD);
+        let size_threshold = SizeThreshold(max_payload_size as usize);
         AwsConverter {
             add_timestamp,
             clock,
@@ -205,6 +205,7 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
+    use tedge_config::AWS_MQTT_PAYLOAD_LIMIT;
     use time::macros::datetime;
 
     struct TestClock;
@@ -225,13 +226,7 @@ mod tests {
 
     #[test]
     fn convert_error() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = "Invalid JSON";
 
@@ -246,13 +241,7 @@ mod tests {
 
     #[test]
     fn try_convert_invalid_json_returns_error() {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
@@ -261,14 +250,7 @@ mod tests {
 
     #[test]
     fn try_convert_exceeding_threshold_returns_error() {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        )
-        .with_threshold(SizeThreshold(1));
+        let mut converter = create_test_converter(false).with_threshold(SizeThreshold(1));
 
         let _topic = "te/device/main///m/".to_string();
         let input = r#"{"temperature": 21.3}"#;
@@ -288,13 +270,7 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{
             "temperature": 23.0
@@ -316,13 +292,7 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false()
     {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -345,13 +315,7 @@ mod tests {
 
     #[test]
     fn unix_timestamp_is_converted_to_rfc3339() {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{
             "time" : 1702029646,
@@ -375,13 +339,7 @@ mod tests {
     #[test]
     fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true()
     {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -405,13 +363,7 @@ mod tests {
     #[test]
     fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "temperature": 23.0
@@ -440,6 +392,7 @@ mod tests {
             MqttSchema::default(),
             TimeFormat::Rfc3339,
             TopicPrefix::try_from("custom-prefix").unwrap(),
+            AWS_MQTT_PAYLOAD_LIMIT,
         );
 
         let input = r#"{
@@ -452,13 +405,7 @@ mod tests {
 
     #[test]
     fn converting_input_with_measurement_type() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "temperature": 23.0
@@ -481,13 +428,7 @@ mod tests {
 
     #[test]
     fn converting_input_for_child_device_with_measurement_type() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "temperature": 23.0
@@ -513,13 +454,7 @@ mod tests {
 
     #[test]
     fn converting_input_for_main_device_service_with_measurement_type() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "temperature": 23.0
@@ -548,13 +483,7 @@ mod tests {
 
     #[test]
     fn converting_input_for_child_device_service_with_measurement_type() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "temperature": 23.0
@@ -583,13 +512,7 @@ mod tests {
 
     #[test]
     fn converting_bridge_health_status() {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
@@ -602,13 +525,7 @@ mod tests {
 
     #[test]
     fn converting_event_for_main_device() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text": "I raised it",
@@ -636,13 +553,7 @@ mod tests {
 
     #[test]
     fn converting_event_for_child_device() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text": "I raised it",
@@ -670,13 +581,7 @@ mod tests {
 
     #[test]
     fn converting_event_for_main_device_service() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text": "I raised it",
@@ -707,13 +612,7 @@ mod tests {
 
     #[test]
     fn converting_event_for_child_device_service() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text": "I raised it",
@@ -744,13 +643,7 @@ mod tests {
 
     #[test]
     fn converting_alarm_for_main_device() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text":"I raised it",
@@ -780,13 +673,7 @@ mod tests {
 
     #[test]
     fn converting_alarm_for_main_service() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text":"I raised it",
@@ -819,13 +706,7 @@ mod tests {
 
     #[test]
     fn converting_alarm_for_child_device() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text":"I raised it",
@@ -855,13 +736,7 @@ mod tests {
 
     #[test]
     fn converting_alarm_for_child_service() {
-        let mut converter = AwsConverter::new(
-            true,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(true);
 
         let input = r#"{
             "text":"I raised it",
@@ -894,13 +769,7 @@ mod tests {
 
     #[test]
     fn converting_service_health_status_up_message() {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{"pid":1234,"status":"up"}"#;
         let result = converter.try_convert(&MqttMessage::new(
@@ -918,13 +787,7 @@ mod tests {
 
     #[test]
     fn converting_service_health_status_down_message() {
-        let mut converter = AwsConverter::new(
-            false,
-            Box::new(TestClock),
-            MqttSchema::default(),
-            TimeFormat::Rfc3339,
-            TopicPrefix::try_from("aws").unwrap(),
-        );
+        let mut converter = create_test_converter(false);
 
         let input = r#"{"pid":1234,"status":"up"}"#;
         let result = converter.try_convert(&MqttMessage::new(
@@ -938,5 +801,16 @@ mod tests {
         );
         let res = result.unwrap();
         assert_eq!(res[0], expected_msg);
+    }
+
+    fn create_test_converter(add_timestamp: bool) -> AwsConverter {
+        AwsConverter::new(
+            add_timestamp,
+            Box::new(TestClock),
+            MqttSchema::default(),
+            TimeFormat::Rfc3339,
+            TopicPrefix::try_from("aws").unwrap(),
+            AWS_MQTT_PAYLOAD_LIMIT,
+        )
     }
 }

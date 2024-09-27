@@ -72,6 +72,7 @@ impl TEdgeComponent for AwsMapper {
             mqtt_schema,
             tedge_config.aws.mapper.timestamp_format,
             prefix.clone(),
+            tedge_config.aws.mapper.mqtt.max_payload_size.0,
         );
         let mut aws_converting_actor = ConvertingActor::builder("AwsConverter", aws_converter);
 

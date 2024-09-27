@@ -591,3 +591,37 @@ async fn test_retain_message_delivery() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn test_max_packet_size_validation() -> Result<(), anyhow::Error> {
+    // Given an MQTT broker
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = Config::default()
+        .with_port(broker.port)
+        .with_max_packet_size(4);
+
+    // A client subscribes to a topic on connect
+    let topic = "a/test/topic";
+    let mqtt_config = mqtt_config
+        .with_session_name("test_client")
+        .with_subscriptions(topic.try_into()?);
+    let mut con = Connection::new(&mqtt_config).await?;
+
+    // Any messages published on that topic ...
+    broker.publish(topic, "aa").await?;
+    broker.publish(topic, "aaaaa").await?; // 5 bytes, exceeding max packet size of 4
+    broker.publish(topic, "aaa").await?;
+
+    // ... must be received by the client
+    assert_eq!(
+        MaybeMessage::Next(message(topic, "aa")),
+        next_message(&mut con.received).await
+    );
+    assert_eq!(
+        MaybeMessage::Next(message(topic, "aaa")),
+        next_message(&mut con.received).await
+    );
+
+    Ok(())
+}

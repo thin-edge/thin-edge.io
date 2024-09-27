@@ -13,6 +13,8 @@ use std::path::Path;
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
+pub const MAX_PACKET_SIZE: usize = 268435455;
+
 /// Configuration of an MQTT connection
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -45,7 +47,7 @@ pub struct Config {
 
     /// Maximum size for a message payload
     ///
-    /// Default: `1024 * 1024`.
+    /// Default: `16777216` (16 MB).
     pub max_packet_size: usize,
 
     /// LastWill message for a mqtt client
@@ -164,7 +166,7 @@ impl Default for Config {
             subscriptions: TopicFilter::empty(),
             clean_session: false,
             queue_capacity: 1024,
-            max_packet_size: 1024 * 1024,
+            max_packet_size: 16 * 1024 * 1024,
             last_will_message: None,
             initial_message: None,
         }
@@ -351,7 +353,7 @@ impl Config {
             mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
         }
 
-        mqtt_options.set_max_packet_size(self.max_packet_size, self.max_packet_size);
+        mqtt_options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
         if let Some(lwp) = &self.last_will_message {
             let last_will_message = LastWill {

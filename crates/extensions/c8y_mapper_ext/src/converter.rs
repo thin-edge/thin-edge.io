@@ -1,6 +1,5 @@
 use super::alarm_converter::AlarmConverter;
 use super::config::C8yMapperConfig;
-use super::config::MQTT_MESSAGE_SIZE_THRESHOLD;
 use super::error::CumulocityMapperError;
 use super::service_monitor;
 use crate::actor::CmdId;
@@ -212,7 +211,7 @@ impl CumulocityConverter {
         let c8y_host = &config.c8y_host;
         let c8y_mqtt = &config.c8y_mqtt;
 
-        let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
+        let size_threshold = SizeThreshold(config.max_mqtt_payload_size as usize);
 
         let operations = Operations::try_new(&*config.ops_dir)?;
         let children = get_child_ops(&*config.ops_dir)?;
@@ -3124,6 +3123,7 @@ pub(crate) mod tests {
             true,
             AutoLogUpload::Never,
             false,
+            16184,
         )
     }
 

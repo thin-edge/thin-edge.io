@@ -11,7 +11,7 @@ mod error;
 mod publish;
 mod subscribe;
 
-const MAX_PACKET_SIZE: usize = 10 * 1024 * 1024;
+const MAX_PACKET_SIZE: usize = 268435455; // 256 MB
 
 fn disconnect_if_interrupted(client: Client) -> Arc<AtomicBool> {
     let interrupter = Arc::new(Mutex::new(client));
