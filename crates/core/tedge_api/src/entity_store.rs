@@ -8,6 +8,7 @@
 // TODO: move entity business logic to its own module
 
 use crate::entity_store;
+use crate::mqtt_topics::default_topic_schema;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
@@ -21,7 +22,6 @@ use log::error;
 use log::info;
 use log::warn;
 use mqtt_channel::MqttMessage;
-use serde_json::json;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
@@ -602,59 +602,34 @@ impl EntityStore {
         &mut self,
         entity_topic_id: &EntityTopicId,
     ) -> Result<Vec<EntityRegistrationMessage>, entity_store::Error> {
-        if entity_topic_id.matches_default_topic_scheme() {
-            if entity_topic_id.is_default_main_device() {
-                return Ok(vec![]); // Do nothing as the main device is always pre-registered
+        let auto_entities = default_topic_schema::parse(entity_topic_id);
+        if auto_entities.is_empty() {
+            return Err(Error::NonDefaultTopicScheme(entity_topic_id.clone()));
+        };
+
+        let mut register_messages = vec![];
+        for mut auto_entity in auto_entities {
+            // Skip any already registered entity
+            if auto_entity.r#type != EntityType::MainDevice
+                && self.get(&auto_entity.topic_id).is_none()
+            {
+                if auto_entity.r#type == EntityType::Service {
+                    auto_entity
+                        .other
+                        .insert("type".to_string(), self.default_service_type.clone().into());
+                }
+
+                let external_id = (self.external_id_mapper)(
+                    &auto_entity.topic_id,
+                    &self.main_device_external_id(),
+                );
+                auto_entity.external_id = Some(external_id);
+                register_messages.push(auto_entity.clone());
+                self.update(auto_entity)?;
             }
-
-            let mut register_messages = vec![];
-
-            let parent_device_id = entity_topic_id
-                .default_source_device_identifier()
-                .expect("device id must be present as the topic id follows the default scheme");
-
-            if !parent_device_id.is_default_main_device() && self.get(&parent_device_id).is_none() {
-                let device_local_id = entity_topic_id.default_device_name().unwrap();
-                let device_external_id =
-                    (self.external_id_mapper)(&parent_device_id, &self.main_device_external_id());
-
-                let device_register_message = EntityRegistrationMessage {
-                    topic_id: parent_device_id.clone(),
-                    external_id: Some(device_external_id),
-                    r#type: EntityType::ChildDevice,
-                    parent: None,
-                    other: json!({ "name": device_local_id })
-                        .as_object()
-                        .unwrap()
-                        .to_owned(),
-                };
-                register_messages.push(device_register_message.clone());
-                self.update(device_register_message)?;
-            }
-
-            // if the entity is a service, register the service as well
-            if let Some(service_id) = entity_topic_id.default_service_name() {
-                let service_external_id =
-                    (self.external_id_mapper)(entity_topic_id, &self.main_device_external_id());
-
-                let service_register_message = EntityRegistrationMessage {
-                    topic_id: entity_topic_id.clone(),
-                    external_id: Some(service_external_id),
-                    r#type: EntityType::Service,
-                    parent: Some(parent_device_id),
-                    other: json!({ "name": service_id, "type": self.default_service_type })
-                        .as_object()
-                        .unwrap()
-                        .to_owned(),
-                };
-                register_messages.push(service_register_message.clone());
-                self.update(service_register_message)?;
-            }
-
-            Ok(register_messages)
-        } else {
-            Err(Error::NonDefaultTopicScheme(entity_topic_id.clone()))
         }
+
+        Ok(register_messages)
     }
 
     /// Updates the entity twin data with the provided fragment data.
@@ -1401,7 +1376,7 @@ mod tests {
                     topic_id: EntityTopicId::from_str("device/child1//").unwrap(),
                     r#type: EntityType::ChildDevice,
                     external_id: Some("device:child1".into()),
-                    parent: None,
+                    parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
                     other: json!({ "name": "child1" }).as_object().unwrap().to_owned(),
                 },
                 EntityRegistrationMessage {
@@ -1432,7 +1407,7 @@ mod tests {
                 topic_id: EntityTopicId::from_str("device/child2//").unwrap(),
                 r#type: EntityType::ChildDevice,
                 external_id: Some("device:child2".into()),
-                parent: None,
+                parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
                 other: json!({ "name": "child2" }).as_object().unwrap().to_owned(),
             },]
         );

@@ -364,14 +364,7 @@ impl EntityTopicId {
     ///
     /// Returns false otherwise
     pub fn matches_default_topic_scheme(&self) -> bool {
-        self.default_device_name()
-            .or(self.default_service_name())
-            .is_some()
-    }
-
-    /// Returns `true` if it's the topic identifier of the child device in default topic scheme.
-    pub fn is_default_child_device(&self) -> bool {
-        matches!(self.segments(), ["device", device_name, "", ""] if device_name != "main" && !device_name.is_empty())
+        !default_topic_schema::parse(self).is_empty()
     }
 
     /// Returns the device name when the entity topic identifier is using the `device/+/service/+` pattern.
@@ -395,20 +388,6 @@ impl EntityTopicId {
         }
     }
 
-    /// Returns the topic identifier of the source device of an entity,
-    /// - for a service, this is the parent entity
-    /// - for a device, this is the device itself
-    ///
-    /// Returns None if the pattern doesn't apply.
-    pub fn default_source_device_identifier(&self) -> Option<Self> {
-        match self.0.split('/').collect::<Vec<&str>>()[..] {
-            ["device", parent_id, "", ""] => Some(parent_id),
-            ["device", parent_id, "service", _] => Some(parent_id),
-            _ => None,
-        }
-        .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
-    }
-
     /// Returns the topic identifier of the parent of a service,
     /// assuming `self` is the topic identifier of a service `device/+/service/+`
     ///
@@ -424,11 +403,6 @@ impl EntityTopicId {
     /// Returns true if the current topic identifier matches that of the main device
     pub fn is_default_main_device(&self) -> bool {
         self == &Self::default_main_device()
-    }
-
-    /// Returns true if the current topic identifier matches that of the service
-    pub fn is_default_service(&self) -> bool {
-        self.default_service_name().is_some()
     }
 
     /// If `self` is a device topic id, return a service topic id under this
@@ -453,6 +427,56 @@ impl EntityTopicId {
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+pub mod default_topic_schema {
+    use crate::entity_store::EntityRegistrationMessage;
+    use crate::entity_store::EntityType;
+    use crate::mqtt_topics::EntityTopicId;
+    use serde_json::json;
+
+    /// Parse an entity topic id into registration messages matching auto-registration logic.
+    ///
+    /// These registration messages are derived from the topic after the default topic schema
+    /// - `device/main//` -> registration of the main device
+    /// - `device/{child}//` -> registration of the child device
+    /// - `device/{device}/service/{service}` -> registrations of the child device and of the service
+    ///
+    /// Return no registration messages if the entity topic id is not built after the default topic schema
+    pub fn parse(topic_id: &EntityTopicId) -> Vec<EntityRegistrationMessage> {
+        match topic_id.segments() {
+            ["device", "main", "", ""] => vec![EntityRegistrationMessage {
+                topic_id: topic_id.clone(),
+                external_id: None,
+                r#type: EntityType::MainDevice,
+                parent: None,
+                other: Default::default(),
+            }],
+            ["device", child, "", ""] if !child.is_empty() => vec![EntityRegistrationMessage {
+                topic_id: topic_id.clone(),
+                external_id: None,
+                r#type: EntityType::ChildDevice,
+                parent: Some(EntityTopicId::default_main_device()),
+                other: json!({ "name": child }).as_object().unwrap().to_owned(),
+            }],
+            ["device", device, "service", service] if !device.is_empty() && !service.is_empty() => {
+                // The device of a service has to be registered fist
+                let device_topic_id = EntityTopicId::default_child_device(device).unwrap();
+                let mut registrations = parse(&device_topic_id);
+
+                // Then the service can be registered
+                registrations.push(EntityRegistrationMessage {
+                    topic_id: topic_id.clone(),
+                    external_id: None,
+                    r#type: EntityType::Service,
+                    parent: Some(device_topic_id),
+                    other: json!({ "name": service }).as_object().unwrap().to_owned(),
+                });
+                registrations
+            }
+            _ => vec![],
+        }
     }
 }
 
@@ -916,9 +940,12 @@ mod tests {
 
     #[test_case("device/main//", true)]
     #[test_case("device/child//", true)]
+    #[test_case("device///", false)]
     #[test_case("device/main/service/foo", true)]
     #[test_case("device/child/service/foo", true)]
     #[test_case("device/main//foo", false)]
+    #[test_case("device/child/service/", false)]
+    #[test_case("device//service/foo", false)]
     #[test_case("custom///", false)]
     #[test_case("custom/main//", false)]
     #[test_case("custom/child//", false)]
