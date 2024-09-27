@@ -1,16 +1,14 @@
+use crate::smartrest::error::OperationsError;
+use crate::smartrest::smartrest_serializer::declare_supported_operations;
+use serde::Deserialize;
+use serde::Deserializer;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-
-use crate::smartrest::error::OperationsError;
-use crate::smartrest::smartrest_serializer::declare_supported_operations;
-use serde::Deserialize;
-use serde::Deserializer;
-use tracing::warn;
-
 use std::time::Duration;
+use tracing::warn;
 
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -25,12 +23,12 @@ pub enum ResultFormat {
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
-
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct OnMessageExec {
     command: Option<String>,
     on_message: Option<String>,
+    on_fragment: Option<String>,
     topic: Option<String>,
     user: Option<String>,
     #[serde(default, deserialize_with = "to_result_format")]
@@ -98,6 +96,14 @@ impl Operation {
         self.exec().and_then(|exec| exec.topic.clone())
     }
 
+    pub fn on_message(&self) -> Option<String> {
+        self.exec().and_then(|exec| exec.on_message.clone())
+    }
+
+    pub fn on_fragment(&self) -> Option<String> {
+        self.exec().and_then(|exec| exec.on_fragment.clone())
+    }
+
     pub fn result_format(&self) -> ResultFormat {
         self.exec()
             .map(|exec| exec.result_format.clone())
@@ -163,6 +169,35 @@ impl Operations {
             }
         }
         None
+    }
+
+    pub fn filter_for_json_input(&self, topic_name: &str) -> Vec<Operation> {
+        let mut vec: Vec<Operation> = Vec::new();
+        for op in self.operations.iter() {
+            if op.exec.is_none() {
+                continue;
+            }
+
+            match op.topic() {
+                Some(topic) if topic != topic_name => {}
+                _ => {
+                    if op.on_message().is_some() {
+                        warn!(
+                            "'on_message' should not be provided in the custom operation handler mapping '{}', which is for SmartREST input.",
+                            op.name
+                        );
+                    } else if op.on_fragment().is_none() {
+                        warn!(
+                            "'on_fragment' is missing in the custom operation handler mapping '{}'",
+                            op.name
+                        );
+                    } else {
+                        vec.push(op.clone())
+                    }
+                }
+            }
+        }
+        vec
     }
 
     pub fn topics_for_operations(&self) -> HashSet<String> {

@@ -1947,6 +1947,153 @@ EOF
     assert_command_exec_log_content(ttd, expected_content);
 }
 
+#[tokio::test]
+async fn json_custom_operation_status_update_with_operation_id() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "echo ${.payload.c8y_Command.text}"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate c8y_Command SmartREST request
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"TST_haul_searing_set",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,\"do something\n\"")]).await;
+}
+
+#[tokio::test]
+async fn json_custom_operation_status_update_with_operation_name() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "echo ${.payload.c8y_Command.text}"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: false,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate c8y_Command SmartREST request
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"TST_haul_searing_set",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "503,c8y_Command,\"do something\n\"")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn json_custom_operation_skip_status_update() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "echo ${.payload.c8y_Command.text}"
+            on_fragment = "c8y_Command"
+            skip_status_update = true
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate c8y_Command SmartREST request
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"TST_haul_searing_set",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    // No MQTT message should be sent
+    let recv = mqtt.recv().await;
+    assert!(recv.is_none());
+}
+
 /// This test aims to verify that when a telemetry message is emitted from an
 /// unknown device or service, the mapper will produce a registration message
 /// for this entity. The registration message shall be published only once, when

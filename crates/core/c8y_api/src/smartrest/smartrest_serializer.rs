@@ -99,15 +99,30 @@ fn succeed_static_operation(
 /// # Errors
 /// This will return an error if the payload is a CSV with multiple records, or an empty CSV.
 pub fn succeed_operation(
+    template_id: &str,
     operation: &str,
     reason: impl Into<TextOrCsv>,
 ) -> Result<String, SmartRestSerializerError> {
     let mut wtr = csv::Writer::from_writer(vec![]);
     // Serialization can fail for CSV, but not for text
-    wtr.serialize(("503", operation, reason.into()))?;
+    wtr.serialize((template_id, operation, reason.into()))?;
     let mut output = wtr.into_inner().unwrap();
     output.pop();
     Ok(String::from_utf8(output)?)
+}
+
+pub fn succeed_operation_with_name(
+    operation: &str,
+    reason: impl Into<TextOrCsv>,
+) -> Result<String, SmartRestSerializerError> {
+    succeed_operation("503", operation, reason)
+}
+
+pub fn succeed_operation_with_id(
+    operation: &str,
+    reason: impl Into<TextOrCsv>,
+) -> Result<String, SmartRestSerializerError> {
+    succeed_operation("506", operation, reason)
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -373,7 +388,7 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_set_custom_operation_to_successful_with_text_payload() {
-        let smartrest = succeed_operation(
+        let smartrest = succeed_operation_with_name(
             "c8y_RelayArray",
             TextOrCsv::Text("true,false,true".to_owned()),
         )
@@ -383,7 +398,7 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_set_custom_operation_to_successful_with_csv_payload() {
-        let smartrest = succeed_operation(
+        let smartrest = succeed_operation_with_name(
             "c8y_RelayArray",
             TextOrCsv::Csv(EmbeddedCsv("true,false,true".to_owned())),
         )
@@ -393,7 +408,7 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_set_custom_operation_to_successful_with_multi_record_csv_payload() {
-        succeed_operation(
+        succeed_operation_with_name(
             "c8y_RelayArray",
             TextOrCsv::Csv(EmbeddedCsv("true\n1,2,3".to_owned())),
         )
@@ -402,7 +417,7 @@ mod tests {
 
     #[test]
     fn serialize_smartrest_set_custom_operation_to_successful_requotes_csv_payload() {
-        let smartrest = succeed_operation(
+        let smartrest = succeed_operation_with_name(
             "c8y_RelayArray",
             TextOrCsv::Csv(EmbeddedCsv("true,random\"quote".to_owned())),
         )
