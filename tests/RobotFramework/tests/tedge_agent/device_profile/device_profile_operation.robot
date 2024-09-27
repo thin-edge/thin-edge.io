@@ -68,7 +68,7 @@ Send device profile operation locally
     ...    "operations": [
     ...    {
     ...    "operation": "firmware_update",
-    ...    "skip": false,
+    ...    "@skip": false,
     ...    "payload": {
     ...    "name": "tedge-core",
     ...    "remoteUrl": "https://abc.com/some/firmware/url",
@@ -77,7 +77,7 @@ Send device profile operation locally
     ...    },
     ...    {
     ...    "operation": "software_update",
-    ...    "skip": false,
+    ...    "@skip": false,
     ...    "payload": {
     ...    "updateList": [
     ...    {
@@ -100,11 +100,29 @@ Send device profile operation locally
     ...    },
     ...    {
     ...    "operation": "config_update",
-    ...    "skip": false,
+    ...    "@skip": false,
     ...    "payload": {
     ...    "type": "tedge-configuration-plugin",
     ...    "tedgeUrl": "${config_url}",
     ...    "remoteUrl": ""
+    ...    }
+    ...    },
+    ...    {
+    ...    "operation": "software_update",
+    ...    "@skip": true,
+    ...    "payload": {
+    ...    "updateList": [
+    ...    {
+    ...    "type": "apt",
+    ...    "modules": [
+    ...    {
+    ...    "name": "htop",
+    ...    "version": "latest",
+    ...    "action": "install"
+    ...    }
+    ...    ]
+    ...    }
+    ...    ]
     ...    }
     ...    },
     ...    {
@@ -114,7 +132,7 @@ Send device profile operation locally
     ...    },
     ...    {
     ...    "operation": "software_update",
-    ...    "skip": false,
+    ...    "@skip": false,
     ...    "payload": {
     ...    "updateList": [
     ...    {
@@ -144,6 +162,9 @@ Send device profile operation locally
     Execute Command    dpkg -l | grep rolldice
     Execute Command    dpkg -l | grep yq
     Execute Command    dpkg -l | grep jo
+
+    # Validate tree package is not installed
+    Execute Command    dpkg -l | grep htop    exp_exit_code=1
 
     # Validate updated config file
     Execute Command    grep "bad toml" /etc/tedge/plugins/tedge-configuration-plugin.toml

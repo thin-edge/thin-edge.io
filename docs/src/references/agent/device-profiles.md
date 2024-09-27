@@ -83,7 +83,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
   "operations": [
     {
       "operation": "firmware_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "name": "core-image-tedge-rauc",
         "remoteUrl": "https://abc.com/some/firmware/url",
@@ -92,7 +92,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
     },
     {
       "operation": "software_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "updateList": [
           {
@@ -116,7 +116,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
     },
     {
       "operation": "config_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "type": "collectd.conf",
         "remoteUrl":"https://abc.com/some/collectd/conf",
@@ -125,7 +125,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/1234' '{
     },
     {
       "operation": "software_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "updateList": [
           {
@@ -398,7 +398,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/523244' '{
   "operations": [
     {
       "operation": "firmware_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "name": "core-image-tedge-rauc",
         "version": "20240430.1139",
@@ -407,7 +407,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/523244' '{
     },
     {
       "operation": "software_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "updateList": [
           {
@@ -431,7 +431,7 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/523244' '{
     },
     {
       "operation": "config_update",
-      "skip": false,
+      "@skip": false,
       "payload": {
         "type": "collectd.conf",
         "remoteUrl":"https://t2373.basic.stage.c8y.io/inventory/binaries/88395"
