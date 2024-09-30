@@ -401,10 +401,21 @@ impl OperationAction {
                 return Err(IterationError::IndexOutOfBounds(index));
             }
 
-            let next_index = index + 1;
-            if next_index >= items.len() {
-                info!("Iteration finished");
-                return Ok(state.update(handlers.on_success));
+            let mut next_index = index + 1;
+            loop {
+                if next_index >= items.len() {
+                    info!("Iteration finished");
+                    return Ok(state.update(handlers.on_success));
+                }
+
+                let next = &items[next_index];
+                let skipped = next.get("@skip").and_then(|v| v.as_bool()).unwrap_or(false);
+                if skipped {
+                    next_index += 1;
+                    continue;
+                } else {
+                    break;
+                }
             }
 
             next_item["index"] = json!(next_index);
@@ -501,6 +512,7 @@ mod tests {
     use super::IterationError;
     use super::OperationAction;
     use assert_json_diff::assert_json_eq;
+    use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
     use serde_json::json;
 
@@ -826,5 +838,99 @@ mod tests {
 
         let res = OperationAction::process_iterate(state, ".bad.json.path", handlers);
         assert_matches!(res, Err(IterationError::InvalidTarget(_)))
+    }
+
+    #[test]
+    fn test_skipping_entries_during_iteration() {
+        let handlers = IterateHandlers::new(
+            "apply_operation".into(),
+            GenericStateUpdate::successful(),
+            GenericStateUpdate::failed("bad input".to_string()),
+        );
+
+        let state = GenericCommandState::new(
+            "test/topic".try_into().unwrap(),
+            "next_operation".to_string(),
+            json!({
+                "status": "next_operation",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "payload": {
+                            "firmware_key": "firmware_value"
+                        }
+                    },
+                    {
+                        "@skip": false, // Explicitly not skip
+                        "operation": "software_update",
+                        "payload": {
+                            "software_key": "software_value"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "@skip": true,  // Skip this entry
+                        "payload": {
+                            "skipped_software_key": "skipped_software_value"
+                        }
+                    },
+                    {
+                        "@skip": "bad_skip_value_type", // Interpreted as not `true`: do not skip
+                        "operation": "config_update",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                ]
+            }),
+        );
+
+        // Iterate to the first operation
+        let next_state =
+            OperationAction::process_iterate(state, ".payload.operations", handlers.clone())
+                .unwrap();
+
+        // Iterate to the second operation that is explicitly not skipped
+        let next_state =
+            OperationAction::process_iterate(next_state, ".payload.operations", handlers.clone())
+                .unwrap();
+
+        assert_eq!(next_state.status, "apply_operation");
+        assert_json_include!(
+            actual: next_state.payload,
+            expected: json!({
+                "@next": {
+                    "index": 1,
+                    "item": {
+                        "operation": "software_update",
+                        "@skip": false,
+                        "payload": {
+                            "software_key": "software_value"
+                        }
+                    }
+                }
+            })
+        );
+
+        // Iterate to the next operation that has non-boolean `skip` value, which is not skipped
+        let next_state =
+            OperationAction::process_iterate(next_state, ".payload.operations", handlers).unwrap();
+
+        assert_eq!(next_state.status, "apply_operation");
+        assert_json_include!(
+            actual: next_state.payload,
+            expected: json!({
+                "@next": {
+                    "index": 3,
+                    "item": {
+                        "operation": "config_update",
+                        "@skip": "bad_skip_value_type",
+                        "payload": {
+                            "config_key": "config_value"
+                        }
+                    }
+                }
+            })
+        );
     }
 }
