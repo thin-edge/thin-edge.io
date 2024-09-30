@@ -609,7 +609,8 @@ Setup Child Device
     Execute Command    sudo tedge config set http.client.host ${parent_ip}
     Execute Command    sudo tedge config set c8y.proxy.client.host ${parent_ip}
     Execute Command    sudo tedge config set mqtt.topic_root te
-    Execute Command    sudo tedge config set mqtt.device_topic_id device/${child_sn}//
+    Execute Command    sudo tedge config set mqtt.device_topic_id custom/child/device/${child_sn}
+    Execute Command    sudo tedge mqtt pub --retain te/custom/child/device/${child_sn} '{"@type":"child-device","name":"${child_sn}"}'
 
     Enable Service    ${install_package}
     Start Service    ${install_package}
