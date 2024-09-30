@@ -1,0 +1,16 @@
+[Unit]
+Description=tedge-agent is a thin-edge.io component to support operations.
+After=syslog.target network.target mosquitto.service
+
+[Service]
+Environment=SERVICE_NAME=tedge-agent
+Environment=RESPOND=
+User=tedge
+RuntimeDirectory=tedge-agent
+ExecStart=/bin/sh /setup/health_check_respond.sh
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
