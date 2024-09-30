@@ -450,8 +450,8 @@ fn generate_conversions(
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
                 let read_path = read_field(&parents);
-                let new_arg2 = id_gen.replay(group.ident.span());
-                field_conversions.push(quote!(#name: dto.#(#read_path).*.map(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*))));
+                let new_arg2 = extra_call_args.last().unwrap().clone();
+                field_conversions.push(quote!(#name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*))));
                 parents.push(new_arg);
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;

@@ -58,8 +58,7 @@ impl<T> Multi<T> {
         }
     }
 
-    // TODO clearer name
-    pub fn map<U>(&self, f: impl Fn(Option<&str>) -> U) -> Multi<U> {
+    pub fn map_keys<U>(&self, f: impl Fn(Option<&str>) -> U) -> Multi<U> {
         match self {
             Self::Single(_) => Multi::Single(f(None)),
             Self::Multi(map) => Multi::Multi(
