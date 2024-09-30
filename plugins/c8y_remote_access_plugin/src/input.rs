@@ -58,6 +58,14 @@ pub struct C8yRemoteAccessPluginOpt {
     /// taking the SmartREST input as an argument
     // Use "-" to read the value from stdin.
     child: Option<String>,
+
+    /// The user who will own the directories created by --init
+    #[arg(long, requires("init"), default_value = "tedge")]
+    user: Option<String>,
+
+    /// The group who will own the directories created by --init
+    #[arg(long, requires("init"), default_value = "tedge")]
+    group: Option<String>,
 }
 
 impl C8yRemoteAccessPluginOpt {
@@ -68,7 +76,7 @@ impl C8yRemoteAccessPluginOpt {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    Init,
+    Init(String, String),
     Cleanup,
     SpawnChild(String),
     TryConnectUnixSocket(String),
@@ -83,7 +91,12 @@ impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
     type Error = miette::Error;
     fn try_from(arguments: C8yRemoteAccessPluginOpt) -> Result<Self, Self::Error> {
         match arguments {
-            C8yRemoteAccessPluginOpt { init: true, .. } => Ok(Command::Init),
+            C8yRemoteAccessPluginOpt {
+                init: true,
+                user: Some(user),
+                group: Some(group),
+                ..
+            } => Ok(Command::Init(user, group)),
             C8yRemoteAccessPluginOpt { cleanup: true, .. } => Ok(Command::Cleanup),
             C8yRemoteAccessPluginOpt {
                 connect_string: Some(message),
@@ -155,7 +168,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::init("--init", Command::Init)]
+    #[case::init("--init", Command::Init("tedge".to_string(), "tedge".to_string()))]
     #[case::cleanup("--cleanup", Command::Cleanup)]
     fn parses_lifecycle_flags(#[case] argument: &str, #[case] expected: Command) {
         assert_eq!(try_parse_arguments(&[argument]).unwrap(), expected);

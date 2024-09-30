@@ -9,6 +9,7 @@ use miette::IntoDiagnostic;
 use std::io;
 use std::process::Stdio;
 use tedge_config::TEdgeConfig;
+use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tokio::io::AsyncBufReadExt;
@@ -40,59 +41,73 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let command = parse_arguments(opt)?;
 
     match command {
-        Command::Init => declare_supported_operation(config_dir.tedge_config_root_path())
-            .with_context(|| {
-                "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
-            }),
+        Command::Init(user, group) => declare_supported_operation(
+            config_dir.tedge_config_root_path(),
+            &user,
+            &group,
+        )
+        .with_context(|| {
+            "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
+        }),
         Command::Cleanup => {
             remove_supported_operation(config_dir.tedge_config_root_path());
             Ok(())
         }
         Command::Connect(command) => proxy(command, tedge_config).await,
-        Command::SpawnChild(command) => spawn_child(command, config_dir.tedge_config_root_path()).await,
-        Command::TryConnectUnixSocket(command) => {
-            match UnixStream::connect(UNIX_SOCKFILE).await {
-               Ok(mut unix_stream) => {
-                   eprintln!("sock: Connected to Unix socket at {UNIX_SOCKFILE}");
-                   write_request_and_shutdown(&mut unix_stream, command).await?;
-                   read_from_stream(&mut unix_stream).await?;
-                   Ok(())
-               }
-               Err(_e) => {
-                   eprintln!("sock: Could not connect to Unix socket at {UNIX_SOCKFILE}. Falling back to spawning a child process");
-                   spawn_child(command, config_dir.tedge_config_root_path()).await
-               }
-           }
+        Command::SpawnChild(command) => {
+            spawn_child(command, config_dir.tedge_config_root_path()).await
+        }
+        Command::TryConnectUnixSocket(command) => match UnixStream::connect(UNIX_SOCKFILE).await {
+            Ok(mut unix_stream) => {
+                eprintln!("sock: Connected to Unix socket at {UNIX_SOCKFILE}");
+                write_request_and_shutdown(&mut unix_stream, command).await?;
+                read_from_stream(&mut unix_stream).await?;
+                Ok(())
+            }
+            Err(_e) => {
+                eprintln!("sock: Could not connect to Unix socket at {UNIX_SOCKFILE}. Falling back to spawning a child process");
+                spawn_child(command, config_dir.tedge_config_root_path()).await
+            }
         },
     }
 }
 
-fn declare_supported_operation(config_dir: &Utf8Path) -> miette::Result<()> {
+fn declare_supported_operation(
+    config_dir: &Utf8Path,
+    user: &str,
+    group: &str,
+) -> miette::Result<()> {
     let supported_operation_path = supported_operation_path(config_dir);
     create_directory_with_user_group(
         supported_operation_path.parent().unwrap(),
-        "tedge",
-        "tedge",
+        user,
+        group,
         0o755,
     )
     .into_diagnostic()
     .context("Creating supported operations directory")?;
 
-    create_file_with_user_group(
-        supported_operation_path,
-        "tedge",
-        "tedge",
-        0o644,
-        Some(
-            r#"[exec]
+    if supported_operation_path.exists() {
+        change_user_and_group(supported_operation_path.as_std_path(), user, group)
+            .into_diagnostic()
+            .context("Changing permissions of supported operations")
+    } else {
+        create_file_with_user_group(
+            supported_operation_path,
+            user,
+            group,
+            0o644,
+            Some(
+                r#"[exec]
 command = "c8y-remote-access-plugin"
 topic = "c8y/s/ds"
 on_message = "530"
 "#,
-        ),
-    )
-    .into_diagnostic()
-    .context("Declaring supported operations")
+            ),
+        )
+        .into_diagnostic()
+        .context("Declaring supported operations")
+    }
 }
 
 fn remove_supported_operation(config_dir: &Utf8Path) {

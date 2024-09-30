@@ -16,13 +16,23 @@ Install/uninstall c8y-remote-access-plugin
 
     # Check that a command is used instead of an explicit path #3111
     ${executable}=    Execute Command
-    ...    cmd=grep "^command" /etc/tedge/operations/c8y/c8y_RemoteAccessConnect | cut -d= -f2-
+    ...    cmd=grep "command" /etc/tedge/operations/c8y/c8y_RemoteAccessConnect | cut -d= -f2-
     ...    strip=${True}
     ...    timeout=5
     Should Match Regexp    ${executable}    pattern=^"c8y-remote-access-plugin\\b
 
     Execute Command    dpkg -r c8y-remote-access-plugin
     File Should Not Exist    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
+
+Init c8y-remote-access-plugin with the custom user and group
+    Device Should Have Installed Software    c8y-remote-access-plugin
+
+    Execute Command    sudo c8y-remote-access-plugin --init --user petertest --group petertest
+    Path Should Have Permissions    /etc/tedge/operations/c8y    mode=755    owner_group=petertest:petertest
+    Path Should Have Permissions
+    ...    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
+    ...    mode=644
+    ...    owner_group=petertest:petertest
 
 Execute ssh command using PASSTHROUGH
     ${KEY_FILE}=    Configure SSH
