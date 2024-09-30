@@ -2,6 +2,11 @@
 Documentation
 ...                 Test suite for tedge-watchdog service.
 ...
+...                 Suite needs to check behaviour of tedge-watchdog when services respond in various ways in response
+...                 to watchdog-sent health check commands. Watchdog can check only a statically enumerated set of tedge
+...                 services, so we need to take some tedge service and override its default health check responses to
+...                 test the watchdog.
+...
 ...                 Reference: docs/src/operate/monitoring/systemd-watchdog.md
 
 Resource            ../resources/common.resource
@@ -15,8 +20,8 @@ Test Tags           adapter:docker    theme:tedge-watchdog
 
 *** Variables ***
 # Interval at which we send notifications/check health of the service. Use smaller value for test to complete faster but
-# increase if flaky.
-${WATCHDOG_SEC}     5
+# increase if flaky or debugging.
+${WATCHDOG_SEC}     60
 ${SERVICE_NAME}     tedge-agent
 
 
@@ -27,13 +32,16 @@ ${SERVICE_NAME}     tedge-agent
 # This is a result of a specific configuration of these services' unit files, that we're not checking or validating
 # anywhere, so we need to define this behaviour more precisely by providing additional tests.
 Watchdog doesn't send notification if service is down which leads to service restart
-    Pass Execution    No longer passes because watchdog doesnt exit on time deserialization error
-
-    Start Service    ${SERVICE_NAME}
-    Start Service    tedge-watchdog
-
     # wait for service to start
     ${pid} =    Service Should Be Running    ${SERVICE_NAME}
+
+    # send status up
+    ${ts} =    Get Unix Timestamp
+    Execute Command
+    ...    tedge mqtt pub 'te/device/main/service/${SERVICE_NAME}/status/health' '{"status": "down", "pid": ${pid}, "time": ${ts}}'
+
+    # wait for a health check command from watchdog
+    Should Have MQTT Messages    te/device/main/service/${SERVICE_NAME}/cmd/health/check
 
     # Simulate service signalling that it's unhealthy
     ${before_restart_timestamp} =    Get Unix Timestamp
@@ -53,11 +61,16 @@ Watchdog doesn't send notification if service is down which leads to service res
     ...    date_from=${before_restart_timestamp}
 
 Watchdog doesn't fail on unexpected time format
-    Start Service    ${SERVICE_NAME}
-    Start Service    tedge-watchdog
-
     # wait for service to start
     ${pid} =    Service Should Be Running    tedge-watchdog
+
+    # send status up
+    ${ts} =    Get Unix Timestamp
+    Execute Command
+    ...    tedge mqtt pub 'te/device/main/service/${SERVICE_NAME}/status/health' '{"status": "down", "pid": ${pid}, "time": ${ts}}'
+
+    # wait for a health check command from watchdog
+    Should Have MQTT Messages    te/device/main/service/${SERVICE_NAME}/cmd/health/check
 
     # Simulate service signalling that it's unhealthy with wrong format in `time` field
     # (we're expecting a UNIX timestamp to be an int, not a string)
@@ -73,18 +86,18 @@ Watchdog doesn't fail on unexpected time format
     Should Be Equal    ${pid}    ${pid1}
 
 Watchdog sends notification if service is up which leads to service continuing to run
-    Start Service    ${SERVICE_NAME}
-    Start Service    tedge-watchdog
+    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    # Set Service health check response    {\\\"status\\\":\\\"up\\\", \\\"pid\\\":\\\"$$\\\"}
+    Restart Service    ${SERVICE_NAME}
+    Restart Service    tedge-watchdog
 
     ${pid} =    Service Should Be Running    ${SERVICE_NAME}
 
-    # wait for service to publish up message
-    Sleep    2s
+    # send status up
+    ${ts} =    Get Unix Timestamp
 
-    # Make sure service is healthy
-    Should Have MQTT Messages
-    ...    te/device/main/service/${SERVICE_NAME}/status/health
-    ...    message_contains="status":"up"
+    # wait for a health check command from watchdog
+    Should Have MQTT Messages    te/device/main/service/${SERVICE_NAME}/cmd/health/check    date_from=${ts}
 
     # Wait until we're sure systemd sees the tedge-watchdog notification about service being healthy
     Sleep    ${WATCHDOG_SEC}s
@@ -93,46 +106,33 @@ Watchdog sends notification if service is up which leads to service continuing t
     ${pid1} =    Service Should Be Running    ${SERVICE_NAME}
     Should Be Equal    ${pid}    ${pid1}
 
-    Should Have MQTT Messages
-    ...    te/device/main/service/${SERVICE_NAME}/status/health
-    ...    message_contains="status":"up"
-
 
 *** Keywords ***
-Enable watchdog for service
-    [Documentation]    Edits systemd unit file for a given service so it can be run with tedge-watchdog.
-    ...    Provide only service name, e.g. `tedge-mapper-c8y`.
-    [Arguments]    ${service_name}
-
-    # inserts `WatchdogSec=...` line at a given position. Ideally we should use `systemctl --edit` to not overwrite the
-    # default unit file provided by the package but it's not currently supported by tedge-watchdog.
-    Execute Command    cmd=sudo sed -i '11iWatchdogSec=${WATCHDOG_SEC}' /lib/systemd/system/${service_name}.service
-
-    # will reload affected services if they're running
-    Execute Command    sudo systemctl daemon-reload
-
-Disable watchdog for service
-    [Documentation]    Edits systemd unit file for a given service so it can be run with tedge-watchdog.
-    ...    Provide only service name, e.g. `tedge-mapper-c8y`.
-    [Arguments]    ${service_name}
-
-    # inserts `WatchdogSec=...` line at a given position. Ideally we should use `systemctl --edit` to not overwrite the
-    # default unit file provided by the package but it's not currently supported by tedge-watchdog.
-    Execute Command    cmd=sudo sed -i '11d' /lib/systemd/system/${service_name}.service
-
-    # will reload affected services if they're running
-    Execute Command    sudo systemctl daemon-reload
-
 Custom Setup
     Setup    skip_bootstrap=True
     Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+
+    Execute Command    mv /lib/systemd/system/tedge-agent.service /lib/systemd/system/tedge-agent.service.bak
+    Transfer To Device    ${CURDIR}/tedge-agent.service    /lib/systemd/system/
+
+    Execute Command    cmd=sed -i '13iWatchdogSec=${WATCHDOG_SEC}' /lib/systemd/system/${service_name}.service
+
+    Transfer To Device    ${CURDIR}/health_check_respond.sh    /setup/
 
     # Without this line mqtt-logger can't connect to listener at 1883, but with it it successfully connects to listener
     # at 8883
     Restart Service    mqtt-logger
 
-    Enable watchdog for service    ${SERVICE_NAME}
+    Restart Service    tedge-watchdog
+
+    Restart Service    ${SERVICE_NAME}
 
 Custom Teardown
-    Disable watchdog for service    ${SERVICE_NAME}
+    Execute Command    rm /setup/health_check_respond.sh
+    Execute Command    mv /lib/systemd/system/tedge-agent.service.bak /lib/systemd/system/tedge-agent.service
     Get Logs
+
+Set Service health check response
+    [Arguments]    ${message}
+    Execute Command    sed -i 's/Environment\=RESPONSE\=.*/Environment\="RESPONSE\=${message}"/' /lib/systemd/system/${SERVICE_NAME}.service
+    Execute Command    systemctl daemon-reload
