@@ -52,7 +52,7 @@ pub enum MultiError {
     MultiKeyNotFound(String, String),
 }
 
-impl<T> MultiDto<T> {
+impl<T: Default> MultiDto<T> {
     pub fn try_get(&self, key: Option<&str>, parent: &str) -> Result<&T, MultiError> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
@@ -69,9 +69,7 @@ impl<T> MultiDto<T> {
     pub fn try_get_mut(&mut self, key: Option<&str>, parent: &str) -> Result<&mut T, MultiError> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
-            (Self::Multi(map), Some(key)) => map
-                .get_mut(key)
-                .ok_or_else(|| MultiError::MultiKeyNotFound(parent.to_owned(), key.to_owned())),
+            (Self::Multi(map), Some(key)) => Ok(map.entry((*key).to_owned()).or_default()),
             (Self::Multi(_), None) => Err(MultiError::MultiNotSingle(parent.to_owned())),
             (Self::Single(_), Some(key)) => {
                 Err(MultiError::SingleNotMulti(parent.into(), key.into()))
@@ -93,19 +91,6 @@ impl<T> MultiReader<T> {
             (Self::Single { value, .. }, None) => Ok(value),
             (Self::Multi { map, parent }, Some(key)) => map
                 .get(key)
-                .ok_or_else(|| MultiError::MultiKeyNotFound((*parent).into(), key.into())),
-            (Self::Multi { parent, .. }, None) => Err(MultiError::MultiNotSingle((*parent).into())),
-            (Self::Single { parent, .. }, Some(key)) => {
-                Err(MultiError::SingleNotMulti((*parent).into(), key.into()))
-            }
-        }
-    }
-
-    pub fn try_get_mut(&mut self, key: Option<&str>) -> Result<&mut T, MultiError> {
-        match (self, key) {
-            (Self::Single { value, .. }, None) => Ok(value),
-            (Self::Multi { map, parent }, Some(key)) => map
-                .get_mut(key)
                 .ok_or_else(|| MultiError::MultiKeyNotFound((*parent).into(), key.into())),
             (Self::Multi { parent, .. }, None) => Err(MultiError::MultiNotSingle((*parent).into())),
             (Self::Single { parent, .. }, Some(key)) => {
