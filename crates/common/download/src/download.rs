@@ -175,8 +175,13 @@ impl Downloader {
         let tmp_target_path = self.temp_filename().await?;
         let target_file_path = self.target_filename.as_path();
 
-        let mut file: File = File::create(&tmp_target_path)
-            .context(format!("Can't create a temporary file {tmp_target_path:?}"))?;
+        let temp_dir = self
+            .target_filename
+            .parent()
+            .unwrap_or(&self.target_filename);
+
+        let mut file = tempfile::NamedTempFile::new_in(temp_dir)
+            .context("Could not write to temporary file".to_string())?;
 
         let mut response = self.request_range_from(url, 0).await?;
 
@@ -187,21 +192,21 @@ impl Downloader {
         );
 
         if file_len > 0 {
-            try_pre_allocate_space(&file, &tmp_target_path, file_len)?;
+            try_pre_allocate_space(file.as_file(), &tmp_target_path, file_len)?;
             debug!("preallocated space for file {tmp_target_path:?}, len={file_len}");
         }
 
-        if let Err(err) = save_chunks_to_file_at(&mut response, &mut file, 0).await {
+        if let Err(err) = save_chunks_to_file_at(&mut response, file.as_file_mut(), 0).await {
             match err {
                 SaveChunksError::Network(err) => {
                     warn!("Error while downloading response: {err}.\nRetrying...");
 
                     match response.headers().get(header::ACCEPT_RANGES) {
                         Some(unit) if unit == "bytes" => {
-                            self.download_remaining(url, &mut file).await?;
+                            self.download_remaining(url, file.as_file_mut()).await?;
                         }
                         _ => {
-                            self.retry(url, &mut file).await?;
+                            self.retry(url, file.as_file_mut()).await?;
                         }
                     }
                 }
@@ -219,13 +224,10 @@ impl Downloader {
             "Moving downloaded file from {:?} to {:?}",
             &tmp_target_path, &target_file_path
         );
-        move_file(
-            tmp_target_path,
-            target_file_path,
-            self.target_permission.clone(),
-        )
-        .await
-        .map_err(FileError::from)?;
+
+        file.persist(target_file_path)
+            .map_err(|p| p.error)
+            .context("Could not persist temporary file".to_string())?;
 
         Ok(())
     }
@@ -738,6 +740,30 @@ mod tests {
         downloader.download(&url).await.unwrap();
 
         assert_eq!("".as_bytes(), std::fs::read(downloader.filename()).unwrap());
+    }
+
+    #[tokio::test]
+    async fn doesnt_leave_tmpfiles_on_errors() {
+        let server = mockito::Server::new();
+
+        let target_dir_path = TempDir::new().unwrap();
+        let target_path = target_dir_path.path().join("test_doesnt_leave_tmpfiles");
+
+        let mut target_url = server.url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let mut downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
+        downloader.set_backoff(ExponentialBackoff {
+            current_interval: Duration::ZERO,
+            max_interval: Duration::ZERO,
+            max_elapsed_time: Some(Duration::ZERO),
+            ..Default::default()
+        });
+        downloader.download(&url).await.unwrap_err();
+
+        assert_eq!(fs::read_dir(target_dir_path.path()).unwrap().count(), 0);
     }
 
     /// This test simulates HTTP response where a connection just drops and a
