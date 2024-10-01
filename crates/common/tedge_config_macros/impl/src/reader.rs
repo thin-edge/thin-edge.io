@@ -14,7 +14,6 @@ use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::Path;
 use syn::Token;
 
 use crate::error::extract_type_from_result;
@@ -455,6 +454,7 @@ fn generate_conversions(
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
                 let read_path = read_field(&parents);
+                #[allow(unstable_name_collisions)]
                 let parent_key = parents
                     .iter()
                     .filter_map(|p| match p {

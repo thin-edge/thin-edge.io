@@ -71,11 +71,19 @@ fn main() {
     );
 
     assert_eq!(
-        single_c8y_reader.c8y.try_get(Some("cloud")).unwrap_err().to_string(),
+        single_c8y_reader
+            .c8y
+            .try_get(Some("cloud"))
+            .unwrap_err()
+            .to_string(),
         "You are trying to access a named field (cloud) of c8y, but the fields are not named"
     );
     assert_eq!(
-        multi_c8y_reader.c8y.try_get(Some("unknown")).unwrap_err().to_string(),
+        multi_c8y_reader
+            .c8y
+            .try_get(Some("unknown"))
+            .unwrap_err()
+            .to_string(),
         "Key c8y.unknown not found in multi-value group"
     );
     assert_eq!(
@@ -113,10 +121,7 @@ fn main() {
         "Unknown key: 'c8y.cloud.not_a_real_key'"
     );
     assert_eq!(
-        "c8y.urll"
-            .parse::<ReadableKey>()
-            .unwrap_err()
-            .to_string(),
+        "c8y.urll".parse::<ReadableKey>().unwrap_err().to_string(),
         "Unknown key: 'c8y.urll'"
     );
 

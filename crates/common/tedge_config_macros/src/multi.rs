@@ -8,8 +8,14 @@ pub enum MultiDto<T> {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum MultiReader<T> {
-    Multi(::std::collections::HashMap<String, T>, &'static str),
-    Single(T, &'static str),
+    Multi {
+        map: ::std::collections::HashMap<String, T>,
+        parent: &'static str,
+    },
+    Single {
+        value: T,
+        parent: &'static str,
+    },
 }
 
 impl<T: Default> Default for MultiDto<T> {
@@ -54,7 +60,9 @@ impl<T> MultiDto<T> {
                 .get(key)
                 .ok_or_else(|| MultiError::MultiKeyNotFound(parent.to_owned(), key.to_owned())),
             (Self::Multi(_), None) => Err(MultiError::MultiNotSingle(parent.to_owned())),
-            (Self::Single(_), Some(key)) => Err(MultiError::SingleNotMulti(parent.into(), key.into())),
+            (Self::Single(_), Some(key)) => {
+                Err(MultiError::SingleNotMulti(parent.into(), key.into()))
+            }
         }
     }
 
@@ -65,7 +73,9 @@ impl<T> MultiDto<T> {
                 .get_mut(key)
                 .ok_or_else(|| MultiError::MultiKeyNotFound(parent.to_owned(), key.to_owned())),
             (Self::Multi(_), None) => Err(MultiError::MultiNotSingle(parent.to_owned())),
-            (Self::Single(_), Some(key)) => Err(MultiError::SingleNotMulti(parent.into(), key.into())),
+            (Self::Single(_), Some(key)) => {
+                Err(MultiError::SingleNotMulti(parent.into(), key.into()))
+            }
         }
     }
 
@@ -80,30 +90,34 @@ impl<T> MultiDto<T> {
 impl<T> MultiReader<T> {
     pub fn try_get(&self, key: Option<&str>) -> Result<&T, MultiError> {
         match (self, key) {
-            (Self::Single(val, _parent), None) => Ok(val),
-            (Self::Multi(map, parent), Some(key)) => {
-                map.get(key).ok_or_else(|| MultiError::MultiKeyNotFound((*parent).into(), key.into()))
+            (Self::Single { value, .. }, None) => Ok(value),
+            (Self::Multi { map, parent }, Some(key)) => map
+                .get(key)
+                .ok_or_else(|| MultiError::MultiKeyNotFound((*parent).into(), key.into())),
+            (Self::Multi { parent, .. }, None) => Err(MultiError::MultiNotSingle((*parent).into())),
+            (Self::Single { parent, .. }, Some(key)) => {
+                Err(MultiError::SingleNotMulti((*parent).into(), key.into()))
             }
-            (Self::Multi(_, parent), None) => Err(MultiError::MultiNotSingle((*parent).into())),
-            (Self::Single(_, parent), Some(key)) => Err(MultiError::SingleNotMulti((*parent).into(), key.into())),
         }
     }
 
     pub fn try_get_mut(&mut self, key: Option<&str>) -> Result<&mut T, MultiError> {
         match (self, key) {
-            (Self::Single(val, _parent), None) => Ok(val),
-            (Self::Multi(map, parent), Some(key)) => {
-                map.get_mut(key).ok_or_else(|| MultiError::MultiKeyNotFound((*parent).into(), key.into()))
+            (Self::Single { value, .. }, None) => Ok(value),
+            (Self::Multi { map, parent }, Some(key)) => map
+                .get_mut(key)
+                .ok_or_else(|| MultiError::MultiKeyNotFound((*parent).into(), key.into())),
+            (Self::Multi { parent, .. }, None) => Err(MultiError::MultiNotSingle((*parent).into())),
+            (Self::Single { parent, .. }, Some(key)) => {
+                Err(MultiError::SingleNotMulti((*parent).into(), key.into()))
             }
-            (Self::Multi(_, parent), None) => Err(MultiError::MultiNotSingle((*parent).into())),
-            (Self::Single(_, parent), Some(key)) => Err(MultiError::SingleNotMulti((*parent).into(), key.into())),
         }
     }
 
     pub fn keys(&self) -> impl Iterator<Item = Option<&str>> {
         match self {
-            Self::Single(_, _) => itertools::Either::Left(std::iter::once(None)),
-            Self::Multi(map, _) => {
+            Self::Single { .. } => itertools::Either::Left(std::iter::once(None)),
+            Self::Multi { map, .. } => {
                 itertools::Either::Right(map.keys().map(String::as_str).map(Some))
             }
         }
@@ -117,13 +131,17 @@ impl<T> MultiDto<T> {
         parent: &'static str,
     ) -> MultiReader<U> {
         match self {
-            Self::Single(_) => MultiReader::Single(f(None), parent),
-            Self::Multi(map) => MultiReader::Multi(
-                map.keys()
+            Self::Single(_) => MultiReader::Single {
+                value: f(None),
+                parent,
+            },
+            Self::Multi(map) => MultiReader::Multi {
+                map: map
+                    .keys()
                     .map(|key| (key.to_owned(), f(Some(key))))
                     .collect(),
                 parent,
-            ),
+            },
         }
     }
 }

@@ -332,7 +332,7 @@ fn key_iterators(
                     syn::Ident::new(&format!("{reader_ty}{upper_ident}"), m.ident.span());
                 let keys_ident = syn::Ident::new(&format!("{}_keys", ident), ident.span());
                 stmts.push(
-                    parse_quote!(let #keys_ident = if let MultiReader::Multi(map, _) = &self.#ident {
+                    parse_quote!(let #keys_ident = if let MultiReader::Multi { map, .. } = &self.#ident {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -968,7 +968,7 @@ mod tests {
                         },
                         _ => unimplemented!("just a test, no error handling"),
                     };
-                    if let Some(captures) = ::regex::Regex::new("c8y(?:\\.([A-z_]+))?\\.url").unwrap().captures(value) {
+                    if let Some(captures) = ::regex::Regex::new("^c8y(?:\\.([A-z_]+))?\\.url$").unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         return Ok(Self::C8yUrl(key0));
                     };
@@ -1006,7 +1006,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let MultiReader::Multi(map, _) = &self.c8y {
+                    let c8y_keys = if let MultiReader::Multi { map, .. } = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1022,7 +1022,7 @@ mod tests {
 
             impl TEdgeConfigReaderC8y {
                 pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let something_keys = if let MultiReader::Multi(map, _) = &self.something {
+                    let something_keys = if let MultiReader::Multi { map, .. } = &self.something {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1143,7 +1143,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let MultiReader::Multi(map, _) = &self.c8y {
+                    let c8y_keys = if let MultiReader::Multi { map, .. } = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
