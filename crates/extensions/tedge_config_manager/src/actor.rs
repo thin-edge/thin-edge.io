@@ -350,13 +350,14 @@ impl ConfigManagerWorker {
         let download_response =
             download_result.context("config-manager failed downloading a file")?;
 
-        let from = Utf8Path::from_path(download_response.file_path.as_path()).unwrap();
-        let deployed_to_path = self
-            .deploy_config_file(from, &request.config_type)
-            .context("failed to deploy configuration file")?;
+        let from = tempfile::TempPath::from_path(download_response.file_path);
 
-        // TODO: source temporary file should be cleaned up automatically
-        let _ = std::fs::remove_file(from);
+        let from_path = Utf8Path::from_path(&from)
+            .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
+
+        let deployed_to_path = self
+            .deploy_config_file(from_path, &request.config_type)
+            .context("failed to deploy configuration file")?;
 
         Ok(deployed_to_path)
     }
