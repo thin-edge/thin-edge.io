@@ -50,13 +50,14 @@ pub fn generate(
                 if !group.dto.skip {
                     let sub_dto_name = prefixed_type_name(&name, group);
                     idents.push(&group.ident);
-                    let field_ty = parse_quote_spanned!(group.ident.span()=> Multi<#sub_dto_name>);
+                    let field_ty =
+                        parse_quote_spanned!(group.ident.span()=> MultiDto<#sub_dto_name>);
                     tys.push(field_ty);
                     sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
                     preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
-                        #[serde(skip_serializing_if = "Multi::is_default")]
+                        #[serde(skip_serializing_if = "MultiDto::is_default")]
                     });
                 }
             }

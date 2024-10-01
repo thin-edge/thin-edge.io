@@ -58,13 +58,6 @@ pub struct SequentialIdGenerator {
     pub count: u32,
 }
 
-impl SequentialIdGenerator {
-    pub fn replay(&self, span: Span) -> syn::Ident {
-        let i = self.count - 1;
-        syn::Ident::new(&format!("key{i}"), span)
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct UnderscoreIdGenerator;
 

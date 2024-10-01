@@ -70,18 +70,18 @@ fn main() {
         "https://edge.example.com"
     );
 
-    assert!(matches!(
-        single_c8y_reader.c8y.try_get(Some("cloud")),
-        Err(MultiError::SingleNotMulti)
-    ));
-    assert!(matches!(
-        multi_c8y_reader.c8y.try_get(Some("unknown")),
-        Err(MultiError::MultiKeyNotFound)
-    ));
-    assert!(matches!(
-        multi_c8y_reader.c8y.try_get(None),
-        Err(MultiError::MultiNotSingle)
-    ));
+    assert_eq!(
+        single_c8y_reader.c8y.try_get(Some("cloud")).unwrap_err().to_string(),
+        "You are trying to access a named field (cloud) of c8y, but the fields are not named"
+    );
+    assert_eq!(
+        multi_c8y_reader.c8y.try_get(Some("unknown")).unwrap_err().to_string(),
+        "Key c8y.unknown not found in multi-value group"
+    );
+    assert_eq!(
+        multi_c8y_reader.c8y.try_get(None).unwrap_err().to_string(),
+        "You need a name for the field c8y"
+    );
 
     assert_eq!(
         "c8y.url".parse::<ReadableKey>().unwrap(),
@@ -112,17 +112,27 @@ fn main() {
             .to_string(),
         "Unknown key: 'c8y.cloud.not_a_real_key'"
     );
-
     assert_eq!(
-        multi_c8y_reader
-            .readable_keys()
-            .map(|r| r.to_string())
-            .collect::<Vec<_>>(),
+        "c8y.urll"
+            .parse::<ReadableKey>()
+            .unwrap_err()
+            .to_string(),
+        "Unknown key: 'c8y.urll'"
+    );
+
+    let mut keys = multi_c8y_reader
+        .readable_keys()
+        .map(|r| r.to_string())
+        .collect::<Vec<_>>();
+    // We need to sort the keys as the map iteration doesn't produce a consistent ordering
+    keys.sort();
+    assert_eq!(
+        keys,
         [
-            "c8y.cloud.url",
             "c8y.cloud.something.test",
-            "c8y.edge.url",
+            "c8y.cloud.url",
             "c8y.edge.something.test",
+            "c8y.edge.url",
         ]
     );
 }

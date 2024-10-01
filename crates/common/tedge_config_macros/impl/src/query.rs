@@ -332,7 +332,7 @@ fn key_iterators(
                     syn::Ident::new(&format!("{reader_ty}{upper_ident}"), m.ident.span());
                 let keys_ident = syn::Ident::new(&format!("{}_keys", ident), ident.span());
                 stmts.push(
-                    parse_quote!(let #keys_ident = if let Multi::Multi(map) = &self.#ident {
+                    parse_quote!(let #keys_ident = if let MultiReader::Multi(map, _) = &self.#ident {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -526,17 +526,31 @@ fn keys_enum(
 fn generate_field_accessor<'a>(
     fields: &'a VecDeque<&FieldOrGroup>,
     method: &'a str,
+    // TODO use an enum or something
+    exclude_parents: bool,
 ) -> impl Iterator<Item = TokenStream> + 'a {
     let mut id_gen = SequentialIdGenerator::default();
     let method = syn::Ident::new(method, Span::call_site());
+    let mut fields_so_far = Vec::new();
     fields.iter().map(move |field| {
         let ident = field.ident();
+        fields_so_far.push(ident);
         match field {
             FieldOrGroup::Field(_) => quote!(#ident),
             FieldOrGroup::Group(_) => quote!(#ident),
-            FieldOrGroup::Multi(_) => {
+            FieldOrGroup::Multi(_) if exclude_parents => {
                 let field = id_gen.next_id(ident.span());
                 quote_spanned!(ident.span()=> #ident.#method(#field.as_deref())?)
+            }
+            FieldOrGroup::Multi(_) => {
+                let field = id_gen.next_id(ident.span());
+                #[allow(unstable_name_collisions)]
+                let parents = fields_so_far
+                    .iter()
+                    .map(|id| id.to_string())
+                    .intersperse(".".to_owned())
+                    .collect::<String>();
+                quote_spanned!(ident.span()=> #ident.#method(#field.as_deref(), #parents)?)
             }
         }
     })
@@ -553,7 +567,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .expect("Path must have a back as it is nonempty")
                 .field()
                 .expect("Back of path is guaranteed to be a field");
-            let segments = generate_field_accessor(path, "try_get");
+            let segments = generate_field_accessor(path, "try_get", true);
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             let match_variant = configuration_key.match_read_write;
             if field.read_only().is_some() {
@@ -602,8 +616,8 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         .iter()
         .zip(enum_variants)
         .map(|(path, configuration_key)| {
-            let read_segments = generate_field_accessor(path, "try_get");
-            let write_segments = generate_field_accessor(path, "try_get_mut").collect::<Vec<_>>();
+            let read_segments = generate_field_accessor(path, "try_get", true);
+            let write_segments = generate_field_accessor(path, "try_get_mut", false).collect::<Vec<_>>();
             let field = path
                 .iter()
                 .filter_map(|thing| thing.field())
@@ -776,6 +790,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             })
             .collect::<Vec<_>>()
             .join("\\.");
+        let re = format!("^{re}$");
         let regex_parser = parse_quote_spanned!(ident.span()=> if let Some(captures) = ::regex::Regex::new(#re).unwrap().captures(value) {});
         let formatters = field_names
             .iter()
@@ -991,7 +1006,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let Multi::Multi(map) = &self.c8y {
+                    let c8y_keys = if let MultiReader::Multi(map, _) = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1007,7 +1022,7 @@ mod tests {
 
             impl TEdgeConfigReaderC8y {
                 pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let something_keys = if let Multi::Multi(map) = &self.something {
+                    let something_keys = if let MultiReader::Multi(map, _) = &self.something {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1128,7 +1143,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let Multi::Multi(map) = &self.c8y {
+                    let c8y_keys = if let MultiReader::Multi(map, _) = &self.c8y {
                         map.keys().map(|k| Some(k.to_owned())).collect()
                     } else {
                         vec![None]
@@ -1166,6 +1181,7 @@ mod tests {
             prettyplease::unparse(&expected)
         );
     }
+
     #[test]
     fn impl_for_simple_group() {
         let input: crate::input::Configuration = parse_quote!(

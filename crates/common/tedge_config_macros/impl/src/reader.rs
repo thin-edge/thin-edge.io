@@ -14,6 +14,7 @@ use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
+use syn::Path;
 use syn::Token;
 
 use crate::error::extract_type_from_result;
@@ -75,7 +76,7 @@ fn generate_structs(
             FieldOrGroup::Multi(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
-                tys.push(parse_quote_spanned!(group.ident.span()=> Multi<#sub_reader_name>));
+                tys.push(parse_quote_spanned!(group.ident.span()=> MultiReader<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
                 parents.push(PathItem::Dynamic(group.ident.span()));
@@ -251,11 +252,15 @@ impl PathItem {
 
 fn read_field(parents: &[PathItem]) -> impl Iterator<Item = TokenStream> + '_ {
     let mut id_gen = SequentialIdGenerator::default();
+    let mut parent_key = String::new();
     parents.iter().map(move |parent| match parent {
-        PathItem::Static(name) => quote!(#name),
+        PathItem::Static(name) => {
+            parent_key += &name.to_string();
+            quote!(#name)
+        }
         PathItem::Dynamic(span) => {
             let id = id_gen.next_id(*span);
-            quote_spanned!(*span=> try_get(#id).unwrap())
+            quote_spanned!(*span=> try_get(#id, #parent_key).unwrap())
         }
     })
 }
@@ -450,8 +455,16 @@ fn generate_conversions(
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
                 let read_path = read_field(&parents);
+                let parent_key = parents
+                    .iter()
+                    .filter_map(|p| match p {
+                        PathItem::Static(s) => Some(s.to_string()),
+                        _ => None,
+                    })
+                    .intersperse(".".to_owned())
+                    .collect::<String>();
                 let new_arg2 = extra_call_args.last().unwrap().clone();
-                field_conversions.push(quote!(#name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*))));
+                field_conversions.push(quote!(#name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*), #parent_key)));
                 parents.push(new_arg);
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
