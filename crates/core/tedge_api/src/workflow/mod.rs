@@ -308,7 +308,10 @@ impl OperationWorkflow {
     ) -> Option<MqttMessage> {
         match self.operation {
             // Custom operations (and restart) have a generic empty capability message
-            OperationType::Custom(_) | OperationType::Restart | OperationType::DeviceProfile => {
+            OperationType::Custom(_)
+            | OperationType::Restart
+            | OperationType::DeviceProfile
+            | OperationType::FirmwareUpdate => {
                 let meta_topic = schema.capability_topic_for(target, self.operation.clone());
                 let payload = "{}".to_string();
                 Some(
@@ -319,7 +322,12 @@ impl OperationWorkflow {
             }
             // Builtin operations dynamically publish their capability message,
             // notably to include a list of supported types.
-            _ => None,
+            OperationType::SoftwareList
+            | OperationType::SoftwareUpdate
+            | OperationType::LogUpload
+            | OperationType::ConfigSnapshot
+            | OperationType::ConfigUpdate
+            | OperationType::Health => None,
         }
     }
 

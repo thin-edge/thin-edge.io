@@ -6,29 +6,23 @@ Library             ThinEdgeIO
 Test Setup          Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:c8y    theme:firmware    theme:plugins
+Test Tags           theme:c8y    theme:firmware
 
 
 *** Test Cases ***
-Successful firmware operation
-    ${operation}=    Cumulocity.Install Firmware    ubuntu    1.0.2    https://dummy.url/firmware.zip
-    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Device Should Have Firmware    ubuntu    1.0.2    https://dummy.url/firmware.zip
+Send firmware update operation from Cumulocity IoT
+    Should Have MQTT Messages    te/device/main///cmd/firmware_update    message_pattern=^\{\}$
+    Cumulocity.Should Contain Supported Operations    c8y_Firmware
 
-Install with empty firmware name
-    ${operation}=    Cumulocity.Install Firmware    ${EMPTY}    1.0.2    https://dummy.url/firmware.zip
-    Operation Should Be FAILED
-    ...    ${operation}
-    ...    failure_reason=.*Invalid firmware name. Firmware name cannot be empty
-    ...    timeout=120
-
+    ${operation}=    Cumulocity.Install Firmware    tedge-core    1.0.0    https://abc.com/some/firmware/url
+    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Device Should Have Firmware    tedge-core    1.0.0    https://abc.com/some/firmware/url
 
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/firmware_handler.*    /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Firmware*    /etc/tedge/operations/c8y/
-    ThinEdgeIO.Restart Service    tedge-agent
-    ThinEdgeIO.Disconnect Then Connect Mapper    c8y
+
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/firmware_update.toml    /etc/tedge/operations/
+    Restart Service    tedge-agent

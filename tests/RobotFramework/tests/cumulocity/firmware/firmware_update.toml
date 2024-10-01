@@ -1,0 +1,36 @@
+operation = "firmware_update"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+script = "/usr/bin/sleep 1"
+on_success = "executing"
+
+[executing]
+script = "/usr/bin/sleep 1"
+on_success = "restart"
+
+[restart]
+operation = "restart"
+on_exec = "waiting_for_restart"
+
+[waiting_for_restart]
+action = "await-operation-completion"
+on_success = "verify"
+on_error = { status = "failed", reason = "fail to restart"}
+
+[verify]
+script = "/usr/bin/sleep 1"
+on_success = "commit"
+
+[commit]
+script = "/usr/bin/sleep 1"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
