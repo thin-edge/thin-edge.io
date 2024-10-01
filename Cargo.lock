@@ -4023,7 +4023,6 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "uzers",
- "whoami",
 ]
 
 [[package]]

@@ -116,6 +116,7 @@ Update Configuration Should Fail
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
+    ...    CONFIG-ROOT
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    tedge-configuration-plugin
     ...    tedge-configuration-plugin
@@ -128,6 +129,7 @@ Update Configuration Should Fail
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
+    ...    CONFIG-ROOT
 
 Update Configuration Should Succeed
     [Arguments]    ${external_id}
@@ -138,6 +140,7 @@ Update Configuration Should Succeed
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
+    ...    CONFIG-ROOT
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    tedge-configuration-plugin
     ...    tedge-configuration-plugin
@@ -149,6 +152,7 @@ Update Configuration Should Succeed
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    Config@2.0.0
 
 Enable Certificate Authentication for File Transfer Service

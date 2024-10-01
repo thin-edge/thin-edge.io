@@ -29,6 +29,8 @@ Set Configuration when file does not exist
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    640    tedge:tedge    delete_file_before=${true}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    640    tedge:tedge    delete_file_before=${true}
+    Root-owned file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG-ROOT    /etc/config-root.json    ${CURDIR}/config-root.json    600    root:root    delete_file_before=${true}
+    Root-owned file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG-ROOT    /etc/config-root.json    ${CURDIR}/config-root.json    600    root:root    delete_file_before=${true}
 
 Set Configuration when file exists and agent run normally
     [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
@@ -39,6 +41,8 @@ Set Configuration when file exists and agent run normally
     Binary file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+    Root-owned file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG-ROOT    /etc/config-root.json    ${CURDIR}/config-root.json    600    root:root    delete_file_before=${false}
+    Root-owned file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG-ROOT    /etc/config-root.json    ${CURDIR}/config-root.json    600    root:root    delete_file_before=${true}
 
 Set Configuration when file exists and tedge run by root
     [Documentation]    If the configuration file already exists, it should be overwritten, but owner and permissions
@@ -52,6 +56,10 @@ Set Configuration when file exists and tedge run by root
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     ...    agent_as_root=${true}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
+    ...    agent_as_root=${true}
+    Root-owned file (Main Device)    ${PARENT_SN}    ${PARENT_SN}    CONFIG-ROOT    /etc/config-root.json    ${CURDIR}/config-root.json    600    root:root    delete_file_before=${true}
+    ...    agent_as_root=${true}
+    Root-owned file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG-ROOT    /etc/config-root.json    ${CURDIR}/config-root.json    600    root:root    delete_file_before=${true}
     ...    agent_as_root=${true}
 
 Set Configuration when tedge-write is in another location
@@ -433,6 +441,7 @@ Update configuration plugin config via cloud
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    CONFIG1_BINARY
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    tedge-configuration-plugin
@@ -445,6 +454,7 @@ Update configuration plugin config via cloud
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    Config@2.0.0
 
 Modify configuration plugin config via local filesystem modify inplace
@@ -456,6 +466,7 @@ Modify configuration plugin config via local filesystem modify inplace
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    CONFIG1_BINARY
     ThinEdgeIO.Set Device Context    ${device}
     ThinEdgeIO.Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
@@ -465,6 +476,7 @@ Modify configuration plugin config via local filesystem modify inplace
     ...    system.toml
     ...    CONFIG3
     ...    CONFIG3_BINARY
+    ...    CONFIG-ROOT
     ${operation}=    Cumulocity.Get Configuration    CONFIG3
     Operation Should Be SUCCESSFUL    ${operation}
 
@@ -479,6 +491,7 @@ Modify configuration plugin config via local filesystem overwrite
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
+    ...    CONFIG-ROOT
     ${NEW_CONFIG}=    ThinEdgeIO.Execute Command
     ...    sed 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
     ThinEdgeIO.Execute Command    echo "${NEW_CONFIG}" > /etc/tedge/plugins/tedge-configuration-plugin.toml
@@ -488,6 +501,7 @@ Modify configuration plugin config via local filesystem overwrite
     ...    system.toml
     ...    CONFIG3
     ...    CONFIG3_BINARY
+    ...    CONFIG-ROOT
     ${operation}=    Cumulocity.Get Configuration    CONFIG3
     Operation Should Be SUCCESSFUL    ${operation}
 
@@ -502,6 +516,7 @@ Update configuration plugin config via local filesystem copy
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
+    ...    CONFIG-ROOT
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/tedge/plugins/
     Execute Command
     ...    cp /etc/tedge/plugins/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
@@ -511,6 +526,7 @@ Update configuration plugin config via local filesystem copy
     ...    system.toml
     ...    CONFIG1
     ...    Config@2.0.0
+    ...    CONFIG-ROOT
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
 
@@ -524,6 +540,7 @@ Update configuration plugin config via local filesystem move (different director
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/
     Execute Command
@@ -533,6 +550,8 @@ Update configuration plugin config via local filesystem move (different director
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
+
     ...    Config@2.0.0
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
@@ -547,6 +566,7 @@ Update configuration plugin config via local filesystem move (same directory)
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/tedge/plugins/
     Execute Command
@@ -556,6 +576,7 @@ Update configuration plugin config via local filesystem move (same directory)
     ...    /etc/tedge/tedge.toml
     ...    system.toml
     ...    CONFIG1
+    ...    CONFIG-ROOT
     ...    Config@2.0.0
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
