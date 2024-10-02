@@ -44,7 +44,9 @@ impl<T: Default + PartialEq> MultiDto<T> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MultiError {
-    #[error("Unexpected profile {1} for the non multi-profile property {0}")]
+    #[error(
+        "You are trying to access a profile `{1}` of {0}, but profiles are not enabled for {0}"
+    )]
     SingleNotMulti(String, String),
     #[error("A profile is required for the multi-profile property {0}")]
     MultiNotSingle(String),
@@ -191,6 +193,26 @@ mod tests {
     }
 
     #[test]
+    fn multi_reader_can_retrieve_field_from_single() {
+        let val = MultiReader::Single {
+            value: "value",
+            parent: "c8y",
+        };
+
+        assert_eq!(*val.try_get(None).unwrap(), "value");
+    }
+
+    #[test]
+    fn multi_reader_can_retrieve_field_from_multi() {
+        let val = MultiReader::Multi {
+            map: [("key".to_owned(), "value")].into(),
+            parent: "c8y",
+        };
+
+        assert_eq!(*val.try_get(Some("key")).unwrap(), "value");
+    }
+
+    #[test]
     fn multi_can_retrieve_field_from_multi() {
         let val = MultiDto::Multi([("key".to_owned(), "value")].into());
 
@@ -198,12 +220,82 @@ mod tests {
     }
 
     #[test]
-    fn multi_gives_appropriate_error_retrieving_keyed_field_from_single() {
+    fn multi_dto_gives_appropriate_error_retrieving_keyed_field_from_single() {
         let val = MultiDto::Single("value");
 
         assert_eq!(
             val.try_get(Some("unknown"), "c8y").unwrap_err().to_string(),
-            "You are trying to access a named field, but the fields are not named"
+            "You are trying to access a profile `unknown` of c8y, but profiles are not enabled for c8y"
         );
+    }
+
+    #[test]
+    fn multi_reader_gives_appropriate_error_retrieving_keyed_field_from_single() {
+        let val = MultiReader::Single {
+            value: "value",
+            parent: "c8y",
+        };
+
+        assert_eq!(
+            val.try_get(Some("unknown")).unwrap_err().to_string(),
+            "You are trying to access a profile `unknown` of c8y, but profiles are not enabled for c8y"
+        );
+    }
+
+    #[test]
+    fn multi_dto_gives_appropriate_error_retrieving_no_profile_from_multi() {
+        let val = MultiDto::Multi([("key".to_owned(), "value")].into());
+
+        assert_eq!(
+            val.try_get(None, "c8y").unwrap_err().to_string(),
+            "A profile is required for the multi-profile property c8y"
+        );
+    }
+
+    #[test]
+    fn multi_reader_gives_appropriate_error_retrieving_no_profile_from_multi() {
+        let val = MultiReader::Multi {
+            map: [("key".to_owned(), "value")].into(),
+            parent: "c8y",
+        };
+
+        assert_eq!(
+            val.try_get(None).unwrap_err().to_string(),
+            "A profile is required for the multi-profile property c8y"
+        );
+    }
+
+    #[test]
+    fn multi_dto_gives_appropriate_error_retrieving_unknown_profile_from_multi() {
+        let val = MultiDto::Multi([("key".to_owned(), "value")].into());
+
+        assert_eq!(
+            val.try_get(Some("unknown"), "c8y").unwrap_err().to_string(),
+            "Unknown profile unknown for the multi-profile property c8y"
+        );
+    }
+
+    #[test]
+    fn multi_reader_gives_appropriate_error_retrieving_unknown_profile_from_multi() {
+        let val = MultiReader::Multi {
+            map: [("key".to_owned(), "value")].into(),
+            parent: "c8y",
+        };
+
+        assert_eq!(
+            val.try_get(Some("unknown")).unwrap_err().to_string(),
+            "Unknown profile unknown for the multi-profile property c8y"
+        );
+    }
+
+    #[test]
+    fn multi_dto_inserts_into_map_retrieving_unknown_mutable_profile() {
+        let mut val = MultiDto::Multi([("key".to_owned(), "value")].into());
+
+        assert_eq!(*val.try_get_mut(Some("new_key"), "c8y").unwrap(), "");
+        let MultiDto::Multi(map) = val else {
+            unreachable!()
+        };
+        assert_eq!(map.len(), 2);
     }
 }
