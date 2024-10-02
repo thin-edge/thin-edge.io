@@ -44,11 +44,11 @@ impl<T: Default + PartialEq> MultiDto<T> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MultiError {
-    #[error("You are trying to access a named field ({1}) of {0}, but the fields are not named")]
+    #[error("Unexpected profile {1} for the non multi-profile property {0}")]
     SingleNotMulti(String, String),
-    #[error("You need a name for the field {0}")]
+    #[error("A profile is required for the multi-profile property {0}")]
     MultiNotSingle(String),
-    #[error("Key {0}.{1} not found in multi-value group")]
+    #[error("Unknown profile {1} for the multi-profile property {0}")]
     MultiKeyNotFound(String, String),
 }
 
