@@ -31,6 +31,8 @@ pub struct OnMessageExec {
     on_fragment: Option<String>,
     topic: Option<String>,
     user: Option<String>,
+    #[serde(default)]
+    skip_status_update: bool,
     #[serde(default, deserialize_with = "to_result_format")]
     result_format: ResultFormat,
     #[serde(rename = "timeout")]
@@ -102,6 +104,10 @@ impl Operation {
 
     pub fn on_fragment(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.on_fragment.clone())
+    }
+
+    pub fn skip_status_update(&self) -> bool {
+        self.exec().unwrap().skip_status_update
     }
 
     pub fn result_format(&self) -> ResultFormat {
