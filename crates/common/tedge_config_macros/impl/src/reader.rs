@@ -340,50 +340,9 @@ fn reader_value_for_field<'a>(
                 }
                 FieldDefault::FromKey(default_key) | FieldDefault::FromOptionalKey(default_key) => {
                     observed_keys.push(default_key);
-                    // TODO error if the field touches an unrelated multi?
-                    // Trace through the key to make sure we pick up dynamic paths as we expect
-                    let mut parents = parents.iter().peekable();
-                    let mut fields = root_fields;
-                    let mut new_parents = vec![];
-                    for (i, field) in default_key.iter().take(default_key.len() - 1).enumerate() {
-                        new_parents.push(PathItem::Static(field.to_owned()));
-                        if let Some(PathItem::Static(s)) = parents.next() {
-                            if field == s {
-                                if let Some(PathItem::Dynamic(span)) = parents.peek() {
-                                    parents.next();
-                                    new_parents.push(PathItem::Dynamic(*span));
-                                }
-                            } else {
-                                while parents.next().is_some() {}
-                            }
-                        }
-                        let root_field = fields.iter().find(|fog| fog.ident() == field).unwrap();
-                        match root_field {
-                            FieldOrGroup::Multi(m) => {
-                                if matches!(new_parents.last().unwrap(), PathItem::Dynamic(_)) {
-                                    fields = &m.contents;
-                                } else {
-                                    let multi_key = default_key
-                                        .iter()
-                                        .take(i + 1)
-                                        .map(|i| i.to_string())
-                                        .collect::<Vec<_>>()
-                                        .join(".");
-                                    return Err(syn::Error::new(
-                                        default_key.span(),
-                                        format!("{multi_key} is a multi-value field"),
-                                    ));
-                                }
-                            }
-                            FieldOrGroup::Group(g) => {
-                                fields = &g.contents;
-                            }
-                            FieldOrGroup::Field(_) => {}
-                        }
-                    }
                     let default = reader_value_for_field(
                         find_field(root_fields, default_key)?,
-                        &new_parents,
+                        &parents_for(default_key, parents, root_fields)?,
                         root_fields,
                         observed_keys,
                     )?;
@@ -438,6 +397,81 @@ fn reader_value_for_field<'a>(
             }
         }
     })
+}
+
+/// Generates the list of parent keys for the given tedge config key
+///
+/// This cross-correlates the provided key with the current key's parents,
+/// so keys with profiles will work.
+///
+/// For example, in the case
+///
+/// ```no_compile
+/// define_tedge_config! {
+///     #[tedge_config(multi)]
+///     c8y: {
+///         url: String,
+///
+///         #[tedge_config(default(from_optional_key = "c8y.url"))]
+///         http: String,
+///     }
+/// }
+/// ```
+///
+/// The parents used in the default value for `c8y.*.http` will be equivalent `c8y.*.url`.
+/// This means the c8y.url value used for c8y.http will use the same profile as the relevant
+/// c8y.http.
+fn parents_for(
+    key: &Punctuated<syn::Ident, Token![.]>,
+    parents: &[PathItem],
+    root_fields: &[FieldOrGroup],
+) -> syn::Result<Vec<PathItem>> {
+    // Trace through the key to make sure we pick up dynamic paths as we expect
+    // This allows e.g. c8y.http to have a default value of c8y.url, and we will pass in key0, key1 as expected
+    // If we hit multi fields that aren't also parents of the current key, this is an error,
+    // as there isn't a sensible resolution to this
+    let mut parents = parents.iter().peekable();
+    let mut fields = root_fields;
+    let mut new_parents = vec![];
+    for (i, field) in key.iter().take(key.len() - 1).enumerate() {
+        new_parents.push(PathItem::Static(field.to_owned()));
+        if let Some(PathItem::Static(s)) = parents.next() {
+            if field == s {
+                if let Some(PathItem::Dynamic(span)) = parents.peek() {
+                    parents.next();
+                    new_parents.push(PathItem::Dynamic(*span));
+                }
+            } else {
+                // This key has diverged from the currrent key's parents, so empty the list
+                // This will prevent unwanted matches that aren't genuine
+                while parents.next().is_some() {}
+            }
+        }
+        let root_field = fields.iter().find(|fog| fog.ident() == field).unwrap();
+        match root_field {
+            FieldOrGroup::Multi(m) => {
+                if matches!(new_parents.last().unwrap(), PathItem::Dynamic(_)) {
+                    fields = &m.contents;
+                } else {
+                    let multi_key = key
+                        .iter()
+                        .take(i + 1)
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    return Err(syn::Error::new(
+                        key.span(),
+                        format!("{multi_key} is a multi-value field"),
+                    ));
+                }
+            }
+            FieldOrGroup::Group(g) => {
+                fields = &g.contents;
+            }
+            FieldOrGroup::Field(_) => {}
+        }
+    }
+    Ok(new_parents)
 }
 
 /// Generate the conversion methods from DTOs to Readers
@@ -646,7 +680,7 @@ mod tests {
     }
 
     #[test]
-    fn generate_conversions_() {
+    fn generate_conversions_passes_profile_keys_to_conversions_for_groups() {
         let input: crate::input::Configuration = parse_quote!(
             #[tedge_config(multi)]
             c8y: {
