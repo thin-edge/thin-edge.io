@@ -289,16 +289,22 @@ fn reader_value_for_field<'a>(
                 parse_quote!(#key_str.into())
             } else {
                 let mut id_gen = SequentialIdGenerator::default();
-                let elems = parents.iter().map::<syn::Expr, _>(|p| match p {
-                    PathItem::Static(p) => {
-                        let p_str = p.to_string();
-                        parse_quote!(Some(#p_str))
-                    }
-                    PathItem::Dynamic(span) => {
-                        let ident = id_gen.next_id(*span);
-                        parse_quote!(#ident)
-                    }
-                });
+                let elems = parents
+                    .iter()
+                    .map::<syn::Expr, _>(|p| match p {
+                        PathItem::Static(p) => {
+                            let p_str = p.to_string();
+                            parse_quote!(Some(#p_str))
+                        }
+                        PathItem::Dynamic(span) => {
+                            let ident = id_gen.next_id(*span);
+                            parse_quote!(#ident)
+                        }
+                    })
+                    .chain({
+                        let name = name.to_string();
+                        iter::once(parse_quote!(Some(#name)))
+                    });
                 parse_quote!([#(#elems),*].into_iter().filter_map(|id| id).collect::<Vec<_>>().join(".").into())
             };
             let read_path = read_field(parents);
@@ -334,14 +340,50 @@ fn reader_value_for_field<'a>(
                 }
                 FieldDefault::FromKey(default_key) | FieldDefault::FromOptionalKey(default_key) => {
                     observed_keys.push(default_key);
+                    // TODO error if the field touches an unrelated multi?
+                    // Trace through the key to make sure we pick up dynamic paths as we expect
+                    let mut parents = parents.iter().peekable();
+                    let mut fields = root_fields;
+                    let mut new_parents = vec![];
+                    for (i, field) in default_key.iter().take(default_key.len() - 1).enumerate() {
+                        new_parents.push(PathItem::Static(field.to_owned()));
+                        if let Some(PathItem::Static(s)) = parents.next() {
+                            if field == s {
+                                if let Some(PathItem::Dynamic(span)) = parents.peek() {
+                                    parents.next();
+                                    new_parents.push(PathItem::Dynamic(*span));
+                                }
+                            } else {
+                                while parents.next().is_some() {}
+                            }
+                        }
+                        let root_field = fields.iter().find(|fog| fog.ident() == field).unwrap();
+                        match root_field {
+                            FieldOrGroup::Multi(m) => {
+                                if matches!(new_parents.last().unwrap(), PathItem::Dynamic(_)) {
+                                    fields = &m.contents;
+                                } else {
+                                    let multi_key = default_key
+                                        .iter()
+                                        .take(i + 1)
+                                        .map(|i| i.to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(".");
+                                    return Err(syn::Error::new(
+                                        default_key.span(),
+                                        format!("{multi_key} is a multi-value field"),
+                                    ));
+                                }
+                            }
+                            FieldOrGroup::Group(g) => {
+                                fields = &g.contents;
+                            }
+                            FieldOrGroup::Field(_) => {}
+                        }
+                    }
                     let default = reader_value_for_field(
                         find_field(root_fields, default_key)?,
-                        &default_key
-                            .iter()
-                            .take(default_key.len() - 1)
-                            .map(<_>::to_owned)
-                            .map(PathItem::Static)
-                            .collect::<Vec<_>>(),
+                        &new_parents,
                         root_fields,
                         observed_keys,
                     )?;
@@ -432,7 +474,17 @@ fn generate_conversions(
 
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone()));
-                field_conversions.push(quote!(#name: #sub_reader_name::from_dto(dto, location)));
+                let mut id_gen = SequentialIdGenerator::default();
+                let extra_call_args: Vec<_> = parents
+                    .iter()
+                    .filter_map(|path_item| match path_item {
+                        PathItem::Static(_) => None,
+                        PathItem::Dynamic(span) => Some(id_gen.next_id(*span)),
+                    })
+                    .collect();
+                field_conversions.push(
+                    quote!(#name: #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*)),
+                );
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);
@@ -490,4 +542,156 @@ fn generate_conversions(
 
         #(#rest)*
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn from_optional_key_reuses_multi_fields() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+
+                #[tedge_config(default(from_optional_key = "c8y.url"))]
+                http: String,
+            }
+        );
+        let FieldOrGroup::Multi(m) = &input.groups[0] else {
+            unreachable!()
+        };
+        let http = m.contents[1].field().unwrap();
+        let actual = reader_value_for_field(
+            http,
+            &[
+                PathItem::Static(parse_quote!(c8y)),
+                PathItem::Dynamic(Span::call_site()),
+            ],
+            &input.groups,
+            vec![],
+        )
+        .unwrap();
+        let actual: syn::File = parse_quote!(fn dummy() { #actual });
+        let c8y_http_key = quote! {
+            [Some("c8y"), key0, Some("http")]
+                .into_iter()
+                .filter_map(|id| id)
+                .collect::<Vec<_>>()
+                .join(".")
+                .into()
+        };
+        let c8y_url_key = quote! {
+            [Some("c8y"), key0, Some("url")]
+                .into_iter()
+                .filter_map(|id| id)
+                .collect::<Vec<_>>()
+                .join(".")
+                .into()
+        };
+        let expected: syn::Expr = parse_quote!(match &dto.c8y.try_get(key0, "c8y").unwrap().http {
+            Some(value) => {
+                OptionalConfig::Present {
+                    value: value.clone(),
+                    key: #c8y_http_key,
+                }
+            }
+            None => {
+                match &dto.c8y.try_get(key0, "c8y").unwrap().url {
+                    None => OptionalConfig::Empty(#c8y_url_key),
+                    Some(value) => OptionalConfig::Present {
+                        value: value.clone(),
+                        key: #c8y_url_key,
+                    },
+                }
+                .map(|v| v.into())
+            }
+        });
+        let expected = parse_quote!(fn dummy() { #expected });
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&actual),
+            prettyplease::unparse(&expected),
+        )
+    }
+
+    #[test]
+    fn from_optional_key_returns_error_with_invalid_multi() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            },
+            az: {
+                // We can't derive this from c8y.url, as we don't have a profile to select from c8y
+                #[tedge_config(default(from_optional_key = "c8y.url"))]
+                url: String,
+            }
+        );
+
+        let FieldOrGroup::Group(g) = &input.groups[1] else {
+            unreachable!()
+        };
+        let az_url = g.contents[0].field().unwrap();
+        let error = reader_value_for_field(
+            az_url,
+            &[PathItem::Static(parse_quote!(az))],
+            &input.groups,
+            vec![],
+        )
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "c8y is a multi-value field");
+    }
+
+    #[test]
+    fn generate_conversions_() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                smartrest: {
+                    templates: TemplatesSet,
+                }
+            },
+        );
+        let actual = generate_conversions(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+        )
+        .unwrap();
+        let file: syn::File = syn::parse2(actual).unwrap();
+        let r#impl = file
+            .items
+            .into_iter()
+            .find_map(|item| match item {
+                syn::Item::Impl(i) if i.self_ty == parse_quote!(TEdgeConfigReaderC8y) => Some(i),
+                _ => None,
+            })
+            .unwrap();
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReaderC8y {
+                #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
+                #[automatically_derived]
+                /// Converts the provided [TEdgeConfigDto] into a reader
+                pub fn from_dto(
+                    dto: &TEdgeConfigDto,
+                    location: &TEdgeConfigLocation,
+                    key0: Option<&str>,
+                ) -> Self {
+                    Self {
+                        smartrest: TEdgeConfigReaderC8ySmartrest::from_dto(dto, location, key0)
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#r#impl)),
+            prettyplease::unparse(&expected)
+        )
+    }
 }

@@ -392,7 +392,7 @@ fn key_iterators(
                 ));
                 let ident = &g.ident;
                 exprs.push_back(parse_quote! {
-                    self.#ident.#function_name(#(#args),*)
+                    self.#ident.#function_name(#(#args.clone()),*)
                 });
             }
             Some(FieldOrGroup::Field(f)) => {
@@ -1159,7 +1159,7 @@ mod tests {
 
             impl TEdgeConfigReaderC8y {
                 pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
-                    self.nested.readable_keys(c8y)
+                    self.nested.readable_keys(c8y.clone())
                 }
             }
 

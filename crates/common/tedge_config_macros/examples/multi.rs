@@ -33,8 +33,19 @@ impl<T> AppendRemoveItem for T {
 define_tedge_config! {
     #[tedge_config(multi)]
     c8y: {
+        #[tedge_config(example = "your-tenant.cumulocity.com")]
         #[tedge_config(reader(private))]
         url: String,
+
+        #[tedge_config(default(from_optional_key = "c8y.url"))]
+        http: String,
+
+        smartrest: {
+            /// Switch using 501-503 (without operation ID) or 504-506 (with operation ID) SmartREST messages for operation status update
+            #[tedge_config(example = "true", default(value = true))]
+            use_operation_id: bool,
+        },
+
         #[tedge_config(multi)]
         something: {
             test: String,
@@ -76,7 +87,7 @@ fn main() {
             .try_get(Some("cloud"))
             .unwrap_err()
             .to_string(),
-        "You are trying to access a named field (cloud) of c8y, but the fields are not named"
+        "You are trying to access a profile `cloud` of c8y, but profiles are not enabled for c8y"
     );
     assert_eq!(
         multi_c8y_reader
@@ -84,11 +95,11 @@ fn main() {
             .try_get(Some("unknown"))
             .unwrap_err()
             .to_string(),
-        "Key c8y.unknown not found in multi-value group"
+        "Unknown profile `unknown` for the multi-profile property c8y"
     );
     assert_eq!(
         multi_c8y_reader.c8y.try_get(None).unwrap_err().to_string(),
-        "You need a name for the field c8y"
+        "A profile is required for the multi-profile property c8y"
     );
 
     assert_eq!(
@@ -134,10 +145,14 @@ fn main() {
     assert_eq!(
         keys,
         [
+            "c8y.cloud.http",
+            "c8y.cloud.smartrest.use_operation_id",
             "c8y.cloud.something.test",
             "c8y.cloud.url",
+            "c8y.edge.http",
+            "c8y.edge.smartrest.use_operation_id",
             "c8y.edge.something.test",
-            "c8y.edge.url",
+            "c8y.edge.url"
         ]
     );
 }

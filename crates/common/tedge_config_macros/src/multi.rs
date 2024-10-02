@@ -1,3 +1,5 @@
+use itertools::Either;
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum MultiDto<T> {
@@ -50,7 +52,7 @@ pub enum MultiError {
     SingleNotMulti(String, String),
     #[error("A profile is required for the multi-profile property {0}")]
     MultiNotSingle(String),
-    #[error("Unknown profile {1} for the multi-profile property {0}")]
+    #[error("Unknown profile `{1}` for the multi-profile property {0}")]
     MultiKeyNotFound(String, String),
 }
 
@@ -107,6 +109,22 @@ impl<T> MultiReader<T> {
             Self::Multi { map, .. } => {
                 itertools::Either::Right(map.keys().map(String::as_str).map(Some))
             }
+        }
+    }
+
+    pub fn entries(&self) -> impl Iterator<Item = (Option<&str>, &T)> {
+        match self {
+            Self::Single { value, .. } => Either::Left(std::iter::once((None, value))),
+            Self::Multi { map, .. } => {
+                Either::Right(map.iter().map(|(k, v)| (Some(k.as_str()), v)))
+            }
+        }
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &T> {
+        match self {
+            Self::Single { value, .. } => Either::Left(std::iter::once(value)),
+            Self::Multi { map, .. } => Either::Right(map.iter().map(|(_, v)| v)),
         }
     }
 }
@@ -271,7 +289,7 @@ mod tests {
 
         assert_eq!(
             val.try_get(Some("unknown"), "c8y").unwrap_err().to_string(),
-            "Unknown profile unknown for the multi-profile property c8y"
+            "Unknown profile `unknown` for the multi-profile property c8y"
         );
     }
 
@@ -284,7 +302,7 @@ mod tests {
 
         assert_eq!(
             val.try_get(Some("unknown")).unwrap_err().to_string(),
-            "Unknown profile unknown for the multi-profile property c8y"
+            "Unknown profile `unknown` for the multi-profile property c8y"
         );
     }
 
