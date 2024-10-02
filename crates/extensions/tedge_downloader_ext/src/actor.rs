@@ -40,13 +40,6 @@ impl DownloadRequest {
             ..self
         }
     }
-
-    pub fn with_permission(self, permission: PermissionEntry) -> Self {
-        Self {
-            permission: Some(permission),
-            ..self
-        }
-    }
 }
 
 pub type DownloadResult = Result<DownloadResponse, DownloadError>;

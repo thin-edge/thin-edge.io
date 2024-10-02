@@ -3,4 +3,5 @@ files = [
     { path = '/etc/tedge/system.toml', type = 'system.toml', user = 'tedge', group = 'tedge', mode = 0o444 },
     { path = '/etc/config1.json', type = 'CONFIG1', user = 'tedge', group = 'tedge', mode = 0o640 },
     { path = '/etc/binary-config1.tar.gz', type = 'CONFIG1_BINARY', user = 'tedge', group = 'tedge', mode = 0o640 },
+    { path = '/etc/config-root.json', type = 'CONFIG-ROOT', user = 'root', group = 'root', mode = 0o600 },
 ]

@@ -335,8 +335,7 @@ impl ConfigManagerWorker {
             return Err(anyhow::anyhow!("tedge_url not present in config update payload").into());
         };
 
-        let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path())
-            .with_permission(file_entry.file_permissions.to_owned());
+        let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path());
 
         info!(
             "Awaiting download for config type: {} from url: {}",
