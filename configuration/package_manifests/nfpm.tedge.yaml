@@ -35,6 +35,11 @@ overrides:
   # * shadow-utils (fedora)
   # * shadow (opensuse)
 
+  # Note: Only keep a weak reference to the mosquitto package, so don't install it by default.
+  # mosquitto can be installed automatically when installing the tedge-full virtual package
+  # This way, it allows the tedge-agent package to be installed directly on child devices
+  # without automatically pulling in mosquitto
+
   apk:
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge/apk/preinst
@@ -42,7 +47,7 @@ overrides:
       preremove: configuration/package_scripts/_generated/tedge/apk/prerm
       postremove: configuration/package_scripts/_generated/tedge/apk/postrm
 
-    depends:
+    suggests:
       - mosquitto
 
   rpm:
@@ -51,7 +56,7 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge/rpm/postinst
       preremove: configuration/package_scripts/_generated/tedge/rpm/prerm
       postremove: configuration/package_scripts/_generated/tedge/rpm/postrm
-    depends:
+    suggests:
       - mosquitto
 
   deb:
@@ -60,7 +65,7 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge/deb/postinst
       preremove: configuration/package_scripts/_generated/tedge/deb/prerm
       postremove: configuration/package_scripts/_generated/tedge/deb/postrm
-    depends:
+    suggests:
       - mosquitto
 
 deb:
