@@ -77,6 +77,22 @@ impl OnMessageExec {
     }
 }
 
+/// Invalid mapping definition of custom operation handlers
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidCustomOperationHandler {
+    #[error("'topic' is missing'")]
+    MissingTopic,
+
+    #[error("'on_fragment' should not be provided for SmartREST custom operation handler")]
+    OnFragmentExists,
+
+    #[error("'on_fragment' is missing")]
+    MissingOnFragment,
+
+    #[error("'command' is missing")]
+    MissingCommand,
+}
+
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub struct Operation {
@@ -131,6 +147,59 @@ impl Operation {
             .map(|exec| exec.forceful_timeout)
             .unwrap_or(DEFAULT_FORCEFUL_TIMEOUT)
     }
+
+    fn is_supported_operation_file(&self) -> bool {
+        self.exec().is_none()
+    }
+
+    fn is_valid_operation_handler(&self) -> bool {
+        if self.exec.is_none() {
+            return false;
+        }
+        if let Err(err) = self.validate_smartrest_operation_handler() {
+            warn!(
+                "'{err} in the SmartREST custom operation handler mapping '{name}'",
+                name = self.name
+            );
+            return false;
+        }
+        if let Err(err) = self.validate_json_operation_handler() {
+            warn!(
+                "'{err} in the JSON custom operation handler mapping '{name}'",
+                name = self.name
+            );
+            return false;
+        }
+
+        true
+    }
+
+    fn validate_smartrest_operation_handler(&self) -> Result<(), InvalidCustomOperationHandler> {
+        if self.on_message().is_some() {
+            if self.topic().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingTopic);
+            }
+            if self.on_fragment().is_some() {
+                return Err(InvalidCustomOperationHandler::OnFragmentExists);
+            }
+            if self.command().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingCommand);
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_json_operation_handler(&self) -> Result<(), InvalidCustomOperationHandler> {
+        if self.on_message().is_none() {
+            if self.on_fragment().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingOnFragment);
+            }
+            if self.command().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingCommand);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -177,30 +246,15 @@ impl Operations {
         None
     }
 
-    pub fn filter_for_json_input(&self, topic_name: &str) -> Vec<Operation> {
-        let mut vec: Vec<Operation> = Vec::new();
+    pub fn filter_by_topic(&self, topic_name: &str) -> Vec<(String, Operation)> {
+        let mut vec: Vec<(String, Operation)> = Vec::new();
         for op in self.operations.iter() {
-            if op.exec.is_none() {
-                continue;
-            }
-
-            match op.topic() {
-                Some(topic) if topic != topic_name => {}
-                _ => {
-                    if op.on_message().is_some() {
-                        warn!(
-                            "'on_message' should not be provided in the custom operation handler mapping '{}', which is for SmartREST input.",
-                            op.name
-                        );
-                    } else if op.on_fragment().is_none() {
-                        warn!(
-                            "'on_fragment' is missing in the custom operation handler mapping '{}'",
-                            op.name
-                        );
-                    } else {
-                        vec.push(op.clone())
-                    }
+            match (op.topic(), op.on_fragment()) {
+                (None, Some(on_fragment)) => vec.push((on_fragment, op.clone())),
+                (Some(topic), Some(on_fragment)) if topic == topic_name => {
+                    vec.push((on_fragment, op.clone()))
                 }
+                _ => {}
             }
         }
         vec
@@ -253,7 +307,9 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
                 .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
                 .clone_into(&mut details.name);
 
-            operations.add_operation(details);
+            if details.is_valid_operation_handler() || details.is_supported_operation_file() {
+                operations.add_operation(details);
+            }
         }
     }
     Ok(operations)
@@ -335,6 +391,7 @@ mod tests {
                 let mut file = fs::File::create(&file_path).unwrap();
                 file.write_all(
                     br#"[exec]
+                        topic = "c8y/s/us"
                         command = "echo"
                         on_message = "511""#,
                 )
@@ -379,6 +436,15 @@ mod tests {
         }
     }
 
+    impl Operation {
+        fn new(exec: OnMessageExec) -> Self {
+            Self {
+                name: "name".to_string(),
+                exec: Some(exec),
+            }
+        }
+    }
+
     #[test_case(0)]
     #[test_case(1)]
     #[test_case(5)]
@@ -415,5 +481,62 @@ mod tests {
 
         let result = toml::from_str::<OnMessageExec>(r#"result_format = "foo""#);
         assert!(result.is_err());
+    }
+
+    #[test_case(
+        r#"
+        topic = "c8y/s/us"
+        on_message = "123"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        on_fragment = "c8y_Something"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        topic = "c8y/devicecontrol/notifications"
+        on_fragment = "c8y_Something"
+        command = "echo"
+        "#
+    )]
+    fn valid_custom_operation_handlers(toml: &str) {
+        let exec: OnMessageExec = toml::from_str(toml).unwrap();
+        let operation = Operation::new(exec);
+        assert!(operation.is_valid_operation_handler());
+    }
+
+    #[test_case(
+        r#"
+        on_message = "123"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        topic = "c8y/s/us"
+        on_message = "123"
+        "#
+    )]
+    #[test_case(
+        r#"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        topic = "c8y/devicecontrol/notifications"
+        on_message = "1234"
+        on_fragment = "c8y_Something"
+        command = "echo"
+        "#
+    )]
+    fn invalid_custom_operation_handlers(toml: &str) {
+        let exec: OnMessageExec = toml::from_str(toml).unwrap();
+        let operation = Operation::new(exec);
+        assert!(!operation.is_valid_operation_handler());
     }
 }

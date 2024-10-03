@@ -718,15 +718,14 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::Custom => {
                 let json_over_mqtt_topic = C8yDeviceControlTopic::name(&self.config.c8y_prefix);
-                let handlers = self.operations.filter_for_json_input(&json_over_mqtt_topic);
+                let handlers = self.operations.filter_by_topic(&json_over_mqtt_topic);
 
                 if handlers.is_empty() {
                     info!("No matched custom operation handler is found for the topic {json_over_mqtt_topic}. The operation '{operation_id}' (ID) is ignored.");
                 }
 
-                for custom_handler in &handlers {
-                    let on_fragment = custom_handler.on_fragment().unwrap(); // already checked while filtering
-                    if extras.contains_key(&on_fragment) {
+                for (on_fragment, custom_handler) in &handlers {
+                    if extras.contains_key(on_fragment) {
                         self.execute_custom_operation(custom_handler, message, &operation_id)
                             .await?;
                         break;
