@@ -1,4 +1,5 @@
 use itertools::Either;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
@@ -56,7 +57,7 @@ pub enum MultiError {
     MultiKeyNotFound(String, String),
 }
 
-impl<T: Default> MultiDto<T> {
+impl<T: Default + PartialEq> MultiDto<T> {
     pub fn try_get(&self, key: Option<&str>, parent: &str) -> Result<&T, MultiError> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
@@ -74,9 +75,25 @@ impl<T: Default> MultiDto<T> {
         match (self, key) {
             (Self::Single(val), None) => Ok(val),
             (Self::Multi(map), Some(key)) => Ok(map.entry((*key).to_owned()).or_default()),
-            (Self::Multi(_), None) => Err(MultiError::MultiNotSingle(parent.to_owned())),
-            (Self::Single(_), Some(key)) => {
+            (Self::Multi(map), None) if map.values().any(|v| *v != T::default()) => {
+                Err(MultiError::MultiNotSingle(parent.to_owned()))
+            }
+            (multi @ Self::Multi(_), None) => {
+                *multi = Self::Single(T::default());
+                let Self::Single(value) = multi else {
+                    unreachable!()
+                };
+                Ok(value)
+            }
+            (Self::Single(t), Some(key)) if *t != T::default() => {
                 Err(MultiError::SingleNotMulti(parent.into(), key.into()))
+            }
+            (multi @ Self::Single(_), Some(key)) => {
+                *multi = Self::Multi(HashMap::new());
+                let Self::Multi(map) = multi else {
+                    unreachable!()
+                };
+                Ok(map.entry((*key).to_owned()).or_default())
             }
         }
     }
@@ -315,5 +332,35 @@ mod tests {
             unreachable!()
         };
         assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn multi_dto_can_convert_default_single_config_to_multi() {
+        let mut val = MultiDto::Single("");
+
+        assert_eq!(*val.try_get_mut(Some("new_key"), "c8y").unwrap(), "");
+        let MultiDto::Multi(map) = val else {
+            unreachable!()
+        };
+        assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    fn multi_dto_can_convert_default_multi_config_to_single() {
+        let mut val = MultiDto::Multi([("key".to_owned(), ""), ("key2".to_owned(), "")].into());
+
+        assert_eq!(*val.try_get_mut(None, "c8y").unwrap(), "");
+        assert_eq!(val, MultiDto::Single(""));
+    }
+
+    #[test]
+    fn multi_dto_refuses_to_convert_non_default_multi_config_to_single() {
+        let mut val =
+            MultiDto::Multi([("key".to_owned(), "non default"), ("key2".to_owned(), "")].into());
+
+        assert_eq!(
+            val.try_get_mut(None, "c8y").unwrap_err().to_string(),
+            "A profile is required for the multi-profile property c8y"
+        );
     }
 }
