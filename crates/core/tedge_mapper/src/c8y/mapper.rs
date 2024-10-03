@@ -212,17 +212,24 @@ impl TEdgeComponent for CumulocityMapper {
         )?);
 
         let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
-            c8y_mapper_config,
+            c8y_mapper_config.clone(),
             &mut mqtt_actor,
             &mut c8y_http_proxy_actor,
             &mut timer_actor,
-            &mut uploader_actor,
-            &mut downloader_actor,
             &mut fs_watch_actor,
             &mut service_monitor_actor,
         )?;
 
         let c8y_prefix = &tedge_config.c8y.bridge.topic_prefix;
+
+        let operation_handler_actor = c8y_mapper_ext::operations::OperationHandlerBuilder::new(
+            c8y_mapper_config.to_operation_handler_config(),
+            &mut c8y_mapper_actor,
+            &mut uploader_actor,
+            &mut downloader_actor,
+            &mut c8y_http_proxy_actor,
+        );
+
         // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
         let old_to_new_agent_adapter = OldAgentAdapter::builder(c8y_prefix, &mut mqtt_actor);
@@ -252,6 +259,7 @@ impl TEdgeComponent for CumulocityMapper {
         if let Some(availability_actor) = availability_actor {
             runtime.spawn(availability_actor).await?;
         }
+        runtime.spawn(operation_handler_actor).await?;
         runtime.run_to_completion().await?;
 
         Ok(())

@@ -13,7 +13,6 @@ use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ClientMessageBox;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
@@ -27,6 +26,7 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -80,6 +80,9 @@ pub struct C8yMapperActor {
     timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+    // these handlers require entity metadata, so the entity already has to be registered
+    registered_message_handlers:
+        HashMap<ChannelFilter, Vec<LoggingSender<(MqttMessage, EntityMetadata)>>>,
 }
 
 #[async_trait]
@@ -140,6 +143,10 @@ impl C8yMapperActor {
         timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+        registered_message_handlers: HashMap<
+            ChannelFilter,
+            Vec<LoggingSender<(MqttMessage, EntityMetadata)>>,
+        >,
     ) -> Self {
         Self {
             converter,
@@ -148,6 +155,7 @@ impl C8yMapperActor {
             timer_sender,
             bridge_status_messages,
             message_handlers,
+            registered_message_handlers,
         }
     }
 
@@ -267,6 +275,25 @@ impl C8yMapperActor {
                 sender.send(message.clone()).await?;
             }
         }
+
+        if let Some(message_handler) = self.registered_message_handlers.get_mut(&channel.into()) {
+            let (entity, _) = self
+                .converter
+                .mqtt_schema
+                .entity_channel_of(&message.topic)
+                .expect("message should've been confirmed to be using MQTT topic scheme v1");
+
+            let entity = self
+                .converter
+                .entity_store
+                .get(&entity)
+                .expect("entity should've already been registered");
+
+            for sender in message_handler {
+                sender.send((message.clone(), entity.clone())).await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -331,11 +358,11 @@ pub struct C8yMapperBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
-    downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
-    uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+    registered_message_handlers:
+        HashMap<ChannelFilter, Vec<LoggingSender<(MqttMessage, EntityMetadata)>>>,
 }
 
 impl C8yMapperBuilder {
@@ -345,8 +372,6 @@ impl C8yMapperBuilder {
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         http: &mut impl Service<C8YRestRequest, C8YRestResult>,
         timer: &mut impl Service<SyncStart, SyncComplete>,
-        uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
-        downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
@@ -359,9 +384,6 @@ impl C8yMapperBuilder {
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
         let http_proxy = C8YHttpProxy::new(http);
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
-
-        let downloader = ClientMessageBox::new(downloader);
-        let uploader = ClientMessageBox::new(uploader);
 
         fs_watcher.connect_sink(
             config.ops_dir.as_std_path().to_path_buf(),
@@ -382,6 +404,7 @@ impl C8yMapperBuilder {
         );
 
         let message_handlers = HashMap::new();
+        let registered_message_handlers = HashMap::new();
 
         Ok(Self {
             config,
@@ -389,11 +412,10 @@ impl C8yMapperBuilder {
             mqtt_publisher,
             http_proxy,
             timer_sender,
-            uploader,
-            downloader,
             auth_proxy,
             bridge_monitor_builder,
             message_handlers,
+            registered_message_handlers,
         })
     }
 
@@ -426,6 +448,22 @@ impl MessageSource<MqttMessage, Vec<ChannelFilter>> for C8yMapperBuilder {
     }
 }
 
+impl MessageSource<(MqttMessage, EntityMetadata), Vec<ChannelFilter>> for C8yMapperBuilder {
+    fn connect_sink(
+        &mut self,
+        config: Vec<ChannelFilter>,
+        peer: &impl MessageSink<(MqttMessage, EntityMetadata)>,
+    ) {
+        let sender = LoggingSender::new("Mapper MQTT".into(), peer.get_sender());
+        for channel in config {
+            self.registered_message_handlers
+                .entry(channel)
+                .or_default()
+                .push(sender.clone());
+        }
+    }
+}
+
 impl MessageSink<PublishMessage> for C8yMapperBuilder {
     fn get_sender(&self) -> DynSender<PublishMessage> {
         self.box_builder.get_sender().sender_clone()
@@ -444,8 +482,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             mqtt_publisher.clone(),
             self.http_proxy,
             self.auth_proxy,
-            self.uploader,
-            self.downloader,
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
@@ -459,6 +495,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             timer_sender,
             bridge_monitor_box,
             self.message_handlers,
+            self.registered_message_handlers,
         ))
     }
 }

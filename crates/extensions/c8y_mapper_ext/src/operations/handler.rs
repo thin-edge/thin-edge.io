@@ -8,18 +8,26 @@ use crate::actor::IdUploadResult;
 use crate::config::C8yMapperConfig;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
+use c8y_auth_proxy::url::Protocol;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
+use camino::Utf8Path;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::LoggingSender;
+use tedge_actors::DynSender;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
+use tedge_api::mqtt_topics::IdGenerator;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::GenericCommandState;
+use tedge_config::AutoLogUpload;
+use tedge_config::SoftwareManagementApiFlag;
+use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
+use tokio::task::JoinHandle;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
@@ -42,46 +50,41 @@ use tracing::warn;
 /// performs an operation in the background in separate tasks. The operation tasks themselves handle
 /// reporting their success/failure.
 pub struct OperationHandler {
-    context: Arc<OperationContext>,
-    running_operations: HashMap<Arc<str>, RunningOperation>,
+    pub(super) context: Arc<OperationContext>,
+    pub(super) running_operations: HashMap<Arc<str>, RunningOperation>,
 }
 
 impl OperationHandler {
     pub fn new(
-        c8y_mapper_config: &C8yMapperConfig,
+        config: OperationHandlerConfig,
 
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
         uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-        mqtt_publisher: LoggingSender<MqttMessage>,
+        mqtt_publisher: DynSender<MqttMessage>,
 
         http_proxy: C8YHttpProxy,
-        auth_proxy: ProxyUrlGenerator,
     ) -> Self {
         Self {
             context: Arc::new(OperationContext {
-                capabilities: c8y_mapper_config.capabilities,
-                auto_log_upload: c8y_mapper_config.auto_log_upload,
-                tedge_http_host: c8y_mapper_config.tedge_http_host.clone(),
-                tmp_dir: c8y_mapper_config.tmp_dir.clone(),
-                mqtt_schema: c8y_mapper_config.mqtt_schema.clone(),
-                mqtt_publisher: mqtt_publisher.clone(),
-                software_management_api: c8y_mapper_config.software_management_api,
-                smart_rest_use_operation_id: c8y_mapper_config.smartrest_use_operation_id,
+                capabilities: config.capabilities,
+                auto_log_upload: config.auto_log_upload,
+                tedge_http_host: config.tedge_http_host,
+                tmp_dir: config.tmp_dir,
+                mqtt_schema: config.mqtt_schema,
+                software_management_api: config.software_management_api,
+                c8y_endpoint: config.c8y_endpoint,
+                auth_proxy: config.auth_proxy.clone(),
+                mqtt_publisher: mqtt_publisher.sender_clone(),
+                smart_rest_use_operation_id: config.smartrest_use_operation_id,
 
                 // TODO(marcel): would be good not to generate new ids from running operations, see if
                 // we can remove it somehow
-                command_id: c8y_mapper_config.id_generator(),
+                command_id: config.id_generator,
 
                 downloader,
                 uploader,
 
-                c8y_endpoint: C8yEndPoint::new(
-                    &c8y_mapper_config.c8y_host,
-                    &c8y_mapper_config.c8y_mqtt,
-                    &c8y_mapper_config.device_id,
-                ),
                 http_proxy: http_proxy.clone(),
-                auth_proxy: auth_proxy.clone(),
             }),
 
             running_operations: Default::default(),
@@ -216,6 +219,33 @@ impl OperationHandler {
         }
     }
 
+    pub fn handle_spawn(&mut self, entity: EntityTarget, message: MqttMessage) -> JoinHandle<()> {
+        let context = self.context.clone();
+        tokio::spawn(async move {
+            let Ok((_, channel)) = context.mqtt_schema.entity_channel_of(&message.topic) else {
+                return;
+            };
+
+            let Channel::Command { operation, cmd_id } = channel else {
+                return;
+            };
+
+            // don't process sub-workflow calls
+            if cmd_id.starts_with("sub:") {
+                return;
+            }
+
+            let message = OperationMessage {
+                operation,
+                entity,
+                cmd_id: cmd_id.into(),
+                message,
+            };
+
+            context.update(message).await;
+        })
+    }
+
     /// A topic filter for operation types this object can handle.
     ///
     /// The MQTT client should subscribe to topics with this filter to receive MQTT messages that it
@@ -253,6 +283,11 @@ impl OperationHandler {
                 (AnyEntity, CommandMetadata(OperationType::FirmwareUpdate)),
             ]);
         }
+        topics.extend([
+            (AnyEntity, Command(OperationType::Restart)),
+            (AnyEntity, Command(OperationType::SoftwareList)),
+            (AnyEntity, Command(OperationType::SoftwareUpdate)),
+        ]);
 
         if capabilities.device_profile {
             topics.extend([
@@ -264,17 +299,63 @@ impl OperationHandler {
         topics
     }
 }
-struct RunningOperation {
-    handle: tokio::task::JoinHandle<()>,
-    status: String,
+
+#[derive(Debug, Clone)]
+pub struct OperationHandlerConfig {
+    pub capabilities: Capabilities,
+    pub auto_log_upload: AutoLogUpload,
+    pub tedge_http_host: Arc<str>,
+    pub tmp_dir: Arc<Utf8Path>,
+    pub software_management_api: SoftwareManagementApiFlag,
+    pub c8y_endpoint: C8yEndPoint,
+    pub mqtt_schema: MqttSchema,
+    pub c8y_prefix: TopicPrefix,
+    pub auth_proxy: ProxyUrlGenerator,
+    pub id_generator: IdGenerator,
+    pub smartrest_use_operation_id: bool,
+}
+
+impl OperationHandlerConfig {
+    fn from_mapper_config(config: &C8yMapperConfig) -> OperationHandlerConfig {
+        OperationHandlerConfig {
+            capabilities: config.capabilities,
+            auto_log_upload: config.auto_log_upload,
+            tedge_http_host: config.tedge_http_host.clone(),
+            tmp_dir: config.tmp_dir.clone(),
+            software_management_api: config.software_management_api,
+            c8y_endpoint: C8yEndPoint::new(&config.c8y_host, &config.c8y_mqtt, &config.device_id),
+            mqtt_schema: config.mqtt_schema.clone(),
+            c8y_prefix: config.c8y_prefix.clone(),
+            auth_proxy: ProxyUrlGenerator::new(
+                config.auth_proxy_addr.clone(),
+                config.auth_proxy_port,
+                Protocol::Http,
+            ),
+            id_generator: config.id_generator(),
+            smartrest_use_operation_id: config.smartrest_use_operation_id,
+        }
+    }
+}
+
+impl C8yMapperConfig {
+    pub fn to_operation_handler_config(&self) -> OperationHandlerConfig {
+        OperationHandlerConfig::from_mapper_config(self)
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct RunningOperation {
+    pub(super) handle: tokio::task::JoinHandle<()>,
+    pub(super) status: String,
 }
 
 // TODO: logic of which status transitions are valid should be defined in tedge_api and be
 // considered together with custom statuses of custom workflows
-fn is_operation_status_transition_valid(previous: &str, next: &str) -> bool {
+pub fn is_operation_status_transition_valid(previous: &str, next: &str) -> bool {
     #[allow(clippy::match_like_matches_macro)]
     match (previous, next) {
         // not really a transition but false to make sure we're not sending multiple smartrest msgs
+        // FIXME: this will blow if prev and next are empty! (clearing messages)
         (prev, next) if prev == next => false,
 
         // successful and failed are terminal, can't change them
@@ -291,13 +372,13 @@ mod tests {
 
     use std::time::Duration;
 
-    use c8y_auth_proxy::url::Protocol;
     use c8y_http_proxy::messages::C8YRestRequest;
     use c8y_http_proxy::messages::C8YRestResult;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Builder;
+    use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
     use tedge_actors::MessageSink;
     use tedge_actors::Sender;
@@ -836,17 +917,12 @@ mod tests {
             FakeServerBoxBuilder::default();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let auth_proxy_addr = c8y_mapper_config.auth_proxy_addr.clone();
-        let auth_proxy_port = c8y_mapper_config.auth_proxy_port;
-        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
-
         let operation_handler = OperationHandler::new(
-            &c8y_mapper_config,
+            c8y_mapper_config.to_operation_handler_config(),
             downloader,
             uploader,
-            mqtt_publisher,
+            mqtt_publisher.into(),
             c8y_proxy,
-            auth_proxy,
         );
 
         let mqtt = mqtt_builder.build();
