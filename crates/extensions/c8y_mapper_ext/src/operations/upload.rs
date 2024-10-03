@@ -79,7 +79,9 @@ impl OperationContext {
         command: &GenericCommandState,
     ) -> Result<(), ConversionError> {
         if command.is_finished()
-            && command.get_log_path().is_some()
+            && command
+                .get_log_path()
+                .is_some_and(|log_path| log_path.exists())
             && (self.auto_log_upload == AutoLogUpload::Always
                 || (self.auto_log_upload == AutoLogUpload::OnFailure && command.is_failed()))
         {
