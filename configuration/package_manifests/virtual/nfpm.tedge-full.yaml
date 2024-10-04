@@ -26,6 +26,7 @@ overrides:
   # slightly different formats
   apk:
     depends:
+        - mosquitto
         - tedge = ${APK_VERSION}
         - tedge-mapper = ${APK_VERSION}
         - tedge-agent = ${APK_VERSION}
@@ -38,6 +39,7 @@ overrides:
     depends:
         # FIXME: Work out a better way to reference the full package specific version which includes the release number (-1) suffix
         # without having to manually add it
+        - mosquitto
         - ca-certificates
         - tedge = ${RPM_VERSION}-1
         - tedge-mapper = ${RPM_VERSION}-1
@@ -49,6 +51,7 @@ overrides:
         - c8y-firmware-plugin = ${RPM_VERSION}-1
   deb:
     depends:
+        - mosquitto
         - tedge (= ${DEB_VERSION})
         - tedge-mapper (= ${DEB_VERSION})
         - tedge-agent (= ${DEB_VERSION})
