@@ -1,16 +1,14 @@
+use crate::smartrest::error::OperationsError;
+use crate::smartrest::smartrest_serializer::declare_supported_operations;
+use serde::Deserialize;
+use serde::Deserializer;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-
-use crate::smartrest::error::OperationsError;
-use crate::smartrest::smartrest_serializer::declare_supported_operations;
-use serde::Deserialize;
-use serde::Deserializer;
-use tracing::warn;
-
 use std::time::Duration;
+use tracing::warn;
 
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -25,14 +23,16 @@ pub enum ResultFormat {
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
-
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct OnMessageExec {
     command: Option<String>,
     on_message: Option<String>,
+    on_fragment: Option<String>,
     topic: Option<String>,
     user: Option<String>,
+    #[serde(default)]
+    skip_status_update: bool,
     #[serde(default, deserialize_with = "to_result_format")]
     result_format: ResultFormat,
     #[serde(rename = "timeout")]
@@ -77,6 +77,22 @@ impl OnMessageExec {
     }
 }
 
+/// Invalid mapping definition of custom operation handlers
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidCustomOperationHandler {
+    #[error("'topic' is missing'")]
+    MissingTopic,
+
+    #[error("'on_fragment' should not be provided for SmartREST custom operation handler")]
+    OnFragmentExists,
+
+    #[error("'on_fragment' is missing")]
+    MissingOnFragment,
+
+    #[error("'command' is missing")]
+    MissingCommand,
+}
+
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub struct Operation {
@@ -96,6 +112,18 @@ impl Operation {
 
     pub fn topic(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.topic.clone())
+    }
+
+    pub fn on_message(&self) -> Option<String> {
+        self.exec().and_then(|exec| exec.on_message.clone())
+    }
+
+    pub fn on_fragment(&self) -> Option<String> {
+        self.exec().and_then(|exec| exec.on_fragment.clone())
+    }
+
+    pub fn skip_status_update(&self) -> bool {
+        self.exec().unwrap().skip_status_update
     }
 
     pub fn result_format(&self) -> ResultFormat {
@@ -118,6 +146,59 @@ impl Operation {
         self.exec()
             .map(|exec| exec.forceful_timeout)
             .unwrap_or(DEFAULT_FORCEFUL_TIMEOUT)
+    }
+
+    fn is_supported_operation_file(&self) -> bool {
+        self.exec().is_none()
+    }
+
+    fn is_valid_operation_handler(&self) -> bool {
+        if self.exec.is_none() {
+            return false;
+        }
+        if let Err(err) = self.validate_smartrest_operation_handler() {
+            warn!(
+                "'{err} in the SmartREST custom operation handler mapping '{name}'",
+                name = self.name
+            );
+            return false;
+        }
+        if let Err(err) = self.validate_json_operation_handler() {
+            warn!(
+                "'{err} in the JSON custom operation handler mapping '{name}'",
+                name = self.name
+            );
+            return false;
+        }
+
+        true
+    }
+
+    fn validate_smartrest_operation_handler(&self) -> Result<(), InvalidCustomOperationHandler> {
+        if self.on_message().is_some() {
+            if self.topic().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingTopic);
+            }
+            if self.on_fragment().is_some() {
+                return Err(InvalidCustomOperationHandler::OnFragmentExists);
+            }
+            if self.command().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingCommand);
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_json_operation_handler(&self) -> Result<(), InvalidCustomOperationHandler> {
+        if self.on_message().is_none() {
+            if self.on_fragment().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingOnFragment);
+            }
+            if self.command().is_none() {
+                return Err(InvalidCustomOperationHandler::MissingCommand);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -163,6 +244,20 @@ impl Operations {
             }
         }
         None
+    }
+
+    pub fn filter_by_topic(&self, topic_name: &str) -> Vec<(String, Operation)> {
+        let mut vec: Vec<(String, Operation)> = Vec::new();
+        for op in self.operations.iter() {
+            match (op.topic(), op.on_fragment()) {
+                (None, Some(on_fragment)) => vec.push((on_fragment, op.clone())),
+                (Some(topic), Some(on_fragment)) if topic == topic_name => {
+                    vec.push((on_fragment, op.clone()))
+                }
+                _ => {}
+            }
+        }
+        vec
     }
 
     pub fn topics_for_operations(&self) -> HashSet<String> {
@@ -212,7 +307,9 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
                 .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
                 .clone_into(&mut details.name);
 
-            operations.add_operation(details);
+            if details.is_valid_operation_handler() || details.is_supported_operation_file() {
+                operations.add_operation(details);
+            }
         }
     }
     Ok(operations)
@@ -294,6 +391,7 @@ mod tests {
                 let mut file = fs::File::create(&file_path).unwrap();
                 file.write_all(
                     br#"[exec]
+                        topic = "c8y/s/us"
                         command = "echo"
                         on_message = "511""#,
                 )
@@ -338,6 +436,15 @@ mod tests {
         }
     }
 
+    impl Operation {
+        fn new(exec: OnMessageExec) -> Self {
+            Self {
+                name: "name".to_string(),
+                exec: Some(exec),
+            }
+        }
+    }
+
     #[test_case(0)]
     #[test_case(1)]
     #[test_case(5)]
@@ -374,5 +481,62 @@ mod tests {
 
         let result = toml::from_str::<OnMessageExec>(r#"result_format = "foo""#);
         assert!(result.is_err());
+    }
+
+    #[test_case(
+        r#"
+        topic = "c8y/s/us"
+        on_message = "123"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        on_fragment = "c8y_Something"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        topic = "c8y/devicecontrol/notifications"
+        on_fragment = "c8y_Something"
+        command = "echo"
+        "#
+    )]
+    fn valid_custom_operation_handlers(toml: &str) {
+        let exec: OnMessageExec = toml::from_str(toml).unwrap();
+        let operation = Operation::new(exec);
+        assert!(operation.is_valid_operation_handler());
+    }
+
+    #[test_case(
+        r#"
+        on_message = "123"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        topic = "c8y/s/us"
+        on_message = "123"
+        "#
+    )]
+    #[test_case(
+        r#"
+        command = "echo"
+        "#
+    )]
+    #[test_case(
+        r#"
+        topic = "c8y/devicecontrol/notifications"
+        on_message = "1234"
+        on_fragment = "c8y_Something"
+        command = "echo"
+        "#
+    )]
+    fn invalid_custom_operation_handlers(toml: &str) {
+        let exec: OnMessageExec = toml::from_str(toml).unwrap();
+        let operation = Operation::new(exec);
+        assert!(!operation.is_valid_operation_handler());
     }
 }

@@ -31,6 +31,7 @@ use c8y_api::smartrest::message::sanitize_bytes_for_smartrest;
 use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::get_operations;
+use c8y_api::smartrest::operations::Operation;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
@@ -38,7 +39,8 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
@@ -76,6 +78,7 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
@@ -632,7 +635,12 @@ impl CumulocityConverter {
         }
 
         let result = self
-            .process_json_over_mqtt(device_xid, cmd_id, &operation.extras)
+            .process_json_over_mqtt(
+                device_xid,
+                operation.op_id.clone(),
+                &operation.extras,
+                message,
+            )
             .await;
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
 
@@ -642,9 +650,12 @@ impl CumulocityConverter {
     async fn process_json_over_mqtt(
         &mut self,
         device_xid: String,
-        cmd_id: String,
+        operation_id: String,
         extras: &HashMap<String, Value>,
+        message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let cmd_id = self.command_id.new_id_with_str(&operation_id);
+
         let msgs = match C8yDeviceControlOperation::from_json_object(extras)? {
             C8yDeviceControlOperation::Restart(_) => {
                 self.forward_restart_request(device_xid, cmd_id)?
@@ -705,13 +716,62 @@ impl CumulocityConverter {
                 }
             }
             C8yDeviceControlOperation::Custom => {
-                // Ignores custom and static template operations unsupported by thin-edge
-                // However, these operations can be addressed by SmartREST that is published together with JSON over MQTT
+                let json_over_mqtt_topic = C8yDeviceControlTopic::name(&self.config.c8y_prefix);
+                let handlers = self.operations.filter_by_topic(&json_over_mqtt_topic);
+
+                if handlers.is_empty() {
+                    info!("No matched custom operation handler is found for the topic {json_over_mqtt_topic}. The operation '{operation_id}' (ID) is ignored.");
+                }
+
+                for (on_fragment, custom_handler) in &handlers {
+                    if extras.contains_key(on_fragment) {
+                        self.execute_custom_operation(custom_handler, message, &operation_id)
+                            .await?;
+                        break;
+                    }
+                }
+                // MQTT messages are sent during the operation execution
                 vec![]
             }
         };
 
         Ok(msgs)
+    }
+
+    async fn execute_custom_operation(
+        &self,
+        custom_handler: &Operation,
+        message: &MqttMessage,
+        operation_id: &str,
+    ) -> Result<(), CumulocityMapperError> {
+        let state = GenericCommandState::from_command_message(message).map_err(|e| {
+            CumulocityMapperError::JsonCustomOperationHandlerError {
+                operation: custom_handler.name.clone(),
+                err_msg: format!("Invalid JSON message, {e}. Message: {message:?}"),
+            }
+        })?;
+        let command_value = custom_handler.command().ok_or(
+            CumulocityMapperError::JsonCustomOperationHandlerError {
+                operation: custom_handler.name.clone(),
+                err_msg: "'command' is missing".to_string(),
+            },
+        )?;
+        let script = state.inject_values_into_template(&command_value);
+        let (command, payload) = script.split_once(' ').unwrap_or_else(|| (&script, ""));
+
+        self.execute_operation(
+            payload,
+            command,
+            custom_handler.result_format(),
+            custom_handler.graceful_timeout(),
+            custom_handler.forceful_timeout(),
+            custom_handler.name.clone(),
+            Some(operation_id.into()),
+            custom_handler.skip_status_update(),
+        )
+        .await?;
+
+        Ok(())
     }
 
     async fn parse_c8y_smartrest_topics(
@@ -860,7 +920,9 @@ impl CumulocityConverter {
                     operation.result_format(),
                     operation.graceful_timeout(),
                     operation.forceful_timeout(),
-                    operation.name,
+                    operation.name.clone(),
+                    None,
+                    operation.skip_status_update(),
                 )
                 .await?;
             }
@@ -869,6 +931,7 @@ impl CumulocityConverter {
         Ok(vec![])
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_operation(
         &self,
         payload: &str,
@@ -877,6 +940,8 @@ impl CumulocityConverter {
         graceful_timeout: Duration,
         forceful_timeout: Duration,
         operation_name: String,
+        operation_id: Option<String>,
+        skip_status_update: bool,
     ) -> Result<(), CumulocityMapperError> {
         let command = command.to_owned();
         let payload = payload.to_string();
@@ -914,19 +979,30 @@ impl CumulocityConverter {
                 let op_name = operation_name.to_owned();
                 let mut mqtt_publisher = self.mqtt_publisher.clone();
                 let c8y_prefix = self.config.c8y_prefix.clone();
+                let (use_id, op_id) = match operation_id {
+                    Some(op_id) if self.config.smartrest_use_operation_id => (true, op_id),
+                    _ => (false, "".to_string()),
+                };
 
                 tokio::spawn(async move {
                     let op_name = op_name.as_str();
-
-                    // mqtt client publishes executing
                     let topic = C8yTopic::SmartRestResponse.to_topic(&c8y_prefix).unwrap();
-                    let executing_str = set_operation_executing_with_name(op_name);
-                    mqtt_publisher
-                        .send(MqttMessage::new(&topic, executing_str.as_str()))
-                        .await
-                        .unwrap_or_else(|err| {
-                            error!("Failed to publish a message: {executing_str}. Error: {err}")
-                        });
+
+                    if !skip_status_update {
+                        // mqtt client publishes executing
+                        let executing_str = if use_id {
+                            set_operation_executing_with_id(&op_id)
+                        } else {
+                            set_operation_executing_with_name(op_name)
+                        };
+
+                        mqtt_publisher
+                            .send(MqttMessage::new(&topic, executing_str.as_str()))
+                            .await
+                            .unwrap_or_else(|err| {
+                                error!("Failed to publish a message: {executing_str}. Error: {err}")
+                            });
+                    }
 
                     // execute the command and wait until it finishes
                     // mqtt client publishes failed or successful depending on the exit code
@@ -948,37 +1024,53 @@ impl CumulocityConverter {
                                     ResultFormat::Text => TextOrCsv::Text(sanitized_stdout),
                                     ResultFormat::Csv => EmbeddedCsv::new(sanitized_stdout).into(),
                                 };
-                                let success_message = succeed_operation(op_name, result);
-                                match success_message {
-                                    Ok(message) => mqtt_publisher.send(MqttMessage::new(&topic, message.as_str())).await
-                                        .unwrap_or_else(|err| {
-                                            error!("Failed to publish a message: {message}. Error: {err}")
-                                        }),
-                                    Err(e) => {
-                                        let fail_message = fail_operation_with_name(
-                                            op_name,
-                                            &format!("{:?}", anyhow::Error::from(e).context("Custom operation process exited successfully, but couldn't convert output to valid SmartREST message")));
-                                        mqtt_publisher.send(MqttMessage::new(&topic, fail_message.as_str())).await.unwrap_or_else(|err| {
-                                            error!("Failed to publish a message: {fail_message}. Error: {err}")
-                                        })
+
+                                if !skip_status_update {
+                                    let success_message = if use_id {
+                                        succeed_operation_with_id(&op_id, result)
+                                    } else {
+                                        succeed_operation_with_name(op_name, result)
+                                    };
+                                    match success_message {
+                                        Ok(message) => mqtt_publisher.send(MqttMessage::new(&topic, message.as_str())).await
+                                            .unwrap_or_else(|err| {
+                                                error!("Failed to publish a message: {message}. Error: {err}")
+                                            }),
+                                        Err(e) => {
+                                            let reason = format!("{:?}", anyhow::Error::from(e).context("Custom operation process exited successfully, but couldn't convert output to valid SmartREST message"));
+                                            let fail_message = if use_id {
+                                                fail_operation_with_id(&op_id, &reason)
+                                            } else {
+                                                fail_operation_with_name(op_name, &reason)
+                                            };
+                                            mqtt_publisher.send(MqttMessage::new(&topic, fail_message.as_str())).await.unwrap_or_else(|err| {
+                                                error!("Failed to publish a message: {fail_message}. Error: {err}")
+                                            })
+                                        }
                                     }
                                 }
                             }
                             _ => {
-                                let failure_reason = get_failure_reason_for_smartrest(
-                                    &output.stderr,
-                                    MAX_PAYLOAD_LIMIT_IN_BYTES,
-                                );
-                                let payload = fail_operation_with_name(op_name, &failure_reason);
+                                if !skip_status_update {
+                                    let failure_reason = get_failure_reason_for_smartrest(
+                                        &output.stderr,
+                                        MAX_PAYLOAD_LIMIT_IN_BYTES,
+                                    );
+                                    let payload = if use_id {
+                                        fail_operation_with_id(&op_id, &failure_reason)
+                                    } else {
+                                        fail_operation_with_name(op_name, &failure_reason)
+                                    };
 
-                                mqtt_publisher
-                                    .send(MqttMessage::new(&topic, payload.as_bytes()))
-                                    .await
-                                    .unwrap_or_else(|err| {
-                                        error!(
+                                    mqtt_publisher
+                                        .send(MqttMessage::new(&topic, payload.as_bytes()))
+                                        .await
+                                        .unwrap_or_else(|err| {
+                                            error!(
                                             "Failed to publish a message: {payload}. Error: {err}"
                                         )
-                                    })
+                                        })
+                                }
                             }
                         }
                     }
@@ -2580,6 +2672,8 @@ pub(crate) mod tests {
                 tokio::time::Duration::from_secs(10),
                 tokio::time::Duration::from_secs(1),
                 "sleep_ten".to_owned(),
+                None,
+                false,
             )
             .await
             .unwrap();
@@ -2591,6 +2685,8 @@ pub(crate) mod tests {
                 tokio::time::Duration::from_secs(20),
                 tokio::time::Duration::from_secs(1),
                 "sleep_twenty".to_owned(),
+                None,
+                false,
             )
             .await
             .unwrap();
