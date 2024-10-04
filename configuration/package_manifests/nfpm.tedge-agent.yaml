@@ -69,6 +69,8 @@ overrides:
       postremove: configuration/package_scripts/_generated/tedge-agent/rpm/postrm
 
   deb:
+    recommends:
+      - tedge-apt-plugin
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge-agent/deb/preinst
       postinstall: configuration/package_scripts/_generated/tedge-agent/deb/postinst
