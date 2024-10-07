@@ -229,6 +229,7 @@ Data extracted from the command status topic and message payload can be passed a
 - Specific path expressions can be used to pass specific excerpts.
   - `${.}` is a json for the whole message including the `topic` and the `payload`.
   - `${.topic}` is the command request topic (*e.g.* `te/device/main/cmd///restart/c8y-mapper-123`)
+  - `${.topic.root_prefix}` is the command target root topic (*e.g.* `te`)
   - `${.topic.target}` is the command target identity  (*e.g.* `device/main/cmd//`)
   - `${.topic.operation}` is the command operation  (*e.g.* `restart`)
   - `${.topic.cmd_id}` is the command request unique identifier  (*e.g.* `c8y-mapper-123`)
@@ -523,6 +524,7 @@ The `await-operation-completion` action also tells how to inject the outcome of 
 - Specific path expressions can be used to extract specific excerpts from the sub-operation final state.
 - `${.}` denotes the whole sub-operation final message including the `topic` and the `payload`.
 - `${.topic}` is the sub-operation request topic
+- `${.topic.root_prefix}` is the command target root topic (*e.g.* `te`)
 - `${.topic.target}` is the sub command target identity
 - `${.topic.operation}` is the sub command operation
 - `${.topic.cmd_id}` is the sub command request unique identifier
