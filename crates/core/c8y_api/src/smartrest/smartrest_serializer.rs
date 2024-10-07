@@ -35,11 +35,11 @@ pub fn fail_operation_with_id(op_id: &str, reason: &str) -> String {
 }
 
 fn fail_operation(template_id: &str, operation: &str, reason: &str) -> String {
-    // If the failure reason exceeds 500 bytes, trancuate it
+    // If the failure reason exceeds 500 bytes, truncate it
     if reason.len() <= 500 {
         fields_to_csv_string(&[template_id, operation, reason])
     } else {
-        warn!("Failure reason too long, message trancuated to 500 bytes");
+        warn!("Failure reason too long, message truncated to 500 bytes");
         fields_to_csv_string(&[template_id, operation, &reason[..500]])
     }
 }
