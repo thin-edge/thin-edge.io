@@ -442,7 +442,7 @@ fn parents_for(
                     new_parents.push(PathItem::Dynamic(*span));
                 }
             } else {
-                // This key has diverged from the currrent key's parents, so empty the list
+                // This key has diverged from the current key's parents, so empty the list
                 // This will prevent unwanted matches that aren't genuine
                 while parents.next().is_some() {}
             }
