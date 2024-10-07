@@ -41,10 +41,10 @@ define_tedge_config! {
 fn arc_str_in_config_can_be_updated() {
     let mut config = TEdgeConfigDto::default();
     config
-        .try_update_str(WritableKey::DeviceType, "new value")
+        .try_update_str(&WritableKey::DeviceType, "new value")
         .unwrap();
     config
-        .try_update_str(WritableKey::DeviceManualFrom, "different value")
+        .try_update_str(&WritableKey::DeviceManualFrom, "different value")
         .unwrap();
 
     assert_eq!(config.device.ty, Some(Arc::from("new value")));

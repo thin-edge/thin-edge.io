@@ -15,7 +15,7 @@ impl Command for RemoveConfigCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         self.config_location.update_toml(&|dto, reader| {
-            dto.try_remove_str(reader, self.key, &self.value)
+            dto.try_remove_str(reader, &self.key, &self.value)
                 .map_err(|e| e.into())
         })?;
         Ok(())

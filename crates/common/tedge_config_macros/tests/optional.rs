@@ -43,6 +43,6 @@ fn vacant_optional_configurations_contain_the_relevant_key() {
 
     assert_eq!(
         config.mqtt.external.bind.port,
-        OptionalConfig::Empty("mqtt.external.bind.port")
+        OptionalConfig::Empty("mqtt.external.bind.port".into())
     );
 }

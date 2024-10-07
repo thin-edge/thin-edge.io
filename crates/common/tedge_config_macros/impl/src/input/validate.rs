@@ -11,6 +11,7 @@ use syn::spanned::Spanned;
 use crate::error::combine_errors;
 use crate::optional_error::OptionalError;
 use crate::optional_error::SynResultExt;
+use crate::reader::PathItem;
 
 pub use super::parse::FieldDefault;
 pub use super::parse::FieldDtoSettings;
@@ -91,12 +92,14 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
 pub enum FieldOrGroup {
     Field(ConfigurableField),
     Group(ConfigurationGroup),
+    Multi(ConfigurationGroup),
 }
 
 impl FieldOrGroup {
     pub fn name(&self) -> Cow<str> {
         let rename = match self {
             Self::Group(group) => group.rename.as_ref().map(|s| s.as_str()),
+            Self::Multi(group) => group.rename.as_ref().map(|s| s.as_str()),
             Self::Field(field) => field.rename(),
         };
 
@@ -107,6 +110,7 @@ impl FieldOrGroup {
         match self {
             Self::Field(field) => field.ident(),
             Self::Group(group) => &group.ident,
+            Self::Multi(group) => &group.ident,
         }
     }
 
@@ -116,6 +120,7 @@ impl FieldOrGroup {
                 Self::Field(field) => field.rename().map_or(false, |rename| *target == rename),
                 // Groups don't support renaming at the moment
                 Self::Group(_) => false,
+                Self::Multi(_) => false,
             }
     }
 
@@ -123,6 +128,7 @@ impl FieldOrGroup {
         match self {
             Self::Field(field) => Some(field),
             Self::Group(..) => None,
+            Self::Multi(..) => None,
         }
     }
 
@@ -130,6 +136,7 @@ impl FieldOrGroup {
         match self {
             Self::Field(field) => field.reader(),
             Self::Group(group) => &group.reader,
+            Self::Multi(group) => &group.reader,
         }
     }
 }
@@ -139,6 +146,9 @@ impl TryFrom<super::parse::FieldOrGroup> for FieldOrGroup {
     fn try_from(value: super::parse::FieldOrGroup) -> Result<Self, Self::Error> {
         match value {
             super::parse::FieldOrGroup::Field(field) => field.try_into().map(Self::Field),
+            super::parse::FieldOrGroup::Group(group) if group.multi => {
+                group.try_into().map(Self::Multi)
+            }
             super::parse::FieldOrGroup::Group(group) => group.try_into().map(Self::Group),
         }
     }
@@ -164,11 +174,12 @@ pub struct ReadOnlyField {
 }
 
 impl ReadOnlyField {
-    pub fn lazy_reader_name(&self, parents: &[syn::Ident]) -> syn::Ident {
+    pub fn lazy_reader_name(&self, parents: &[PathItem]) -> syn::Ident {
         format_ident!(
             "LazyReader{}{}",
             parents
                 .iter()
+                .filter_map(PathItem::as_static)
                 .map(|p| p.to_string().to_upper_camel_case())
                 .collect::<Vec<_>>()
                 .join("."),

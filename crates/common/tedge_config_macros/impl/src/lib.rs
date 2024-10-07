@@ -11,6 +11,7 @@ use quote::quote_spanned;
 mod dto;
 mod error;
 mod input;
+mod namegen;
 mod optional_error;
 mod query;
 mod reader;
@@ -25,6 +26,7 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         .iter()
         .flat_map(|group| match group {
             input::FieldOrGroup::Group(group) => unfold_group(Vec::new(), group),
+            input::FieldOrGroup::Multi(group) => unfold_group(Vec::new(), group),
             input::FieldOrGroup::Field(field) => {
                 error.combine(syn::Error::new(
                     field.ident().span(),
@@ -153,6 +155,10 @@ fn unfold_group(
                 );
                 output.push((name, field))
             }
+            input::FieldOrGroup::Multi(group) => {
+                name.push("*".to_owned());
+                output.append(&mut unfold_group(name.clone(), group));
+            }
             input::FieldOrGroup::Group(group) => {
                 output.append(&mut unfold_group(name.clone(), group));
             }
@@ -227,6 +233,17 @@ mod tests {
 
                 #[tedge_config(rename = "hyphen-separated-field", example = "hsf")]
                 hyphen_separated_field: String
+            },
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn can_contain_multi_fields() {
+        generate_configuration(quote! {
+            #[multi]
+            c8y: {
+                url: String
             },
         })
         .unwrap();

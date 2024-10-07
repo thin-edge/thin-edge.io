@@ -388,7 +388,7 @@ mod tests {
             key_path: OptionalConfig::present(InjectedValue(key), "http.key_path"),
             ca_path: root_certs
                 .map(|c| OptionalConfig::present(InjectedValue(c), "http.ca_path"))
-                .unwrap_or_else(|| OptionalConfig::Empty("http.ca_path")),
+                .unwrap_or_else(|| OptionalConfig::empty("http.ca_path")),
             bind_addr: ([127, 0, 0, 1], 0).into(),
         })
     }

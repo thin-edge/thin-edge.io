@@ -44,7 +44,7 @@ use std::path::Path;
 ///     }
 ///
 ///     fn execute(&self) -> anyhow::Result<()> {
-///        match self.config.read_string(self.key) {
+///        match self.config.read_string(&self.key) {
 ///             Ok(value) => println!("{}", value),
 ///             Err(ReadError::ConfigNotSet(_)) => eprintln!("The configuration key `{}` is not set", self.key),
 ///             Err(e) => return Err(e.into()),

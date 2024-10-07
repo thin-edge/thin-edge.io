@@ -7,6 +7,7 @@ pub use all_or_nothing::*;
 pub use connect_url::*;
 pub use default::*;
 pub use doku_aliases::*;
+pub use multi::*;
 pub use option::*;
 
 mod all_or_nothing;
@@ -15,4 +16,5 @@ mod default;
 mod doku_aliases;
 #[cfg(doc)]
 pub mod example;
+mod multi;
 mod option;
