@@ -39,7 +39,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 pub use tedge_config_macros::ConfigNotSet;
-use tedge_config_macros::OptionalConfig;
+pub use tedge_config_macros::MultiError;
 use tedge_config_macros::*;
 use toml::Table;
 use tracing::error;
@@ -318,7 +318,7 @@ impl TEdgeTomlVersion {
                 mv("software.default_plugin_type", SoftwarePluginDefault),
                 mv("run.lock_files", RunLockFiles),
                 mv("firmware.child_update_timeout", FirmwareChildUpdateTimeout),
-                mv("c8y.smartrest_templates", C8ySmartrestTemplates),
+                mv("c8y.smartrest_templates", C8ySmartrestTemplates(None)),
                 update_version_field(),
             ]),
             Self::Two => None,
@@ -455,6 +455,7 @@ define_tedge_config! {
         ty: String,
     },
 
+    #[tedge_config(multi)]
     c8y: {
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -1021,12 +1022,14 @@ static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 impl TEdgeConfigReader {
     pub fn cloud_root_certs(&self) -> CloudRootCerts {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
-            let c8y_roots = read_trust_store(&self.c8y.root_cert_path).unwrap_or_else(move |e| {
-                error!(
-                    "Unable to read certificates from {}: {e:?}",
-                    ReadableKey::C8yRootCertPath
-                );
-                vec![]
+            let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
+                read_trust_store(&c8y.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::C8yRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
             });
             let az_roots = read_trust_store(&self.az.root_cert_path).unwrap_or_else(move |e| {
                 error!(
@@ -1042,11 +1045,7 @@ impl TEdgeConfigReader {
                 );
                 vec![]
             });
-            c8y_roots
-                .into_iter()
-                .chain(az_roots)
-                .chain(aws_roots)
-                .collect()
+            c8y_roots.chain(az_roots).chain(aws_roots).collect()
         });
 
         CloudRootCerts::from(roots.clone())
@@ -1054,11 +1053,12 @@ impl TEdgeConfigReader {
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {
         // TODO do we want to unwrap here?
-        client_config_for_ca_certificates([
-            &self.c8y.root_cert_path,
-            &self.az.root_cert_path,
-            &self.aws.root_cert_path,
-        ])
+        client_config_for_ca_certificates(
+            self.c8y
+                .values()
+                .map(|c8y| &c8y.root_cert_path)
+                .chain([&self.az.root_cert_path, &self.aws.root_cert_path]),
+        )
         .unwrap()
     }
 }
@@ -1228,6 +1228,9 @@ fn default_mqtt_port() -> NonZeroU16 {
 pub enum ReadError {
     #[error(transparent)]
     ConfigNotSet(#[from] ConfigNotSet),
+
+    #[error(transparent)]
+    Multi(#[from] MultiError),
 
     #[error("Config value {key}, cannot be read: {message} ")]
     ReadOnlyNotFound {
@@ -1410,6 +1413,6 @@ mod tests {
 
         let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
 
-        assert_eq!(reader.c8y.http.key(), "c8y.url");
+        assert_eq!(reader.c8y.try_get(None).unwrap().http.key(), "c8y.url");
     }
 }

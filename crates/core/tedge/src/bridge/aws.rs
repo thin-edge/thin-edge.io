@@ -1,6 +1,7 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
+use std::borrow::Cow;
 use tedge_config::HostPort;
 use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
@@ -10,7 +11,7 @@ const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-aws-bridg
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAwsParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
-    pub config_file: String,
+    pub config_file: Cow<'static, str>,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,
@@ -105,7 +106,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
 
     let expected = BridgeConfig {
         cloud_name: "aws".into(),
-        config_file: "aws-bridge.conf".to_string(),
+        config_file: "aws-bridge.conf".into(),
         connection: "edge_to_aws".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("alpha".into()),
@@ -158,7 +159,7 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
 
     let expected = BridgeConfig {
         cloud_name: "aws".into(),
-        config_file: "aws-bridge.conf".to_string(),
+        config_file: "aws-bridge.conf".into(),
         connection: "edge_to_aws".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("alpha".into()),

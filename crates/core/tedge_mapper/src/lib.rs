@@ -18,12 +18,19 @@ mod c8y;
 mod collectd;
 mod core;
 
-fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
+fn lookup_component(
+    component_name: &MapperName,
+    profile: Option<String>,
+) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper),
         MapperName::Aws => Box::new(AwsMapper),
         MapperName::Collectd => Box::new(CollectdMapper),
-        MapperName::C8y => Box::new(CumulocityMapper),
+        MapperName::C8y => Box::new(CumulocityMapper {
+            profile: profile
+                .or_else(|| std::env::var("C8Y_PROFILE").ok())
+                .inspect(|profile| std::env::set_var("C8Y_PROFILE", profile)),
+        }),
     }
 }
 
@@ -64,6 +71,9 @@ pub struct MapperOpt {
         hide_default_value = true,
     )]
     pub config_dir: PathBuf,
+
+    #[clap(long, global = true)]
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -86,7 +96,7 @@ impl fmt::Display for MapperName {
 }
 
 pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
-    let component = lookup_component(&mapper_opt.name);
+    let component = lookup_component(&mapper_opt.name, mapper_opt.profile.clone());
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);

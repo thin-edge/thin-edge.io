@@ -15,6 +15,7 @@ pub struct ReconnectBridgeCommand {
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
+    pub profile: Option<String>,
 }
 
 impl Command for ReconnectBridgeCommand {
@@ -54,6 +55,7 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
             is_test_connection: false,
             offline_mode: false,
             service_manager: reconnect_cmd.service_manager.clone(),
+            profile: reconnect_cmd.profile.clone(),
         }
     }
 }

@@ -64,6 +64,7 @@ impl FirmwareManagerConfig {
 
     pub fn from_tedge_config(
         tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
     ) -> Result<Self, FirmwareManagementConfigBuildError> {
         let tedge_device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let local_http_address = tedge_config.http.client.host.clone();
@@ -71,10 +72,11 @@ impl FirmwareManagerConfig {
         let tmp_dir = tedge_config.tmp.path.clone();
         let data_dir = tedge_config.data.path.clone().into();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
 
-        let c8y_url = tedge_config.c8y.http.or_config_not_set()?.to_string();
-        let c8y_mqtt = tedge_config.c8y.mqtt.or_config_not_set()?.to_string();
-        let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
+        let c8y_url = c8y_config.http.or_config_not_set()?.to_string();
+        let c8y_mqtt = c8y_config.mqtt.or_config_not_set()?.to_string();
+        let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
 
         Ok(Self::new(
             tedge_device_id,

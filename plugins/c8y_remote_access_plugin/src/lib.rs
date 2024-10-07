@@ -33,6 +33,8 @@ const UNIX_SOCKFILE: &str = "/run/c8y-remote-access-plugin.sock";
 
 pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let config_dir = opt.get_config_location();
+    let c8y_profile = opt.profile.clone();
+    let c8y_profile = c8y_profile.as_deref();
 
     let tedge_config = TEdgeConfig::try_new(config_dir.clone())
         .into_diagnostic()
@@ -53,9 +55,9 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             remove_supported_operation(config_dir.tedge_config_root_path());
             Ok(())
         }
-        Command::Connect(command) => proxy(command, tedge_config).await,
+        Command::Connect(command) => proxy(command, tedge_config, c8y_profile).await,
         Command::SpawnChild(command) => {
-            spawn_child(command, config_dir.tedge_config_root_path()).await
+            spawn_child(command, config_dir.tedge_config_root_path(), c8y_profile).await
         }
         Command::TryConnectUnixSocket(command) => match UnixStream::connect(UNIX_SOCKFILE).await {
             Ok(mut unix_stream) => {
@@ -66,7 +68,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             }
             Err(_e) => {
                 eprintln!("sock: Could not connect to Unix socket at {UNIX_SOCKFILE}. Falling back to spawning a child process");
-                spawn_child(command, config_dir.tedge_config_root_path()).await
+                spawn_child(command, config_dir.tedge_config_root_path(), c8y_profile).await
             }
         },
     }
@@ -125,13 +127,22 @@ static SUCCESS_MESSAGE: &str = "CONNECTED";
 ))]
 struct Unreachable<E: std::error::Error + 'static>(#[source] E, &'static str);
 
-async fn spawn_child(command: String, config_dir: &Utf8Path) -> miette::Result<()> {
+async fn spawn_child(
+    command: String,
+    config_dir: &Utf8Path,
+    c8y_profile: Option<&str>,
+) -> miette::Result<()> {
     let exec_path = std::env::args()
         .next()
         .ok_or(miette!("Could not get current process executable"))?;
 
     let mut command = tokio::process::Command::new(exec_path)
         .args(["--config-dir", config_dir.as_str()])
+        .args(
+            c8y_profile
+                .iter()
+                .flat_map(|profile| ["--c8y-profile", profile]),
+        )
         .arg("--child")
         .arg(command)
         .stdout(Stdio::piped())
@@ -266,15 +277,21 @@ async fn read_from_stream(unix_stream: &mut UnixStream) -> miette::Result<()> {
     .into())
 }
 
-async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
+async fn proxy(
+    command: RemoteAccessConnect,
+    config: TEdgeConfig,
+    c8y_profile: Option<&str>,
+) -> miette::Result<()> {
     let host = config
         .c8y
+        .try_get(c8y_profile)
+        .into_diagnostic()?
         .http
         .or_config_not_set()
         .into_diagnostic()?
         .to_string();
     let url = build_proxy_url(host.as_str(), command.key())?;
-    let jwt = Jwt::retrieve(&config)
+    let jwt = Jwt::retrieve(&config, c8y_profile)
         .await
         .context("Failed when requesting JWT from Cumulocity")?;
     let client_config = config.cloud_client_tls_config();

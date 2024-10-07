@@ -21,6 +21,7 @@ use tedge_api::path::DataDir;
 use tedge_api::service_health_topic;
 use tedge_config::AutoLogUpload;
 use tedge_config::ConfigNotSet;
+use tedge_config::MultiError;
 use tedge_config::ReadError;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
@@ -153,6 +154,7 @@ impl C8yMapperConfig {
     pub fn from_tedge_config(
         config_dir: impl AsRef<Utf8Path>,
         tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
@@ -164,14 +166,14 @@ impl C8yMapperConfig {
         let device_type = tedge_config.device.ty.clone();
         let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
         let service = tedge_config.service.clone();
-        let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let auth_proxy_addr = tedge_config.c8y.proxy.client.host.clone();
-        let auth_proxy_port = tedge_config.c8y.proxy.client.port;
-        let auth_proxy_protocol = tedge_config
-            .c8y
+        let auth_proxy_addr = c8y_config.proxy.client.host.clone();
+        let auth_proxy_port = c8y_config.proxy.client.port;
+        let auth_proxy_protocol = c8y_config
             .proxy
             .cert_path
             .or_none()
@@ -180,25 +182,25 @@ impl C8yMapperConfig {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 
         let capabilities = Capabilities {
-            log_upload: tedge_config.c8y.enable.log_upload,
-            config_snapshot: tedge_config.c8y.enable.config_snapshot,
-            config_update: tedge_config.c8y.enable.config_update,
-            firmware_update: tedge_config.c8y.enable.firmware_update,
-            device_profile: tedge_config.c8y.enable.device_profile,
+            log_upload: c8y_config.enable.log_upload,
+            config_snapshot: c8y_config.enable.config_snapshot,
+            config_update: c8y_config.enable.config_update,
+            firmware_update: c8y_config.enable.firmware_update,
+            device_profile: c8y_config.enable.device_profile,
         };
-        let c8y_prefix = tedge_config.c8y.bridge.topic_prefix.clone();
+        let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
 
         let mut topics =
             Self::default_internal_topic_filter(config_dir.as_std_path(), &c8y_prefix)?;
-        let enable_auto_register = tedge_config.c8y.entity_store.auto_register;
-        let clean_start = tedge_config.c8y.entity_store.clean_start;
+        let enable_auto_register = c8y_config.entity_store.auto_register;
+        let clean_start = c8y_config.entity_store.clean_start;
 
-        let software_management_api = tedge_config.c8y.software_management.api;
-        let software_management_with_types = tedge_config.c8y.software_management.with_types;
+        let software_management_api = c8y_config.software_management.api;
+        let software_management_with_types = c8y_config.software_management.with_types;
 
-        let auto_log_upload = tedge_config.c8y.operations.auto_log_upload;
-        let smartrest_use_operation_id = tedge_config.c8y.smartrest.use_operation_id;
-        let max_mqtt_payload_size = tedge_config.c8y.mapper.mqtt.max_payload_size.0;
+        let auto_log_upload = c8y_config.operations.auto_log_upload;
+        let smartrest_use_operation_id = c8y_config.smartrest.use_operation_id;
+        let max_mqtt_payload_size = c8y_config.mapper.mqtt.max_payload_size.0;
 
         // Add feature topic filters
         for cmd in [
@@ -217,7 +219,7 @@ impl C8yMapperConfig {
         topics.add_all(operation_topics);
 
         // Add user configurable external topic filters
-        for topic in tedge_config.c8y.topics.0.clone() {
+        for topic in c8y_config.topics.0.clone() {
             if topics.add(&topic).is_err() {
                 warn!("The configured topic '{topic}' is invalid and ignored.");
             }
@@ -313,6 +315,9 @@ pub enum C8yMapperConfigBuildError {
 
     #[error(transparent)]
     FromTopicIdError(#[from] TopicIdError),
+
+    #[error(transparent)]
+    FromMultiError(#[from] MultiError),
 }
 
 #[derive(thiserror::Error, Debug)]

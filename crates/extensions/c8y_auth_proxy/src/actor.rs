@@ -39,20 +39,22 @@ pub struct C8yAuthProxyBuilder {
 impl C8yAuthProxyBuilder {
     pub fn try_from_config(
         config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
         jwt: &mut ServerActorBuilder<C8YJwtRetriever, Sequential>,
     ) -> anyhow::Result<Self> {
         let reqwest_client = config.cloud_root_certs().client();
+        let c8y = config.c8y.try_get(c8y_profile)?;
         let app_data = AppData {
             is_https: true,
-            host: config.c8y.http.or_config_not_set()?.to_string(),
+            host: c8y.http.or_config_not_set()?.to_string(),
             token_manager: TokenManager::new(JwtRetriever::new(jwt)).shared(),
             client: reqwest_client,
         };
-        let bind = &config.c8y.proxy.bind;
+        let bind = &c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let cert_path = config.c8y.proxy.cert_path.clone();
-        let key_path = config.c8y.proxy.key_path.clone();
-        let ca_path = config.c8y.proxy.ca_path.clone();
+        let cert_path = c8y.proxy.cert_path.clone();
+        let key_path = c8y.proxy.key_path.clone();
+        let ca_path = c8y.proxy.ca_path.clone();
 
         Ok(Self {
             app_data,

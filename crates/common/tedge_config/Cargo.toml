@@ -21,6 +21,7 @@ figment = { workspace = true, features = ["env", "toml"] }
 humantime = { workspace = true }
 mqtt_channel = { workspace = true }
 once_cell = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 rustls = { workspace = true }
 serde = { workspace = true, features = ["rc"] }

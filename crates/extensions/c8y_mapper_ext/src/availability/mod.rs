@@ -8,6 +8,7 @@ use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
+use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
@@ -59,15 +60,19 @@ pub struct AvailabilityConfig {
     pub interval: Duration,
 }
 
-impl From<&TEdgeConfig> for AvailabilityConfig {
-    fn from(tedge_config: &TEdgeConfig) -> Self {
-        let xid = tedge_config.device.id.try_read(tedge_config).unwrap();
-        Self {
+impl AvailabilityConfig {
+    pub fn try_new(
+        tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
+    ) -> Result<Self, ReadError> {
+        let xid = tedge_config.device.id.try_read(tedge_config)?;
+        let c8y = tedge_config.c8y.try_get(c8y_profile)?;
+        Ok(Self {
             main_device_id: xid.into(),
             mqtt_schema: MqttSchema::with_root(tedge_config.mqtt.topic_root.clone()),
-            c8y_prefix: tedge_config.c8y.bridge.topic_prefix.clone(),
-            enable: tedge_config.c8y.availability.enable,
-            interval: tedge_config.c8y.availability.interval.duration(),
-        }
+            c8y_prefix: c8y.bridge.topic_prefix.clone(),
+            enable: c8y.availability.enable,
+            interval: c8y.availability.interval.duration(),
+        })
     }
 }

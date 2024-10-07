@@ -19,6 +19,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::Service;
 use tedge_config::ConfigNotSet;
+use tedge_config::MultiError;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_http_ext::HttpRequest;
@@ -44,12 +45,23 @@ pub struct C8YHttpConfig {
     retry_interval: Duration,
 }
 
-impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
-    type Error = C8yHttpConfigBuildError;
-
-    fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
-        let c8y_http_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
-        let c8y_mqtt_host = tedge_config.c8y.mqtt.or_config_not_set()?.to_string();
+impl C8YHttpConfig {
+    pub fn try_new(
+        tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
+    ) -> Result<Self, C8yHttpConfigBuildError> {
+        let c8y_http_host = tedge_config
+            .c8y
+            .try_get(c8y_profile)?
+            .http
+            .or_config_not_set()?
+            .to_string();
+        let c8y_mqtt_host = tedge_config
+            .c8y
+            .try_get(c8y_profile)?
+            .mqtt
+            .or_config_not_set()?
+            .to_string();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
         let identity = tedge_config.http.client.auth.identity()?;
@@ -76,6 +88,9 @@ pub enum C8yHttpConfigBuildError {
 
     #[error(transparent)]
     FromConfigNotSet(#[from] ConfigNotSet),
+
+    #[error(transparent)]
+    FromMultiError(#[from] MultiError),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),

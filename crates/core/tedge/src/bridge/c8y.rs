@@ -1,6 +1,7 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
+use std::borrow::Cow;
 use std::process::Command;
 use tedge_config::AutoFlag;
 use tedge_config::HostPort;
@@ -14,7 +15,7 @@ const C8Y_BRIDGE_HEALTH_TOPIC: &str = "te/device/main/service/mosquitto-c8y-brid
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
-    pub config_file: String,
+    pub config_file: Cow<'static, str>,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,

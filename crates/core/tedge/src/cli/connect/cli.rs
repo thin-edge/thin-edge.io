@@ -19,6 +19,9 @@ pub enum TEdgeConnectOpt {
         /// Ignore connection registration and connection check
         #[clap(long = "offline")]
         offline_mode: bool,
+
+        #[clap(long, env = "C8Y_PROFILE")]
+        profile: Option<String>,
     },
 
     /// Create connection to Azure
@@ -54,6 +57,7 @@ impl BuildCommand for TEdgeConnectOpt {
             TEdgeConnectOpt::C8y {
                 is_test_connection,
                 offline_mode,
+                profile,
             } => ConnectCommand {
                 config_location: context.config_location.clone(),
                 config: context.load_config()?,
@@ -61,6 +65,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 is_test_connection,
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
+                profile,
             },
             TEdgeConnectOpt::Az {
                 is_test_connection,
@@ -72,6 +77,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 is_test_connection,
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
+                profile: None,
             },
             TEdgeConnectOpt::Aws {
                 is_test_connection,
@@ -83,6 +89,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 is_test_connection,
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
+                profile: None,
             },
         }
         .into_boxed())

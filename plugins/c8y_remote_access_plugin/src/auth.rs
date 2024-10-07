@@ -9,9 +9,9 @@ impl Jwt {
         format!("Bearer {}", self.0)
     }
 
-    pub async fn retrieve(config: &TEdgeConfig) -> miette::Result<Jwt> {
+    pub async fn retrieve(config: &TEdgeConfig, c8y_profile: Option<&str>) -> miette::Result<Jwt> {
         let mut retriever =
-            C8yMqttJwtTokenRetriever::from_tedge_config(config).into_diagnostic()?;
+            C8yMqttJwtTokenRetriever::from_tedge_config(config, c8y_profile).into_diagnostic()?;
 
         retriever
             .get_jwt_token()

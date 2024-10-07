@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use camino::Utf8PathBuf;
 use tedge_config::HostPort;
 use tedge_config::TEdgeConfigLocation;
@@ -12,7 +14,7 @@ use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 pub struct BridgeConfig {
     pub cloud_name: String,
     // XXX: having file name squished together with 20 fields which go into file content is a bit obscure
-    pub config_file: String,
+    pub config_file: Cow<'static, str>,
     pub connection: String,
     pub address: HostPort<MQTT_TLS_PORT>,
     pub remote_username: Option<String>,
@@ -132,7 +134,7 @@ impl BridgeConfig {
         tedge_config_location
             .tedge_config_root_path
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-            .join(&self.config_file)
+            .join(&*self.config_file)
     }
 }
 
@@ -406,7 +408,7 @@ bridge_attempt_unsubscribe false
     fn default_bridge_config() -> BridgeConfig {
         BridgeConfig {
             cloud_name: "az/c8y".into(),
-            config_file: "cfg".to_string(),
+            config_file: "cfg".into(),
             connection: "edge_to_az/c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::from_str("test.com").unwrap(),
             remote_username: None,

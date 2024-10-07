@@ -66,6 +66,10 @@ pub struct C8yRemoteAccessPluginOpt {
     /// The group who will own the directories created by --init
     #[arg(long, requires("init"), default_value = "tedge")]
     group: Option<String>,
+
+    #[arg(long, env = "C8Y_PROFILE")]
+    /// The c8y profile to use
+    pub profile: Option<String>,
 }
 
 impl C8yRemoteAccessPluginOpt {

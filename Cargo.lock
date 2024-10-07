@@ -3949,6 +3949,7 @@ dependencies = [
  "humantime",
  "mqtt_channel",
  "once_cell",
+ "regex",
  "reqwest",
  "rustls 0.21.11",
  "serde",

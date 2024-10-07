@@ -57,6 +57,9 @@ pub struct FirmwarePluginOpt {
         hide_default_value = true,
     )]
     pub config_dir: PathBuf,
+
+    #[clap(long, env)]
+    pub c8y_profile: Option<String>,
 }
 
 pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::Error> {
@@ -72,23 +75,32 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
     set_log_level(log_level);
 
     let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
+    let c8y_profile = firmware_plugin_opt.c8y_profile.as_deref();
 
     if firmware_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");
         Ok(())
     } else {
-        run_with(tedge_config).await
+        run_with(tedge_config, c8y_profile).await
     }
 }
 
-async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+async fn run_with(
+    tedge_config: TEdgeConfig,
+    c8y_profile: Option<&str>,
+) -> Result<(), anyhow::Error> {
     let mut runtime = Runtime::new();
 
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
     let mut jwt_actor = C8YJwtRetriever::builder(
         mqtt_config.clone(),
-        tedge_config.c8y.bridge.topic_prefix.clone(),
+        tedge_config
+            .c8y
+            .try_get(c8y_profile)?
+            .bridge
+            .topic_prefix
+            .clone(),
     );
     let identity = tedge_config.http.client.auth.identity()?;
     let cloud_root_certs = tedge_config.cloud_root_certs();
@@ -123,7 +135,8 @@ async fn run_with(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     );
 
     // Instantiate firmware manager actor
-    let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;
+    let firmware_manager_config =
+        FirmwareManagerConfig::from_tedge_config(&tedge_config, c8y_profile)?;
     let firmware_actor = FirmwareManagerBuilder::try_new(
         firmware_manager_config,
         &mut mqtt_actor,
