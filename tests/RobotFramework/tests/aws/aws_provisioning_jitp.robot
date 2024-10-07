@@ -30,8 +30,5 @@ Connect to AWS
     ${stdout}=    Execute Command    sudo tedge connect aws    retries=0
     Should Not Contain    ${stdout}    Warning: Bridge has been configured, but Aws connection check failed
 
-    ${bridge_service_name}=    Get Bridge Service Name    aws
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-aws
-    ThinEdgeIO.Should Have MQTT Messages
-    ...    te/device/main/service/${bridge_service_name}/status/health
-    ...    message_pattern=^(1|.*"status":"up".*)$
+    ThinEdgeIO.Bridge Should Be Up    aws
