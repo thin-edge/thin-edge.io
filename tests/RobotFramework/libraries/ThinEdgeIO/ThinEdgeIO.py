@@ -502,7 +502,7 @@ class ThinEdgeIO(DeviceLibrary):
     # Service Health Status
     #
     @keyword("Service Health Status Should Be Up")
-    def assert_service_health_status_up(self, service: str, device: str = "main") -> Dict[str, Any]:
+    def assert_service_health_status_up(self, service: str, device: str = "main", **kwargs) -> Dict[str, Any]:
         """Checks if the Service Health Status is up
 
         *Examples:*
@@ -510,19 +510,19 @@ class ThinEdgeIO(DeviceLibrary):
         | `Service Health Status Should Be Up` | tedge-mapper-c8y |
         | `Service Health Status Should Be Up` | tedge-mapper-c8y | device=child01 |
         """
-        return self._assert_health_status(service, status="up", device=device)
+        return self._assert_health_status(service, status="up", device=device, **kwargs)
 
     @keyword("Service Health Status Should Be Down")
-    def assert_service_health_status_down(self, service: str, device: str = "main") -> Dict[str, Any]:
-        return self._assert_health_status(service, status="down", device=device)
+    def assert_service_health_status_down(self, service: str, device: str = "main", **kwargs) -> Dict[str, Any]:
+        return self._assert_health_status(service, status="down", device=device, **kwargs)
 
     @keyword("Service Health Status Should Be Equal")
     def assert_service_health_status_equal(
-            self, service: str, status: str, device: str = "main"
+            self, service: str, status: str, device: str = "main", **kwargs
     ) -> Dict[str, Any]:
         return self._assert_health_status(service, status=status, device=device)
 
-    def _assert_health_status(self, service: str, status: str, device: str = "main") -> Dict[str, Any]:
+    def _assert_health_status(self, service: str, status: str, device: str = "main", **kwargs) -> Dict[str, Any]:
         # if mqtt.client.auth.ca_file or mqtt.client.auth.ca_dir is set, we pass setting
         # value to mosquitto_sub
         mqtt_config_options = self.execute_command(
@@ -552,7 +552,9 @@ class ThinEdgeIO(DeviceLibrary):
                 ex,
                 message,
             )
-            current_status = message
+            # Convert mosquitto 1/0 to up/down
+            status_mappings = {"1":"up","0":"down"}
+            current_status = status_mappings.get(message.strip(), "unknown") 
         assert current_status == status
         return health
 
@@ -898,12 +900,40 @@ class ThinEdgeIO(DeviceLibrary):
         The service name will depend if the built-in bridge
         has been activated or not (on the device).
         """
-        output = self.execute_command("tedge config get mqtt.bridge.built_in", strip=True, ignore_exit_code=True)
+        output = self.execute_command(
+            "tedge config get mqtt.bridge.built_in", strip=True, ignore_exit_code=True
+        )
         if output == "true":
             return f"tedge-mapper-bridge-{cloud}"
 
         # Legacy mosquitto bridge
         return f"mosquitto-{cloud}-bridge"
+
+    @keyword("Bridge Should Be Up")
+    def bridge_should_be_up(self, cloud: str, **kwargs) -> str:
+        """Assert that the bridge should be up/healthy
+
+        Examples:
+        | Bridge Should Be Up | c8y |
+        | Bridge Should Be Up | aws |
+        | Bridge Should Be Up | az |
+        """
+        return self.assert_service_health_status_up(
+            self.get_bridge_service_name(cloud), **kwargs
+        )
+
+    @keyword("Bridge Should Be Down")
+    def bridge_should_be_down(self, cloud: str, **kwargs) -> str:
+        """Assert that the bridge should be down/unhealthy
+
+        Examples:
+        | Bridge Should Be Down | c8y |
+        | Bridge Should Be Down | aws |
+        | Bridge Should Be Down | az |
+        """
+        return self.assert_service_health_status_down(
+            self.get_bridge_service_name(cloud), **kwargs
+        )
 
 
 def to_date(value: relativetime_) -> datetime:
