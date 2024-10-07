@@ -10,18 +10,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'  # Use Python 3.x
-
-      - name: Install dependencies
+      - name: Set up environment variables
         run: |
-          pip install requests
+          echo "MUNIN_USERNAME=${{ secrets.MUNIN_USERNAME }}" >> $GITHUB_ENV
+          echo "MUNIN_PASSWORD=${{ secrets.MUNIN_PASSWORD }}" >> $GITHUB_ENV
 
-      - name: Run download_svgs.py
+      - name: Make download_svgs.sh executable
+        run: chmod +x /scripts/download_svgs.sh
+
+      - name: Run download_svgs.sh
         env:
           MUNIN_USERNAME: ${{ secrets.MUNIN_USERNAME }}
           MUNIN_PASSWORD: ${{ secrets.MUNIN_PASSWORD }}
         run: |
-          python3 /scripts/download_svgs.py
+          /scripts/download_svgs.sh
