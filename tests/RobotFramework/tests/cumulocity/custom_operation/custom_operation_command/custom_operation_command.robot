@@ -15,7 +15,7 @@ Run shell custom operation for main device and publish the status
     ${operation}=    Cumulocity.Create Operation
     ...    description=echo helloworld
     ...    fragments={"c8y_Command":{"text":"echo helloworld"}}
-    
+
     Operation Should Be SUCCESSFUL    ${operation}
     Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    helloworld\n
     Should Have MQTT Messages
@@ -28,11 +28,11 @@ Run shell custom operation for main device and do not publish the status
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_2    /etc/tedge/operations/c8y/c8y_Command
     Restart Service    tedge-mapper-c8y
     ${operation}=    Cumulocity.Create Operation
-    ...    description=echo helloworld    
+    ...    description=echo helloworld
     ...    fragments={"c8y_Command":{"text":"echo helloworld"}}
-    
+
     Operation Should Be PENDING    ${operation}
-    
+
     Should Have MQTT Messages
     ...    c8y/s/us
     ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld\n\\")
