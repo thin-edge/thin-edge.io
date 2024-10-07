@@ -13,84 +13,70 @@ use tracing::warn;
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
 
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub enum ResultFormat {
-    #[default]
-    Text,
-    Csv,
-}
-
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
-#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub struct OnMessageExec {
-    command: Option<String>,
-    on_message: Option<String>,
-    on_fragment: Option<String>,
-    topic: Option<String>,
-    user: Option<String>,
-    #[serde(default)]
-    skip_status_update: bool,
-    #[serde(default, deserialize_with = "to_result_format")]
-    result_format: ResultFormat,
-    #[serde(rename = "timeout")]
-    #[serde(default = "default_graceful_timeout", deserialize_with = "to_duration")]
-    pub graceful_timeout: Duration,
-    #[serde(default = "default_forceful_timeout", deserialize_with = "to_duration")]
-    pub forceful_timeout: Duration,
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Operations {
+    operations: Vec<Operation>,
 }
 
-fn to_result_format<'de, D>(deserializer: D) -> Result<ResultFormat, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let val: String = serde::Deserialize::deserialize(deserializer)?;
-
-    match val.as_str() {
-        "text" => Ok(ResultFormat::Text),
-        "csv" => Ok(ResultFormat::Csv),
-        _ => Err(serde::de::Error::unknown_variant(&val, &["text", "csv"])),
+impl Operations {
+    pub fn add_operation(&mut self, operation: Operation) {
+        self.operations.push(operation);
     }
-}
 
-fn default_graceful_timeout() -> Duration {
-    DEFAULT_GRACEFUL_TIMEOUT
-}
-
-fn default_forceful_timeout() -> Duration {
-    DEFAULT_FORCEFUL_TIMEOUT
-}
-
-fn to_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let timeout = Deserialize::deserialize(deserializer)?;
-    Ok(Duration::from_secs(timeout))
-}
-
-impl OnMessageExec {
-    pub fn set_time_out(&mut self, timeout: Duration) {
-        self.graceful_timeout = timeout;
+    pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
+        get_operations(dir.as_ref())
     }
-}
 
-/// Invalid mapping definition of custom operation handlers
-#[derive(thiserror::Error, Debug)]
-pub enum InvalidCustomOperationHandler {
-    #[error("'topic' is missing'")]
-    MissingTopic,
+    pub fn get_operations_list(&self) -> Vec<String> {
+        let mut ops_name: Vec<String> = Vec::default();
+        for op in &self.operations {
+            ops_name.push(op.name.clone());
+        }
 
-    #[error("'on_fragment' should not be provided for SmartREST custom operation handler")]
-    OnFragmentExists,
+        ops_name
+    }
 
-    #[error("'on_fragment' is missing")]
-    MissingOnFragment,
+    pub fn matching_smartrest_template(&self, operation_template: &str) -> Option<Operation> {
+        for op in self.operations.clone() {
+            if let Some(template) = op.template() {
+                if template.eq(operation_template) {
+                    return Some(op);
+                }
+            }
+        }
+        None
+    }
 
-    #[error("'command' is missing")]
-    MissingCommand,
+    pub fn filter_by_topic(&self, topic_name: &str) -> Vec<(String, Operation)> {
+        let mut vec: Vec<(String, Operation)> = Vec::new();
+        for op in self.operations.iter() {
+            match (op.topic(), op.on_fragment()) {
+                (None, Some(on_fragment)) => vec.push((on_fragment, op.clone())),
+                (Some(topic), Some(on_fragment)) if topic == topic_name => {
+                    vec.push((on_fragment, op.clone()))
+                }
+                _ => {}
+            }
+        }
+        vec
+    }
+
+    pub fn topics_for_operations(&self) -> HashSet<String> {
+        self.operations
+            .iter()
+            .filter_map(|operation| operation.topic())
+            .collect::<HashSet<String>>()
+    }
+
+    pub fn create_smartrest_ops_message(&self) -> String {
+        let mut ops = self.get_operations_list();
+        ops.sort();
+        let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
+        declare_supported_operations(&ops)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
@@ -202,76 +188,48 @@ impl Operation {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Operations {
-    operations: Vec<Operation>,
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct OnMessageExec {
+    command: Option<String>,
+    on_message: Option<String>,
+    on_fragment: Option<String>,
+    topic: Option<String>,
+    user: Option<String>,
+    #[serde(default)]
+    skip_status_update: bool,
+    #[serde(default, deserialize_with = "to_result_format")]
+    result_format: ResultFormat,
+    #[serde(rename = "timeout")]
+    #[serde(default = "default_graceful_timeout", deserialize_with = "to_duration")]
+    pub graceful_timeout: Duration,
+    #[serde(default = "default_forceful_timeout", deserialize_with = "to_duration")]
+    pub forceful_timeout: Duration,
 }
 
-/// depending on which editor you use, temporary files could be created that contain the name of
-/// the file.
-/// this `operation_name_is_valid` fn will ensure that only files that do not contain
-/// any special characters are allowed.
-pub fn is_valid_operation_name(operation: &str) -> bool {
-    operation
-        .chars()
-        .all(|c| c.is_ascii_alphabetic() || c.is_numeric() || c.eq(&'_'))
+impl OnMessageExec {
+    pub fn set_time_out(&mut self, timeout: Duration) {
+        self.graceful_timeout = timeout;
+    }
 }
 
-impl Operations {
-    pub fn add_operation(&mut self, operation: Operation) {
-        self.operations.push(operation);
-    }
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub enum ResultFormat {
+    #[default]
+    Text,
+    Csv,
+}
 
-    pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
-        get_operations(dir.as_ref())
-    }
+fn to_result_format<'de, D>(deserializer: D) -> Result<ResultFormat, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let val: String = serde::Deserialize::deserialize(deserializer)?;
 
-    pub fn get_operations_list(&self) -> Vec<String> {
-        let mut ops_name: Vec<String> = Vec::default();
-        for op in &self.operations {
-            ops_name.push(op.name.clone());
-        }
-
-        ops_name
-    }
-
-    pub fn matching_smartrest_template(&self, operation_template: &str) -> Option<Operation> {
-        for op in self.operations.clone() {
-            if let Some(template) = op.template() {
-                if template.eq(operation_template) {
-                    return Some(op);
-                }
-            }
-        }
-        None
-    }
-
-    pub fn filter_by_topic(&self, topic_name: &str) -> Vec<(String, Operation)> {
-        let mut vec: Vec<(String, Operation)> = Vec::new();
-        for op in self.operations.iter() {
-            match (op.topic(), op.on_fragment()) {
-                (None, Some(on_fragment)) => vec.push((on_fragment, op.clone())),
-                (Some(topic), Some(on_fragment)) if topic == topic_name => {
-                    vec.push((on_fragment, op.clone()))
-                }
-                _ => {}
-            }
-        }
-        vec
-    }
-
-    pub fn topics_for_operations(&self) -> HashSet<String> {
-        self.operations
-            .iter()
-            .filter_map(|operation| operation.topic())
-            .collect::<HashSet<String>>()
-    }
-
-    pub fn create_smartrest_ops_message(&self) -> String {
-        let mut ops = self.get_operations_list();
-        ops.sort();
-        let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
-        declare_supported_operations(&ops)
+    match val.as_str() {
+        "text" => Ok(ResultFormat::Text),
+        "csv" => Ok(ResultFormat::Csv),
+        _ => Err(serde::de::Error::unknown_variant(&val, &["text", "csv"])),
     }
 }
 
@@ -353,6 +311,48 @@ pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
         .clone_into(&mut details.name);
 
     Ok(details)
+}
+
+/// depending on which editor you use, temporary files could be created that contain the name of
+/// the file.
+/// this `operation_name_is_valid` fn will ensure that only files that do not contain
+/// any special characters are allowed.
+pub fn is_valid_operation_name(operation: &str) -> bool {
+    operation
+        .chars()
+        .all(|c| c.is_ascii_alphabetic() || c.is_numeric() || c.eq(&'_'))
+}
+
+fn default_graceful_timeout() -> Duration {
+    DEFAULT_GRACEFUL_TIMEOUT
+}
+
+fn default_forceful_timeout() -> Duration {
+    DEFAULT_FORCEFUL_TIMEOUT
+}
+
+fn to_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let timeout = Deserialize::deserialize(deserializer)?;
+    Ok(Duration::from_secs(timeout))
+}
+
+/// Invalid mapping definition of custom operation handlers
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidCustomOperationHandler {
+    #[error("'topic' is missing'")]
+    MissingTopic,
+
+    #[error("'on_fragment' should not be provided for SmartREST custom operation handler")]
+    OnFragmentExists,
+
+    #[error("'on_fragment' is missing")]
+    MissingOnFragment,
+
+    #[error("'command' is missing")]
+    MissingCommand,
 }
 
 #[cfg(test)]
