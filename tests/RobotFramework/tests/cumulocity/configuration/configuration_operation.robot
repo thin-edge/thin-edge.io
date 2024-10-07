@@ -551,7 +551,6 @@ Update configuration plugin config via local filesystem move (different director
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG-ROOT
-
     ...    Config@2.0.0
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}

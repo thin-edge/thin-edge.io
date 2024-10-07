@@ -18,6 +18,7 @@ Send firmware update operation from Cumulocity IoT
     ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
     Cumulocity.Device Should Have Firmware    tedge-core    1.0.0    https://abc.com/some/firmware/url
 
+
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup
