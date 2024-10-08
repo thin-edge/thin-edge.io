@@ -7,10 +7,15 @@ use serde::Serialize;
 #[derive(Default)]
 pub struct WorkflowSupervisor {
     /// The user-defined operation workflow definitions
-    workflows: HashMap<OperationType, OperationWorkflow>,
+    workflows: HashMap<OperationType, WorkflowVersions>,
 
     /// Operation instances under execution
     commands: CommandBoard,
+}
+
+struct WorkflowVersions {
+    current: WorkflowVersion,
+    workflows: HashMap<WorkflowVersion, OperationWorkflow>,
 }
 
 impl WorkflowSupervisor {
@@ -19,30 +24,39 @@ impl WorkflowSupervisor {
         &mut self,
         operation: OperationType,
     ) -> Result<(), WorkflowRegistrationError> {
-        self.register_custom_workflow(OperationWorkflow::built_in(operation))
+        self.register_custom_workflow(
+            OperationWorkflow::built_in(operation),
+            "builtin".to_string(),
+        )
     }
 
     /// Register a user-defined workflow
     pub fn register_custom_workflow(
         &mut self,
         workflow: OperationWorkflow,
+        version: WorkflowVersion,
     ) -> Result<(), WorkflowRegistrationError> {
-        if let Some(previous) = self.workflows.get(&workflow.operation) {
-            if previous.built_in == workflow.built_in {
-                return Err(WorkflowRegistrationError::DuplicatedWorkflow {
-                    operation: workflow.operation.to_string(),
-                });
-            }
-
-            info!(
-                "The built-in {} operation has been customized",
-                workflow.operation
-            );
-            if workflow.built_in {
+        let operation = workflow.operation.clone();
+        if let Some(versions) = self.workflows.get_mut(&operation) {
+            if version == versions.current || versions.workflows.contains_key(&version) {
+                // Already registered
                 return Ok(());
             }
+
+            if workflow.built_in {
+                info!("The built-in {operation} operation has been customized",);
+                return Ok(());
+            }
+
+            versions.workflows.insert(version.clone(), workflow);
+            versions.current = version
+        } else {
+            let versions = WorkflowVersions {
+                current: version.clone(),
+                workflows: HashMap::from([(version, workflow)]),
+            };
+            self.workflows.insert(operation, versions);
         }
-        self.workflows.insert(workflow.operation.clone(), workflow);
         Ok(())
     }
 
@@ -67,7 +81,11 @@ impl WorkflowSupervisor {
         target: &EntityTopicId,
     ) -> Vec<MqttMessage> {
         // To ease testing the capability messages are emitted in a deterministic order
-        let mut operations = self.workflows.values().collect::<Vec<_>>();
+        let mut operations = self
+            .workflows
+            .values()
+            .filter_map(|versions| versions.current_workflow())
+            .collect::<Vec<_>>();
         operations.sort_by(|&a, &b| a.operation.to_string().cmp(&b.operation.to_string()));
         operations
             .iter()
@@ -83,7 +101,7 @@ impl WorkflowSupervisor {
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
-        if !self.workflows.contains_key(operation) {
+        let Some(workflow_versions) = self.workflows.get(operation) else {
             return Err(WorkflowExecutionError::UnknownOperation {
                 operation: operation.to_string(),
             });
@@ -94,6 +112,7 @@ impl WorkflowSupervisor {
             Ok(Some(command_state))
         } else if command_state.is_init() {
             // This is a new command request
+            let command_state = command_state.set_workflow_version(&workflow_versions.current);
             self.commands.insert(command_state.clone())?;
             Ok(Some(command_state))
         } else {
@@ -118,11 +137,13 @@ impl WorkflowSupervisor {
             });
         };
 
+        let version = command_state.workflow_version();
         self.workflows
             .get(&operation_name.as_str().into())
             .ok_or(WorkflowExecutionError::UnknownOperation {
-                operation: operation_name,
+                operation: operation_name.clone(),
             })
+            .and_then(|versions| versions.get(&operation_name, version.as_ref()))
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
@@ -226,6 +247,26 @@ impl WorkflowSupervisor {
                 Some(command)
             }
         }
+    }
+}
+
+impl WorkflowVersions {
+    fn get(
+        &self,
+        operation: &OperationName,
+        version: Option<&WorkflowVersion>,
+    ) -> Result<&OperationWorkflow, WorkflowExecutionError> {
+        let version = version.unwrap_or(&self.current);
+        self.workflows
+            .get(version)
+            .ok_or(WorkflowExecutionError::UnknownVersion {
+                operation: operation.clone(),
+                version: version.to_string(),
+            })
+    }
+
+    fn current_workflow(&self) -> Option<&OperationWorkflow> {
+        self.workflows.get(&self.current)
     }
 }
 
@@ -340,7 +381,7 @@ mod tests {
         // Start a level_1 operation
         let level_1_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
             &Topic::new_unchecked("te/device/foo///cmd/level_1/id_1"),
-            r#"{ "status":"init" }"#,
+            r#"{ "@version": "builtin", "status":"init" }"#,
         ))
         .unwrap();
         workflows
@@ -356,7 +397,7 @@ mod tests {
         // Start a level_2 operation, sub-command of the previous level_1 command
         let level_2_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
             &Topic::new_unchecked("te/device/foo///cmd/level_2/sub:level_1:id_1"),
-            r#"{ "status":"init" }"#,
+            r#"{ "@version": "builtin", "status":"init" }"#,
         ))
         .unwrap();
         workflows
@@ -377,7 +418,7 @@ mod tests {
         // Start a level_3 operation, sub-command of the previous level_2 command
         let level_3_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
             &Topic::new_unchecked("te/device/foo///cmd/level_3/sub:level_2:sub:level_1:id_1"),
-            r#"{ "status":"init" }"#,
+            r#"{ "@version": "builtin", "status":"init" }"#,
         ))
         .unwrap();
         workflows
