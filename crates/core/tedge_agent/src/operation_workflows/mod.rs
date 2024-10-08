@@ -6,6 +6,7 @@ use std::path::Path;
 use tedge_api::workflow::IllFormedOperationWorkflow;
 use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::WorkflowSupervisor;
+use tedge_api::workflow::WorkflowVersion;
 use tracing::info;
 
 mod actor;
@@ -28,8 +29,9 @@ pub async fn load_operation_workflows(
         if file.extension() == Some(OsStr::new("toml")) {
             match read_operation_workflow(&file)
                 .await
-                .and_then(|workflow| load_operation_workflow(&mut workflows, workflow))
-            {
+                .and_then(|(workflow, version)| {
+                    load_operation_workflow(&mut workflows, workflow, version)
+                }) {
                 Ok(cmd) => {
                     info!(
                         "Using operation workflow definition from {file:?} for '{cmd}' operation"
@@ -44,9 +46,12 @@ pub async fn load_operation_workflows(
     Ok(workflows)
 }
 
-async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyhow::Error> {
+async fn read_operation_workflow(
+    path: &Path,
+) -> Result<(OperationWorkflow, WorkflowVersion), anyhow::Error> {
     let bytes = tokio::fs::read(path).await.context("Fail to read file")?;
     let input = std::str::from_utf8(&bytes).context("Fail to extract UTF8 content")?;
+    let version = sha256::digest(input);
 
     toml::from_str::<OperationWorkflow>(input)
         .context("Fail to parse TOML")
@@ -58,13 +63,15 @@ async fn read_operation_workflow(path: &Path) -> Result<OperationWorkflow, anyho
             let reason = format!("Invalid operation workflow definition {path:?}: {err:?}");
             Ok(OperationWorkflow::ill_formed(workflow.operation, reason))
         })
+        .map(|workflow| (workflow, version))
 }
 
 fn load_operation_workflow(
     workflows: &mut WorkflowSupervisor,
     workflow: OperationWorkflow,
+    version: WorkflowVersion,
 ) -> Result<String, anyhow::Error> {
     let name = workflow.operation.to_string();
-    workflows.register_custom_workflow(workflow)?;
+    workflows.register_custom_workflow(workflow, version)?;
     Ok(name)
 }
