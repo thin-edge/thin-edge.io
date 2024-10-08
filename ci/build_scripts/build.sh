@@ -159,6 +159,10 @@ source ./ci/package_list.sh
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
 if [ "$BUILD" = 1 ]; then
+    # Install stable toolchain if missing
+    if command -V rustup >/dev/null 2>&1; then
+        rustup toolchain install stable --no-self-update
+    fi
     # Use zig to build as it is provides better cross compiling support
     cargo +stable install cargo-zigbuild --version ">=0.17.3"
 
