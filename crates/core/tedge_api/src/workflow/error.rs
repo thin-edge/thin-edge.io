@@ -82,6 +82,9 @@ pub enum WorkflowExecutionError {
     #[error("No workflow is defined for the operation: {operation}")]
     UnknownOperation { operation: String },
 
+    #[error("Unknown version for the {operation} operation: {version}")]
+    UnknownVersion { operation: String, version: String },
+
     #[error("No command has been initiated on the command topic: {topic}")]
     UnknownRequest { topic: String },
 

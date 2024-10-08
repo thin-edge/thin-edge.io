@@ -26,6 +26,7 @@ pub type OperationName = String;
 pub type StateName = String;
 pub type CommandId = String;
 pub type JsonPath = String;
+pub type WorkflowVersion = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
