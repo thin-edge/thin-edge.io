@@ -3,9 +3,9 @@ use crate::operation_workflows::actor::InternalCommandState;
 use crate::operation_workflows::actor::WorkflowActor;
 use crate::operation_workflows::config::OperationConfig;
 use crate::operation_workflows::message_box::CommandDispatcher;
+use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
-use log::error;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -28,14 +28,12 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
-use tedge_api::workflow::WorkflowSupervisor;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
 
 pub struct WorkflowActorBuilder {
     config: OperationConfig,
-    workflows: WorkflowSupervisor,
     input_sender: DynSender<AgentInput>,
     input_receiver: UnboundedLoggingReceiver<AgentInput>,
     command_dispatcher: CommandDispatcher,
@@ -48,7 +46,6 @@ pub struct WorkflowActorBuilder {
 impl WorkflowActorBuilder {
     pub fn new(
         config: OperationConfig,
-        workflows: WorkflowSupervisor,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
     ) -> Self {
@@ -76,7 +73,6 @@ impl WorkflowActorBuilder {
 
         Self {
             config,
-            workflows,
             input_sender,
             input_receiver,
             command_dispatcher,
@@ -119,23 +115,19 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
         Ok(self.build())
     }
 
-    fn build(mut self) -> WorkflowActor {
-        for capability in self.command_dispatcher.capabilities() {
-            if let Err(err) = self
-                .workflows
-                .register_builtin_workflow(capability.as_str().into())
-            {
-                error!("Fail to register built-in workflow for {capability} operation: {err}");
-            }
-        }
-
+    fn build(self) -> WorkflowActor {
+        let builtin_workflows = self.command_dispatcher.capabilities();
+        let custom_workflows_dir = self.config.operations_dir;
         let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
-        let repository = AgentStateRepository::with_state_dir(state_dir, "workflows");
+        let workflow_repository =
+            WorkflowRepository::new(builtin_workflows, custom_workflows_dir, state_dir.clone());
+        let state_repository = AgentStateRepository::with_state_dir(state_dir, "workflows");
+
         WorkflowActor {
             mqtt_schema: self.config.mqtt_schema,
             device_topic_id: self.config.device_topic_id,
-            workflows: self.workflows,
-            state_repository: repository,
+            workflow_repository,
+            state_repository,
             log_dir: self.config.log_dir,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,

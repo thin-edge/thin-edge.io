@@ -9,4 +9,3 @@ mod tests;
 
 pub use builder::WorkflowActorBuilder;
 pub use config::OperationConfig;
-pub use persist::load_operation_workflows;
