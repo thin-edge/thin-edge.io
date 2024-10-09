@@ -44,6 +44,11 @@ Args:
         * armv7-unknown-linux-gnueabihf
         * arm-unknown-linux-gnueabihf
 
+        Linux GNU variants (controlling GNU libc version)
+        # Be aware of the caveats: https://github.com/rust-cross/cargo-zigbuild?tab=readme-ov-file#specify-glibc-version
+        * aarch64-unknown-linux-gnu.2.17
+        * aarch64-unknown-linux-gnu.2.27
+
         Apple
         * aarch64-apple-darwin
         * x86_64-apple-darwin
@@ -156,6 +161,12 @@ fi
 # shellcheck disable=SC1091
 source ./ci/package_list.sh
 
+# Note: cargo-zigbuild supports specifiying the specific gnu libc version to use
+# but Rust doesn't, so the target needs to be normalized to match the target without
+# the gnu libc version information
+ZIG_TARGET="$ARCH"
+ARCH=$(echo "$ZIG_TARGET" | cut -d. -f1)
+
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
 if [ "$BUILD" = 1 ]; then
@@ -177,8 +188,8 @@ if [ "$BUILD" = 1 ]; then
     echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
 
     if [ -n "$ARCH" ]; then
-        echo "Using target: $ARCH"
-        TARGET+=("--target=$ARCH")
+        echo "Using target: $ARCH (zig target=$ZIG_TARGET)"
+        TARGET+=("--target=$ZIG_TARGET")
         rustup target add "$ARCH"
     else
         # Note: This will build the artifacts under target/release and not target/<triple>/release !
