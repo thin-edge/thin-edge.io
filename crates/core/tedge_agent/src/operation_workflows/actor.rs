@@ -1,4 +1,5 @@
 use crate::operation_workflows::message_box::CommandDispatcher;
+use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::AgentStateRepository;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
@@ -30,7 +31,6 @@ use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
-use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::CommandLog;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
@@ -47,7 +47,7 @@ fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericComman
 pub struct WorkflowActor {
     pub(crate) mqtt_schema: MqttSchema,
     pub(crate) device_topic_id: EntityTopicId,
-    pub(crate) workflows: WorkflowSupervisor,
+    pub(crate) workflow_repository: WorkflowRepository,
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
@@ -64,6 +64,7 @@ impl Actor for WorkflowActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        self.workflow_repository.load().await;
         self.publish_operation_capabilities().await?;
         self.load_command_board().await?;
 
@@ -92,6 +93,7 @@ impl Actor for WorkflowActor {
 impl WorkflowActor {
     async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
         for capability in self
+            .workflow_repository
             .workflows
             .capability_messages(&self.mqtt_schema, &self.device_topic_id)
         {
@@ -135,7 +137,11 @@ impl WorkflowActor {
 
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
-        match self.workflows.apply_external_update(&operation, state) {
+        match self
+            .workflow_repository
+            .workflows
+            .apply_external_update(&operation, state)
+        {
             Ok(None) => (),
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
@@ -172,7 +178,7 @@ impl WorkflowActor {
         };
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
-        let action = match self.workflows.get_action(&state) {
+        let action = match self.workflow_repository.workflows.get_action(&state) {
             Ok(action) => action,
             Err(WorkflowExecutionError::UnknownStep { operation, step }) => {
                 info!("No action defined for {operation} operation {step} step");
@@ -192,7 +198,11 @@ impl WorkflowActor {
 
         match action {
             OperationAction::Clear => {
-                if let Some(invoking_command) = self.workflows.invoking_command_state(&state) {
+                if let Some(invoking_command) = self
+                    .workflow_repository
+                    .workflows
+                    .invoking_command_state(&state)
+                {
                     log_file
                         .log_info(&format!(
                             "Resuming invoking command {}",
@@ -336,6 +346,7 @@ impl WorkflowActor {
 
                 // Get the sub-operation state and resume this command when the sub-operation is in a terminal state
                 if let Some(sub_state) = self
+                    .workflow_repository
                     .workflows
                     .sub_command_state(&state)
                     .map(|s| s.to_owned())
@@ -423,8 +434,15 @@ impl WorkflowActor {
         &mut self,
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        let adapted_state = self.workflows.adapt_builtin_response(new_state);
-        if let Err(err) = self.workflows.apply_internal_update(adapted_state.clone()) {
+        let adapted_state = self
+            .workflow_repository
+            .workflows
+            .adapt_builtin_response(new_state);
+        if let Err(err) = self
+            .workflow_repository
+            .workflows
+            .apply_internal_update(adapted_state.clone())
+        {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
@@ -441,6 +459,7 @@ impl WorkflowActor {
         cmd_id: &str,
     ) -> CommandLog {
         let (root_operation, root_cmd_id) = match self
+            .workflow_repository
             .workflows
             .root_invoking_command_state(state)
             .map(|s| s.topic.as_ref())
@@ -465,7 +484,11 @@ impl WorkflowActor {
         new_state: GenericCommandState,
         log_file: &mut CommandLog,
     ) -> Result<(), RuntimeError> {
-        if let Err(err) = self.workflows.apply_internal_update(new_state.clone()) {
+        if let Err(err) = self
+            .workflow_repository
+            .workflows
+            .apply_internal_update(new_state.clone())
+        {
             error!("Fail to persist workflow operation state: {err}");
         }
         self.persist_command_board().await?;
@@ -483,7 +506,11 @@ impl WorkflowActor {
     async fn load_command_board(&mut self) -> Result<(), RuntimeError> {
         match self.state_repository.load().await {
             Ok(Some(pending_commands)) => {
-                for command in self.workflows.load_pending_commands(pending_commands) {
+                for command in self
+                    .workflow_repository
+                    .workflows
+                    .load_pending_commands(pending_commands)
+                {
                     self.process_command_update(command.clone()).await?;
                 }
             }
@@ -500,7 +527,7 @@ impl WorkflowActor {
 
     /// Persist on-disk the current state of the pending command requests
     async fn persist_command_board(&mut self) -> Result<(), RuntimeError> {
-        let pending_commands = self.workflows.pending_commands();
+        let pending_commands = self.workflow_repository.workflows.pending_commands();
         if let Err(err) = self.state_repository.store(pending_commands).await {
             error!(
                 "Fail to persist pending command requests in {} due to: {}",
