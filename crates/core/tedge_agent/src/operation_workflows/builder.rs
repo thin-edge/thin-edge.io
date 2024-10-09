@@ -3,6 +3,7 @@ use crate::operation_workflows::actor::InternalCommandState;
 use crate::operation_workflows::actor::WorkflowActor;
 use crate::operation_workflows::config::OperationConfig;
 use crate::operation_workflows::message_box::CommandDispatcher;
+use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
 use log::error;
 use std::process::Output;
@@ -128,8 +129,8 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             }
         }
 
-        let repository =
-            AgentStateRepository::new(self.config.state_dir, self.config.config_dir, "workflows");
+        let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
+        let repository = AgentStateRepository::with_state_dir(state_dir, "workflows");
         WorkflowActor {
             mqtt_schema: self.config.mqtt_schema,
             device_topic_id: self.config.device_topic_id,

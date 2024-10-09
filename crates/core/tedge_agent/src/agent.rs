@@ -9,7 +9,7 @@ use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
-use crate::state_repository::state::agent_state_dir;
+use crate::state_repository::state::agent_default_state_dir;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use crate::Capabilities;
@@ -219,7 +219,7 @@ impl Agent {
     #[instrument(skip(self), name = "sm-agent")]
     pub fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(agent_state_dir(self.config.config_dir.clone()))?;
+        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))?;
         create_directory_with_defaults(&self.config.agent_log_dir)?;
         create_directory_with_defaults(&self.config.data_dir)?;
         create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
