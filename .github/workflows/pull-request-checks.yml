@@ -123,11 +123,12 @@ jobs:
       - name: Check Cargo.toml formatting
         run: taplo fmt --check
 
-  cargo-fmt:
-    name: Run cargo fmt
+  format:
+    # Check formatting of both Rust and Robotframework code
+    name: Run format checks
     runs-on: ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
+    if: ${{ github.event_name == 'pull_request' }}
 
     steps:
       - name: Checkout
@@ -146,8 +147,19 @@ jobs:
       - name: Cargo fmt --version
         run: cargo fmt --version
 
-      - name: Cargo fmt
-        run: cargo fmt -- --check
+      - uses: taiki-e/install-action@just
+      - name: Install tools
+        run: just install-tools
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements/requirements*.txt
+
+      - name: just format-check
+        run: just format-check
 
   cargo-clippy:
     name: Run cargo clippy
