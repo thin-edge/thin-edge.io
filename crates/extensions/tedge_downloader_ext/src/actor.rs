@@ -118,20 +118,11 @@ impl<T: Message> Server for DownloaderActor<T> {
             DownloadInfo::new(&request.url)
         };
 
-        let downloader = if let Some(permission) = request.permission {
-            Downloader::with_permission(
-                request.file_path.clone(),
-                permission,
-                self.identity.clone(),
-                self.cloud_root_certs.clone(),
-            )
-        } else {
-            Downloader::new(
-                request.file_path.clone(),
-                self.identity.clone(),
-                self.cloud_root_certs.clone(),
-            )
-        };
+        let downloader = Downloader::new(
+            request.file_path.clone(),
+            self.identity.clone(),
+            self.cloud_root_certs.clone(),
+        );
 
         info!(
             "Downloading from url {} to location {}",

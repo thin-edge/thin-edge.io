@@ -13,7 +13,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::Service;
-use tedge_utils::file::PermissionEntry;
 
 use super::messages::DownloadFile;
 
@@ -112,12 +111,10 @@ impl C8YHttpProxy {
         &mut self,
         download_url: &str,
         file_path: PathBuf,
-        file_permissions: PermissionEntry,
     ) -> Result<(), C8YRestError> {
         let request: C8YRestRequest = DownloadFile {
             download_url: download_url.into(),
             file_path,
-            file_permissions,
         }
         .into();
         match self.c8y.await_response(request).await? {

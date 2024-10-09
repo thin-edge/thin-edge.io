@@ -25,9 +25,7 @@ use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
-use tedge_utils::file::PermissionEntry;
 
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;
@@ -106,7 +104,6 @@ impl Auth {
 #[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
-    target_permission: PermissionEntry,
     backoff: ExponentialBackoff,
     client: Client,
 }
@@ -126,28 +123,6 @@ impl Downloader {
         let client = client_builder.build().expect("Client builder is valid");
         Self {
             target_filename: target_path,
-            target_permission: PermissionEntry::default(),
-            backoff: default_backoff(),
-            client,
-        }
-    }
-
-    /// Creates a new downloader which downloads to a target directory and sets
-    /// specified permissions the downloaded file.
-    pub fn with_permission(
-        target_path: PathBuf,
-        target_permission: PermissionEntry,
-        identity: Option<Identity>,
-        cloud_root_certs: CloudRootCerts,
-    ) -> Self {
-        let mut client_builder = cloud_root_certs.client_builder();
-        if let Some(identity) = identity {
-            client_builder = client_builder.identity(identity);
-        }
-        let client = client_builder.build().expect("Client builder is valid");
-        Self {
-            target_filename: target_path,
-            target_permission,
             backoff: default_backoff(),
             client,
         }
