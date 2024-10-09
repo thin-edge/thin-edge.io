@@ -20,7 +20,7 @@ pub enum TEdgeConnectOpt {
         #[clap(long = "offline")]
         offline_mode: bool,
 
-        #[clap(long, env = "C8Y_PROFILE")]
+        #[clap(long)]
         profile: Option<String>,
     },
 
@@ -35,6 +35,9 @@ pub enum TEdgeConnectOpt {
         /// Ignore connection registration and connection check
         #[clap(long = "offline")]
         offline_mode: bool,
+
+        #[clap(long)]
+        profile: Option<String>,
     },
 
     /// Create connection to AWS
@@ -48,6 +51,9 @@ pub enum TEdgeConnectOpt {
         /// Ignore connection registration and connection check
         #[clap(long = "offline")]
         offline_mode: bool,
+
+        #[clap(long)]
+        profile: Option<String>,
     },
 }
 
@@ -70,6 +76,7 @@ impl BuildCommand for TEdgeConnectOpt {
             TEdgeConnectOpt::Az {
                 is_test_connection,
                 offline_mode,
+                profile,
             } => ConnectCommand {
                 config_location: context.config_location.clone(),
                 config: context.load_config()?,
@@ -77,11 +84,12 @@ impl BuildCommand for TEdgeConnectOpt {
                 is_test_connection,
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
-                profile: None,
+                profile,
             },
             TEdgeConnectOpt::Aws {
                 is_test_connection,
                 offline_mode,
+                profile,
             } => ConnectCommand {
                 config_location: context.config_location.clone(),
                 config: context.load_config()?,
@@ -89,7 +97,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 is_test_connection,
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
-                profile: None,
+                profile,
             },
         }
         .into_boxed())

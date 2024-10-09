@@ -157,7 +157,7 @@ pub enum UploadCertCli {
         /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
         password: String,
 
-        #[clap(long, env = "C8Y_PROFILE")]
+        #[clap(long)]
         profile: Option<String>,
     },
 }

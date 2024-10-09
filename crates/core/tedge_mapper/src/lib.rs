@@ -23,8 +23,16 @@ fn lookup_component(
     profile: Option<String>,
 ) -> Box<dyn TEdgeComponent> {
     match component_name {
-        MapperName::Az => Box::new(AzureMapper),
-        MapperName::Aws => Box::new(AwsMapper),
+        MapperName::Az => Box::new(AzureMapper {
+            profile: profile
+                .or_else(|| std::env::var("AZ_PROFILE").ok())
+                .inspect(|profile| std::env::set_var("AZ_PROFILE", profile)),
+        }),
+        MapperName::Aws => Box::new(AwsMapper {
+            profile: profile
+                .or_else(|| std::env::var("AWS_PROFILE").ok())
+                .inspect(|profile| std::env::set_var("AWS_PROFILE", profile)),
+        }),
         MapperName::Collectd => Box::new(CollectdMapper),
         MapperName::C8y => Box::new(CumulocityMapper {
             profile: profile

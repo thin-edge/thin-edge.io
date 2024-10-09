@@ -311,8 +311,8 @@ impl TEdgeTomlVersion {
                 mv("mqtt.external_capath", MqttExternalCaPath),
                 mv("mqtt.external_certfile", MqttExternalCertFile),
                 mv("mqtt.external_keyfile", MqttExternalKeyFile),
-                mv("az.mapper_timestamp", AzMapperTimestamp),
-                mv("aws.mapper_timestamp", AwsMapperTimestamp),
+                mv("az.mapper_timestamp", AzMapperTimestamp(None)),
+                mv("aws.mapper_timestamp", AwsMapperTimestamp(None)),
                 mv("http.port", HttpBindPort),
                 mv("http.bind_address", HttpBindAddress),
                 mv("software.default_plugin_type", SoftwarePluginDefault),
@@ -621,6 +621,7 @@ define_tedge_config! {
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
+    #[tedge_config(multi)]
     az: {
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -665,6 +666,7 @@ define_tedge_config! {
         topics: TemplatesSet,
     },
 
+    #[tedge_config(multi)]
     aws: {
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1031,19 +1033,23 @@ impl TEdgeConfigReader {
                     vec![]
                 })
             });
-            let az_roots = read_trust_store(&self.az.root_cert_path).unwrap_or_else(move |e| {
-                error!(
-                    "Unable to read certificates from {}: {e:?}",
-                    ReadableKey::AzRootCertPath
-                );
-                vec![]
+            let az_roots = self.az.entries().flat_map(|(key, az)| {
+                read_trust_store(&az.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::AzRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
             });
-            let aws_roots = read_trust_store(&self.aws.root_cert_path).unwrap_or_else(move |e| {
-                error!(
-                    "Unable to read certificates from {}: {e:?}",
-                    ReadableKey::AwsRootCertPath
-                );
-                vec![]
+            let aws_roots = self.aws.entries().flat_map(|(key, aws)| {
+                read_trust_store(&aws.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::AwsRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
             });
             c8y_roots.chain(az_roots).chain(aws_roots).collect()
         });
@@ -1057,7 +1063,8 @@ impl TEdgeConfigReader {
             self.c8y
                 .values()
                 .map(|c8y| &c8y.root_cert_path)
-                .chain([&self.az.root_cert_path, &self.aws.root_cert_path]),
+                .chain(self.az.values().map(|az| &az.root_cert_path))
+                .chain(self.aws.values().map(|aws| &aws.root_cert_path)),
         )
         .unwrap()
     }

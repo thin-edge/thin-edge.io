@@ -178,7 +178,6 @@ impl ConnectCommand {
     fn check_connection(
         &self,
         config: &TEdgeConfig,
-
         profile: Option<&str>,
     ) -> Result<DeviceStatus, ConnectError> {
         println!(
@@ -186,8 +185,8 @@ impl ConnectCommand {
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
-            Cloud::Azure => check_device_status_azure(config),
-            Cloud::Aws => check_device_status_aws(config),
+            Cloud::Azure => check_device_status_azure(config, profile),
+            Cloud::Aws => check_device_status_aws(config, profile),
             Cloud::C8y => check_device_status_c8y(config, profile),
         }
     }
@@ -227,35 +226,37 @@ pub fn bridge_config(
     };
     match cloud {
         Cloud::Azure => {
+            let az_config = config.az.try_get(profile)?;
             let params = BridgeConfigAzureParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
-                    config.az.url.or_config_not_set()?.as_str(),
+                    az_config.url.or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
                 config_file: Cloud::Azure.bridge_config_filename(profile),
-                bridge_root_cert_path: config.az.root_cert_path.clone(),
+                bridge_root_cert_path: az_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 bridge_location,
-                topic_prefix: config.az.bridge.topic_prefix.clone(),
+                topic_prefix: az_config.bridge.topic_prefix.clone(),
             };
 
             Ok(BridgeConfig::from(params))
         }
         Cloud::Aws => {
+            let aws_config = config.aws.try_get(profile)?;
             let params = BridgeConfigAwsParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
-                    config.aws.url.or_config_not_set()?.as_str(),
+                    aws_config.url.or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
                 config_file: Cloud::Aws.bridge_config_filename(profile),
-                bridge_root_cert_path: config.aws.root_cert_path.clone(),
+                bridge_root_cert_path: aws_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 bridge_location,
-                topic_prefix: config.aws.bridge.topic_prefix.clone(),
+                topic_prefix: aws_config.bridge.topic_prefix.clone(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -378,8 +379,12 @@ fn check_device_status_c8y(
 // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID.
 // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
 // Here if the status is 200 then it's success.
-fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-    let topic_prefix = &tedge_config.az.bridge.topic_prefix;
+fn check_device_status_azure(
+    tedge_config: &TEdgeConfig,
+    profile: Option<&str>,
+) -> Result<DeviceStatus, ConnectError> {
+    let az_config = tedge_config.az.try_get(profile)?;
+    let topic_prefix = &az_config.bridge.topic_prefix;
     let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);
     let azure_topic_device_twin_upstream = format!(r#"{topic_prefix}/twin/GET/?$rid=1"#);
     const CLIENT_ID: &str = "check_connection_az";
@@ -463,8 +468,12 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
     }
 }
 
-fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-    let topic_prefix = &tedge_config.aws.bridge.topic_prefix;
+fn check_device_status_aws(
+    tedge_config: &TEdgeConfig,
+    profile: Option<&str>,
+) -> Result<DeviceStatus, ConnectError> {
+    let aws_config = tedge_config.aws.try_get(profile)?;
+    let topic_prefix = &aws_config.bridge.topic_prefix;
     let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
     let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");
     const CLIENT_ID: &str = "check_connection_aws";
