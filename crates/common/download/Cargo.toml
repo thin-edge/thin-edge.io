@@ -22,6 +22,7 @@ rustls = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tedge_utils = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 url = { workspace = true }
@@ -29,7 +30,6 @@ url = { workspace = true }
 [dev-dependencies]
 mockito = { workspace = true }
 regex = { workspace = true }
-tempfile = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
-use tedge_utils::file::PermissionEntry;
 
 fan_in_message_type!(C8YRestRequest[GetJwtToken, GetFreshJwtToken, CreateEvent, SoftwareListResponse, UploadLogBinary, UploadFile, DownloadFile]: Debug, PartialEq, Eq);
 //HIPPO Rename EventId to String as there could be many other String responses as well and this macro doesn't allow another String variant
@@ -90,7 +89,6 @@ pub struct UploadFile {
 pub struct DownloadFile {
     pub download_url: String,
     pub file_path: PathBuf,
-    pub file_permissions: PermissionEntry,
 }
 
 pub type EventId = String;

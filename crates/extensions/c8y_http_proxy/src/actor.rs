@@ -513,9 +513,8 @@ impl C8YHttpProxyActor {
         }
 
         info!(target: self.name(), "Downloading from: {:?}", download_info.url());
-        let downloader: Downloader = Downloader::with_permission(
+        let downloader: Downloader = Downloader::new(
             request.file_path,
-            request.file_permissions,
             self.config.identity.clone(),
             self.config.cloud_root_certs.clone(),
         );
