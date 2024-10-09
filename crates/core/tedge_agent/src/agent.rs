@@ -2,7 +2,6 @@ use crate::device_profile_manager::DeviceProfileManagerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
-use crate::operation_workflows::load_operation_workflows;
 use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
@@ -242,8 +241,7 @@ impl Agent {
         // as it will create the device_profile workflow if it does not already exist
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
 
-        // Operation workflows
-        let workflows = load_operation_workflows(&self.config.operations_dir).await?;
+        // Script actor
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
 
         // Restart actor
@@ -258,7 +256,6 @@ impl Agent {
         // Converter actor
         let mut converter_actor_builder = WorkflowActorBuilder::new(
             self.config.operation_config,
-            workflows,
             &mut mqtt_actor_builder,
             &mut script_runner,
         );
