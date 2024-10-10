@@ -272,8 +272,8 @@ jobs:
         job:
           - { target: x86_64-unknown-linux-musl,      repo: tedge-main,          component: main }
           - { target: aarch64-unknown-linux-musl,     repo: tedge-main,          component: main }
-          # Keep arm-unknown-linux-musleabihf in separate repo due to armhf conflict between raspbian and debian
-          - { target: arm-unknown-linux-musleabihf,   repo: tedge-main-armv6,    component: main }
+          # Keep arm-unknown-linux-musleabi in separate repo due to armhf conflict between raspbian and debian
+          - { target: arm-unknown-linux-musleabi,   repo: tedge-main-armv6,    component: main }
           - { target: armv7-unknown-linux-musleabihf, repo: tedge-main,          component: main }
           - { target: arm-unknown-linux-musleabi,     repo: tedge-main,          component: main }
           - { target: i686-unknown-linux-musl,        repo: tedge-main,          component: main }

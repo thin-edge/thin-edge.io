@@ -18,7 +18,7 @@ detect_linux_target() {
             ;;
 
         armv6*)
-            target_arch=arm-unknown-linux-musleabihf
+            target_arch=arm-unknown-linux-musleabi
             ;;
     esac
     echo "$target_arch"
