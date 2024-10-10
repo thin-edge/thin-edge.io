@@ -71,6 +71,15 @@ On your machine (not the target device that will be on-boarded) you will need on
     c8y extension install thin-edge/c8y-tedge
     ```
 
+    :::tip
+
+    If you have already installed the `c8y-tedge` go-c8y-cli extension, then make sure it is up-to-date using:
+
+    ```sh
+    c8y extension update tedge
+    ```
+    :::
+
 3. Create a Cumulocity session file (if one does not already for the Cumulocity instance you wish to connect to)
 
     ```sh
