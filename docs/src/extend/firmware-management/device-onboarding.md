@@ -94,13 +94,13 @@ On your machine (not the target device that will be on-boarded) you will need on
     ```
 
     ```sh title="Output"
-    rpi1-b827eb21100e
-    rpi2-b827ebed6e5a
-    rpi3-b827ebe1f7d6
-    rpi4-dcb630486720
-    rpi5-d83add9a145a
-    rpizero-b827ebdddb46
-    rpizero2-d83add030bfd
+    rpi1-b827eb21100e.local
+    rpi2-b827ebed6e5a.local
+    rpi3-b827ebe1f7d6.local
+    rpi4-dcb630486720.local
+    rpi5-d83add9a145a.local
+    rpizero-b827ebdddb46.local
+    rpizero2-d83add030bfd.local
     ```
 
     :::info
