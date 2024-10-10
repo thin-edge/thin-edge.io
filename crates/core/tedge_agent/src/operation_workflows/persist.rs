@@ -1,7 +1,7 @@
 use anyhow::Context;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use std::ffi::OsStr;
-use std::path::Path;
+use std::collections::HashMap;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
@@ -26,9 +26,22 @@ use tracing::info;
 /// - caching definitions in-use,
 /// - reloading definitions on changes.
 pub struct WorkflowRepository {
+    // Names of the builtin workflows, i.e. without any file representation
     builtin_workflows: Vec<OperationName>,
+
+    // Directory for the user-defined workflows
     custom_workflows_dir: Utf8PathBuf,
+
+    // Directory of user-defined workflow copies of the workflow in-use
     state_dir: Utf8PathBuf,
+
+    // Map each workflow version to its workflow file
+    //
+    // For a fresh new workflow definition, this points to the user-defined file
+    // When the workflow definition is in use, this points to a copy in the state directory.
+    definitions: HashMap<String, Utf8PathBuf>,
+
+    // The in-memory representation of all the workflows (builtin, user-defined, i,n-use).
     workflows: WorkflowSupervisor,
 }
 
@@ -39,24 +52,36 @@ impl WorkflowRepository {
         state_dir: Utf8PathBuf,
     ) -> Self {
         let workflows = WorkflowSupervisor::default();
+        let state_dir = state_dir.join("workflows-in-use");
+        let definitions = HashMap::new();
         Self {
             builtin_workflows,
             custom_workflows_dir,
             state_dir,
+            definitions,
             workflows,
         }
     }
 
     pub async fn load(&mut self) {
+        // Note that the loading order matters.
+
+        // First, all the user-defined workflows are loaded
         let dir_path = &self.custom_workflows_dir.clone();
         if let Err(err) = self.load_operation_workflows(dir_path).await {
             error!("Fail to read the operation workflows from {dir_path}: {err:?}");
         }
 
+        // Then, the definitions of the workflow still in-use are loaded
+        // If a definition has not changed, then self.definitions is updated accordingly
+        // so the known location of this definition is the copy not the original
         let dir_path = &self.state_dir.clone();
+        let _ = tokio::fs::create_dir(dir_path).await; // if the creation fails, this will be reported next line on read
         if let Err(err) = self.load_operation_workflows(dir_path).await {
             error!("Fail to reload the running operation workflows from {dir_path}: {err:?}");
         }
+
+        // Finally, builtin workflows are installed if not better definition has been provided by the user
         self.load_builtin_workflows();
     }
 
@@ -64,17 +89,18 @@ impl WorkflowRepository {
         &mut self,
         dir_path: &Utf8PathBuf,
     ) -> Result<(), anyhow::Error> {
-        for entry in std::fs::read_dir(dir_path)?.flatten() {
+        for entry in dir_path.read_dir_utf8()?.flatten() {
             let file = entry.path();
-            if file.extension() == Some(OsStr::new("toml")) {
-                match read_operation_workflow(&file)
+            if file.extension() == Some("toml") {
+                match read_operation_workflow(file)
                     .await
-                    .and_then(|(workflow, version)| self.load_operation_workflow(workflow, version))
-                {
+                    .and_then(|(workflow, version)| {
+                        self.load_operation_workflow(file.into(), workflow, version)
+                    }) {
                     Ok(cmd) => {
                         info!(
-                        "Using operation workflow definition from {file:?} for '{cmd}' operation"
-                    );
+                            "Using operation workflow definition from {file:?} for '{cmd}' operation"
+                        );
                     }
                     Err(err) => {
                         error!("Ignoring {file:?}: {err:?}")
@@ -87,10 +113,12 @@ impl WorkflowRepository {
 
     fn load_operation_workflow(
         &mut self,
+        definition: Utf8PathBuf,
         workflow: OperationWorkflow,
         version: WorkflowVersion,
     ) -> Result<String, anyhow::Error> {
         let name = workflow.operation.to_string();
+        self.definitions.insert(version.clone(), definition);
         self.workflows.register_custom_workflow(workflow, version)?;
         Ok(name)
     }
@@ -102,6 +130,25 @@ impl WorkflowRepository {
                 .register_builtin_workflow(capability.as_str().into())
             {
                 error!("Fail to register built-in workflow for {capability} operation: {err}");
+            }
+        }
+    }
+
+    /// Copy the workflow definition file to the persisted state directory,
+    /// unless this has already been done.
+    async fn persist_workflow_definition(
+        &mut self,
+        operation: &OperationName,
+        version: &WorkflowVersion,
+    ) {
+        if let Some(source) = self.definitions.get(version) {
+            if !source.starts_with(&self.state_dir) {
+                let target = self.state_dir.join(operation).with_extension("toml");
+                if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
+                    error!("Fail to persist a copy of {source} as {target}: {err}");
+                } else {
+                    self.definitions.insert(version.clone(), target);
+                }
             }
         }
     }
@@ -122,13 +169,33 @@ impl WorkflowRepository {
         self.workflows.capability_messages(schema, target)
     }
 
-    pub fn apply_external_update(
+    /// Update the state of the command board on reception of a message sent by a peer over MQTT
+    ///
+    /// If this is the first time a command of that type is created,
+    /// then a copy of its definition is persisted in the state directory.
+    /// The point is to be sure the command execution is ruled by its initial workflow unchanged
+    /// even if the user pushes a new version meantime.
+    pub async fn apply_external_update(
         &mut self,
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
-        self.workflows
-            .apply_external_update(operation, command_state)
+        match self
+            .workflows
+            .apply_external_update(operation, command_state)?
+        {
+            None => Ok(None),
+
+            Some(new_state) if new_state.is_init() => {
+                if let Some(version) = new_state.workflow_version() {
+                    self.persist_workflow_definition(&operation.to_string(), &version)
+                        .await;
+                }
+                Ok(Some(new_state))
+            }
+
+            Some(updated_state) => Ok(Some(updated_state)),
+        }
     }
 
     pub fn apply_internal_update(
@@ -175,7 +242,7 @@ impl WorkflowRepository {
 }
 
 async fn read_operation_workflow(
-    path: &Path,
+    path: &Utf8Path,
 ) -> Result<(OperationWorkflow, WorkflowVersion), anyhow::Error> {
     let bytes = tokio::fs::read(path).await.context("Fail to read file")?;
     let input = std::str::from_utf8(&bytes).context("Fail to extract UTF8 content")?;

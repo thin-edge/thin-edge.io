@@ -139,6 +139,7 @@ impl WorkflowActor {
         match self
             .workflow_repository
             .apply_external_update(&operation, state)
+            .await
         {
             Ok(None) => (),
             Ok(Some(new_state)) => {
