@@ -94,7 +94,6 @@ impl WorkflowActor {
     async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
         for capability in self
             .workflow_repository
-            .workflows
             .capability_messages(&self.mqtt_schema, &self.device_topic_id)
         {
             self.mqtt_publisher.send(capability).await?
@@ -139,7 +138,6 @@ impl WorkflowActor {
 
         match self
             .workflow_repository
-            .workflows
             .apply_external_update(&operation, state)
         {
             Ok(None) => (),
@@ -178,7 +176,7 @@ impl WorkflowActor {
         };
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
-        let action = match self.workflow_repository.workflows.get_action(&state) {
+        let action = match self.workflow_repository.get_action(&state) {
             Ok(action) => action,
             Err(WorkflowExecutionError::UnknownStep { operation, step }) => {
                 info!("No action defined for {operation} operation {step} step");
@@ -198,10 +196,8 @@ impl WorkflowActor {
 
         match action {
             OperationAction::Clear => {
-                if let Some(invoking_command) = self
-                    .workflow_repository
-                    .workflows
-                    .invoking_command_state(&state)
+                if let Some(invoking_command) =
+                    self.workflow_repository.invoking_command_state(&state)
                 {
                     log_file
                         .log_info(&format!(
@@ -347,7 +343,6 @@ impl WorkflowActor {
                 // Get the sub-operation state and resume this command when the sub-operation is in a terminal state
                 if let Some(sub_state) = self
                     .workflow_repository
-                    .workflows
                     .sub_command_state(&state)
                     .map(|s| s.to_owned())
                 {
@@ -434,13 +429,9 @@ impl WorkflowActor {
         &mut self,
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
-        let adapted_state = self
-            .workflow_repository
-            .workflows
-            .adapt_builtin_response(new_state);
+        let adapted_state = self.workflow_repository.adapt_builtin_response(new_state);
         if let Err(err) = self
             .workflow_repository
-            .workflows
             .apply_internal_update(adapted_state.clone())
         {
             error!("Fail to persist workflow operation state: {err}");
@@ -460,7 +451,6 @@ impl WorkflowActor {
     ) -> CommandLog {
         let (root_operation, root_cmd_id) = match self
             .workflow_repository
-            .workflows
             .root_invoking_command_state(state)
             .map(|s| s.topic.as_ref())
             .and_then(|root_topic| self.extract_command_identifiers(root_topic).ok())
@@ -486,7 +476,6 @@ impl WorkflowActor {
     ) -> Result<(), RuntimeError> {
         if let Err(err) = self
             .workflow_repository
-            .workflows
             .apply_internal_update(new_state.clone())
         {
             error!("Fail to persist workflow operation state: {err}");
@@ -508,7 +497,6 @@ impl WorkflowActor {
             Ok(Some(pending_commands)) => {
                 for command in self
                     .workflow_repository
-                    .workflows
                     .load_pending_commands(pending_commands)
                 {
                     self.process_command_update(command.clone()).await?;
@@ -527,7 +515,7 @@ impl WorkflowActor {
 
     /// Persist on-disk the current state of the pending command requests
     async fn persist_command_board(&mut self) -> Result<(), RuntimeError> {
-        let pending_commands = self.workflow_repository.workflows.pending_commands();
+        let pending_commands = self.workflow_repository.pending_commands();
         if let Err(err) = self.state_repository.store(pending_commands).await {
             error!(
                 "Fail to persist pending command requests in {} due to: {}",
