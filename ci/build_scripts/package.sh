@@ -215,7 +215,7 @@ get_package_arch() {
         aarch64-unknown-linux-*) pkg_arch=arm64 ;;
         armv7-unknown-linux-*eabihf) pkg_arch=arm7 ;;
         arm-unknown-linux-*eabihf) pkg_arch=arm6 ;;
-        arm-unknown-linux-*eabi) pkg_arch=arm5 ;;
+        arm-unknown-linux-*eabi) pkg_arch=arm6 ;;
         armv5te-unknown-linux-*eabi) pkg_arch=arm5 ;;
         riscv64gc-unknown-linux-*) pkg_arch=riscv64 ;;
         mips64el-unknown-linux-*abi64) pkg_arch=mips64le ;;

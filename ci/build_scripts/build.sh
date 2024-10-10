@@ -151,7 +151,7 @@ if [ -z "$ARCH" ]; then
             ;;
 
         armv6*)
-            ARCH=arm-unknown-linux-musleabihf
+            ARCH=arm-unknown-linux-musleabi
             ;;
     esac
 fi
