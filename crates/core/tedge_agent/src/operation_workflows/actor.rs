@@ -32,6 +32,7 @@ use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::CommandLog;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
@@ -42,7 +43,7 @@ use tokio::time::sleep;
 #[derive(Debug)]
 pub struct InternalCommandState(GenericCommandState);
 
-fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData] : Debug);
+fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData, FsWatchEvent] : Debug);
 
 pub struct WorkflowActor {
     pub(crate) mqtt_schema: MqttSchema,
@@ -83,6 +84,11 @@ impl Actor for WorkflowActor {
                     GenericCommandMetadata { operation, payload },
                 )) => {
                     self.publish_builtin_capability(operation, payload).await?;
+                }
+                AgentInput::FsWatchEvent(file_update) => {
+                    self.workflow_repository
+                        .update_operation_workflows(file_update)
+                        .await;
                 }
             }
         }

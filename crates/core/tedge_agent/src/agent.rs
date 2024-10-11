@@ -241,6 +241,9 @@ impl Agent {
         // as it will create the device_profile workflow if it does not already exist
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
 
+        // Inotify actor
+        let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
+
         // Script actor
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
 
@@ -258,6 +261,7 @@ impl Agent {
             self.config.operation_config,
             &mut mqtt_actor_builder,
             &mut script_runner,
+            &mut fs_watch_actor_builder,
         );
         converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         converter_actor_builder.register_builtin_operation(&mut software_update_builder);
@@ -281,7 +285,6 @@ impl Agent {
             &self.config.service,
         );
 
-        let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
         let mut downloader_actor_builder = DownloaderActor::new(
             self.config.identity.clone(),
             self.config.cloud_root_certs.clone(),
