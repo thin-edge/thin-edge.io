@@ -15,7 +15,7 @@ In the [vision.md](./vision.md) the goal of the project is encoded.
 It specifies the different functional requirements and non-functional requirements of the project as a whole.
 All the stakeholders must agree on the vision upon joining.
 
-- The current stakeholders are: Software AG, and IFM
+- The current stakeholders are: Cumulocity GmbH
 
 Changes to the vision need to be done in a plenum of stakeholders, this makes sure that everyone is aware and agrees to the evolution of the project.
 
@@ -103,7 +103,7 @@ The project has a hierarchy to solve these two problems:
 
 
 ```
-core contributors = [SAG, IFM]
+core contributors = [Cumulocity GmbH]
 
 -> Project leads, one each from [core contributors]
 |

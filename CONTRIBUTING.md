@@ -212,7 +212,7 @@ have to read carefully, this page and the CONTRIBUTOR LICENSE AGREEMENT.
 
 ## Signing the CONTRIBUTOR LICENSE AGREEMENT
 
-Each Contribution to Software AG's Open Source Projects must be accompanied by a
+Each Contribution to Cumulocity GmbH's Open Source Projects must be accompanied by a
 sign-off indicating acceptance of current version of the CONTRIBUTOR LICENSE
 AGREEMENT, which is derived from the Apache Foundation's Individual Contributor
 License Agreement, sign-off time stamp relates to corresponding version of the
