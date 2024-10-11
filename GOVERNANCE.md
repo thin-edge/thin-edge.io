@@ -15,7 +15,7 @@ In the [vision.md](./vision.md) the goal of the project is encoded.
 It specifies the different functional requirements and non-functional requirements of the project as a whole.
 All the stakeholders must agree on the vision upon joining.
 
-- The current stakeholders are: Software AG, and IFM
+- The current stakeholders are: Cumulocity GmbH
 
 Changes to the vision need to be done in a plenum of stakeholders, this makes sure that everyone is aware and agrees to the evolution of the project.
 
@@ -103,7 +103,7 @@ The project has a hierarchy to solve these two problems:
 
 
 ```
-core contributors = [SAG, IFM]
+core contributors = [Cumulocity GmbH]
 
 -> Project leads, one each from [core contributors]
 |
@@ -282,7 +282,7 @@ minor release workflow:
 
 * The release maintainer submits a pull request to the release branch with the
   following changes:
-  * `CHANEGLOG.md` entries for the patch level release
+  * `CHANGELOG.md` entries for the patch level release
   * Updates of the version numbers for all crates in the "patch"-level position,
     e.g. "0.42.0" becomes "0.42.1",
 * Once the aforementioned pull request is merged, the release maintainer
@@ -311,7 +311,7 @@ branch.
 Version number bumps happen right _after_ branchoff for a release. Doing the
 version number bump before the release would mean that the release maintainers
 would have to wait for the version-bump-pull-request, which is not acceptable
-under the preassumption that every commit from `main` can potentially be
+under the presumption that every commit from `main` can potentially be
 released.
 By bumping the numbers right _after_ the release, but for the next release, we
 automatically get a peace-of-mind state for that next release, where the release

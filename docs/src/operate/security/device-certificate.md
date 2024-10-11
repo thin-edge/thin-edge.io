@@ -53,7 +53,7 @@ The `tedge cert show` command can be used to look at the content of the certific
 ```text title="tedge cert show""                                 
 Device certificate: /etc/mosquitto/certs/demo-device-007.chain.pem
 Subject: O=Thin-Edge, OU=t398942, CN=demo-device-007
-Issuer: C=DE, O=Software AG, CN=QA Thin-Edge CA G1
+Issuer: C=DE, O=Cumulocity GmbH, CN=QA Thin-Edge CA G1
 Valid from: Tue, 09 Nov 2021 14:38:41 +0000
 Valid up to: Sat, 09 Nov 2024 14:38:41 +0000
 Thumbprint: 1E0F9A074E6FE67A43EE948335E42EB729CB3974
