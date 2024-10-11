@@ -40,7 +40,7 @@ pub struct WorkflowRepository {
     //
     // For a fresh new workflow definition, this points to the user-defined file
     // When the workflow definition is in use, this points to a copy in the state directory.
-    definitions: HashMap<String, Utf8PathBuf>,
+    definitions: HashMap<String, (OperationName, Utf8PathBuf)>,
 
     // The in-memory representation of all the workflows (builtin, user-defined, i,n-use).
     workflows: WorkflowSupervisor,
@@ -118,10 +118,11 @@ impl WorkflowRepository {
         workflow: OperationWorkflow,
         version: WorkflowVersion,
     ) -> Result<String, anyhow::Error> {
-        let name = workflow.operation.to_string();
-        self.definitions.insert(version.clone(), definition);
+        let operation_name = workflow.operation.to_string();
+        self.definitions
+            .insert(version.clone(), (operation_name.clone(), definition));
         self.workflows.register_custom_workflow(workflow, version)?;
-        Ok(name)
+        Ok(operation_name)
     }
 
     fn load_builtin_workflows(&mut self) {
@@ -135,20 +136,39 @@ impl WorkflowRepository {
         }
     }
 
-    pub async fn update_operation_workflows(&mut self, file_update: FsWatchEvent) {
+    /// Update the workflow definitions after some on-disk changes
+    ///
+    /// Return the operation capability deregistration message when the operation has been deprecated.
+    pub async fn update_operation_workflows(
+        &mut self,
+        file_update: FsWatchEvent,
+    ) -> Option<OperationName> {
         match file_update {
             FsWatchEvent::Modified(path) | FsWatchEvent::FileCreated(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
-                        self.reload_operation_workflow(&path).await
+                        if path.exists() {
+                            self.reload_operation_workflow(&path).await
+                        } else {
+                            // FsWatchEvent returns misleading Modified events along FileDeleted events.
+                            return self.remove_operation_workflow(&path).await;
+                        }
                     }
                 }
             }
 
-            FsWatchEvent::FileDeleted(_) => {}
+            FsWatchEvent::FileDeleted(path) => {
+                if let Ok(path) = Utf8PathBuf::try_from(path) {
+                    if self.is_user_defined(&path) {
+                        return self.remove_operation_workflow(&path).await;
+                    }
+                }
+            }
 
             FsWatchEvent::DirectoryDeleted(_) | FsWatchEvent::DirectoryCreated(_) => {}
         }
+
+        None
     }
 
     fn is_user_defined(&mut self, path: &Utf8PathBuf) -> bool {
@@ -168,6 +188,33 @@ impl WorkflowRepository {
         }
     }
 
+    /// Remove a user defined workflow.
+    ///
+    /// Return the operation name if this was the last version for that operation,
+    /// .i.e. there is no builtin workflow.
+    async fn remove_operation_workflow(
+        &mut self,
+        removed_path: &Utf8PathBuf,
+    ) -> Option<OperationName> {
+        // As this is not intended to be a frequent operation, there is no attempt to be efficient.
+        let (operation, removed_version) = self
+            .definitions
+            .iter()
+            .find(|(_, (_, p))| p == removed_path)
+            .map(|(v, (n, _))| (n.clone(), v.clone()))?;
+
+        self.definitions.remove(&removed_version);
+        let deprecated = self
+            .workflows
+            .unregister_custom_workflow(&operation, &removed_version);
+        if deprecated {
+            info!("The user defined workflow for the '{operation}' operation has been removed");
+            Some(operation)
+        } else {
+            None
+        }
+    }
+
     /// Copy the workflow definition file to the persisted state directory,
     /// unless this has already been done.
     async fn persist_workflow_definition(
@@ -175,13 +222,14 @@ impl WorkflowRepository {
         operation: &OperationName,
         version: &WorkflowVersion,
     ) {
-        if let Some(source) = self.definitions.get(version) {
+        if let Some((_, source)) = self.definitions.get(version) {
             if !source.starts_with(&self.state_dir) {
                 let target = self.state_dir.join(operation).with_extension("toml");
                 if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
                     error!("Fail to persist a copy of {source} as {target}: {err}");
                 } else {
-                    self.definitions.insert(version.clone(), target);
+                    self.definitions
+                        .insert(version.clone(), (operation.clone(), target));
                 }
             }
         }
@@ -201,6 +249,16 @@ impl WorkflowRepository {
         target: &EntityTopicId,
     ) -> Vec<MqttMessage> {
         self.workflows.capability_messages(schema, target)
+    }
+
+    pub fn deregistration_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> MqttMessage {
+        self.workflows
+            .deregistration_message(schema, target, operation)
     }
 
     /// Update the state of the command board on reception of a message sent by a peer over MQTT
