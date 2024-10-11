@@ -6,6 +6,7 @@ use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
+use std::path::PathBuf;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -28,6 +29,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
@@ -48,6 +50,7 @@ impl WorkflowActorBuilder {
         config: OperationConfig,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
+        fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -70,6 +73,8 @@ impl WorkflowActorBuilder {
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
 
         let script_runner = ClientMessageBox::new(script_runner);
+
+        fs_notify.connect_sink(config.operations_dir.clone().into(), &input_sender);
 
         Self {
             config,
