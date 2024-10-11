@@ -1,3 +1,4 @@
+use crate::mqtt_topics::Channel;
 use crate::workflow::*;
 use ::log::info;
 use on_disk::OnDiskCommandBoard;
@@ -38,26 +39,32 @@ impl WorkflowSupervisor {
     ) -> Result<(), WorkflowRegistrationError> {
         let operation = workflow.operation.clone();
         if let Some(versions) = self.workflows.get_mut(&operation) {
-            if version == versions.current || versions.workflows.contains_key(&version) {
-                // Already registered
-                return Ok(());
-            }
-
-            if workflow.built_in {
-                info!("The built-in {operation} operation has been customized",);
-                return Ok(());
-            }
-
-            versions.workflows.insert(version.clone(), workflow);
-            versions.current = version
+            versions.add(version, workflow);
         } else {
-            let versions = WorkflowVersions {
-                current: version.clone(),
-                workflows: HashMap::from([(version, workflow)]),
-            };
+            let versions = WorkflowVersions::new(version, workflow);
             self.workflows.insert(operation, versions);
         }
         Ok(())
+    }
+
+    /// Register a user-defined workflow
+    ///
+    /// Return true is this was the last version for that operation.
+    pub fn unregister_custom_workflow(
+        &mut self,
+        operation: &OperationName,
+        version: &WorkflowVersion,
+    ) -> bool {
+        let operation = OperationType::from(operation.as_str());
+        if let Some(versions) = self.workflows.get_mut(&operation) {
+            versions.remove(version);
+        }
+        if self.workflows.get(&operation).map(|v| v.is_empty()) == Some(true) {
+            self.workflows.remove(&operation);
+            true
+        } else {
+            false
+        }
     }
 
     /// The set of pending commands
@@ -91,6 +98,22 @@ impl WorkflowSupervisor {
             .iter()
             .filter_map(|workflow| workflow.capability_message(schema, target))
             .collect()
+    }
+
+    pub fn deregistration_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> MqttMessage {
+        let operation = OperationType::from(operation.as_str());
+        let topic = schema.topic_for(target, &Channel::CommandMetadata { operation });
+        MqttMessage {
+            topic,
+            payload: "".to_string().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        }
     }
 
     /// Update the state of the command board on reception of a message sent by a peer over MQTT
@@ -251,6 +274,53 @@ impl WorkflowSupervisor {
 }
 
 impl WorkflowVersions {
+    fn new(version: WorkflowVersion, workflow: OperationWorkflow) -> Self {
+        WorkflowVersions {
+            current: version.clone(),
+            workflows: HashMap::from([(version, workflow)]),
+        }
+    }
+
+    fn add(&mut self, version: WorkflowVersion, workflow: OperationWorkflow) {
+        if version == self.current || self.workflows.contains_key(&version) {
+            // Already registered
+            return;
+        }
+
+        // FIXME builtin registration
+        if workflow.built_in {
+            info!(
+                "The built-in {operation} operation has been customized",
+                operation = workflow.operation
+            );
+            return;
+        }
+
+        self.workflows.insert(version.clone(), workflow);
+        self.current = version
+    }
+
+    // Remove a version from this list of versions.
+    //
+    // Return Some updated list when there is still one version
+    // Return None if there is no more version for that operation.
+    fn remove(&mut self, version: &WorkflowVersion) {
+        self.workflows.remove(version);
+        if &self.current == version {
+            if self.workflows.contains_key("builtin") {
+                self.current = "builtin".to_string()
+            } else {
+                // FIXME
+                self.current = "".to_string()
+            }
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        // FIXME
+        self.current.is_empty()
+    }
+
     fn get(
         &self,
         operation: &OperationName,
