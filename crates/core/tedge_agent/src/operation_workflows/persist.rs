@@ -14,6 +14,7 @@ use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::workflow::WorkflowVersion;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
@@ -130,6 +131,39 @@ impl WorkflowRepository {
                 .register_builtin_workflow(capability.as_str().into())
             {
                 error!("Fail to register built-in workflow for {capability} operation: {err}");
+            }
+        }
+    }
+
+    pub async fn update_operation_workflows(&mut self, file_update: FsWatchEvent) {
+        match file_update {
+            FsWatchEvent::Modified(path) | FsWatchEvent::FileCreated(path) => {
+                if let Ok(path) = Utf8PathBuf::try_from(path) {
+                    if self.is_user_defined(&path) {
+                        self.reload_operation_workflow(&path).await
+                    }
+                }
+            }
+
+            FsWatchEvent::FileDeleted(_) => {}
+
+            FsWatchEvent::DirectoryDeleted(_) | FsWatchEvent::DirectoryCreated(_) => {}
+        }
+    }
+
+    fn is_user_defined(&mut self, path: &Utf8PathBuf) -> bool {
+        path.extension() == Some("toml") && path.parent() == Some(&self.custom_workflows_dir)
+    }
+
+    async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) {
+        match read_operation_workflow(path).await {
+            Ok((workflow, version)) => {
+                if let Ok(cmd) = self.load_operation_workflow(path.clone(), workflow, version) {
+                    info!("Using the updated operation workflow definition from {path} for '{cmd}' operation");
+                }
+            }
+            Err(err) => {
+                error!("Fail to reload {path}: {err}")
             }
         }
     }

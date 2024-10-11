@@ -38,6 +38,7 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -355,6 +356,8 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         RequestEnvelope<Execute, std::io::Result<Output>>,
         NoMessage,
     > = SimpleMessageBoxBuilder::new("Script", 5);
+    let mut inotify_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
+        SimpleMessageBoxBuilder::new("Inotify", 5);
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
@@ -366,8 +369,12 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         state_dir: tmp_path.join("running-operations"),
         operations_dir: tmp_path.join("operations"),
     };
-    let mut converter_actor_builder =
-        WorkflowActorBuilder::new(config, &mut mqtt_builder, &mut script_builder);
+    let mut converter_actor_builder = WorkflowActorBuilder::new(
+        config,
+        &mut mqtt_builder,
+        &mut script_builder,
+        &mut inotify_builder,
+    );
     converter_actor_builder.register_builtin_operation(&mut restart_builder);
     converter_actor_builder.register_builtin_operation(&mut software_builder);
 
