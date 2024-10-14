@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::supervisor::WorkflowSource;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::IllFormedOperationWorkflow;
@@ -65,11 +66,12 @@ impl WorkflowRepository {
     }
 
     pub async fn load(&mut self) {
-        // Note that the loading order matters.
-
         // First, all the user-defined workflows are loaded
         let dir_path = &self.custom_workflows_dir.clone();
-        if let Err(err) = self.load_operation_workflows(dir_path).await {
+        if let Err(err) = self
+            .load_operation_workflows(WorkflowSource::UserDefined, dir_path)
+            .await
+        {
             error!("Fail to read the operation workflows from {dir_path}: {err:?}");
         }
 
@@ -78,7 +80,10 @@ impl WorkflowRepository {
         // so the known location of this definition is the copy not the original
         let dir_path = &self.state_dir.clone();
         let _ = tokio::fs::create_dir(dir_path).await; // if the creation fails, this will be reported next line on read
-        if let Err(err) = self.load_operation_workflows(dir_path).await {
+        if let Err(err) = self
+            .load_operation_workflows(WorkflowSource::InUseCopy, dir_path)
+            .await
+        {
             error!("Fail to reload the running operation workflows from {dir_path}: {err:?}");
         }
 
@@ -88,6 +93,7 @@ impl WorkflowRepository {
 
     async fn load_operation_workflows(
         &mut self,
+        source: WorkflowSource,
         dir_path: &Utf8PathBuf,
     ) -> Result<(), anyhow::Error> {
         for entry in dir_path.read_dir_utf8()?.flatten() {
@@ -96,7 +102,7 @@ impl WorkflowRepository {
                 match read_operation_workflow(file)
                     .await
                     .and_then(|(workflow, version)| {
-                        self.load_operation_workflow(file.into(), workflow, version)
+                        self.load_operation_workflow(source, file.into(), workflow, version)
                     }) {
                     Ok(cmd) => {
                         info!(
@@ -114,6 +120,7 @@ impl WorkflowRepository {
 
     fn load_operation_workflow(
         &mut self,
+        source: WorkflowSource,
         definition: Utf8PathBuf,
         workflow: OperationWorkflow,
         version: WorkflowVersion,
@@ -121,7 +128,8 @@ impl WorkflowRepository {
         let operation_name = workflow.operation.to_string();
         self.definitions
             .insert(version.clone(), (operation_name.clone(), definition));
-        self.workflows.register_custom_workflow(workflow, version)?;
+        self.workflows
+            .register_custom_workflow(source, workflow, version)?;
         Ok(operation_name)
     }
 
@@ -178,7 +186,12 @@ impl WorkflowRepository {
     async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) {
         match read_operation_workflow(path).await {
             Ok((workflow, version)) => {
-                if let Ok(cmd) = self.load_operation_workflow(path.clone(), workflow, version) {
+                if let Ok(cmd) = self.load_operation_workflow(
+                    WorkflowSource::UserDefined,
+                    path.clone(),
+                    workflow,
+                    version,
+                ) {
                     info!("Using the updated operation workflow definition from {path} for '{cmd}' operation");
                 }
             }
