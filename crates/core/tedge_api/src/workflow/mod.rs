@@ -35,9 +35,6 @@ pub struct OperationWorkflow {
     /// The operation to which this workflow applies
     pub operation: OperationType,
 
-    /// Mark this workflow as built_in
-    pub built_in: bool,
-
     /// Default action outcome handlers
     pub handlers: DefaultHandlers,
 
@@ -237,7 +234,6 @@ impl OperationWorkflow {
 
         Ok(OperationWorkflow {
             operation,
-            built_in: false,
             handlers,
             states,
         })
@@ -269,7 +265,6 @@ impl OperationWorkflow {
         .collect();
 
         OperationWorkflow {
-            built_in: true,
             operation,
             handlers: DefaultHandlers::default(),
             states,
@@ -294,7 +289,6 @@ impl OperationWorkflow {
         .collect();
 
         OperationWorkflow {
-            built_in: true,
             operation: operation.as_str().into(),
             handlers: DefaultHandlers::default(),
             states,
