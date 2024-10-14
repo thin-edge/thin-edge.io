@@ -154,14 +154,13 @@ pub fn is_mosquitto_version_above_2() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bridge::C8Y_CONFIG_FILENAME;
 
     #[test]
     fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         use std::convert::TryFrom;
         let params = BridgeConfigC8yParams {
             mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
-            config_file: C8Y_CONFIG_FILENAME.into(),
+            config_file: "c8y-bridge.conf".into(),
             remote_clientid: "alpha".into(),
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             bridge_certfile: "./test-certificate.pem".into(),
@@ -176,7 +175,7 @@ mod tests {
 
         let expected = BridgeConfig {
             cloud_name: "c8y".into(),
-            config_file: C8Y_CONFIG_FILENAME.into(),
+            config_file: "c8y-bridge.conf".into(),
             connection: "edge_to_c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             remote_username: None,

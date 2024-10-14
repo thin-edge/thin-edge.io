@@ -42,7 +42,7 @@ pub struct ConnectCommand {
     pub is_test_connection: bool,
     pub offline_mode: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
-    pub profile: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 pub enum DeviceStatus {
@@ -61,14 +61,14 @@ impl Command for ConnectCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         let config = &self.config;
-        let bridge_config = bridge_config(config, self.cloud, self.profile.as_deref())?;
+        let bridge_config = bridge_config(config, self.cloud, self.profile.as_ref())?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
 
         if self.is_test_connection {
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
             return if self.check_if_bridge_exists(&bridge_config) {
-                match self.check_connection(config, self.profile.as_deref()) {
+                match self.check_connection(config, self.profile.as_ref()) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
                         println!("Connection check to {} cloud is successful.\n", cloud);
@@ -114,7 +114,7 @@ impl Command for ConnectCommand {
             match self.check_connection_with_retries(
                 config,
                 bridge_config.connection_check_attempts,
-                self.profile.as_deref(),
+                self.profile.as_ref(),
             ) {
                 Ok(DeviceStatus::AlreadyExists) => {
                     println!("Connection check is successful.\n");
@@ -160,7 +160,7 @@ impl ConnectCommand {
         &self,
         config: &TEdgeConfig,
         max_attempts: i32,
-        profile: Option<&str>,
+        profile: Option<&ProfileName>,
     ) -> Result<DeviceStatus, ConnectError> {
         for i in 1..max_attempts {
             let result = self.check_connection(config, profile);
@@ -178,7 +178,7 @@ impl ConnectCommand {
     fn check_connection(
         &self,
         config: &TEdgeConfig,
-        profile: Option<&str>,
+        profile: Option<&ProfileName>,
     ) -> Result<DeviceStatus, ConnectError> {
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
@@ -218,7 +218,7 @@ impl ConnectCommand {
 pub fn bridge_config(
     config: &TEdgeConfig,
     cloud: self::Cloud,
-    profile: Option<&str>,
+    profile: Option<&ProfileName>,
 ) -> Result<BridgeConfig, ConfigError> {
     let bridge_location = match config.mqtt.bridge.built_in {
         true => BridgeLocation::BuiltIn,
@@ -285,7 +285,7 @@ pub fn bridge_config(
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(
     tedge_config: &TEdgeConfig,
-    c8y_profile: Option<&str>,
+    c8y_profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
     let prefix = &tedge_config.c8y.try_get(c8y_profile)?.bridge.topic_prefix;
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
@@ -381,7 +381,7 @@ fn check_device_status_c8y(
 // Here if the status is 200 then it's success.
 fn check_device_status_azure(
     tedge_config: &TEdgeConfig,
-    profile: Option<&str>,
+    profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
     let az_config = tedge_config.az.try_get(profile)?;
     let topic_prefix = &az_config.bridge.topic_prefix;
@@ -470,7 +470,7 @@ fn check_device_status_azure(
 
 fn check_device_status_aws(
     tedge_config: &TEdgeConfig,
-    profile: Option<&str>,
+    profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
     let aws_config = tedge_config.aws.try_get(profile)?;
     let topic_prefix = &aws_config.bridge.topic_prefix;

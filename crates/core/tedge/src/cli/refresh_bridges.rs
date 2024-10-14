@@ -3,6 +3,7 @@ use std::sync::Arc;
 use camino::Utf8PathBuf;
 use tedge_config::system_services::SystemService;
 use tedge_config::system_services::SystemServiceManager;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 
@@ -92,7 +93,7 @@ impl RefreshBridgesCmd {
 fn established_bridges<'a>(
     config_location: &TEdgeConfigLocation,
     config: &'a TEdgeConfig,
-) -> Vec<(Cloud, Option<&'a str>)> {
+) -> Vec<(Cloud, Option<&'a ProfileName>)> {
     // if the bridge configuration file doesn't exist, then the bridge doesn't exist and we shouldn't try to update it
     possible_clouds(config)
         .filter(|(cloud, profile)| {
@@ -101,11 +102,13 @@ fn established_bridges<'a>(
         .collect()
 }
 
-fn possible_clouds(config: &TEdgeConfig) -> impl Iterator<Item = (Cloud, Option<&str>)> {
-    let possible_c8ys = config.c8y.keys();
-    [(Cloud::Aws, None), (Cloud::Azure, None)]
-        .into_iter()
-        .chain(possible_c8ys.map(|profile| (Cloud::C8y, profile)))
+fn possible_clouds(config: &TEdgeConfig) -> impl Iterator<Item = (Cloud, Option<&ProfileName>)> {
+    config
+        .c8y
+        .keys()
+        .map(|profile| (Cloud::C8y, profile))
+        .chain(config.az.keys().map(|profile| (Cloud::Azure, profile)))
+        .chain(config.aws.keys().map(|profile| (Cloud::Aws, profile)))
 }
 
 pub fn refresh_bridge(
@@ -121,7 +124,7 @@ pub fn refresh_bridge(
 pub fn get_bridge_config_file_path_cloud(
     config_location: &TEdgeConfigLocation,
     cloud: Cloud,
-    profile: Option<&str>,
+    profile: Option<&ProfileName>,
 ) -> Utf8PathBuf {
     config_location
         .tedge_config_root_path

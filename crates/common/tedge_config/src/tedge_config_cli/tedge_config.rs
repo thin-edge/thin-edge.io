@@ -40,6 +40,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
+pub use tedge_config_macros::ProfileName;
 use tedge_config_macros::*;
 use toml::Table;
 use tracing::error;
@@ -1420,6 +1421,6 @@ mod tests {
 
         let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
 
-        assert_eq!(reader.c8y.try_get(None).unwrap().http.key(), "c8y.url");
+        assert_eq!(reader.c8y.try_get::<str>(None).unwrap().http.key(), "c8y.url");
     }
 }

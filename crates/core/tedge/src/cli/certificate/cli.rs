@@ -1,6 +1,7 @@
 use crate::bridge::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
+use tedge_config::ProfileName;
 
 use super::create::CreateCertCmd;
 use super::create_csr::CreateCsrCmd;
@@ -158,6 +159,6 @@ pub enum UploadCertCli {
         password: String,
 
         #[clap(long)]
-        profile: Option<String>,
+        profile: Option<ProfileName>,
     },
 }

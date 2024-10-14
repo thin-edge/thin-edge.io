@@ -98,7 +98,7 @@ fn main() {
         "Unknown profile `unknown` for the multi-profile property c8y"
     );
     assert_eq!(
-        multi_c8y_reader.c8y.try_get(None).unwrap_err().to_string(),
+        multi_c8y_reader.c8y.try_get::<&str>(None).unwrap_err().to_string(),
         "A profile is required for the multi-profile property c8y"
     );
 

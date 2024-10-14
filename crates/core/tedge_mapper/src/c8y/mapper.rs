@@ -13,6 +13,7 @@ use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
+use tedge_config::ProfileName;
 use std::borrow::Cow;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -30,7 +31,7 @@ use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
 
 pub struct CumulocityMapper {
-    pub profile: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 #[async_trait]

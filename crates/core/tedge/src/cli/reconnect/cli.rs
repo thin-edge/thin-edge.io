@@ -1,21 +1,26 @@
 use crate::cli::common::Cloud;
 use crate::command::*;
 use tedge_config::system_services::service_manager;
-
+use tedge_config::ProfileName;
 use super::command::ReconnectBridgeCommand;
-
-use crate::bridge::AWS_CONFIG_FILENAME;
-use crate::bridge::AZURE_CONFIG_FILENAME;
-use crate::bridge::C8Y_CONFIG_FILENAME;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeReconnectCli {
     /// Remove bridge connection to Cumulocity.
-    C8y { profile: Option<String> },
+    C8y {
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
     /// Remove bridge connection to Azure.
-    Az,
+    Az {
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
     /// Remove bridge connection to AWS.
-    Aws,
+    Aws {
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
 }
 
 impl BuildCommand for TEdgeReconnectCli {
@@ -29,28 +34,25 @@ impl BuildCommand for TEdgeReconnectCli {
                 config_location,
                 config,
                 service_manager,
-                config_file: C8Y_CONFIG_FILENAME.into(),
                 cloud: Cloud::C8y,
                 use_mapper: true,
                 profile,
             },
-            TEdgeReconnectCli::Az => ReconnectBridgeCommand {
+            TEdgeReconnectCli::Az { profile} => ReconnectBridgeCommand {
                 config_location,
                 config,
                 service_manager,
-                config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
                 use_mapper: true,
-                profile: None,
+                profile,
             },
-            TEdgeReconnectCli::Aws => ReconnectBridgeCommand {
+            TEdgeReconnectCli::Aws { profile} => ReconnectBridgeCommand {
                 config_location,
                 config,
                 service_manager,
-                config_file: AWS_CONFIG_FILENAME.into(),
                 cloud: Cloud::Aws,
                 use_mapper: true,
-                profile: None,
+                profile,
             },
         };
         Ok(cmd.into_boxed())

@@ -4,6 +4,7 @@ use miette::ensure;
 use miette::miette;
 use miette::Context;
 use serde::Deserialize;
+use tedge_config::ProfileName;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -69,7 +70,7 @@ pub struct C8yRemoteAccessPluginOpt {
 
     #[arg(long, env = "C8Y_PROFILE")]
     /// The c8y profile to use
-    pub profile: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 impl C8yRemoteAccessPluginOpt {

@@ -3,6 +3,7 @@ use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
+use anyhow::Context;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::fmt;
@@ -10,6 +11,7 @@ use tedge_config::get_config_dir;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::PathBuf;
+use tedge_config::ProfileName;
 use tracing::log::warn;
 
 mod aws;
@@ -18,29 +20,40 @@ mod c8y;
 mod collectd;
 mod core;
 
+macro_rules! read_and_set_var {
+    ($profile:ident, $var:literal) => {
+        $profile
+            .or_else(|| {
+                Some(
+                    std::env::var($var)
+                        .ok()?
+                        .parse()
+                        .context(concat!("Reading environment variable ", $var))
+                        .unwrap(),
+                )
+            })
+            .inspect(|profile| std::env::set_var($var, profile))
+    };
+}
+
 fn lookup_component(
     component_name: &MapperName,
-    profile: Option<String>,
+    profile: Option<ProfileName>,
 ) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper {
-            profile: profile
-                .or_else(|| std::env::var("AZ_PROFILE").ok())
-                .inspect(|profile| std::env::set_var("AZ_PROFILE", profile)),
+            profile: read_and_set_var!(profile, "AZ_PROFILE"),
         }),
         MapperName::Aws => Box::new(AwsMapper {
-            profile: profile
-                .or_else(|| std::env::var("AWS_PROFILE").ok())
-                .inspect(|profile| std::env::set_var("AWS_PROFILE", profile)),
+            profile: read_and_set_var!(profile, "AWS_PROFILE"),
         }),
         MapperName::Collectd => Box::new(CollectdMapper),
         MapperName::C8y => Box::new(CumulocityMapper {
-            profile: profile
-                .or_else(|| std::env::var("C8Y_PROFILE").ok())
-                .inspect(|profile| std::env::set_var("C8Y_PROFILE", profile)),
+            profile: read_and_set_var!(profile, "C8Y_PROFILE"),
         }),
     }
 }
+
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -81,7 +94,7 @@ pub struct MapperOpt {
     pub config_dir: PathBuf,
 
     #[clap(long, global = true)]
-    pub profile: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 #[derive(Debug, clap::Subcommand)]

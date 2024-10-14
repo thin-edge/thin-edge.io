@@ -2,6 +2,7 @@ use anyhow::Context;
 use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
+use tedge_config::ProfileName;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::DeviceTopicId;
@@ -58,8 +59,8 @@ pub struct FirmwarePluginOpt {
     )]
     pub config_dir: PathBuf,
 
-    #[clap(long, env)]
-    pub c8y_profile: Option<String>,
+    #[clap(long, env = "C8Y_PROFILE")]
+    pub profile: Option<ProfileName>,
 }
 
 pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::Error> {
@@ -75,7 +76,7 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
     set_log_level(log_level);
 
     let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
-    let c8y_profile = firmware_plugin_opt.c8y_profile.as_deref();
+    let c8y_profile = firmware_plugin_opt.profile.as_deref();
 
     if firmware_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");

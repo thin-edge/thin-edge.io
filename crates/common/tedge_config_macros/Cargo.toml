@@ -9,6 +9,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
 doku = { workspace = true }
 itertools = { workspace = true }

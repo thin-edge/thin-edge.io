@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
+use tedge_config::ProfileName;
 use std::borrow::Cow;
 use std::str::FromStr;
 use tedge_actors::ConvertingActor;
@@ -22,7 +23,7 @@ use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
 pub struct AzureMapper {
-    pub profile: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 #[async_trait]

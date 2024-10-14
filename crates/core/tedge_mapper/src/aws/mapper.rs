@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
+use tedge_config::ProfileName;
 use std::str::FromStr;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
@@ -21,7 +22,7 @@ use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
 pub struct AwsMapper {
-    pub profile: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 #[async_trait]

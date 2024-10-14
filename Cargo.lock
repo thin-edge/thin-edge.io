@@ -3974,6 +3974,7 @@ dependencies = [
 name = "tedge_config_macros"
 version = "1.3.1"
 dependencies = [
+ "anyhow",
  "camino",
  "doku",
  "itertools 0.13.0",

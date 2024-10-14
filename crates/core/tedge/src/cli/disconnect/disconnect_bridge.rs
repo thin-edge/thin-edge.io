@@ -3,6 +3,7 @@ use crate::cli::disconnect::error::*;
 use crate::command::*;
 use std::sync::Arc;
 use tedge_config::system_services::*;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 use which::which;
 
@@ -11,7 +12,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {
     pub config_location: TEdgeConfigLocation,
-    pub config_file: String,
+    pub profile: Option<ProfileName>,
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
@@ -67,12 +68,13 @@ impl DisconnectBridgeCommand {
     }
 
     fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
+        let config_file = self.cloud.bridge_config_filename(self.profile.as_ref());
         // Check if bridge exists and stop with code 0 if it doesn't.
         let bridge_conf_path = self
             .config_location
             .tedge_config_root_path
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-            .join(&self.config_file);
+            .join(config_file.as_ref());
 
         println!("Removing {} bridge.\n", self.cloud);
         match std::fs::remove_file(&bridge_conf_path) {

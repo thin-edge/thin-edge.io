@@ -1,4 +1,5 @@
 use tedge_config::system_services::service_manager;
+use tedge_config::ProfileName;
 
 use crate::cli::common::Cloud;
 use crate::cli::connect::*;
@@ -21,7 +22,7 @@ pub enum TEdgeConnectOpt {
         offline_mode: bool,
 
         #[clap(long)]
-        profile: Option<String>,
+        profile: Option<ProfileName>,
     },
 
     /// Create connection to Azure
@@ -37,7 +38,7 @@ pub enum TEdgeConnectOpt {
         offline_mode: bool,
 
         #[clap(long)]
-        profile: Option<String>,
+        profile: Option<ProfileName>,
     },
 
     /// Create connection to AWS
@@ -53,7 +54,7 @@ pub enum TEdgeConnectOpt {
         offline_mode: bool,
 
         #[clap(long)]
-        profile: Option<String>,
+        profile: Option<ProfileName>,
     },
 }
 
