@@ -54,7 +54,6 @@ fn lookup_component(
     }
 }
 
-
 #[derive(Debug, Parser)]
 #[clap(
     name = clap::crate_name!(),

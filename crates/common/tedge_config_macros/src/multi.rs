@@ -52,7 +52,7 @@ fn validate_profile_name(value: &str) -> Result<(), anyhow::Error> {
 impl FromStr for ProfileName {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        validate_profile_name(&s)?;
+        validate_profile_name(s)?;
         Ok(Self(s.to_owned()))
     }
 }

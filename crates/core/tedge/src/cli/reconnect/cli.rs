@@ -1,8 +1,8 @@
+use super::command::ReconnectBridgeCommand;
 use crate::cli::common::Cloud;
 use crate::command::*;
 use tedge_config::system_services::service_manager;
 use tedge_config::ProfileName;
-use super::command::ReconnectBridgeCommand;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeReconnectCli {
@@ -38,7 +38,7 @@ impl BuildCommand for TEdgeReconnectCli {
                 use_mapper: true,
                 profile,
             },
-            TEdgeReconnectCli::Az { profile} => ReconnectBridgeCommand {
+            TEdgeReconnectCli::Az { profile } => ReconnectBridgeCommand {
                 config_location,
                 config,
                 service_manager,
@@ -46,7 +46,7 @@ impl BuildCommand for TEdgeReconnectCli {
                 use_mapper: true,
                 profile,
             },
-            TEdgeReconnectCli::Aws { profile} => ReconnectBridgeCommand {
+            TEdgeReconnectCli::Aws { profile } => ReconnectBridgeCommand {
                 config_location,
                 config,
                 service_manager,

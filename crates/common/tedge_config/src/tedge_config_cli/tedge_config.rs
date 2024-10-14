@@ -1421,6 +1421,9 @@ mod tests {
 
         let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
 
-        assert_eq!(reader.c8y.try_get::<str>(None).unwrap().http.key(), "c8y.url");
+        assert_eq!(
+            reader.c8y.try_get::<str>(None).unwrap().http.key(),
+            "c8y.url"
+        );
     }
 }

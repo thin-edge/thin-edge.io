@@ -4,12 +4,12 @@ use miette::ensure;
 use miette::miette;
 use miette::Context;
 use serde::Deserialize;
-use tedge_config::ProfileName;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
 use tedge_config::get_config_dir;
 use tedge_config::Path;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 
 use crate::csv::deserialize_csv_record;

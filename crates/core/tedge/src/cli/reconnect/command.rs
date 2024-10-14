@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use crate::cli::common::Cloud;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
+use std::sync::Arc;
 use tedge_config::system_services::SystemServiceManager;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;

@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
-use tedge_config::{system_services::SystemService, ProfileName};
+use tedge_config::system_services::SystemService;
+use tedge_config::ProfileName;
 
 #[derive(Copy, Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr, PartialEq, Eq)]
 pub enum Cloud {
