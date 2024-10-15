@@ -76,7 +76,6 @@ impl TEdgeComponent for CumulocityMapper {
             tc.forward_from_local("s/ut/#", local_prefix.clone(), "")?;
 
             // Static templates
-            tc.forward_from_local("s/us", local_prefix.clone(), "")?;
             tc.forward_from_local("s/us/#", local_prefix.clone(), "")?;
             tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
             tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
