@@ -46,21 +46,27 @@ impl WorkflowSupervisor {
 
     /// Un-register a user-defined workflow
     ///
-    /// Return true is this was the last version for that operation.
+    /// Return None is this was the last version for that operation.
+    /// Return Some(BuiltIn) is there is a builtin definition
+    /// Return Some(InUseCopy) if the workflow has been deprecated but there is still a running command.
     pub fn unregister_custom_workflow(
         &mut self,
         operation: &OperationName,
         version: &WorkflowVersion,
-    ) -> bool {
+    ) -> Option<WorkflowSource> {
         let operation = OperationType::from(operation.as_str());
         if let Some(versions) = self.workflows.get_mut(&operation) {
             versions.remove(version);
         }
+
         if self.workflows.get(&operation).map(|v| v.is_empty()) == Some(true) {
             self.workflows.remove(&operation);
-            true
-        } else {
-            false
+        }
+
+        match self.workflows.get(&operation) {
+            None => None,
+            Some(version) if version.is_builtin() => Some(BuiltIn),
+            _ => Some(InUseCopy),
         }
     }
 
@@ -398,6 +404,10 @@ impl WorkflowVersions {
 
     fn is_empty(&self) -> bool {
         self.versions.is_empty()
+    }
+
+    fn is_builtin(&self) -> bool {
+        self.builtin.is_some()
     }
 
     fn get(
