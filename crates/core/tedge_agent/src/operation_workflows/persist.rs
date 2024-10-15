@@ -41,7 +41,8 @@ pub struct WorkflowRepository {
     //
     // For a fresh new workflow definition, this points to the user-defined file
     // When the workflow definition is in use, this points to a copy in the state directory.
-    definitions: HashMap<String, (OperationName, Utf8PathBuf)>,
+    definitions: HashMap<WorkflowVersion, (OperationName, Utf8PathBuf)>,
+    in_use_copies: HashMap<OperationName, WorkflowVersion>,
 
     // The in-memory representation of all the workflows (builtin, user-defined, i,n-use).
     workflows: WorkflowSupervisor,
@@ -56,11 +57,13 @@ impl WorkflowRepository {
         let workflows = WorkflowSupervisor::default();
         let state_dir = state_dir.join("workflows-in-use");
         let definitions = HashMap::new();
+        let in_use_copies = HashMap::new();
         Self {
             builtin_workflows,
             custom_workflows_dir,
             state_dir,
             definitions,
+            in_use_copies,
             workflows,
         }
     }
@@ -126,8 +129,18 @@ impl WorkflowRepository {
         version: WorkflowVersion,
     ) -> Result<String, anyhow::Error> {
         let operation_name = workflow.operation.to_string();
-        self.definitions
-            .insert(version.clone(), (operation_name.clone(), definition));
+        match source {
+            WorkflowSource::UserDefined => {
+                self.definitions
+                    .insert(version.clone(), (operation_name.clone(), definition));
+            }
+            WorkflowSource::InUseCopy => {
+                self.in_use_copies
+                    .insert(operation_name.clone(), version.clone());
+            }
+            WorkflowSource::BuiltIn => {}
+        };
+
         self.workflows
             .register_custom_workflow(source, workflow, version)?;
         Ok(operation_name)
@@ -149,17 +162,21 @@ impl WorkflowRepository {
     /// Return the operation capability deregistration message when the operation has been deprecated.
     pub async fn update_operation_workflows(
         &mut self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
         file_update: FsWatchEvent,
-    ) -> Option<OperationName> {
+    ) -> Option<MqttMessage> {
         match file_update {
             FsWatchEvent::Modified(path) | FsWatchEvent::FileCreated(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
+                        // Checking the path exists as FsWatchEvent returns misleading Modified events along FileDeleted events.
                         if path.exists() {
-                            self.reload_operation_workflow(&path).await
-                        } else {
-                            // FsWatchEvent returns misleading Modified events along FileDeleted events.
-                            return self.remove_operation_workflow(&path).await;
+                            return self.reload_operation_workflow(&path).await.and_then(
+                                |updated_operation| {
+                                    self.capability_message(schema, target, &updated_operation)
+                                },
+                            );
                         }
                     }
                 }
@@ -168,7 +185,11 @@ impl WorkflowRepository {
             FsWatchEvent::FileDeleted(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
-                        return self.remove_operation_workflow(&path).await;
+                        return self.remove_operation_workflow(&path).await.map(
+                            |deprecated_operation| {
+                                self.deregistration_message(schema, target, &deprecated_operation)
+                            },
+                        );
                     }
                 }
             }
@@ -183,7 +204,10 @@ impl WorkflowRepository {
         path.extension() == Some("toml") && path.parent() == Some(&self.custom_workflows_dir)
     }
 
-    async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) {
+    /// Reload a user defined workflow.
+    ///
+    /// Return the operation name if this is a new operation or workflow version.
+    async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) -> Option<OperationName> {
         match read_operation_workflow(path).await {
             Ok((workflow, version)) => {
                 if let Ok(cmd) = self.load_operation_workflow(
@@ -193,12 +217,14 @@ impl WorkflowRepository {
                     version,
                 ) {
                     info!("Using the updated operation workflow definition from {path} for '{cmd}' operation");
+                    return Some(cmd);
                 }
             }
             Err(err) => {
                 error!("Fail to reload {path}: {err}")
             }
         }
+        None
     }
 
     /// Remove a user defined workflow.
@@ -215,16 +241,16 @@ impl WorkflowRepository {
             .iter()
             .find(|(_, (_, p))| p == removed_path)
             .map(|(v, (n, _))| (n.clone(), v.clone()))?;
-
         self.definitions.remove(&removed_version);
         let deprecated = self
             .workflows
             .unregister_custom_workflow(&operation, &removed_version);
-        if deprecated {
+        if matches!(deprecated, Some(WorkflowSource::BuiltIn)) {
+            info!("The builtin workflow for the '{operation}' operation has been restored");
+            None
+        } else {
             info!("The user defined workflow for the '{operation}' operation has been removed");
             Some(operation)
-        } else {
-            None
         }
     }
 
@@ -235,15 +261,18 @@ impl WorkflowRepository {
         operation: &OperationName,
         version: &WorkflowVersion,
     ) {
+        if let Some(in_use_version) = self.in_use_copies.get(operation) {
+            if in_use_version == version {
+                return;
+            }
+        };
         if let Some((_, source)) = self.definitions.get(version) {
-            if !source.starts_with(&self.state_dir) {
-                let target = self.state_dir.join(operation).with_extension("toml");
-                if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
-                    error!("Fail to persist a copy of {source} as {target}: {err}");
-                } else {
-                    self.definitions
-                        .insert(version.clone(), (operation.clone(), target));
-                }
+            let target = self.state_dir.join(operation).with_extension("toml");
+            if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
+                error!("Fail to persist a copy of {source} as {target}: {err}");
+            } else {
+                self.in_use_copies
+                    .insert(operation.clone(), version.clone());
             }
         }
     }
@@ -264,7 +293,16 @@ impl WorkflowRepository {
         self.workflows.capability_messages(schema, target)
     }
 
-    pub fn deregistration_message(
+    fn capability_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> Option<MqttMessage> {
+        self.workflows.capability_message(schema, target, operation)
+    }
+
+    fn deregistration_message(
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,

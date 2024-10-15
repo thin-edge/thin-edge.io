@@ -46,22 +46,31 @@ impl WorkflowSupervisor {
 
     /// Un-register a user-defined workflow
     ///
-    /// Return true is this was the last version for that operation.
+    /// Return None is this was the last version for that operation.
+    /// Return Some(BuiltIn) is there is a builtin definition
+    /// Return Some(InUseCopy) if the workflow has been deprecated but there is still a running command.
     pub fn unregister_custom_workflow(
         &mut self,
         operation: &OperationName,
         version: &WorkflowVersion,
-    ) -> bool {
+    ) -> Option<WorkflowSource> {
         let operation = OperationType::from(operation.as_str());
         if let Some(versions) = self.workflows.get_mut(&operation) {
             versions.remove(version);
         }
-        if self.workflows.get(&operation).map(|v| v.is_empty()) == Some(true) {
+
+        let current_source = match self.workflows.get(&operation) {
+            None => None,
+            Some(version) if version.is_empty() => None,
+            Some(version) if version.is_builtin() => Some(BuiltIn),
+            Some(_) => Some(InUseCopy),
+        };
+
+        if current_source.is_none() {
             self.workflows.remove(&operation);
-            true
-        } else {
-            false
         }
+
+        current_source
     }
 
     /// The set of pending commands
@@ -95,6 +104,19 @@ impl WorkflowSupervisor {
             .iter()
             .filter_map(|workflow| workflow.capability_message(schema, target))
             .collect()
+    }
+
+    pub fn capability_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> Option<MqttMessage> {
+        let operation = OperationType::from(operation.as_str());
+        self.workflows
+            .get(&operation)
+            .and_then(|versions| versions.current_workflow())
+            .and_then(|workflow| workflow.capability_message(schema, target))
     }
 
     pub fn deregistration_message(
@@ -369,8 +391,11 @@ impl WorkflowVersions {
     // Mark the current version as being in-use.
     fn use_current_version(&mut self) -> Option<&WorkflowVersion> {
         if self.current.is_some() && self.in_use != self.current {
-            if let Some(old_version) = self.in_use.as_ref() {
-                self.versions.remove(old_version);
+            // remove the previous version in-use unless this is the builtin version
+            if let Some(previous_version) = self.in_use.as_ref() {
+                if Some(previous_version) != self.builtin.as_ref() {
+                    self.versions.remove(previous_version);
+                }
             }
             self.in_use.clone_from(&self.current);
         }
@@ -385,6 +410,10 @@ impl WorkflowVersions {
 
     fn is_empty(&self) -> bool {
         self.versions.is_empty()
+    }
+
+    fn is_builtin(&self) -> bool {
+        self.builtin.is_some()
     }
 
     fn get(
