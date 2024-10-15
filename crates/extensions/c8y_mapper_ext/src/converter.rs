@@ -216,8 +216,10 @@ impl CumulocityConverter {
 
         let size_threshold = SizeThreshold(config.max_mqtt_payload_size as usize);
 
-        let operations = Operations::try_new(&*config.ops_dir)?;
-        let children = get_child_ops(&*config.ops_dir)?;
+        let prefix = &config.c8y_prefix;
+
+        let operations = Operations::try_new(&*config.ops_dir, prefix)?;
+        let children = get_child_ops(&*config.ops_dir, prefix)?;
 
         let alarm_converter = AlarmConverter::new();
 
@@ -228,7 +230,6 @@ impl CumulocityConverter {
 
         let mqtt_schema = config.mqtt_schema.clone();
 
-        let prefix = &config.c8y_prefix;
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked(&format!("{prefix}/measurement/measurements/create")),
             errors_topic: mqtt_schema.error_topic(),
@@ -716,26 +717,58 @@ impl CumulocityConverter {
                 }
             }
             C8yDeviceControlOperation::Custom => {
-                let json_over_mqtt_topic = C8yDeviceControlTopic::name(&self.config.c8y_prefix);
-                let handlers = self.operations.filter_by_topic(&json_over_mqtt_topic);
-
-                if handlers.is_empty() {
-                    info!("No matched custom operation handler is found for the topic {json_over_mqtt_topic}. The operation '{operation_id}' (ID) is ignored.");
-                }
-
-                for (on_fragment, custom_handler) in &handlers {
-                    if extras.contains_key(on_fragment) {
-                        self.execute_custom_operation(custom_handler, message, &operation_id)
-                            .await?;
-                        break;
-                    }
-                }
-                // MQTT messages are sent during the operation execution
-                vec![]
+                return self
+                    .process_json_custom_operation(operation_id, extras, message)
+                    .await;
             }
         };
 
         Ok(msgs)
+    }
+
+    async fn parse_json_custom_operation_topic(
+        &mut self,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let operation = C8yOperation::from_json(message.payload.as_str()?)?;
+        let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+
+        if self.active_commands.contains(&cmd_id) {
+            info!("{cmd_id} is already addressed");
+            return Ok(vec![]);
+        }
+
+        let result = self
+            .process_json_custom_operation(operation.op_id.clone(), &operation.extras, message)
+            .await;
+
+        let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+
+        Ok(output)
+    }
+
+    async fn process_json_custom_operation(
+        &self,
+        operation_id: String,
+        extras: &HashMap<String, Value>,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let handlers = self.operations.filter_by_topic(&message.topic.name);
+
+        if handlers.is_empty() {
+            info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
+        }
+
+        for (on_fragment, custom_handler) in &handlers {
+            if extras.contains_key(on_fragment) {
+                self.execute_custom_operation(custom_handler, message, &operation_id)
+                    .await?;
+                break;
+            }
+        }
+
+        // MQTT messages are sent during the operation execution
+        Ok(vec![])
     }
 
     async fn execute_custom_operation(
@@ -1352,7 +1385,20 @@ impl CumulocityConverter {
             topic if C8yDeviceControlTopic::accept(topic, &self.config.c8y_prefix) => {
                 self.parse_c8y_devicecontrol_topic(message).await
             }
-            topic if topic.name.starts_with(self.config.c8y_prefix.as_str()) => {
+            topic
+                if self
+                    .operations
+                    .get_json_custom_operation_topics()?
+                    .accept_topic(topic) =>
+            {
+                self.parse_json_custom_operation_topic(message).await
+            }
+            topic
+                if self
+                    .operations
+                    .get_smartrest_custom_operation_topics()?
+                    .accept_topic(topic) =>
+            {
                 self.parse_c8y_smartrest_topics(message).await
             }
             _ => {
@@ -1401,7 +1447,7 @@ impl CumulocityConverter {
 
         Ok(MqttMessage::new(
             &topic,
-            Operations::try_new(path)?.create_smartrest_ops_message(),
+            Operations::try_new(path, &self.config.c8y_prefix)?.create_smartrest_ops_message(),
         ))
     }
 
@@ -1505,7 +1551,7 @@ impl CumulocityConverter {
     /// If the supported operation set changed, `Ok(true)` is returned to denote that this change
     /// should be sent to the cloud.
     fn update_operations(&mut self, dir: &Path) -> Result<bool, ConversionError> {
-        let operations = get_operations(dir)?;
+        let operations = get_operations(dir, &self.config.c8y_prefix)?;
         let current_operations = if is_child_operation_path(dir) {
             let child_id = get_child_external_id(dir)?;
             let Some(current_operations) = self.children.get_mut(&child_id) else {
@@ -3187,11 +3233,15 @@ pub(crate) mod tests {
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
-        let topics = C8yMapperConfig::default_internal_topic_filter(
-            &tmp_dir.to_path_buf(),
+        let mut topics =
+            C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
+        let custom_operation_topics = C8yMapperConfig::get_topics_from_custom_operations(
             &"c8y".try_into().unwrap(),
+            tmp_dir.path(),
         )
         .unwrap();
+        topics.add_all(custom_operation_topics);
+        topics.remove_overlapping_patterns();
 
         C8yMapperConfig::new(
             tmp_dir.utf8_path().into(),

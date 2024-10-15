@@ -1,5 +1,6 @@
 use crate::smartrest::error::OperationsError;
 use crate::smartrest::smartrest_serializer::declare_supported_operations;
+use mqtt_channel::TopicFilter;
 use serde::Deserialize;
 use serde::Deserializer;
 use std::collections::HashMap;
@@ -8,10 +9,12 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_config::TopicPrefix;
 use tracing::warn;
 
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
+const BRIDGE_PREFIX_TEMPLATE: &str = "${.bridge.topic_prefix}";
 
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
@@ -26,8 +29,8 @@ impl Operations {
         self.operations.push(operation);
     }
 
-    pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
-        get_operations(dir.as_ref())
+    pub fn try_new(dir: impl AsRef<Path>, prefix: &TopicPrefix) -> Result<Self, OperationsError> {
+        get_operations(dir.as_ref(), prefix)
     }
 
     pub fn get_operations_list(&self) -> Vec<String> {
@@ -76,6 +79,25 @@ impl Operations {
         ops.sort();
         let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
         declare_supported_operations(&ops)
+    }
+    pub fn get_json_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
+        Ok(self
+            .operations
+            .iter()
+            .filter(|operation| operation.on_fragment().is_some())
+            .filter_map(|operation| operation.topic())
+            .collect::<HashSet<String>>()
+            .try_into()?)
+    }
+
+    pub fn get_smartrest_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
+        Ok(self
+            .operations
+            .iter()
+            .filter(|operation| operation.on_message().is_some())
+            .filter_map(|operation| operation.topic())
+            .collect::<HashSet<String>>()
+            .try_into()?)
     }
 }
 
@@ -211,6 +233,10 @@ impl OnMessageExec {
     pub fn set_time_out(&mut self, timeout: Duration) {
         self.graceful_timeout = timeout;
     }
+
+    pub fn set_topic(&mut self, topic: String) {
+        self.topic = Some(topic);
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
@@ -233,7 +259,10 @@ where
     }
 }
 
-pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> {
+pub fn get_operations(
+    dir: impl AsRef<Path>,
+    prefix: &TopicPrefix,
+) -> Result<Operations, OperationsError> {
     let mut operations = Operations::default();
     let dir_entries = fs::read_dir(&dir)
         .map_err(|_| OperationsError::ReadDirError {
@@ -260,6 +289,21 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
                 Err(err) => return Err(OperationsError::FromIo(err)),
             };
 
+            // replace bridge prefix template with mapper prefix (if necessary)
+            if let Some(ref mut exec) = details.exec {
+                if let Some(index) = exec
+                    .topic
+                    .as_ref()
+                    .and_then(|topic| topic.find(BRIDGE_PREFIX_TEMPLATE))
+                {
+                    // safe to unwrap as we checked that topic exists when looking for bridge prefix template
+                    exec.topic
+                        .as_mut()
+                        .unwrap()
+                        .replace_range(index..index + BRIDGE_PREFIX_TEMPLATE.len(), prefix);
+                }
+            }
+
             path.file_name()
                 .and_then(|filename| filename.to_str())
                 .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
@@ -275,6 +319,7 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
 
 pub fn get_child_ops(
     ops_dir: impl AsRef<Path>,
+    prefix: &TopicPrefix,
 ) -> Result<HashMap<String, Operations>, OperationsError> {
     let mut child_ops: HashMap<String, Operations> = HashMap::new();
     let child_entries = fs::read_dir(&ops_dir)
@@ -287,7 +332,7 @@ pub fn get_child_ops(
         .filter(|path| path.is_dir())
         .collect::<Vec<PathBuf>>();
     for cdir in child_entries {
-        let ops = Operations::try_new(&cdir)?;
+        let ops = Operations::try_new(&cdir, prefix)?;
         if let Some(id) = cdir.file_name() {
             if let Some(id_str) = id.to_str() {
                 child_ops.insert(id_str.to_string(), ops);
@@ -451,7 +496,11 @@ mod tests {
     fn get_operations_all(ops_count: usize) {
         let test_operations = TestOperations::builder().with_operations(ops_count).build();
 
-        let operations = get_operations(test_operations.temp_dir()).unwrap();
+        let operations = get_operations(
+            test_operations.temp_dir(),
+            &TopicPrefix::try_from("c8y").unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(operations.operations.len(), ops_count);
     }
