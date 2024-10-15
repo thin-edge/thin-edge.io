@@ -86,18 +86,16 @@ impl Actor for WorkflowActor {
                     self.publish_builtin_capability(operation, payload).await?;
                 }
                 AgentInput::FsWatchEvent(file_update) => {
-                    if let Some(deprecated_operation) = self
+                    if let Some(updated_capability) = self
                         .workflow_repository
-                        .update_operation_workflows(file_update)
+                        .update_operation_workflows(
+                            &self.mqtt_schema,
+                            &self.device_topic_id,
+                            file_update,
+                        )
                         .await
                     {
-                        let deprecated_capability =
-                            self.workflow_repository.deregistration_message(
-                                &self.mqtt_schema,
-                                &self.device_topic_id,
-                                &deprecated_operation,
-                            );
-                        self.mqtt_publisher.send(deprecated_capability).await?
+                        self.mqtt_publisher.send(updated_capability).await?
                     }
                 }
             }
