@@ -158,11 +158,11 @@ impl WorkflowRepository {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
                         if path.exists() {
-                            return self.reload_operation_workflow(&path)
-                                .await
-                                .and_then(|updated_operation| {
+                            return self.reload_operation_workflow(&path).await.and_then(
+                                |updated_operation| {
                                     self.capability_message(schema, target, &updated_operation)
-                                });
+                                },
+                            );
                         } else {
                             // FsWatchEvent returns misleading Modified events along FileDeleted events.
                             return self.remove_operation_workflow(&path).await.map(
@@ -238,16 +238,16 @@ impl WorkflowRepository {
             .iter()
             .find(|(_, (_, p))| p == removed_path)
             .map(|(v, (n, _))| (n.clone(), v.clone()))?;
-
         self.definitions.remove(&removed_version);
         let deprecated = self
             .workflows
             .unregister_custom_workflow(&operation, &removed_version);
-        if deprecated {
+        if matches!(deprecated, Some(WorkflowSource::BuiltIn)) {
+            info!("The builtin workflow for the '{operation}' operation has been restored");
+            None
+        } else {
             info!("The user defined workflow for the '{operation}' operation has been removed");
             Some(operation)
-        } else {
-            None
         }
     }
 
