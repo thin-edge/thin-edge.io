@@ -184,7 +184,7 @@ impl CumulocityConverter {
         let entity_external_id = self.entity_store.try_get(source)?.external_id.as_ref();
         Ok(Topic::new_unchecked(&format!(
             "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}",
-            prefix = self.config.c8y_prefix,
+            prefix = self.config.bridge_config.c8y_prefix,
         )))
     }
 }
