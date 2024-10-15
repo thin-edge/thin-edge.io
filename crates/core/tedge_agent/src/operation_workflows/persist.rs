@@ -149,17 +149,31 @@ impl WorkflowRepository {
     /// Return the operation name when the operation has been deprecated.
     pub async fn update_operation_workflows(
         &mut self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
         file_update: FsWatchEvent,
-    ) -> Option<OperationName> {
+    ) -> Option<MqttMessage> {
         match file_update {
             FsWatchEvent::Modified(path) | FsWatchEvent::FileCreated(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
                         if path.exists() {
-                            self.reload_operation_workflow(&path).await
+                            self.reload_operation_workflow(&path)
+                                .await
+                                .map(|updated_operation| {
+                                    self.capability_message(schema, target, &updated_operation)
+                                });
                         } else {
                             // FsWatchEvent returns misleading Modified events along FileDeleted events.
-                            return self.remove_operation_workflow(&path).await;
+                            return self.remove_operation_workflow(&path).await.map(
+                                |deprecated_operation| {
+                                    self.deregistration_message(
+                                        schema,
+                                        target,
+                                        &deprecated_operation,
+                                    )
+                                },
+                            );
                         }
                     }
                 }
@@ -168,7 +182,11 @@ impl WorkflowRepository {
             FsWatchEvent::FileDeleted(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
-                        return self.remove_operation_workflow(&path).await;
+                        return self.remove_operation_workflow(&path).await.map(
+                            |deprecated_operation| {
+                                self.deregistration_message(schema, target, &deprecated_operation)
+                            },
+                        );
                     }
                 }
             }
@@ -183,7 +201,10 @@ impl WorkflowRepository {
         path.extension() == Some("toml") && path.parent() == Some(&self.custom_workflows_dir)
     }
 
-    async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) {
+    /// Reload a user defined workflow.
+    ///
+    /// Return the operation name if this is a new operation or workflow version.
+    async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) -> Option<OperationName> {
         match read_operation_workflow(path).await {
             Ok((workflow, version)) => {
                 if let Ok(cmd) = self.load_operation_workflow(
@@ -193,12 +214,14 @@ impl WorkflowRepository {
                     version,
                 ) {
                     info!("Using the updated operation workflow definition from {path} for '{cmd}' operation");
+                    return Some(cmd);
                 }
             }
             Err(err) => {
                 error!("Fail to reload {path}: {err}")
             }
         }
+        None
     }
 
     /// Remove a user defined workflow.
@@ -264,7 +287,16 @@ impl WorkflowRepository {
         self.workflows.capability_messages(schema, target)
     }
 
-    pub fn deregistration_message(
+    fn capability_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> Option<MqttMessage> {
+        self.workflows.capability_message(schema, target, operation)
+    }
+
+    fn deregistration_message(
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,

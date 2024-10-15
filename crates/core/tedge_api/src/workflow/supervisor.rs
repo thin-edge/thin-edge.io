@@ -97,6 +97,19 @@ impl WorkflowSupervisor {
             .collect()
     }
 
+    pub fn capability_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> Option<MqttMessage> {
+        let operation = OperationType::from(operation.as_str());
+        self.workflows
+            .get(&operation)
+            .and_then(|versions| versions.current_workflow())
+            .and_then(|workflow| workflow.capability_message(schema, target))
+    }
+
     pub fn deregistration_message(
         &self,
         schema: &MqttSchema,
