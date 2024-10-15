@@ -92,7 +92,7 @@ pub struct MapperOpt {
     )]
     pub config_dir: PathBuf,
 
-    #[clap(long, global = true)]
+    #[clap(long, global = true, hide = true)]
     pub profile: Option<ProfileName>,
 }
 

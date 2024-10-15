@@ -59,7 +59,7 @@ pub struct FirmwarePluginOpt {
     )]
     pub config_dir: PathBuf,
 
-    #[clap(long, env = "C8Y_PROFILE")]
+    #[clap(long, env = "C8Y_PROFILE", hide = true)]
     pub profile: Option<ProfileName>,
 }
 

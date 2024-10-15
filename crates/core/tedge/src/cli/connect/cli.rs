@@ -21,7 +21,7 @@ pub enum TEdgeConnectOpt {
         #[clap(long = "offline")]
         offline_mode: bool,
 
-        #[clap(long)]
+        #[clap(long, hide = true)]
         profile: Option<ProfileName>,
     },
 
@@ -37,7 +37,7 @@ pub enum TEdgeConnectOpt {
         #[clap(long = "offline")]
         offline_mode: bool,
 
-        #[clap(long)]
+        #[clap(long, hide = true)]
         profile: Option<ProfileName>,
     },
 
@@ -53,7 +53,7 @@ pub enum TEdgeConnectOpt {
         #[clap(long = "offline")]
         offline_mode: bool,
 
-        #[clap(long)]
+        #[clap(long, hide = true)]
         profile: Option<ProfileName>,
     },
 }

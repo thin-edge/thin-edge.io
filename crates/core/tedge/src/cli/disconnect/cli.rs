@@ -8,17 +8,17 @@ use tedge_config::ProfileName;
 pub enum TEdgeDisconnectBridgeCli {
     /// Remove bridge connection to Cumulocity.
     C8y {
-        #[clap(long)]
+        #[clap(long, hide = true)]
         profile: Option<ProfileName>,
     },
     /// Remove bridge connection to Azure.
     Az {
-        #[clap(long)]
+        #[clap(long, hide = true)]
         profile: Option<ProfileName>,
     },
     /// Remove bridge connection to AWS.
     Aws {
-        #[clap(long)]
+        #[clap(long, hide = true)]
         profile: Option<ProfileName>,
     },
 }
