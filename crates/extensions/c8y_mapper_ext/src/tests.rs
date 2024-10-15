@@ -2095,6 +2095,58 @@ async fn json_custom_operation_skip_status_update() {
     assert!(recv.is_none());
 }
 
+#[tokio::test]
+async fn json_custom_operation_status_update_with_custom_topic() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            topic = "${.topic.root_prefix}/custom/operation/one"
+            command = "echo ${.payload.c8y_Command.text}"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: false,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate c8y_Command SmartREST request
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/custom/operation/one"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"TST_haul_searing_set",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "503,c8y_Command,\"do something\n\"")],
+    )
+    .await;
+}
+
 /// This test aims to verify that when a telemetry message is emitted from an
 /// unknown device or service, the mapper will produce a registration message
 /// for this entity. The registration message shall be published only once, when
@@ -2990,8 +3042,11 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let auth_proxy_addr = "127.0.0.1".into();
     let auth_proxy_port = 8001;
     let mut topics =
-        C8yMapperConfig::default_internal_topic_filter(tmp_dir.path(), &"c8y".try_into().unwrap())
+        C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
+    let custom_operation_topics =
+        C8yMapperConfig::get_topics_from_operations(&"c8y".try_into().unwrap(), tmp_dir.path())
             .unwrap();
+    topics.add_all(custom_operation_topics.clone());
 
     let capabilities = Capabilities::default();
 
@@ -3002,6 +3057,8 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     topics.add_all(operation_topics);
 
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
+
+    topics.remove_overlapping_patterns();
 
     C8yMapperConfig::new(
         tmp_dir.utf8_path().into(),
@@ -3016,6 +3073,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         c8y_host,
         tedge_http_host,
         topics,
+        custom_operation_topics,
         capabilities,
         auth_proxy_addr,
         auth_proxy_port,

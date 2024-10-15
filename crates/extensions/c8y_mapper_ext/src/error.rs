@@ -208,6 +208,9 @@ pub enum CumulocityMapperError {
     #[error(transparent)]
     ChannelError(#[from] tedge_actors::ChannelError),
 
+    #[error("Invalid JSON message: {err_msg}.")]
+    InvalidJsonMessage { err_msg: String },
+
     #[error("Error occurred while preprocessing custom operation handler {operation}. Reason: {err_msg}")]
     JsonCustomOperationHandlerError { operation: String, err_msg: String },
 }

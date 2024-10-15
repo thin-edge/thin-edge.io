@@ -8,6 +8,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_api::workflow::GenericCommandState;
 use tracing::warn;
 
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
@@ -50,12 +51,18 @@ impl Operations {
         None
     }
 
-    pub fn filter_by_topic(&self, topic_name: &str) -> Vec<(String, Operation)> {
+    pub fn filter_by_topics(
+        &self,
+        topics: Vec<String>,
+        state: &GenericCommandState,
+    ) -> Vec<(String, Operation)> {
         let mut vec: Vec<(String, Operation)> = Vec::new();
         for op in self.operations.iter() {
             match (op.topic(), op.on_fragment()) {
                 (None, Some(on_fragment)) => vec.push((on_fragment, op.clone())),
-                (Some(topic), Some(on_fragment)) if topic == topic_name => {
+                (Some(topic), Some(on_fragment))
+                    if topics.contains(&state.inject_values_into_template(&topic)) =>
+                {
                     vec.push((on_fragment, op.clone()))
                 }
                 _ => {}
@@ -63,10 +70,11 @@ impl Operations {
         }
         vec
     }
-
+    /// Get topics of operations that are delivered via JSON over MQTT
     pub fn topics_for_operations(&self) -> HashSet<String> {
         self.operations
             .iter()
+            .filter(|operation| operation.on_fragment().is_some())
             .filter_map(|operation| operation.topic())
             .collect::<HashSet<String>>()
     }
