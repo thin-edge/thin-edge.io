@@ -158,9 +158,9 @@ impl WorkflowRepository {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
                         if path.exists() {
-                            self.reload_operation_workflow(&path)
+                            return self.reload_operation_workflow(&path)
                                 .await
-                                .map(|updated_operation| {
+                                .and_then(|updated_operation| {
                                     self.capability_message(schema, target, &updated_operation)
                                 });
                         } else {
