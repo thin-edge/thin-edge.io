@@ -4,6 +4,59 @@ use tracing::error;
 // We need a buffer, therefore here sets smaller size than the actual limit.
 pub const MAX_PAYLOAD_LIMIT_IN_BYTES: usize = 16000;
 
+/// A Cumulocity SmartREST message payload.
+///
+/// A SmartREST message is either an HTTP request or an MQTT message that contains SmartREST topic and payload. The
+/// payload is a CSV-like format that is backed by templates, either static or registered by the user. This struct
+/// represents that payload, and should be used as such in SmartREST 1.0 and 2.0 message implementations.
+///
+/// # Example
+///
+/// ```text
+/// 503,c8y_Command,"This is a ""Set operation to SUCCESSFUL (503)"" message payload; it has a template id (503),
+/// operation fragment (c8y_Command), and optional parameters."
+/// ```
+///
+/// # Reference
+///
+/// - https://cumulocity.com/docs/smartrest/smartrest-introduction/
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmartrestPayload(String);
+
+impl SmartrestPayload {
+    /// Creates a payload that consists of a single record.
+    ///
+    /// Doesn't trim any fields, so if the resulting payload is above size limit, returns an error.
+    pub fn from_fields(fields: &[&str]) -> Result<Self, SmartrestPayloadError> {
+        let payload = super::csv::fields_to_csv_string(fields);
+
+        if payload.len() > super::message::MAX_PAYLOAD_LIMIT_IN_BYTES {
+            return Err(SmartrestPayloadError(anyhow::anyhow!(
+                "Message is larger ({}) than size limit ({})",
+                payload.len(),
+                MAX_PAYLOAD_LIMIT_IN_BYTES
+            )));
+        }
+
+        Ok(Self(payload))
+    }
+
+    /// Returns a string slice view of the payload.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Moves the underlying `String` out of the payload.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+/// Errors that can occur when trying to create a SmartREST payload.
+#[derive(Debug, thiserror::Error)]
+#[error("Could not create SmartrestPayload: {0:#}")]
+pub struct SmartrestPayloadError(#[from] anyhow::Error);
+
 /// Extract the Device ID from the SmartREST payload.
 ///
 /// ```
