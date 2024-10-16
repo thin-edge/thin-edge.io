@@ -4,6 +4,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::C8YHttpConfig;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
 use c8y_mapper_ext::availability::AvailabilityBuilder;
@@ -15,6 +16,7 @@ use mqtt_channel::Config;
 use std::borrow::Cow;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
@@ -28,7 +30,9 @@ use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
 
-pub struct CumulocityMapper;
+pub struct CumulocityMapper {
+    pub profile: Option<ProfileName>,
+}
 
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
@@ -37,16 +41,18 @@ impl TEdgeComponent for CumulocityMapper {
         tedge_config: TEdgeConfig,
         cfg_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let prefix = &tedge_config.c8y.bridge.topic_prefix;
+        let c8y_profile = self.profile.as_deref();
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let prefix = &c8y_config.bridge.topic_prefix;
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
 
         let mqtt_config = tedge_config.mqtt_config()?;
-        let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
+        let c8y_mapper_config =
+            C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
-            let custom_topics = tedge_config
-                .c8y
+            let custom_topics = c8y_config
                 .smartrest
                 .templates
                 .0
@@ -66,7 +72,7 @@ impl TEdgeComponent for CumulocityMapper {
             .chain(custom_topics);
 
             let mut tc = BridgeConfig::new();
-            let local_prefix = format!("{}/", tedge_config.c8y.bridge.topic_prefix.as_str());
+            let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
 
             for topic in cloud_topics {
                 tc.forward_from_remote(topic, local_prefix.clone(), "")?;
@@ -102,7 +108,7 @@ impl TEdgeComponent for CumulocityMapper {
             tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
             tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
 
-            let c8y = tedge_config.c8y.mqtt.or_config_not_set()?;
+            let c8y = c8y_config.mqtt.or_config_not_set()?;
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 tedge_config.device.id.try_read(&tedge_config)?,
                 c8y.host().to_string(),
@@ -111,11 +117,7 @@ impl TEdgeComponent for CumulocityMapper {
             // Cumulocity tells us not to not set clean session to false, so don't
             // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
             cloud_config.set_clean_session(true);
-            use_key_and_cert(
-                &mut cloud_config,
-                &tedge_config.c8y.root_cert_path,
-                &tedge_config,
-            )?;
+            use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
 
             let main_device_xid: EntityExternalId =
                 tedge_config.device.id.try_read(&tedge_config)?.into();
@@ -181,16 +183,14 @@ impl TEdgeComponent for CumulocityMapper {
                 )
                 .await?;
         }
-        let mut jwt_actor = C8YJwtRetriever::builder(
-            mqtt_config.clone(),
-            tedge_config.c8y.bridge.topic_prefix.clone(),
-        );
+        let mut jwt_actor =
+            C8YJwtRetriever::builder(mqtt_config.clone(), c8y_config.bridge.topic_prefix.clone());
         let mut http_actor = HttpActor::new(&tedge_config).builder();
-        let c8y_http_config = (&tedge_config).try_into()?;
+        let c8y_http_config = C8YHttpConfig::try_new(&tedge_config, c8y_profile)?;
         let mut c8y_http_proxy_actor =
             C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
         let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, &mut jwt_actor)?;
+            C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile, &mut jwt_actor)?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
@@ -208,6 +208,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut service_monitor_actor = MqttActorBuilder::new(service_monitor_client_config(
             &c8y_mapper_name,
             &tedge_config,
+            c8y_profile,
         )?);
 
         let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
@@ -221,14 +222,14 @@ impl TEdgeComponent for CumulocityMapper {
             &mut service_monitor_actor,
         )?;
 
-        let c8y_prefix = &tedge_config.c8y.bridge.topic_prefix;
+        let c8y_prefix = &c8y_config.bridge.topic_prefix;
         // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
         let old_to_new_agent_adapter = OldAgentAdapter::builder(c8y_prefix, &mut mqtt_actor);
 
-        let availability_actor = if tedge_config.c8y.availability.enable {
+        let availability_actor = if c8y_config.availability.enable {
             Some(AvailabilityBuilder::new(
-                AvailabilityConfig::from(&tedge_config),
+                AvailabilityConfig::try_new(&tedge_config, c8y_profile)?,
                 &mut c8y_mapper_actor,
                 &mut timer_actor,
             ))
@@ -260,7 +261,9 @@ impl TEdgeComponent for CumulocityMapper {
 pub fn service_monitor_client_config(
     c8y_mapper_name: &str,
     tedge_config: &TEdgeConfig,
+    c8y_profile: Option<&str>,
 ) -> Result<Config, anyhow::Error> {
+    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
     let main_device_xid: EntityExternalId = tedge_config.device.id.try_read(tedge_config)?.into();
     let service_type = &tedge_config.service.ty;
     let service_type = if service_type.is_empty() {
@@ -279,7 +282,7 @@ pub fn service_monitor_client_config(
         .clone()
         .parse()
         .context("Invalid device_topic_id")?;
-    let prefix = &tedge_config.c8y.bridge.topic_prefix;
+    let prefix = &c8y_config.bridge.topic_prefix;
 
     let mapper_service_topic_id = entity_topic_id
         .default_service_for_device(c8y_mapper_name)

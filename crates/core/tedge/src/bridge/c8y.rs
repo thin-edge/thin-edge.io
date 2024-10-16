@@ -1,6 +1,7 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
+use std::borrow::Cow;
 use std::process::Command;
 use tedge_config::AutoFlag;
 use tedge_config::HostPort;
@@ -14,7 +15,7 @@ const C8Y_BRIDGE_HEALTH_TOPIC: &str = "te/device/main/service/mosquitto-c8y-brid
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
-    pub config_file: String,
+    pub config_file: Cow<'static, str>,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,
@@ -153,14 +154,13 @@ pub fn is_mosquitto_version_above_2() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bridge::C8Y_CONFIG_FILENAME;
 
     #[test]
     fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         use std::convert::TryFrom;
         let params = BridgeConfigC8yParams {
             mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
-            config_file: C8Y_CONFIG_FILENAME.into(),
+            config_file: "c8y-bridge.conf".into(),
             remote_clientid: "alpha".into(),
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             bridge_certfile: "./test-certificate.pem".into(),
@@ -175,7 +175,7 @@ mod tests {
 
         let expected = BridgeConfig {
             cloud_name: "c8y".into(),
-            config_file: C8Y_CONFIG_FILENAME.into(),
+            config_file: "c8y-bridge.conf".into(),
             connection: "edge_to_c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             remote_username: None,

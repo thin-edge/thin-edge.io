@@ -67,8 +67,11 @@ impl From<FirmwareManagementError> for RuntimeError {
 #[derive(Debug, thiserror::Error)]
 pub enum FirmwareManagementConfigBuildError {
     #[error(transparent)]
-    FromReadError(#[from] tedge_config::ReadError),
+    ReadError(#[from] tedge_config::ReadError),
 
     #[error(transparent)]
-    FromConfigNotSet(#[from] tedge_config::ConfigNotSet),
+    ConfigNotSet(#[from] tedge_config::ConfigNotSet),
+
+    #[error(transparent)]
+    MultiError(#[from] tedge_config::MultiError),
 }

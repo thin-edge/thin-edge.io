@@ -332,11 +332,7 @@ fn key_iterators(
                     syn::Ident::new(&format!("{reader_ty}{upper_ident}"), m.ident.span());
                 let keys_ident = syn::Ident::new(&format!("{}_keys", ident), ident.span());
                 stmts.push(
-                    parse_quote!(let #keys_ident = if let MultiReader::Multi { map, .. } = &self.#ident {
-                        map.keys().map(|k| Some(k.to_owned())).collect()
-                    } else {
-                        vec![None]
-                    };),
+                    parse_quote!(let #keys_ident = self.#ident.keys().map(|k| Some(k?.to_string())).collect::<Vec<_>>();),
                 );
                 let prefix = format!("{prefix}{upper_ident}");
                 let remaining_fields = fields.iter().map(|fs| &fs[1..]).collect::<Vec<_>>();
@@ -784,7 +780,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
         let re = segments
             .iter()
             .map(|fog| match fog {
-                FieldOrGroup::Multi(m) => format!("{}(?:\\.([A-z_]+))?", m.ident),
+                FieldOrGroup::Multi(m) => format!("{}(?:\\.(@[A-z_]+))?", m.ident),
                 FieldOrGroup::Field(f) => f.ident().to_string(),
                 FieldOrGroup::Group(g) => g.ident.to_string(),
             })
@@ -968,7 +964,7 @@ mod tests {
                         },
                         _ => unimplemented!("just a test, no error handling"),
                     };
-                    if let Some(captures) = ::regex::Regex::new("^c8y(?:\\.([A-z_]+))?\\.url$").unwrap().captures(value) {
+                    if let Some(captures) = ::regex::Regex::new("^c8y(?:\\.(@[A-z_]+))?\\.url$").unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         return Ok(Self::C8yUrl(key0));
                     };
@@ -1006,12 +1002,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let MultiReader::Multi { map, .. } = &self.c8y {
-                        map.keys().map(|k| Some(k.to_owned())).collect()
-                    } else {
-                        vec![None]
-                    };
-
+                    let c8y_keys = self.c8y.keys().map(|k| Some(k?.to_string())).collect::<Vec<_>>();
                     let c8y_keys = c8y_keys
                         .into_iter()
                         .flat_map(|c8y| self.c8y.try_get(c8y.as_deref()).unwrap().readable_keys(c8y));
@@ -1022,11 +1013,7 @@ mod tests {
 
             impl TEdgeConfigReaderC8y {
                 pub fn readable_keys(&self, c8y: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let something_keys = if let MultiReader::Multi { map, .. } = &self.something {
-                        map.keys().map(|k| Some(k.to_owned())).collect()
-                    } else {
-                        vec![None]
-                    };
+                    let something_keys = self.something.keys().map(|k| Some(k?.to_string())).collect::<Vec<_>>();
                     let something_keys = something_keys.into_iter().flat_map({
                         let c8y = c8y.clone();
                         move |something| {
@@ -1143,12 +1130,7 @@ mod tests {
         let expected = parse_quote! {
             impl TEdgeConfigReader {
                 pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
-                    let c8y_keys = if let MultiReader::Multi { map, .. } = &self.c8y {
-                        map.keys().map(|k| Some(k.to_owned())).collect()
-                    } else {
-                        vec![None]
-                    };
-
+                    let c8y_keys = self.c8y.keys().map(|k| Some(k?.to_string())).collect::<Vec<_>>();
                     let c8y_keys = c8y_keys
                         .into_iter()
                         .flat_map(|c8y| self.c8y.try_get(c8y.as_deref()).unwrap().readable_keys(c8y));

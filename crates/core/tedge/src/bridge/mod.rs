@@ -11,8 +11,4 @@ pub use common_mosquitto_config::*;
 pub use config::BridgeConfig;
 pub use config::BridgeLocation;
 
-pub const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
-pub const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
-pub const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
-
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";

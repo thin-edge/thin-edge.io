@@ -13,14 +13,18 @@ use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigReaderAz;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
-pub struct AzureMapper;
+pub struct AzureMapper {
+    pub profile: Option<ProfileName>,
+}
 
 #[async_trait]
 impl TEdgeComponent for AzureMapper {
@@ -29,7 +33,8 @@ impl TEdgeComponent for AzureMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let prefix = &tedge_config.az.bridge.topic_prefix;
+        let az_config = tedge_config.az.try_get(self.profile.as_deref())?;
+        let prefix = &az_config.bridge.topic_prefix;
         let az_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&az_mapper_name, &tedge_config).await?;
@@ -43,22 +48,18 @@ impl TEdgeComponent for AzureMapper {
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 remote_clientid,
-                tedge_config.az.url.or_config_not_set()?.to_string(),
+                az_config.url.or_config_not_set()?.to_string(),
                 8883,
             );
             cloud_config.set_clean_session(false);
             cloud_config.set_credentials(
                 format!(
                     "{}/{remote_clientid}/?api-version=2018-06-30",
-                    tedge_config.az.url.or_config_not_set()?
+                    az_config.url.or_config_not_set()?
                 ),
                 "",
             );
-            use_key_and_cert(
-                &mut cloud_config,
-                &tedge_config.az.root_cert_path,
-                &tedge_config,
-            )?;
+            use_key_and_cert(&mut cloud_config, &az_config.root_cert_path, &tedge_config)?;
 
             let built_in_bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic =
@@ -76,15 +77,15 @@ impl TEdgeComponent for AzureMapper {
         }
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
-            tedge_config.az.mapper.timestamp,
+            az_config.mapper.timestamp,
             Box::new(WallClock),
             mqtt_schema,
-            tedge_config.az.mapper.timestamp_format,
+            az_config.mapper.timestamp_format,
             prefix,
-            tedge_config.az.mapper.mqtt.max_payload_size.0,
+            az_config.mapper.mqtt.max_payload_size.0,
         );
         let mut az_converting_actor = ConvertingActor::builder("AzConverter", az_converter);
-        az_converting_actor.connect_source(get_topic_filter(&tedge_config), &mut mqtt_actor);
+        az_converting_actor.connect_source(get_topic_filter(az_config), &mut mqtt_actor);
         az_converting_actor.connect_sink(NoConfig, &mqtt_actor);
 
         runtime.spawn(az_converting_actor).await?;
@@ -94,9 +95,9 @@ impl TEdgeComponent for AzureMapper {
     }
 }
 
-fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
+fn get_topic_filter(az_config: &TEdgeConfigReaderAz) -> TopicFilter {
     let mut topics = TopicFilter::empty();
-    for topic in tedge_config.az.topics.0.clone() {
+    for topic in az_config.topics.0.clone() {
         if topics.add(&topic).is_err() {
             warn!("The configured topic '{topic}' is invalid and ignored.");
         }

@@ -3,6 +3,7 @@ use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
+use anyhow::Context;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::fmt;
@@ -10,6 +11,7 @@ use tedge_config::get_config_dir;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::PathBuf;
+use tedge_config::ProfileName;
 use tracing::log::warn;
 
 mod aws;
@@ -18,12 +20,37 @@ mod c8y;
 mod collectd;
 mod core;
 
-fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
+macro_rules! read_and_set_var {
+    ($profile:ident, $var:literal) => {
+        $profile
+            .or_else(|| {
+                Some(
+                    std::env::var($var)
+                        .ok()?
+                        .parse()
+                        .context(concat!("Reading environment variable ", $var))
+                        .unwrap(),
+                )
+            })
+            .inspect(|profile| std::env::set_var($var, profile))
+    };
+}
+
+fn lookup_component(
+    component_name: &MapperName,
+    profile: Option<ProfileName>,
+) -> Box<dyn TEdgeComponent> {
     match component_name {
-        MapperName::Az => Box::new(AzureMapper),
-        MapperName::Aws => Box::new(AwsMapper),
+        MapperName::Az => Box::new(AzureMapper {
+            profile: read_and_set_var!(profile, "AZ_PROFILE"),
+        }),
+        MapperName::Aws => Box::new(AwsMapper {
+            profile: read_and_set_var!(profile, "AWS_PROFILE"),
+        }),
         MapperName::Collectd => Box::new(CollectdMapper),
-        MapperName::C8y => Box::new(CumulocityMapper),
+        MapperName::C8y => Box::new(CumulocityMapper {
+            profile: read_and_set_var!(profile, "C8Y_PROFILE"),
+        }),
     }
 }
 
@@ -64,6 +91,9 @@ pub struct MapperOpt {
         hide_default_value = true,
     )]
     pub config_dir: PathBuf,
+
+    #[clap(long, global = true, hide = true)]
+    pub profile: Option<ProfileName>,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -86,7 +116,7 @@ impl fmt::Display for MapperName {
 }
 
 pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
-    let component = lookup_component(&mapper_opt.name);
+    let component = lookup_component(&mapper_opt.name, mapper_opt.profile.clone());
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);

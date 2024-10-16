@@ -1,6 +1,7 @@
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
+use std::borrow::Cow;
 use tedge_config::HostPort;
 use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
@@ -10,7 +11,7 @@ const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-az-bridge
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAzureParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
-    pub config_file: String,
+    pub config_file: Cow<'static, str>,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub bridge_certfile: Utf8PathBuf,
@@ -102,7 +103,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
 
     let expected = BridgeConfig {
         cloud_name: "az".into(),
-        config_file: "az-bridge.conf".to_string(),
+        config_file: "az-bridge.conf".into(),
         connection: "edge_to_az".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
@@ -159,7 +160,7 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
 
     let expected = BridgeConfig {
         cloud_name: "az".into(),
-        config_file: "az-bridge.conf".to_string(),
+        config_file: "az-bridge.conf".into(),
         connection: "edge_to_az".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),

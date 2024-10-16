@@ -39,7 +39,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 pub use tedge_config_macros::ConfigNotSet;
-use tedge_config_macros::OptionalConfig;
+pub use tedge_config_macros::MultiError;
+pub use tedge_config_macros::ProfileName;
 use tedge_config_macros::*;
 use toml::Table;
 use tracing::error;
@@ -311,14 +312,14 @@ impl TEdgeTomlVersion {
                 mv("mqtt.external_capath", MqttExternalCaPath),
                 mv("mqtt.external_certfile", MqttExternalCertFile),
                 mv("mqtt.external_keyfile", MqttExternalKeyFile),
-                mv("az.mapper_timestamp", AzMapperTimestamp),
-                mv("aws.mapper_timestamp", AwsMapperTimestamp),
+                mv("az.mapper_timestamp", AzMapperTimestamp(None)),
+                mv("aws.mapper_timestamp", AwsMapperTimestamp(None)),
                 mv("http.port", HttpBindPort),
                 mv("http.bind_address", HttpBindAddress),
                 mv("software.default_plugin_type", SoftwarePluginDefault),
                 mv("run.lock_files", RunLockFiles),
                 mv("firmware.child_update_timeout", FirmwareChildUpdateTimeout),
-                mv("c8y.smartrest_templates", C8ySmartrestTemplates),
+                mv("c8y.smartrest_templates", C8ySmartrestTemplates(None)),
                 update_version_field(),
             ]),
             Self::Two => None,
@@ -455,6 +456,7 @@ define_tedge_config! {
         ty: String,
     },
 
+    #[tedge_config(multi)]
     c8y: {
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -620,6 +622,7 @@ define_tedge_config! {
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
+    #[tedge_config(multi)]
     az: {
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -664,6 +667,7 @@ define_tedge_config! {
         topics: TemplatesSet,
     },
 
+    #[tedge_config(multi)]
     aws: {
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1021,32 +1025,34 @@ static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 impl TEdgeConfigReader {
     pub fn cloud_root_certs(&self) -> CloudRootCerts {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
-            let c8y_roots = read_trust_store(&self.c8y.root_cert_path).unwrap_or_else(move |e| {
-                error!(
-                    "Unable to read certificates from {}: {e:?}",
-                    ReadableKey::C8yRootCertPath
-                );
-                vec![]
+            let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
+                read_trust_store(&c8y.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::C8yRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
             });
-            let az_roots = read_trust_store(&self.az.root_cert_path).unwrap_or_else(move |e| {
-                error!(
-                    "Unable to read certificates from {}: {e:?}",
-                    ReadableKey::AzRootCertPath
-                );
-                vec![]
+            let az_roots = self.az.entries().flat_map(|(key, az)| {
+                read_trust_store(&az.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::AzRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
             });
-            let aws_roots = read_trust_store(&self.aws.root_cert_path).unwrap_or_else(move |e| {
-                error!(
-                    "Unable to read certificates from {}: {e:?}",
-                    ReadableKey::AwsRootCertPath
-                );
-                vec![]
+            let aws_roots = self.aws.entries().flat_map(|(key, aws)| {
+                read_trust_store(&aws.root_cert_path).unwrap_or_else(move |e| {
+                    error!(
+                        "Unable to read certificates from {}: {e:?}",
+                        ReadableKey::AwsRootCertPath(key.map(<_>::to_owned))
+                    );
+                    vec![]
+                })
             });
-            c8y_roots
-                .into_iter()
-                .chain(az_roots)
-                .chain(aws_roots)
-                .collect()
+            c8y_roots.chain(az_roots).chain(aws_roots).collect()
         });
 
         CloudRootCerts::from(roots.clone())
@@ -1054,11 +1060,13 @@ impl TEdgeConfigReader {
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {
         // TODO do we want to unwrap here?
-        client_config_for_ca_certificates([
-            &self.c8y.root_cert_path,
-            &self.az.root_cert_path,
-            &self.aws.root_cert_path,
-        ])
+        client_config_for_ca_certificates(
+            self.c8y
+                .values()
+                .map(|c8y| &c8y.root_cert_path)
+                .chain(self.az.values().map(|az| &az.root_cert_path))
+                .chain(self.aws.values().map(|aws| &aws.root_cert_path)),
+        )
         .unwrap()
     }
 }
@@ -1228,6 +1236,9 @@ fn default_mqtt_port() -> NonZeroU16 {
 pub enum ReadError {
     #[error(transparent)]
     ConfigNotSet(#[from] ConfigNotSet),
+
+    #[error(transparent)]
+    Multi(#[from] MultiError),
 
     #[error("Config value {key}, cannot be read: {message} ")]
     ReadOnlyNotFound {
@@ -1410,6 +1421,9 @@ mod tests {
 
         let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
 
-        assert_eq!(reader.c8y.http.key(), "c8y.url");
+        assert_eq!(
+            reader.c8y.try_get::<str>(None).unwrap().http.key(),
+            "c8y.url"
+        );
     }
 }

@@ -1,20 +1,20 @@
-use std::sync::Arc;
-
 use crate::cli::common::Cloud;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
+use std::sync::Arc;
 use tedge_config::system_services::SystemServiceManager;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 
 pub struct ReconnectBridgeCommand {
     pub config_location: TEdgeConfigLocation,
     pub config: TEdgeConfig,
-    pub config_file: String,
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
+    pub profile: Option<ProfileName>,
 }
 
 impl Command for ReconnectBridgeCommand {
@@ -37,7 +37,7 @@ impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         DisconnectBridgeCommand {
             config_location: reconnect_cmd.config_location.clone(),
-            config_file: reconnect_cmd.config_file.clone(),
+            profile: reconnect_cmd.profile.clone(),
             cloud: reconnect_cmd.cloud,
             use_mapper: reconnect_cmd.use_mapper,
             service_manager: reconnect_cmd.service_manager.clone(),
@@ -54,6 +54,7 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
             is_test_connection: false,
             offline_mode: false,
             service_manager: reconnect_cmd.service_manager.clone(),
+            profile: reconnect_cmd.profile.clone(),
         }
     }
 }

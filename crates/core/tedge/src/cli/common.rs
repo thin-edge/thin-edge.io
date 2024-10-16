@@ -1,4 +1,7 @@
+use std::borrow::Cow;
+
 use tedge_config::system_services::SystemService;
+use tedge_config::ProfileName;
 
 #[derive(Copy, Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr, PartialEq, Eq)]
 pub enum Cloud {
@@ -17,11 +20,14 @@ impl Cloud {
         }
     }
 
-    pub fn bridge_config_filename(&self) -> &str {
-        match self {
-            Self::C8y => crate::bridge::C8Y_CONFIG_FILENAME,
-            Self::Aws => crate::bridge::AWS_CONFIG_FILENAME,
-            Self::Azure => crate::bridge::AZURE_CONFIG_FILENAME,
+    pub fn bridge_config_filename(&self, profile: Option<&ProfileName>) -> Cow<'static, str> {
+        match (self, profile) {
+            (Self::C8y, None) => "c8y-bridge.conf".into(),
+            (Self::C8y, Some(profile)) => format!("c8y{profile}-bridge.conf").into(),
+            (Self::Aws, None) => "aws-bridge.conf".into(),
+            (Self::Aws, Some(profile)) => format!("aws{profile}-bridge.conf").into(),
+            (Self::Azure, None) => "az-bridge.conf".into(),
+            (Self::Azure, Some(profile)) => format!("az{profile}-bridge.conf").into(),
         }
     }
 }

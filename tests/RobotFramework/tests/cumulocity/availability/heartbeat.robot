@@ -22,6 +22,10 @@ Heartbeat is sent
     ...    The tests therefore relies on the backend availability service which then sets the c8y_Availability fragment
     ...    based on the last received telemetry data.
     Device Should Have Fragment Values
+    ...    c8y_RequiredAvailability.responseInterval\=1
+    ...    timeout=5
+    ...    wait=1
+    Device Should Have Fragment Values
     ...    c8y_Availability.status\=AVAILABLE
     ...    timeout=${INTERVAL_CHANGE_TIMEOUT}
     ...    wait=${CHECK_INTERVAL}

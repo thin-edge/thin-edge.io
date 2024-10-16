@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tedge_config::TEdgeConfig;
-
 #[derive(Clone, Debug)]
 pub struct ProxyUrlGenerator {
     host: Arc<str>,
@@ -30,19 +28,6 @@ impl ProxyUrlGenerator {
             host,
             port,
             protocol,
-        }
-    }
-
-    pub fn from_tedge_config(tedge_config: &TEdgeConfig) -> Self {
-        Self {
-            host: tedge_config.c8y.proxy.client.host.clone(),
-            port: tedge_config.c8y.proxy.client.port,
-            protocol: tedge_config
-                .c8y
-                .proxy
-                .cert_path
-                .or_none()
-                .map_or(Protocol::Http, |_| Protocol::Https),
         }
     }
 

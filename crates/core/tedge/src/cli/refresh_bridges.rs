@@ -3,6 +3,7 @@ use std::sync::Arc;
 use camino::Utf8PathBuf;
 use tedge_config::system_services::SystemService;
 use tedge_config::system_services::SystemServiceManager;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 
@@ -27,7 +28,7 @@ impl Command for RefreshBridgesCmd {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let clouds = established_bridges(&self.config_location);
+        let clouds = established_bridges(&self.config_location, &self.config);
 
         if clouds.is_empty() && !self.config.mqtt.bridge.built_in {
             println!("No bridges to refresh.");
@@ -38,22 +39,22 @@ impl Command for RefreshBridgesCmd {
         common_mosquitto_config.save(&self.config_location)?;
 
         if !self.config.mqtt.bridge.built_in {
-            for cloud in &clouds {
+            for (cloud, profile) in &clouds {
                 println!("Refreshing bridge {cloud}");
 
-                let bridge_config = super::connect::bridge_config(&self.config, *cloud)?;
+                let bridge_config = super::connect::bridge_config(&self.config, *cloud, *profile)?;
                 refresh_bridge(&bridge_config, &self.config_location)?;
             }
         }
 
-        for cloud in [Cloud::Aws, Cloud::Azure, Cloud::C8y] {
+        for (cloud, profile) in possible_clouds(&self.config) {
             // (attempt to) reassert ownership of the certificate and key
             // This is necessary when upgrading from the mosquitto bridge to the built-in bridge
-            if let Ok(bridge_config) = super::connect::bridge_config(&self.config, cloud) {
+            if let Ok(bridge_config) = super::connect::bridge_config(&self.config, cloud, profile) {
                 super::connect::chown_certificate_and_key(&bridge_config);
 
                 if bridge_config.bridge_location == BridgeLocation::BuiltIn
-                    && clouds.contains(&cloud)
+                    && clouds.contains(&(cloud, profile))
                 {
                     println!(
                     "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
@@ -89,14 +90,25 @@ impl RefreshBridgesCmd {
     }
 }
 
-fn established_bridges(config_location: &TEdgeConfigLocation) -> Vec<Cloud> {
-    let possible_clouds = [Cloud::Aws, Cloud::Azure, Cloud::C8y];
-
+fn established_bridges<'a>(
+    config_location: &TEdgeConfigLocation,
+    config: &'a TEdgeConfig,
+) -> Vec<(Cloud, Option<&'a ProfileName>)> {
     // if the bridge configuration file doesn't exist, then the bridge doesn't exist and we shouldn't try to update it
-    possible_clouds
-        .into_iter()
-        .filter(|c| get_bridge_config_file_path_cloud(config_location, c).exists())
+    possible_clouds(config)
+        .filter(|(cloud, profile)| {
+            get_bridge_config_file_path_cloud(config_location, *cloud, *profile).exists()
+        })
         .collect()
+}
+
+fn possible_clouds(config: &TEdgeConfig) -> impl Iterator<Item = (Cloud, Option<&ProfileName>)> {
+    config
+        .c8y
+        .keys()
+        .map(|profile| (Cloud::C8y, profile))
+        .chain(config.az.keys().map(|profile| (Cloud::Azure, profile)))
+        .chain(config.aws.keys().map(|profile| (Cloud::Aws, profile)))
 }
 
 pub fn refresh_bridge(
@@ -111,10 +123,11 @@ pub fn refresh_bridge(
 
 pub fn get_bridge_config_file_path_cloud(
     config_location: &TEdgeConfigLocation,
-    cloud: &Cloud,
+    cloud: Cloud,
+    profile: Option<&ProfileName>,
 ) -> Utf8PathBuf {
     config_location
         .tedge_config_root_path
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-        .join(cloud.bridge_config_filename())
+        .join(&*cloud.bridge_config_filename(profile))
 }

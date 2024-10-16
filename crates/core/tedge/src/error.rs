@@ -1,3 +1,5 @@
+use tedge_config::MultiError;
+
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum TEdgeError {
@@ -30,4 +32,7 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     FromConfigNotSet(#[from] tedge_config::ConfigNotSet),
+
+    #[error(transparent)]
+    FromMultiError(#[from] MultiError),
 }

@@ -9,6 +9,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use tedge_config::get_config_dir;
 use tedge_config::Path;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 
 use crate::csv::deserialize_csv_record;
@@ -66,6 +67,10 @@ pub struct C8yRemoteAccessPluginOpt {
     /// The group who will own the directories created by --init
     #[arg(long, requires("init"), default_value = "tedge")]
     group: Option<String>,
+
+    #[arg(long, env = "C8Y_PROFILE", hide = true)]
+    /// The c8y profile to use
+    pub profile: Option<ProfileName>,
 }
 
 impl C8yRemoteAccessPluginOpt {

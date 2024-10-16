@@ -12,14 +12,18 @@ use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
+use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigReaderAws;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
 
-pub struct AwsMapper;
+pub struct AwsMapper {
+    pub profile: Option<ProfileName>,
+}
 
 #[async_trait]
 impl TEdgeComponent for AwsMapper {
@@ -28,7 +32,8 @@ impl TEdgeComponent for AwsMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let prefix = &tedge_config.aws.bridge.topic_prefix;
+        let aws_config = tedge_config.aws.try_get(self.profile.as_deref())?;
+        let prefix = &aws_config.bridge.topic_prefix;
         let aws_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&aws_mapper_name, &tedge_config).await?;
@@ -42,15 +47,11 @@ impl TEdgeComponent for AwsMapper {
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 tedge_config.device.id.try_read(&tedge_config)?,
-                tedge_config.aws.url.or_config_not_set()?.to_string(),
+                aws_config.url.or_config_not_set()?.to_string(),
                 8883,
             );
             cloud_config.set_clean_session(false);
-            use_key_and_cert(
-                &mut cloud_config,
-                &tedge_config.aws.root_cert_path,
-                &tedge_config,
-            )?;
+            use_key_and_cert(&mut cloud_config, &aws_config.root_cert_path, &tedge_config)?;
 
             let bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_name);
@@ -67,16 +68,16 @@ impl TEdgeComponent for AwsMapper {
         }
         let clock = Box::new(WallClock);
         let aws_converter = AwsConverter::new(
-            tedge_config.aws.mapper.timestamp,
+            aws_config.mapper.timestamp,
             clock,
             mqtt_schema,
-            tedge_config.aws.mapper.timestamp_format,
+            aws_config.mapper.timestamp_format,
             prefix.clone(),
-            tedge_config.aws.mapper.mqtt.max_payload_size.0,
+            aws_config.mapper.mqtt.max_payload_size.0,
         );
         let mut aws_converting_actor = ConvertingActor::builder("AwsConverter", aws_converter);
 
-        aws_converting_actor.connect_source(get_topic_filter(&tedge_config), &mut mqtt_actor);
+        aws_converting_actor.connect_source(get_topic_filter(aws_config), &mut mqtt_actor);
         aws_converting_actor.connect_sink(NoConfig, &mqtt_actor);
 
         runtime.spawn(aws_converting_actor).await?;
@@ -86,9 +87,9 @@ impl TEdgeComponent for AwsMapper {
     }
 }
 
-fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
+fn get_topic_filter(aws_config: &TEdgeConfigReaderAws) -> TopicFilter {
     let mut topics = TopicFilter::empty();
-    for topic in tedge_config.aws.topics.0.clone() {
+    for topic in aws_config.topics.0.clone() {
         if topics.add(&topic).is_err() {
             warn!("The configured topic '{topic}' is invalid and ignored.");
         }

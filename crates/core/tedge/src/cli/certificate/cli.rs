@@ -1,6 +1,7 @@
 use crate::bridge::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
+use tedge_config::ProfileName;
 
 use super::create::CreateCertCmd;
 use super::create_csr::CreateCsrCmd;
@@ -98,10 +99,19 @@ impl BuildCommand for TEdgeCertCli {
 
             TEdgeCertCli::Upload(cmd) => {
                 let cmd = match cmd {
-                    UploadCertCli::C8y { username, password } => UploadCertCmd {
+                    UploadCertCli::C8y {
+                        username,
+                        password,
+                        profile,
+                    } => UploadCertCmd {
                         device_id: config.device.id.try_read(&config)?.clone(),
                         path: config.device.cert_path.clone(),
-                        host: config.c8y.http.or_err()?.to_owned(),
+                        host: config
+                            .c8y
+                            .try_get(profile.as_deref())?
+                            .http
+                            .or_err()?
+                            .to_owned(),
                         cloud_root_certs: config.cloud_root_certs(),
                         username,
                         password,
@@ -147,5 +157,8 @@ pub enum UploadCertCli {
         ///
         /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
         password: String,
+
+        #[clap(long, hide = true)]
+        profile: Option<ProfileName>,
     },
 }

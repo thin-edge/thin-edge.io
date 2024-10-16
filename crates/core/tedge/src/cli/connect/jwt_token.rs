@@ -8,8 +8,11 @@ use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
 use tedge_config::TEdgeConfig;
 
-pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String, ConnectError> {
-    let prefix = &tedge_config.c8y.bridge.topic_prefix;
+pub(crate) fn get_connected_c8y_url(
+    tedge_config: &TEdgeConfig,
+    c8y_prefix: Option<&str>,
+) -> Result<String, ConnectError> {
+    let prefix = &tedge_config.c8y.try_get(c8y_prefix)?.bridge.topic_prefix;
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     const CLIENT_ID: &str = "get_jwt_token_c8y";
