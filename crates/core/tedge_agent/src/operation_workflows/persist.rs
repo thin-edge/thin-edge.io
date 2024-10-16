@@ -157,21 +157,11 @@ impl WorkflowRepository {
             FsWatchEvent::Modified(path) | FsWatchEvent::FileCreated(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
+                        // Checking the path exists as FsWatchEvent returns misleading Modified events along FileDeleted events.
                         if path.exists() {
                             return self.reload_operation_workflow(&path).await.and_then(
                                 |updated_operation| {
                                     self.capability_message(schema, target, &updated_operation)
-                                },
-                            );
-                        } else {
-                            // FsWatchEvent returns misleading Modified events along FileDeleted events.
-                            return self.remove_operation_workflow(&path).await.map(
-                                |deprecated_operation| {
-                                    self.deregistration_message(
-                                        schema,
-                                        target,
-                                        &deprecated_operation,
-                                    )
                                 },
                             );
                         }
