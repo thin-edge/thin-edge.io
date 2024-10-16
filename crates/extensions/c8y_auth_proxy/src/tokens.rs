@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use c8y_http_proxy::credentials::JwtRetriever;
+use c8y_http_proxy::credentials::AuthRetriever;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
@@ -16,12 +16,12 @@ impl SharedTokenManager {
 }
 
 pub struct TokenManager {
-    recv: JwtRetriever,
+    recv: AuthRetriever,
     cached: Option<Arc<str>>,
 }
 
 impl TokenManager {
-    pub fn new(recv: JwtRetriever) -> Self {
+    pub fn new(recv: AuthRetriever) -> Self {
         Self { recv, cached: None }
     }
 

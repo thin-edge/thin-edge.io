@@ -123,13 +123,12 @@ impl HttpRequestBuilder {
         HttpRequestBuilder { body, ..self }
     }
 
-    /// Add bearer authentication (e.g. a JWT token)
-    pub fn bearer_auth<T>(self, token: T) -> Self
+    /// Add an authentication header
+    pub fn auth<T>(self, header_value: T) -> Self
     where
         T: std::fmt::Display,
     {
-        let header_value = format!("Bearer {}", token);
-        self.header(http::header::AUTHORIZATION, header_value)
+        self.header(http::header::AUTHORIZATION, header_value.to_string())
     }
 }
 

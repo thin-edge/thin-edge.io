@@ -50,7 +50,7 @@ fn default_backoff() -> ExponentialBackoff {
 pub struct DownloadInfo {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth: Option<Auth>,
+    pub auth: Option<String>,
 }
 
 impl From<&str> for DownloadInfo {
@@ -69,9 +69,9 @@ impl DownloadInfo {
     }
 
     /// Creates new [`DownloadInfo`] from a URL with authentication.
-    pub fn with_auth(self, auth: Auth) -> Self {
+    pub fn with_auth(self, auth: &str) -> Self {
         Self {
-            auth: Some(auth),
+            auth: Some(auth.into()),
             ..self
         }
     }
@@ -82,21 +82,6 @@ impl DownloadInfo {
 
     pub fn is_empty(&self) -> bool {
         self.url.trim().is_empty()
-    }
-}
-
-/// Possible authentication schemes
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub enum Auth {
-    /// HTTP Bearer authentication
-    Bearer(String),
-}
-
-impl Auth {
-    pub fn new_bearer(token: &str) -> Self {
-        Self::Bearer(token.into())
     }
 }
 
@@ -384,8 +369,8 @@ impl Downloader {
 
         let operation = || async {
             let mut request = self.client.get(url.url());
-            if let Some(Auth::Bearer(token)) = &url.auth {
-                request = request.bearer_auth(token)
+            if let Some(header_value) = &url.auth {
+                request = request.header("Authorization", header_value)
             }
 
             if range_start != 0 {
@@ -926,7 +911,7 @@ mod tests {
         // applying token if `with_token` = true
         let url = {
             if with_token {
-                url.with_auth(Auth::Bearer(String::from("token")))
+                url.with_auth("Bearer token")
             } else {
                 url
             }

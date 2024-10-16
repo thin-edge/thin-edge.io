@@ -226,7 +226,7 @@ fn tungstenite_to_axum(message: tungstenite::Message) -> axum::extract::ws::Mess
 }
 
 async fn connect_to_websocket(
-    token: &str,
+    auth_value: &str,
     headers: &HeaderMap<HeaderValue>,
     uri: &str,
     host: &TargetHost,
@@ -235,7 +235,7 @@ async fn connect_to_websocket(
     for (name, value) in headers {
         req = req.header(name.as_str(), value);
     }
-    req = req.header("Authorization", format!("Bearer {token}"));
+    req = req.header("Authorization", auth_value);
     let req = req
         .uri(uri)
         .header(HOST, host.without_scheme.as_ref())
@@ -405,9 +405,9 @@ async fn respond_to(
     };
     let auth: fn(reqwest::RequestBuilder, &str) -> reqwest::RequestBuilder =
         if headers.contains_key("Authorization") {
-            |req, _token| req
+            |req, _auth_value| req
         } else {
-            |req, token| req.bearer_auth(token)
+            |req, auth_value| req.header("Authorization", auth_value)
         };
     headers.remove(HOST);
 
@@ -436,7 +436,7 @@ async fn respond_to(
         let destination = format!("{}/tenant/currentTenant", host.http);
         let response = client
             .head(&destination)
-            .bearer_auth(&token)
+            .header("Authorization", token.to_string())
             .send()
             .await
             .with_context(|| format!("making HEAD request to {destination}"))?;
@@ -499,9 +499,9 @@ mod tests {
     use axum::http::Request;
     use axum::middleware::Next;
     use axum::TypedHeader;
-    use c8y_http_proxy::credentials::JwtRequest;
-    use c8y_http_proxy::credentials::JwtResult;
-    use c8y_http_proxy::credentials::JwtRetriever;
+    use c8y_http_proxy::credentials::AuthRequest;
+    use c8y_http_proxy::credentials::AuthResult;
+    use c8y_http_proxy::credentials::AuthRetriever;
     use camino::Utf8PathBuf;
     use futures::channel::mpsc;
     use futures::future::ready;
@@ -1113,7 +1113,7 @@ mod tests {
             let state = AppData {
                 is_https: false,
                 host: target_host.into(),
-                token_manager: TokenManager::new(JwtRetriever::new(&mut retriever)).shared(),
+                token_manager: TokenManager::new(AuthRetriever::new(&mut retriever)).shared(),
                 client: reqwest::Client::new(),
             };
             let trust_store = ca_dir
@@ -1147,15 +1147,16 @@ mod tests {
 
     #[async_trait]
     impl Server for IterJwtRetriever {
-        type Request = JwtRequest;
-        type Response = JwtResult;
+        type Request = AuthRequest;
+        type Response = AuthResult;
 
         fn name(&self) -> &str {
             "IterJwtRetriever"
         }
 
         async fn handle(&mut self, _request: Self::Request) -> Self::Response {
-            Ok(self.tokens.next().unwrap().into())
+            let auth_value = format!("Bearer {}", self.tokens.next().unwrap());
+            Ok(auth_value)
         }
     }
 

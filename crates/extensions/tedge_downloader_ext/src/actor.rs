@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use certificate::CloudRootCerts;
-use download::Auth;
 use download::DownloadError;
 use download::DownloadInfo;
 use download::Downloader;
@@ -20,7 +19,7 @@ use tedge_utils::file::PermissionEntry;
 pub struct DownloadRequest {
     pub url: String,
     pub file_path: PathBuf,
-    pub auth: Option<Auth>,
+    pub auth: Option<String>,
     pub permission: Option<PermissionEntry>,
 }
 
@@ -34,9 +33,9 @@ impl DownloadRequest {
         }
     }
 
-    pub fn with_auth(self, auth: Auth) -> Self {
+    pub fn with_auth(self, auth: &str) -> Self {
         Self {
-            auth: Some(auth),
+            auth: Some(auth.into()),
             ..self
         }
     }
@@ -112,8 +111,8 @@ impl<T: Message> Server for DownloaderActor<T> {
     async fn handle(&mut self, id_request: Self::Request) -> Self::Response {
         let (id, request) = id_request;
 
-        let download_info = if let Some(auth) = request.auth {
-            DownloadInfo::new(&request.url).with_auth(auth)
+        let download_info = if let Some(header_value) = request.auth {
+            DownloadInfo::new(&request.url).with_auth(&header_value)
         } else {
             DownloadInfo::new(&request.url)
         };

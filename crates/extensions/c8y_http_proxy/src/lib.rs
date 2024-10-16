@@ -1,7 +1,7 @@
 use crate::actor::C8YHttpProxyActor;
 use crate::actor::C8YHttpProxyMessageBox;
-use crate::credentials::JwtResult;
-use crate::credentials::JwtRetriever;
+use crate::credentials::AuthResult;
+use crate::credentials::AuthRetriever;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
 use certificate::CloudRootCerts;
@@ -107,24 +107,24 @@ pub struct C8YHttpProxyBuilder {
     /// Connection to an HTTP actor
     http: ClientMessageBox<HttpRequest, HttpResult>,
 
-    /// Connection to a JWT token retriever
-    jwt: JwtRetriever,
+    /// Connection to an HTTP auth header value retriever
+    auth: AuthRetriever,
 }
 
 impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
         http: &mut impl Service<HttpRequest, HttpResult>,
-        jwt: &mut impl Service<(), JwtResult>,
+        auth: &mut impl Service<(), AuthResult>,
     ) -> Self {
         let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
         let http = ClientMessageBox::new(http);
-        let jwt = JwtRetriever::new(jwt);
+        let auth = AuthRetriever::new(auth);
         C8YHttpProxyBuilder {
             config,
             clients,
             http,
-            jwt,
+            auth,
         }
     }
 }
@@ -140,7 +140,7 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
-            jwt: self.jwt,
+            auth: self.auth,
         };
 
         C8YHttpProxyActor::new(self.config, message_box)
