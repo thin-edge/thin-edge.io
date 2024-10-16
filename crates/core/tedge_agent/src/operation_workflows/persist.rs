@@ -41,7 +41,8 @@ pub struct WorkflowRepository {
     //
     // For a fresh new workflow definition, this points to the user-defined file
     // When the workflow definition is in use, this points to a copy in the state directory.
-    definitions: HashMap<String, (OperationName, Utf8PathBuf)>,
+    definitions: HashMap<WorkflowVersion, (OperationName, Utf8PathBuf)>,
+    in_use_copies: HashMap<OperationName, WorkflowVersion>,
 
     // The in-memory representation of all the workflows (builtin, user-defined, i,n-use).
     workflows: WorkflowSupervisor,
@@ -56,11 +57,13 @@ impl WorkflowRepository {
         let workflows = WorkflowSupervisor::default();
         let state_dir = state_dir.join("workflows-in-use");
         let definitions = HashMap::new();
+        let in_use_copies = HashMap::new();
         Self {
             builtin_workflows,
             custom_workflows_dir,
             state_dir,
             definitions,
+            in_use_copies,
             workflows,
         }
     }
@@ -126,8 +129,18 @@ impl WorkflowRepository {
         version: WorkflowVersion,
     ) -> Result<String, anyhow::Error> {
         let operation_name = workflow.operation.to_string();
-        self.definitions
-            .insert(version.clone(), (operation_name.clone(), definition));
+        match source {
+            WorkflowSource::UserDefined => {
+                self.definitions
+                    .insert(version.clone(), (operation_name.clone(), definition));
+            }
+            WorkflowSource::InUseCopy => {
+                self.in_use_copies
+                    .insert(operation_name.clone(), version.clone());
+            }
+            WorkflowSource::BuiltIn => {}
+        };
+
         self.workflows
             .register_custom_workflow(source, workflow, version)?;
         Ok(operation_name)
@@ -248,15 +261,18 @@ impl WorkflowRepository {
         operation: &OperationName,
         version: &WorkflowVersion,
     ) {
+        if let Some(in_use_version) = self.in_use_copies.get(operation) {
+            if in_use_version == version {
+                return;
+            }
+        };
         if let Some((_, source)) = self.definitions.get(version) {
-            if !source.starts_with(&self.state_dir) {
-                let target = self.state_dir.join(operation).with_extension("toml");
-                if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
-                    error!("Fail to persist a copy of {source} as {target}: {err}");
-                } else {
-                    self.definitions
-                        .insert(version.clone(), (operation.clone(), target));
-                }
+            let target = self.state_dir.join(operation).with_extension("toml");
+            if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
+                error!("Fail to persist a copy of {source} as {target}: {err}");
+            } else {
+                self.in_use_copies
+                    .insert(operation.clone(), version.clone());
             }
         }
     }
