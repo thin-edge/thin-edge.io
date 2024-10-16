@@ -16,6 +16,8 @@ use mqtt_channel::MqttMessage;
 use std::time::Duration;
 use tedge_config::TopicPrefix;
 
+use super::message::SmartrestPayload;
+
 /// Create a SmartREST message for creating a child device under the given ancestors.
 /// The provided ancestors list must contain all the parents of the given device
 /// starting from its immediate parent device.
@@ -45,15 +47,17 @@ pub fn child_device_creation_message(
         });
     }
 
+    let payload = SmartrestPayload::from_fields(&[
+        "101",
+        child_id,
+        device_name.unwrap_or(child_id),
+        device_type.unwrap_or("thin-edge.io-child"),
+    ])
+    .expect("child_id, device_name, device_type should not increase payload size over the limit");
+
     Ok(MqttMessage::new(
         &publish_topic_from_ancestors(ancestors, prefix),
-        // XXX: if any arguments contain commas, output will be wrong
-        format!(
-            "101,{},{},{}",
-            child_id,
-            device_name.unwrap_or(child_id),
-            device_type.unwrap_or("thin-edge.io-child")
-        ),
+        payload.into_inner(),
     ))
 }
 
@@ -70,7 +74,8 @@ pub fn service_creation_message(
 ) -> Result<MqttMessage, InvalidValueError> {
     Ok(MqttMessage::new(
         &publish_topic_from_ancestors(ancestors, prefix),
-        service_creation_message_payload(service_id, service_name, service_type, service_status)?,
+        service_creation_message_payload(service_id, service_name, service_type, service_status)?
+            .into_inner(),
     ))
 }
 
@@ -82,7 +87,7 @@ pub fn service_creation_message_payload(
     service_name: &str,
     service_type: &str,
     service_status: &str,
-) -> Result<String, InvalidValueError> {
+) -> Result<SmartrestPayload, InvalidValueError> {
     // TODO: most of this noise can be eliminated by implementing `Serialize`/`Deserialize` for smartrest format
     if service_id.is_empty() {
         return Err(InvalidValueError {
@@ -109,13 +114,18 @@ pub fn service_creation_message_payload(
         });
     }
 
-    Ok(fields_to_csv_string(&[
+    let payload = SmartrestPayload::from_fields(&[
         "102",
         service_id,
         service_type,
         service_name,
         service_status,
-    ]))
+    ])
+    .expect(
+        "TODO: message can get over the limit but none of the fields can be reasonably trimmed",
+    );
+
+    Ok(payload)
 }
 
 /// Create a SmartREST message to set a response interval for c8y_RequiredAvailability.
@@ -134,10 +144,9 @@ impl From<C8ySmartRestSetInterval117> for MqttMessage {
     fn from(value: C8ySmartRestSetInterval117) -> Self {
         let topic = value.c8y_topic.to_topic(&value.prefix).unwrap();
         let interval_in_minutes = value.interval.as_secs() / 60;
-        MqttMessage::new(
-            &topic,
-            fields_to_csv_string(&["117", &interval_in_minutes.to_string()]),
-        )
+        let payload = SmartrestPayload::from_fields(&["117", &interval_in_minutes.to_string()])
+            .expect("interval should not increase size over the limit");
+        MqttMessage::new(&topic, payload.into_inner())
     }
 }
 
