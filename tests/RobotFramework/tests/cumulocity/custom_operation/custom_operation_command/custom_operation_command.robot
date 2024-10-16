@@ -14,13 +14,13 @@ Run shell custom operation for main device and publish the status
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_1    /etc/tedge/operations/c8y/c8y_Command
     ${operation}=    Cumulocity.Create Operation
     ...    description=echo helloworld
-    ...    fragments={"c8y_Command":{"text":"echo helloworld"}}
+    ...    fragments={"c8y_Command":{"text":"echo helloworld1"}}
 
     Operation Should Be SUCCESSFUL    ${operation}
-    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    helloworld\n
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    helloworld1\n
     Should Have MQTT Messages
     ...    c8y/s/us
-    ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld\n\\")
+    ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld1\n\\")
     ...    minimum=2
     ...    maximum=2
 
@@ -29,13 +29,13 @@ Run shell custom operation for main device and do not publish the status
     Restart Service    tedge-mapper-c8y
     ${operation}=    Cumulocity.Create Operation
     ...    description=echo helloworld
-    ...    fragments={"c8y_Command":{"text":"echo helloworld"}}
+    ...    fragments={"c8y_Command":{"text":"echo helloworld2"}}
 
     Operation Should Be PENDING    ${operation}
 
     Should Have MQTT Messages
     ...    c8y/s/us
-    ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld\n\\")
+    ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld2\n\\")
     ...    minimum=0
     ...    maximum=0
 
@@ -49,6 +49,20 @@ Run arbitrary shell command
     ...    test-topic
     ...    message_pattern=hello world
     Operation Should Be SUCCESSFUL    ${operation}
+
+Run shell custom operation for main device with custom topic
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_4    /etc/tedge/operations/c8y/c8y_Command
+    Restart Service    tedge-mapper-c8y
+    ${prefix}=    Execute Command    tedge config get c8y.bridge.topic_prefix    strip=True
+
+    Execute Command
+    ...    tedge mqtt pub --retain '${prefix}/custom/topic/one' '{"status":"PENDING","id":"1234","c8y_Command":{"text":"echo helloworld4"},"externalSource":{"externalId":"${DEVICE_SN}","type":"c8y_Serial"}}'
+
+    Should Have MQTT Messages
+    ...    c8y/s/us
+    ...    message_pattern=^(504|505|506),1234($|,\\"helloworld4\n\\")
+    ...    minimum=2
+    ...    maximum=2
 
 
 *** Keywords ***
