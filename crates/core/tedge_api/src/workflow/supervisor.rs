@@ -59,15 +59,18 @@ impl WorkflowSupervisor {
             versions.remove(version);
         }
 
-        if self.workflows.get(&operation).map(|v| v.is_empty()) == Some(true) {
+        let current_source = match self.workflows.get(&operation) {
+            None => None,
+            Some(version) if version.is_empty() => None,
+            Some(version) if version.is_builtin() => Some(BuiltIn),
+            Some(_) => Some(InUseCopy),
+        };
+
+        if current_source.is_none() {
             self.workflows.remove(&operation);
         }
 
-        match self.workflows.get(&operation) {
-            None => None,
-            Some(version) if version.is_builtin() => Some(BuiltIn),
-            _ => Some(InUseCopy),
-        }
+        current_source
     }
 
     /// The set of pending commands
@@ -388,8 +391,11 @@ impl WorkflowVersions {
     // Mark the current version as being in-use.
     fn use_current_version(&mut self) -> Option<&WorkflowVersion> {
         if self.current.is_some() && self.in_use != self.current {
-            if let Some(old_version) = self.in_use.as_ref() {
-                self.versions.remove(old_version);
+            // remove the previous version in-use unless this is the builtin version
+            if let Some(previous_version) = self.in_use.as_ref() {
+                if Some(previous_version) != self.builtin.as_ref() {
+                    self.versions.remove(previous_version);
+                }
             }
             self.in_use.clone_from(&self.current);
         }
