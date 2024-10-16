@@ -82,7 +82,10 @@ impl AlarmConverter {
                         let smartrest_topic = C8yTopic::from(&c8y_alarm)
                             .to_topic(c8y_prefix)
                             .expect("Infallible");
-                        output_messages.push(MqttMessage::new(&smartrest_topic, smartrest_alarm));
+                        output_messages.push(MqttMessage::new(
+                            &smartrest_topic,
+                            smartrest_alarm.into_inner(),
+                        ));
                     }
                 }
 
