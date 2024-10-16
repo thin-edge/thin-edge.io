@@ -1,3 +1,5 @@
+use super::payload::SmartrestPayload;
+use super::payload::SmartrestPayloadError;
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::error::SmartRestSerializerError;
 use csv::StringRecord;
@@ -15,39 +17,43 @@ pub fn request_pending_operations() -> &'static str {
 }
 
 /// Generates a SmartREST message to set the provided operation to executing
-pub fn set_operation_executing_with_name(operation: impl C8yOperation) -> String {
-    fields_to_csv_string(&["501", operation.name()])
+pub fn set_operation_executing_with_name(operation: impl C8yOperation) -> SmartrestPayload {
+    SmartrestPayload::serialize(("501", operation.name()))
+        .expect("operation name shouldn't put payload over size limit")
 }
 
 /// Generates a SmartREST message to set the provided operation ID to executing
-pub fn set_operation_executing_with_id(op_id: &str) -> String {
-    fields_to_csv_string(&["504", op_id])
+pub fn set_operation_executing_with_id(op_id: &str) -> SmartrestPayload {
+    SmartrestPayload::serialize(("504", op_id))
+        .expect("op_id shouldn't put payload over size limit")
 }
 
 /// Generates a SmartREST message to set the provided operation to failed with the provided reason
-pub fn fail_operation_with_name(operation: impl C8yOperation, reason: &str) -> String {
+pub fn fail_operation_with_name(operation: impl C8yOperation, reason: &str) -> SmartrestPayload {
     fail_operation("502", operation.name(), reason)
 }
 
 /// Generates a SmartREST message to set the provided operation ID to failed with the provided reason
-pub fn fail_operation_with_id(op_id: &str, reason: &str) -> String {
+pub fn fail_operation_with_id(op_id: &str, reason: &str) -> SmartrestPayload {
     fail_operation("505", op_id, reason)
 }
 
-fn fail_operation(template_id: &str, operation: &str, reason: &str) -> String {
+fn fail_operation(template_id: &str, operation: &str, reason: &str) -> SmartrestPayload {
     // If the failure reason exceeds 500 bytes, truncate it
     if reason.len() <= 500 {
-        fields_to_csv_string(&[template_id, operation, reason])
+        SmartrestPayload::serialize((template_id, operation, reason))
+            .expect("operation name shouldn't put payload over size limit")
     } else {
         warn!("Failure reason too long, message truncated to 500 bytes");
-        fields_to_csv_string(&[template_id, operation, &reason[..500]])
+        SmartrestPayload::serialize((template_id, operation, &reason[..500]))
+            .expect("operation name shouldn't put payload over size limit")
     }
 }
 
 /// Generates a SmartREST message to set the provided operation to successful without a payload
 pub fn succeed_operation_with_name_no_parameters(
     operation: CumulocitySupportedOperations,
-) -> String {
+) -> SmartrestPayload {
     succeed_static_operation_with_name(operation, None::<&str>)
 }
 
@@ -55,17 +61,20 @@ pub fn succeed_operation_with_name_no_parameters(
 pub fn succeed_static_operation_with_name(
     operation: CumulocitySupportedOperations,
     payload: Option<impl AsRef<str>>,
-) -> String {
+) -> SmartrestPayload {
     succeed_static_operation("503", operation.name(), payload)
 }
 
 /// Generates a SmartREST message to set the provided operation ID to successful without a payload
-pub fn succeed_operation_with_id_no_parameters(op_id: &str) -> String {
+pub fn succeed_operation_with_id_no_parameters(op_id: &str) -> SmartrestPayload {
     succeed_static_operation_with_id(op_id, None::<&str>)
 }
 
 /// Generates a SmartREST message to set the provided operation ID to successful with an optional payload
-pub fn succeed_static_operation_with_id(op_id: &str, payload: Option<impl AsRef<str>>) -> String {
+pub fn succeed_static_operation_with_id(
+    op_id: &str,
+    payload: Option<impl AsRef<str>>,
+) -> SmartrestPayload {
     succeed_static_operation("506", op_id, payload)
 }
 
@@ -73,17 +82,12 @@ fn succeed_static_operation(
     template_id: &str,
     operation: &str,
     payload: Option<impl AsRef<str>>,
-) -> String {
-    let mut wtr = csv::Writer::from_writer(vec![]);
-    // Serialization will never fail for text
+) -> SmartrestPayload {
     match payload {
-        Some(payload) => wtr.serialize((template_id, operation, payload.as_ref())),
-        None => wtr.serialize((template_id, operation)),
+        Some(payload) => SmartrestPayload::serialize((template_id, operation, payload.as_ref())),
+        None => SmartrestPayload::serialize((template_id, operation)),
     }
-    .unwrap();
-    let mut output = wtr.into_inner().unwrap();
-    output.pop();
-    String::from_utf8(output).unwrap()
+    .expect("operation name shouldn't put payload over size limit")
 }
 
 /// Generates a SmartREST message to set the provided custom operation to successful with a text or csv payload
@@ -105,24 +109,21 @@ pub fn succeed_operation(
     template_id: &str,
     operation: &str,
     reason: impl Into<TextOrCsv>,
-) -> Result<String, SmartRestSerializerError> {
+) -> Result<SmartrestPayload, SmartRestSerializerError> {
     let reason: TextOrCsv = reason.into();
 
-    let result = {
-        let mut wtr = csv::Writer::from_writer(vec![]);
-        wtr.serialize((template_id, operation, &reason))?;
-        let mut vec = wtr.into_inner().unwrap();
-        // remove newline character
-        vec.pop();
-        String::from_utf8(vec)?
-    };
+    let result = SmartrestPayload::serialize((template_id, operation, &reason));
 
-    if result.len() <= super::message::MAX_PAYLOAD_LIMIT_IN_BYTES {
-        return Ok(result);
+    match result {
+        Ok(payload) => return Ok(payload),
+        Err(SmartrestPayloadError::SerializeError(e)) => {
+            return Err(SmartRestSerializerError::InvalidCsv(e))
+        }
+        Err(SmartrestPayloadError::TooLarge(_)) => {}
     }
 
     // payload too big, need to trim
-    let prefix = super::csv::fields_to_csv_string(&[template_id, operation]);
+    let prefix = super::csv::fields_to_csv_string([template_id, operation]);
 
     let trim_indicator = "...<trimmed>";
 
@@ -157,22 +158,20 @@ pub fn succeed_operation(
         format!("{prefix},\"{trimmed_reason}{trim_indicator}\"")
     };
 
-    assert!(result.len() <= super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);
-
-    Ok(result)
+    Ok(SmartrestPayload(result))
 }
 
 pub fn succeed_operation_with_name(
     operation: &str,
     reason: impl Into<TextOrCsv>,
-) -> Result<String, SmartRestSerializerError> {
+) -> Result<SmartrestPayload, SmartRestSerializerError> {
     succeed_operation("503", operation, reason)
 }
 
 pub fn succeed_operation_with_id(
     operation: &str,
     reason: impl Into<TextOrCsv>,
-) -> Result<String, SmartRestSerializerError> {
+) -> Result<SmartrestPayload, SmartRestSerializerError> {
     succeed_operation("506", operation, reason)
 }
 
@@ -201,8 +200,8 @@ impl From<CumulocitySupportedOperations> for &'static str {
     }
 }
 
-pub fn declare_supported_operations(ops: &[&str]) -> String {
-    format!("114,{}", fields_to_csv_string(ops))
+pub fn declare_supported_operations(ops: &[&str]) -> SmartrestPayload {
+    SmartrestPayload::serialize((114, ops)).expect("TODO: ops list can increase payload over limit")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -398,7 +397,10 @@ mod tests {
     #[test]
     fn serialize_smartrest_supported_operations() {
         let smartrest = declare_supported_operations(&["c8y_SoftwareUpdate", "c8y_LogfileRequest"]);
-        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest");
+        assert_eq!(
+            smartrest.as_str(),
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest"
+        );
     }
 
     #[test]
@@ -411,10 +413,10 @@ mod tests {
     fn serialize_smartrest_set_operation_to_executing() {
         let smartrest =
             set_operation_executing_with_name(CumulocitySupportedOperations::C8ySoftwareUpdate);
-        assert_eq!(smartrest, "501,c8y_SoftwareUpdate");
+        assert_eq!(smartrest.as_str(), "501,c8y_SoftwareUpdate");
 
         let smartrest = set_operation_executing_with_id("1234");
-        assert_eq!(smartrest, "504,1234");
+        assert_eq!(smartrest.as_str(), "504,1234");
     }
 
     #[test]
@@ -422,10 +424,10 @@ mod tests {
         let smartrest = succeed_operation_with_name_no_parameters(
             CumulocitySupportedOperations::C8ySoftwareUpdate,
         );
-        assert_eq!(smartrest, "503,c8y_SoftwareUpdate");
+        assert_eq!(smartrest.as_str(), "503,c8y_SoftwareUpdate");
 
         let smartrest = succeed_operation_with_id_no_parameters("1234");
-        assert_eq!(smartrest, "506,1234");
+        assert_eq!(smartrest.as_str(), "506,1234");
     }
 
     #[test]
@@ -434,10 +436,10 @@ mod tests {
             CumulocitySupportedOperations::C8ySoftwareUpdate,
             Some("a payload"),
         );
-        assert_eq!(smartrest, "503,c8y_SoftwareUpdate,a payload");
+        assert_eq!(smartrest.as_str(), "503,c8y_SoftwareUpdate,a payload");
 
         let smartrest = succeed_static_operation_with_id("1234", Some("a payload"));
-        assert_eq!(smartrest, "506,1234,a payload");
+        assert_eq!(smartrest.as_str(), "506,1234,a payload");
     }
 
     #[test]
@@ -447,7 +449,7 @@ mod tests {
             TextOrCsv::Text("true,false,true".to_owned()),
         )
         .unwrap();
-        assert_eq!(smartrest, "503,c8y_RelayArray,\"true,false,true\"");
+        assert_eq!(smartrest.as_str(), "503,c8y_RelayArray,\"true,false,true\"");
     }
 
     #[test]
@@ -457,7 +459,7 @@ mod tests {
             TextOrCsv::Csv(EmbeddedCsv("true,false,true".to_owned())),
         )
         .unwrap();
-        assert_eq!(smartrest, "503,c8y_RelayArray,true,false,true");
+        assert_eq!(smartrest.as_str(), "503,c8y_RelayArray,true,false,true");
     }
 
     #[test]
@@ -476,7 +478,10 @@ mod tests {
             TextOrCsv::Csv(EmbeddedCsv("true,random\"quote".to_owned())),
         )
         .unwrap();
-        assert_eq!(smartrest, "503,c8y_RelayArray,true,\"random\"\"quote\"");
+        assert_eq!(
+            smartrest.as_str(),
+            "503,c8y_RelayArray,true,\"random\"\"quote\""
+        );
     }
 
     #[test]
@@ -486,21 +491,21 @@ mod tests {
             "Failed due to permission.",
         );
         assert_eq!(
-            smartrest,
+            smartrest.as_str(),
             "502,c8y_SoftwareUpdate,Failed due to permission."
         );
 
         let smartrest = fail_operation_with_id("1234", "Failed due to permission.");
-        assert_eq!(smartrest, "505,1234,Failed due to permission.");
+        assert_eq!(smartrest.as_str(), "505,1234,Failed due to permission.");
     }
 
     #[test]
     fn serialize_smartrest_set_custom_operation_to_failed() {
         let smartrest = fail_operation_with_name("c8y_Custom", "Something went wrong");
-        assert_eq!(smartrest, "502,c8y_Custom,Something went wrong");
+        assert_eq!(smartrest.as_str(), "502,c8y_Custom,Something went wrong");
 
         let smartrest = fail_operation_with_id("1234", "Something went wrong");
-        assert_eq!(smartrest, "505,1234,Something went wrong");
+        assert_eq!(smartrest.as_str(), "505,1234,Something went wrong");
     }
 
     #[test]
@@ -510,12 +515,15 @@ mod tests {
             "Failed due to permi\"ssion.",
         );
         assert_eq!(
-            smartrest,
+            smartrest.as_str(),
             "502,c8y_SoftwareUpdate,\"Failed due to permi\"\"ssion.\""
         );
 
         let smartrest = fail_operation_with_id("1234", "Failed due to permi\"ssion.");
-        assert_eq!(smartrest, "505,1234,\"Failed due to permi\"\"ssion.\"");
+        assert_eq!(
+            smartrest.as_str(),
+            "505,1234,\"Failed due to permi\"\"ssion.\""
+        );
     }
 
     #[test]
@@ -525,14 +533,14 @@ mod tests {
             "Failed to install collectd, modbus, and golang.",
         );
         assert_eq!(
-            smartrest,
+            smartrest.as_str(),
             "502,c8y_SoftwareUpdate,\"Failed to install collectd, modbus, and golang.\""
         );
 
         let smartrest =
             fail_operation_with_id("1234", "Failed to install collectd, modbus, and golang.");
         assert_eq!(
-            smartrest,
+            smartrest.as_str(),
             "505,1234,\"Failed to install collectd, modbus, and golang.\""
         );
     }
@@ -541,10 +549,10 @@ mod tests {
     fn serialize_smartrest_set_operation_to_failed_with_empty_reason() {
         let smartrest =
             fail_operation_with_name(CumulocitySupportedOperations::C8ySoftwareUpdate, "");
-        assert_eq!(smartrest, "502,c8y_SoftwareUpdate,");
+        assert_eq!(smartrest.as_str(), "502,c8y_SoftwareUpdate,");
 
         let smartrest = fail_operation_with_id("1234", "");
-        assert_eq!(smartrest, "505,1234,");
+        assert_eq!(smartrest.as_str(), "505,1234,");
     }
 
     #[test]
@@ -633,19 +641,17 @@ mod tests {
 
         // assert message is under size limit and has expected structure
         assert!(
-            smartrest.len() <= MAX_PAYLOAD_LIMIT_IN_BYTES,
+            smartrest.as_str().len() <= MAX_PAYLOAD_LIMIT_IN_BYTES,
             "bigger than message size limit: {} > {}",
-            smartrest.len(),
+            smartrest.as_str().len(),
             MAX_PAYLOAD_LIMIT_IN_BYTES
         );
-        let mut fields = smartrest.split(',');
+        let mut fields = smartrest.as_str().split(',');
         assert_eq!(fields.next().unwrap(), "503");
         assert_eq!(fields.next().unwrap(), "c8y_Command");
 
         // assert trimming preserves valid double quotes
         let reason = fields.next().unwrap();
-        assert!(reason.starts_with('"'));
-        assert!(reason.ends_with('"'));
 
         let num_quotes = reason.chars().filter(|c| *c == '"').count();
 

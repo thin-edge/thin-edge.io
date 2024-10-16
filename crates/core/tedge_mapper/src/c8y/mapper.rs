@@ -154,14 +154,16 @@ impl TEdgeComponent for CumulocityMapper {
                     &c8y_mapper_name,
                     service_type.as_str(),
                     "down",
-                )?;
+                )?
+                .into_inner();
             let last_will_message_bridge =
                 c8y_api::smartrest::inventory::service_creation_message_payload(
                     mapper_service_external_id.as_ref(),
                     &c8y_mapper_config.bridge_service_name,
                     service_type.as_str(),
                     "down",
-                )?;
+                )?
+                .into_inner();
 
             cloud_config.set_last_will(LastWill {
                 topic: "s/us".into(),

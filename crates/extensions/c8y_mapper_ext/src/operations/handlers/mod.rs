@@ -17,6 +17,7 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
+use c8y_api::smartrest::payload::SmartrestPayload;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
@@ -200,7 +201,7 @@ impl OperationContext {
         &self,
         operation: CumulocitySupportedOperations,
         cmd_id: &str,
-    ) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+    ) -> SmartrestPayload {
         match self.get_operation_id(cmd_id) {
             Some(op_id) if self.smart_rest_use_operation_id => {
                 succeed_operation_with_id_no_parameters(&op_id)
@@ -214,7 +215,7 @@ impl OperationContext {
         operation: CumulocitySupportedOperations,
         reason: &str,
         cmd_id: &str,
-    ) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+    ) -> SmartrestPayload {
         match self.get_operation_id(cmd_id) {
             Some(op_id) if self.smart_rest_use_operation_id => {
                 fail_operation_with_id(&op_id, reason)
@@ -342,7 +343,7 @@ pub fn get_smartrest_response_for_upload_result(
     operation: c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations,
     use_operation_id: bool,
     op_id: Option<String>,
-) -> c8y_api::smartrest::smartrest_serializer::SmartRest {
+) -> SmartrestPayload {
     match upload_result {
         Ok(_) => match op_id {
             Some(op_id) if use_operation_id => {
