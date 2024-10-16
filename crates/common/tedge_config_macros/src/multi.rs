@@ -39,7 +39,7 @@ impl AsRef<OsStr> for ProfileName {
 }
 
 fn validate_profile_name(value: &str) -> Result<(), anyhow::Error> {
-    ensure!(value.starts_with("@"), "Profile names must start with `@`");
+    ensure!(value.starts_with('@'), "Profile names must start with `@`");
     ensure!(
         value[1..]
             .chars()

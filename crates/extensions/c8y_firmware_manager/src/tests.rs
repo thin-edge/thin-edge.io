@@ -1,7 +1,7 @@
 use super::*;
 use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_http_proxy::credentials::JwtRequest;
+use c8y_http_proxy::credentials::AuthRequest;
 use serde_json::json;
 use sha256::digest;
 use std::io;
@@ -17,7 +17,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::Auth;
 use tedge_api::DownloadError;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_mqtt_ext::Topic;
@@ -274,7 +273,7 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
         spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false).await?;
 
     let c8y_download_url = format!("http://{C8Y_HOST}/file/end/point");
-    let token = "token";
+    let auth_header_value = "Bearer token";
 
     // Publish firmware update operation to child device.
     let c8y_firmware_update_msg = MqttMessage::new(
@@ -288,7 +287,9 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
     assert!(jwt_request.is_some());
 
     // Return JWT token.
-    jwt_message_box.send(Ok(token.to_string())).await?;
+    jwt_message_box
+        .send(Ok(auth_header_value.to_string()))
+        .await?;
 
     // Assert firmware download request.
     let (_id, download_request) = downloader_message_box.recv().await.unwrap();
@@ -297,10 +298,7 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
         download_request.file_path,
         ttd.path().join("cache").join(digest(c8y_download_url))
     );
-    assert_eq!(
-        download_request.auth,
-        Some(Auth::Bearer(String::from(token)))
-    );
+    assert_eq!(download_request.auth, Some(auth_header_value.into()));
 
     Ok(())
 }
@@ -622,7 +620,7 @@ async fn spawn_firmware_manager(
     (
         JoinHandle<Result<(), RuntimeError>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
-        TimedMessageBox<FakeServerBox<JwtRequest, JwtResult>>,
+        TimedMessageBox<FakeServerBox<AuthRequest, AuthResult>>,
         TimedMessageBox<FakeServerBox<IdDownloadRequest, IdDownloadResult>>,
     ),
     DynError,
@@ -649,7 +647,7 @@ async fn spawn_firmware_manager(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
-    let mut jwt_builder: FakeServerBoxBuilder<JwtRequest, JwtResult> = FakeServerBox::builder();
+    let mut jwt_builder: FakeServerBoxBuilder<AuthRequest, AuthResult> = FakeServerBox::builder();
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBox::builder();
 
