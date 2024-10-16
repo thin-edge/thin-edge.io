@@ -199,10 +199,7 @@ impl<T> MultiReader<T> {
     pub fn keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
         match self {
             Self::Single { .. } => itertools::Either::Left(std::iter::once(None)),
-            Self::Multi { map, .. } => {
-                // itertools::Either::Right(map.keys().map(|k| k.0.as_str()).map(Some))
-                itertools::Either::Right(map.keys().map(Some))
-            }
+            Self::Multi { map, .. } => itertools::Either::Right(map.keys().map(Some)),
         }
     }
 
