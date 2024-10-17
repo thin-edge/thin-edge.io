@@ -1,6 +1,6 @@
-use crate::credentials::JwtRequest;
-use crate::credentials::JwtResult;
-use crate::credentials::JwtRetriever;
+use crate::credentials::AuthRequest;
+use crate::credentials::AuthResult;
+use crate::credentials::AuthRetriever;
 use crate::messages::C8YConnectionError;
 use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
@@ -22,7 +22,6 @@ use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::OffsetDateTime;
-use download::Auth;
 use download::DownloadInfo;
 use download::Downloader;
 use http::status::StatusCode;
@@ -63,14 +62,14 @@ pub struct C8YHttpProxyMessageBox {
     /// Connection to an HTTP actor
     pub(crate) http: ClientMessageBox<HttpRequest, HttpResult>,
 
-    /// Connection to a JWT token retriever
-    pub(crate) jwt: JwtRetriever,
+    /// Connection to an HTTP auth header value retriever
+    pub(crate) auth: AuthRetriever,
 }
 
 pub type C8YRestRequestEnvelope = RequestEnvelope<C8YRestRequest, C8YRestResult>;
 
-fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestEnvelope, HttpResult, JwtResult] : Debug);
-fan_in_message_type!(C8YHttpProxyOutput[HttpRequest, JwtRequest] : Debug);
+fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestEnvelope, HttpResult, AuthResult] : Debug);
+fan_in_message_type!(C8YHttpProxyOutput[HttpRequest, AuthRequest] : Debug);
 
 #[async_trait]
 impl Actor for C8YHttpProxyActor {
@@ -88,13 +87,13 @@ impl Actor for C8YHttpProxyActor {
         {
             let result = match request {
                 C8YRestRequest::GetJwtToken(_) => self
-                    .get_and_set_jwt_token()
+                    .get_and_set_auth_header_value()
                     .await
                     .map(|response| response.into()),
 
                 C8YRestRequest::GetFreshJwtToken(_) => {
                     self.end_point.token = None;
-                    self.get_and_set_jwt_token()
+                    self.get_and_set_auth_header_value()
                         .await
                         .map(|response| response.into())
                 }
@@ -207,7 +206,7 @@ impl C8YHttpProxyActor {
         loop {
             attempt += 1;
             let request = HttpRequestBuilder::get(&url_get_id)
-                .bearer_auth(self.end_point.token.clone().unwrap_or_default())
+                .auth(self.end_point.token.clone().unwrap_or_default())
                 .build()?;
             let endpoint = request.uri().path().to_owned();
             let method = request.method().to_owned();
@@ -265,7 +264,7 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .bearer_auth(self.end_point.token.clone().unwrap_or_default())
+            .auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
         let endpoint = request.uri().path().to_owned();
         let method = request.method().to_owned();
@@ -296,7 +295,7 @@ impl C8YHttpProxyActor {
 
     async fn get_fresh_token(&mut self) -> Result<String, C8YRestError> {
         self.end_point.token = None;
-        self.get_and_set_jwt_token().await
+        self.get_and_set_auth_header_value().await
     }
 
     async fn try_request_with_fresh_token<
@@ -311,7 +310,7 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .bearer_auth(self.end_point.token.clone().unwrap_or_default())
+            .auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
         // retry the request
         Ok(self.peers.http.await_response(request).await?)
@@ -330,7 +329,7 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .bearer_auth(self.end_point.token.clone().unwrap_or_default())
+            .auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
         Ok(self.peers.http.await_response(request).await?)
     }
@@ -486,11 +485,11 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn get_and_set_jwt_token(&mut self) -> Result<String, C8YRestError> {
+    async fn get_and_set_auth_header_value(&mut self) -> Result<String, C8YRestError> {
         match self.end_point.token.clone() {
             Some(token) => Ok(token),
             None => {
-                if let Ok(token) = self.peers.jwt.await_response(()).await? {
+                if let Ok(token) = self.peers.auth.await_response(()).await? {
                     self.end_point.token = Some(token.clone());
                     Ok(token)
                 } else {
@@ -508,8 +507,8 @@ impl C8YHttpProxyActor {
             .maybe_tenant_url(download_info.url())
             .is_some()
         {
-            let token = self.get_and_set_jwt_token().await?;
-            download_info.auth = Some(Auth::new_bearer(token.as_str()));
+            let header_value = self.get_and_set_auth_header_value().await?;
+            download_info.auth = Some(header_value);
         }
 
         info!(target: self.name(), "Downloading from: {:?}", download_info.url());

@@ -10,8 +10,8 @@ mod tests;
 
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
-use c8y_http_proxy::credentials::JwtResult;
-use c8y_http_proxy::credentials::JwtRetriever;
+use c8y_http_proxy::credentials::AuthResult;
+use c8y_http_proxy::credentials::AuthRetriever;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -39,7 +39,7 @@ pub struct FirmwareManagerBuilder {
     config: FirmwareManagerConfig,
     input_receiver: LoggingReceiver<FirmwareInput>,
     mqtt_publisher: DynSender<MqttMessage>,
-    jwt_retriever: JwtRetriever,
+    jwt_retriever: AuthRetriever,
     download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     progress_sender: DynSender<OperationOutcome>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -49,7 +49,7 @@ impl FirmwareManagerBuilder {
     pub fn try_new(
         config: FirmwareManagerConfig,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
-        jwt_actor: &mut impl Service<(), JwtResult>,
+        jwt_actor: &mut impl Service<(), AuthResult>,
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<FirmwareManagerBuilder, FileError> {
         Self::init(&config.data_dir)?;
@@ -65,7 +65,7 @@ impl FirmwareManagerBuilder {
 
         mqtt_actor.connect_sink(Self::subscriptions(&config.c8y_prefix), &mqtt_sender);
         let mqtt_publisher = mqtt_actor.get_sender();
-        let jwt_retriever = JwtRetriever::new(jwt_actor);
+        let jwt_retriever = AuthRetriever::new(jwt_actor);
         let download_sender = ClientMessageBox::new(downloader_actor);
         let progress_sender = input_sender.into();
         Ok(Self {
