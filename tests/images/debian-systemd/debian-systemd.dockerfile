@@ -20,17 +20,24 @@ RUN apt-get -y update \
     net-tools \
     # json tools (for tests)
     jq \
-    jo
+    jo \
+    # mosquitto (default version used by Debian, see below for more details)
+    mosquitto \
+    mosquitto-clients
 
+# Note: Avoid using mosquitto 2.0.18 due to a session persistence bug when using `per_listener_settings true
+# Only comment out the custom install logic to make it easier to re-enable once the bug is resolved
+# See https://github.com/thin-edge/thin-edge.io/issues/3185 for more details
 # Install more recent version of mosquitto >= 2.0.18 from debian backports to avoid mosquitto following bugs:
 # The mosquitto repo can't be used as it does not included builds for arm64/aarch64 (only amd64 and armhf)
 # * https://github.com/eclipse/mosquitto/issues/2604 (2.0.11)
 # * https://github.com/eclipse/mosquitto/issues/2634 (2.0.15)
-RUN sh -c "echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/debian-bookworm-backports.list" \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install -t bookworm-backports \
-        mosquitto \
-        mosquitto-clients
+# * https://github.com/eclipse/mosquitto/issues/2618 (2.0.18)
+#RUN sh -c "echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/debian-bookworm-backports.list" \
+#    && apt-get update \
+#    && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install -t bookworm-backports \
+#        mosquitto \
+#        mosquitto-clients
 
 # Remove unnecessary systemd services
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
