@@ -19,6 +19,7 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
 use tedge_api::service_health_topic;
+use tedge_api::workflow::GenericCommandState;
 use tedge_config::AutoLogUpload;
 use tedge_config::ConfigNotSet;
 use tedge_config::MultiError;
@@ -44,6 +45,7 @@ pub struct C8yMapperConfig {
     pub c8y_mqtt: String,
     pub tedge_http_host: Arc<str>,
     pub topics: TopicFilter,
+    pub operation_topics: TopicFilter,
     pub capabilities: Capabilities,
     pub auth_proxy_addr: Arc<str>,
     pub auth_proxy_port: u16,
@@ -86,6 +88,7 @@ impl C8yMapperConfig {
         c8y_mqtt: String,
         tedge_http_host: Arc<str>,
         topics: TopicFilter,
+        operation_topics: TopicFilter,
         capabilities: Capabilities,
         auth_proxy_addr: Arc<str>,
         auth_proxy_port: u16,
@@ -125,6 +128,7 @@ impl C8yMapperConfig {
             c8y_mqtt,
             tedge_http_host,
             topics,
+            operation_topics,
             capabilities,
             auth_proxy_addr,
             auth_proxy_port,
@@ -190,8 +194,8 @@ impl C8yMapperConfig {
         };
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
 
-        let mut topics =
-            Self::default_internal_topic_filter(config_dir.as_std_path(), &c8y_prefix)?;
+        let mut topics = Self::default_internal_topic_filter(&c8y_prefix)?;
+
         let enable_auto_register = c8y_config.entity_store.auto_register;
         let clean_start = c8y_config.entity_store.clean_start;
 
@@ -225,6 +229,14 @@ impl C8yMapperConfig {
             }
         }
 
+        // Add operation topics
+        let operation_topics =
+            Self::get_topics_from_operations(&c8y_prefix, config_dir.as_std_path())?;
+
+        topics.add_all(operation_topics.clone());
+
+        topics.remove_overlapping_patterns();
+
         let bridge_in_mapper = tedge_config.mqtt.bridge.built_in;
 
         Ok(C8yMapperConfig::new(
@@ -240,6 +252,7 @@ impl C8yMapperConfig {
             c8y_host,
             tedge_http_host,
             topics,
+            operation_topics,
             capabilities,
             auth_proxy_addr,
             auth_proxy_port,
@@ -258,10 +271,9 @@ impl C8yMapperConfig {
     }
 
     pub fn default_internal_topic_filter(
-        config_dir: &Path,
         prefix: &TopicPrefix,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
-        let mut topic_filter: TopicFilter = vec![
+        let topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.with_prefix(prefix).as_str(),
             &C8yDeviceControlTopic::name(prefix),
@@ -269,14 +281,57 @@ impl C8yMapperConfig {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
+        Ok(topic_filter)
+    }
+
+    pub fn get_topics_from_operations(
+        prefix: &TopicPrefix,
+        config_dir: &Path,
+    ) -> Result<TopicFilter, C8yMapperConfigError> {
+        let mut topic_filter = TopicFilter::empty();
+
         if let Ok(operations) = Operations::try_new(
             config_dir
                 .join(SUPPORTED_OPERATIONS_DIRECTORY)
                 .join(C8Y_CLOUD),
         ) {
-            for topic in operations.topics_for_operations() {
+            // get topics from operations that contains `on command` field in their file and ignore those that come via smartREST
+            let topics = operations.topics_for_operations();
+
+            for topic in topics {
+                // if topic contains a template for the root prefix, replace that template with mapper prefix.
+                // else if topic contains a template not for the root prefix, reject that topic when appending the topic filter
+                // else if no template is present, simply add that topic to the topic filter (assuming that provided pattern is valid)
+                let topic = topic
+                    .split_inclusive("}")
+                    .flat_map(|s| match s.find("${") {
+                        None => vec![s],
+                        Some(i) => {
+                            let (prefix, template) = s.split_at(i);
+                            vec![prefix, template]
+                        }
+                    })
+                    .map(|s| {
+                        if let Some(template) = GenericCommandState::extract_path(s) {
+                            if template.eq(".topic.root_prefix") {
+                                prefix.as_str()
+                            } else {
+                                warn!("The custom topic '{topic}' is invalid and ignored.");
+                                s
+                            }
+                        } else {
+                            s
+                        }
+                    })
+                    .collect::<String>();
+
                 topic_filter.add(&topic)?;
             }
+        }
+
+        // add default topic used for operations in case it was not directly provided
+        if !topic_filter.accept_topic(&C8yDeviceControlTopic::topic(prefix)) {
+            topic_filter.add(C8yDeviceControlTopic::name(prefix).as_str())?;
         }
 
         Ok(topic_filter)

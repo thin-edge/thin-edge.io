@@ -15,7 +15,6 @@ use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
-use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
 use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
@@ -716,16 +715,25 @@ impl CumulocityConverter {
                 }
             }
             C8yDeviceControlOperation::Custom => {
-                let json_over_mqtt_topic = C8yDeviceControlTopic::name(&self.config.c8y_prefix);
-                let handlers = self.operations.filter_by_topic(&json_over_mqtt_topic);
+                let custom_operation_topics = self.config.operation_topics.patterns().clone();
+
+                let state = GenericCommandState::from_command_message(message).map_err(|e| {
+                    CumulocityMapperError::InvalidJsonMessage {
+                        err_msg: e.to_string(),
+                    }
+                })?;
+
+                let handlers = self
+                    .operations
+                    .filter_by_topics(custom_operation_topics, &state);
 
                 if handlers.is_empty() {
-                    info!("No matched custom operation handler is found for the topic {json_over_mqtt_topic}. The operation '{operation_id}' (ID) is ignored.");
+                    info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
                 }
 
                 for (on_fragment, custom_handler) in &handlers {
                     if extras.contains_key(on_fragment) {
-                        self.execute_custom_operation(custom_handler, message, &operation_id)
+                        self.execute_custom_operation(custom_handler, &state, &operation_id)
                             .await?;
                         break;
                     }
@@ -741,15 +749,9 @@ impl CumulocityConverter {
     async fn execute_custom_operation(
         &self,
         custom_handler: &Operation,
-        message: &MqttMessage,
+        state: &GenericCommandState,
         operation_id: &str,
     ) -> Result<(), CumulocityMapperError> {
-        let state = GenericCommandState::from_command_message(message).map_err(|e| {
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: format!("Invalid JSON message, {e}. Message: {message:?}"),
-            }
-        })?;
         let command_value = custom_handler.command().ok_or(
             CumulocityMapperError::JsonCustomOperationHandlerError {
                 operation: custom_handler.name.clone(),
@@ -1349,7 +1351,7 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic if C8yDeviceControlTopic::accept(topic, &self.config.c8y_prefix) => {
+            topic if self.config.operation_topics.accept_topic(topic) => {
                 self.parse_c8y_devicecontrol_topic(message).await
             }
             topic if topic.name.starts_with(self.config.c8y_prefix.as_str()) => {
@@ -3187,11 +3189,13 @@ pub(crate) mod tests {
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
-        let topics = C8yMapperConfig::default_internal_topic_filter(
-            &tmp_dir.to_path_buf(),
-            &"c8y".try_into().unwrap(),
-        )
-        .unwrap();
+        let mut topics =
+            C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
+        let operation_topics =
+            C8yMapperConfig::get_topics_from_operations(&"c8y".try_into().unwrap(), tmp_dir.path())
+                .unwrap();
+        topics.add_all(operation_topics.clone());
+        topics.remove_overlapping_patterns();
 
         C8yMapperConfig::new(
             tmp_dir.utf8_path().into(),
@@ -3206,6 +3210,7 @@ pub(crate) mod tests {
             c8y_host,
             tedge_http_host,
             topics,
+            operation_topics,
             Capabilities::default(),
             auth_proxy_addr,
             auth_proxy_port,

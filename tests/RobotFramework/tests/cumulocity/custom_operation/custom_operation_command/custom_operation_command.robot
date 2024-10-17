@@ -39,6 +39,20 @@ Run shell custom operation for main device and do not publish the status
     ...    minimum=0
     ...    maximum=0
 
+Run shell custom operation for main device with custom topic
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_3    /etc/tedge/operations/c8y/c8y_Command
+    Restart Service    tedge-mapper-c8y
+    ${prefix}=    Execute Command    tedge config get c8y.bridge.topic_prefix    strip=True
+
+    Execute Command
+    ...    tedge mqtt pub --retain '${prefix}/custom/topic/one' '{"status":"PENDING","id":"1234","c8y_Command":{"text":"echo helloworld"},"externalSource":{"externalId":"${DEVICE_SN}","type":"c8y_Serial"}}'
+
+    Should Have MQTT Messages
+    ...    c8y/s/us
+    ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld\n\\")
+    ...    minimum=2
+    ...    maximum=2
+
 
 *** Keywords ***
 Custom Setup
