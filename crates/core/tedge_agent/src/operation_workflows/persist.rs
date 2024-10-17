@@ -41,10 +41,10 @@ pub struct WorkflowRepository {
     //
     // For a fresh new workflow definition, this points to the user-defined file
     // When the workflow definition is in use, this points to a copy in the state directory.
-    definitions: HashMap<WorkflowVersion, (OperationName, Utf8PathBuf)>,
+    definitions: HashMap<OperationName, (WorkflowVersion, Utf8PathBuf)>,
     in_use_copies: HashMap<OperationName, WorkflowVersion>,
 
-    // The in-memory representation of all the workflows (builtin, user-defined, i,n-use).
+    // The in-memory representation of all the workflows (builtin, user-defined, in-use).
     workflows: WorkflowSupervisor,
 }
 
@@ -132,7 +132,7 @@ impl WorkflowRepository {
         match source {
             WorkflowSource::UserDefined => {
                 self.definitions
-                    .insert(version.clone(), (operation_name.clone(), definition));
+                    .insert(operation_name.clone(), (version.clone(), definition));
             }
             WorkflowSource::InUseCopy => {
                 self.in_use_copies
@@ -167,7 +167,10 @@ impl WorkflowRepository {
         file_update: FsWatchEvent,
     ) -> Option<MqttMessage> {
         match file_update {
-            FsWatchEvent::Modified(path) | FsWatchEvent::FileCreated(path) => {
+            // FsWatchEvent returns a duplicated Modified events along FileCreated events.
+            FsWatchEvent::FileCreated(_) => {}
+
+            FsWatchEvent::Modified(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
                         // Checking the path exists as FsWatchEvent returns misleading Modified events along FileDeleted events.
@@ -240,8 +243,8 @@ impl WorkflowRepository {
             .definitions
             .iter()
             .find(|(_, (_, p))| p == removed_path)
-            .map(|(v, (n, _))| (n.clone(), v.clone()))?;
-        self.definitions.remove(&removed_version);
+            .map(|(n, (v, _))| (n.clone(), v.clone()))?;
+        self.definitions.remove(&operation);
         let deprecated = self
             .workflows
             .unregister_custom_workflow(&operation, &removed_version);
@@ -266,7 +269,7 @@ impl WorkflowRepository {
                 return;
             }
         };
-        if let Some((_, source)) = self.definitions.get(version) {
+        if let Some((_, source)) = self.definitions.get(operation) {
             let target = self.state_dir.join(operation).with_extension("toml");
             if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
                 error!("Fail to persist a copy of {source} as {target}: {err}");
@@ -275,6 +278,41 @@ impl WorkflowRepository {
                     .insert(operation.clone(), version.clone());
             }
         }
+    }
+
+    async fn load_latest_version(&mut self, operation: &OperationName) {
+        if let Some((path, version, workflow)) = self.get_latest_version(operation).await {
+            if let Err(err) = self.load_operation_workflow(
+                WorkflowSource::UserDefined,
+                path.clone(),
+                workflow,
+                version,
+            ) {
+                error!("Fail to reload the latest version of the {operation} operation from {path}: {err:?}");
+            }
+        }
+    }
+
+    async fn get_latest_version(
+        &mut self,
+        operation: &OperationName,
+    ) -> Option<(Utf8PathBuf, WorkflowVersion, OperationWorkflow)> {
+        if let Some((version, path)) = self.definitions.get(operation) {
+            if let Ok((workflow, latest)) = read_operation_workflow(path).await {
+                if version != &latest {
+                    return Some((path.to_owned(), latest, workflow));
+                };
+            };
+        } else {
+            let path = self
+                .custom_workflows_dir
+                .join(operation)
+                .with_extension("toml");
+            if let Ok((workflow, new)) = read_operation_workflow(&path).await {
+                return Some((path, new, workflow));
+            };
+        }
+        None
     }
 
     pub fn load_pending_commands(&mut self, commands: CommandBoard) -> Vec<GenericCommandState> {
@@ -323,6 +361,11 @@ impl WorkflowRepository {
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
+        if command_state.is_init() {
+            // A new command instance must use the latest on-disk version of the operation workflow
+            self.load_latest_version(&operation.to_string()).await;
+        }
+
         match self
             .workflows
             .apply_external_update(operation, command_state)?

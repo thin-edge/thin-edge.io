@@ -105,7 +105,7 @@ Trigger Workflow Update From A Main Workflow
     ${capability}    Should Have MQTT Messages    te/device/main///cmd/update-user-command
     Should Be Equal    ${capability[0]}    {}
     Execute Command
-    ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-6 '{"status":"init"}'
+    ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-6 '{"status":"init", "version":"v2"}'
     Should Have MQTT Messages
     ...    te/device/main///cmd/update-user-command/dyn-test-6
     ...    message_pattern=.*successful.*
@@ -114,6 +114,26 @@ Trigger Workflow Update From A Main Workflow
     ...    ${workflow_log}
     ...    item="user_command_version":"1370727b2fcd269c91546e36651b9c727897562a5d3cc8e861a1e35f09ec82a6"
     Should Contain    ${workflow_log}    item="user-command":"second-version"
+
+Trigger Workflow Creation From A Main Workflow
+    # Assuming the update-user-command workflow is already installed
+    ThinEdgeIO.File Should Exist    /etc/tedge/operations/update-user-command.toml
+    # Fully disable user-command
+    ${timestamp}    Get Unix Timestamp
+    Execute Command    rm /etc/tedge/operations/user-command.toml
+    Should Have MQTT Messages    te/device/main///cmd/user-command    pattern="^$"    date_from=${timestamp}
+    # Prepare the creation of the user-command from the update-user-command workflow
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v1.toml    /etc/tedge/operations/user-command.toml.v1
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-7 '{"status":"init", "version":"v1"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/update-user-command/dyn-test-7
+    ...    message_pattern=.*successful.*
+    ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-update-user-command-dyn-test-7.log
+    Should Contain
+    ...    ${workflow_log}
+    ...    item="user_command_version":"37d0861e3038b34e8ab2ffe3257dd9372213ed5e17ba352e5028b0bf9762a089"
+    Should Contain    ${workflow_log}    item="user-command":"first-version"
 
 
 *** Keywords ***
