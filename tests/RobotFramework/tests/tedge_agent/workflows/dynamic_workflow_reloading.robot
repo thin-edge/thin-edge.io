@@ -121,8 +121,7 @@ Trigger Workflow Creation From A Main Workflow
     # Fully disable user-command
     ${timestamp}    Get Unix Timestamp
     Execute Command    rm /etc/tedge/operations/user-command.toml
-    ${capability}    Should Have MQTT Messages    te/device/main///cmd/user-command    date_from=${timestamp}
-    Should Be Empty    ${capability[0]}
+    Should Have MQTT Messages    te/device/main///cmd/user-command    pattern="^$"    date_from=${timestamp}
     # Prepare the creation of the user-command from the update-user-command workflow
     ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v1.toml    /etc/tedge/operations/user-command.toml.v1
     Execute Command
