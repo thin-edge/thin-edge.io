@@ -159,7 +159,7 @@ impl WorkflowRepository {
 
     /// Update the workflow definitions after some on-disk changes
     ///
-    /// Return the operation capability deregistration messag when the operation has been deprecated.
+    /// Return the operation capability deregistration message when the operation has been deprecated.
     pub async fn update_operation_workflows(
         &mut self,
         schema: &MqttSchema,
