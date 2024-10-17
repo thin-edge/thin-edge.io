@@ -281,7 +281,7 @@ impl WorkflowRepository {
     }
 
     async fn load_latest_version(&mut self, operation: &OperationName) {
-        if let Some((path, version, workflow)) = self.get_lastest_version(operation).await {
+        if let Some((path, version, workflow)) = self.get_latest_version(operation).await {
             if let Err(err) = self.load_operation_workflow(
                 WorkflowSource::UserDefined,
                 path.clone(),
@@ -293,7 +293,7 @@ impl WorkflowRepository {
         }
     }
 
-    async fn get_lastest_version(
+    async fn get_latest_version(
         &mut self,
         operation: &OperationName,
     ) -> Option<(Utf8PathBuf, WorkflowVersion, OperationWorkflow)> {
