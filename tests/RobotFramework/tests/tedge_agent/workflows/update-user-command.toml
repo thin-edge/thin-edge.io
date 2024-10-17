@@ -5,11 +5,7 @@ action = "proceed"
 on_success = "update"
 
 [update]
-script = "mv /etc/tedge/operations/user-command.toml.v2 /etc/tedge/operations/user-command.toml"
-on_success = "wait"
-
-[wait]
-script = "sleep 1"
+script = "mv /etc/tedge/operations/user-command.toml.${.payload.version} /etc/tedge/operations/user-command.toml"
 on_success = "execute"
 
 [execute]
