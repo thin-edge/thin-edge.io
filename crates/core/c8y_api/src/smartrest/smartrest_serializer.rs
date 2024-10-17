@@ -8,6 +8,8 @@ use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareModule;
 use tracing::warn;
 
+use super::message::SmartrestPayload;
+
 pub type SmartRest = String;
 
 pub fn request_pending_operations() -> &'static str {
@@ -96,6 +98,9 @@ fn succeed_static_operation(
 /// rules will be applied. For example, `a,field "with" quotes` will be converted to
 /// `a,"field ""with"" quotes"` before being appended to the output of this function.
 ///
+/// If the message size turns out to be bigger than maximum cumulocity message size, it will be truncated to fit in the
+/// limit.
+///
 /// # Errors
 /// This will return an error if the payload is a CSV with multiple records, or an empty CSV.
 pub fn succeed_operation(
@@ -103,12 +108,60 @@ pub fn succeed_operation(
     operation: &str,
     reason: impl Into<TextOrCsv>,
 ) -> Result<String, SmartRestSerializerError> {
-    let mut wtr = csv::Writer::from_writer(vec![]);
-    // Serialization can fail for CSV, but not for text
-    wtr.serialize((template_id, operation, reason.into()))?;
-    let mut output = wtr.into_inner().unwrap();
-    output.pop();
-    Ok(String::from_utf8(output)?)
+    let reason: TextOrCsv = reason.into();
+
+    let result = {
+        let mut wtr = csv::Writer::from_writer(vec![]);
+        wtr.serialize((template_id, operation, &reason))?;
+        let mut vec = wtr.into_inner().unwrap();
+        // remove newline character
+        vec.pop();
+        String::from_utf8(vec)?
+    };
+
+    if result.len() <= super::message::MAX_PAYLOAD_LIMIT_IN_BYTES {
+        return Ok(result);
+    }
+
+    // payload too big, need to trim
+    let prefix = super::csv::fields_to_csv_string(&[template_id, operation]);
+
+    let trim_indicator = "...<trimmed>";
+
+    // 3 extra characters: 1 for comma, 2 for surrounding quotes
+    let mut max_result_limit =
+        super::message::MAX_PAYLOAD_LIMIT_IN_BYTES - prefix.len() - trim_indicator.len() - 3;
+
+    // escaping can add additional characters so that the field will be too large to fit in the
+    // message; if so we need to trim it after escaping, making sure we don't screw up bespoke
+    // smartrest escape sequences
+    let result = {
+        let mut wtr = csv::WriterBuilder::new()
+            .quote_style(csv::QuoteStyle::Always)
+            .from_writer(vec![]);
+        wtr.serialize(reason)?;
+        let mut vec = wtr.into_inner().unwrap();
+
+        // remove newline character
+        vec.pop();
+
+        // remove outer quotes, added back after trimming
+        let reason = std::str::from_utf8(&vec).unwrap();
+        let reason = reason.strip_prefix('"').unwrap_or(reason);
+        let reason = reason.strip_suffix('"').unwrap_or(reason);
+
+        // if we'd cut across an escaped " character, move trim point 1 char back to omit it
+        if &reason[max_result_limit - 1..=max_result_limit] == r#""""# {
+            max_result_limit -= 1;
+        }
+        let trimmed_reason = &reason[..max_result_limit];
+
+        format!("{prefix},\"{trimmed_reason}{trim_indicator}\"")
+    };
+
+    assert!(result.len() <= super::message::MAX_PAYLOAD_LIMIT_IN_BYTES);
+
+    Ok(result)
 }
 
 pub fn succeed_operation_with_name(
@@ -150,8 +203,9 @@ impl From<CumulocitySupportedOperations> for &'static str {
     }
 }
 
-pub fn declare_supported_operations(ops: &[&str]) -> String {
-    format!("114,{}", fields_to_csv_string(ops))
+pub fn declare_supported_operations(ops: &[&str]) -> SmartrestPayload {
+    SmartrestPayload::from_fields(&["114", &fields_to_csv_string(ops)])
+        .expect("TODO: ops list can increase payload over limit")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -336,15 +390,21 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
+
     use super::*;
     use tedge_api::commands::SoftwareListCommandPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::Jsonify;
+    use test_case::test_case;
 
     #[test]
     fn serialize_smartrest_supported_operations() {
         let smartrest = declare_supported_operations(&["c8y_SoftwareUpdate", "c8y_LogfileRequest"]);
-        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest");
+        assert_eq!(
+            smartrest.as_str(),
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest"
+        );
     }
 
     #[test]
@@ -563,5 +623,38 @@ mod tests {
 
         let advanced_sw_list = get_advanced_software_list_payloads(command, 2);
         assert_eq!(advanced_sw_list[0], "140,,,,");
+    }
+
+    /// Make sure that `reason` field is trimmed correctly, even in presence of double quote
+    /// sequences.
+    #[test_case(MAX_PAYLOAD_LIMIT_IN_BYTES - 1, 2; "skips_final_quote_because_wont_fit")]
+    #[test_case(MAX_PAYLOAD_LIMIT_IN_BYTES - 2, 4; "preserves_final_quote_because_fits")]
+    fn succeed_operation_trims_reason_field_3171(message_len: usize, expected_num_quotes: usize) {
+        let prefix_len = "503,c8y_Command,".len();
+
+        let mut reason: String = "a".repeat(message_len - prefix_len - 2);
+        reason.push('"');
+
+        let smartrest = succeed_operation("503", "c8y_Command", reason).unwrap();
+
+        // assert message is under size limit and has expected structure
+        assert!(
+            smartrest.len() <= MAX_PAYLOAD_LIMIT_IN_BYTES,
+            "bigger than message size limit: {} > {}",
+            smartrest.len(),
+            MAX_PAYLOAD_LIMIT_IN_BYTES
+        );
+        let mut fields = smartrest.split(',');
+        assert_eq!(fields.next().unwrap(), "503");
+        assert_eq!(fields.next().unwrap(), "c8y_Command");
+
+        // assert trimming preserves valid double quotes
+        let reason = fields.next().unwrap();
+        assert!(reason.starts_with('"'));
+        assert!(reason.ends_with('"'));
+
+        let num_quotes = reason.chars().filter(|c| *c == '"').count();
+
+        assert_eq!(num_quotes, expected_num_quotes);
     }
 }

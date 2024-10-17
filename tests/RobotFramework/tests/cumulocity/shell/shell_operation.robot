@@ -29,6 +29,13 @@ Failed shell command
     ${operation}=    Cumulocity.Execute Shell Command    exit 1
     Operation Should Be FAILED    ${operation}
 
+Shell command succeeds if output is too large
+    [Documentation]    Output should be trimmed by c8y mapper.
+    ${operation}=    Cumulocity.Execute Shell Command    yes 'hello"' | head -n 100000
+    Operation Should Be SUCCESSFUL    ${operation}
+    ${result}=    Set Variable    ${operation.to_json()["c8y_Command"]["result"]}
+    Should End With    ${result}    ...<trimmed>
+
 
 *** Keywords ***
 Custom Setup
