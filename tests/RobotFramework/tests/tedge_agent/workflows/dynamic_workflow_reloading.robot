@@ -99,9 +99,11 @@ Trigger Workflow Update From A Main Workflow
     # Enable user-command v1 and prepare v2
     ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v1.toml    /etc/tedge/operations/user-command.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v2.toml    /etc/tedge/operations/user-command.toml.v2
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/update-user-command.toml    /etc/tedge/operations/update-user-command.toml
-        ${capability}    Should Have MQTT Messages    te/device/main///cmd/update-user-command
-        Should Be Equal    ${capability[0]}    {}
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/update-user-command.toml
+    ...    /etc/tedge/operations/update-user-command.toml
+    ${capability}    Should Have MQTT Messages    te/device/main///cmd/update-user-command
+    Should Be Equal    ${capability[0]}    {}
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-6 '{"status":"init"}'
     Should Have MQTT Messages
@@ -112,6 +114,7 @@ Trigger Workflow Update From A Main Workflow
     ...    ${workflow_log}
     ...    item="user_command_version":"1370727b2fcd269c91546e36651b9c727897562a5d3cc8e861a1e35f09ec82a6"
     Should Contain    ${workflow_log}    item="user-command":"second-version"
+
 
 *** Keywords ***
 Custom Setup
