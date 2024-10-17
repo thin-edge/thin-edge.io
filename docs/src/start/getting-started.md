@@ -39,6 +39,8 @@ To follow this guide, you only need the following:
     sudo apt-get update && sudo apt-get upgrade
     ```
 
+- A network which allows communication to the [following ports](../references/supported-platforms.md#network_configuration) for each cloud URL that you plan on using
+
 ## Steps
 
 This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity IoT. The last three are optional but needed to get a good overview of the capabilities of %%te%%.
