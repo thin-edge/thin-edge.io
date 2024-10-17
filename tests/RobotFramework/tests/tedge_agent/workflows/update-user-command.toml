@@ -1,0 +1,29 @@
+operation = "update-user-command"
+
+[init]
+action = "proceed"
+on_success = "update"
+
+[update]
+script = "mv /etc/tedge/operations/user-command.toml.v2 /etc/tedge/operations/user-command.toml"
+on_success = "wait"
+
+[wait]
+script = "sleep 1"
+on_success = "execute"
+
+[execute]
+operation = "user-command"
+on_exec = "executing"
+
+[executing]
+action = "await-operation-completion"
+on_success = "successful"
+output.user_command = "${.payload.user_command}"
+output.user_command_version = "${.payload.@version}"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

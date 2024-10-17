@@ -52,6 +52,25 @@ Remove User-Defined Operation
     ${capability}    Should Have MQTT Messages    te/device/main///cmd/user-command    date_from=${timestamp}
     Should Be Empty    ${capability[0]}
 
+Updating A Workflow Twice Before Using It
+    ThinEdgeIO.File Should Not Exist    /etc/tedge/operations/user-command.toml
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v1.toml    /etc/tedge/operations/user-command.toml
+    ${capability}    Should Have MQTT Messages    te/device/main///cmd/user-command
+    Should Be Equal    ${capability[0]}    {}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v2.toml    /etc/tedge/operations/user-command.toml
+    ${capability}    Should Have MQTT Messages    te/device/main///cmd/user-command
+    Should Be Equal    ${capability[0]}    {}
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/user-command/dyn-test-3 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/user-command/dyn-test-3
+    ...    message_pattern=.*successful.*
+    ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-user-command-dyn-test-3.log
+    Should Contain
+    ...    ${workflow_log}
+    ...    item="@version":"1370727b2fcd269c91546e36651b9c727897562a5d3cc8e861a1e35f09ec82a6"
+    Should Contain    ${workflow_log}    item="user-command":"second-version"
+
 Override Builtin Operation
     ThinEdgeIO.File Should Not Exist    /etc/tedge/operations/software_list.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/software_list.toml    /etc/tedge/operations/software_list.toml
@@ -76,6 +95,26 @@ Recover Builtin Operation
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-software_list-dyn-test-5.log
     Should Contain    ${workflow_log}    item="@version":"builtin"
 
+Trigger Workflow Update From A Main Workflow
+    # Enable user-command v1 and prepare v2
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v1.toml    /etc/tedge/operations/user-command.toml
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/user-command-v2.toml    /etc/tedge/operations/user-command.toml.v2
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/update-user-command.toml
+    ...    /etc/tedge/operations/update-user-command.toml
+    ${capability}    Should Have MQTT Messages    te/device/main///cmd/update-user-command
+    Should Be Equal    ${capability[0]}    {}
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-6 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/update-user-command/dyn-test-6
+    ...    message_pattern=.*successful.*
+    ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-update-user-command-dyn-test-6.log
+    Should Contain
+    ...    ${workflow_log}
+    ...    item="user_command_version":"1370727b2fcd269c91546e36651b9c727897562a5d3cc8e861a1e35f09ec82a6"
+    Should Contain    ${workflow_log}    item="user-command":"second-version"
+
 
 *** Keywords ***
 Custom Setup
@@ -90,9 +129,13 @@ Custom Test Setup
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/user-command/dyn-test-2 ''
     Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/user-command/dyn-test-3 ''
+    Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/software_list/dyn-test-4 ''
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/software_list/dyn-test-5 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-6 ''
 
 Copy Scripts
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
