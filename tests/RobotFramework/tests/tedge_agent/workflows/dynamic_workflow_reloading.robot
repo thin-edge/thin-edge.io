@@ -135,6 +135,35 @@ Trigger Workflow Creation From A Main Workflow
     ...    item="user_command_version":"37d0861e3038b34e8ab2ffe3257dd9372213ed5e17ba352e5028b0bf9762a089"
     Should Contain    ${workflow_log}    item="user-command":"first-version"
 
+Update Concurrently Running Versions
+    # Trigger a first version of a long running command
+    Update Workflow    ${CURDIR}/long-running-command-v1.toml    long-running-command
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-8 '{"status":"init", "duration":60}'
+
+    # Then a second version of the same long running command
+    Update Workflow    ${CURDIR}/long-running-command-v2.toml    long-running-command
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-9 '{"status":"init", "duration":60}'
+
+    # And a third one
+    Update Workflow    ${CURDIR}/long-running-command-v3.toml    long-running-command
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-10 '{"status":"init", "duration":60}'
+
+    # Force a restart, the point being to check the workflow versions in-use are correctly persisted
+    Restart Service    tedge-agent
+
+    # Check that after restart the 3 workflows are resumed using their original workflow version
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/long-running-command/dyn-test-8
+    ...    message_pattern=.*first-version.*
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/long-running-command/dyn-test-9
+    ...    message_pattern=.*second-version.*
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/long-running-command/dyn-test-10
+    ...    message_pattern=.*third-version.*
 
 *** Keywords ***
 Custom Setup
@@ -156,6 +185,20 @@ Custom Test Setup
     ...    tedge mqtt pub --retain te/device/main///cmd/software_list/dyn-test-5 ''
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-6 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/update-user-command/dyn-test-7 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-8 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-9 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-10 ''
 
 Copy Scripts
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
+
+Update Workflow
+    [Arguments]    ${FILE}    ${OPERATION}
+    ${timestamp}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${FILE}    /etc/tedge/operations/${OPERATION}.toml
+    Should Have MQTT Messages    te/device/main///cmd/${OPERATION}    pattern="^{}$"    date_from=${timestamp}    timeout=60
