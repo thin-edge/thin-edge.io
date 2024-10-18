@@ -17,6 +17,10 @@ Whilst the methodology described on this page can be extended to support other d
 
 ## Setting up your build system
 
+:::info
+The instructions below were tested with the `kirkstone` release. If you want to use a different project version or check the most recent requirements, visit [Official Yocto quick guide](https://docs.yoctoproject.org/brief-yoctoprojectqs/index.html). Make sure you select the proper release, as the instructions may vary for different versions.
+:::
+
 Before being able to build your own image, you need to prepare an environment to run Yocto. Follow the instructions to get your build system setup.
 
 1. Create a Virtual Machine running Ubuntu 20.04 (LTS)
