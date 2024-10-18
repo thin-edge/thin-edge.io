@@ -1,13 +1,15 @@
+use crate::mqtt_topics::Channel;
 use crate::workflow::*;
 use ::log::info;
 use on_disk::OnDiskCommandBoard;
 use serde::Serialize;
+use std::string::ToString;
 
 /// Dispatch actions to operation participants
 #[derive(Default)]
 pub struct WorkflowSupervisor {
     /// The user-defined operation workflow definitions
-    workflows: HashMap<OperationType, OperationWorkflow>,
+    workflows: HashMap<OperationType, WorkflowVersions>,
 
     /// Operation instances under execution
     commands: CommandBoard,
@@ -19,31 +21,57 @@ impl WorkflowSupervisor {
         &mut self,
         operation: OperationType,
     ) -> Result<(), WorkflowRegistrationError> {
-        self.register_custom_workflow(OperationWorkflow::built_in(operation))
+        self.register_custom_workflow(
+            WorkflowSource::BuiltIn,
+            OperationWorkflow::built_in(operation),
+            "builtin".to_string(),
+        )
     }
 
     /// Register a user-defined workflow
     pub fn register_custom_workflow(
         &mut self,
+        source: WorkflowSource,
         workflow: OperationWorkflow,
+        version: WorkflowVersion,
     ) -> Result<(), WorkflowRegistrationError> {
-        if let Some(previous) = self.workflows.get(&workflow.operation) {
-            if previous.built_in == workflow.built_in {
-                return Err(WorkflowRegistrationError::DuplicatedWorkflow {
-                    operation: workflow.operation.to_string(),
-                });
-            }
-
-            info!(
-                "The built-in {} operation has been customized",
-                workflow.operation
-            );
-            if workflow.built_in {
-                return Ok(());
-            }
+        let operation = workflow.operation.clone();
+        if let Some(versions) = self.workflows.get_mut(&operation) {
+            versions.add(source, version, workflow);
+        } else {
+            let versions = WorkflowVersions::new(source, version, workflow);
+            self.workflows.insert(operation, versions);
         }
-        self.workflows.insert(workflow.operation.clone(), workflow);
         Ok(())
+    }
+
+    /// Un-register a user-defined workflow
+    ///
+    /// Return None is this was the last version for that operation.
+    /// Return Some(BuiltIn) is there is a builtin definition
+    /// Return Some(InUseCopy) if the workflow has been deprecated but there is still a running command.
+    pub fn unregister_custom_workflow(
+        &mut self,
+        operation: &OperationName,
+        version: &WorkflowVersion,
+    ) -> Option<WorkflowSource> {
+        let operation = OperationType::from(operation.as_str());
+        if let Some(versions) = self.workflows.get_mut(&operation) {
+            versions.remove(version);
+        }
+
+        let current_source = match self.workflows.get(&operation) {
+            None => None,
+            Some(version) if version.is_empty() => None,
+            Some(version) if version.is_builtin() => Some(BuiltIn),
+            Some(_) => Some(InUseCopy),
+        };
+
+        if current_source.is_none() {
+            self.workflows.remove(&operation);
+        }
+
+        current_source
     }
 
     /// The set of pending commands
@@ -67,12 +95,45 @@ impl WorkflowSupervisor {
         target: &EntityTopicId,
     ) -> Vec<MqttMessage> {
         // To ease testing the capability messages are emitted in a deterministic order
-        let mut operations = self.workflows.values().collect::<Vec<_>>();
+        let mut operations = self
+            .workflows
+            .values()
+            .filter_map(|versions| versions.current_workflow())
+            .collect::<Vec<_>>();
         operations.sort_by(|&a, &b| a.operation.to_string().cmp(&b.operation.to_string()));
         operations
             .iter()
             .filter_map(|workflow| workflow.capability_message(schema, target))
             .collect()
+    }
+
+    pub fn capability_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> Option<MqttMessage> {
+        let operation = OperationType::from(operation.as_str());
+        self.workflows
+            .get(&operation)
+            .and_then(|versions| versions.current_workflow())
+            .and_then(|workflow| workflow.capability_message(schema, target))
+    }
+
+    pub fn deregistration_message(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        operation: &OperationName,
+    ) -> MqttMessage {
+        let operation = OperationType::from(operation.as_str());
+        let topic = schema.topic_for(target, &Channel::CommandMetadata { operation });
+        MqttMessage {
+            topic,
+            payload: "".to_string().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        }
     }
 
     /// Update the state of the command board on reception of a message sent by a peer over MQTT
@@ -83,7 +144,7 @@ impl WorkflowSupervisor {
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
-        if !self.workflows.contains_key(operation) {
+        let Some(workflow_versions) = self.workflows.get_mut(operation) else {
             return Err(WorkflowExecutionError::UnknownOperation {
                 operation: operation.to_string(),
             });
@@ -94,8 +155,15 @@ impl WorkflowSupervisor {
             Ok(Some(command_state))
         } else if command_state.is_init() {
             // This is a new command request
-            self.commands.insert(command_state.clone())?;
-            Ok(Some(command_state))
+            if let Some(current_version) = workflow_versions.use_current_version() {
+                let command_state = command_state.set_workflow_version(current_version);
+                self.commands.insert(command_state.clone())?;
+                Ok(Some(command_state))
+            } else {
+                return Err(WorkflowExecutionError::DeprecatedOperation {
+                    operation: operation.to_string(),
+                });
+            }
         } else {
             // Ignore command updates published over MQTT
             //
@@ -118,11 +186,16 @@ impl WorkflowSupervisor {
             });
         };
 
+        let Some(version) = &command_state.workflow_version() else {
+            return Err(WorkflowExecutionError::MissingVersion);
+        };
+
         self.workflows
             .get(&operation_name.as_str().into())
             .ok_or(WorkflowExecutionError::UnknownOperation {
-                operation: operation_name,
+                operation: operation_name.clone(),
             })
+            .and_then(|versions| versions.get(version))
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
@@ -226,6 +299,127 @@ impl WorkflowSupervisor {
                 Some(command)
             }
         }
+    }
+}
+
+/// The set of in-use workflow versions for an operation
+///
+/// - The current version is the version that will be used for a new command instance.
+/// - The current version might be none. This is the case when the command has been deprecated.
+/// - When a new command instance is initialized, the current version is stored as being in use.
+/// - When all the commands using a given version are finalized, these copies are removed (TODO).
+/// - Among all the versions, the `"builtin"` version is specific.
+/// - The `"builtin"` version is never removed, and is used as the current version if none is available.
+struct WorkflowVersions {
+    operation: OperationName,
+    current: Option<(WorkflowVersion, OperationWorkflow)>,
+    in_use: HashMap<WorkflowVersion, OperationWorkflow>,
+}
+
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+pub enum WorkflowSource {
+    BuiltIn,
+    UserDefined,
+    InUseCopy,
+}
+
+use WorkflowSource::*;
+
+impl WorkflowVersions {
+    const BUILT_IN: &'static str = "builtin";
+
+    fn new(source: WorkflowSource, version: WorkflowVersion, workflow: OperationWorkflow) -> Self {
+        let operation = workflow.operation.to_string();
+        let (current, in_use) = match source {
+            BuiltIn => (
+                None,
+                HashMap::from([(Self::BUILT_IN.to_string(), workflow)]),
+            ),
+            UserDefined => (Some((version, workflow)), HashMap::new()),
+            InUseCopy => (None, HashMap::from([(version, workflow)])),
+        };
+
+        WorkflowVersions {
+            operation,
+            current,
+            in_use,
+        }
+    }
+
+    fn add(
+        &mut self,
+        source: WorkflowSource,
+        version: WorkflowVersion,
+        workflow: OperationWorkflow,
+    ) {
+        match source {
+            BuiltIn => {
+                self.in_use.insert(Self::BUILT_IN.to_string(), workflow);
+            }
+            UserDefined => {
+                self.current = Some((version, workflow));
+            }
+            InUseCopy => {
+                self.in_use.insert(version, workflow);
+            }
+        };
+
+        if self.current.is_some() && self.in_use.contains_key(Self::BUILT_IN) {
+            info!(
+                "The built-in {operation} operation has been customized",
+                operation = self.operation
+            );
+        }
+    }
+
+    // Mark the current version as being in-use.
+    fn use_current_version(&mut self) -> Option<&WorkflowVersion> {
+        match self.current.as_ref() {
+            Some((version, workflow)) => {
+                if !self.in_use.contains_key(version) {
+                    self.in_use.insert(version.clone(), workflow.clone());
+                };
+                Some(version)
+            }
+
+            None => self
+                .in_use
+                .get_key_value(Self::BUILT_IN)
+                .map(|(builtin, _)| builtin),
+        }
+    }
+
+    // Remove the current version from this list of versions, restoring the built-in version if any
+    fn remove(&mut self, version: &WorkflowVersion) {
+        if self.current.as_ref().map(|(v, _)| v == version) == Some(true) {
+            self.current = None;
+        } else if version != Self::BUILT_IN {
+            self.in_use.remove(version);
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.in_use.is_empty()
+    }
+
+    fn is_builtin(&self) -> bool {
+        self.in_use.contains_key(Self::BUILT_IN)
+    }
+
+    fn get(&self, version: &WorkflowVersion) -> Result<&OperationWorkflow, WorkflowExecutionError> {
+        self.in_use
+            .get(version)
+            .ok_or(WorkflowExecutionError::UnknownVersion {
+                operation: self.operation.clone(),
+                version: version.to_string(),
+            })
+    }
+
+    fn current_workflow(&self) -> Option<&OperationWorkflow> {
+        self.current
+            .as_ref()
+            .map(|(_, workflow)| workflow)
+            .or_else(|| self.in_use.get(Self::BUILT_IN))
     }
 }
 
@@ -340,7 +534,7 @@ mod tests {
         // Start a level_1 operation
         let level_1_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
             &Topic::new_unchecked("te/device/foo///cmd/level_1/id_1"),
-            r#"{ "status":"init" }"#,
+            r#"{ "@version": "builtin", "status":"init" }"#,
         ))
         .unwrap();
         workflows
@@ -356,7 +550,7 @@ mod tests {
         // Start a level_2 operation, sub-command of the previous level_1 command
         let level_2_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
             &Topic::new_unchecked("te/device/foo///cmd/level_2/sub:level_1:id_1"),
-            r#"{ "status":"init" }"#,
+            r#"{ "@version": "builtin", "status":"init" }"#,
         ))
         .unwrap();
         workflows
@@ -377,7 +571,7 @@ mod tests {
         // Start a level_3 operation, sub-command of the previous level_2 command
         let level_3_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
             &Topic::new_unchecked("te/device/foo///cmd/level_3/sub:level_2:sub:level_1:id_1"),
-            r#"{ "status":"init" }"#,
+            r#"{ "@version": "builtin", "status":"init" }"#,
         ))
         .unwrap();
         workflows

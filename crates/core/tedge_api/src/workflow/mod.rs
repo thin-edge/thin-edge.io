@@ -26,6 +26,7 @@ pub type OperationName = String;
 pub type StateName = String;
 pub type CommandId = String;
 pub type JsonPath = String;
+pub type WorkflowVersion = String;
 
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
@@ -33,9 +34,6 @@ pub type JsonPath = String;
 pub struct OperationWorkflow {
     /// The operation to which this workflow applies
     pub operation: OperationType,
-
-    /// Mark this workflow as built_in
-    pub built_in: bool,
 
     /// Default action outcome handlers
     pub handlers: DefaultHandlers,
@@ -236,7 +234,6 @@ impl OperationWorkflow {
 
         Ok(OperationWorkflow {
             operation,
-            built_in: false,
             handlers,
             states,
         })
@@ -268,7 +265,6 @@ impl OperationWorkflow {
         .collect();
 
         OperationWorkflow {
-            built_in: true,
             operation,
             handlers: DefaultHandlers::default(),
             states,
@@ -293,7 +289,6 @@ impl OperationWorkflow {
         .collect();
 
         OperationWorkflow {
-            built_in: true,
             operation: operation.as_str().into(),
             handlers: DefaultHandlers::default(),
             states,
