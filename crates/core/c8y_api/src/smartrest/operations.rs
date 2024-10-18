@@ -315,6 +315,7 @@ pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
 
 /// depending on which editor you use, temporary files could be created that contain the name of
 /// the file.
+///
 /// this `operation_name_is_valid` fn will ensure that only files that do not contain
 /// any special characters are allowed.
 pub fn is_valid_operation_name(operation: &str) -> bool {

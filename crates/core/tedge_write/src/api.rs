@@ -30,7 +30,7 @@ pub struct CopyOptions<'a> {
     pub group: Option<&'a str>,
 }
 
-impl<'a> CopyOptions<'a> {
+impl CopyOptions<'_> {
     /// Copies the file by spawning new tedge-write process.
     ///
     /// Stdin and Stdout are UTF-8.

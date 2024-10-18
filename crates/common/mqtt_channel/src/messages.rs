@@ -109,7 +109,7 @@ impl<'de> Deserialize<'de> for DebugPayload {
     {
         struct DebugPayloadVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for DebugPayloadVisitor {
+        impl serde::de::Visitor<'_> for DebugPayloadVisitor {
             type Value = DebugPayload;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

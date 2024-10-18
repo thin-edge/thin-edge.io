@@ -97,7 +97,7 @@ where
 
 struct IsoOrUnixVisitor;
 
-impl<'de> de::Visitor<'de> for IsoOrUnixVisitor {
+impl de::Visitor<'_> for IsoOrUnixVisitor {
     type Value = IsoOrUnix;
 
     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {

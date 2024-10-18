@@ -308,13 +308,13 @@ impl C8yOperation for CumulocitySupportedOperations {
     }
 }
 
-impl<'a> C8yOperation for &'a str {
+impl C8yOperation for &str {
     fn name(&self) -> &str {
         self
     }
 }
 
-impl<'a> C8yOperation for &'a String {
+impl C8yOperation for &String {
     fn name(&self) -> &str {
         self.as_str()
     }

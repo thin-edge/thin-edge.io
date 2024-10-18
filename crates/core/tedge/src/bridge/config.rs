@@ -49,11 +49,8 @@ impl BridgeConfig {
     pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writeln!(writer, "### Bridge")?;
         writeln!(writer, "connection {}", self.connection)?;
-        match &self.remote_username {
-            Some(name) => {
-                writeln!(writer, "remote_username {}", name)?;
-            }
-            None => {}
+        if let Some(name) = &self.remote_username {
+            writeln!(writer, "remote_username {}", name)?;
         }
         writeln!(writer, "address {}", self.address)?;
 
