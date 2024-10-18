@@ -30,6 +30,7 @@ fn default_backoff() -> ExponentialBackoff {
 }
 
 /// Auto tries to detect the mime from the given file extension without direct file access.
+///
 /// Custom sets a custom Content-Type.
 /// If multipart request is needed, choose FormData.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -40,6 +41,7 @@ pub enum ContentType {
 }
 
 /// Dataset to construct reqwest::multipart::Form.
+///
 /// To avoid using reqwest::multipart::Form inside the ContentType enum
 /// since reqwest::multipart::Form doesn't support Copy or Clone.
 /// If mime is None, the mime will be guessed while uploading a file.

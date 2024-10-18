@@ -3,6 +3,7 @@ use std::hash::Hash;
 use time::OffsetDateTime;
 
 /// Implement this interface for the items that you want batched.
+///
 /// No items with the same key will go in the same batch.
 /// The event_time of the item will determine how items are grouped,
 /// dependent on how the batcher is configured.

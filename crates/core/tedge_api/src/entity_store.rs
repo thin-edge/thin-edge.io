@@ -30,14 +30,6 @@ use std::fmt::Display;
 use std::path::Path;
 use thiserror::Error;
 
-/// Represents an "Entity topic identifier" portion of the MQTT topic
-///
-/// Example:
-/// - topic: `te/device/dev1/service/myservice/m//my_measurement`
-/// - entity id: `device/dev1/service/myservice`
-///
-/// <https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier>
-
 // In the future, root will be read from config
 const MQTT_ROOT: &str = "te";
 

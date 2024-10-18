@@ -47,6 +47,7 @@ impl FlockfileError {
 }
 
 /// flockfile creates a lockfile in the filesystem under `/run/lock` and then creates a filelock using system fcntl with flock.
+///
 /// flockfile will automatically remove lockfile on application exit and the OS should cleanup the filelock afterwards.
 /// If application exits unexpectedly the filelock will be dropped, but the lockfile will not be removed unless handled in signal handler.
 #[derive(Debug)]

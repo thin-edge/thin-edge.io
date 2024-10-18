@@ -114,7 +114,7 @@ impl OperationHandler {
     ///
     /// The panic in the operation task has to happen first, and then another message with the same
     /// command id has to be handled for the call to `.handle()` to panic.
-
+    //
     // but there's a problem: in practice, when a panic in a child task happens, .handle() will
     // never get called for that operation again. Operation task itself sends the messages, so if
     // they can't be sent over MQTT because of a panic, they won't be handled, won't be joined, so

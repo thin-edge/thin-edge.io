@@ -71,7 +71,7 @@ struct ThinEdgeValueParser<'key, 'vis, T> {
     visitor: &'vis mut T,
 }
 
-impl<'vis, 'de, T> de::Visitor<'de> for ThinEdgeJsonParser<'vis, T>
+impl<'de, T> de::Visitor<'de> for ThinEdgeJsonParser<'_, T>
 where
     T: MeasurementVisitor,
 {
@@ -119,7 +119,7 @@ where
     }
 }
 
-impl<'key, 'vis, 'de, T> de::Visitor<'de> for ThinEdgeValueParser<'key, 'vis, T>
+impl<'de, T> de::Visitor<'de> for ThinEdgeValueParser<'_, '_, T>
 where
     T: MeasurementVisitor,
 {
@@ -240,7 +240,7 @@ where
 ///
 /// As we are passing the parsed data over to the embedded visitor, all of our parsers do not
 /// produce a value, so we use the empty tuple type.
-impl<'key, 'vis, 'de, T> DeserializeSeed<'de> for ThinEdgeValueParser<'key, 'vis, T>
+impl<'de, T> DeserializeSeed<'de> for ThinEdgeValueParser<'_, '_, T>
 where
     T: MeasurementVisitor,
 {
