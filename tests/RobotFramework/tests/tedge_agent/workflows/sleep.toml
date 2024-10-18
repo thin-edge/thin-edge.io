@@ -1,0 +1,24 @@
+operation = "sleep"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "sleep ${.payload.duration}"
+on_success = "logging"
+# As the purpose of this test-fixture workflow is to check that
+# the same version of the workflow is used after a restart of the agent,
+# we want to be sure the engine doesn't move to the failed state when the agent stops
+# For that purpose, we loop on executing when interrupted.
+on_kill = "executing"
+
+[logging]
+script = "/etc/tedge/operations/echo-as-json.sh message 'what a long sleep'"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

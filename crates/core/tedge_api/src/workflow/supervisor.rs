@@ -3,6 +3,7 @@ use crate::workflow::*;
 use ::log::info;
 use on_disk::OnDiskCommandBoard;
 use serde::Serialize;
+use std::string::ToString;
 
 /// Dispatch actions to operation participants
 #[derive(Default)]
@@ -185,13 +186,16 @@ impl WorkflowSupervisor {
             });
         };
 
-        let version = command_state.workflow_version();
+        let Some(version) = &command_state.workflow_version() else {
+            return Err(WorkflowExecutionError::MissingVersion);
+        };
+
         self.workflows
             .get(&operation_name.as_str().into())
             .ok_or(WorkflowExecutionError::UnknownOperation {
                 operation: operation_name.clone(),
             })
-            .and_then(|versions| versions.get(version.as_ref()))
+            .and_then(|versions| versions.get(version))
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
@@ -298,26 +302,21 @@ impl WorkflowSupervisor {
     }
 }
 
-/// A stack of known versions for a workflow
+/// The set of in-use workflow versions for an operation
 ///
-/// In practice, one might have 3 concurrent versions:
-///
-/// - The current version, i.e. the version to be used for new operation instances.
-/// - One in-use version, that was used by some operation instance when the current version has been updated.
-/// - The builtin version provided by the agent and which can be overridden by the users.
-///
-/// None of these versions are mandatory. For instance, an operation can have no builtin version,
-/// no current version (because the user removed the definition file), but a version still in-use
-/// (that has been started before the user deprecated the operation).
+/// - The current version is the version that will be used for a new command instance.
+/// - The current version might be none. This is the case when the command has been deprecated.
+/// - When a new command instance is initialized, the current version is stored as being in use.
+/// - When all the commands using a given version are finalized, these copies are removed.
+/// - Among all the versions, the `"builtin"` version is specific.
+/// - The `"builtin"` version is never removed, and is used as the current version if none is available.
 struct WorkflowVersions {
     operation: OperationName,
-    current: Option<WorkflowVersion>,
-    builtin: Option<WorkflowVersion>,
-    in_use: Option<WorkflowVersion>,
-    versions: HashMap<WorkflowVersion, OperationWorkflow>,
+    current: Option<(WorkflowVersion, OperationWorkflow)>,
+    in_use: HashMap<WorkflowVersion, OperationWorkflow>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum WorkflowSource {
     BuiltIn,
     UserDefined,
@@ -327,28 +326,23 @@ pub enum WorkflowSource {
 use WorkflowSource::*;
 
 impl WorkflowVersions {
+    const BUILT_IN: &'static str = "builtin";
+
     fn new(source: WorkflowSource, version: WorkflowVersion, workflow: OperationWorkflow) -> Self {
         let operation = workflow.operation.to_string();
+        let (current, in_use) = match source {
+            BuiltIn => (
+                None,
+                HashMap::from([(Self::BUILT_IN.to_string(), workflow)]),
+            ),
+            UserDefined => (Some((version, workflow)), HashMap::new()),
+            InUseCopy => (None, HashMap::from([(version, workflow)])),
+        };
 
-        let current = match source {
-            BuiltIn | UserDefined => Some(version.clone()),
-            InUseCopy => None,
-        };
-        let builtin = match source {
-            BuiltIn => Some(version.clone()),
-            UserDefined | InUseCopy => None,
-        };
-        let in_use = match source {
-            InUseCopy => Some(version.clone()),
-            UserDefined | BuiltIn => None,
-        };
-        let versions = HashMap::from([(version, workflow)]);
         WorkflowVersions {
             operation,
             current,
-            builtin,
             in_use,
-            versions,
         }
     }
 
@@ -360,87 +354,72 @@ impl WorkflowVersions {
     ) {
         match source {
             BuiltIn => {
-                self.builtin = Some(version.clone());
-
-                if self.current.is_none() {
-                    self.current = Some(version.clone());
-                } else {
-                    info!(
-                        "The built-in {operation} operation has been customized",
-                        operation = workflow.operation
-                    );
-                }
+                self.in_use.insert(Self::BUILT_IN.to_string(), workflow);
             }
-
             UserDefined => {
-                self.current = Some(version.clone());
-                if self.builtin.is_some() {
-                    info!(
-                        "The built-in {operation} operation has been customized",
-                        operation = workflow.operation
-                    );
-                }
+                self.current = Some((version, workflow));
             }
+            InUseCopy => {
+                self.in_use.insert(version, workflow);
+            }
+        };
 
-            InUseCopy => self.in_use = Some(version.clone()),
+        if self.current.is_some() && self.in_use.contains_key(Self::BUILT_IN) {
+            info!(
+                "The built-in {operation} operation has been customized",
+                operation = self.operation
+            );
         }
-
-        self.versions.insert(version.clone(), workflow);
     }
 
     // Mark the current version as being in-use.
     fn use_current_version(&mut self) -> Option<&WorkflowVersion> {
-        if self.current.is_some() && self.in_use != self.current {
-            // remove the previous version in-use unless this is the builtin version
-            if let Some(previous_version) = self.in_use.as_ref() {
-                if Some(previous_version) != self.builtin.as_ref() {
-                    self.versions.remove(previous_version);
-                }
+        match self.current.as_ref() {
+            Some((version, workflow)) => {
+                if !self.in_use.contains_key(version) {
+                    self.in_use.insert(version.clone(), workflow.clone());
+                };
+                Some(version)
             }
-            self.in_use.clone_from(&self.current);
+
+            None => self
+                .in_use
+                .get_key_value(Self::BUILT_IN)
+                .map(|(builtin, _)| builtin),
         }
-        self.current.as_ref()
     }
 
-    // Remove a version from this list of versions, restoring the built-in version if any
+    // Remove the current version from this list of versions, restoring the built-in version if any
     fn remove(&mut self, version: &WorkflowVersion) {
-        self.versions.remove(version);
-        self.current.clone_from(&self.builtin);
+        if self.current.as_ref().map(|(v, _)| v == version) == Some(true) {
+            self.current = None;
+        } else if version != Self::BUILT_IN {
+            self.in_use.remove(version);
+        }
     }
 
     fn is_empty(&self) -> bool {
-        self.versions.is_empty()
+        self.in_use.is_empty()
     }
 
     fn is_builtin(&self) -> bool {
-        self.builtin.is_some()
+        self.in_use.contains_key(Self::BUILT_IN)
     }
 
-    fn get(
-        &self,
-        version: Option<&WorkflowVersion>,
-    ) -> Result<&OperationWorkflow, WorkflowExecutionError> {
-        match version {
-            None => self.current_workflow(),
-            Some(version) => self.find(version),
-        }
-        .ok_or(WorkflowExecutionError::UnknownVersion {
-            operation: self.operation.clone(),
-            version: version
-                .or(self.current.as_ref())
-                .unwrap_or(&"current".to_string())
-                .to_string(),
-        })
+    fn get(&self, version: &WorkflowVersion) -> Result<&OperationWorkflow, WorkflowExecutionError> {
+        self.in_use
+            .get(version)
+            .ok_or(WorkflowExecutionError::UnknownVersion {
+                operation: self.operation.clone(),
+                version: version.to_string(),
+            })
     }
 
     fn current_workflow(&self) -> Option<&OperationWorkflow> {
         self.current
             .as_ref()
-            .and_then(|version| self.versions.get(version))
-    }
-
-    fn find(&self, version: &WorkflowVersion) -> Option<&OperationWorkflow> {
-        self.versions.get(version)
+            .map(|(_, workflow)| workflow)
+            .or_else(|| self.in_use.get(Self::BUILT_IN))
     }
 }
 

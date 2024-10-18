@@ -2,6 +2,7 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
@@ -37,12 +38,13 @@ pub struct WorkflowRepository {
     // Directory of user-defined workflow copies of the workflow in-use
     state_dir: Utf8PathBuf,
 
-    // Map each workflow version to its workflow file
-    //
-    // For a fresh new workflow definition, this points to the user-defined file
-    // When the workflow definition is in use, this points to a copy in the state directory.
+    // Map each user defined workflow to its version and workflow file
     definitions: HashMap<OperationName, (WorkflowVersion, Utf8PathBuf)>,
-    in_use_copies: HashMap<OperationName, WorkflowVersion>,
+
+    // Set of workflow in-use
+    //
+    // TODO Implement the cleanup logic
+    in_use_copies: HashSet<WorkflowVersion>,
 
     // The in-memory representation of all the workflows (builtin, user-defined, in-use).
     workflows: WorkflowSupervisor,
@@ -57,7 +59,7 @@ impl WorkflowRepository {
         let workflows = WorkflowSupervisor::default();
         let state_dir = state_dir.join("workflows-in-use");
         let definitions = HashMap::new();
-        let in_use_copies = HashMap::new();
+        let in_use_copies = HashSet::new();
         Self {
             builtin_workflows,
             custom_workflows_dir,
@@ -79,8 +81,6 @@ impl WorkflowRepository {
         }
 
         // Then, the definitions of the workflow still in-use are loaded
-        // If a definition has not changed, then self.definitions is updated accordingly
-        // so the known location of this definition is the copy not the original
         let dir_path = &self.state_dir.clone();
         let _ = tokio::fs::create_dir(dir_path).await; // if the creation fails, this will be reported next line on read
         if let Err(err) = self
@@ -135,8 +135,7 @@ impl WorkflowRepository {
                     .insert(operation_name.clone(), (version.clone(), definition));
             }
             WorkflowSource::InUseCopy => {
-                self.in_use_copies
-                    .insert(operation_name.clone(), version.clone());
+                self.in_use_copies.insert(version.clone());
             }
             WorkflowSource::BuiltIn => {}
         };
@@ -264,18 +263,15 @@ impl WorkflowRepository {
         operation: &OperationName,
         version: &WorkflowVersion,
     ) {
-        if let Some(in_use_version) = self.in_use_copies.get(operation) {
-            if in_use_version == version {
-                return;
-            }
+        if self.in_use_copies.contains(version) {
+            return;
         };
         if let Some((_, source)) = self.definitions.get(operation) {
-            let target = self.state_dir.join(operation).with_extension("toml");
+            let target = self.state_dir.join(version).with_extension("toml");
             if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
                 error!("Fail to persist a copy of {source} as {target}: {err}");
             } else {
-                self.in_use_copies
-                    .insert(operation.clone(), version.clone());
+                self.in_use_copies.insert(version.clone());
             }
         }
     }

@@ -79,6 +79,9 @@ pub enum WorkflowExecutionError {
     #[error("Missing status in the command payload")]
     MissingStatus,
 
+    #[error("Missing version in the command payload")]
+    MissingVersion,
+
     #[error("No workflow is defined for the operation: {operation}")]
     UnknownOperation { operation: String },
 
