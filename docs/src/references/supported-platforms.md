@@ -55,8 +55,8 @@ Generally the newer ARM processors should be supported, as they are mostly based
 
 If you using %%te%% in a controlled networked, for example, behind a corporate proxy or firewall/network manager like Palo Alto Networks, then the following port configuration is required to allow communication **to each** configured cloud (e.g. Cumulocity, AWS, Azure):
 
-|Destination|Direction|Port|Protocol|
-|-----------|---------|----|--------|
+|Destination|Direction|Port|Protocol|Description|
+|-----------|---------|----|--------|-----------|
 |Per cloud url| Outgoing | 443 | TCP | HTTPS (Hypertext Transfer Protocol Secure) |
 |Per cloud url| Outgoing | 8883 | TCP | Secure MQTT (MQTT over TLS) |
 
