@@ -55,7 +55,7 @@
 //! #
 //! #[cfg(feature = "test-helpers")]
 //! # #[tokio::main]
-//! # async fn main_test() {
+//! # async fn main() {
 //! # use tedge_actors::Service;
 //! #
 //! // As for any actor, one needs a handle to the message box of the server.

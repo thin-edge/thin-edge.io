@@ -46,7 +46,7 @@
 //! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, Sender, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder, Service, MessageSink, MessageSource};
 //! # use crate::tedge_actors::examples::calculator_server::*;
 //! # #[tokio::main]
-//! # async fn main_test() -> Result<(),ChannelError> {
+//! # async fn main() -> Result<(),ChannelError> {
 //! #
 //!
 //! // Building a box to hold 16 pending requests for the calculator server actor
