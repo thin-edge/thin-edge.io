@@ -86,7 +86,6 @@ Watchdog doesn't fail on unexpected time format
     Should Be Equal    ${pid}    ${pid1}
 
 Watchdog sends notification if service is up which leads to service continuing to run
-    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
     # Set Service health check response    {\\\"status\\\":\\\"up\\\", \\\"pid\\\":\\\"$$\\\"}
     Restart Service    ${SERVICE_NAME}
     Restart Service    tedge-watchdog

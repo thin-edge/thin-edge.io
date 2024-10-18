@@ -22,5 +22,5 @@ while true; do
     mosquitto_sub -p 8883 --cafile /etc/mosquitto/ca_certificates/ca.crt -C 1 -t $HEALTH_CHECK_TOPIC
     echo "got check"
     mosquitto_pub -p 8883 --cafile /etc/mosquitto/ca_certificates/ca.crt -t $HEALTH_STATUS_TOPIC -m "$message"
-    echo "sent response" $RESPONSE
+    echo "sent response" $message
 done
