@@ -7,6 +7,7 @@ on_success = "executing"
 [executing]
 script = "sleep ${.payload.duration}"
 on_success = "logging"
+on_error = "logging"
 
 [logging]
 script = "/etc/tedge/operations/echo-as-json.sh long-running-command first-version"

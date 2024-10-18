@@ -139,31 +139,55 @@ Update Concurrently Running Versions
     # Trigger a first version of a long running command
     Update Workflow    ${CURDIR}/long-running-command-v1.toml    long-running-command
     Execute Command
-    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-8 '{"status":"init", "duration":60}'
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-8 '{"status":"init", "duration":30}'
 
     # Then a second version of the same long running command
     Update Workflow    ${CURDIR}/long-running-command-v2.toml    long-running-command
     Execute Command
-    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-9 '{"status":"init", "duration":60}'
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-9 '{"status":"init", "duration":30}'
 
     # And a third one
     Update Workflow    ${CURDIR}/long-running-command-v3.toml    long-running-command
     Execute Command
-    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-10 '{"status":"init", "duration":60}'
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-10 '{"status":"init", "duration":30}'
 
-    # Force a restart, the point being to check the workflow versions in-use are correctly persisted
-    Restart Service    tedge-agent
-
-    # Check that after restart the 3 workflows are resumed using their original workflow version
+    # Check the 3 workflows use heir original workflow version till the end
     Should Have MQTT Messages
     ...    te/device/main///cmd/long-running-command/dyn-test-8
     ...    message_pattern=.*first-version.*
+    ...    timeout=60
     Should Have MQTT Messages
     ...    te/device/main///cmd/long-running-command/dyn-test-9
     ...    message_pattern=.*second-version.*
+    ...    timeout=60
     Should Have MQTT Messages
     ...    te/device/main///cmd/long-running-command/dyn-test-10
     ...    message_pattern=.*third-version.*
+    ...    timeout=60
+
+Resume On Restart A Pending Operation Which Workflow Is Deprecated
+    # Trigger a long running command
+    Update Workflow    ${CURDIR}/long-running-command-v1.toml    long-running-command
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-11 '{"status":"init", "duration":30}'
+
+    # Stop the agent, once sure the command is executing
+    Should Have MQTT Messages
+        ...    te/device/main///cmd/long-running-command/dyn-test-11
+        ...    message_pattern=.*executing.*
+    Stop Service    tedge-agent
+
+    # Deprecate the long running command, and restart
+    Execute Command    rm /etc/tedge/operations/long-running-command.toml
+    Start Service    tedge-agent
+
+    # The pending long command should resume, despite the operation has been deprecated
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/long-running-command/dyn-test-11
+    ...    message_pattern=.*successful.*
+    ...    timeout=60
+    Should Contain    ${messages[0]}    item="first-version"
+    Should Contain    ${messages[0]}    item="killed by signal 15"
 
 *** Keywords ***
 Custom Setup
@@ -193,6 +217,8 @@ Custom Test Setup
     ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-9 ''
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-10 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-11 ''
 
 Copy Scripts
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
