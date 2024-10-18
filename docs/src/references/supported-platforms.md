@@ -51,6 +51,16 @@ The following are the supported ARM processors:
 
 Generally the newer ARM processors should be supported, as they are mostly based on the arm64/aarch64 architecture, however please let us know if something does not work as expected.
 
+### Network configuration {#network_configuration}
+
+If you using %%te%% in a controlled networked, for example, behind a corporate proxy or firewall/network manager like Palo Alto Networks, then the following port configuration is required to allow communication **to each** configured cloud (e.g. Cumulocity, AWS, Azure):
+
+|Destination|Direction|Port|Protocol|Description|
+|-----------|---------|----|--------|-----------|
+|Per cloud url| Outgoing | 443 | TCP | HTTPS (Hypertext Transfer Protocol Secure) |
+|Per cloud url| Outgoing | 8883 | TCP | Secure MQTT (MQTT over TLS) |
+
+
 ## Memory Usage
 
 The exact memory usage of %%te%% and the MQTT broker depends on a many factors; such factors are listed below:
