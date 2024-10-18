@@ -8,6 +8,8 @@ use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareModule;
 use tracing::warn;
 
+use super::message::SmartrestPayload;
+
 pub type SmartRest = String;
 
 pub fn request_pending_operations() -> &'static str {
@@ -201,8 +203,9 @@ impl From<CumulocitySupportedOperations> for &'static str {
     }
 }
 
-pub fn declare_supported_operations(ops: &[&str]) -> String {
-    format!("114,{}", fields_to_csv_string(ops))
+pub fn declare_supported_operations(ops: &[&str]) -> SmartrestPayload {
+    SmartrestPayload::from_fields(&["114", &fields_to_csv_string(ops)])
+        .expect("TODO: ops list can increase payload over limit")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -398,7 +401,10 @@ mod tests {
     #[test]
     fn serialize_smartrest_supported_operations() {
         let smartrest = declare_supported_operations(&["c8y_SoftwareUpdate", "c8y_LogfileRequest"]);
-        assert_eq!(smartrest, "114,c8y_SoftwareUpdate,c8y_LogfileRequest");
+        assert_eq!(
+            smartrest.as_str(),
+            "114,c8y_SoftwareUpdate,c8y_LogfileRequest"
+        );
     }
 
     #[test]

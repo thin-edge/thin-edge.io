@@ -1401,7 +1401,9 @@ impl CumulocityConverter {
 
         Ok(MqttMessage::new(
             &topic,
-            Operations::try_new(path)?.create_smartrest_ops_message(),
+            Operations::try_new(path)?
+                .create_smartrest_ops_message()
+                .into_inner(),
         ))
     }
 
