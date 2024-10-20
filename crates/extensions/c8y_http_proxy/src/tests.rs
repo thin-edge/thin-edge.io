@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
-use certificate::CloudRootCerts;
 use http::StatusCode;
 use mockito::Matcher;
 use std::collections::HashMap;
@@ -363,8 +362,6 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
-        identity: None,
-        cloud_root_certs: CloudRootCerts::from([]),
         retry_interval: Duration::from_millis(100),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut auth);
@@ -432,8 +429,6 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
-        identity: None,
-        cloud_root_certs: CloudRootCerts::from([]),
         retry_interval: Duration::from_millis(100),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
@@ -675,8 +670,6 @@ async fn spawn_c8y_http_proxy(
         c8y_mqtt_host: c8y_host,
         device_id,
         tmp_dir,
-        identity: None,
-        cloud_root_certs: CloudRootCerts::from([]),
         retry_interval: Duration::from_millis(10),
     };
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);

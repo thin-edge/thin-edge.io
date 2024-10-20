@@ -6,7 +6,7 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
 
-fan_in_message_type!(C8YRestRequest[GetJwtToken, GetFreshJwtToken, CreateEvent, SoftwareListResponse, UploadLogBinary, UploadFile, DownloadFile]: Debug, PartialEq, Eq);
+fan_in_message_type!(C8YRestRequest[CreateEvent, SoftwareListResponse, UploadLogBinary]: Debug, PartialEq, Eq);
 //HIPPO Rename EventId to String as there could be many other String responses as well and this macro doesn't allow another String variant
 fan_in_message_type!(C8YRestResponse[EventId, Url, Unit]: Debug);
 

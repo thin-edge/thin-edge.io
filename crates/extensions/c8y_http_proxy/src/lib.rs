@@ -4,8 +4,6 @@ use crate::credentials::AuthResult;
 use crate::credentials::AuthRetriever;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
-use certificate::CloudRootCerts;
-use reqwest::Identity;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -40,8 +38,6 @@ pub struct C8YHttpConfig {
     pub c8y_mqtt_host: String,
     pub device_id: String,
     pub tmp_dir: PathBuf,
-    identity: Option<Identity>,
-    cloud_root_certs: CloudRootCerts,
     retry_interval: Duration,
 }
 
@@ -64,8 +60,6 @@ impl C8YHttpConfig {
             .to_string();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
-        let identity = tedge_config.http.client.auth.identity()?;
-        let cloud_root_certs = tedge_config.cloud_root_certs();
         let retry_interval = Duration::from_secs(5);
 
         Ok(Self {
@@ -73,8 +67,6 @@ impl C8YHttpConfig {
             c8y_mqtt_host,
             device_id,
             tmp_dir,
-            identity,
-            cloud_root_certs,
             retry_interval,
         })
     }

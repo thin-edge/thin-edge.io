@@ -6,13 +6,10 @@ use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
 use crate::messages::CreateEvent;
-use crate::messages::DownloadFile;
 use crate::messages::EventId;
 use crate::messages::SoftwareListResponse;
 use crate::messages::Unit;
-use crate::messages::UploadFile;
 use crate::messages::UploadLogBinary;
-use crate::messages::Url;
 use crate::C8YHttpConfig;
 use anyhow::Context;
 use async_trait::async_trait;
@@ -22,10 +19,7 @@ use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::OffsetDateTime;
-use download::DownloadInfo;
-use download::Downloader;
 use http::status::StatusCode;
-use log::debug;
 use log::error;
 use log::info;
 use std::collections::HashMap;
@@ -86,18 +80,6 @@ impl Actor for C8YHttpProxyActor {
         }) = self.peers.clients.recv().await
         {
             let result = match request {
-                C8YRestRequest::GetJwtToken(_) => self
-                    .get_and_set_auth_header_value()
-                    .await
-                    .map(|response| response.into()),
-
-                C8YRestRequest::GetFreshJwtToken(_) => {
-                    self.end_point.token = None;
-                    self.get_and_set_auth_header_value()
-                        .await
-                        .map(|response| response.into())
-                }
-
                 C8YRestRequest::CreateEvent(request) => self
                     .create_event(request)
                     .await
@@ -110,15 +92,6 @@ impl Actor for C8YHttpProxyActor {
 
                 C8YRestRequest::UploadLogBinary(request) => self
                     .upload_log_binary(request)
-                    .await
-                    .map(|response| response.into()),
-
-                C8YRestRequest::UploadFile(request) => {
-                    self.upload_file(request).await.map(|url| url.into())
-                }
-
-                C8YRestRequest::DownloadFile(request) => self
-                    .download_file(request)
                     .await
                     .map(|response| response.into()),
             };
@@ -427,64 +400,6 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn upload_file(&mut self, request: UploadFile) -> Result<Url, C8YRestError> {
-        let device_id = request.device_id;
-
-        let create_event = |internal_id: String| -> C8yCreateEvent {
-            C8yCreateEvent {
-                source: Some(C8yManagedObject { id: internal_id }),
-                event_type: request.file_type.clone(),
-                time: OffsetDateTime::now_utc(),
-                text: request.file_type.clone(),
-                extras: HashMap::new(),
-            }
-        };
-
-        let event_response_id = self
-            .send_event_internal(device_id.clone(), create_event)
-            .await?;
-        debug!(target: self.name(), "File event created with id: {:?}", event_response_id);
-
-        let build_request = |end_point: &C8yEndPoint| {
-            let binary_upload_event_url =
-                end_point.get_url_for_event_binary_upload(&event_response_id);
-
-            async {
-                // TODO: Upload the file as a multi-part stream
-                let file_content =
-                    tokio::fs::read(&request.file_path).await.with_context(|| {
-                        format!(
-                            "Reading file {} for upload failed",
-                            request.file_path.display()
-                        )
-                    })?;
-
-                let (content_type, body) = match String::from_utf8(file_content) {
-                    Ok(text) => ("text/plain", hyper::Body::from(text)),
-                    Err(not_text) => ("application/octet-stream", not_text.into_bytes().into()),
-                };
-
-                Ok::<_, C8YRestError>(
-                    HttpRequestBuilder::post(binary_upload_event_url)
-                        .header("Accept", "application/json")
-                        .header("Content-Type", content_type)
-                        .body(body),
-                )
-            }
-        };
-        info!(target: self.name(), "Uploading file to URL: {}", self.end_point
-        .get_url_for_event_binary_upload(&event_response_id));
-        let http_result = self.execute(device_id.clone(), build_request).await??;
-
-        if !http_result.status().is_success() {
-            Err(C8YRestError::CustomError("Upload failed".into()))
-        } else {
-            Ok(Url(self
-                .end_point
-                .get_url_for_event_binary_upload(&event_response_id)))
-        }
-    }
-
     async fn get_and_set_auth_header_value(&mut self) -> Result<String, C8YRestError> {
         match self.end_point.token.clone() {
             Some(token) => Ok(token),
@@ -497,29 +412,6 @@ impl C8YHttpProxyActor {
                 }
             }
         }
-    }
-
-    async fn download_file(&mut self, request: DownloadFile) -> Result<Unit, C8YRestError> {
-        let mut download_info: DownloadInfo = request.download_url.as_str().into();
-        // If the provided url is c8y, add auth
-        if self
-            .end_point
-            .maybe_tenant_url(download_info.url())
-            .is_some()
-        {
-            let header_value = self.get_and_set_auth_header_value().await?;
-            download_info.auth = Some(header_value);
-        }
-
-        info!(target: self.name(), "Downloading from: {:?}", download_info.url());
-        let downloader: Downloader = Downloader::new(
-            request.file_path,
-            self.config.identity.clone(),
-            self.config.cloud_root_certs.clone(),
-        );
-        downloader.download(&download_info).await?;
-
-        Ok(())
     }
 
     async fn send_event_internal(
