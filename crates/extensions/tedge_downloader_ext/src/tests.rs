@@ -1,5 +1,7 @@
 use super::*;
 use certificate::CloudRootCerts;
+use reqwest::header::HeaderMap;
+use reqwest::header::AUTHORIZATION;
 use std::time::Duration;
 use tedge_actors::ClientMessageBox;
 use tedge_test_utils::fs::TempTedgeDir;
@@ -51,8 +53,10 @@ async fn download_with_auth() {
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
-    let download_request =
-        DownloadRequest::new(&server_url, &target_path).with_auth("Bearer token");
+
+    let mut headers = HeaderMap::new();
+    headers.append(AUTHORIZATION, "Bearer token".parse().unwrap());
+    let download_request = DownloadRequest::new(&server_url, &target_path).with_headers(headers);
 
     let mut requester = spawn_downloader_actor().await;
 

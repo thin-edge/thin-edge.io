@@ -11,7 +11,7 @@ use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_http_proxy::credentials::AuthRetriever;
+use c8y_http_proxy::credentials::HttpHeaderRetriever;
 use camino::Utf8PathBuf;
 use log::error;
 use log::info;
@@ -52,7 +52,7 @@ pub(crate) struct FirmwareManagerWorker {
     pub(crate) config: Arc<FirmwareManagerConfig>,
     executing: bool,
     mqtt_publisher: DynSender<MqttMessage>,
-    auth_retriever: AuthRetriever,
+    header_retriever: HttpHeaderRetriever,
     download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     progress_sender: DynSender<OperationOutcome>,
 }
@@ -63,7 +63,7 @@ impl Clone for FirmwareManagerWorker {
             config: self.config.clone(),
             executing: false,
             mqtt_publisher: self.mqtt_publisher.sender_clone(),
-            auth_retriever: self.auth_retriever.clone(),
+            header_retriever: self.header_retriever.clone(),
             download_sender: self.download_sender.clone(),
             progress_sender: self.progress_sender.sender_clone(),
         }
@@ -74,7 +74,7 @@ impl FirmwareManagerWorker {
     pub(crate) fn new(
         config: FirmwareManagerConfig,
         mqtt_publisher: DynSender<MqttMessage>,
-        auth_retriever: AuthRetriever,
+        header_retriever: HttpHeaderRetriever,
         download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
         progress_sender: DynSender<OperationOutcome>,
     ) -> Self {
@@ -82,7 +82,7 @@ impl FirmwareManagerWorker {
             config: Arc::new(config),
             executing: false,
             mqtt_publisher,
-            auth_retriever,
+            header_retriever,
             download_sender,
             progress_sender,
         }
@@ -205,9 +205,9 @@ impl FirmwareManagerWorker {
                 .maybe_tenant_url(firmware_url)
                 .is_some()
             {
-                if let Ok(header_value) = self.auth_retriever.await_response(()).await? {
+                if let Ok(header_map) = self.header_retriever.await_response(()).await? {
                     DownloadRequest::new(firmware_url, cache_file_path.as_std_path())
-                        .with_auth(&header_value)
+                        .with_headers(header_map)
                 } else {
                     return Err(FirmwareManagementError::NoJwtToken);
                 }

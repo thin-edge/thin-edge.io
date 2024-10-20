@@ -1,6 +1,6 @@
-use crate::credentials::AuthRequest;
-use crate::credentials::AuthResult;
-use crate::credentials::AuthRetriever;
+use crate::credentials::HttpHeaderRequest;
+use crate::credentials::HttpHeaderResult;
+use crate::credentials::HttpHeaderRetriever;
 use crate::messages::C8YConnectionError;
 use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
@@ -56,14 +56,14 @@ pub struct C8YHttpProxyMessageBox {
     /// Connection to an HTTP actor
     pub(crate) http: ClientMessageBox<HttpRequest, HttpResult>,
 
-    /// Connection to an HTTP auth header value retriever
-    pub(crate) auth: AuthRetriever,
+    /// Connection to an HTTP header value retriever
+    pub(crate) header_retriever: HttpHeaderRetriever,
 }
 
 pub type C8YRestRequestEnvelope = RequestEnvelope<C8YRestRequest, C8YRestResult>;
 
-fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestEnvelope, HttpResult, AuthResult] : Debug);
-fan_in_message_type!(C8YHttpProxyOutput[HttpRequest, AuthRequest] : Debug);
+fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestEnvelope, HttpResult, HttpHeaderResult] : Debug);
+fan_in_message_type!(C8YHttpProxyOutput[HttpRequest, HttpHeaderRequest] : Debug);
 
 #[async_trait]
 impl Actor for C8YHttpProxyActor {
@@ -170,16 +170,14 @@ impl C8YHttpProxyActor {
         device_id: String,
     ) -> Result<String, C8YRestError> {
         let url_get_id: String = self.end_point.get_url_for_internal_id(&device_id);
-        if self.end_point.token.is_none() {
-            self.get_fresh_token().await?;
-        }
+        self.refresh_headers().await?;
 
         let mut attempt = 0;
         let mut token_refreshed = false;
         loop {
             attempt += 1;
             let request = HttpRequestBuilder::get(&url_get_id)
-                .auth(self.end_point.token.clone().unwrap_or_default())
+                .headers(&self.end_point.headers)
                 .build()?;
             let endpoint = request.uri().path().to_owned();
             let method = request.method().to_owned();
@@ -208,7 +206,7 @@ impl C8YHttpProxyActor {
                                 response.error_for_status()?;
                             }
                             info!("Re-fetching internal id for {device_id} with fresh token");
-                            self.get_fresh_token().await?;
+                            self.refresh_headers().await?;
                             token_refreshed = true;
                             continue;
                         }
@@ -237,7 +235,7 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .auth(self.end_point.token.clone().unwrap_or_default())
+            .headers(&self.end_point.headers)
             .build()?;
         let endpoint = request.uri().path().to_owned();
         let method = request.method().to_owned();
@@ -266,11 +264,6 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn get_fresh_token(&mut self) -> Result<String, C8YRestError> {
-        self.end_point.token = None;
-        self.get_and_set_auth_header_value().await
-    }
-
     async fn try_request_with_fresh_token<
         Fut: Future<Output = Result<HttpRequestBuilder, C8YRestError>>,
     >(
@@ -278,12 +271,12 @@ impl C8YHttpProxyActor {
         build_request: impl Fn(&C8yEndPoint) -> Fut,
     ) -> Result<HttpResult, C8YRestError> {
         // get new token not the cached one
-        self.get_fresh_token().await?;
+        self.refresh_headers().await?;
         // build the request
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .auth(self.end_point.token.clone().unwrap_or_default())
+            .headers(&self.end_point.headers)
             .build()?;
         // retry the request
         Ok(self.peers.http.await_response(request).await?)
@@ -302,7 +295,7 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder
             .await?
-            .auth(self.end_point.token.clone().unwrap_or_default())
+            .headers(&self.end_point.headers)
             .build()?;
         Ok(self.peers.http.await_response(request).await?)
     }
@@ -400,17 +393,19 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn get_and_set_auth_header_value(&mut self) -> Result<String, C8YRestError> {
-        match self.end_point.token.clone() {
-            Some(token) => Ok(token),
-            None => {
-                if let Ok(token) = self.peers.auth.await_response(()).await? {
-                    self.end_point.token = Some(token.clone());
-                    Ok(token)
-                } else {
-                    Err(C8YRestError::CustomError("JWT token not available".into()))
+    /// Update HTTP headers with the ones retried from the HttpHeaderRetriever actor
+    async fn refresh_headers(&mut self) -> Result<(), C8YRestError> {
+        match self.peers.header_retriever.await_response(()).await? {
+            Ok(headers) => {
+                self.end_point.headers.clear();
+                for (key, value) in headers {
+                    self.end_point.headers.insert(key.unwrap(), value);
                 }
+                Ok(())
             }
+            Err(err) => Err(C8YRestError::CustomError(format!(
+                "Failed to retrieve headers with reason {err}"
+            ))),
         }
     }
 

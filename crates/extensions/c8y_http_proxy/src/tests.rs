@@ -1,6 +1,6 @@
-use crate::credentials::AuthRequest;
-use crate::credentials::AuthResult;
 use crate::credentials::ConstJwtRetriever;
+use crate::credentials::HttpHeaderRequest;
+use crate::credentials::HttpHeaderResult;
 use crate::handle::C8YHttpProxy;
 use crate::messages::CreateEvent;
 use crate::C8YHttpConfig;
@@ -9,6 +9,8 @@ use async_trait::async_trait;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
+use http::header::AUTHORIZATION;
+use http::HeaderMap;
 use http::StatusCode;
 use mockito::Matcher;
 use std::collections::HashMap;
@@ -49,7 +51,7 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     let init_request = HttpRequestBuilder::get(format!(
         "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .auth(BEARER_AUTH)
+    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     assert_recv(&mut c8y, Some(init_request)).await;
@@ -77,7 +79,7 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
         &mut c8y,
         Some(
             HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-                .auth(BEARER_AUTH)
+                .headers(&get_test_auth_header(BEARER_AUTH))
                 .header("content-type", "application/json")
                 .header("accept", "application/json")
                 .build()
@@ -102,7 +104,7 @@ async fn retry_internal_id_on_expired_jwt() {
     let init_request = HttpRequestBuilder::get(format!(
         "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .auth(BEARER_AUTH)
+    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     assert_recv(&mut c8y, Some(init_request)).await;
@@ -116,7 +118,7 @@ async fn retry_internal_id_on_expired_jwt() {
             HttpRequestBuilder::get(format!(
                 "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
             ))
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap(),
         ),
@@ -145,7 +147,7 @@ async fn retry_internal_id_on_expired_jwt() {
         &mut c8y,
         Some(
             HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-                .auth(BEARER_AUTH)
+                .headers(&get_test_auth_header(BEARER_AUTH))
                 .header("content-type", "application/json")
                 .header("accept", "application/json")
                 .build()
@@ -176,7 +178,7 @@ async fn retry_get_internal_id_when_not_found() {
         let get_internal_id_url =
             format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{main_device_id}");
         let init_request = HttpRequestBuilder::get(get_internal_id_url)
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap();
         assert_recv(&mut c8y, Some(init_request)).await;
@@ -196,7 +198,7 @@ async fn retry_get_internal_id_when_not_found() {
                 &mut c8y,
                 Some(
                     HttpRequestBuilder::get(&get_internal_id_url)
-                        .auth(BEARER_AUTH)
+                        .headers(&get_test_auth_header(BEARER_AUTH))
                         .build()
                         .unwrap(),
                 ),
@@ -214,7 +216,7 @@ async fn retry_get_internal_id_when_not_found() {
             &mut c8y,
             Some(
                 HttpRequestBuilder::get(&get_internal_id_url)
-                    .auth(BEARER_AUTH)
+                    .headers(&get_test_auth_header(BEARER_AUTH))
                     .build()
                     .unwrap(),
             ),
@@ -235,7 +237,7 @@ async fn retry_get_internal_id_when_not_found() {
                 HttpRequestBuilder::put(format!("https://{c8y_host}/inventory/managedObjects/200"))
                     .header("content-type", "application/json")
                     .header("accept", "application/json")
-                    .auth(BEARER_AUTH)
+                    .headers(&get_test_auth_header(BEARER_AUTH))
                     .json(&c8y_software_list)
                     .build()
                     .unwrap(),
@@ -276,7 +278,7 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
         let get_internal_id_url =
             format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{main_device_id}");
         let init_request = HttpRequestBuilder::get(get_internal_id_url)
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap();
         assert_recv(&mut c8y, Some(init_request)).await;
@@ -296,7 +298,7 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
                 &mut c8y,
                 Some(
                     HttpRequestBuilder::get(&get_internal_id_url)
-                        .auth(BEARER_AUTH)
+                        .headers(&get_test_auth_header(BEARER_AUTH))
                         .build()
                         .unwrap(),
                 ),
@@ -442,7 +444,8 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     proxy
         .end_point
         .set_internal_id(external_id.into(), internal_id.into());
-    proxy.end_point.token = Some("Bearer Cached JWT Token".into());
+    let headers = get_test_auth_header("Bearer Cached JWT Token");
+    proxy.end_point.headers = headers;
 
     let result = proxy.create_event(event).await;
     assert_eq!(event_id, result.unwrap());
@@ -463,7 +466,7 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     let _init_request = HttpRequestBuilder::get(format!(
         "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .auth(BEARER_AUTH)
+    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     // skip the message
@@ -498,7 +501,7 @@ async fn retry_software_list_once_with_fresh_internal_id() {
             ))
             .header("content-type", "application/json")
             .header("accept", "application/json")
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .json(&c8y_software_list)
             .build()
             .unwrap(),
@@ -521,7 +524,7 @@ async fn retry_software_list_once_with_fresh_internal_id() {
             HttpRequestBuilder::get(format!(
                 "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
             ))
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap(),
         ),
@@ -544,7 +547,7 @@ async fn retry_software_list_once_with_fresh_internal_id() {
             HttpRequestBuilder::put(format!(
                 "https://{c8y_host}/inventory/managedObjects/{device_id}"
             ))
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .header("content-type", "application/json")
             .header("accept", "application/json")
             .json(&c8y_software_list)
@@ -570,7 +573,7 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
     let init_request = HttpRequestBuilder::get(format!(
         "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .auth(BEARER_AUTH)
+    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     assert_recv(&mut c8y, Some(init_request)).await;
@@ -595,7 +598,7 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
         &mut c8y,
         Some(
             HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-                .auth(BEARER_AUTH)
+                .headers(&get_test_auth_header(BEARER_AUTH))
                 .header("content-type", "application/json")
                 .header("accept", "application/json")
                 .build()
@@ -619,7 +622,7 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
             HttpRequestBuilder::get(format!(
                 "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
             ))
-            .auth(BEARER_AUTH)
+            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap(),
         ),
@@ -638,7 +641,7 @@ async fn auto_retry_upload_log_binary_when_internal_id_expires() {
         &mut c8y,
         Some(
             HttpRequestBuilder::post(format!("https://{c8y_host}/event/events/"))
-                .auth(BEARER_AUTH)
+                .headers(&get_test_auth_header(BEARER_AUTH))
                 .header("content-type", "application/json")
                 .header("accept", "application/json")
                 .build()
@@ -697,21 +700,29 @@ pub(crate) struct DynamicJwtRetriever {
 
 #[async_trait]
 impl Server for DynamicJwtRetriever {
-    type Request = AuthRequest;
-    type Response = AuthResult;
+    type Request = HttpHeaderRequest;
+    type Response = HttpHeaderResult;
 
     fn name(&self) -> &str {
         "DynamicJwtRetriever"
     }
 
     async fn handle(&mut self, _request: Self::Request) -> Self::Response {
+        let mut headers = HeaderMap::new();
         if self.count == 0 {
             self.count += 1;
-            Ok("Bearer Cached JWT token".into())
+            headers.insert(AUTHORIZATION, "Bearer Cached JWT token".parse().unwrap());
         } else {
-            Ok("Bearer Fresh JWT token".into())
+            headers.insert(AUTHORIZATION, "Bearer Fresh JWT token".parse().unwrap());
         }
+        Ok(headers)
     }
+}
+
+fn get_test_auth_header(value: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(AUTHORIZATION, value.parse().unwrap());
+    headers
 }
 
 async fn assert_recv(

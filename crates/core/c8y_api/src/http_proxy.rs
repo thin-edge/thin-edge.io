@@ -5,6 +5,7 @@ use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use reqwest::header::HeaderMap;
 use reqwest::Url;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -27,7 +28,7 @@ pub struct C8yEndPoint {
     c8y_host: String,
     c8y_mqtt_host: String,
     pub device_id: String,
-    pub token: Option<String>,
+    pub headers: HeaderMap,
     devices_internal_id: HashMap<String, String>,
 }
 
@@ -37,7 +38,7 @@ impl C8yEndPoint {
             c8y_host: c8y_host.into(),
             c8y_mqtt_host: c8y_mqtt_host.into(),
             device_id: device_id.into(),
-            token: None,
+            headers: HeaderMap::new(),
             devices_internal_id: HashMap::new(),
         }
     }

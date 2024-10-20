@@ -23,6 +23,7 @@ use futures::Sink;
 use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
+use hyper::header::AUTHORIZATION;
 use hyper::header::HOST;
 use hyper::HeaderMap;
 use reqwest::Method;
@@ -235,7 +236,7 @@ async fn connect_to_websocket(
     for (name, value) in headers {
         req = req.header(name.as_str(), value);
     }
-    req = req.header("Authorization", auth_value);
+    req = req.header(AUTHORIZATION, auth_value);
     let req = req
         .uri(uri)
         .header(HOST, host.without_scheme.as_ref())
@@ -404,10 +405,10 @@ async fn respond_to(
         None => "",
     };
     let auth: fn(reqwest::RequestBuilder, &str) -> reqwest::RequestBuilder =
-        if headers.contains_key("Authorization") {
+        if headers.contains_key(AUTHORIZATION) {
             |req, _auth_value| req
         } else {
-            |req, auth_value| req.header("Authorization", auth_value)
+            |req, auth_value| req.header(AUTHORIZATION, auth_value)
         };
     headers.remove(HOST);
 
@@ -436,7 +437,7 @@ async fn respond_to(
         let destination = format!("{}/tenant/currentTenant", host.http);
         let response = client
             .head(&destination)
-            .header("Authorization", token.to_string())
+            .header(AUTHORIZATION, token.to_string())
             .send()
             .await
             .with_context(|| format!("making HEAD request to {destination}"))?;
@@ -496,12 +497,13 @@ mod tests {
     use axum::body::Bytes;
     use axum::headers::authorization::Bearer;
     use axum::headers::Authorization;
+    use axum::http::header::AUTHORIZATION;
     use axum::http::Request;
     use axum::middleware::Next;
     use axum::TypedHeader;
-    use c8y_http_proxy::credentials::AuthRequest;
-    use c8y_http_proxy::credentials::AuthResult;
-    use c8y_http_proxy::credentials::AuthRetriever;
+    use c8y_http_proxy::credentials::HttpHeaderRequest;
+    use c8y_http_proxy::credentials::HttpHeaderResult;
+    use c8y_http_proxy::credentials::HttpHeaderRetriever;
     use camino::Utf8PathBuf;
     use futures::channel::mpsc;
     use futures::future::ready;
@@ -1113,7 +1115,7 @@ mod tests {
             let state = AppData {
                 is_https: false,
                 host: target_host.into(),
-                token_manager: TokenManager::new(AuthRetriever::new(&mut retriever)).shared(),
+                token_manager: TokenManager::new(HttpHeaderRetriever::new(&mut retriever)).shared(),
                 client: reqwest::Client::new(),
             };
             let trust_store = ca_dir
@@ -1147,16 +1149,22 @@ mod tests {
 
     #[async_trait]
     impl Server for IterJwtRetriever {
-        type Request = AuthRequest;
-        type Response = AuthResult;
+        type Request = HttpHeaderRequest;
+        type Response = HttpHeaderResult;
 
         fn name(&self) -> &str {
             "IterJwtRetriever"
         }
 
         async fn handle(&mut self, _request: Self::Request) -> Self::Response {
-            let auth_value = format!("Bearer {}", self.tokens.next().unwrap());
-            Ok(auth_value)
+            let mut header_map = HeaderMap::new();
+            header_map.insert(
+                AUTHORIZATION,
+                format!("Bearer {}", self.tokens.next().unwrap())
+                    .parse()
+                    .unwrap(),
+            );
+            Ok(header_map)
         }
     }
 

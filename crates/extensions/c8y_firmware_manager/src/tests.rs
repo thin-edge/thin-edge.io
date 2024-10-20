@@ -1,7 +1,8 @@
 use super::*;
 use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_http_proxy::credentials::AuthRequest;
+use c8y_http_proxy::credentials::HttpHeaderRequest;
+use c8y_http_proxy::HeaderMap;
 use serde_json::json;
 use sha256::digest;
 use std::io;
@@ -183,7 +184,7 @@ async fn handle_request_child_device_with_new_download() -> Result<(), DynError>
         download_request.file_path,
         ttd.path().join("cache").join(DOWNLOADED_FILE_NAME)
     );
-    assert_eq!(download_request.auth, None);
+    assert!(download_request.headers.is_empty());
 
     // Simulate downloading a file is completed.
     ttd.dir("cache").file(DOWNLOADED_FILE_NAME);
@@ -287,9 +288,9 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
     assert!(jwt_request.is_some());
 
     // Return JWT token.
-    jwt_message_box
-        .send(Ok(auth_header_value.to_string()))
-        .await?;
+    let mut headers = HeaderMap::new();
+    headers.insert("Authorization", auth_header_value.parse().unwrap());
+    jwt_message_box.send(Ok(headers.clone())).await?;
 
     // Assert firmware download request.
     let (_id, download_request) = downloader_message_box.recv().await.unwrap();
@@ -298,7 +299,7 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
         download_request.file_path,
         ttd.path().join("cache").join(digest(c8y_download_url))
     );
-    assert_eq!(download_request.auth, Some(auth_header_value.into()));
+    assert_eq!(download_request.headers, headers);
 
     Ok(())
 }
@@ -620,7 +621,7 @@ async fn spawn_firmware_manager(
     (
         JoinHandle<Result<(), RuntimeError>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
-        TimedMessageBox<FakeServerBox<AuthRequest, AuthResult>>,
+        TimedMessageBox<FakeServerBox<HttpHeaderRequest, HttpHeaderResult>>,
         TimedMessageBox<FakeServerBox<IdDownloadRequest, IdDownloadResult>>,
     ),
     DynError,
@@ -647,7 +648,8 @@ async fn spawn_firmware_manager(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
-    let mut jwt_builder: FakeServerBoxBuilder<AuthRequest, AuthResult> = FakeServerBox::builder();
+    let mut jwt_builder: FakeServerBoxBuilder<HttpHeaderRequest, HttpHeaderResult> =
+        FakeServerBox::builder();
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBox::builder();
 

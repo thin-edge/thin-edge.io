@@ -1,7 +1,7 @@
 use crate::actor::C8YHttpProxyActor;
 use crate::actor::C8YHttpProxyMessageBox;
-use crate::credentials::AuthResult;
-use crate::credentials::AuthRetriever;
+use crate::credentials::HttpHeaderResult;
+use crate::credentials::HttpHeaderRetriever;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
 use std::convert::Infallible;
@@ -27,6 +27,8 @@ mod actor;
 pub mod credentials;
 pub mod handle;
 pub mod messages;
+
+pub use http::HeaderMap;
 
 #[cfg(test)]
 mod tests;
@@ -99,24 +101,24 @@ pub struct C8YHttpProxyBuilder {
     /// Connection to an HTTP actor
     http: ClientMessageBox<HttpRequest, HttpResult>,
 
-    /// Connection to an HTTP auth header value retriever
-    auth: AuthRetriever,
+    /// Connection to an HTTP header value retriever
+    header_retriever: HttpHeaderRetriever,
 }
 
 impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
         http: &mut impl Service<HttpRequest, HttpResult>,
-        auth: &mut impl Service<(), AuthResult>,
+        header_retriever: &mut impl Service<(), HttpHeaderResult>,
     ) -> Self {
         let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
         let http = ClientMessageBox::new(http);
-        let auth = AuthRetriever::new(auth);
+        let header_retriever = HttpHeaderRetriever::new(header_retriever);
         C8YHttpProxyBuilder {
             config,
             clients,
             http,
-            auth,
+            header_retriever,
         }
     }
 }
@@ -132,7 +134,7 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
-            auth: self.auth,
+            header_retriever: self.header_retriever,
         };
 
         C8YHttpProxyActor::new(self.config, message_box)

@@ -1,6 +1,6 @@
 use axum::async_trait;
-use c8y_http_proxy::credentials::AuthResult;
-use c8y_http_proxy::credentials::AuthRetriever;
+use c8y_http_proxy::credentials::HttpHeaderResult;
+use c8y_http_proxy::credentials::HttpHeaderRetriever;
 use camino::Utf8PathBuf;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -38,14 +38,14 @@ impl C8yAuthProxyBuilder {
     pub fn try_from_config(
         config: &TEdgeConfig,
         c8y_profile: Option<&str>,
-        auth: &mut impl Service<(), AuthResult>,
+        header_retriever: &mut impl Service<(), HttpHeaderResult>,
     ) -> anyhow::Result<Self> {
         let reqwest_client = config.cloud_root_certs().client();
         let c8y = config.c8y.try_get(c8y_profile)?;
         let app_data = AppData {
             is_https: true,
             host: c8y.http.or_config_not_set()?.to_string(),
-            token_manager: TokenManager::new(AuthRetriever::new(auth)).shared(),
+            token_manager: TokenManager::new(HttpHeaderRetriever::new(header_retriever)).shared(),
             client: reqwest_client,
         };
         let bind = &c8y.proxy.bind;
