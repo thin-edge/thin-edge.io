@@ -18,7 +18,7 @@ use tokio::io::BufReader;
 use tokio::net::UnixStream;
 use url::Url;
 
-use crate::auth::Jwt;
+use crate::auth::Auth;
 pub use crate::input::C8yRemoteAccessPluginOpt;
 use crate::input::Command;
 use crate::input::RemoteAccessConnect;
@@ -291,13 +291,12 @@ async fn proxy(
         .into_diagnostic()?
         .to_string();
     let url = build_proxy_url(host.as_str(), command.key())?;
-    let jwt = Jwt::retrieve(&config, c8y_profile)
-        .await
-        .context("Failed when requesting JWT from Cumulocity")?;
+    let auth = Auth::retrieve(&config, c8y_profile)
+        .await.context("Failed when requesting JWT from Cumulocity or invalid username/password credentials are given")?;
     let client_config = config.cloud_client_tls_config();
 
     let proxy =
-        WebsocketSocketProxy::connect(&url, command.target_address(), jwt, client_config).await?;
+        WebsocketSocketProxy::connect(&url, command.target_address(), auth, client_config).await?;
 
     proxy.run().await;
     Ok(())

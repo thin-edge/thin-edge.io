@@ -1,7 +1,7 @@
 use anyhow::Context;
 use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
-use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::credentials::C8YHeaderRetriever;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::DeviceTopicId;
@@ -94,8 +94,10 @@ async fn run_with(
 
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
-    let mut jwt_actor = C8YJwtRetriever::builder(
-        mqtt_config.clone(),
+    let mut jwt_actor = C8YHeaderRetriever::builder(
+        c8y_api::http_proxy::C8yAuthType::JwtToken {
+            mqtt_config: Box::new(mqtt_config.clone()),
+        },
         tedge_config
             .c8y
             .try_get(c8y_profile)?

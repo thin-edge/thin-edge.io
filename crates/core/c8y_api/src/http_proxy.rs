@@ -1,11 +1,14 @@
 use crate::smartrest::error::SmartRestDeserializerError;
 use crate::smartrest::smartrest_deserializer::SmartRestJwtResponse;
+use camino::Utf8PathBuf;
 use mqtt_channel::Connection;
 use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use reqwest::header::InvalidHeaderValue;
 use reqwest::Url;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -131,53 +134,117 @@ impl C8yEndPoint {
     }
 }
 
-pub struct C8yMqttJwtTokenRetriever {
-    mqtt_config: mqtt_channel::Config,
+pub enum C8yAuthType {
+    JwtToken {
+        mqtt_config: Box<mqtt_channel::Config>,
+    },
+    Basic {
+        credentials_path: Utf8PathBuf,
+    },
+}
+
+pub struct C8yAuthRetriever {
+    auth: C8yAuthType,
     topic_prefix: TopicPrefix,
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum JwtRetrieverError {
+pub enum C8yAuthRetrieverError {
     #[error(transparent)]
     MqttConfigBuild(#[from] MqttConfigBuildError),
     #[error(transparent)]
     ConfigMulti(#[from] MultiError),
+    #[error(transparent)]
+    JwtError(#[from] JwtError),
+    #[error(transparent)]
+    InvalidHeaderValue(#[from] InvalidHeaderValue),
 }
 
-impl C8yMqttJwtTokenRetriever {
+impl C8yAuthRetriever {
     pub fn from_tedge_config(
         tedge_config: &TEdgeConfig,
         c8y_profile: Option<&str>,
-    ) -> Result<Self, JwtRetrieverError> {
-        let mqtt_config = tedge_config
-            .mqtt_config()
-            .map_err(MqttConfigBuildError::from)?;
+    ) -> Result<Self, C8yAuthRetrieverError> {
+        // FIXME: replace me with tedge config
+        let use_basic_auth = true;
+        let credentials_path = Utf8PathBuf::from("/etc/tedge/c8y/.password");
 
-        Ok(Self::new(
-            mqtt_config,
-            tedge_config
+        let auth = if use_basic_auth {
+            C8yAuthType::Basic { credentials_path }
+        } else {
+            let mqtt_config = tedge_config
+                .mqtt_config()
+                .map_err(MqttConfigBuildError::from)?;
+            C8yAuthType::JwtToken {
+                mqtt_config: Box::new(mqtt_config),
+            }
+        };
+
+        Ok(Self {
+            auth,
+            topic_prefix: tedge_config
                 .c8y
                 .try_get(c8y_profile)?
                 .bridge
                 .topic_prefix
                 .clone(),
-        ))
+        })
     }
 
-    pub fn new(mqtt_config: mqtt_channel::Config, topic_prefix: TopicPrefix) -> Self {
+    pub fn new_with_jwt_auth(mqtt_config: mqtt_channel::Config, topic_prefix: TopicPrefix) -> Self {
         let topic = TopicFilter::new_unchecked(&format!("{topic_prefix}/s/dat"));
         let mqtt_config = mqtt_config
             .with_no_session() // Ignore any already published tokens, possibly stale.
             .with_subscriptions(topic);
 
-        C8yMqttJwtTokenRetriever {
-            mqtt_config,
+        Self {
+            auth: C8yAuthType::JwtToken {
+                mqtt_config: Box::new(mqtt_config),
+            },
             topic_prefix,
         }
     }
 
-    pub async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, JwtError> {
-        let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
+    pub fn new_with_basic_auth(credentials_path: Utf8PathBuf, topic_prefix: TopicPrefix) -> Self {
+        Self {
+            auth: C8yAuthType::Basic { credentials_path },
+            topic_prefix,
+        }
+    }
+
+    pub async fn get_auth_header_value(&mut self) -> Result<HeaderValue, C8yAuthRetrieverError> {
+        let header_value = match &self.auth {
+            C8yAuthType::JwtToken { .. } => {
+                let jwt_token = self.get_jwt_token().await?;
+                format!("Bearer {}", jwt_token.token()).parse()?
+            }
+            C8yAuthType::Basic { .. } => {
+                let (username, password) = self.get_basic_auth().await?;
+                format!("Basic {}", base64::encode(format!("{username}:{password}"))).parse()?
+            }
+        };
+        Ok(header_value)
+    }
+
+    async fn get_basic_auth(&self) -> Result<(String, String), C8yAuthRetrieverError> {
+        let C8yAuthType::Basic {
+            credentials_path: _,
+        } = &self.auth
+        else {
+            panic!("This method should not be called if not intended to use Basic auth (username/password).");
+        };
+        // FIXME: async read credentials from a file
+        let username = "abc";
+        let password = "1234";
+
+        Ok((username.into(), password.into()))
+    }
+
+    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, JwtError> {
+        let C8yAuthType::JwtToken { mqtt_config } = &self.auth else {
+            panic!("This method should not be called if not intended to use JWT token.");
+        };
+        let mut mqtt_con = Connection::new(mqtt_config).await?;
         let pub_topic = format!("{}/s/uat", self.topic_prefix);
 
         tokio::time::sleep(Duration::from_millis(20)).await;
