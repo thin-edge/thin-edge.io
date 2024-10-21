@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use http::header::HeaderName;
 use http::header::HeaderValue;
+use http::HeaderMap;
 use http::Method;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -109,6 +110,15 @@ impl HttpRequestBuilder {
         }
     }
 
+    /// Add multiple headers at once
+    pub fn headers(mut self, header_map: &HeaderMap) -> Self {
+        let request = self.inner.headers_mut().unwrap();
+        for (key, value) in header_map {
+            request.insert(key, value.clone());
+        }
+        self
+    }
+
     /// Send a JSON body
     pub fn json<T: serde::Serialize + ?Sized>(self, json: &T) -> Self {
         let body = serde_json::to_vec(json)
@@ -121,15 +131,6 @@ impl HttpRequestBuilder {
     pub fn body(self, content: impl Into<hyper::Body>) -> Self {
         let body = Ok(content.into());
         HttpRequestBuilder { body, ..self }
-    }
-
-    /// Add bearer authentication (e.g. a JWT token)
-    pub fn bearer_auth<T>(self, token: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        let header_value = format!("Bearer {}", token);
-        self.header(http::header::AUTHORIZATION, header_value)
     }
 }
 

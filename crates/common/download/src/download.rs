@@ -11,6 +11,7 @@ use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
 use reqwest::header;
+use reqwest::header::HeaderMap;
 use reqwest::Client;
 use reqwest::Identity;
 use serde::Deserialize;
@@ -20,8 +21,6 @@ use std::fs::File;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
-#[cfg(target_os = "linux")]
-use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -31,6 +30,8 @@ use tedge_utils::file::FileError;
 use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
 use nix::fcntl::FallocateFlags;
+#[cfg(target_os = "linux")]
+use std::os::unix::prelude::AsRawFd;
 
 fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 15 minutes total.
@@ -49,8 +50,8 @@ fn default_backoff() -> ExponentialBackoff {
 #[serde(deny_unknown_fields)]
 pub struct DownloadInfo {
     pub url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth: Option<Auth>,
+    #[serde(skip)]
+    pub headers: HeaderMap,
 }
 
 impl From<&str> for DownloadInfo {
@@ -64,14 +65,14 @@ impl DownloadInfo {
     pub fn new(url: &str) -> Self {
         Self {
             url: url.into(),
-            auth: None,
+            headers: HeaderMap::new(),
         }
     }
 
     /// Creates new [`DownloadInfo`] from a URL with authentication.
-    pub fn with_auth(self, auth: Auth) -> Self {
+    pub fn with_headers(self, header_map: HeaderMap) -> Self {
         Self {
-            auth: Some(auth),
+            headers: header_map,
             ..self
         }
     }
@@ -82,21 +83,6 @@ impl DownloadInfo {
 
     pub fn is_empty(&self) -> bool {
         self.url.trim().is_empty()
-    }
-}
-
-/// Possible authentication schemes
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub enum Auth {
-    /// HTTP Bearer authentication
-    Bearer(String),
-}
-
-impl Auth {
-    pub fn new_bearer(token: &str) -> Self {
-        Self::Bearer(token.into())
     }
 }
 
@@ -384,9 +370,7 @@ impl Downloader {
 
         let operation = || async {
             let mut request = self.client.get(url.url());
-            if let Some(Auth::Bearer(token)) = &url.auth {
-                request = request.bearer_auth(token)
-            }
+            request = request.headers(url.headers.clone());
 
             if range_start != 0 {
                 request = request.header("Range", format!("bytes={range_start}-"));
@@ -482,6 +466,7 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
 #[allow(deprecated)]
 mod tests {
     use super::*;
+    use hyper::header::AUTHORIZATION;
     use std::io::Write;
     use tempfile::tempdir;
     use tempfile::NamedTempFile;
@@ -923,10 +908,12 @@ mod tests {
             }
         };
 
-        // applying token if `with_token` = true
+        // applying http auth header
         let url = {
             if with_token {
-                url.with_auth(Auth::Bearer(String::from("token")))
+                let mut headers = HeaderMap::new();
+                headers.append(AUTHORIZATION, "Bearer token".parse().unwrap());
+                url.with_headers(headers)
             } else {
                 url
             }

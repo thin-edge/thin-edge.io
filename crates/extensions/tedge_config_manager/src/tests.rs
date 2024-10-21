@@ -379,7 +379,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
         std::env::temp_dir().join("type_two")
     );
 
-    assert_eq!(download_request.auth, None);
+    assert!(download_request.headers.is_empty());
 
     // Simulate downloading a file is completed.
     std::fs::File::create(&download_request.file_path).unwrap();

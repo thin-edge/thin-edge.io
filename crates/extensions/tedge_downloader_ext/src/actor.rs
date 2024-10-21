@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use certificate::CloudRootCerts;
-use download::Auth;
 use download::DownloadError;
 use download::DownloadInfo;
 use download::Downloader;
 use log::info;
+use reqwest::header::HeaderMap;
 use reqwest::Identity;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -20,7 +20,7 @@ use tedge_utils::file::PermissionEntry;
 pub struct DownloadRequest {
     pub url: String,
     pub file_path: PathBuf,
-    pub auth: Option<Auth>,
+    pub headers: HeaderMap,
     pub permission: Option<PermissionEntry>,
 }
 
@@ -29,14 +29,14 @@ impl DownloadRequest {
         Self {
             url: url.into(),
             file_path: file_path.into(),
-            auth: None,
+            headers: HeaderMap::new(),
             permission: None,
         }
     }
 
-    pub fn with_auth(self, auth: Auth) -> Self {
+    pub fn with_headers(self, header_map: HeaderMap) -> Self {
         Self {
-            auth: Some(auth),
+            headers: header_map,
             ..self
         }
     }
@@ -112,11 +112,7 @@ impl<T: Message> Server for DownloaderActor<T> {
     async fn handle(&mut self, id_request: Self::Request) -> Self::Response {
         let (id, request) = id_request;
 
-        let download_info = if let Some(auth) = request.auth {
-            DownloadInfo::new(&request.url).with_auth(auth)
-        } else {
-            DownloadInfo::new(&request.url)
-        };
+        let download_info = DownloadInfo::new(&request.url).with_headers(request.headers);
 
         let downloader = Downloader::new(
             request.file_path.clone(),

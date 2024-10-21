@@ -22,7 +22,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
-use std::time::SystemTime;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -3055,21 +3054,6 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<C8YRestRequest,
     tokio::spawn(async move {
         loop {
             match http.recv().await {
-                Some(C8YRestRequest::GetJwtToken(_)) => {
-                    let _ = http
-                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
-                            "dummy-token".into(),
-                        )))
-                        .await;
-                }
-                Some(C8YRestRequest::GetFreshJwtToken(_)) => {
-                    let now = SystemTime::now();
-                    let _ = http
-                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
-                            format!("dummy-token-{:?}", now),
-                        )))
-                        .await;
-                }
                 Some(C8YRestRequest::SoftwareListResponse(_)) => {
                     let _ = http
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Unit(())))

@@ -1,6 +1,8 @@
+use anyhow::Context;
+use hyper::header::AUTHORIZATION;
 use std::sync::Arc;
 
-use c8y_http_proxy::credentials::JwtRetriever;
+use c8y_http_proxy::credentials::HttpHeaderRetriever;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
@@ -16,12 +18,12 @@ impl SharedTokenManager {
 }
 
 pub struct TokenManager {
-    recv: JwtRetriever,
+    recv: HttpHeaderRetriever,
     cached: Option<Arc<str>>,
 }
 
 impl TokenManager {
-    pub fn new(recv: JwtRetriever) -> Self {
+    pub fn new(recv: HttpHeaderRetriever) -> Self {
         Self { recv, cached: None }
     }
 
@@ -41,7 +43,11 @@ impl TokenManager {
     }
 
     async fn refresh(&mut self) -> Result<Arc<str>, anyhow::Error> {
-        self.cached = Some(self.recv.await_response(()).await??.into());
+        let header_map = self.recv.await_response(()).await??;
+        let auth_header_value = header_map
+            .get(AUTHORIZATION)
+            .context("Authorization is missing from header")?;
+        self.cached = Some(auth_header_value.to_str()?.into());
         Ok(self.cached.as_ref().unwrap().clone())
     }
 }
