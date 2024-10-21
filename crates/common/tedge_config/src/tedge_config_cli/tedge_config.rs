@@ -470,6 +470,17 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
+        // TODO: Enum or bool? If enum, what are the other items?
+        /// Use basic authentication (username/password) instead of device certificate based authentication
+        #[tedge_config(example = "true", default(value = false))]
+        use_basic_auth: bool,
+
+        /// The path where Cumulocity username/password are stored
+        #[tedge_config(note = "The value must be the path of the credentials file.")]
+        #[tedge_config(example = "/etc/tedge/credentials", default(value = "/etc/tedge/credentials"))]
+        #[doku(as = "PathBuf")]
+        credentials_path: Utf8PathBuf,
+
         smartrest: {
             /// Set of SmartREST template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]

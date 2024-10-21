@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use c8y_api::http_proxy::C8yAuthRetriever;
-use c8y_api::http_proxy::C8yAuthType;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use tedge_actors::ClientMessageBox;
@@ -8,7 +7,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_config::TopicPrefix;
+use tedge_config::TEdgeConfig;
 
 pub type HttpHeaderRequest = ();
 pub type HttpHeaderResult = Result<HeaderMap, HttpHeaderError>;
@@ -22,20 +21,17 @@ pub struct C8YHeaderRetriever {
 }
 
 impl C8YHeaderRetriever {
-    pub fn builder(
-        auth: C8yAuthType,
-        topic_prefix: TopicPrefix,
-    ) -> ServerActorBuilder<C8YHeaderRetriever, Sequential> {
-        let auth_retriever = match auth {
-            C8yAuthType::JwtToken { mqtt_config } => {
-                C8yAuthRetriever::new_with_jwt_auth(*mqtt_config, topic_prefix)
-            }
-            C8yAuthType::Basic { credentials_path } => {
-                C8yAuthRetriever::new_with_basic_auth(credentials_path, topic_prefix)
-            }
-        };
+    pub fn try_builder(
+        config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
+    ) -> Result<ServerActorBuilder<C8YHeaderRetriever, Sequential>, HttpHeaderError> {
+        let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y_profile)?;
         let server = C8YHeaderRetriever { auth_retriever };
-        ServerActorBuilder::new(server, &ServerConfig::default(), Sequential)
+        Ok(ServerActorBuilder::new(
+            server,
+            &ServerConfig::default(),
+            Sequential,
+        ))
     }
 }
 

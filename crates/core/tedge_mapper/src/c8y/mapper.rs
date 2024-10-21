@@ -2,7 +2,6 @@ use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use anyhow::Context;
 use async_trait::async_trait;
-use c8y_api::http_proxy::C8yAuthType;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YHeaderRetriever;
 use c8y_http_proxy::C8YHttpConfig;
@@ -15,7 +14,6 @@ use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
 use std::borrow::Cow;
-use std::path::PathBuf;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::ProfileName;
@@ -50,7 +48,6 @@ impl TEdgeComponent for CumulocityMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
 
-        let mqtt_config = tedge_config.mqtt_config()?;
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
@@ -187,20 +184,8 @@ impl TEdgeComponent for CumulocityMapper {
                 )
                 .await?;
         }
-        // FIXME: replace hardcoded values by tedge config
-        let use_basic_auth = true;
-        let auth_type = if use_basic_auth {
-            let credentials_path = PathBuf::from("/etc/tedge/c8y/.credentials");
-            C8yAuthType::Basic {
-                credentials_path: credentials_path.try_into().unwrap(),
-            }
-        } else {
-            C8yAuthType::JwtToken {
-                mqtt_config: Box::new(mqtt_config),
-            }
-        };
-        let mut header_actor =
-            C8YHeaderRetriever::builder(auth_type, c8y_config.bridge.topic_prefix.clone());
+
+        let mut header_actor = C8YHeaderRetriever::try_builder(&tedge_config, c8y_profile)?;
         let mut http_actor = HttpActor::new(&tedge_config).builder();
         let c8y_http_config = C8YHttpConfig::try_new(&tedge_config, c8y_profile)?;
         let mut c8y_http_proxy_actor =

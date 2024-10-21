@@ -94,17 +94,7 @@ async fn run_with(
 
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
-    let mut jwt_actor = C8YHeaderRetriever::builder(
-        c8y_api::http_proxy::C8yAuthType::JwtToken {
-            mqtt_config: Box::new(mqtt_config.clone()),
-        },
-        tedge_config
-            .c8y
-            .try_get(c8y_profile)?
-            .bridge
-            .topic_prefix
-            .clone(),
-    );
+    let mut jwt_actor = C8YHeaderRetriever::try_builder(&tedge_config, c8y_profile)?;
     let identity = tedge_config.http.client.auth.identity()?;
     let cloud_root_certs = tedge_config.cloud_root_certs();
     let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
