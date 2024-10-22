@@ -23,6 +23,7 @@ pub struct BridgeConfigC8yParams {
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
     pub smartrest_templates: TemplatesSet,
+    pub smartrest_one_templates: TemplatesSet,
     pub include_local_clean_session: AutoFlag,
     pub bridge_location: BridgeLocation,
     pub topic_prefix: TopicPrefix,
@@ -40,6 +41,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_certfile,
             bridge_keyfile,
             smartrest_templates,
+            smartrest_one_templates,
             include_local_clean_session,
             bridge_location,
             topic_prefix,
@@ -96,6 +98,38 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             })
             .collect::<Vec<String>>();
         topics.extend(templates_set);
+
+        // These topics are somehow required to receive operations when using Basic auth
+        let use_smartrest_one = use_basic_auth;
+        if use_smartrest_one {
+            topics.extend([
+                format!(r#"s/ul/# out 2 {topic_prefix}/ """#),
+                format!(r#"t/ul/# out 2 {topic_prefix}/ """#),
+                format!(r#"q/ul/# out 2 {topic_prefix}/ """#),
+                format!(r#"c/ul/# out 2 {topic_prefix}/ """#),
+                format!(r#"s/dl/# in 2 {topic_prefix}/ """#),
+            ]);
+        }
+
+        // SmartRest1 (to support customers with existing solutions based on SmartRest 1)
+        // Only add the topics if at least 1 template is defined
+        if !smartrest_one_templates.0.is_empty() {
+            let templates_set = smartrest_one_templates
+                .0
+                .iter()
+                .flat_map(|s| {
+                    // SmartRest1 templates should be deserialized as:
+                    // c8y/s/ul/template-1 (in from localhost), s/ul/template-1
+                    // c8y/s/dl/template-1 (out to localhost), s/dl/template-1
+                    [
+                        format!(r#"s/ul/{s} out 2 {topic_prefix}/ """#),
+                        format!(r#"s/dl/{s} in 2 {topic_prefix}/ """#),
+                    ]
+                    .into_iter()
+                })
+                .collect::<Vec<String>>();
+            topics.extend(templates_set);
+        }
 
         let include_local_clean_session = match include_local_clean_session {
             AutoFlag::True => true,
@@ -179,6 +213,7 @@ mod tests {
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
+            smartrest_one_templates: TemplatesSet::default(),
             include_local_clean_session: AutoFlag::False,
             bridge_location: BridgeLocation::Mosquitto,
             topic_prefix: "c8y".try_into().unwrap(),
@@ -267,6 +302,7 @@ mod tests {
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
+            smartrest_one_templates: TemplatesSet::try_from(vec!["legacy1", "legacy2"])?,
             include_local_clean_session: AutoFlag::False,
             bridge_location: BridgeLocation::Mosquitto,
             topic_prefix: "c8y".try_into().unwrap(),
@@ -319,6 +355,17 @@ mod tests {
                 r#"s/dc/abc in 2 c8y/ """#.into(),
                 r#"s/uc/def out 2 c8y/ """#.into(),
                 r#"s/dc/def in 2 c8y/ """#.into(),
+                // SmartREST 1.0 topics
+                r#"s/ul/# out 2 c8y/ """#.into(),
+                r#"t/ul/# out 2 c8y/ """#.into(),
+                r#"q/ul/# out 2 c8y/ """#.into(),
+                r#"c/ul/# out 2 c8y/ """#.into(),
+                r#"s/dl/# in 2 c8y/ """#.into(),
+                // SmartREST 1.0 custom templates
+                r#"s/ul/legacy1 out 2 c8y/ """#.into(),
+                r#"s/dl/legacy1 in 2 c8y/ """#.into(),
+                r#"s/ul/legacy2 out 2 c8y/ """#.into(),
+                r#"s/dl/legacy2 in 2 c8y/ """#.into(),
             ],
             try_private: false,
             start_type: "automatic".into(),

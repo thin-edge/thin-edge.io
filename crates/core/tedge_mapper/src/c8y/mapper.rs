@@ -53,7 +53,14 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
-            let custom_topics = c8y_config
+            let smartrest_1_topics = c8y_config
+                .smartrest1
+                .templates
+                .0
+                .iter()
+                .map(|id| Cow::Owned(format!("s/dl/{id}")));
+
+            let smartrest_2_topics = c8y_config
                 .smartrest
                 .templates
                 .0
@@ -76,7 +83,8 @@ impl TEdgeComponent for CumulocityMapper {
                     None
                 }
             })
-            .chain(custom_topics);
+            .chain(smartrest_1_topics)
+            .chain(smartrest_2_topics);
 
             let mut tc = BridgeConfig::new();
             let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
@@ -93,6 +101,12 @@ impl TEdgeComponent for CumulocityMapper {
             tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
             tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
             tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
+
+            // SmartREST1
+            tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
 
             // SmartREST2
             tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
