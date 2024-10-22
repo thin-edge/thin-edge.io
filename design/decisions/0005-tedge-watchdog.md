@@ -1,7 +1,7 @@
 # tedge-watchdog
 
 * Date: __2024-10-18__
-* Status: __New__
+* Status: __Approved__
 
 ## Background
 
