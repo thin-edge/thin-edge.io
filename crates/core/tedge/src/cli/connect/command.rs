@@ -298,7 +298,14 @@ fn check_device_status_c8y(
     tedge_config: &TEdgeConfig,
     c8y_profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let prefix = &tedge_config.c8y.try_get(c8y_profile)?.bridge.topic_prefix;
+    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+
+    // TODO: Use SmartREST1 to check connection
+    if c8y_config.use_basic_auth {
+        return Ok(DeviceStatus::AlreadyExists);
+    }
+
+    let prefix = c8y_config.bridge.topic_prefix.clone();
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -587,8 +594,11 @@ fn new_bridge(
         bridge_config_exists(config_location, bridge_config)?;
     }
 
+    let use_basic_auth =
+        bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
+
     println!("Validating the bridge certificates.\n");
-    bridge_config.validate()?;
+    bridge_config.validate(use_basic_auth)?;
 
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
@@ -596,6 +606,7 @@ fn new_bridge(
         } else {
             println!("Creating the device in Cumulocity cloud.\n");
             c8y_direct_connection::create_device_with_direct_connection(
+                use_basic_auth,
                 bridge_config,
                 device_type,
             )?;

@@ -101,17 +101,19 @@ impl BridgeConfig {
         Ok(())
     }
 
-    pub fn validate(&self) -> Result<(), ConnectError> {
+    pub fn validate(&self, use_basic_auth: bool) -> Result<(), ConnectError> {
         if !self.bridge_root_cert_path.exists() {
             return Err(ConnectError::Certificate);
         }
 
-        if !self.bridge_certfile.exists() {
-            return Err(ConnectError::Certificate);
-        }
+        if !use_basic_auth {
+            if !self.bridge_certfile.exists() {
+                return Err(ConnectError::Certificate);
+            }
 
-        if !self.bridge_keyfile.exists() {
-            return Err(ConnectError::Certificate);
+            if !self.bridge_keyfile.exists() {
+                return Err(ConnectError::Certificate);
+            }
         }
 
         Ok(())
@@ -446,7 +448,7 @@ bridge_attempt_unsubscribe false
             ..default_bridge_config()
         };
 
-        assert!(config.validate().is_ok());
+        assert!(config.validate(false).is_ok());
 
         Ok(())
     }
@@ -462,7 +464,7 @@ bridge_attempt_unsubscribe false
             ..default_bridge_config()
         };
 
-        assert!(config.validate().is_err());
+        assert!(config.validate(false).is_err());
     }
 
     #[test]
@@ -478,7 +480,7 @@ bridge_attempt_unsubscribe false
             ..default_bridge_config()
         };
 
-        assert!(config.validate().is_err());
+        assert!(config.validate(false).is_err());
 
         Ok(())
     }

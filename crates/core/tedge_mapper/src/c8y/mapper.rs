@@ -2,6 +2,7 @@ use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use anyhow::Context;
 use async_trait::async_trait;
+use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YHeaderRetriever;
 use c8y_http_proxy::C8YHttpConfig;
@@ -22,6 +23,7 @@ use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
+use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -59,15 +61,21 @@ impl TEdgeComponent for CumulocityMapper {
                 .map(|id| Cow::Owned(format!("s/dc/{id}")));
 
             let cloud_topics = [
-                "s/dt",
-                "s/dat",
-                "s/ds",
-                "s/e",
-                "devicecontrol/notifications",
-                "error",
+                ("s/dt", true),
+                ("s/ds", true),
+                ("s/dat", !c8y_config.use_basic_auth),
+                ("s/e", true),
+                ("devicecontrol/notifications", true),
+                ("error", true),
             ]
             .into_iter()
-            .map(Cow::Borrowed)
+            .filter_map(|(topic, active)| {
+                if active {
+                    Some(Cow::Borrowed(topic))
+                } else {
+                    None
+                }
+            })
             .chain(custom_topics);
 
             let mut tc = BridgeConfig::new();
@@ -105,7 +113,11 @@ impl TEdgeComponent for CumulocityMapper {
             )?;
             tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
             tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+
+            // JWT token
+            if !c8y_config.use_basic_auth {
+                tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+            }
 
             let c8y = c8y_config.mqtt.or_config_not_set()?;
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
@@ -116,7 +128,18 @@ impl TEdgeComponent for CumulocityMapper {
             // Cumulocity tells us not to not set clean session to false, so don't
             // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
             cloud_config.set_clean_session(true);
-            use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
+
+            if c8y_config.use_basic_auth {
+                let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
+                use_credentials(
+                    &mut cloud_config,
+                    &c8y_config.root_cert_path,
+                    username,
+                    password,
+                )?;
+            } else {
+                use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
+            }
 
             let main_device_xid: EntityExternalId =
                 tedge_config.device.id.try_read(&tedge_config)?.into();
