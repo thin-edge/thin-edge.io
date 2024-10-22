@@ -56,7 +56,7 @@ impl WorkflowSupervisor {
             versions.remove(version);
         }
 
-        let (empty,builtin_restored) = match self.workflows.get(&operation) {
+        let (empty, builtin_restored) = match self.workflows.get(&operation) {
             None => (true, false),
             Some(version) if version.is_empty() => (true, false),
             Some(version) if version.is_builtin() => (false, true),
