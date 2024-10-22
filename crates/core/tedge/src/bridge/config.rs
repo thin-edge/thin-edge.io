@@ -18,6 +18,7 @@ pub struct BridgeConfig {
     pub connection: String,
     pub address: HostPort<MQTT_TLS_PORT>,
     pub remote_username: Option<String>,
+    pub remote_password: Option<String>,
     pub bridge_root_cert_path: Utf8PathBuf,
     pub remote_clientid: String,
     pub local_clientid: String,
@@ -49,9 +50,6 @@ impl BridgeConfig {
     pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writeln!(writer, "### Bridge")?;
         writeln!(writer, "connection {}", self.connection)?;
-        if let Some(name) = &self.remote_username {
-            writeln!(writer, "remote_username {}", name)?;
-        }
         writeln!(writer, "address {}", self.address)?;
 
         if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
@@ -62,8 +60,20 @@ impl BridgeConfig {
 
         writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
         writeln!(writer, "local_clientid {}", self.local_clientid)?;
-        writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
-        writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
+
+        if let Some(name) = &self.remote_username {
+            writeln!(writer, "remote_username {}", name)?;
+        }
+        let use_basic_auth = self.remote_username.is_some() && self.remote_password.is_some();
+        if use_basic_auth {
+            if let Some(password) = &self.remote_password {
+                writeln!(writer, "remote_password {}", password)?;
+            }
+        } else {
+            writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
+            writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
+        }
+
         writeln!(writer, "try_private {}", self.try_private)?;
         writeln!(writer, "start_type {}", self.start_type)?;
         writeln!(writer, "cleansession {}", self.clean_session)?;
@@ -155,6 +165,7 @@ mod test {
             connection: "edge_to_test".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "test".into(),
@@ -222,6 +233,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_test".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "test".into(),
@@ -288,6 +300,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_az".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
             remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
+            remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "Azure".into(),
@@ -342,6 +355,74 @@ bridge_attempt_unsubscribe false
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
         expected.insert("topic messages/devicebound/# in 1 az/ devices/alpha/");
+        assert_eq!(config_set, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize_use_basic_auth() -> anyhow::Result<()> {
+        let file = tempfile::NamedTempFile::new()?;
+        let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
+
+        let config = BridgeConfig {
+            cloud_name: "c8y".into(),
+            config_file: "c8y-bridge.conf".into(),
+            connection: "edge_to_c8y".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
+            remote_username: Some("octocat".into()),
+            remote_password: Some("pass1234".into()),
+            bridge_root_cert_path: bridge_root_cert_path.to_owned(),
+            remote_clientid: "alpha".into(),
+            local_clientid: "C8Y".into(),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            use_mapper: false,
+            use_agent: false,
+            topics: vec![
+                r#"inventory/managedObjects/update/# out 2 c8y/ """#.into(),
+                r#"measurement/measurements/create out 2 c8y/ """#.into(),
+            ],
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            include_local_clean_session: true,
+            local_clean_session: true,
+            notifications: false,
+            notifications_local_only: false,
+            notification_topic: "test_topic".into(),
+            bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 1,
+        };
+
+        let mut buffer = Vec::new();
+        config.serialize(&mut buffer)?;
+
+        let contents = String::from_utf8(buffer)?;
+        let config_set: std::collections::HashSet<&str> = contents
+            .lines()
+            .filter(|str| !str.is_empty() && !str.starts_with('#'))
+            .collect();
+
+        let mut expected = std::collections::HashSet::new();
+        expected.insert("connection edge_to_c8y");
+        expected.insert("remote_username octocat");
+        expected.insert("remote_password pass1234");
+        expected.insert("address test.test.io:8883");
+        let bridge_capath = format!("bridge_cafile {}", bridge_root_cert_path);
+        expected.insert(&bridge_capath);
+        expected.insert("remote_clientid alpha");
+        expected.insert("local_clientid C8Y");
+        expected.insert("start_type automatic");
+        expected.insert("try_private false");
+        expected.insert("cleansession true");
+        expected.insert("local_cleansession true");
+        expected.insert("notifications false");
+        expected.insert("notifications_local_only false");
+        expected.insert("notification_topic test_topic");
+        expected.insert("bridge_attempt_unsubscribe false");
+        expected.insert(r#"topic inventory/managedObjects/update/# out 2 c8y/ """#);
+        expected.insert(r#"topic measurement/measurements/create out 2 c8y/ """#);
         assert_eq!(config_set, expected);
         Ok(())
     }
@@ -409,6 +490,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_az/c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::from_str("test.com").unwrap(),
             remote_username: None,
+            remote_password: None,
             bridge_root_cert_path: "".into(),
             bridge_certfile: "".into(),
             bridge_keyfile: "".into(),

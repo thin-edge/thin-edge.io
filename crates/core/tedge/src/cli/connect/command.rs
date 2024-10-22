@@ -9,6 +9,7 @@ use crate::cli::connect::jwt_token::*;
 use crate::cli::connect::*;
 use crate::command::Command;
 use crate::ConfigError;
+use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8PathBuf;
 use rumqttc::Event;
 use rumqttc::Incoming;
@@ -263,11 +264,21 @@ pub fn bridge_config(
         }
         Cloud::C8y => {
             let c8y_config = config.c8y.try_get(profile)?;
+
+            let (remote_username, remote_password) = if c8y_config.use_basic_auth {
+                let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
+                (Some(username), Some(password))
+            } else {
+                (None, None)
+            };
+
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
                 config_file: Cloud::C8y.bridge_config_filename(profile),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
+                remote_username,
+                remote_password,
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 smartrest_templates: c8y_config.smartrest.templates.clone(),

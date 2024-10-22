@@ -177,14 +177,8 @@ pub enum C8yAuthRetrieverError {
     #[error(transparent)]
     InvalidHeaderValue(#[from] InvalidHeaderValue),
 
-    #[error("{context}: {source}")]
-    ReadCredentialsFailed {
-        context: String,
-        source: std::io::Error,
-    },
-
-    #[error("Error while parsing credentials file: '{0}': {1}.")]
-    TomlError(PathBuf, #[source] toml::de::Error),
+    #[error(transparent)]
+    CredentialsFileError(#[from] CredentialsFileError),
 }
 
 impl C8yAuthRetriever {
@@ -219,8 +213,7 @@ impl C8yAuthRetriever {
     pub async fn get_auth_header_value(&mut self) -> Result<HeaderValue, C8yAuthRetrieverError> {
         let header_value = match &self {
             Self::Basic { credentials_path } => {
-                let BasicCredentials { username, password } =
-                    Self::get_basic_auth(credentials_path).await?;
+                let (username, password) = read_c8y_credentials(credentials_path)?;
                 format!("Basic {}", base64::encode(format!("{username}:{password}"))).parse()?
             }
             Self::Jwt {
@@ -232,20 +225,6 @@ impl C8yAuthRetriever {
             }
         };
         Ok(header_value)
-    }
-
-    async fn get_basic_auth(
-        credentials_path: &Utf8Path,
-    ) -> Result<BasicCredentials, C8yAuthRetrieverError> {
-        let contents = tokio::fs::read_to_string(credentials_path)
-            .await
-            .map_err(|e| C8yAuthRetrieverError::ReadCredentialsFailed {
-                context: "Failed to read the basic auth credentials file.".to_string(),
-                source: e,
-            })?;
-        let credentials: Credentials = toml::from_str(&contents)
-            .map_err(|e| C8yAuthRetrieverError::TomlError(credentials_path.into(), e))?;
-        Ok(credentials.c8y)
     }
 
     async fn get_jwt_token(
@@ -293,6 +272,34 @@ impl C8yAuthRetriever {
         error!("Fail to retrieve JWT token after 3 attempts");
         Err(JwtError::NoJwtReceived)
     }
+}
+
+pub fn read_c8y_credentials(
+    credentials_path: &Utf8Path,
+) -> Result<(String, String), CredentialsFileError> {
+    let contents = std::fs::read_to_string(credentials_path).map_err(|e| {
+        CredentialsFileError::ReadCredentialsFailed {
+            context: "Failed to read the basic auth credentials file.".to_string(),
+            source: e,
+        }
+    })?;
+    let credentials: Credentials = toml::from_str(&contents)
+        .map_err(|e| CredentialsFileError::TomlError(credentials_path.into(), e))?;
+    let BasicCredentials { username, password } = credentials.c8y;
+
+    Ok((username, password))
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum CredentialsFileError {
+    #[error("{context}: {source}")]
+    ReadCredentialsFailed {
+        context: String,
+        source: std::io::Error,
+    },
+
+    #[error("Error while parsing credentials file: '{0}': {1}.")]
+    TomlError(PathBuf, #[source] toml::de::Error),
 }
 
 #[derive(thiserror::Error, Debug)]

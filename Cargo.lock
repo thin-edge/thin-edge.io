@@ -3716,6 +3716,7 @@ dependencies = [
  "base64 0.13.1",
  "c8y-firmware-plugin",
  "c8y-remote-access-plugin",
+ "c8y_api",
  "camino",
  "cap",
  "certificate",
