@@ -24,22 +24,20 @@ impl WorkflowSupervisor {
         self.register_custom_workflow(
             WorkflowSource::BuiltIn,
             OperationWorkflow::built_in(operation),
-            "builtin".to_string(),
         )
     }
 
     /// Register a user-defined workflow
     pub fn register_custom_workflow(
         &mut self,
-        source: WorkflowSource,
+        version: WorkflowSource<WorkflowVersion>,
         workflow: OperationWorkflow,
-        version: WorkflowVersion,
     ) -> Result<(), WorkflowRegistrationError> {
         let operation = workflow.operation.clone();
         if let Some(versions) = self.workflows.get_mut(&operation) {
-            versions.add(source, version, workflow);
+            versions.add(version, workflow);
         } else {
-            let versions = WorkflowVersions::new(source, version, workflow);
+            let versions = WorkflowVersions::new(version, workflow);
             self.workflows.insert(operation, versions);
         }
         Ok(())
@@ -47,31 +45,29 @@ impl WorkflowSupervisor {
 
     /// Un-register a user-defined workflow
     ///
-    /// Return None is this was the last version for that operation.
-    /// Return Some(BuiltIn) is there is a builtin definition
-    /// Return Some(InUseCopy) if the workflow has been deprecated but there is still a running command.
+    /// Return true if a builtin version has been restored
     pub fn unregister_custom_workflow(
         &mut self,
         operation: &OperationName,
         version: &WorkflowVersion,
-    ) -> Option<WorkflowSource> {
+    ) -> bool {
         let operation = OperationType::from(operation.as_str());
         if let Some(versions) = self.workflows.get_mut(&operation) {
             versions.remove(version);
         }
 
-        let current_source = match self.workflows.get(&operation) {
-            None => None,
-            Some(version) if version.is_empty() => None,
-            Some(version) if version.is_builtin() => Some(BuiltIn),
-            Some(_) => Some(InUseCopy),
+        let (empty,builtin_restored) = match self.workflows.get(&operation) {
+            None => (true, false),
+            Some(version) if version.is_empty() => (true, false),
+            Some(version) if version.is_builtin() => (false, true),
+            Some(_) => (false, false),
         };
 
-        if current_source.is_none() {
+        if empty {
             self.workflows.remove(&operation);
         }
 
-        current_source
+        builtin_restored
     }
 
     /// The set of pending commands
@@ -316,11 +312,27 @@ struct WorkflowVersions {
     in_use: HashMap<WorkflowVersion, OperationWorkflow>,
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
-pub enum WorkflowSource {
+pub enum WorkflowSource<T> {
     BuiltIn,
-    UserDefined,
-    InUseCopy,
+    UserDefined(T),
+    InUseCopy(T),
+}
+
+impl<T> WorkflowSource<T> {
+    pub fn inner(&self) -> Option<&T> {
+        match self {
+            BuiltIn => None,
+            UserDefined(inner) | InUseCopy(inner) => Some(inner),
+        }
+    }
+
+    pub fn set_inner<U>(&self, target: U) -> WorkflowSource<U> {
+        match self {
+            BuiltIn => BuiltIn,
+            UserDefined(_) => UserDefined(target),
+            InUseCopy(_) => InUseCopy(target),
+        }
+    }
 }
 
 use WorkflowSource::*;
@@ -328,15 +340,15 @@ use WorkflowSource::*;
 impl WorkflowVersions {
     const BUILT_IN: &'static str = "builtin";
 
-    fn new(source: WorkflowSource, version: WorkflowVersion, workflow: OperationWorkflow) -> Self {
+    fn new(source: WorkflowSource<WorkflowVersion>, workflow: OperationWorkflow) -> Self {
         let operation = workflow.operation.to_string();
         let (current, in_use) = match source {
             BuiltIn => (
                 None,
                 HashMap::from([(Self::BUILT_IN.to_string(), workflow)]),
             ),
-            UserDefined => (Some((version, workflow)), HashMap::new()),
-            InUseCopy => (None, HashMap::from([(version, workflow)])),
+            UserDefined(version) => (Some((version, workflow)), HashMap::new()),
+            InUseCopy(version) => (None, HashMap::from([(version, workflow)])),
         };
 
         WorkflowVersions {
@@ -346,20 +358,15 @@ impl WorkflowVersions {
         }
     }
 
-    fn add(
-        &mut self,
-        source: WorkflowSource,
-        version: WorkflowVersion,
-        workflow: OperationWorkflow,
-    ) {
+    fn add(&mut self, source: WorkflowSource<WorkflowVersion>, workflow: OperationWorkflow) {
         match source {
             BuiltIn => {
                 self.in_use.insert(Self::BUILT_IN.to_string(), workflow);
             }
-            UserDefined => {
+            UserDefined(version) => {
                 self.current = Some((version, workflow));
             }
-            InUseCopy => {
+            InUseCopy(version) => {
                 self.in_use.insert(version, workflow);
             }
         };

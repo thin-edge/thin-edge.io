@@ -74,7 +74,7 @@ impl WorkflowRepository {
         // First, all the user-defined workflows are loaded
         let dir_path = &self.custom_workflows_dir.clone();
         if let Err(err) = self
-            .load_operation_workflows(WorkflowSource::UserDefined, dir_path)
+            .load_operation_workflows(WorkflowSource::UserDefined(dir_path))
             .await
         {
             error!("Fail to read the operation workflows from {dir_path}: {err:?}");
@@ -84,7 +84,7 @@ impl WorkflowRepository {
         let dir_path = &self.state_dir.clone();
         let _ = tokio::fs::create_dir(dir_path).await; // if the creation fails, this will be reported next line on read
         if let Err(err) = self
-            .load_operation_workflows(WorkflowSource::InUseCopy, dir_path)
+            .load_operation_workflows(WorkflowSource::InUseCopy(dir_path))
             .await
         {
             error!("Fail to reload the running operation workflows from {dir_path}: {err:?}");
@@ -96,16 +96,19 @@ impl WorkflowRepository {
 
     async fn load_operation_workflows(
         &mut self,
-        source: WorkflowSource,
-        dir_path: &Utf8PathBuf,
+        source: WorkflowSource<&Utf8PathBuf>,
     ) -> Result<(), anyhow::Error> {
+        let Some(dir_path) = source.inner() else {
+            return Ok(());
+        };
         for entry in dir_path.read_dir_utf8()?.flatten() {
             let file = entry.path();
             if file.extension() == Some("toml") {
                 match read_operation_workflow(file)
                     .await
                     .and_then(|(workflow, version)| {
-                        self.load_operation_workflow(source, file.into(), workflow, version)
+                        let file_source = source.set_inner(file.into());
+                        self.load_operation_workflow(file_source, workflow, version)
                     }) {
                     Ok(cmd) => {
                         info!(
@@ -123,25 +126,25 @@ impl WorkflowRepository {
 
     fn load_operation_workflow(
         &mut self,
-        source: WorkflowSource,
-        definition: Utf8PathBuf,
+        source: WorkflowSource<Utf8PathBuf>,
         workflow: OperationWorkflow,
         version: WorkflowVersion,
     ) -> Result<String, anyhow::Error> {
         let operation_name = workflow.operation.to_string();
-        match source {
-            WorkflowSource::UserDefined => {
+        let version = match source {
+            WorkflowSource::UserDefined(definition) => {
                 self.definitions
                     .insert(operation_name.clone(), (version.clone(), definition));
+                WorkflowSource::UserDefined(version)
             }
-            WorkflowSource::InUseCopy => {
+            WorkflowSource::InUseCopy(_) => {
                 self.in_use_copies.insert(version.clone());
+                WorkflowSource::InUseCopy(version)
             }
-            WorkflowSource::BuiltIn => {}
+            WorkflowSource::BuiltIn => WorkflowSource::BuiltIn,
         };
 
-        self.workflows
-            .register_custom_workflow(source, workflow, version)?;
+        self.workflows.register_custom_workflow(version, workflow)?;
         Ok(operation_name)
     }
 
@@ -213,8 +216,7 @@ impl WorkflowRepository {
         match read_operation_workflow(path).await {
             Ok((workflow, version)) => {
                 if let Ok(cmd) = self.load_operation_workflow(
-                    WorkflowSource::UserDefined,
-                    path.clone(),
+                    WorkflowSource::UserDefined(path.clone()),
                     workflow,
                     version,
                 ) {
@@ -244,10 +246,10 @@ impl WorkflowRepository {
             .find(|(_, (_, p))| p == removed_path)
             .map(|(n, (v, _))| (n.clone(), v.clone()))?;
         self.definitions.remove(&operation);
-        let deprecated = self
+        let builtin_restored = self
             .workflows
             .unregister_custom_workflow(&operation, &removed_version);
-        if matches!(deprecated, Some(WorkflowSource::BuiltIn)) {
+        if builtin_restored {
             info!("The builtin workflow for the '{operation}' operation has been restored");
             None
         } else {
@@ -279,8 +281,7 @@ impl WorkflowRepository {
     async fn load_latest_version(&mut self, operation: &OperationName) {
         if let Some((path, version, workflow)) = self.get_latest_version(operation).await {
             if let Err(err) = self.load_operation_workflow(
-                WorkflowSource::UserDefined,
-                path.clone(),
+                WorkflowSource::UserDefined(path.clone()),
                 workflow,
                 version,
             ) {
