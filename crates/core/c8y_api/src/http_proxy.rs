@@ -14,6 +14,7 @@ use reqwest::Url;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_config::auth_method::AuthType;
 use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::MultiError;
 use tedge_config::TEdgeConfig;
@@ -189,24 +190,25 @@ impl C8yAuthRetriever {
         let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let topic_prefix = c8y_config.bridge.topic_prefix.clone();
 
-        if c8y_config.use_basic_auth {
-            Ok(Self::Basic {
+        match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
+            AuthType::Basic => Ok(Self::Basic {
                 credentials_path: c8y_config.credentials_path.clone(),
-            })
-        } else {
-            let mqtt_config = tedge_config
-                .mqtt_config()
-                .map_err(MqttConfigBuildError::from)?;
+            }),
+            AuthType::Certificate => {
+                let mqtt_config = tedge_config
+                    .mqtt_config()
+                    .map_err(MqttConfigBuildError::from)?;
 
-            let topic = TopicFilter::new_unchecked(&format!("{topic_prefix}/s/dat"));
-            let mqtt_config = mqtt_config
-                .with_no_session() // Ignore any already published tokens, possibly stale.
-                .with_subscriptions(topic);
+                let topic = TopicFilter::new_unchecked(&format!("{topic_prefix}/s/dat"));
+                let mqtt_config = mqtt_config
+                    .with_no_session() // Ignore any already published tokens, possibly stale.
+                    .with_subscriptions(topic);
 
-            Ok(Self::Jwt {
-                mqtt_config: Box::new(mqtt_config),
-                topic_prefix,
-            })
+                Ok(Self::Jwt {
+                    mqtt_config: Box::new(mqtt_config),
+                    topic_prefix,
+                })
+            }
         }
     }
 

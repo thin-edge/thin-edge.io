@@ -1,4 +1,5 @@
 use super::models::timestamp::TimeFormat;
+use crate::auth_method::AuthMethod;
 use crate::AptConfig;
 use crate::AutoFlag;
 use crate::AutoLogUpload;
@@ -379,7 +380,8 @@ impl_append_remove_for_single_value!(
     SecondsOrHumanTime,
     u32,
     AptConfig,
-    MqttPayloadLimit
+    MqttPayloadLimit,
+    AuthMethod
 );
 
 impl AppendRemoveItem for TemplatesSet {
@@ -470,10 +472,10 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
-        // TODO: Enum or bool? If enum, what are the other items?
-        /// Use basic authentication (username/password) instead of device certificate based authentication
-        #[tedge_config(example = "true", default(value = false))]
-        use_basic_auth: bool,
+        /// The authentication method used to connect Cumulocity
+        #[tedge_config(note = "In the auto mode, basic auth is used if c8y.credentials_path is set")]
+        #[tedge_config(example = "certificate", example = "basic", example = "auto", default(variable = AuthMethod::Certificate))]
+        auth_method: AuthMethod,
 
         /// The path where Cumulocity username/password are stored
         #[tedge_config(note = "The value must be the path of the credentials file.")]

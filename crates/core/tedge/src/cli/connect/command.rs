@@ -19,6 +19,7 @@ use rumqttc::QoS::AtLeastOnce;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
 use tedge_config::TEdgeConfig;
 use tedge_config::*;
@@ -265,12 +266,15 @@ pub fn bridge_config(
         Cloud::C8y => {
             let c8y_config = config.c8y.try_get(profile)?;
 
-            let (remote_username, remote_password) = if c8y_config.use_basic_auth {
-                let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
-                (Some(username), Some(password))
-            } else {
-                (None, None)
-            };
+            let (remote_username, remote_password) =
+                match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
+                    AuthType::Certificate => (None, None),
+                    AuthType::Basic => {
+                        let (username, password) =
+                            read_c8y_credentials(&c8y_config.credentials_path)?;
+                        (Some(username), Some(password))
+                    }
+                };
 
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
@@ -302,7 +306,10 @@ fn check_device_status_c8y(
     let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
 
     // TODO: Use SmartREST1 to check connection
-    if c8y_config.use_basic_auth {
+    if c8y_config
+        .auth_method
+        .is_basic(&c8y_config.credentials_path)
+    {
         return Ok(DeviceStatus::AlreadyExists);
     }
 

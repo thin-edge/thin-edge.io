@@ -67,7 +67,7 @@ Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
     Execute Command    tedge config set mqtt.bridge.built_in ${use_builtin_bridge}
-    Execute Command    tedge config set c8y.use_basic_auth true
+    Execute Command    tedge config set c8y.auth_method basic
 
     Set Suite Variable    $DEVICE_SN
 

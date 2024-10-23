@@ -67,10 +67,13 @@ impl TEdgeComponent for CumulocityMapper {
                 .iter()
                 .map(|id| Cow::Owned(format!("s/dc/{id}")));
 
+            let use_certificate = c8y_config
+                .auth_method
+                .is_certificate(&c8y_config.credentials_path);
             let cloud_topics = [
                 ("s/dt", true),
                 ("s/ds", true),
-                ("s/dat", !c8y_config.use_basic_auth),
+                ("s/dat", use_certificate),
                 ("s/e", true),
                 ("devicecontrol/notifications", true),
                 ("error", true),
@@ -129,7 +132,7 @@ impl TEdgeComponent for CumulocityMapper {
             tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
 
             // JWT token
-            if !c8y_config.use_basic_auth {
+            if use_certificate {
                 tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
             }
 
@@ -143,7 +146,9 @@ impl TEdgeComponent for CumulocityMapper {
             // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
             cloud_config.set_clean_session(true);
 
-            if c8y_config.use_basic_auth {
+            if use_certificate {
+                use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
+            } else {
                 let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
                 use_credentials(
                     &mut cloud_config,
@@ -151,8 +156,6 @@ impl TEdgeComponent for CumulocityMapper {
                     username,
                     password,
                 )?;
-            } else {
-                use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
             }
 
             let main_device_xid: EntityExternalId =
