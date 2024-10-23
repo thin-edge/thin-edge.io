@@ -79,8 +79,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 // c8y/s/uc/template-1 (in from localhost), s/uc/template-1
                 // c8y/s/dc/template-1 (out to localhost), s/dc/template-1
                 [
-                    format!(r#"s/uc/{s} out 2 c8y/ """#),
-                    format!(r#"s/dc/{s} in 2 c8y/ """#),
+                    format!(r#"s/uc/{s} out 2 {topic_prefix}/ """#),
+                    format!(r#"s/dc/{s} in 2 {topic_prefix}/ """#),
                 ]
                 .into_iter()
             })
