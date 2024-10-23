@@ -2,14 +2,13 @@ use crate::device_profile_manager::DeviceProfileManagerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
-use crate::operation_workflows::load_operation_workflows;
 use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
-use crate::state_repository::state::agent_state_dir;
+use crate::state_repository::state::agent_default_state_dir;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use crate::Capabilities;
@@ -219,7 +218,7 @@ impl Agent {
     #[instrument(skip(self), name = "sm-agent")]
     pub fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(agent_state_dir(self.config.config_dir.clone()))?;
+        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))?;
         create_directory_with_defaults(&self.config.agent_log_dir)?;
         create_directory_with_defaults(&self.config.data_dir)?;
         create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
@@ -242,8 +241,10 @@ impl Agent {
         // as it will create the device_profile workflow if it does not already exist
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
 
-        // Operation workflows
-        let workflows = load_operation_workflows(&self.config.operations_dir).await?;
+        // Inotify actor
+        let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
+
+        // Script actor
         let mut script_runner: ServerActorBuilder<ScriptActor, Concurrent> = ScriptActor::builder();
 
         // Restart actor
@@ -258,9 +259,9 @@ impl Agent {
         // Converter actor
         let mut converter_actor_builder = WorkflowActorBuilder::new(
             self.config.operation_config,
-            workflows,
             &mut mqtt_actor_builder,
             &mut script_runner,
+            &mut fs_watch_actor_builder,
         );
         converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         converter_actor_builder.register_builtin_operation(&mut software_update_builder);
@@ -284,7 +285,6 @@ impl Agent {
             &self.config.service,
         );
 
-        let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
         let mut downloader_actor_builder = DownloaderActor::new(
             self.config.identity.clone(),
             self.config.cloud_root_certs.clone(),

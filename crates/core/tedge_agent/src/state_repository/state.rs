@@ -17,30 +17,41 @@ pub struct AgentStateRepository<T> {
     phantom: PhantomData<T>,
 }
 
-pub fn agent_state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
+/// The directory used by the agent to persist its state when tedge config agent.state.path is not set
+pub fn agent_default_state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
     tedge_root.join(".agent")
 }
 
-impl<T: DeserializeOwned + Serialize> AgentStateRepository<T> {
-    /// Create a new agent state file in the the given state directory.
-    ///
-    /// If for some reason the state file cannot be created (e.g. the directory doesn't exist or is not writable)
-    /// then the agent state is created under the tedge root directory (`/etc/tedge/.agent`).
-    pub fn new(state_dir: Utf8PathBuf, tedge_root: Utf8PathBuf, file_name: &str) -> Self {
-        // Check that the given directory is actually writable
-        let test_file = state_dir.join(state_dir.join(".--test--"));
-        let state_dir =
-            match File::create(test_file.clone()).and_then(|mut file| file.write_all(b"")) {
-                Ok(_) => {
-                    let _ = std::fs::remove_file(test_file);
-                    state_dir
-                }
-                Err(err) => {
-                    warn!("Cannot use {state_dir:?} to store tedge-agent state: {err}");
-                    agent_state_dir(tedge_root)
-                }
-            };
+/// Return the given `state_dir` once checked that it can be used to persist the agent state.
+///
+/// If for some reason the configured state directory cannot be used,
+/// then fallback to the default directory under tedge root (`/etc/tedge/.agent`).
+pub fn agent_state_dir(state_dir: Utf8PathBuf, tedge_root: Utf8PathBuf) -> Utf8PathBuf {
+    // Check that the given directory is actually writable, by creating an empty test file
+    let test_file = state_dir.join(state_dir.join(".--test--"));
+    match File::create(test_file.clone()).and_then(|mut file| file.write_all(b"")) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(test_file);
+            state_dir
+        }
+        Err(err) => {
+            warn!("Cannot use {state_dir:?} to store tedge-agent state: {err}");
+            agent_default_state_dir(tedge_root)
+        }
+    }
+}
 
+impl<T: DeserializeOwned + Serialize> AgentStateRepository<T> {
+    /// Create a new agent state file in the given state directory
+    /// or in the tedge root directory if the given directory is not suitable
+    /// (e.g. the directory doesn't exist or is not writable).
+    pub fn new(state_dir: Utf8PathBuf, tedge_root: Utf8PathBuf, file_name: &str) -> Self {
+        let state_dir = agent_state_dir(state_dir, tedge_root);
+        Self::with_state_dir(state_dir, file_name)
+    }
+
+    /// Create a new agent state file in the given state directory.
+    pub fn with_state_dir(state_dir: Utf8PathBuf, file_name: &str) -> Self {
         let state_repo_path = state_dir.join(file_name);
         info!("Use {state_repo_path:?} to store tedge-agent {file_name} state");
         Self {

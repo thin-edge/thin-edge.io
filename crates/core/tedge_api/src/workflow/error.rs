@@ -79,8 +79,17 @@ pub enum WorkflowExecutionError {
     #[error("Missing status in the command payload")]
     MissingStatus,
 
+    #[error("Missing version in the command payload")]
+    MissingVersion,
+
     #[error("No workflow is defined for the operation: {operation}")]
     UnknownOperation { operation: String },
+
+    #[error("Unknown version for the {operation} operation: {version}")]
+    UnknownVersion { operation: String, version: String },
+
+    #[error("A new command cannot be created for the deprecated {operation} operation")]
+    DeprecatedOperation { operation: String },
 
     #[error("No command has been initiated on the command topic: {topic}")]
     UnknownRequest { topic: String },

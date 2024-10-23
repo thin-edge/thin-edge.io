@@ -40,7 +40,7 @@ impl CommandDispatcher {
     }
 
     /// List the operations for which a builtin handler has been registered
-    pub fn capabilities(&self) -> Vec<&OperationName> {
-        self.senders.keys().collect()
+    pub fn capabilities(&self) -> Vec<OperationName> {
+        self.senders.keys().cloned().collect()
     }
 }

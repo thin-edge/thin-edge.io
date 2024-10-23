@@ -1,0 +1,15 @@
+operation = "user-command"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/echo-as-json.sh user-command first-version"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

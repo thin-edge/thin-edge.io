@@ -1,0 +1,26 @@
+operation = "long-running-command"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+# Using a sub-operation for sleep to allow concurrent execution of multiple versions of this workflow.
+# Using sleep command directly would have blocked each workflow, resulting in serial execution.
+operation = "sleep"
+input.duration = "${.payload.duration}"
+on_exec = "executing"
+
+[executing]
+action = "await-operation-completion"
+on_success = "logging"
+
+[logging]
+script = "/etc/tedge/operations/echo-as-json.sh long-running-command first-version"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

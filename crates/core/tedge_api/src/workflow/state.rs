@@ -19,7 +19,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
 
-pub const OP_LOG_PATH_KEY: &str = "logPath";
+const OP_LOG_PATH_KEY: &str = "logPath";
+const OP_WORKFLOW_VERSION_KEY: &str = "@version";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GenericCommandData {
@@ -195,6 +196,17 @@ impl GenericCommandState {
 
     pub fn set_log_path<P: AsRef<Utf8Path>>(self, path: P) -> Self {
         self.update_with_key_value(OP_LOG_PATH_KEY, path.as_ref().as_str())
+    }
+
+    pub fn workflow_version(&self) -> Option<String> {
+        self.payload
+            .get(OP_WORKFLOW_VERSION_KEY)
+            .and_then(|val| val.as_str())
+            .map(|str| str.to_string())
+    }
+
+    pub fn set_workflow_version(self, version: &str) -> Self {
+        self.update_with_key_value(OP_WORKFLOW_VERSION_KEY, version)
     }
 
     /// Update the command state with the outcome of a script
