@@ -1,3 +1,4 @@
+use crate::substitution::Record;
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -12,6 +13,20 @@ use std::str::FromStr;
 pub struct ShellScript {
     pub command: String,
     pub args: Vec<String>,
+}
+
+impl ShellScript {
+    /// Inject values extracted from the record into a script command and arguments.
+    ///
+    /// - The script command is first tokenized using shell escaping rules.
+    ///   `/some/script.sh arg1 "arg 2" "arg 3"` -> ["/some/script.sh", "arg1", "arg 2", "arg 3"]
+    /// - Then each token matching `${x.y.z}` is substituted with the value pointed by the JSON path in the record.
+    pub fn inject_values(&self, record: &impl Record) -> ShellScript {
+        ShellScript {
+            command: record.inject_values_into_template(&self.command),
+            args: record.inject_values_into_templates(&self.args),
+        }
+    }
 }
 
 /// Deserialize an Unix command line
