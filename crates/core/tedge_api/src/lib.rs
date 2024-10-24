@@ -11,6 +11,7 @@ pub mod path;
 pub mod script;
 mod software;
 mod store;
+pub mod substitution;
 pub mod workflow;
 
 pub use commands::CommandStatus;

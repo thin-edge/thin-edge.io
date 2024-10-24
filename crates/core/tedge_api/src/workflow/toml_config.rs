@@ -1,5 +1,6 @@
 use crate::mqtt_topics::OperationType;
 use crate::script::ShellScript;
+use crate::substitution::Record;
 use crate::workflow::AwaitHandlers;
 use crate::workflow::DefaultHandlers;
 use crate::workflow::ExecHandlers;

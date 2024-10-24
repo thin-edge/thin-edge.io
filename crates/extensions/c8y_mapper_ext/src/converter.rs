@@ -764,10 +764,7 @@ impl CumulocityConverter {
                 err_msg: format!("Fail to parse the script {command_value}: {e}"),
             }
         })?;
-        let script = ShellScript {
-            command: state.inject_values_into_template(&script_template.command),
-            args: state.inject_values_into_parameters(&script_template.args),
-        };
+        let script = script_template.inject_values(&state);
 
         self.execute_operation(
             script,
