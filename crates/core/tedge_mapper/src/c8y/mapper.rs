@@ -106,10 +106,12 @@ impl TEdgeComponent for CumulocityMapper {
             tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
 
             // SmartREST1
-            tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
+            if !use_certificate {
+                tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
+                tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
+                tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
+                tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
+            }
 
             // SmartREST2
             tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
