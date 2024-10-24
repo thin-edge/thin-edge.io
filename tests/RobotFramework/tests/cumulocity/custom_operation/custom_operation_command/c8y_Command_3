@@ -1,0 +1,5 @@
+[exec]
+topic = "c8y/devicecontrol/notifications"
+on_fragment = "c8y_MqttPub"
+command = "tedge mqtt pub ${.payload.c8y_MqttPub.topic} '${.payload.c8y_MqttPub.message}'"
+skip_status_update = false
