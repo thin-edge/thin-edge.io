@@ -190,8 +190,8 @@ impl C8yMapperConfig {
         };
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
 
-        let mut topics =
-            Self::default_internal_topic_filter(config_dir.as_std_path(), &c8y_prefix)?;
+        let mut topics = Self::default_internal_topic_filter(&c8y_prefix)?;
+
         let enable_auto_register = c8y_config.entity_store.auto_register;
         let clean_start = c8y_config.entity_store.clean_start;
 
@@ -224,6 +224,14 @@ impl C8yMapperConfig {
                 warn!("The configured topic '{topic}' is invalid and ignored.");
             }
         }
+
+        // Add custom operation topics
+        let custom_operation_topics =
+            Self::get_topics_from_custom_operations(&c8y_prefix, config_dir.as_std_path())?;
+
+        topics.add_all(custom_operation_topics);
+
+        topics.remove_overlapping_patterns();
 
         let bridge_in_mapper = tedge_config.mqtt.bridge.built_in;
 
@@ -258,10 +266,9 @@ impl C8yMapperConfig {
     }
 
     pub fn default_internal_topic_filter(
-        config_dir: &Path,
         prefix: &TopicPrefix,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
-        let mut topic_filter: TopicFilter = vec![
+        let topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.with_prefix(prefix).as_str(),
             &C8yDeviceControlTopic::name(prefix),
@@ -269,10 +276,20 @@ impl C8yMapperConfig {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
+        Ok(topic_filter)
+    }
+
+    pub fn get_topics_from_custom_operations(
+        prefix: &TopicPrefix,
+        config_dir: &Path,
+    ) -> Result<TopicFilter, C8yMapperConfigError> {
+        let mut topic_filter = TopicFilter::empty();
+
         if let Ok(operations) = Operations::try_new(
             config_dir
                 .join(SUPPORTED_OPERATIONS_DIRECTORY)
                 .join(C8Y_CLOUD),
+            prefix,
         ) {
             for topic in operations.topics_for_operations() {
                 topic_filter.add(&topic)?;

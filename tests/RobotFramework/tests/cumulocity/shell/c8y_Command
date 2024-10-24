@@ -1,4 +1,4 @@
 [exec]
-topic = "c8y/s/ds"
+topic ="${.bridge.topic_prefix}/s/ds" 
 on_message = "511"
 command = "/etc/tedge/operations/command"

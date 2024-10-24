@@ -4,6 +4,7 @@ use rumqttc::QoS;
 use rumqttc::SubscribeFilter;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::convert::TryInto;
 
 /// An MQTT topic
@@ -241,6 +242,18 @@ impl TryInto<TopicFilter> for Vec<String> {
 impl AsRef<str> for Topic {
     fn as_ref(&self) -> &str {
         &self.name
+    }
+}
+
+impl TryInto<TopicFilter> for HashSet<String> {
+    type Error = MqttError;
+
+    fn try_into(self) -> Result<TopicFilter, Self::Error> {
+        let mut filter = TopicFilter::empty();
+        for pattern in self.into_iter() {
+            filter.add(pattern.as_str())?
+        }
+        Ok(filter)
     }
 }
 
