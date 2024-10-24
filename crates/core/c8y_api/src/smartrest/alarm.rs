@@ -1,10 +1,11 @@
 use crate::json_c8y::AlarmSeverity;
 use crate::json_c8y::C8yAlarm;
-use crate::smartrest::csv::fields_to_csv_string;
 use time::format_description::well_known::Rfc3339;
 
+use super::payload::SmartrestPayload;
+
 /// Serialize C8yAlarm to SmartREST message
-pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<String, time::error::Format> {
+pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<SmartrestPayload, time::error::Format> {
     let smartrest = match c8y_alarm {
         C8yAlarm::Create(alarm) => {
             let smartrest_code = match alarm.severity {
@@ -13,14 +14,16 @@ pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<String, time::error::Form
                 AlarmSeverity::Minor => "303",
                 AlarmSeverity::Warning => "304",
             };
-            fields_to_csv_string(&[
+            SmartrestPayload::serialize([
                 smartrest_code,
                 &alarm.alarm_type,
                 &alarm.text,
                 &alarm.time.format(&Rfc3339)?,
             ])
+            .expect("TODO: should alarm text be trimmed?")
         }
-        C8yAlarm::Clear(alarm) => fields_to_csv_string(&["306", &alarm.alarm_type]),
+        C8yAlarm::Clear(alarm) => SmartrestPayload::serialize((306, &alarm.alarm_type))
+            .expect("alarm type should be shorter than payload size limit"),
     };
     Ok(smartrest)
 }
@@ -134,6 +137,6 @@ mod tests {
     )]
     fn check_alarm_translation(alarm: C8yAlarm, expected_smartrest_msg: &str) {
         let smartrest = serialize_alarm(&alarm);
-        assert_eq!(smartrest.unwrap(), expected_smartrest_msg);
+        assert_eq!(smartrest.unwrap().into_inner(), expected_smartrest_msg);
     }
 }

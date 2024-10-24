@@ -1063,7 +1063,7 @@ impl CumulocityConverter {
                                     };
 
                                     mqtt_publisher
-                                        .send(MqttMessage::new(&topic, payload.as_bytes()))
+                                        .send(MqttMessage::new(&topic, payload.as_str()))
                                         .await
                                         .unwrap_or_else(|err| {
                                             error!(
@@ -1401,7 +1401,9 @@ impl CumulocityConverter {
 
         Ok(MqttMessage::new(
             &topic,
-            Operations::try_new(path)?.create_smartrest_ops_message(),
+            Operations::try_new(path)?
+                .create_smartrest_ops_message()
+                .into_inner(),
         ))
     }
 

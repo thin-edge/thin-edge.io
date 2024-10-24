@@ -10,6 +10,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tracing::warn;
 
+use super::payload::SmartrestPayload;
+
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -71,7 +73,7 @@ impl Operations {
             .collect::<HashSet<String>>()
     }
 
-    pub fn create_smartrest_ops_message(&self) -> String {
+    pub fn create_smartrest_ops_message(&self) -> SmartrestPayload {
         let mut ops = self.get_operations_list();
         ops.sort();
         let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();

@@ -9,6 +9,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 clock = { workspace = true }
 csv = { workspace = true }
 download = { workspace = true }
@@ -27,7 +28,6 @@ toml = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 maplit = { workspace = true }

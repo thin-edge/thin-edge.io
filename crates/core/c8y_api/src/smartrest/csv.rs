@@ -1,4 +1,7 @@
-pub fn fields_to_csv_string(record: &[&str]) -> String {
+pub fn fields_to_csv_string<T>(record: impl IntoIterator<Item = T>) -> String
+where
+    T: AsRef<str> + AsRef<[u8]>,
+{
     let mut writer = csv::Writer::from_writer(vec![]);
     writer
         .write_record(record)
@@ -14,12 +17,12 @@ mod tests {
 
     #[test]
     fn normal_fields_containing_commas_are_quoted() {
-        assert_eq!(fields_to_csv_string(&["503", "test,me"]), "503,\"test,me\"");
+        assert_eq!(fields_to_csv_string(["503", "test,me"]), "503,\"test,me\"");
     }
 
     #[test]
     fn normal_fields_containing_quotes_are_quoted() {
-        let rcd = fields_to_csv_string(&["503", r#"A value"with" quotes"#, "field"]);
+        let rcd = fields_to_csv_string(["503", r#"A value"with" quotes"#, "field"]);
         assert_eq!(rcd, r#"503,"A value""with"" quotes",field"#);
     }
 }
