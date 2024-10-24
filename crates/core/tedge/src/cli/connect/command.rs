@@ -268,8 +268,12 @@ pub fn bridge_config(
 
             let (remote_username, remote_password) =
                 match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
-                    AuthType::Certificate => (None, None),
+                    AuthType::Certificate => {
+                        println!("Using device certificate authentication.\n");
+                        (None, None)
+                    }
                     AuthType::Basic => {
+                        println!("Using basic authentication.\n");
                         let (username, password) =
                             read_c8y_credentials(&c8y_config.credentials_path)?;
                         (Some(username), Some(password))

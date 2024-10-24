@@ -19,6 +19,7 @@ use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::MultiError;
 use tedge_config::TEdgeConfig;
 use tedge_config::TopicPrefix;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -215,6 +216,7 @@ impl C8yAuthRetriever {
     pub async fn get_auth_header_value(&mut self) -> Result<HeaderValue, C8yAuthRetrieverError> {
         let header_value = match &self {
             Self::Basic { credentials_path } => {
+                debug!("Using basic authentication.");
                 let (username, password) = read_c8y_credentials(credentials_path)?;
                 format!("Basic {}", base64::encode(format!("{username}:{password}"))).parse()?
             }
@@ -222,6 +224,7 @@ impl C8yAuthRetriever {
                 mqtt_config,
                 topic_prefix,
             } => {
+                debug!("Using JWT token bearer authentication.");
                 let jwt_token = Self::get_jwt_token(mqtt_config, topic_prefix).await?;
                 format!("Bearer {}", jwt_token.token()).parse()?
             }
