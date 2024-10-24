@@ -50,6 +50,7 @@ Run arbitrary shell command
     ...    message_pattern=hello world
     Operation Should Be SUCCESSFUL    ${operation}
 
+
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup
