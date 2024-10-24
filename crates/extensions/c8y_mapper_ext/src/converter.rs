@@ -79,8 +79,8 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::script::ShellScript;
 use tedge_api::workflow::GenericCommandState;
-use tedge_api::workflow::ShellScript;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
@@ -1655,7 +1655,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::pending_entity_store::PendingEntityData;
-    use tedge_api::workflow::ShellScript;
+    use tedge_api::script::ShellScript;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_config::AutoLogUpload;
     use tedge_config::SoftwareManagementApiFlag;

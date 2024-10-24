@@ -8,6 +8,7 @@ pub mod health;
 pub mod measurement;
 pub mod mqtt_topics;
 pub mod path;
+pub mod script;
 mod software;
 mod store;
 pub mod workflow;

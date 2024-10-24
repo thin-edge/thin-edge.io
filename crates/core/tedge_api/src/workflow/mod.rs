@@ -9,6 +9,7 @@ mod toml_config;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
+use crate::script::ShellScript;
 use ::log::info;
 pub use error::*;
 use mqtt_channel::MqttMessage;
