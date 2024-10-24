@@ -23,6 +23,12 @@ version = clap::crate_version!(),
 about = clap::crate_description!()
 )]
 pub struct WatchdogOpt {
+    /// Logging level.
+    ///
+    /// One of error/warn/info/debug/trace. Takes precedence over `--debug`
+    #[clap(long)]
+    pub log_level: Option<tracing::Level>,
+
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
@@ -46,13 +52,17 @@ pub async fn run(watchdog_opt: WatchdogOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(watchdog_opt.config_dir.clone());
 
-    let log_level = if watchdog_opt.debug {
-        tracing::Level::DEBUG
-    } else {
-        get_log_level(
-            "tedge-watchdog",
-            &tedge_config_location.tedge_config_root_path,
-        )?
+    // If `--level` was provided, use that log level.
+    // If `debug` is `false` then only `error!`, `warn!` and `info!` are reported.
+    // If `debug` is `true` then also `debug!` is reported.
+    // If neither was provided, use a log level from a config file.
+    let log_level = watchdog_opt
+        .log_level
+        .or(watchdog_opt.debug.then_some(tracing::Level::DEBUG));
+
+    let log_level = match log_level {
+        Some(log_level) => log_level,
+        None => get_log_level("tedge-agent", &tedge_config_location.tedge_config_root_path)?,
     };
 
     set_log_level(log_level);

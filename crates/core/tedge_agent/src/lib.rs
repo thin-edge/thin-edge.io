@@ -44,6 +44,12 @@ pub struct AgentOpt {
     #[clap(long)]
     pub debug: bool,
 
+    /// Logging level.
+    ///
+    /// One of error/warn/info/debug/trace. Takes precedence over `--debug`
+    #[clap(long)]
+    pub log_level: Option<tracing::Level>,
+
     /// Start the agent with clean session off, subscribe to the topics, so that no messages are lost
     #[clap(short, long)]
     pub init: bool,
@@ -72,12 +78,17 @@ pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
 
+    // If `--level` was provided, use that log level.
     // If `debug` is `false` then only `error!`, `warn!` and `info!` are reported.
     // If `debug` is `true` then also `debug!` is reported.
-    let log_level = if agent_opt.debug {
-        tracing::Level::DEBUG
-    } else {
-        get_log_level("tedge-agent", &tedge_config_location.tedge_config_root_path)?
+    // If neither was provided, use a log level from a config file.
+    let log_level = agent_opt
+        .log_level
+        .or(agent_opt.debug.then_some(tracing::Level::DEBUG));
+
+    let log_level = match log_level {
+        Some(log_level) => log_level,
+        None => get_log_level("tedge-agent", &tedge_config_location.tedge_config_root_path)?,
     };
 
     set_log_level(log_level);
