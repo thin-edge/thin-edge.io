@@ -68,6 +68,17 @@ where
         .with_no_client_auth())
 }
 
+pub fn create_tls_config_without_client_cert(
+    root_certificates: impl AsRef<Path>,
+) -> Result<ClientConfig, CertificateError> {
+    let root_cert_store = new_root_store(root_certificates.as_ref())?;
+
+    Ok(ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(root_cert_store)
+        .with_no_client_auth())
+}
+
 pub fn add_certs_from_file(
     root_store: &mut RootCertStore,
     cert_file: impl AsRef<Path>,

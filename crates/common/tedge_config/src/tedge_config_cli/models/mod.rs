@@ -1,4 +1,5 @@
 pub mod apt_config;
+pub mod auth_method;
 pub mod auto;
 pub mod c8y_software_management;
 pub mod connect_url;

@@ -9,6 +9,7 @@ use crate::cli::connect::jwt_token::*;
 use crate::cli::connect::*;
 use crate::command::Command;
 use crate::ConfigError;
+use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8PathBuf;
 use rumqttc::Event;
 use rumqttc::Incoming;
@@ -18,6 +19,7 @@ use rumqttc::QoS::AtLeastOnce;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
 use tedge_config::TEdgeConfig;
 use tedge_config::*;
@@ -135,13 +137,18 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            if !self.offline_mode {
+            let c8y_config = config.c8y.try_get(self.profile.as_deref())?;
+
+            let use_basic_auth = c8y_config
+                .auth_method
+                .is_basic(&c8y_config.credentials_path);
+            if use_basic_auth {
+                println!("Skipped tenant URL check due to basic authentication.\n");
+            } else if !self.offline_mode {
                 check_connected_c8y_tenant_as_configured(
                     config,
                     self.profile.as_deref(),
-                    &config
-                        .c8y
-                        .try_get(self.profile.as_deref())?
+                    &c8y_config
                         .mqtt
                         .or_none()
                         .map(|u| u.host().to_string())
@@ -263,14 +270,32 @@ pub fn bridge_config(
         }
         Cloud::C8y => {
             let c8y_config = config.c8y.try_get(profile)?;
+
+            let (remote_username, remote_password) =
+                match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
+                    AuthType::Certificate => {
+                        println!("Using device certificate authentication.\n");
+                        (None, None)
+                    }
+                    AuthType::Basic => {
+                        println!("Using basic authentication.\n");
+                        let (username, password) =
+                            read_c8y_credentials(&c8y_config.credentials_path)?;
+                        (Some(username), Some(password))
+                    }
+                };
+
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
                 config_file: Cloud::C8y.bridge_config_filename(profile),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
+                remote_username,
+                remote_password,
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 smartrest_templates: c8y_config.smartrest.templates.clone(),
+                smartrest_one_templates: c8y_config.smartrest1.templates.clone(),
                 include_local_clean_session: c8y_config.bridge.include.local_cleansession.clone(),
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
@@ -287,7 +312,17 @@ fn check_device_status_c8y(
     tedge_config: &TEdgeConfig,
     c8y_profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let prefix = &tedge_config.c8y.try_get(c8y_profile)?.bridge.topic_prefix;
+    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+
+    // TODO: Use SmartREST1 to check connection
+    if c8y_config
+        .auth_method
+        .is_basic(&c8y_config.credentials_path)
+    {
+        return Ok(DeviceStatus::AlreadyExists);
+    }
+
+    let prefix = c8y_config.bridge.topic_prefix.clone();
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -576,8 +611,11 @@ fn new_bridge(
         bridge_config_exists(config_location, bridge_config)?;
     }
 
+    let use_basic_auth =
+        bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
+
     println!("Validating the bridge certificates.\n");
-    bridge_config.validate()?;
+    bridge_config.validate(use_basic_auth)?;
 
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
@@ -585,6 +623,7 @@ fn new_bridge(
         } else {
             println!("Creating the device in Cumulocity cloud.\n");
             c8y_direct_connection::create_device_with_direct_connection(
+                use_basic_auth,
                 bridge_config,
                 device_type,
             )?;
@@ -797,7 +836,9 @@ fn check_connected_c8y_tenant_as_configured(
     configured_url: &str,
 ) {
     match get_connected_c8y_url(tedge_config, c8y_prefix) {
-        Ok(url) if url == configured_url => {}
+        Ok(url) if url == configured_url => {
+            println!("Tenant URL check is successful.\n")
+        }
         Ok(url) => println!(
             "Warning: Connecting to {}, but the configured URL is {}.\n\
             The device certificate has to be removed from the former tenant.\n",

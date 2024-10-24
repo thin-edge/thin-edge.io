@@ -1,10 +1,11 @@
-use crate::auth::Jwt;
+use crate::auth::Auth;
 use async_compat::CompatExt;
 use async_tungstenite::tokio::ConnectStream;
 use futures::future::join;
 use futures::future::select;
 use futures_util::io::AsyncReadExt;
 use futures_util::io::AsyncWriteExt;
+use http::HeaderValue;
 use miette::Context;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
@@ -35,11 +36,11 @@ impl WebsocketSocketProxy {
     pub async fn connect<SA: ToSocketAddrs + std::fmt::Debug>(
         url: &Url,
         socket: SA,
-        jwt: Jwt,
+        auth: Auth,
         config: ClientConfig,
     ) -> miette::Result<Self> {
         let socket_future = TcpStream::connect(socket);
-        let websocket_future = Websocket::new(url, jwt.authorization_header(), config);
+        let websocket_future = Websocket::new(url, auth.authorization_header(), config);
 
         match join(socket_future, websocket_future).await {
             (Err(socket_error), _) => Err(SocketError(socket_error))?,
@@ -80,7 +81,11 @@ fn generate_sec_websocket_key() -> String {
 }
 
 impl Websocket {
-    async fn new(url: &Url, authorization: String, config: ClientConfig) -> miette::Result<Self> {
+    async fn new(
+        url: &Url,
+        authorization: HeaderValue,
+        config: ClientConfig,
+    ) -> miette::Result<Self> {
         let request = http::Request::builder()
             .header("Authorization", authorization)
             .header("Sec-WebSocket-Key", generate_sec_websocket_key())

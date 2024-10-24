@@ -1,4 +1,5 @@
 use super::models::timestamp::TimeFormat;
+use crate::auth_method::AuthMethod;
 use crate::AptConfig;
 use crate::AutoFlag;
 use crate::AutoLogUpload;
@@ -379,7 +380,8 @@ impl_append_remove_for_single_value!(
     SecondsOrHumanTime,
     u32,
     AptConfig,
-    MqttPayloadLimit
+    MqttPayloadLimit,
+    AuthMethod
 );
 
 impl AppendRemoveItem for TemplatesSet {
@@ -470,6 +472,17 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
+        /// The authentication method used to connect Cumulocity
+        #[tedge_config(note = "In the auto mode, basic auth is used if c8y.credentials_path is set")]
+        #[tedge_config(example = "certificate", example = "basic", example = "auto", default(variable = AuthMethod::Certificate))]
+        auth_method: AuthMethod,
+
+        /// The path where Cumulocity username/password are stored
+        #[tedge_config(note = "The value must be the path of the credentials file.")]
+        #[tedge_config(example = "/etc/tedge/credentials", default(value = "/etc/tedge/credentials"))]
+        #[doku(as = "PathBuf")]
+        credentials_path: Utf8PathBuf,
+
         smartrest: {
             /// Set of SmartREST template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
@@ -480,6 +493,11 @@ define_tedge_config! {
             use_operation_id: bool,
         },
 
+        smartrest1: {
+            /// Set of SmartREST 1.0 template IDs the device should subscribe to
+            #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
+            templates: TemplatesSet,
+        },
 
         /// HTTP Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "http.your-tenant.cumulocity.com:1234")]
