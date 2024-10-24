@@ -8,8 +8,8 @@ use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::fmt;
 use tedge_config::get_config_dir;
-use tedge_config::system_services::get_log_level;
-use tedge_config::system_services::set_log_level;
+use tedge_config::system_services::log_init;
+use tedge_config::system_services::LogConfigArgs;
 use tedge_config::PathBuf;
 use tedge_config::ProfileName;
 use tracing::log::warn;
@@ -64,12 +64,8 @@ pub struct MapperOpt {
     #[clap(subcommand)]
     pub name: MapperName,
 
-    /// Turn-on the debug log level.
-    ///
-    /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG
-    #[clap(long, global = true)]
-    pub debug: bool,
+    #[command(flatten)]
+    pub log_args: LogConfigArgs,
 
     /// Start the mapper with clean session off, subscribe to the topics, so that no messages are lost
     #[clap(short, long)]
@@ -122,15 +118,11 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
     let config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
 
-    let log_level = if mapper_opt.debug {
-        tracing::Level::DEBUG
-    } else {
-        get_log_level(
-            "tedge-mapper",
-            &tedge_config_location.tedge_config_root_path,
-        )?
-    };
-    set_log_level(log_level);
+    log_init(
+        "tedge-mapper",
+        &mapper_opt.log_args,
+        &tedge_config_location.tedge_config_root_path,
+    )?;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;

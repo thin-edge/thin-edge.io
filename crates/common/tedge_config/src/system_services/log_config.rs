@@ -1,9 +1,55 @@
 use camino::Utf8Path;
+use clap::Args;
 
 use crate::system_services::SystemConfig;
 use crate::system_services::SystemServiceError;
 use std::io::IsTerminal;
 use std::str::FromStr;
+
+#[derive(Args, Debug, PartialEq, Eq, Clone)]
+pub struct LogConfigArgs {
+    /// Turn-on the DEBUG log level.
+    ///
+    /// If off only reports ERROR, WARN, and INFO, if on also reports DEBUG
+    #[clap(long, global = true)]
+    pub debug: bool,
+}
+
+/// Configures and enables logging taking into account flags, env variables and file config.
+///
+/// 1. Log config is taken from the file configuration first
+/// 2. If `RUST_LOG` variable is set, it overrides file-based configuration
+/// 3. If `--debug` or `--log-level` flags are set, they override previous steps
+///
+/// Reports all the log events sent either with the `log` crate or the `tracing`
+/// crate.
+pub fn log_init(
+    sname: &str,
+    flags: &LogConfigArgs,
+    config_dir: &Utf8Path,
+) -> Result<(), SystemServiceError> {
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
+        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+
+    if flags.debug {
+        subscriber.with_max_level(tracing::Level::DEBUG).init();
+        return Ok(());
+    }
+
+    if std::env::var("RUST_LOG").is_ok() {
+        subscriber
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+        return Ok(());
+    }
+
+    let log_level = get_log_level(sname, config_dir)?;
+    subscriber.with_max_level(log_level).init();
+
+    Ok(())
+}
 
 pub fn get_log_level(
     sname: &str,

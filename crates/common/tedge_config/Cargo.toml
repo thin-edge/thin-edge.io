@@ -16,6 +16,7 @@ test = []
 anyhow = { workspace = true }
 camino = { workspace = true, features = ["serde", "serde1"] }
 certificate = { workspace = true, features = ["reqwest"] }
+clap = { workspace = true }
 doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
 humantime = { workspace = true }

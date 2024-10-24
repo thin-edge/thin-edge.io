@@ -9,8 +9,8 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_config::get_config_dir;
-use tedge_config::system_services::get_log_level;
-use tedge_config::system_services::set_log_level;
+use tedge_config::system_services::log_init;
+use tedge_config::system_services::LogConfigArgs;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -39,12 +39,8 @@ about = clap::crate_description!(),
 after_help = AFTER_HELP_TEXT
 )]
 pub struct FirmwarePluginOpt {
-    /// Turn-on the debug log level.
-    ///
-    /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG
-    #[clap(long)]
-    pub debug: bool,
+    #[command(flatten)]
+    pub log_args: LogConfigArgs,
 
     /// Create required directories
     #[clap(short, long)]
@@ -67,13 +63,12 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
     // Load tedge config from the provided location
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&firmware_plugin_opt.config_dir);
-    let log_level = if firmware_plugin_opt.debug {
-        tracing::Level::DEBUG
-    } else {
-        get_log_level(PLUGIN_NAME, &tedge_config_location.tedge_config_root_path)?
-    };
 
-    set_log_level(log_level);
+    log_init(
+        "c8y-firmware-plugin",
+        &firmware_plugin_opt.log_args,
+        &tedge_config_location.tedge_config_root_path,
+    )?;
 
     let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
     let c8y_profile = firmware_plugin_opt.profile.as_deref();
