@@ -49,29 +49,29 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
 
         let mut topics: Vec<String> = vec![
             // Templates
-            format!(r#"s/dt in 2 {topic_prefix}/ """#),
-            format!(r#"s/ut/# out 2 {topic_prefix}/ """#),
+            format!(r#"s/dt in 1 {topic_prefix}/ """#),
+            format!(r#"s/ut/# out 1 {topic_prefix}/ """#),
             // Static templates
-            format!(r#"s/us/# out 2 {topic_prefix}/ """#),
-            format!(r#"t/us/# out 2 {topic_prefix}/ """#),
-            format!(r#"q/us/# out 2 {topic_prefix}/ """#),
-            format!(r#"c/us/# out 2 {topic_prefix}/ """#),
-            format!(r#"s/ds in 2 {topic_prefix}/ """#),
+            format!(r#"s/us/# out 1 {topic_prefix}/ """#),
+            format!(r#"t/us/# out 1 {topic_prefix}/ """#),
+            format!(r#"q/us/# out 1 {topic_prefix}/ """#),
+            format!(r#"c/us/# out 1 {topic_prefix}/ """#),
+            format!(r#"s/ds in 1 {topic_prefix}/ """#),
             // Debug
             format!(r#"s/e in 0 {topic_prefix}/ """#),
             // SmartRest2
-            format!(r#"s/uc/# out 2 {topic_prefix}/ """#),
-            format!(r#"t/uc/# out 2 {topic_prefix}/ """#),
-            format!(r#"q/uc/# out 2 {topic_prefix}/ """#),
-            format!(r#"c/uc/# out 2 {topic_prefix}/ """#),
-            format!(r#"s/dc/# in 2 {topic_prefix}/ """#),
+            format!(r#"s/uc/# out 1 {topic_prefix}/ """#),
+            format!(r#"t/uc/# out 1 {topic_prefix}/ """#),
+            format!(r#"q/uc/# out 1 {topic_prefix}/ """#),
+            format!(r#"c/uc/# out 1 {topic_prefix}/ """#),
+            format!(r#"s/dc/# in 1 {topic_prefix}/ """#),
             // c8y JSON
-            format!(r#"inventory/managedObjects/update/# out 2 {topic_prefix}/ """#),
-            format!(r#"measurement/measurements/create out 2 {topic_prefix}/ """#),
-            format!(r#"event/events/create out 2 {topic_prefix}/ """#),
-            format!(r#"alarm/alarms/create out 2 {topic_prefix}/ """#),
-            format!(r#"devicecontrol/notifications in 2 {topic_prefix}/ """#),
-            format!(r#"error in 2 {topic_prefix}/ """#),
+            format!(r#"inventory/managedObjects/update/# out 1 {topic_prefix}/ """#),
+            format!(r#"measurement/measurements/create out 1 {topic_prefix}/ """#),
+            format!(r#"event/events/create out 1 {topic_prefix}/ """#),
+            format!(r#"alarm/alarms/create out 1 {topic_prefix}/ """#),
+            format!(r#"devicecontrol/notifications in 1 {topic_prefix}/ """#),
+            format!(r#"error in 1 {topic_prefix}/ """#),
         ];
 
         let use_basic_auth = remote_username.is_some() && remote_password.is_some();
@@ -91,8 +91,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 // c8y/s/uc/template-1 (in from localhost), s/uc/template-1
                 // c8y/s/dc/template-1 (out to localhost), s/dc/template-1
                 [
-                    format!(r#"s/uc/{s} out 2 {topic_prefix}/ """#),
-                    format!(r#"s/dc/{s} in 2 {topic_prefix}/ """#),
+                    format!(r#"s/uc/{s} out 1 {topic_prefix}/ """#),
+                    format!(r#"s/dc/{s} in 1 {topic_prefix}/ """#),
                 ]
                 .into_iter()
             })
@@ -103,11 +103,11 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
         // Only add the topics if at least 1 template is defined
         if !smartrest_one_templates.0.is_empty() {
             topics.extend([
-                format!(r#"s/ul/# out 2 {topic_prefix}/ """#),
-                format!(r#"t/ul/# out 2 {topic_prefix}/ """#),
-                format!(r#"q/ul/# out 2 {topic_prefix}/ """#),
-                format!(r#"c/ul/# out 2 {topic_prefix}/ """#),
-                format!(r#"s/dl/# in 2 {topic_prefix}/ """#),
+                format!(r#"s/ul/# out 1 {topic_prefix}/ """#),
+                format!(r#"t/ul/# out 1 {topic_prefix}/ """#),
+                format!(r#"q/ul/# out 1 {topic_prefix}/ """#),
+                format!(r#"c/ul/# out 1 {topic_prefix}/ """#),
+                format!(r#"s/dl/# in 1 {topic_prefix}/ """#),
             ]);
 
             let templates_set = smartrest_one_templates
@@ -118,8 +118,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                     // c8y/s/ul/template-1 (in from localhost), s/ul/template-1
                     // c8y/s/dl/template-1 (out to localhost), s/dl/template-1
                     [
-                        format!(r#"s/ul/{s} out 2 {topic_prefix}/ """#),
-                        format!(r#"s/dl/{s} in 2 {topic_prefix}/ """#),
+                        format!(r#"s/ul/{s} out 1 {topic_prefix}/ """#),
+                        format!(r#"s/dl/{s} in 1 {topic_prefix}/ """#),
                     ]
                     .into_iter()
                 })
@@ -233,39 +233,39 @@ mod tests {
             use_agent: true,
             topics: vec![
                 // Templates
-                r#"s/dt in 2 c8y/ """#.into(),
-                r#"s/ut/# out 2 c8y/ """#.into(),
+                r#"s/dt in 1 c8y/ """#.into(),
+                r#"s/ut/# out 1 c8y/ """#.into(),
                 // Static templates
-                r#"s/us/# out 2 c8y/ """#.into(),
-                r#"t/us/# out 2 c8y/ """#.into(),
-                r#"q/us/# out 2 c8y/ """#.into(),
-                r#"c/us/# out 2 c8y/ """#.into(),
-                r#"s/ds in 2 c8y/ """#.into(),
+                r#"s/us/# out 1 c8y/ """#.into(),
+                r#"t/us/# out 1 c8y/ """#.into(),
+                r#"q/us/# out 1 c8y/ """#.into(),
+                r#"c/us/# out 1 c8y/ """#.into(),
+                r#"s/ds in 1 c8y/ """#.into(),
                 // Debug
                 r#"s/e in 0 c8y/ """#.into(),
                 // SmartRest2
-                r#"s/uc/# out 2 c8y/ """#.into(),
-                r#"t/uc/# out 2 c8y/ """#.into(),
-                r#"q/uc/# out 2 c8y/ """#.into(),
-                r#"c/uc/# out 2 c8y/ """#.into(),
-                r#"s/dc/# in 2 c8y/ """#.into(),
+                r#"s/uc/# out 1 c8y/ """#.into(),
+                r#"t/uc/# out 1 c8y/ """#.into(),
+                r#"q/uc/# out 1 c8y/ """#.into(),
+                r#"c/uc/# out 1 c8y/ """#.into(),
+                r#"s/dc/# in 1 c8y/ """#.into(),
                 // c8y JSON
-                r#"inventory/managedObjects/update/# out 2 c8y/ """#.into(),
-                r#"measurement/measurements/create out 2 c8y/ """#.into(),
-                r#"event/events/create out 2 c8y/ """#.into(),
-                r#"alarm/alarms/create out 2 c8y/ """#.into(),
-                r#"devicecontrol/notifications in 2 c8y/ """#.into(),
-                r#"error in 2 c8y/ """#.into(),
+                r#"inventory/managedObjects/update/# out 1 c8y/ """#.into(),
+                r#"measurement/measurements/create out 1 c8y/ """#.into(),
+                r#"event/events/create out 1 c8y/ """#.into(),
+                r#"alarm/alarms/create out 1 c8y/ """#.into(),
+                r#"devicecontrol/notifications in 1 c8y/ """#.into(),
+                r#"error in 1 c8y/ """#.into(),
                 // c8y JWT token retrieval
                 r#"s/uat out 0 c8y/ """#.into(),
                 r#"s/dat in 0 c8y/ """#.into(),
                 // Smartrest templates should be deserialized as:
                 // s/uc/template-1 (in from localhost), s/uc/template-1
                 // s/dc/template-1 (out to localhost), s/dc/template-1
-                r#"s/uc/abc out 2 c8y/ """#.into(),
-                r#"s/dc/abc in 2 c8y/ """#.into(),
-                r#"s/uc/def out 2 c8y/ """#.into(),
-                r#"s/dc/def in 2 c8y/ """#.into(),
+                r#"s/uc/abc out 1 c8y/ """#.into(),
+                r#"s/dc/abc in 1 c8y/ """#.into(),
+                r#"s/uc/def out 1 c8y/ """#.into(),
+                r#"s/dc/def in 1 c8y/ """#.into(),
             ],
             try_private: false,
             start_type: "automatic".into(),
@@ -322,46 +322,46 @@ mod tests {
             use_agent: true,
             topics: vec![
                 // Templates
-                r#"s/dt in 2 c8y/ """#.into(),
-                r#"s/ut/# out 2 c8y/ """#.into(),
+                r#"s/dt in 1 c8y/ """#.into(),
+                r#"s/ut/# out 1 c8y/ """#.into(),
                 // Static templates
-                r#"s/us/# out 2 c8y/ """#.into(),
-                r#"t/us/# out 2 c8y/ """#.into(),
-                r#"q/us/# out 2 c8y/ """#.into(),
-                r#"c/us/# out 2 c8y/ """#.into(),
-                r#"s/ds in 2 c8y/ """#.into(),
+                r#"s/us/# out 1 c8y/ """#.into(),
+                r#"t/us/# out 1 c8y/ """#.into(),
+                r#"q/us/# out 1 c8y/ """#.into(),
+                r#"c/us/# out 1 c8y/ """#.into(),
+                r#"s/ds in 1 c8y/ """#.into(),
                 // Debug
                 r#"s/e in 0 c8y/ """#.into(),
                 // SmartRest2
-                r#"s/uc/# out 2 c8y/ """#.into(),
-                r#"t/uc/# out 2 c8y/ """#.into(),
-                r#"q/uc/# out 2 c8y/ """#.into(),
-                r#"c/uc/# out 2 c8y/ """#.into(),
-                r#"s/dc/# in 2 c8y/ """#.into(),
+                r#"s/uc/# out 1 c8y/ """#.into(),
+                r#"t/uc/# out 1 c8y/ """#.into(),
+                r#"q/uc/# out 1 c8y/ """#.into(),
+                r#"c/uc/# out 1 c8y/ """#.into(),
+                r#"s/dc/# in 1 c8y/ """#.into(),
                 // c8y JSON
-                r#"inventory/managedObjects/update/# out 2 c8y/ """#.into(),
-                r#"measurement/measurements/create out 2 c8y/ """#.into(),
-                r#"event/events/create out 2 c8y/ """#.into(),
-                r#"alarm/alarms/create out 2 c8y/ """#.into(),
-                r#"devicecontrol/notifications in 2 c8y/ """#.into(),
-                r#"error in 2 c8y/ """#.into(),
+                r#"inventory/managedObjects/update/# out 1 c8y/ """#.into(),
+                r#"measurement/measurements/create out 1 c8y/ """#.into(),
+                r#"event/events/create out 1 c8y/ """#.into(),
+                r#"alarm/alarms/create out 1 c8y/ """#.into(),
+                r#"devicecontrol/notifications in 1 c8y/ """#.into(),
+                r#"error in 1 c8y/ """#.into(),
                 // Important: no c8y JWT token topics!
                 // SmartRest2 custom templates
-                r#"s/uc/abc out 2 c8y/ """#.into(),
-                r#"s/dc/abc in 2 c8y/ """#.into(),
-                r#"s/uc/def out 2 c8y/ """#.into(),
-                r#"s/dc/def in 2 c8y/ """#.into(),
+                r#"s/uc/abc out 1 c8y/ """#.into(),
+                r#"s/dc/abc in 1 c8y/ """#.into(),
+                r#"s/uc/def out 1 c8y/ """#.into(),
+                r#"s/dc/def in 1 c8y/ """#.into(),
                 // SmartREST 1.0 topics
-                r#"s/ul/# out 2 c8y/ """#.into(),
-                r#"t/ul/# out 2 c8y/ """#.into(),
-                r#"q/ul/# out 2 c8y/ """#.into(),
-                r#"c/ul/# out 2 c8y/ """#.into(),
-                r#"s/dl/# in 2 c8y/ """#.into(),
+                r#"s/ul/# out 1 c8y/ """#.into(),
+                r#"t/ul/# out 1 c8y/ """#.into(),
+                r#"q/ul/# out 1 c8y/ """#.into(),
+                r#"c/ul/# out 1 c8y/ """#.into(),
+                r#"s/dl/# in 1 c8y/ """#.into(),
                 // SmartREST 1.0 custom templates
-                r#"s/ul/legacy1 out 2 c8y/ """#.into(),
-                r#"s/dl/legacy1 in 2 c8y/ """#.into(),
-                r#"s/ul/legacy2 out 2 c8y/ """#.into(),
-                r#"s/dl/legacy2 in 2 c8y/ """#.into(),
+                r#"s/ul/legacy1 out 1 c8y/ """#.into(),
+                r#"s/dl/legacy1 in 1 c8y/ """#.into(),
+                r#"s/ul/legacy2 out 1 c8y/ """#.into(),
+                r#"s/dl/legacy2 in 1 c8y/ """#.into(),
             ],
             try_private: false,
             start_type: "automatic".into(),
