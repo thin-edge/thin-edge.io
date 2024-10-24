@@ -137,13 +137,18 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            if !self.offline_mode {
+            let c8y_config = config.c8y.try_get(self.profile.as_deref())?;
+
+            let use_basic_auth = c8y_config
+                .auth_method
+                .is_basic(&c8y_config.credentials_path);
+            if use_basic_auth {
+                println!("Skipped tenant URL check due to basic authentication.\n");
+            } else if !self.offline_mode {
                 check_connected_c8y_tenant_as_configured(
                     config,
                     self.profile.as_deref(),
-                    &config
-                        .c8y
-                        .try_get(self.profile.as_deref())?
+                    &c8y_config
                         .mqtt
                         .or_none()
                         .map(|u| u.host().to_string())
@@ -831,7 +836,9 @@ fn check_connected_c8y_tenant_as_configured(
     configured_url: &str,
 ) {
     match get_connected_c8y_url(tedge_config, c8y_prefix) {
-        Ok(url) if url == configured_url => {}
+        Ok(url) if url == configured_url => {
+            println!("Tenant URL check is successful.\n")
+        }
         Ok(url) => println!(
             "Warning: Connecting to {}, but the configured URL is {}.\n\
             The device certificate has to be removed from the former tenant.\n",
