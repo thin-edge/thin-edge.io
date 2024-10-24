@@ -99,9 +99,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             .collect::<Vec<String>>();
         topics.extend(templates_set);
 
-        // These topics are somehow required to receive operations when using Basic auth
-        let use_smartrest_one = use_basic_auth;
-        if use_smartrest_one {
+        // SmartRest1 (to support customers with existing solutions based on SmartRest 1)
+        // Only add the topics if at least 1 template is defined
+        if !smartrest_one_templates.0.is_empty() {
             topics.extend([
                 format!(r#"s/ul/# out 2 {topic_prefix}/ """#),
                 format!(r#"t/ul/# out 2 {topic_prefix}/ """#),
@@ -109,11 +109,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 format!(r#"c/ul/# out 2 {topic_prefix}/ """#),
                 format!(r#"s/dl/# in 2 {topic_prefix}/ """#),
             ]);
-        }
 
-        // SmartRest1 (to support customers with existing solutions based on SmartRest 1)
-        // Only add the topics if at least 1 template is defined
-        if !smartrest_one_templates.0.is_empty() {
             let templates_set = smartrest_one_templates
                 .0
                 .iter()
