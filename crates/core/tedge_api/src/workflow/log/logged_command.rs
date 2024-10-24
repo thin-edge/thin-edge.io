@@ -176,6 +176,14 @@ impl LoggedCommand {
         self
     }
 
+    pub fn args<T: AsRef<OsStr>, TS: IntoIterator<Item = T>>(
+        &mut self,
+        args: TS,
+    ) -> &mut LoggedCommand {
+        self.command.args(args);
+        self
+    }
+
     /// Execute the command and log its exit status, stdout and stderr
     ///
     /// If the command has been executed the outcome is returned (successful or not).

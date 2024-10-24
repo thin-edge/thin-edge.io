@@ -1,7 +1,7 @@
 pub mod error;
+pub mod handlers;
 pub(crate) mod log;
 mod on_disk;
-pub mod script;
 pub mod state;
 pub mod supervisor;
 mod toml_config;
@@ -9,11 +9,13 @@ mod toml_config;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
+use crate::script::ShellScript;
+use crate::substitution::Record;
 use ::log::info;
 pub use error::*;
+pub use handlers::*;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
-pub use script::*;
 use serde::Deserialize;
 use serde_json::json;
 pub use state::*;
@@ -344,19 +346,17 @@ impl OperationWorkflow {
 impl OperationAction {
     pub fn inject_state(&self, state: &GenericCommandState) -> Self {
         match self {
-            OperationAction::Script(script, handlers) => OperationAction::Script(
-                Self::inject_values_into_script(state, script),
-                handlers.clone(),
-            ),
-            OperationAction::BgScript(script, handlers) => OperationAction::BgScript(
-                Self::inject_values_into_script(state, script),
-                handlers.clone(),
-            ),
+            OperationAction::Script(script, handlers) => {
+                OperationAction::Script(script.inject_values(state), handlers.clone())
+            }
+            OperationAction::BgScript(script, handlers) => {
+                OperationAction::BgScript(script.inject_values(state), handlers.clone())
+            }
             OperationAction::Operation(operation_expr, optional_script, input, handlers) => {
                 let operation = state.inject_values_into_template(operation_expr);
                 let optional_script = optional_script
                     .as_ref()
-                    .map(|script| Self::inject_values_into_script(state, script));
+                    .map(|script| script.inject_values(state));
                 OperationAction::Operation(
                     operation,
                     optional_script,
@@ -365,13 +365,6 @@ impl OperationAction {
                 )
             }
             _ => self.clone(),
-        }
-    }
-
-    fn inject_values_into_script(state: &GenericCommandState, script: &ShellScript) -> ShellScript {
-        ShellScript {
-            command: state.inject_values_into_template(&script.command),
-            args: state.inject_values_into_parameters(&script.args),
         }
     }
 

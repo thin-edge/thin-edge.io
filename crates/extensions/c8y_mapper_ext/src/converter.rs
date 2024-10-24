@@ -58,6 +58,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
@@ -78,6 +79,7 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::script::ShellScript;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
@@ -756,12 +758,16 @@ impl CumulocityConverter {
                 err_msg: "'command' is missing".to_string(),
             },
         )?;
-        let script = state.inject_values_into_template(&command_value);
-        let (command, payload) = script.split_once(' ').unwrap_or_else(|| (&script, ""));
+        let script_template = ShellScript::from_str(&command_value).map_err(|e| {
+            CumulocityMapperError::JsonCustomOperationHandlerError {
+                operation: custom_handler.name.clone(),
+                err_msg: format!("Fail to parse the script {command_value}: {e}"),
+            }
+        })?;
+        let script = script_template.inject_values(&state);
 
         self.execute_operation(
-            payload,
-            command,
+            script,
             custom_handler.result_format(),
             custom_handler.graceful_timeout(),
             custom_handler.forceful_timeout(),
@@ -914,9 +920,12 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         if let Some(operation) = self.operations.matching_smartrest_template(template) {
             if let Some(command) = operation.command() {
+                let script = ShellScript {
+                    command,
+                    args: vec![payload.to_string()],
+                };
                 self.execute_operation(
-                    payload,
-                    command.as_str(),
+                    script,
                     operation.result_format(),
                     operation.graceful_timeout(),
                     operation.forceful_timeout(),
@@ -934,8 +943,7 @@ impl CumulocityConverter {
     #[allow(clippy::too_many_arguments)]
     async fn execute_operation(
         &self,
-        payload: &str,
-        command: &str,
+        script: ShellScript,
         result_format: ResultFormat,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
@@ -943,18 +951,17 @@ impl CumulocityConverter {
         operation_id: Option<String>,
         skip_status_update: bool,
     ) -> Result<(), CumulocityMapperError> {
-        let command = command.to_owned();
-        let payload = payload.to_string();
+        let command = script.command.as_str();
         let cmd_id = self.command_id.new_id();
 
         let mut logged =
-            LoggedCommand::new(&command).map_err(|e| CumulocityMapperError::ExecuteFailed {
+            LoggedCommand::new(command).map_err(|e| CumulocityMapperError::ExecuteFailed {
                 error_message: e.to_string(),
                 command: command.to_string(),
                 operation_name: operation_name.to_string(),
             })?;
 
-        logged.arg(&payload);
+        logged.args(script.args);
 
         let maybe_child_process =
             logged
@@ -1645,6 +1652,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::pending_entity_store::PendingEntityData;
+    use tedge_api::script::ShellScript;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_config::AutoLogUpload;
     use tedge_config::SoftwareManagementApiFlag;
@@ -2668,8 +2676,7 @@ pub(crate) mod tests {
         let now = std::time::Instant::now();
         converter
             .execute_operation(
-                "5",
-                "sleep",
+                ShellScript::from_str("sleep 5").unwrap(),
                 ResultFormat::Text,
                 tokio::time::Duration::from_secs(10),
                 tokio::time::Duration::from_secs(1),
@@ -2681,8 +2688,7 @@ pub(crate) mod tests {
             .unwrap();
         converter
             .execute_operation(
-                "5",
-                "sleep",
+                ShellScript::from_str("sleep 5").unwrap(),
                 ResultFormat::Text,
                 tokio::time::Duration::from_secs(20),
                 tokio::time::Duration::from_secs(1),
