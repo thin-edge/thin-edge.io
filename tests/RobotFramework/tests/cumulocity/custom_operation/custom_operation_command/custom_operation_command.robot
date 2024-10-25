@@ -39,6 +39,17 @@ Run shell custom operation for main device and do not publish the status
     ...    minimum=0
     ...    maximum=0
 
+Run arbitrary shell command
+    # See https://github.com/thin-edge/thin-edge.io/issues/3186
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_3    /etc/tedge/operations/c8y/c8y_Command
+    ${operation}=    Cumulocity.Create Operation
+    ...    description=mqtt pub hello world
+    ...    fragments={"c8y_MqttPub":{"topic":"test-topic", "message": "hello world"}}
+    Should Have MQTT Messages
+    ...    test-topic
+    ...    message_pattern=hello world
+    Operation Should Be SUCCESSFUL    ${operation}
+
 
 *** Keywords ***
 Custom Setup
