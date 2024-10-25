@@ -17,7 +17,6 @@ Add New SmartREST Template
 
     # Add Template and check if it was added
     Execute Command    sudo tedge config set c8y.smartrest.templates template-1
-    Reconnect to Cumulocity
     Check SmartREST Templates    present    template-1
 
     # Add Template and check if existing template + added template co-exist
