@@ -18,10 +18,11 @@ ${SMART_REST_ONE_TEMPLATES}=
 
 
 *** Test Cases ***
-Supports SmartREST 1.0 Templates
-    [Template]    Register and Use SmartREST 1.0. Templates
-    use_builtin_bridge=true
-    use_builtin_bridge=false
+Supports SmartREST 1.0 Templates - builtin
+    Register and Use SmartREST 1.0. Templates    use_builtin_bridge=true
+
+Supports SmartREST 1.0 Templates - mosquitto
+    Register and Use SmartREST 1.0. Templates    use_builtin_bridge=false
 
 
 *** Keywords ***
@@ -32,17 +33,22 @@ Register and Use SmartREST 1.0. Templates
     ${TEMPLATE_XID}=    Get Random Name    prefix=TST_Template
     Set Test Variable    $TEMPLATE_XID
     Execute Command    tedge config set c8y.smartrest1.templates "${TEMPLATE_XID}"
-    Execute Command    tedge connect c8y    timeout=10
+    Execute Command    tedge connect c8y
     ${mo}=    Device Should Exist    ${DEVICE_SN}
 
     # register templates
     Execute Command
     ...    curl --max-time 15 -sf -XPOST http://127.0.0.1:8001/c8y/s -H "Content-Type: plain/text" -H "X-Id: ${TEMPLATE_XID}" --data "${SMART_REST_ONE_TEMPLATES}"
 
+    SmartREST1 Template Should Exist    ${TEMPLATE_XID}
+
+    # Since we create a SmartREST template after initial connection, reconnect is required to subscribe the template properly.
+    Execute Command    tedge reconnect c8y
+
     # Use templates
     # Get managed object id
-    Execute Command    cmd=tedge mqtt pub c8y/s/ul/${TEMPLATE_XID} '339,${DEVICE_SN}'
-    Should Have MQTT Messages    c8y/s/dl/${TEMPLATE_XID}    message_pattern=^800,\\d+,${mo["id"]}    timeout=10
+    Execute Command    cmd=tedge mqtt pub --qos 1 c8y/s/ul/${TEMPLATE_XID} '339,${DEVICE_SN}'
+    Should Have MQTT Messages    c8y/s/dl/${TEMPLATE_XID}    message_pattern=^800,\\d+,${mo["id"]}
 
     Execute Command    cmd=tedge mqtt pub te/device/main///a/test '{"text":"test alarm","severity":"major"}' -r
     Device Should Have Alarm/s    type=test    expected_text=test alarm
@@ -60,7 +66,12 @@ Register Device
     ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Basic Auth    external_id=${SERIAL}
 
     Execute Command
-    ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' "${CREDENTIALS.username}" "${CREDENTIALS.password}" > /etc/tedge/credentials
+    ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' '${CREDENTIALS.username}' '${CREDENTIALS.password}' > /etc/tedge/credentials
+
+SmartREST1 Template Should Exist
+    [Arguments]    ${name}
+    Execute Command
+    ...    cmd=curl --max-time 15 -sf -X GET http://127.0.0.1:8001/c8y/identity/externalIds/c8y_SmartRestDeviceIdentifier/${name}
 
 Custom Setup
     [Arguments]    ${use_builtin_bridge}
