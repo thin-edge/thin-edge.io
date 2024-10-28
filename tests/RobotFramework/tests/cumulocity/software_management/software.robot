@@ -171,6 +171,16 @@ Operation gets updated regardless of the order of the creation time
     ...    tedge mqtt pub -r te/device/main///cmd/software_update/c8y-mapper-${op_id1} '{"status":"successful","updateList":[{"type":"default","modules":[{"name":"non-existent-package1","action":"install"}]}]}'
     Operation Should Be SUCCESSFUL    ${OPERATION1}    timeout=60
 
+Agent should ignore unknown software-update fields
+    # Issue https://github.com/thin-edge/thin-edge.io/issues/3136
+    # Add the softwareType field erroneously to an item in the modules array
+    Execute Command
+    ...    tedge mqtt pub -r te/device/main///cmd/software_update/test-3136 '{"status":"init","updateList":[{"type":"apt","modules":[{"name":"jq","action":"install","version":"latest","softwareType":"invalid"}]}]}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/software_update/test-3136
+    ...    message_pattern=.*"status":"successful".*
+    ...    timeout=60
+
 
 *** Keywords ***
 Custom Setup

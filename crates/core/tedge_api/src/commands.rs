@@ -372,7 +372,6 @@ impl CommandPayload for SoftwareListCommandPayload {
 /// Sub list of modules grouped by plugin type.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
 pub struct SoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
@@ -551,7 +550,6 @@ impl SoftwareUpdateCommand {
 /// Sub list of modules grouped by plugin type.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
 pub struct SoftwareRequestResponseSoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
@@ -571,7 +569,6 @@ pub enum SoftwareModuleAction {
 /// Software module payload definition.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
 pub struct SoftwareModuleItem {
     pub name: SoftwareName,
 
