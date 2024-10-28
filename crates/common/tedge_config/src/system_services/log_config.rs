@@ -13,6 +13,15 @@ pub struct LogConfigArgs {
     /// If off only reports ERROR, WARN, and INFO, if on also reports DEBUG
     #[clap(long, global = true)]
     pub debug: bool,
+
+    /// Configures the logging level.
+    ///
+    /// One of error/warn/info/debug/trace. Logs with verbosity lower or equal to the selected level
+    /// will be printed, i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
+    ///
+    /// Overrides `--debug`
+    #[clap(long, global = true)]
+    pub log_level: Option<tracing::Level>,
 }
 
 /// Configures and enables logging taking into account flags, env variables and file config.
@@ -33,8 +42,12 @@ pub fn log_init(
         .with_ansi(std::io::stderr().is_terminal())
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
 
-    if flags.debug {
-        subscriber.with_max_level(tracing::Level::DEBUG).init();
+    let log_level = flags
+        .log_level
+        .or(flags.debug.then_some(tracing::Level::DEBUG));
+
+    if let Some(log_level) = log_level {
+        subscriber.with_max_level(log_level).init();
         return Ok(());
     }
 
