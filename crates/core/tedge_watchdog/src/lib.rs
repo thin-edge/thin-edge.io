@@ -23,12 +23,8 @@ version = clap::crate_version!(),
 about = clap::crate_description!()
 )]
 pub struct WatchdogOpt {
-    /// Turn-on the debug log level.
-    ///
-    /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG
-    #[clap(long)]
-    pub debug: bool,
+    #[command(flatten)]
+    pub log_args: LogConfigArgs,
 
     /// Start the watchdog from custom path
     ///
@@ -46,16 +42,11 @@ pub async fn run(watchdog_opt: WatchdogOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(watchdog_opt.config_dir.clone());
 
-    let log_level = if watchdog_opt.debug {
-        tracing::Level::DEBUG
-    } else {
-        get_log_level(
-            "tedge-watchdog",
-            &tedge_config_location.tedge_config_root_path,
-        )?
-    };
-
-    set_log_level(log_level);
+    log_init(
+        "tedge-watchdog",
+        &watchdog_opt.log_args,
+        &tedge_config_location.tedge_config_root_path,
+    )?;
 
     watchdog::start_watchdog(watchdog_opt.config_dir).await
 }

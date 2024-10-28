@@ -16,8 +16,8 @@ use std::sync::Arc;
 use agent::AgentConfig;
 use camino::Utf8PathBuf;
 use tedge_config::get_config_dir;
-use tedge_config::system_services::get_log_level;
-use tedge_config::system_services::set_log_level;
+use tedge_config::system_services::log_init;
+use tedge_config::system_services::LogConfigArgs;
 use tracing::log::warn;
 
 mod agent;
@@ -37,12 +37,8 @@ version = clap::crate_version!(),
 about = clap::crate_description!()
 )]
 pub struct AgentOpt {
-    /// Turn-on the debug log level.
-    ///
-    /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG
-    #[clap(long)]
-    pub debug: bool,
+    #[command(flatten)]
+    pub log_args: LogConfigArgs,
 
     /// Start the agent with clean session off, subscribe to the topics, so that no messages are lost
     #[clap(short, long)]
@@ -72,15 +68,11 @@ pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
 
-    // If `debug` is `false` then only `error!`, `warn!` and `info!` are reported.
-    // If `debug` is `true` then also `debug!` is reported.
-    let log_level = if agent_opt.debug {
-        tracing::Level::DEBUG
-    } else {
-        get_log_level("tedge-agent", &tedge_config_location.tedge_config_root_path)?
-    };
-
-    set_log_level(log_level);
+    log_init(
+        "tedge-agent",
+        &agent_opt.log_args,
+        &tedge_config_location.tedge_config_root_path,
+    )?;
 
     let init = agent_opt.init;
 
