@@ -671,7 +671,6 @@ mod tests {
 
     #[tokio::test]
     async fn shouldnt_process_invalid_status_transitions() {
-        tedge_config::system_services::set_log_level(tracing::Level::DEBUG);
         let TestHandle {
             operation_handler: mut sut,
             ttd: _ttd,

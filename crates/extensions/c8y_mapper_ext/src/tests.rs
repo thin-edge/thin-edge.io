@@ -2628,7 +2628,6 @@ async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
 
 #[tokio::test]
 async fn mapper_doesnt_send_duplicate_operation_status() {
-    tedge_config::system_services::set_log_level(tracing::Level::DEBUG);
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
