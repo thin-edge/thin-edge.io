@@ -54,6 +54,8 @@ pub fn log_init(
     if std::env::var("RUST_LOG").is_ok() {
         subscriber
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_file(true)
+            .with_line_number(true)
             .init();
         return Ok(());
     }
