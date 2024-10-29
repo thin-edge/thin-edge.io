@@ -8,6 +8,7 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::actor::PublishMessage;
 use crate::availability::AvailabilityBuilder;
+use crate::config::BridgeConfig;
 use crate::operations::OperationHandler;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
@@ -39,6 +40,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::AutoLogUpload;
 use tedge_config::SoftwareManagementApiFlag;
 use tedge_config::TEdgeConfig;
+use tedge_config::TopicPrefix;
 use tedge_config::C8Y_MQTT_PAYLOAD_LIMIT;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
@@ -2094,6 +2096,58 @@ async fn json_custom_operation_skip_status_update() {
     assert!(recv.is_none());
 }
 
+#[tokio::test]
+async fn json_custom_operation_status_update_with_custom_topic() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            topic = "${.bridge.topic_prefix}/custom/operation/one"
+            command = "echo ${.payload.c8y_Command.text}"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: false,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate c8y_Command SmartREST request
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/custom/operation/one"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"TST_haul_searing_set",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "503,c8y_Command,\"do something\n\"")],
+    )
+    .await;
+}
+
 /// This test aims to verify that when a telemetry message is emitted from an
 /// unknown device or service, the mapper will produce a registration message
 /// for this entity. The registration message shall be published only once, when
@@ -2987,9 +3041,15 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let mqtt_schema = MqttSchema::default();
     let auth_proxy_addr = "127.0.0.1".into();
     let auth_proxy_port = 8001;
+    let bridge_config = BridgeConfig {
+        c8y_prefix: TopicPrefix::try_from("c8y").unwrap(),
+    };
+
     let mut topics =
-        C8yMapperConfig::default_internal_topic_filter(tmp_dir.path(), &"c8y".try_into().unwrap())
-            .unwrap();
+        C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
+    let custom_operation_topics =
+        C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config).unwrap();
+    topics.add_all(custom_operation_topics);
 
     let capabilities = Capabilities::default();
 
@@ -3000,6 +3060,8 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     topics.add_all(operation_topics);
 
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
+
+    topics.remove_overlapping_patterns();
 
     C8yMapperConfig::new(
         tmp_dir.utf8_path().into(),
@@ -3021,7 +3083,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         MqttSchema::default(),
         true,
         true,
-        "c8y".try_into().unwrap(),
+        bridge_config,
         false,
         SoftwareManagementApiFlag::Advanced,
         true,

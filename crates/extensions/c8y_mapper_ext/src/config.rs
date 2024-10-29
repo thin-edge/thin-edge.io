@@ -6,6 +6,7 @@ use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_auth_proxy::url::Protocol;
 use camino::Utf8Path;
+use serde_json::Value;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
 use tedge_api::service_health_topic;
+use tedge_api::substitution::Record;
 use tedge_config::AutoLogUpload;
 use tedge_config::ConfigNotSet;
 use tedge_config::MultiError;
@@ -51,7 +53,7 @@ pub struct C8yMapperConfig {
     pub mqtt_schema: MqttSchema,
     pub enable_auto_register: bool,
     pub clean_start: bool,
-    pub c8y_prefix: TopicPrefix,
+    pub bridge_config: BridgeConfig,
     pub bridge_in_mapper: bool,
     pub software_management_api: SoftwareManagementApiFlag,
     pub software_management_with_types: bool,
@@ -93,7 +95,7 @@ impl C8yMapperConfig {
         mqtt_schema: MqttSchema,
         enable_auto_register: bool,
         clean_start: bool,
-        c8y_prefix: TopicPrefix,
+        bridge_config: BridgeConfig,
         bridge_in_mapper: bool,
         software_management_api: SoftwareManagementApiFlag,
         software_management_with_types: bool,
@@ -108,7 +110,7 @@ impl C8yMapperConfig {
         let state_dir = config_dir.join(STATE_DIR_NAME).into();
 
         let bridge_service_name = if bridge_in_mapper {
-            format!("tedge-mapper-bridge-{c8y_prefix}")
+            format!("tedge-mapper-bridge-{}", bridge_config.c8y_prefix)
         } else {
             "mosquitto-c8y-bridge".into()
         };
@@ -132,7 +134,7 @@ impl C8yMapperConfig {
             mqtt_schema,
             enable_auto_register,
             clean_start,
-            c8y_prefix,
+            bridge_config,
             bridge_in_mapper,
             software_management_api,
             software_management_with_types,
@@ -188,10 +190,12 @@ impl C8yMapperConfig {
             firmware_update: c8y_config.enable.firmware_update,
             device_profile: c8y_config.enable.device_profile,
         };
-        let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
+        let bridge_config = BridgeConfig {
+            c8y_prefix: c8y_config.bridge.topic_prefix.clone(),
+        };
 
-        let mut topics =
-            Self::default_internal_topic_filter(config_dir.as_std_path(), &c8y_prefix)?;
+        let mut topics = Self::default_internal_topic_filter(&bridge_config.c8y_prefix)?;
+
         let enable_auto_register = c8y_config.entity_store.auto_register;
         let clean_start = c8y_config.entity_store.clean_start;
 
@@ -225,6 +229,14 @@ impl C8yMapperConfig {
             }
         }
 
+        // Add custom operation topics
+        let custom_operation_topics =
+            Self::get_topics_from_custom_operations(config_dir.as_std_path(), &bridge_config)?;
+
+        topics.add_all(custom_operation_topics);
+
+        topics.remove_overlapping_patterns();
+
         let bridge_in_mapper = tedge_config.mqtt.bridge.built_in;
 
         Ok(C8yMapperConfig::new(
@@ -247,7 +259,7 @@ impl C8yMapperConfig {
             mqtt_schema,
             enable_auto_register,
             clean_start,
-            c8y_prefix,
+            bridge_config,
             bridge_in_mapper,
             software_management_api,
             software_management_with_types,
@@ -258,10 +270,9 @@ impl C8yMapperConfig {
     }
 
     pub fn default_internal_topic_filter(
-        config_dir: &Path,
         prefix: &TopicPrefix,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
-        let mut topic_filter: TopicFilter = vec![
+        let topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.with_prefix(prefix).as_str(),
             &C8yDeviceControlTopic::name(prefix),
@@ -269,10 +280,20 @@ impl C8yMapperConfig {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
+        Ok(topic_filter)
+    }
+
+    pub fn get_topics_from_custom_operations(
+        config_dir: &Path,
+        bridge_config: &BridgeConfig,
+    ) -> Result<TopicFilter, C8yMapperConfigError> {
+        let mut topic_filter = TopicFilter::empty();
+
         if let Ok(operations) = Operations::try_new(
             config_dir
                 .join(SUPPORTED_OPERATIONS_DIRECTORY)
                 .join(C8Y_CLOUD),
+            bridge_config,
         ) {
             for topic in operations.topics_for_operations() {
                 topic_filter.add(&topic)?;
@@ -298,7 +319,20 @@ impl C8yMapperConfig {
     }
 
     pub fn id_generator(&self) -> IdGenerator {
-        IdGenerator::new(&format!("{}-mapper", self.c8y_prefix))
+        IdGenerator::new(&format!("{}-mapper", self.bridge_config.c8y_prefix))
+    }
+}
+
+pub struct BridgeConfig {
+    pub c8y_prefix: TopicPrefix,
+}
+
+impl Record for BridgeConfig {
+    fn extract_value(&self, path: &str) -> Option<Value> {
+        match path {
+            ".bridge.topic_prefix" => Some(self.c8y_prefix.as_str().into()),
+            _ => None,
+        }
     }
 }
 

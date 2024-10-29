@@ -60,6 +60,9 @@ pub enum OperationsError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromMqttError(#[from] mqtt_channel::MqttError),
 }
 
 #[derive(thiserror::Error, Debug)]

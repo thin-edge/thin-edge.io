@@ -218,8 +218,10 @@ impl CumulocityConverter {
 
         let size_threshold = SizeThreshold(config.max_mqtt_payload_size as usize);
 
-        let operations = Operations::try_new(&*config.ops_dir)?;
-        let children = get_child_ops(&*config.ops_dir)?;
+        let prefix = &config.bridge_config.c8y_prefix;
+
+        let operations = Operations::try_new(&*config.ops_dir, &config.bridge_config)?;
+        let children = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
 
         let alarm_converter = AlarmConverter::new();
 
@@ -230,7 +232,6 @@ impl CumulocityConverter {
 
         let mqtt_schema = config.mqtt_schema.clone();
 
-        let prefix = &config.c8y_prefix;
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked(&format!("{prefix}/measurement/measurements/create")),
             errors_topic: mqtt_schema.error_topic(),
@@ -385,7 +386,7 @@ impl CumulocityConverter {
                     display_name,
                     display_type,
                     &ancestors_external_ids,
-                    &self.config.c8y_prefix,
+                    &self.config.bridge_config.c8y_prefix,
                 )
                 .context("Could not create device creation message")?;
                 Ok(vec![child_creation_message])
@@ -404,7 +405,7 @@ impl CumulocityConverter {
                     display_type.unwrap_or(&self.service_type),
                     "up",
                     &ancestors_external_ids,
-                    &self.config.c8y_prefix,
+                    &self.config.bridge_config.c8y_prefix,
                 )
                 .context("Could not create service creation message")?;
                 Ok(vec![service_creation_message])
@@ -425,7 +426,7 @@ impl CumulocityConverter {
         ancestors_external_ids.insert(0, entity.external_id.as_ref().into());
         Ok(publish_topic_from_ancestors(
             &ancestors_external_ids,
-            &self.config.c8y_prefix,
+            &self.config.bridge_config.c8y_prefix,
         ))
     }
 
@@ -553,14 +554,15 @@ impl CumulocityConverter {
             // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
             let message = if c8y_event.extras.is_empty() {
                 let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
-                let smartrest_topic = C8yTopic::upstream_topic(&self.config.c8y_prefix);
+                let smartrest_topic =
+                    C8yTopic::upstream_topic(&self.config.bridge_config.c8y_prefix);
                 MqttMessage::new(&smartrest_topic, smartrest_event)
             } else {
                 // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
                 let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
                 let json_mqtt_topic = Topic::new_unchecked(&format!(
                     "{}/{C8Y_JSON_MQTT_EVENTS_TOPIC}",
-                    self.config.c8y_prefix
+                    self.config.bridge_config.c8y_prefix
                 ));
                 MqttMessage::new(&json_mqtt_topic, cumulocity_event_json)
             };
@@ -597,7 +599,7 @@ impl CumulocityConverter {
             input,
             alarm_type,
             &self.entity_store,
-            &self.config.c8y_prefix,
+            &self.config.bridge_config.c8y_prefix,
         )?;
 
         Ok(mqtt_messages)
@@ -619,7 +621,7 @@ impl CumulocityConverter {
             entity_metadata,
             &ancestors_external_ids,
             message,
-            &self.config.c8y_prefix,
+            &self.config.bridge_config.c8y_prefix,
         ))
     }
 
@@ -718,26 +720,58 @@ impl CumulocityConverter {
                 }
             }
             C8yDeviceControlOperation::Custom => {
-                let json_over_mqtt_topic = C8yDeviceControlTopic::name(&self.config.c8y_prefix);
-                let handlers = self.operations.filter_by_topic(&json_over_mqtt_topic);
-
-                if handlers.is_empty() {
-                    info!("No matched custom operation handler is found for the topic {json_over_mqtt_topic}. The operation '{operation_id}' (ID) is ignored.");
-                }
-
-                for (on_fragment, custom_handler) in &handlers {
-                    if extras.contains_key(on_fragment) {
-                        self.execute_custom_operation(custom_handler, message, &operation_id)
-                            .await?;
-                        break;
-                    }
-                }
-                // MQTT messages are sent during the operation execution
-                vec![]
+                return self
+                    .process_json_custom_operation(operation_id, extras, message)
+                    .await;
             }
         };
 
         Ok(msgs)
+    }
+
+    async fn parse_json_custom_operation_topic(
+        &mut self,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let operation = C8yOperation::from_json(message.payload.as_str()?)?;
+        let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+
+        if self.active_commands.contains(&cmd_id) {
+            info!("{cmd_id} is already addressed");
+            return Ok(vec![]);
+        }
+
+        let result = self
+            .process_json_custom_operation(operation.op_id.clone(), &operation.extras, message)
+            .await;
+
+        let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+
+        Ok(output)
+    }
+
+    async fn process_json_custom_operation(
+        &self,
+        operation_id: String,
+        extras: &HashMap<String, Value>,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let handlers = self.operations.filter_by_topic(&message.topic.name);
+
+        if handlers.is_empty() {
+            info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
+        }
+
+        for (on_fragment, custom_handler) in &handlers {
+            if extras.contains_key(on_fragment) {
+                self.execute_custom_operation(custom_handler, message, &operation_id)
+                    .await?;
+                break;
+            }
+        }
+
+        // MQTT messages are sent during the operation execution
+        Ok(vec![])
     }
 
     async fn execute_custom_operation(
@@ -812,7 +846,7 @@ impl CumulocityConverter {
                 },
             ) => {
                 let topic = C8yTopic::SmartRestResponse
-                    .to_topic(&self.config.c8y_prefix)
+                    .to_topic(&self.config.bridge_config.c8y_prefix)
                     .unwrap();
 
                 let (payload1, payload2) =
@@ -985,7 +1019,7 @@ impl CumulocityConverter {
             Ok(child_process) => {
                 let op_name = operation_name.to_owned();
                 let mut mqtt_publisher = self.mqtt_publisher.clone();
-                let c8y_prefix = self.config.c8y_prefix.clone();
+                let c8y_prefix = self.config.bridge_config.c8y_prefix.clone();
                 let (use_id, op_id) = match operation_id {
                     Some(op_id) if self.config.smartrest_use_operation_id => (true, op_id),
                     _ => (false, "".to_string()),
@@ -1356,10 +1390,25 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic if C8yDeviceControlTopic::accept(topic, &self.config.c8y_prefix) => {
+            topic
+                if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
+            {
                 self.parse_c8y_devicecontrol_topic(message).await
             }
-            topic if topic.name.starts_with(self.config.c8y_prefix.as_str()) => {
+            topic
+                if self
+                    .operations
+                    .get_json_custom_operation_topics()?
+                    .accept_topic(topic) =>
+            {
+                self.parse_json_custom_operation_topic(message).await
+            }
+            topic
+                if self
+                    .operations
+                    .get_smartrest_custom_operation_topics()?
+                    .accept_topic(topic) =>
+            {
                 self.parse_c8y_smartrest_topics(message).await
             }
             _ => {
@@ -1376,13 +1425,13 @@ impl CumulocityConverter {
 
         let supported_operations_message = self.create_supported_operations(
             self.config.ops_dir.as_std_path(),
-            &self.config.c8y_prefix,
+            &self.config.bridge_config.c8y_prefix,
         )?;
 
         let device_data_message = self.inventory_device_type_update_message()?;
 
         let pending_operations_message =
-            create_get_pending_operations_message(&self.config.c8y_prefix)?;
+            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix)?;
 
         messages.append(&mut vec![
             supported_operations_message,
@@ -1408,7 +1457,7 @@ impl CumulocityConverter {
 
         Ok(MqttMessage::new(
             &topic,
-            Operations::try_new(path)?
+            Operations::try_new(path, &self.config.bridge_config)?
                 .create_smartrest_ops_message()
                 .into_inner(),
         ))
@@ -1429,7 +1478,7 @@ impl CumulocityConverter {
         if needs_cloud_update {
             Ok(Some(self.create_supported_operations(
                 &message.ops_dir,
-                &self.config.c8y_prefix,
+                &self.config.bridge_config.c8y_prefix,
             )?))
         } else {
             Ok(None)
@@ -1501,8 +1550,10 @@ impl CumulocityConverter {
         let need_cloud_update = self.update_operations(ops_dir.as_std_path())?;
 
         if need_cloud_update {
-            let device_operations =
-                self.create_supported_operations(ops_dir.as_std_path(), &self.config.c8y_prefix)?;
+            let device_operations = self.create_supported_operations(
+                ops_dir.as_std_path(),
+                &self.config.bridge_config.c8y_prefix,
+            )?;
             return Ok(vec![device_operations]);
         }
 
@@ -1514,7 +1565,7 @@ impl CumulocityConverter {
     /// If the supported operation set changed, `Ok(true)` is returned to denote that this change
     /// should be sent to the cloud.
     fn update_operations(&mut self, dir: &Path) -> Result<bool, ConversionError> {
-        let operations = get_operations(dir)?;
+        let operations = get_operations(dir, &self.config.bridge_config)?;
         let current_operations = if is_child_operation_path(dir) {
             let child_id = get_child_external_id(dir)?;
             let Some(current_operations) = self.children.get_mut(&child_id) else {
@@ -1618,6 +1669,7 @@ pub(crate) mod tests {
     use crate::actor::IdDownloadResult;
     use crate::actor::IdUploadRequest;
     use crate::actor::IdUploadResult;
+    use crate::config::BridgeConfig;
     use crate::config::C8yMapperConfig;
     use crate::Capabilities;
     use anyhow::Result;
@@ -1632,6 +1684,7 @@ pub(crate) mod tests {
     use c8y_http_proxy::messages::C8YRestResult;
     use serde_json::json;
     use serde_json::Value;
+    use tedge_config::TopicPrefix;
 
     use std::str::FromStr;
 
@@ -2503,7 +2556,7 @@ pub(crate) mod tests {
         let mut config = c8y_converter_config(&tmp_dir);
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
-        config.c8y_prefix = "custom-topic".try_into().unwrap();
+        config.bridge_config.c8y_prefix = "custom-topic".try_into().unwrap();
 
         let (mut converter, _) = create_c8y_converter_from_config(config);
         let event_topic = "te/device/main///e/click_event";
@@ -2978,7 +3031,7 @@ pub(crate) mod tests {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
-        config.c8y_prefix = "custom-c8y-prefix".try_into().unwrap();
+        config.bridge_config.c8y_prefix = "custom-c8y-prefix".try_into().unwrap();
 
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
@@ -3195,11 +3248,17 @@ pub(crate) mod tests {
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
-        let topics = C8yMapperConfig::default_internal_topic_filter(
-            &tmp_dir.to_path_buf(),
-            &"c8y".try_into().unwrap(),
-        )
-        .unwrap();
+        let bridge_config = BridgeConfig {
+            c8y_prefix: TopicPrefix::try_from("c8y").unwrap(),
+        };
+
+        let mut topics =
+            C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
+        let custom_operation_topics =
+            C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config)
+                .unwrap();
+        topics.add_all(custom_operation_topics);
+        topics.remove_overlapping_patterns();
 
         C8yMapperConfig::new(
             tmp_dir.utf8_path().into(),
@@ -3221,7 +3280,7 @@ pub(crate) mod tests {
             MqttSchema::default(),
             true,
             true,
-            "c8y".try_into().unwrap(),
+            bridge_config,
             false,
             SoftwareManagementApiFlag::Advanced,
             true,

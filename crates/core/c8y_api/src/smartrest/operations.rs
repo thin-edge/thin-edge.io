@@ -1,5 +1,6 @@
 use crate::smartrest::error::OperationsError;
 use crate::smartrest::smartrest_serializer::declare_supported_operations;
+use mqtt_channel::TopicFilter;
 use serde::Deserialize;
 use serde::Deserializer;
 use std::collections::HashMap;
@@ -8,6 +9,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_api::substitution::Record;
 use tracing::warn;
 
 use super::payload::SmartrestPayload;
@@ -28,8 +30,11 @@ impl Operations {
         self.operations.push(operation);
     }
 
-    pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
-        get_operations(dir.as_ref())
+    pub fn try_new(
+        dir: impl AsRef<Path>,
+        bridge_config: &impl Record,
+    ) -> Result<Self, OperationsError> {
+        get_operations(dir.as_ref(), bridge_config)
     }
 
     pub fn get_operations_list(&self) -> Vec<String> {
@@ -78,6 +83,25 @@ impl Operations {
         ops.sort();
         let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
         declare_supported_operations(&ops)
+    }
+    pub fn get_json_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
+        Ok(self
+            .operations
+            .iter()
+            .filter(|operation| operation.on_fragment().is_some())
+            .filter_map(|operation| operation.topic())
+            .collect::<HashSet<String>>()
+            .try_into()?)
+    }
+
+    pub fn get_smartrest_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
+        Ok(self
+            .operations
+            .iter()
+            .filter(|operation| operation.on_message().is_some())
+            .filter_map(|operation| operation.topic())
+            .collect::<HashSet<String>>()
+            .try_into()?)
     }
 }
 
@@ -235,7 +259,10 @@ where
     }
 }
 
-pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> {
+pub fn get_operations(
+    dir: impl AsRef<Path>,
+    bridge_config: &impl Record,
+) -> Result<Operations, OperationsError> {
     let mut operations = Operations::default();
     let dir_entries = fs::read_dir(&dir)
         .map_err(|_| OperationsError::ReadDirError {
@@ -262,6 +289,11 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
                 Err(err) => return Err(OperationsError::FromIo(err)),
             };
 
+            if let Some(ref mut exec) = details.exec {
+                if let Some(ref topic) = exec.topic {
+                    exec.topic = Some(bridge_config.inject_values_into_template(topic))
+                }
+            }
             path.file_name()
                 .and_then(|filename| filename.to_str())
                 .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
@@ -277,6 +309,7 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
 
 pub fn get_child_ops(
     ops_dir: impl AsRef<Path>,
+    bridge_config: &impl Record,
 ) -> Result<HashMap<String, Operations>, OperationsError> {
     let mut child_ops: HashMap<String, Operations> = HashMap::new();
     let child_entries = fs::read_dir(&ops_dir)
@@ -289,7 +322,7 @@ pub fn get_child_ops(
         .filter(|path| path.is_dir())
         .collect::<Vec<PathBuf>>();
     for cdir in child_entries {
-        let ops = Operations::try_new(&cdir)?;
+        let ops = Operations::try_new(&cdir, bridge_config)?;
         if let Some(id) = cdir.file_name() {
             if let Some(id_str) = id.to_str() {
                 child_ops.insert(id_str.to_string(), ops);
@@ -363,6 +396,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use tedge_config::TopicPrefix;
     use test_case::test_case;
 
     // Structs for state change with the builder pattern
@@ -448,13 +482,32 @@ mod tests {
         }
     }
 
+    struct TestBridgeConfig {
+        c8y_prefix: TopicPrefix,
+    }
+
+    impl Record for TestBridgeConfig {
+        fn extract_value(&self, path: &str) -> Option<serde_json::Value> {
+            match path {
+                ".bridge.c8y_prefix" => Some(self.c8y_prefix.as_str().into()),
+                _ => None,
+            }
+        }
+    }
+
     #[test_case(0)]
     #[test_case(1)]
     #[test_case(5)]
     fn get_operations_all(ops_count: usize) {
         let test_operations = TestOperations::builder().with_operations(ops_count).build();
 
-        let operations = get_operations(test_operations.temp_dir()).unwrap();
+        let operations = get_operations(
+            test_operations.temp_dir(),
+            &TestBridgeConfig {
+                c8y_prefix: TopicPrefix::try_from("c8y").unwrap(),
+            },
+        )
+        .unwrap();
 
         assert_eq!(operations.operations.len(), ops_count);
     }
