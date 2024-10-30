@@ -1,22 +1,23 @@
-use c8y_api::http_proxy::C8yMqttJwtTokenRetriever;
+use c8y_api::http_proxy::C8yAuthRetriever;
+use http::HeaderValue;
 use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;
 
-pub struct Jwt(String);
+pub struct Auth(HeaderValue);
 
-impl Jwt {
-    pub fn authorization_header(&self) -> String {
-        format!("Bearer {}", self.0)
+impl Auth {
+    pub fn authorization_header(&self) -> HeaderValue {
+        self.0.clone()
     }
 
-    pub async fn retrieve(config: &TEdgeConfig, c8y_profile: Option<&str>) -> miette::Result<Jwt> {
+    pub async fn retrieve(config: &TEdgeConfig, c8y_profile: Option<&str>) -> miette::Result<Auth> {
         let mut retriever =
-            C8yMqttJwtTokenRetriever::from_tedge_config(config, c8y_profile).into_diagnostic()?;
+            C8yAuthRetriever::from_tedge_config(config, c8y_profile).into_diagnostic()?;
 
         retriever
-            .get_jwt_token()
+            .get_auth_header_value()
             .await
-            .map(|resp| Jwt(resp.token()))
+            .map(Auth)
             .into_diagnostic()
     }
 }

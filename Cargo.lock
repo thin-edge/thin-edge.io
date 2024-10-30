@@ -611,6 +611,7 @@ name = "c8y-firmware-plugin"
 version = "1.3.1"
 dependencies = [
  "anyhow",
+ "c8y_api",
  "c8y_firmware_manager",
  "c8y_http_proxy",
  "clap",
@@ -662,6 +663,8 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
+ "base64 0.13.1",
+ "camino",
  "clock",
  "csv",
  "download",
@@ -3695,6 +3698,7 @@ dependencies = [
  "base64 0.13.1",
  "c8y-firmware-plugin",
  "c8y-remote-access-plugin",
+ "c8y_api",
  "camino",
  "cap",
  "certificate",

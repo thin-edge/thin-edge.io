@@ -2,8 +2,9 @@ use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use anyhow::Context;
 use async_trait::async_trait;
+use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
-use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::credentials::C8YHeaderRetriever;
 use c8y_http_proxy::C8YHttpConfig;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
@@ -22,6 +23,7 @@ use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
+use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -48,28 +50,44 @@ impl TEdgeComponent for CumulocityMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
 
-        let mqtt_config = tedge_config.mqtt_config()?;
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
-            let custom_topics = c8y_config
+            let smartrest_1_topics = c8y_config
+                .smartrest1
+                .templates
+                .0
+                .iter()
+                .map(|id| Cow::Owned(format!("s/dl/{id}")));
+
+            let smartrest_2_topics = c8y_config
                 .smartrest
                 .templates
                 .0
                 .iter()
                 .map(|id| Cow::Owned(format!("s/dc/{id}")));
 
+            let use_certificate = c8y_config
+                .auth_method
+                .is_certificate(&c8y_config.credentials_path);
             let cloud_topics = [
-                "s/dt",
-                "s/dat",
-                "s/ds",
-                "s/e",
-                "devicecontrol/notifications",
-                "error",
+                ("s/dt", true),
+                ("s/ds", true),
+                ("s/dat", use_certificate),
+                ("s/e", true),
+                ("devicecontrol/notifications", true),
+                ("error", true),
             ]
             .into_iter()
-            .map(Cow::Borrowed)
-            .chain(custom_topics);
+            .filter_map(|(topic, active)| {
+                if active {
+                    Some(Cow::Borrowed(topic))
+                } else {
+                    None
+                }
+            })
+            .chain(smartrest_1_topics)
+            .chain(smartrest_2_topics);
 
             let mut tc = BridgeConfig::new();
             let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
@@ -86,6 +104,14 @@ impl TEdgeComponent for CumulocityMapper {
             tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
             tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
             tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
+
+            // SmartREST1
+            if !use_certificate {
+                tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
+                tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
+                tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
+                tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
+            }
 
             // SmartREST2
             tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
@@ -106,7 +132,11 @@ impl TEdgeComponent for CumulocityMapper {
             )?;
             tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
             tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+
+            // JWT token
+            if use_certificate {
+                tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+            }
 
             let c8y = c8y_config.mqtt.or_config_not_set()?;
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
@@ -117,7 +147,18 @@ impl TEdgeComponent for CumulocityMapper {
             // Cumulocity tells us not to not set clean session to false, so don't
             // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
             cloud_config.set_clean_session(true);
-            use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
+
+            if use_certificate {
+                use_key_and_cert(&mut cloud_config, &c8y_config.root_cert_path, &tedge_config)?;
+            } else {
+                let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
+                use_credentials(
+                    &mut cloud_config,
+                    &c8y_config.root_cert_path,
+                    username,
+                    password,
+                )?;
+            }
 
             let main_device_xid: EntityExternalId =
                 tedge_config.device.id.try_read(&tedge_config)?.into();
@@ -185,14 +226,14 @@ impl TEdgeComponent for CumulocityMapper {
                 )
                 .await?;
         }
-        let mut jwt_actor =
-            C8YJwtRetriever::builder(mqtt_config.clone(), c8y_config.bridge.topic_prefix.clone());
+
+        let mut header_actor = C8YHeaderRetriever::try_builder(&tedge_config, c8y_profile)?;
         let mut http_actor = HttpActor::new(&tedge_config).builder();
         let c8y_http_config = C8YHttpConfig::try_new(&tedge_config, c8y_profile)?;
         let mut c8y_http_proxy_actor =
-            C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
+            C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut header_actor);
         let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile, &mut jwt_actor)?;
+            C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile, &mut header_actor)?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
@@ -240,7 +281,7 @@ impl TEdgeComponent for CumulocityMapper {
         };
 
         runtime.spawn(mqtt_actor).await?;
-        runtime.spawn(jwt_actor).await?;
+        runtime.spawn(header_actor).await?;
         runtime.spawn(http_actor).await?;
         runtime.spawn(c8y_http_proxy_actor).await?;
         runtime.spawn(c8y_auth_proxy_actor).await?;
