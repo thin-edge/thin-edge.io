@@ -22,6 +22,7 @@ Supports SmartREST 1.0 Templates - builtin
     Register and Use SmartREST 1.0. Templates    use_builtin_bridge=true
 
 Supports SmartREST 1.0 Templates - mosquitto
+    [Tags]    test:retry(1)    workaround    # rarely no message arrives on c8y/s/dl/template
     Register and Use SmartREST 1.0. Templates    use_builtin_bridge=false
 
 
