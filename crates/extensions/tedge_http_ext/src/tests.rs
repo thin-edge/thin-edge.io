@@ -5,8 +5,8 @@ use tedge_test_utils::fs::TempTedgeDir;
 
 #[tokio::test]
 async fn get_over_https() {
-    let mut server = mockito::Server::new();
-    let _mock = server.mock("GET", "/").create();
+    let mut server = mockito::Server::new_async().await;
+    let _mock = server.mock("GET", "/").create_async().await;
 
     let mut http = spawn_http_actor().await;
 

@@ -12,13 +12,14 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 #[tokio::test]
 async fn download_without_auth() {
     let ttd = TempTedgeDir::new();
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let _mock = server
         .mock("GET", "/")
         .with_status(200)
         .with_header("content-type", "text/plain")
         .with_body("without auth")
-        .create();
+        .create_async()
+        .await;
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
@@ -42,14 +43,15 @@ async fn download_without_auth() {
 #[tokio::test]
 async fn download_with_auth() {
     let ttd = TempTedgeDir::new();
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let _mock = server
         .mock("GET", "/")
         .with_status(200)
         .with_header("content-type", "text/plain")
         .match_header("authorization", "Bearer token")
         .with_body("with auth")
-        .create();
+        .create_async()
+        .await;
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
@@ -87,13 +89,14 @@ async fn spawn_downloader_actor(
 #[tokio::test]
 async fn download_if_download_key_is_struct() {
     let ttd = TempTedgeDir::new();
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let _mock = server
         .mock("GET", "/")
         .with_status(200)
         .with_header("content-type", "text/plain")
         .with_body("without auth")
-        .create();
+        .create_async()
+        .await;
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();

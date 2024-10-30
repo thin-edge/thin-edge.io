@@ -841,12 +841,13 @@ mod tests {
     #[tokio::test]
     async fn forwards_successful_responses() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("GET", "/hello")
             .match_header("Authorization", "Bearer test-token")
             .with_status(204)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["test-token"]);
 
@@ -865,12 +866,13 @@ mod tests {
         let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
         let cert_der = certificate.serialize_der().unwrap();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("GET", "/hello")
             .match_header("Authorization", "Bearer test-token")
             .with_status(204)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server_with_certificate(&server, vec!["test-token"], certificate, None);
 
@@ -890,11 +892,12 @@ mod tests {
     #[tokio::test]
     async fn forwards_unsuccessful_responses() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("GET", "/not-a-known-url")
             .with_status(404)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["test-token"]);
 
@@ -928,12 +931,13 @@ mod tests {
     #[tokio::test]
     async fn sends_query_string_from_original_request() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("GET", "/inventory/managedObjects")
             .match_query("pageSize=100")
             .with_status(200)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["test-token"]);
 
@@ -950,12 +954,13 @@ mod tests {
     #[tokio::test]
     async fn uses_authorization_header_passed_by_user_if_one_is_provided() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("GET", "/inventory/managedObjects")
             .match_header("authorization", "Basic dGVzdDp0ZXN0")
             .with_status(200)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["test-token"]);
 
@@ -973,19 +978,21 @@ mod tests {
     #[tokio::test]
     async fn retries_requests_with_small_bodies() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock = server
             .mock("PUT", "/hello")
             .match_header("Authorization", "Bearer old-token")
             .with_status(401)
-            .create();
+            .create_async()
+            .await;
         let _mock = server
             .mock("PUT", "/hello")
             .match_header("Authorization", "Bearer test-token")
             .match_body("A body")
             .with_body("Some response")
             .with_status(200)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
@@ -1005,19 +1012,21 @@ mod tests {
     #[tokio::test]
     async fn regenerates_token_proactively_if_the_request_cannot_be_retried() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let head_request = server
             .mock("HEAD", "/tenant/currentTenant")
             .match_header("Authorization", "Bearer old-token")
             .with_status(401)
-            .create();
+            .create_async()
+            .await;
         let _mock = server
             .mock("PUT", "/hello")
             .match_header("Authorization", "Bearer test-token")
             .match_body("A body")
             .with_body("Some response")
             .with_status(200)
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
@@ -1040,19 +1049,21 @@ mod tests {
     #[tokio::test]
     async fn retries_get_request_on_401() {
         let _ = env_logger::try_init();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         server
             .mock("GET", "/hello")
             .match_header("Authorization", "Bearer stale-token")
             .with_status(401)
             .with_body("Token expired")
-            .create();
+            .create_async()
+            .await;
         server
             .mock("GET", "/hello")
             .match_header("Authorization", "Bearer test-token")
             .with_status(200)
             .with_body("Succeeded")
-            .create();
+            .create_async()
+            .await;
 
         let port = start_server(&server, vec!["stale-token", "test-token"]);
 

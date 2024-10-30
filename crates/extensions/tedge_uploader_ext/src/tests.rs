@@ -31,8 +31,12 @@ async fn spawn_uploader_actor() -> ClientMessageBox<(String, UploadRequest), (St
 #[tokio::test]
 async fn upload_without_auth() -> Result<(), DynError> {
     let ttd = TempTedgeDir::new();
-    let mut server = mockito::Server::new();
-    let _mock = server.mock("PUT", "/").with_status(201).create();
+    let mut server = mockito::Server::new_async().await;
+    let _mock = server
+        .mock("PUT", "/")
+        .with_status(201)
+        .create_async()
+        .await;
 
     let target_path = Utf8Path::from_path(ttd.path())
         .unwrap()
@@ -64,12 +68,13 @@ async fn upload_without_auth() -> Result<(), DynError> {
 #[tokio::test]
 async fn upload_with_auth() -> Result<(), DynError> {
     let ttd = TempTedgeDir::new();
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let _mock = server
         .mock("PUT", "/")
         .match_header("authorization", "Bearer token")
         .with_status(201)
-        .create();
+        .create_async()
+        .await;
 
     let target_path = Utf8Path::from_path(ttd.path())
         .unwrap()

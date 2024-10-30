@@ -331,7 +331,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
     let response = InternalIdResponse::new(internal_id, external_id);
     let response = serde_json::to_string(&response).unwrap();
     // Start a lightweight mock server.
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
 
     let _mock1 = server
         .mock("GET", "/identity/externalIds/c8y_Serial/device-001")
@@ -340,7 +340,8 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
             Matcher::Exact("Bearer Cached JWT token".into()),
         )
         .with_status(401)
-        .create();
+        .create_async()
+        .await;
     let _mock2 = server
         .mock("GET", "/identity/externalIds/c8y_Serial/device-001")
         .match_header(
@@ -349,7 +350,8 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         )
         .with_status(200)
         .with_body(response)
-        .create();
+        .create_async()
+        .await;
 
     let target_url = server.url();
     let mut auth = ServerMessageBoxBuilder::new("Auth Actor", 16);
@@ -397,7 +399,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     };
     let response = serde_json::to_string(&response).unwrap();
     // Start a lightweight mock server.
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
 
     let _mock1 = server
         .mock("POST", "/event/events/")
@@ -406,7 +408,8 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
             Matcher::Exact("Bearer Cached JWT Token".into()),
         )
         .with_status(401)
-        .create();
+        .create_async()
+        .await;
 
     let _mock2 = server
         .mock("POST", "/event/events/")
@@ -416,7 +419,8 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         )
         .with_status(200)
         .with_body(response)
-        .create();
+        .create_async()
+        .await;
 
     let target_url = server.url();
     let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);

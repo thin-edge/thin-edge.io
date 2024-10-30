@@ -479,12 +479,13 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_content_no_auth() {
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
-            .create();
+            .create_async()
+            .await;
 
         let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download");
@@ -510,12 +511,13 @@ mod tests {
     async fn downloader_download_to_target_path() {
         let temp_dir = tempdir().unwrap();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
-            .create();
+            .create_async()
+            .await;
 
         let target_path = temp_dir.path().join("downloaded_file.txt");
 
@@ -540,11 +542,12 @@ mod tests {
         let tmpstats = statvfs::statvfs("/tmp").unwrap();
         let usable_disk_space = (tmpstats.blocks_free() as u64) * (tmpstats.block_size() as u64);
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_header("content-length", &usable_disk_space.to_string())
-            .create();
+            .create_async()
+            .await;
 
         let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_with_length");
@@ -564,12 +567,13 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
-            .create();
+            .create_async()
+            .await;
 
         let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
@@ -606,12 +610,13 @@ mod tests {
     #[tokio::test]
     async fn writing_to_existing_file() {
         let temp_dir = tempdir().unwrap();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
-            .create();
+            .create_async()
+            .await;
 
         let target_file_path = temp_dir.path().join("downloaded_file.txt");
         std::fs::File::create(&target_file_path).unwrap();
@@ -634,11 +639,12 @@ mod tests {
         let file = create_file_with_size(10 * 1024 * 1024).unwrap();
         let file_path = file.into_temp_path();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_body_from_file(&file_path)
-            .create();
+            .create_async()
+            .await;
 
         let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_with_length");
@@ -661,11 +667,12 @@ mod tests {
     async fn downloader_download_verify_file_content() {
         let file = create_file_with_size(10).unwrap();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("GET", "/some_file.txt")
             .with_body_from_file(file.into_temp_path())
-            .create();
+            .create_async()
+            .await;
 
         let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_with_length");
@@ -685,8 +692,8 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_without_content_length() {
-        let mut server = mockito::Server::new();
-        let _mock1 = server.mock("GET", "/some_file.txt").create();
+        let mut server = mockito::Server::new_async().await;
+        let _mock1 = server.mock("GET", "/some_file.txt").create_async().await;
 
         let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_without_length");
@@ -704,7 +711,7 @@ mod tests {
 
     #[tokio::test]
     async fn doesnt_leave_tmpfiles_on_errors() {
-        let server = mockito::Server::new();
+        let server = mockito::Server::new_async().await;
 
         let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_doesnt_leave_tmpfiles");
@@ -879,7 +886,7 @@ mod tests {
         expected_err: &str,
     ) {
         let target_dir_path = TempDir::new().unwrap();
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
 
         // bearer/no bearer setup
         let _mock1 = {
@@ -888,12 +895,14 @@ mod tests {
                     .mock("GET", "/some_file.txt")
                     .match_header("authorization", "Bearer token")
                     .with_status(status_code)
-                    .create()
+                    .create_async()
+                    .await
             } else {
                 server
                     .mock("GET", "/some_file.txt")
                     .with_status(status_code)
-                    .create()
+                    .create_async()
+                    .await
             }
         };
 
