@@ -2482,7 +2482,7 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
 async fn mapper_processes_operations_concurrently() {
     let num_operations = 20;
 
-    let mut fts_server = mockito::Server::new();
+    let mut fts_server = mockito::Server::new_async().await;
     let _mock = fts_server
         .mock(
             "GET",

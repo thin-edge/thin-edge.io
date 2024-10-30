@@ -303,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn upload_content_no_auth() {
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("PUT", "/some_file.txt")
             .with_status(201)
@@ -333,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn upload_content_no_auth_post() {
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("POST", "/some_file.txt")
             .with_status(201)
@@ -365,7 +365,7 @@ mod tests {
 
     #[tokio::test]
     async fn upload_content_with_auth() {
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("PUT", "/some_file.txt")
             .with_status(201)
@@ -400,7 +400,7 @@ mod tests {
 
     #[tokio::test]
     async fn upload_content_from_file_that_does_not_exist() {
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let _mock1 = server
             .mock("PUT", "/some_file.txt")
             .with_status(201)
