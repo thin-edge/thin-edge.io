@@ -7,6 +7,7 @@ use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
+use crate::error::MessageConversionError;
 use crate::json;
 use crate::operations;
 use crate::operations::OperationHandler;
@@ -121,7 +122,7 @@ pub struct MapperConfig {
 impl CumulocityConverter {
     pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
         let messages_or_err = self.try_convert(input).await;
-        self.wrap_errors(messages_or_err)
+        self.wrap_errors_with_input(messages_or_err, input)
     }
 
     pub fn wrap_errors(
@@ -131,11 +132,20 @@ impl CumulocityConverter {
         messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
     }
 
-    pub fn wrap_error(&self, message_or_err: Result<MqttMessage, ConversionError>) -> MqttMessage {
-        message_or_err.unwrap_or_else(|error| self.new_error_message(error))
+    pub fn wrap_errors_with_input(
+        &self,
+        messages_or_err: Result<Vec<MqttMessage>, ConversionError>,
+        input: &MqttMessage,
+    ) -> Vec<MqttMessage> {
+        messages_or_err
+            .map_err(|error| MessageConversionError {
+                error,
+                topic: input.topic.name.clone(),
+            })
+            .unwrap_or_else(|error| vec![self.new_error_message(error)])
     }
 
-    pub fn new_error_message(&self, error: ConversionError) -> MqttMessage {
+    pub fn new_error_message(&self, error: impl std::error::Error) -> MqttMessage {
         error!("Mapping error: {}", error);
         MqttMessage::new(&self.get_mapper_config().errors_topic, error.to_string())
     }
@@ -1183,11 +1193,8 @@ impl CumulocityConverter {
                 Ok(vec![])
             }
             _ => {
-                let result = self
-                    .try_convert_data_message(source, channel, message)
-                    .await;
-                let messages = self.wrap_errors(result);
-                Ok(messages)
+                self.try_convert_data_message(source, channel, message)
+                    .await
             }
         }
     }
@@ -2469,9 +2476,12 @@ pub(crate) mod tests {
         let alarm_payload = json!({ "text": big_alarm_text }).to_string();
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        let messages = converter.try_convert(&alarm_message).await.unwrap();
-        let payload = messages[0].payload_str().unwrap();
-        assert!(payload.ends_with("greater than the threshold size of 16184."));
+        let error = converter.try_convert(&alarm_message).await.unwrap_err();
+        assert!(matches!(
+            error,
+            crate::error::ConversionError::SizeThresholdExceeded(_)
+        ));
+
         Ok(())
     }
 
@@ -2670,7 +2680,7 @@ pub(crate) mod tests {
         let result = converter.convert(&big_measurement_message).await;
 
         let payload = result[0].payload_str().unwrap();
-        assert!(payload.starts_with(
+        assert!(payload.contains(
             r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/main///m/ after translation is"#
         ));
         assert!(payload.ends_with("greater than the threshold size of 16184."));
@@ -2721,7 +2731,7 @@ pub(crate) mod tests {
 
         // Skipping the first two auto-registration messages and validating the third mapped message
         let payload = result[0].payload_str().unwrap();
-        assert!(payload.starts_with(
+        assert!(payload.contains(
             r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/child1///m/ after translation is"#
         ));
         assert!(payload.ends_with("greater than the threshold size of 16184."));

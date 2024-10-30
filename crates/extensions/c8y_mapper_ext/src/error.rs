@@ -34,6 +34,13 @@ pub enum MapperError {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[error("Failed to convert a message on topic '{topic}': {error:#}")]
+pub struct MessageConversionError {
+    pub error: ConversionError,
+    pub topic: String,
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum ConversionError {
     #[error(transparent)]
     FromMapper(#[from] MapperError),
