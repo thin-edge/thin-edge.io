@@ -175,7 +175,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::FileEntry;
+    use crate::manager::FileEntry;
     use filetime::set_file_mtime;
     use filetime::FileTime;
     use tedge_test_utils::fs::TempTedgeDir;

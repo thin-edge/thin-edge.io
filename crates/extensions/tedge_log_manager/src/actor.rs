@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
+use crate::manager::LogPluginConfig;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use log_manager::LogPluginConfig;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -156,7 +156,7 @@ impl LogManagerActor {
     ) -> Result<(), LogManagementError> {
         let topic = request.topic(&self.config.mqtt_schema).as_ref().to_string();
         let request = &request.payload;
-        let log_path = log_manager::new_read_logs(
+        let log_path = crate::manager::new_read_logs(
             &self.plugin_config.files,
             &request.log_type,
             request.date_from,
