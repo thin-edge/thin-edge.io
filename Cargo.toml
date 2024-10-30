@@ -20,6 +20,56 @@ homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
 
 [workspace.dependencies]
+# workspace crates
+aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
+axum_tls = { path = "crates/common/axum_tls" }
+az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
+batcher = { path = "crates/common/batcher" }
+c8y-firmware-plugin = { path = "plugins/c8y_firmware_plugin" }
+c8y-remote-access-plugin = { path = "plugins/c8y_remote_access_plugin" }
+c8y_api = { path = "crates/core/c8y_api" }
+c8y_auth_proxy = { path = "crates/extensions/c8y_auth_proxy" }
+c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
+c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
+c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
+certificate = { path = "crates/common/certificate" }
+clock = { path = "crates/common/clock" }
+collectd_ext = { path = "crates/extensions/collectd_ext" }
+download = { path = "crates/common/download" }
+flockfile = { path = "crates/common/flockfile" }
+json-writer = { path = "crates/common/json_writer" }
+log_manager = { path = "crates/common/log_manager" }
+mqtt_channel = { path = "crates/common/mqtt_channel" }
+mqtt_tests = { path = "crates/tests/mqtt_tests" }
+plugin_sm = { path = "crates/core/plugin_sm" }
+tedge-agent = { path = "crates/core/tedge_agent" }
+tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
+tedge-mapper = { path = "crates/core/tedge_mapper" }
+tedge-watchdog = { path = "crates/core/tedge_watchdog" }
+tedge-write = { path = "crates/core/tedge_write" }
+tedge_actors = { path = "crates/core/tedge_actors" }
+tedge_api = { path = "crates/core/tedge_api" }
+tedge_config = { path = "crates/common/tedge_config" }
+tedge_config_macros = { path = "crates/common/tedge_config_macros" }
+tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
+tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
+tedge_downloader_ext = { path = "crates/extensions/tedge_downloader_ext" }
+tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
+tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
+tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
+tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }
+tedge_mqtt_bridge = { path = "crates/extensions/tedge_mqtt_bridge" }
+tedge_mqtt_ext = { path = "crates/extensions/tedge_mqtt_ext" }
+tedge_script_ext = { path = "crates/extensions/tedge_script_ext" }
+tedge_signal_ext = { path = "crates/extensions/tedge_signal_ext" }
+tedge_test_utils = { path = "crates/tests/tedge_test_utils" }
+tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
+tedge_uploader_ext = { path = "crates/extensions/tedge_uploader_ext" }
+tedge_utils = { path = "crates/common/tedge_utils" }
+upload = { path = "crates/common/upload" }
+
+# external dependencies
+
 anstyle = "1.0"
 anyhow = "1.0"
 assert-json-diff = "2.0"
@@ -32,25 +82,13 @@ async-tungstenite = { version = "0.23", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
-aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
 axum = "0.6"
 axum-server = { version = "0.5.1", features = ["tls-rustls"] }
-axum_tls = { path = "crates/common/axum_tls" }
-az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
-batcher = { path = "crates/common/batcher" }
 bytes = "1.4"
-c8y-firmware-plugin = { path = "plugins/c8y_firmware_plugin" }
-c8y-remote-access-plugin = { path = "plugins/c8y_remote_access_plugin" }
-c8y_api = { path = "crates/core/c8y_api" }
-c8y_auth_proxy = { path = "crates/extensions/c8y_auth_proxy" }
-c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
-c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
-c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 camino = "1.1"
 cap = "0.1"
-certificate = { path = "crates/common/certificate" }
 clap = { version = "4.4", features = [
     "cargo",
     "derive",
@@ -58,18 +96,14 @@ clap = { version = "4.4", features = [
     "env",
     "unstable-styles",
 ] }
-clock = { path = "crates/common/clock" }
-collectd_ext = { path = "crates/extensions/collectd_ext" }
 csv = "1.1"
 darling = "0.20"
 doku = "0.21"
-download = { path = "crates/common/download" }
 easy_reader = "0.5"
 env_logger = "0.10"
 fastrand = "1.8"
 figment = { version = "0.10" }
 filetime = "0.2"
-flockfile = { path = "crates/common/flockfile" }
 freedesktop_entry_parser = "1.3.0"
 futures = "0.3"
 futures-timer = "3.0"
@@ -89,18 +123,14 @@ hyper-rustls = { version = "0.24", default-features = false, features = [
     "http2",
 ] }
 itertools = "0.13"
-json-writer = { path = "crates/common/json_writer" }
 lazy_static = "1.4"
 log = "0.4"
-log_manager = { path = "crates/common/log_manager" }
 maplit = "1.0"
 miette = { version = "5.5.0", features = ["fancy"] }
 mime = "0.3.17"
 mime_guess = "2.0.4"
 mockall = "0.11"
 mockito = "1.1.0"
-mqtt_channel = { path = "crates/common/mqtt_channel" }
-mqtt_tests = { path = "crates/tests/mqtt_tests" }
 mutants = "0.0.3"
 nanoid = "0.4"
 nix = "0.26"
@@ -111,7 +141,6 @@ pad = "0.1"
 path-clean = "0.1"
 pem = "1.0"
 pin-project = { version = "1.1.3", features = [] }
-plugin_sm = { path = "crates/core/plugin_sm" }
 predicates = "2.1"
 pretty_assertions = "1.4.1"
 prettyplease = "0.2.22"
@@ -142,30 +171,6 @@ signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 strum = "0.24"
 strum_macros = "0.24"
 syn = { version = "2", features = ["full", "extra-traits"] }
-tedge-agent = { path = "crates/core/tedge_agent" }
-tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
-tedge-mapper = { path = "crates/core/tedge_mapper" }
-tedge-watchdog = { path = "crates/core/tedge_watchdog" }
-tedge-write = { path = "crates/core/tedge_write" }
-tedge_actors = { path = "crates/core/tedge_actors" }
-tedge_api = { path = "crates/core/tedge_api" }
-tedge_config = { path = "crates/common/tedge_config" }
-tedge_config_macros = { path = "crates/common/tedge_config_macros" }
-tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
-tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
-tedge_downloader_ext = { path = "crates/extensions/tedge_downloader_ext" }
-tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
-tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
-tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
-tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }
-tedge_mqtt_bridge = { path = "crates/extensions/tedge_mqtt_bridge" }
-tedge_mqtt_ext = { path = "crates/extensions/tedge_mqtt_ext" }
-tedge_script_ext = { path = "crates/extensions/tedge_script_ext" }
-tedge_signal_ext = { path = "crates/extensions/tedge_signal_ext" }
-tedge_test_utils = { path = "crates/tests/tedge_test_utils" }
-tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
-tedge_uploader_ext = { path = "crates/extensions/tedge_uploader_ext" }
-tedge_utils = { path = "crates/common/tedge_utils" }
 tempfile = "3.12"
 test-case = "3.2"
 thiserror = "1.0"
@@ -174,13 +179,12 @@ tokio = { version = "1.37", default-features = false }
 tokio-rustls = "0.24.1"
 tokio-tungstenite = { version = "0.20.0" }
 tokio-util = { version = "0.7", features = ["codec"] }
-toml = "0.7"
+toml = "0.8"
 tower = "0.4"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 try-traits = "0.1"
 tungstenite = "0.20"
-upload = { path = "crates/common/upload" }
 url = "2.3"
 uzers = "0.11"
 walkdir = "2"
@@ -188,7 +192,7 @@ which = "4.2"
 whoami = "1.5.0"
 ws_stream_tungstenite = "0.11"
 x509-parser = "0.15"
-yansi = "0.5"
+yansi = "1.0.1"
 zeroize = "1.5"
 
 [profile.release]
