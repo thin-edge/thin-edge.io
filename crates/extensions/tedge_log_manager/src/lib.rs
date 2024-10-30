@@ -1,6 +1,7 @@
 mod actor;
 mod config;
 mod error;
+mod manager;
 
 #[cfg(test)]
 mod tests;
@@ -8,7 +9,7 @@ mod tests;
 pub use actor::*;
 pub use config::*;
 use log::error;
-use log_manager::LogPluginConfig;
+use manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;

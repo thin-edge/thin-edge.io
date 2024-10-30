@@ -12,8 +12,12 @@ repository = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 camino = { workspace = true }
+easy_reader = { workspace = true }
+glob = { workspace = true }
 log = { workspace = true }
-log_manager = { workspace = true }
+rand = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
@@ -23,6 +27,7 @@ tedge_mqtt_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
+time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }
 
@@ -32,6 +37,7 @@ assert-json-diff = { workspace = true }
 filetime = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
+time = { workspace = true, features = ["macros"] }
 
 [lints]
 workspace = true

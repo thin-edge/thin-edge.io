@@ -18,7 +18,7 @@ pub enum LogManagementError {
     FromPathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
-    FromLogRetrievalError(#[from] log_manager::LogRetrievalError),
+    FromLogRetrievalError(#[from] crate::manager::LogRetrievalError),
 }
 
 impl From<LogManagementError> for tedge_actors::RuntimeError {
