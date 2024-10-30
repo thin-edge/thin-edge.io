@@ -1287,6 +1287,12 @@ impl CumulocityConverter {
             }
 
             Channel::CommandMetadata { operation } => {
+                // https://github.com/thin-edge/thin-edge.io/issues/2739
+                if message.payload().is_empty() {
+                    warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing capabilities is not currently supported");
+                    return Ok(vec![]);
+                }
+
                 self.validate_operation_supported(operation, &source)?;
                 match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
