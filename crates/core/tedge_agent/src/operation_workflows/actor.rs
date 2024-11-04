@@ -514,6 +514,10 @@ impl WorkflowActor {
                     .workflow_repository
                     .load_pending_commands(pending_commands)
                 {
+                    // Make sure the latest state is visible over MQTT
+                    self.mqtt_publisher
+                        .send(command.clone().into_message())
+                        .await?;
                     self.process_command_update(command.clone()).await?;
                 }
             }

@@ -204,6 +204,26 @@ Resume On Restart A Pending Operation Which Workflow Is Deprecated
     ...    timeout=60
     Should Contain    ${messages[0]}    item="what a long sleep"
 
+Resume On Restart A Pending Operation
+    # Trigger a long running operation
+    Update Workflow    ${CURDIR}/sleep-command.toml    sleep
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/sleep/dyn-test-12 '{"status":"init", "duration":120}'
+
+    # Restart the agent, once sure the command is executing
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/sleep/dyn-test-12
+    ...    message_pattern=.*executing.*
+    Restart Service    tedge-agent
+
+    # The command should be interrupted and marked as failed
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/sleep/dyn-test-12
+    ...    message_pattern=.*failed.*
+    ...    timeout=60
+    Should Contain    ${messages[0]}    item="sleep killed by signal 15"
+    Should Contain    ${messages[0]}    item="resumed_at"
+
 
 *** Keywords ***
 Custom Setup
@@ -235,6 +255,8 @@ Custom Test Setup
     ...    tedge mqtt pub --retain te/device/main///cmd/long-running-command/dyn-test-10 ''
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/sleep/dyn-test-11 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/sleep/dyn-test-12 ''
 
 Copy Scripts
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
