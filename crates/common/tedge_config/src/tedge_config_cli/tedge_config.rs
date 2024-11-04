@@ -479,7 +479,7 @@ define_tedge_config! {
 
         /// The path where Cumulocity username/password are stored
         #[tedge_config(note = "The value must be the path of the credentials file.")]
-        #[tedge_config(example = "/etc/tedge/credentials", default(value = "/etc/tedge/credentials"))]
+        #[tedge_config(example = "/etc/tedge/credentials.toml", default(function = "default_credentials_path"))]
         #[doku(as = "PathBuf")]
         credentials_path: Utf8PathBuf,
 
@@ -1244,6 +1244,10 @@ fn default_device_csr(location: &TEdgeConfigLocation) -> Utf8PathBuf {
         .tedge_config_root_path()
         .join("device-certs")
         .join("tedge.csr")
+}
+
+fn default_credentials_path(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+    location.tedge_config_root_path().join("credentials.toml")
 }
 
 fn default_mqtt_port() -> NonZeroU16 {

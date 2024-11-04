@@ -67,7 +67,7 @@ Register Device
     ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Basic Auth    external_id=${SERIAL}
 
     Execute Command
-    ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' '${CREDENTIALS.username}' '${CREDENTIALS.password}' > /etc/tedge/credentials
+    ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' '${CREDENTIALS.username}' '${CREDENTIALS.password}' > /etc/tedge/credentials.toml
 
 SmartREST1 Template Should Exist
     [Arguments]    ${name}
