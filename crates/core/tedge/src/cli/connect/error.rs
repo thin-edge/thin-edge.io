@@ -3,7 +3,7 @@ use tedge_config::mqtt_config::MqttConfigBuildError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
-    #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
+    #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config set'")]
     Certificate,
 
     #[error(transparent)]
