@@ -123,13 +123,13 @@ impl C8yEndPoint {
         let url = Url::parse(url).ok()?;
         let url_host = url.domain()?;
 
-        let (_, host) = url_host.split_once('.').unwrap_or((url_host, ""));
+        let (_, host) = url_host.split_once('.').unwrap_or(("", url_host));
         let (_, c8y_http_host) = tenant_http_host
             .split_once('.')
-            .unwrap_or((tenant_http_host, ""));
+            .unwrap_or(("", tenant_http_host));
         let (_, c8y_mqtt_host) = tenant_mqtt_host
             .split_once('.')
-            .unwrap_or((tenant_mqtt_host, ""));
+            .unwrap_or(("", tenant_mqtt_host));
 
         // The configured `c8y.http` setting may have a port value specified,
         // but the incoming URL is less likely to have any port specified.
@@ -408,6 +408,13 @@ mod tests {
         let c8y = C8yEndPoint::new("custom-domain", "non-custom-mqtt-domain", "test_device");
         let url = "http://custom-domain/path";
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
+    }
+
+    #[test]
+    fn url_is_not_my_tenant_with_hostname_without_commas() {
+        let c8y = C8yEndPoint::new("custom-domain", "non-custom-mqtt-domain", "test_device");
+        let url = "http://unrelated-domain/path";
+        assert!(c8y.maybe_tenant_url(url).is_none());
     }
 
     #[ignore = "Until #2804 is fixed"]
