@@ -284,7 +284,11 @@ pub fn read_c8y_credentials(
 ) -> Result<(String, String), CredentialsFileError> {
     let contents = std::fs::read_to_string(credentials_path).map_err(|e| {
         CredentialsFileError::ReadCredentialsFailed {
-            context: "Failed to read the basic auth credentials file.".to_string(),
+            context: format!(
+                "Failed to read the basic auth credentials file. file={}",
+                credentials_path
+            )
+            .to_string(),
             source: e,
         }
     })?;
