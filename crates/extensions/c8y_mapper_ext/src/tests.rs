@@ -1510,7 +1510,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     );
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let TestHandle { mqtt, mut fs, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1554,10 +1554,28 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     )
     .await;
 
+    // Add a new operation for the child device
+    // Simulate FsEvent for the creation of a new operation file
+    fs.send(FsWatchEvent::FileCreated(
+        ttd.dir("operations")
+            .dir("c8y")
+            .dir("child11")
+            .file("c8y_ChildTestOp3")
+            .to_path_buf(),
+    ))
+    .await
+    .expect("Send failed");
+
+    // Assert that the creation of the operation file alone doesn't trigger the supported operations update
+    assert!(
+        mqtt.recv().await.is_none(),
+        "No messages expected on operation file creation event"
+    );
+
     // Send any command metadata message to trigger the supported operations update
     mqtt.send(
         MqttMessage::new(
-            &Topic::new_unchecked("te/device/child11///cmd/c8y_ChildTestOp3"),
+            &Topic::new_unchecked("te/device/child11///cmd/restart"),
             "{}",
         )
         .with_retain(),
@@ -1570,7 +1588,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
         &mut mqtt,
         [(
             "c8y/s/us/child11",
-            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3",
+            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
         )],
     )
     .await;

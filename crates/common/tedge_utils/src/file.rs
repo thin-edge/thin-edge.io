@@ -2,6 +2,7 @@ use futures::TryFutureExt;
 use nix::unistd::*;
 use std::fs;
 use std::io;
+use std::io::Error;
 use std::io::Write;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
@@ -64,6 +65,12 @@ pub enum FileError {
 
     #[error(transparent)]
     FileMove(#[from] FileMoveError),
+
+    #[error("Failed to create a symlink {link:?}: {source:?}.")]
+    CreateSymlinkFailed {
+        link: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 pub fn create_directory<P: AsRef<Path>>(
@@ -505,6 +512,29 @@ pub fn has_write_access(path: &Path) -> Result<(), FileError> {
     }
 }
 
+pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), FileError> {
+    match std::os::unix::fs::symlink(&original, &link) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::read_link(&link) {
+            Ok(path) if path == original.as_ref() => Ok(()),
+            Ok(_) => Err(FileError::CreateSymlinkFailed {
+                link: link.as_ref().to_path_buf(),
+                source: Error::other(format!(
+                    "symlink exists but does not point to {:?}",
+                    original.as_ref()
+                )),
+            }),
+            Err(e) => Err(FileError::CreateSymlinkFailed {
+                link: link.as_ref().to_path_buf(),
+                source: e,
+            }),
+        },
+        Err(e) => Err(FileError::CreateSymlinkFailed {
+            link: link.as_ref().to_path_buf(),
+            source: e,
+        }),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -674,6 +704,41 @@ mod tests {
         assert_ne!(get_gid_by_name("staff").unwrap(), 0);
         let err = get_gid_by_name("nonexistent_group").unwrap_err();
         assert!(err.to_string().contains("Group not found"));
+    }
+
+    #[test]
+    fn create_new_symlink() {
+        let temp_dir = TempDir::new().unwrap();
+        let source_path = temp_dir.path().join("source_file").display().to_string();
+        let another_source_path = temp_dir
+            .path()
+            .join("another_source_file")
+            .display()
+            .to_string();
+        let invalid_source_path = temp_dir.path().join("invalid_file").display().to_string();
+        let dest_path = temp_dir.path().join("dest_file").display().to_string();
+
+        // create symlink
+        create_file_with_user_group(&source_path, &USER, &GROUP, 0o644, None).unwrap();
+        assert!(Path::new(source_path.as_str()).exists());
+        create_symlink(&source_path, &dest_path).unwrap();
+        assert!(Path::new(dest_path.as_str()).exists());
+
+        // creating symlink again should not return error if source is the same
+        assert!(create_symlink(&source_path, &dest_path).is_ok());
+
+        // creating symlink again should  return error if source is different
+        create_file_with_user_group(&another_source_path, &USER, &GROUP, 0o644, None).unwrap();
+        assert!(Path::new(another_source_path.as_str()).exists());
+        let err = create_symlink(&another_source_path, &dest_path).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("symlink exists but does not point to")
+                && err.to_string().contains(another_source_path.as_str())
+        );
+
+        // creating symlink should not be possible to file that does not exists
+        assert!(create_symlink(invalid_source_path, dest_path).is_err());
     }
 
     #[tokio::test]

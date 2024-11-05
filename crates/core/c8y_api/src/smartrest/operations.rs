@@ -26,6 +26,7 @@ const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Operations {
     operations: Vec<Operation>,
+    templates: Vec<Operation>,
 }
 
 impl Operations {
@@ -52,6 +53,10 @@ impl Operations {
         bridge_config: &impl Record,
     ) -> Result<Self, OperationsError> {
         get_operations(dir.as_ref(), bridge_config)
+    }
+
+    pub fn add_template(&mut self, template: Operation) {
+        self.templates.push(template);
     }
 
     pub fn get_operations_list(&self) -> Vec<String> {
@@ -127,6 +132,41 @@ impl Operations {
             .collect::<HashSet<String>>()
             .try_into()?)
     }
+
+    /// Return operation name if `workflow.operation` matches
+    pub fn get_operation_name_by_workflow_operation(&self, command_name: &str) -> Option<String> {
+        let matching_templates: Vec<&Operation> = self
+            .templates
+            .iter()
+            .filter(|template| {
+                template
+                    .workflow_operation()
+                    .is_some_and(|operation| operation.eq(command_name))
+            })
+            .collect();
+
+        if matching_templates.len() > 1 {
+            warn!(
+                "Found more than one template with the same `workflow.operation` field. Picking {}",
+                matching_templates.first().unwrap().name
+            );
+        }
+
+        matching_templates
+            .first()
+            .and_then(|template| template.on_fragment())
+    }
+
+    pub fn get_template_name_by_operation_name(&self, operation_name: &str) -> Option<&str> {
+        self.templates
+            .iter()
+            .find(|template| {
+                template
+                    .on_fragment()
+                    .is_some_and(|name| name.eq(operation_name))
+            })
+            .map(|template| template.name.as_ref())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
@@ -144,6 +184,22 @@ impl Operation {
 
     pub fn command(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.command.clone())
+    }
+
+    pub fn workflow_operation(&self) -> Option<&str> {
+        self.exec().and_then(|exec| {
+            exec.workflow
+                .as_ref()
+                .and_then(|workflow| workflow.operation.as_deref())
+        })
+    }
+
+    pub fn workflow_input(&self) -> Option<&str> {
+        self.exec().and_then(|exec| {
+            exec.workflow
+                .as_ref()
+                .and_then(|workflow| workflow.input.as_deref())
+        })
     }
 
     pub fn topic(&self) -> Option<String> {
@@ -230,8 +286,13 @@ impl Operation {
             if self.on_fragment().is_none() {
                 return Err(InvalidCustomOperationHandler::MissingOnFragment);
             }
+
             if self.command().is_none() {
-                return Err(InvalidCustomOperationHandler::MissingCommand);
+                if self.workflow_operation().is_none() {
+                    return Err(InvalidCustomOperationHandler::MissingCommand);
+                }
+            } else if self.workflow_operation().is_some() || self.workflow_input().is_some() {
+                return Err(InvalidCustomOperationHandler::CommandExists);
             }
         }
         Ok(())
@@ -246,6 +307,7 @@ pub struct OnMessageExec {
     on_fragment: Option<String>,
     topic: Option<String>,
     user: Option<String>,
+    workflow: Option<ExecWorkflow>,
     #[serde(default)]
     skip_status_update: bool,
     #[serde(default, deserialize_with = "to_result_format")]
@@ -283,7 +345,14 @@ where
     }
 }
 
-pub fn get_operations(
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+struct ExecWorkflow {
+    operation: Option<String>,
+    input: Option<String>,
+}
+
+fn get_operations(
     dir: impl AsRef<Path>,
     bridge_config: &impl Record,
 ) -> Result<Operations, OperationsError> {
@@ -295,7 +364,7 @@ pub fn get_operations(
         .map(|entry| entry.map(|e| e.path()))
         .collect::<Result<Vec<PathBuf>, _>>()?
         .into_iter()
-        .filter(|path| path.is_file())
+        .filter(|path| path.is_file() || path.is_symlink())
         .collect::<Vec<PathBuf>>();
 
     for path in dir_entries {
@@ -303,7 +372,7 @@ pub fn get_operations(
             if !is_valid_operation_name(file_name) {
                 // Warn user about invalid operation names, otherwise the
                 // user does not know that the operation is being ignored
-                warn!("Ignoring custom operation definition as the filename uses an invalid character. Only [A-Za-z0-9_] characters are accepted. file={}", path.display());
+                warn!("Ignoring custom operation definition as the filename uses an invalid character. Only [A-Za-z0-9_.] characters are accepted. file={}", path.display());
                 continue;
             }
 
@@ -320,10 +389,17 @@ pub fn get_operations(
             };
 
             if details.is_valid_operation_handler() || details.is_supported_operation_file() {
-                operations.add_operation(details);
+                match path.extension() {
+                    None => operations.add_operation(details),
+                    Some(extension) if extension.eq("template") => operations.add_template(details),
+                    Some(_) => {
+                        return Err(OperationsError::InvalidOperationName(path.to_owned()));
+                    }
+                };
             }
         }
     }
+
     Ok(operations)
 }
 
@@ -380,9 +456,15 @@ pub fn get_operation(
 /// this `operation_name_is_valid` fn will ensure that only files that do not contain
 /// any special characters are allowed.
 pub fn is_valid_operation_name(operation: &str) -> bool {
-    operation
-        .chars()
-        .all(|c| c.is_ascii_alphabetic() || c.is_numeric() || c.eq(&'_'))
+    match operation.split_once('.') {
+        Some((file_name, extension)) if extension.eq("template") => file_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c.eq(&'_')),
+        None => operation
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c.eq(&'_')),
+        _ => false,
+    }
 }
 
 fn default_graceful_timeout() -> Duration {
@@ -413,8 +495,11 @@ pub enum InvalidCustomOperationHandler {
     #[error("'on_fragment' is missing")]
     MissingOnFragment,
 
-    #[error("'command' is missing")]
+    #[error("'command' or 'workflow.operation' is missing")]
     MissingCommand,
+
+    #[error("'command' should not be provided with 'workflow.operation' or 'workflow.input'")]
+    CommandExists,
 }
 
 #[cfg(test)]
@@ -566,7 +651,7 @@ mod tests {
     #[test_case("~file_b", false)]
     #[test_case("c8y_Command", true)]
     #[test_case("c8y_CommandA~", false)]
-    #[test_case(".c8y_CommandB", false)]
+    #[test_case("c8y_CommandB.template", true)]
     #[test_case("c8y_CommandD?", false)]
     #[test_case("c8y_CommandE?!£$%^&*(", false)]
     #[test_case("?!£$%^&*(c8y_CommandF?!£$%^&*(", false)]
@@ -666,6 +751,7 @@ mod tests {
 
         let ops = Operations {
             operations: vec![operation1.clone(), operation2.clone()],
+            ..Default::default()
         };
 
         let prefix = TopicPrefix::from_str("c8y").unwrap();
