@@ -97,7 +97,11 @@ pub fn add_certs_from_directory(
     root_store: &mut RootCertStore,
     cert_dir: impl AsRef<Path>,
 ) -> Result<(), CertificateError> {
-    let files = fs::read_dir(cert_dir)?;
+    let cert_dir = cert_dir.as_ref();
+    let files = fs::read_dir(cert_dir).map_err(|error| CertificateError::IoError {
+        error,
+        path: cert_dir.to_owned(),
+    })?;
     let certs = files.filter_map(|f| f.ok()).filter(|file| {
         file.path()
             .extension()
@@ -133,8 +137,16 @@ fn try_rec_add_root_cert(
     root_store: &mut RootCertStore,
     cert_path: &Path,
 ) -> Result<(), CertificateError> {
-    if fs::metadata(cert_path)?.is_dir() {
-        for file_entry in fs::read_dir(cert_path)?.flatten() {
+    let metadata = fs::metadata(cert_path).map_err(|error| CertificateError::IoError {
+        error,
+        path: cert_path.to_owned(),
+    })?;
+    if metadata.is_dir() {
+        let entries = fs::read_dir(cert_path).map_err(|error| CertificateError::IoError {
+            error,
+            path: cert_path.to_owned(),
+        })?;
+        for file_entry in entries.flatten() {
             rec_add_root_cert(root_store, &file_entry.path());
         }
     } else if let Err(err) = add_root_cert(root_store, cert_path) {
@@ -165,7 +177,10 @@ pub fn read_pvt_key(key_file: impl AsRef<Path>) -> Result<PrivateKey, Certificat
 }
 
 fn parse_pkcs8_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
-    let f = File::open(key_file)?;
+    let f = File::open(key_file).map_err(|error| CertificateError::IoError {
+        error,
+        path: key_file.to_owned(),
+    })?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
         Ok(key) if !key.is_empty() => Ok(PrivateKey(key[0].clone())),
@@ -174,7 +189,10 @@ fn parse_pkcs8_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
 }
 
 fn parse_rsa_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
-    let f = File::open(key_file)?;
+    let f = File::open(key_file).map_err(|error| CertificateError::IoError {
+        error,
+        path: key_file.to_owned(),
+    })?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
         Ok(key) if !key.is_empty() => Ok(PrivateKey(key[0].clone())),
@@ -183,7 +201,10 @@ fn parse_rsa_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
 }
 
 pub fn read_cert_chain(cert_file: impl AsRef<Path>) -> Result<Vec<Certificate>, CertificateError> {
-    let f = File::open(&cert_file)?;
+    let f = File::open(&cert_file).map_err(|error| CertificateError::IoError {
+        error,
+        path: cert_file.as_ref().to_owned(),
+    })?;
     let mut cert_reader = BufReader::new(f);
     certs(&mut cert_reader)
         .map(|der_chain| der_chain.into_iter().map(Certificate).collect())

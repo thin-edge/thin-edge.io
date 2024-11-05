@@ -24,8 +24,8 @@ impl Command for ShowCertCmd {
 impl ShowCertCmd {
     fn show_certificate(&self) -> Result<(), CertError> {
         let pem = PemCertificate::from_pem_file(&self.cert_path).map_err(|err| match err {
-            certificate::CertificateError::IoError(from) => {
-                CertError::IoError(from).cert_context(self.cert_path.clone())
+            certificate::CertificateError::IoError { error, .. } => {
+                CertError::IoError(error).cert_context(self.cert_path.clone())
             }
             from => CertError::CertificateError(from),
         })?;

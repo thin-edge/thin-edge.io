@@ -22,7 +22,11 @@ pub struct PemCertificate {
 
 impl PemCertificate {
     pub fn from_pem_file(path: impl AsRef<Path>) -> Result<PemCertificate, CertificateError> {
-        let file = std::fs::File::open(path)?;
+        let path = path.as_ref();
+        let file = std::fs::File::open(path).map_err(|error| CertificateError::IoError {
+            error,
+            path: path.to_owned(),
+        })?;
         let (pem, _) = x509_parser::pem::Pem::read(std::io::BufReader::new(file))?;
         Ok(PemCertificate { pem })
     }
@@ -240,8 +244,11 @@ pub fn translate_rustls_error(err: &(dyn std::error::Error + 'static)) -> Option
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificateError {
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    #[error("Could not access {path}: {error}")]
+    IoError {
+        path: PathBuf,
+        error: std::io::Error,
+    },
 
     #[error("Cryptography related error")]
     CryptographyError(#[from] rcgen::Error),

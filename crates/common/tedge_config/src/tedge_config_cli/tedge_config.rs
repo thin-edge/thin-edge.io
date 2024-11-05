@@ -1205,7 +1205,7 @@ fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
 
 fn cert_error_into_config_error(key: Cow<'static, str>, err: CertificateError) -> ReadError {
     match &err {
-        CertificateError::IoError(io_err) => match io_err.kind() {
+        CertificateError::IoError { error, .. } => match error.kind() {
             std::io::ErrorKind::NotFound => ReadError::ReadOnlyNotFound {
                 key,
                 message: concat!(
