@@ -4,7 +4,6 @@ use crate::messages::C8YRestResponse;
 use crate::messages::C8YRestResult;
 use crate::messages::CreateEvent;
 use crate::messages::SoftwareListResponse;
-use crate::messages::UploadLogBinary;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::Service;
@@ -42,24 +41,6 @@ impl C8YHttpProxy {
 
         match self.c8y.await_response(request).await? {
             Ok(C8YRestResponse::Unit(_)) => Ok(()),
-            unexpected => Err(unexpected.into()),
-        }
-    }
-
-    pub async fn upload_log_binary(
-        &mut self,
-        log_type: &str,
-        log_content: &str,
-        device_id: String,
-    ) -> Result<String, C8YRestError> {
-        let request: C8YRestRequest = UploadLogBinary {
-            log_type: log_type.to_string(),
-            log_content: log_content.to_string(),
-            device_id,
-        }
-        .into();
-        match self.c8y.await_response(request).await? {
-            Ok(C8YRestResponse::EventId(id)) => Ok(id),
             unexpected => Err(unexpected.into()),
         }
     }

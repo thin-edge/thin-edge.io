@@ -9,7 +9,6 @@ use crate::messages::CreateEvent;
 use crate::messages::EventId;
 use crate::messages::SoftwareListResponse;
 use crate::messages::Unit;
-use crate::messages::UploadLogBinary;
 use crate::C8YHttpConfig;
 use anyhow::Context;
 use async_trait::async_trait;
@@ -18,12 +17,9 @@ use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
-use c8y_api::OffsetDateTime;
 use http::status::StatusCode;
 use log::error;
 use log::info;
-use std::collections::HashMap;
-use std::future::ready;
 use std::future::Future;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -87,11 +83,6 @@ impl Actor for C8YHttpProxyActor {
 
                 C8YRestRequest::SoftwareListResponse(request) => self
                     .send_software_list_http(request)
-                    .await
-                    .map(|response| response.into()),
-
-                C8YRestRequest::UploadLogBinary(request) => self
-                    .upload_log_binary(request)
                     .await
                     .map(|response| response.into()),
             };
@@ -351,46 +342,6 @@ impl C8YHttpProxyActor {
             .error_for_status()
             .context("updating software list")?;
         Ok(())
-    }
-
-    async fn upload_log_binary(
-        &mut self,
-        request: UploadLogBinary,
-    ) -> Result<EventId, C8YRestError> {
-        let device_id = request.device_id;
-        let create_event = |internal_id: String| -> C8yCreateEvent {
-            C8yCreateEvent {
-                source: Some(C8yManagedObject { id: internal_id }),
-                event_type: request.log_type.clone(),
-                time: OffsetDateTime::now_utc(),
-                text: request.log_type.clone(),
-                extras: HashMap::new(),
-            }
-        };
-        let event_response_id = self
-            .send_event_internal(device_id.clone(), create_event)
-            .await?;
-
-        let build_request = |end_point: &C8yEndPoint| {
-            let binary_upload_event_url =
-                end_point.get_url_for_event_binary_upload(&event_response_id);
-            ready(Ok::<_, C8YRestError>(
-                HttpRequestBuilder::post(&binary_upload_event_url)
-                    .header("Accept", "application/json")
-                    .header("Content-Type", "text/plain")
-                    .body(request.log_content.clone()),
-            ))
-        };
-
-        let http_result = self.execute(device_id.clone(), build_request).await??;
-
-        if !http_result.status().is_success() {
-            Err(C8YRestError::CustomError("Upload failed".into()))
-        } else {
-            Ok(self
-                .end_point
-                .get_url_for_event_binary_upload(&event_response_id))
-        }
     }
 
     /// Update HTTP headers with the ones retried from the HttpHeaderRetriever actor

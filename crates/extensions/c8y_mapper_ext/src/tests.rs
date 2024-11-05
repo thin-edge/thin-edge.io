@@ -3127,7 +3127,7 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<C8YRestRequest,
                         )))
                         .await;
                 }
-                _ => {}
+                None => {}
             }
         }
     });
