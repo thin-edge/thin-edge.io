@@ -110,6 +110,10 @@ impl Default for CommonMosquittoConfig {
 
 impl CommonMosquittoConfig {
     pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        // Enable persistence as thin-edge.io heavily relies on retained messages and
+        // if mosquitto persistence is not configured, then it can lead to unexpected behavior
+        writeln!(writer, "persistence true")?;
+
         writeln!(writer, "per_listener_settings true")?;
 
         writeln!(writer, "connection_messages true")?;
@@ -237,6 +241,7 @@ mod tests {
             .collect();
         let mut expected = std::collections::HashSet::new();
 
+        expected.insert("persistence true");
         expected.insert("listener 1883 127.0.0.1");
         expected.insert("allow_anonymous true");
         expected.insert("connection_messages true");
@@ -280,6 +285,7 @@ mod tests {
 
         let contents = String::from_utf8(buffer).unwrap();
         let expected = concat!(
+            "persistence true\n",
             "per_listener_settings true\n",
             "connection_messages true\n",
             "log_type error\n",
