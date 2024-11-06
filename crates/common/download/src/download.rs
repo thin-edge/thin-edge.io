@@ -927,7 +927,7 @@ mod tests {
         let target_path = target_dir_path.path().join("test_download");
         let mut downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         downloader.set_backoff(ExponentialBackoff {
-            current_interval: Duration::ZERO,
+            max_elapsed_time: Some(Duration::ZERO),
             ..Default::default()
         });
         match downloader.download(&url).await {
