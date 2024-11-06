@@ -23,6 +23,8 @@ use log::info;
 use log::warn;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
@@ -30,6 +32,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::Path;
+use std::str::FromStr;
 use thiserror::Error;
 
 // In the future, root will be read from config
@@ -40,7 +43,8 @@ const MQTT_ROOT: &str = "te";
 /// Although this struct doesn't enforce any restrictions for the values,
 /// the consumers may impose restrictions on the accepted values.
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct EntityExternalId(String);
 
 impl AsRef<str> for EntityExternalId {
@@ -849,23 +853,32 @@ enum InsertOutcome {
     Inserted,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityMetadata {
+    #[serde(rename = "@topic-id")]
     pub topic_id: EntityTopicId,
+    #[serde(rename = "@parent")]
     pub parent: Option<EntityTopicId>,
+    #[serde(rename = "@type")]
     pub r#type: EntityType,
+    #[serde(rename = "@id")]
     pub external_id: EntityExternalId,
 
     // TODO: use a dedicated struct for cloud-specific fields, have `EntityMetadata` be generic over
     // cloud we're currently connected to
+    #[serde(flatten)]
     pub other: Map<String, JsonValue>,
+    #[serde(skip)]
     pub twin_data: Map<String, JsonValue>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntityType {
+    #[serde(rename = "device")]
     MainDevice,
+    #[serde(rename = "child-device")]
     ChildDevice,
+    #[serde(rename = "service")]
     Service,
 }
 
@@ -882,6 +895,23 @@ impl EntityType {
 impl Display for EntityType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("Invalid entity type: {0}")]
+pub struct InvalidEntityType(String);
+
+impl FromStr for EntityType {
+    type Err = InvalidEntityType;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "device" => Ok(EntityType::MainDevice),
+            "child-device" => Ok(EntityType::ChildDevice),
+            "service" => Ok(EntityType::Service),
+            other => Err(InvalidEntityType(other.to_string())),
+        }
     }
 }
 
@@ -960,17 +990,22 @@ pub enum InitError {
 }
 
 /// An object representing a valid entity registration message.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityRegistrationMessage {
     // fields used by thin-edge locally
+    #[serde(rename = "@topic-id")]
     pub topic_id: EntityTopicId,
+    #[serde(rename = "@id")]
     pub external_id: Option<EntityExternalId>,
+    #[serde(rename = "@type")]
     pub r#type: EntityType,
+    #[serde(rename = "@parent")]
     pub parent: Option<EntityTopicId>,
 
     // other properties, usually cloud-specific
     // TODO: replace with `Map` and use type wrapper that forbids fields `@id`,
     // `@parent`, etc.
+    #[serde(flatten)]
     pub other: Map<String, JsonValue>,
 }
 

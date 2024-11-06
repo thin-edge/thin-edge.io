@@ -1,3 +1,4 @@
+use super::entity_store::entity_store_router;
 use super::file_transfer::file_transfer_router;
 use crate::file_transfer_server::error::FileTransferError;
 use axum::Router;
@@ -25,7 +26,7 @@ impl AgentState {
     }
 }
 
-pub(crate) fn http_file_transfer_server(
+pub(crate) fn http_server(
     listener: TcpListener,
     rustls_config: Option<ServerConfig>,
     agent_state: AgentState,
