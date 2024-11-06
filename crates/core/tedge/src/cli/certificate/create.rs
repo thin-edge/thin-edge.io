@@ -155,8 +155,8 @@ fn create_new_file(path: impl AsRef<Path>, user: &str, group: &str) -> Result<Fi
 
 pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
     let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
-        certificate::CertificateError::IoError(from) => {
-            CertError::IoError(from).cert_context(cert_path.clone())
+        certificate::CertificateError::IoError { error, .. } => {
+            CertError::IoError(error).cert_context(cert_path.clone())
         }
         from => CertError::CertificateError(from),
     })?;
