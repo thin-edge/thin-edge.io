@@ -1,5 +1,6 @@
 use crate::file_transfer_server::error::FileTransferError;
-use crate::file_transfer_server::http_rest::http_file_transfer_server;
+use crate::file_transfer_server::http_rest::http_server;
+use crate::file_transfer_server::http_rest::AgentState;
 use anyhow::Context;
 use async_trait::async_trait;
 use axum_tls::config::load_ssl_config;
@@ -17,6 +18,7 @@ use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_api::EntityStore;
 use tedge_config::OptionalConfig;
 use tokio::net::TcpListener;
 use tracing::log::info;
@@ -26,6 +28,7 @@ pub struct FileTransferServerActor {
     rustls_config: Option<ServerConfig>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
+    entity_store: EntityStore,
 }
 
 #[derive(Debug, Clone)]
@@ -47,8 +50,9 @@ impl Actor for FileTransferServerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let server =
-            http_file_transfer_server(self.listener, self.file_transfer_dir, self.rustls_config)?;
+        let agent_state = AgentState::new(self.file_transfer_dir, self.entity_store);
+
+        let server = http_server(self.listener, self.rustls_config, agent_state)?;
 
         tokio::select! {
             result = server => {
@@ -69,11 +73,13 @@ pub struct FileTransferServerBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
+    entity_store: EntityStore,
 }
 
 impl FileTransferServerBuilder {
     pub(crate) async fn try_bind(
         config: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
+        entity_store: EntityStore,
     ) -> Result<Self, anyhow::Error> {
         let listener = TcpListener::bind(config.bind_addr)
             .await
@@ -91,6 +97,7 @@ impl FileTransferServerBuilder {
             signal_sender,
             signal_receiver,
             listener,
+            entity_store,
         })
     }
 }
@@ -110,12 +117,15 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
             rustls_config: self.rustls_config,
             signal_receiver: self.signal_receiver,
             listener: self.listener,
+            entity_store: self.entity_store,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use anyhow::ensure;
     use axum_tls::config::InjectedValue;
@@ -125,6 +135,13 @@ mod tests {
     use reqwest::Certificate;
     use reqwest::Identity;
     use rustls::RootCertStore;
+    use serde_json::Map;
+    use tedge_api::entity_store::EntityExternalId;
+    use tedge_api::entity_store::EntityRegistrationMessage;
+    use tedge_api::entity_store::EntityType;
+    use tedge_api::entity_store::InvalidExternalIdError;
+    use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
@@ -157,8 +174,10 @@ mod tests {
     async fn check_server_does_not_panic_when_port_is_in_use() -> anyhow::Result<()> {
         let ttd = TempTedgeDir::new();
         let (_listener, port_in_use) = create_listener().await?;
+        let entity_store = new_entity_store(&ttd, true);
 
-        let binding_res = FileTransferServerBuilder::try_bind(http_config(&ttd, port_in_use)).await;
+        let binding_res =
+            FileTransferServerBuilder::try_bind(http_config(&ttd, port_in_use), entity_store).await;
 
         ensure!(
             binding_res.is_err(),
@@ -227,8 +246,9 @@ mod tests {
         async fn new_http() -> anyhow::Result<Self> {
             let temp_dir = TempTedgeDir::new();
             let config = http_config(&temp_dir, 0);
+            let entity_store = new_entity_store(&temp_dir, true);
             let (tx, rx) = mpsc::channel(1);
-            let port = Self::spawn(config, tx).await?;
+            let port = Self::spawn(config, tx, entity_store).await?;
 
             Ok(TestFileTransferService {
                 port,
@@ -267,8 +287,9 @@ mod tests {
         ) -> anyhow::Result<Self> {
             let temp_dir = TempTedgeDir::new();
             let config = https_config(&temp_dir, &server_cert, trusted_root)?;
+            let entity_store = new_entity_store(&temp_dir, true);
             let (tx, rx) = mpsc::channel(1);
-            let port = Self::spawn(config, tx).await?;
+            let port = Self::spawn(config, tx, entity_store).await?;
 
             Ok(TestFileTransferService {
                 port,
@@ -329,8 +350,9 @@ mod tests {
         async fn spawn(
             config: TestConfig,
             mut error_tx: Sender<RuntimeError>,
+            entity_store: EntityStore,
         ) -> anyhow::Result<u16> {
-            let builder = FileTransferServerBuilder::try_bind(config).await?;
+            let builder = FileTransferServerBuilder::try_bind(config, entity_store).await?;
             let port = builder.listener.local_addr()?.port();
             let actor = builder.build();
 
@@ -391,5 +413,49 @@ mod tests {
                 .unwrap_or_else(|| OptionalConfig::empty("http.ca_path")),
             bind_addr: ([127, 0, 0, 1], 0).into(),
         })
+    }
+
+    pub fn new_entity_store(temp_dir: &TempTedgeDir, clean_start: bool) -> EntityStore {
+        EntityStore::with_main_device_and_default_service_type(
+            MqttSchema::default(),
+            EntityRegistrationMessage {
+                topic_id: EntityTopicId::default_main_device(),
+                external_id: Some("test-device".into()),
+                r#type: EntityType::MainDevice,
+                parent: None,
+                other: Map::new(),
+            },
+            "service".into(),
+            dummy_external_id_mapper,
+            dummy_external_id_validator,
+            5,
+            temp_dir.path(),
+            clean_start,
+        )
+        .unwrap()
+    }
+
+    fn dummy_external_id_mapper(
+        entity_topic_id: &EntityTopicId,
+        _main_device_xid: &EntityExternalId,
+    ) -> EntityExternalId {
+        entity_topic_id
+            .to_string()
+            .trim_end_matches('/')
+            .replace('/', ":")
+            .into()
+    }
+
+    fn dummy_external_id_validator(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
+        let forbidden_chars = HashSet::from(['/', '+', '#']);
+        for c in id.chars() {
+            if forbidden_chars.contains(&c) {
+                return Err(InvalidExternalIdError {
+                    external_id: id.into(),
+                    invalid_char: c,
+                });
+            }
+        }
+        Ok(id.into())
     }
 }
