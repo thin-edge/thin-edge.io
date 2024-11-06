@@ -766,7 +766,9 @@ impl CumulocityConverter {
         extras: &HashMap<String, Value>,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let handlers = self.operations.filter_by_topic(&message.topic.name);
+        let handlers = self
+            .operations
+            .filter_by_topic(&message.topic.name, &self.config.bridge_config.c8y_prefix);
 
         if handlers.is_empty() {
             info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");

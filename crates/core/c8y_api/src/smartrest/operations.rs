@@ -1,3 +1,4 @@
+use crate::json_c8y_deserializer::C8yDeviceControlTopic;
 use crate::smartrest::error::OperationsError;
 use crate::smartrest::smartrest_serializer::declare_supported_operations;
 use mqtt_channel::TopicFilter;
@@ -10,6 +11,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::substitution::Record;
+use tedge_config::TopicPrefix;
 use tracing::warn;
 
 use super::payload::SmartrestPayload;
@@ -57,11 +59,17 @@ impl Operations {
         None
     }
 
-    pub fn filter_by_topic(&self, topic_name: &str) -> Vec<(String, Operation)> {
+    pub fn filter_by_topic(
+        &self,
+        topic_name: &str,
+        prefix: &TopicPrefix,
+    ) -> Vec<(String, Operation)> {
         let mut vec: Vec<(String, Operation)> = Vec::new();
         for op in self.operations.iter() {
             match (op.topic(), op.on_fragment()) {
-                (None, Some(on_fragment)) => vec.push((on_fragment, op.clone())),
+                (None, Some(on_fragment)) if C8yDeviceControlTopic::name(prefix) == topic_name => {
+                    vec.push((on_fragment, op.clone()))
+                }
                 (Some(topic), Some(on_fragment)) if topic == topic_name => {
                     vec.push((on_fragment, op.clone()))
                 }
@@ -394,6 +402,7 @@ pub enum InvalidCustomOperationHandler {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
+    use std::str::FromStr;
 
     use super::*;
     use tedge_config::TopicPrefix;
@@ -594,5 +603,42 @@ mod tests {
         let exec: OnMessageExec = toml::from_str(toml).unwrap();
         let operation = Operation::new(exec);
         assert!(!operation.is_valid_operation_handler());
+    }
+
+    #[test_case(
+        r#"
+        on_fragment = "c8y_Something"
+        command = "echo 1"
+        "#,
+        r#"
+        topic = "c8y/custom/one"
+        on_fragment = "c8y_Something"
+        command = "echo 2" 
+        "#
+    )]
+    fn filter_by_topic_(toml1: &str, toml2: &str) {
+        let exec: OnMessageExec = toml::from_str(toml1).unwrap();
+        let operation1 = Operation::new(exec);
+
+        let exec: OnMessageExec = toml::from_str(toml2).unwrap();
+        let operation2 = Operation::new(exec);
+
+        let ops = Operations {
+            operations: vec![operation1.clone(), operation2.clone()],
+        };
+
+        let prefix = TopicPrefix::from_str("c8y").unwrap();
+
+        let filter_custom = ops.filter_by_topic("c8y/custom/one", &prefix);
+        assert_eq!(
+            filter_custom,
+            vec![("c8y_Something".to_string(), operation2)]
+        );
+
+        let filter_default = ops.filter_by_topic("c8y/devicecontrol/notifications", &prefix);
+        assert_eq!(
+            filter_default,
+            vec![("c8y_Something".to_string(), operation1)]
+        );
     }
 }
