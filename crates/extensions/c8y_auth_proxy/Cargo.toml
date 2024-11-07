@@ -31,7 +31,6 @@ tokio = { workspace = true, features = [
 ] }
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-native-roots"] }
 tracing = { workspace = true }
-url = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }

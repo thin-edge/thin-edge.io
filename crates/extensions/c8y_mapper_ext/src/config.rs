@@ -1,10 +1,10 @@
 use crate::operations::OperationHandler;
 use crate::Capabilities;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
+use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_auth_proxy::url::Protocol;
 use camino::Utf8Path;
 use serde_json::Value;
 use std::path::Path;

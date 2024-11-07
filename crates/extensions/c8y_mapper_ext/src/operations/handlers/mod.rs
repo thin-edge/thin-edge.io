@@ -17,6 +17,7 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
+use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::payload::SmartrestPayload;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
@@ -27,7 +28,6 @@ use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_par
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;

@@ -8,7 +8,7 @@ use crate::actor::IdUploadResult;
 use crate::config::C8yMapperConfig;
 use crate::Capabilities;
 use c8y_api::http_proxy::C8yEndPoint;
-use c8y_auth_proxy::url::ProxyUrlGenerator;
+use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -291,7 +291,7 @@ mod tests {
 
     use std::time::Duration;
 
-    use c8y_auth_proxy::url::Protocol;
+    use c8y_api::proxy_url::Protocol;
     use c8y_http_proxy::messages::C8YRestRequest;
     use c8y_http_proxy::messages::C8YRestResult;
     use tedge_actors::test_helpers::FakeServerBox;

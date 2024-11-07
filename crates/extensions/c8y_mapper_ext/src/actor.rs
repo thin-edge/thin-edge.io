@@ -3,7 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
-use c8y_auth_proxy::url::ProxyUrlGenerator;
+use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
