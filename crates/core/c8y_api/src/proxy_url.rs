@@ -7,6 +7,12 @@ pub struct ProxyUrlGenerator {
     protocol: Protocol,
 }
 
+impl Default for ProxyUrlGenerator {
+    fn default() -> Self {
+        ProxyUrlGenerator::new("localhost".into(), 8000, Protocol::Http)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Protocol {
     Http,

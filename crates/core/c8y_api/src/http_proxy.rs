@@ -1,3 +1,5 @@
+use crate::proxy_url::Protocol;
+use crate::proxy_url::ProxyUrlGenerator;
 use crate::smartrest::error::SmartRestDeserializerError;
 use crate::smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use camino::Utf8Path;
@@ -16,7 +18,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_config::auth_method::AuthType;
 use tedge_config::mqtt_config::MqttConfigBuildError;
+use tedge_config::ConfigNotSet;
 use tedge_config::MultiError;
+use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_config::TopicPrefix;
 use tracing::debug;
@@ -34,16 +38,50 @@ pub enum C8yEndPointError {
 pub struct C8yEndPoint {
     c8y_host: String,
     c8y_mqtt_host: String,
+    proxy: ProxyUrlGenerator,
     pub device_id: String,
     pub headers: HeaderMap,
     devices_internal_id: HashMap<String, String>,
 }
 
 impl C8yEndPoint {
-    pub fn new(c8y_host: &str, c8y_mqtt_host: &str, device_id: &str) -> C8yEndPoint {
+    pub fn from_config(
+        tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
+    ) -> Result<Self, C8yEndPointConfigError> {
+        let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
+        let c8y_mqtt_host = c8y_config.mqtt.or_config_not_set()?.to_string();
+        let auth_proxy_addr = c8y_config.proxy.client.host.clone();
+        let auth_proxy_port = c8y_config.proxy.client.port;
+        let auth_proxy_protocol = c8y_config
+            .proxy
+            .cert_path
+            .or_none()
+            .map_or(Protocol::Http, |_| Protocol::Https);
+        let proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, auth_proxy_protocol);
+
+        Ok(C8yEndPoint {
+            c8y_host,
+            c8y_mqtt_host,
+            proxy,
+            device_id,
+            headers: HeaderMap::new(),
+            devices_internal_id: HashMap::new(),
+        })
+    }
+
+    pub fn new(
+        c8y_host: &str,
+        c8y_mqtt_host: &str,
+        device_id: &str,
+        proxy: ProxyUrlGenerator,
+    ) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
             c8y_mqtt_host: c8y_mqtt_host.into(),
+            proxy,
             device_id: device_id.into(),
             headers: HeaderMap::new(),
             devices_internal_id: HashMap::new(),
@@ -106,6 +144,21 @@ impl C8yEndPoint {
         Url::parse(&url).unwrap()
     }
 
+    // Return the local url going through the local auth proxy to reach the given remote url
+    //
+    // Return the remote url unchanged if not related to the current tenant.
+    pub fn local_proxy_url(&self, remote_url: &str) -> Result<Url, InvalidUrl> {
+        let valid_url: Url = remote_url.parse().map_err(|err| InvalidUrl {
+            url: remote_url.to_string(),
+            err,
+        })?;
+        Ok(self
+            .maybe_tenant_url(valid_url.as_str())
+            .filter(|tenant_url| tenant_url.scheme().starts_with("http"))
+            .map(|tenant_url| self.proxy.proxy_url(tenant_url))
+            .unwrap_or(valid_url))
+    }
+
     pub fn maybe_tenant_url(&self, url: &str) -> Option<Url> {
         // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
         // * <tenant_name>.<domain> eg: sample.c8y.io
@@ -136,6 +189,29 @@ impl C8yEndPoint {
         // Hence just matching the host prefix.
         (host == c8y_http_host || host == c8y_mqtt_host).then_some(url)
     }
+}
+
+/// The errors that could occur while building `C8yEndPoint` struct.
+#[derive(Debug, thiserror::Error)]
+pub enum C8yEndPointConfigError {
+    #[error(transparent)]
+    FromReadError(#[from] ReadError),
+
+    #[error(transparent)]
+    FromConfigNotSet(#[from] ConfigNotSet),
+
+    #[error(transparent)]
+    FromMultiError(#[from] MultiError),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid url {url}: {err}")]
+pub struct InvalidUrl {
+    url: String,
+    err: url::ParseError,
 }
 
 pub enum C8yAuthRetriever {
@@ -330,7 +406,12 @@ mod tests {
 
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
-        let c8y = C8yEndPoint::new("test_host", "test_host", "test_device");
+        let c8y = C8yEndPoint::new(
+            "test_host",
+            "test_host",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         let res = c8y.get_url_for_internal_id("test_device");
 
         assert_eq!(
@@ -341,7 +422,12 @@ mod tests {
 
     #[test]
     fn get_url_for_sw_list_returns_correct_address() {
-        let mut c8y = C8yEndPoint::new("test_host", "test_host", "test_device");
+        let mut c8y = C8yEndPoint::new(
+            "test_host",
+            "test_host",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         c8y.devices_internal_id
             .insert("test_device".to_string(), "12345".to_string());
         let internal_id = c8y.get_internal_id("test_device".to_string()).unwrap();
@@ -361,7 +447,12 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file")]
     #[test_case("https://t1124124.mqtt-url.com/path/to/file")]
     fn url_is_my_tenant_correct_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test.mqtt-url.com", "test_device");
+        let c8y = C8yEndPoint::new(
+            "test.test.com",
+            "test.mqtt-url.com",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
@@ -376,7 +467,12 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file")]
     #[test_case("https://t1124124.mqtt-url.com/path/to/file")]
     fn url_is_my_tenant_correct_urls_with_http_port(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com:443", "test.mqtt-url.com", "test_device");
+        let c8y = C8yEndPoint::new(
+            "test.test.com:443",
+            "test.mqtt-url.com",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
@@ -391,7 +487,12 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file")]
     #[test_case("https://t1124124.mqtt-url.com/path/to/file")]
     fn url_is_my_tenant_correct_urls_with_mqtt_port(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test.mqtt-url.com:8883", "test_device");
+        let c8y = C8yEndPoint::new(
+            "test.test.com",
+            "test.mqtt-url.com:8883",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
@@ -403,20 +504,35 @@ mod tests {
     #[test_case("http://localhost")]
     #[test_case("http://abc.com")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test.mqtt-url.com", "test_device");
+        let c8y = C8yEndPoint::new(
+            "test.test.com",
+            "test.mqtt-url.com",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         assert!(c8y.maybe_tenant_url(url).is_none());
     }
 
     #[test]
     fn url_is_my_tenant_with_hostname_without_commas() {
-        let c8y = C8yEndPoint::new("custom-domain", "non-custom-mqtt-domain", "test_device");
+        let c8y = C8yEndPoint::new(
+            "custom-domain",
+            "non-custom-mqtt-domain",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         let url = "http://custom-domain/path";
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
     #[test]
     fn url_is_not_my_tenant_with_hostname_without_commas() {
-        let c8y = C8yEndPoint::new("custom-domain", "non-custom-mqtt-domain", "test_device");
+        let c8y = C8yEndPoint::new(
+            "custom-domain",
+            "non-custom-mqtt-domain",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         let url = "http://unrelated-domain/path";
         assert!(c8y.maybe_tenant_url(url).is_none());
     }
@@ -424,14 +540,24 @@ mod tests {
     #[ignore = "Until #2804 is fixed"]
     #[test]
     fn url_is_my_tenant_check_not_too_broad() {
-        let c8y = C8yEndPoint::new("abc.com", "abc.com", "test_device");
+        let c8y = C8yEndPoint::new(
+            "abc.com",
+            "abc.com",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         dbg!(c8y.maybe_tenant_url("http://xyz.com"));
         assert!(c8y.maybe_tenant_url("http://xyz.com").is_none());
     }
 
     #[test]
     fn check_non_cached_internal_id_for_a_device() {
-        let mut c8y = C8yEndPoint::new("test_host", "test_host", "test_device");
+        let mut c8y = C8yEndPoint::new(
+            "test_host",
+            "test_host",
+            "test_device",
+            ProxyUrlGenerator::default(),
+        );
         c8y.devices_internal_id
             .insert("test_device".to_string(), "12345".to_string());
         let end_pt_err = c8y.get_internal_id("test_child".into()).unwrap_err();
@@ -440,5 +566,34 @@ mod tests {
             end_pt_err.to_string(),
             "Cumulocity internal id not found for the device: test_child".to_string()
         );
+    }
+
+    #[test_case("http://aaa.test.com", "https://127.0.0.1:1234/c8y/")]
+    #[test_case("https://aaa.test.com", "https://127.0.0.1:1234/c8y/")]
+    #[test_case("http://aaa.unrelated.com", "http://aaa.unrelated.com/")] // Unchanged: unrelated tenant
+    #[test_case("ftp://aaa.test.com", "ftp://aaa.test.com/")] // Unchanged: unrelated protocol
+    #[test_case("https://t1124124.test.com", "https://127.0.0.1:1234/c8y/")]
+    #[test_case("https://t1124124.test.com:12345", "https://127.0.0.1:1234/c8y/")]
+    #[test_case("https://t1124124.test.com/path", "https://127.0.0.1:1234/c8y/path")]
+    #[test_case(
+        "https://t1124124.test.com/path/to/file.test",
+        "https://127.0.0.1:1234/c8y/path/to/file.test"
+    )]
+    #[test_case(
+        "https://t1124124.test.com/path/to/file",
+        "https://127.0.0.1:1234/c8y/path/to/file"
+    )]
+    #[test_case(
+        "https://t1124124.mqtt-url.com/path/to/file",
+        "https://127.0.0.1:1234/c8y/path/to/file"
+    )]
+    fn local_proxy_url(url: &str, proxy_url: &str) {
+        let c8y = C8yEndPoint::new(
+            "test.test.com",
+            "test.mqtt-url.com",
+            "test_device",
+            ProxyUrlGenerator::new("127.0.0.1".into(), 1234, Protocol::Https),
+        );
+        assert_eq!(c8y.local_proxy_url(url).unwrap().as_ref(), proxy_url);
     }
 }

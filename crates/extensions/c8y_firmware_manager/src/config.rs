@@ -37,17 +37,14 @@ impl FirmwareManagerConfig {
         tmp_dir: Utf8PathBuf,
         data_dir: DataDir,
         timeout_sec: Duration,
-        c8y_url: String,
-        c8y_mqtt: String,
         c8y_prefix: TopicPrefix,
+        c8y_end_point: C8yEndPoint,
     ) -> Self {
         let local_http_host = format!("{}:{}", local_http_host, local_http_port).into();
 
         let c8y_request_topics = C8yTopic::SmartRestRequest.to_topic_filter(&c8y_prefix);
         let firmware_update_response_topics =
             TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS);
-
-        let c8y_end_point = C8yEndPoint::new(&c8y_url, &c8y_mqtt, &tedge_device_id);
 
         Self {
             tedge_device_id,
@@ -74,9 +71,8 @@ impl FirmwareManagerConfig {
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
         let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
 
-        let c8y_url = c8y_config.http.or_config_not_set()?.to_string();
-        let c8y_mqtt = c8y_config.mqtt.or_config_not_set()?.to_string();
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
+        let c8y_end_point = C8yEndPoint::from_config(tedge_config, c8y_profile)?;
 
         Ok(Self::new(
             tedge_device_id,
@@ -85,9 +81,8 @@ impl FirmwareManagerConfig {
             tmp_dir,
             data_dir,
             timeout_sec,
-            c8y_url,
-            c8y_mqtt,
             c8y_prefix,
+            c8y_end_point,
         ))
     }
 

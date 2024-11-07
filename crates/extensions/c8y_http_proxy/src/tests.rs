@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
+use c8y_api::proxy_url::ProxyUrlGenerator;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::StatusCode;
@@ -319,6 +320,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         retry_interval: Duration::from_millis(100),
+        proxy: ProxyUrlGenerator::default(),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut auth);
     let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, auth.build());
@@ -388,6 +390,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         device_id: external_id.into(),
         tmp_dir: tmp_dir.into(),
         retry_interval: Duration::from_millis(100),
+        proxy: ProxyUrlGenerator::default(),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
     let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
@@ -537,6 +540,7 @@ async fn spawn_c8y_http_proxy(
         device_id,
         tmp_dir,
         retry_interval: Duration::from_millis(10),
+        proxy: ProxyUrlGenerator::default(),
     };
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
     let proxy = C8YHttpProxy::new(&mut c8y_proxy_actor);

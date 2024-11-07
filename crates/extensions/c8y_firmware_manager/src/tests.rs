@@ -1,5 +1,8 @@
 use super::*;
 use assert_json_diff::assert_json_include;
+use c8y_api::http_proxy::C8yEndPoint;
+use c8y_api::proxy_url::Protocol;
+use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::credentials::HttpHeaderRequest;
 use c8y_http_proxy::HeaderMap;
@@ -634,6 +637,12 @@ async fn spawn_firmware_manager(
     let device_id = "parent-device";
     let tedge_host = TEDGE_HOST.into();
 
+    let c8y_end_point = C8yEndPoint::new(
+        C8Y_HOST,
+        C8Y_HOST,
+        device_id,
+        ProxyUrlGenerator::new("localhost".into(), 8000, Protocol::Http),
+    );
     let config = FirmwareManagerConfig::new(
         device_id.to_string(),
         tedge_host,
@@ -641,9 +650,8 @@ async fn spawn_firmware_manager(
         tmp_dir.utf8_path_buf(),
         tmp_dir.utf8_path_buf().into(),
         timeout_sec,
-        C8Y_HOST.into(),
-        C8Y_HOST.into(),
         "c8y".try_into().unwrap(),
+        c8y_end_point,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

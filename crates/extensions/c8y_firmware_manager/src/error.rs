@@ -74,4 +74,7 @@ pub enum FirmwareManagementConfigBuildError {
 
     #[error(transparent)]
     MultiError(#[from] tedge_config::MultiError),
+
+    #[error(transparent)]
+    C8yEndPointConfigError(#[from] c8y_api::http_proxy::C8yEndPointConfigError),
 }

@@ -79,6 +79,7 @@ impl OperationHandler {
                     &c8y_mapper_config.c8y_host,
                     &c8y_mapper_config.c8y_mqtt,
                     &c8y_mapper_config.device_id,
+                    auth_proxy.clone(),
                 ),
                 http_proxy: http_proxy.clone(),
                 auth_proxy: auth_proxy.clone(),

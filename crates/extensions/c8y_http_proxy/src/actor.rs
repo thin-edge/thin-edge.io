@@ -98,6 +98,7 @@ impl C8YHttpProxyActor {
             &config.c8y_http_host,
             &config.c8y_mqtt_host,
             &config.device_id,
+            config.proxy.clone(),
         );
         C8YHttpProxyActor {
             config,

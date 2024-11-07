@@ -239,7 +239,7 @@ impl CumulocityConverter {
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir)?;
 
-        let c8y_endpoint = C8yEndPoint::new(c8y_host, c8y_mqtt, &device_id);
+        let c8y_endpoint = C8yEndPoint::new(c8y_host, c8y_mqtt, &device_id, auth_proxy.clone());
 
         let mqtt_schema = config.mqtt_schema.clone();
 
