@@ -1,12 +1,12 @@
 //! Converting Cumulocity Smartrest operation messages into local thin-edge operation messages.
-
-use std::sync::Arc;
-
 use c8y_api::json_c8y_deserializer::C8yDeviceProfile;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
+use c8y_api::smartrest::operations::Operation;
+use serde_json::Value;
+use std::sync::Arc;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
@@ -20,6 +20,8 @@ use tedge_api::entity_store::EntityMetadata;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::workflow::StateExcerpt;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
@@ -386,5 +388,52 @@ impl CumulocityConverter {
             }
             Ok(messages) => Ok(messages),
         }
+    }
+
+    pub fn convert_custom_operation_request(
+        &self,
+        device_xid: String,
+        cmd_id: String,
+        command_name: String,
+        custom_handler: &Operation,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let entity_xid: EntityExternalId = device_xid.into();
+
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+
+        let channel = Channel::Command {
+            operation: OperationType::Custom(command_name),
+            cmd_id,
+        };
+
+        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
+
+        let state = GenericCommandState::from_command_message(message).map_err(|e| {
+            CumulocityMapperError::JsonCustomOperationHandlerError {
+                operation: custom_handler.name.clone(),
+                err_msg: format!("Invalid JSON message, {e}. Message: {message:?}"),
+            }
+        })?;
+
+        let payload: Value = if let Some(workflow_input) = custom_handler.workflow_input() {
+            let excerpt = StateExcerpt::from(Value::String(workflow_input.to_string()));
+            match excerpt.extract_value_from(&state) {
+                Value::Object(obj) => Value::Object(obj),
+                _ => {
+                    error!(
+                        "Operation file {} contains invalid value for `exec.workflow.input`. Skipping",
+                        custom_handler.name
+                    );
+                    return Ok(vec![]);
+                }
+            }
+        } else {
+            serde_json::Value::Object(serde_json::Map::new())
+        };
+
+        let request = GenericCommandState::new(topic, CommandStatus::Init.to_string(), payload);
+
+        Ok(vec![request.into_message()])
     }
 }

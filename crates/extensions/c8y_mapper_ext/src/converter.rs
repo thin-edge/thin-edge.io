@@ -732,7 +732,13 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::Custom => {
                 return self
-                    .process_json_custom_operation(operation_id, extras, message)
+                    .process_json_custom_operation(
+                        operation_id,
+                        cmd_id,
+                        device_xid,
+                        extras,
+                        message,
+                    )
                     .await;
             }
         };
@@ -746,6 +752,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let operation = C8yOperation::from_json(message.payload.as_str()?)?;
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+        let device_xid = operation.external_source.external_id;
 
         if self.active_commands.contains(&cmd_id) {
             info!("{cmd_id} is already addressed");
@@ -753,7 +760,13 @@ impl CumulocityConverter {
         }
 
         let result = self
-            .process_json_custom_operation(operation.op_id.clone(), &operation.extras, message)
+            .process_json_custom_operation(
+                operation.op_id.clone(),
+                cmd_id,
+                device_xid,
+                &operation.extras,
+                message,
+            )
             .await;
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
@@ -764,12 +777,16 @@ impl CumulocityConverter {
     async fn process_json_custom_operation(
         &self,
         operation_id: String,
+        cmd_id: String,
+        device_xid: String,
         extras: &HashMap<String, Value>,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let handlers = self
-            .operations
-            .filter_by_topic(&message.topic.name, &self.config.bridge_config.c8y_prefix);
+        let handlers = self.get_operation_handlers(
+            device_xid.as_str(),
+            &message.topic.name,
+            &self.config.bridge_config.c8y_prefix,
+        )?;
 
         if handlers.is_empty() {
             info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
@@ -777,14 +794,49 @@ impl CumulocityConverter {
 
         for (on_fragment, custom_handler) in &handlers {
             if extras.contains_key(on_fragment) {
-                self.execute_custom_operation(custom_handler, message, &operation_id)
-                    .await?;
-                break;
+                if let Some(command_name) = custom_handler.workflow_operation() {
+                    return self.convert_custom_operation_request(
+                        device_xid,
+                        cmd_id,
+                        command_name.to_string(),
+                        custom_handler,
+                        message,
+                    );
+                } else {
+                    self.execute_custom_operation(custom_handler, message, &operation_id)
+                        .await?;
+                    break;
+                }
             }
         }
 
         // MQTT messages are sent during the operation execution
         Ok(vec![])
+    }
+
+    fn get_operation_handlers(
+        &self,
+        device_xid: &str,
+        topic: &str,
+        prefix: &TopicPrefix,
+    ) -> Result<Vec<(String, Operation)>, CumulocityMapperError> {
+        let entity_xid = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+
+        match target.r#type {
+            EntityType::MainDevice => Ok(self.operations.filter_by_topic(topic, prefix)),
+            EntityType::ChildDevice => {
+                if let Some(operations) = self.children.get(device_xid) {
+                    Ok(operations.filter_by_topic(topic, prefix))
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+            EntityType::Service => {
+                warn!("operation for services are currently unsupported");
+                Ok(Vec::new())
+            }
+        }
     }
 
     async fn execute_custom_operation(
@@ -1649,7 +1701,6 @@ impl CumulocityConverter {
         } else {
             &mut self.operations
         };
-
         let modified = *current_operations != operations;
         *current_operations = operations;
 
