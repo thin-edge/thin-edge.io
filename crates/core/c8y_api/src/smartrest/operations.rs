@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::substitution::Record;
 use tedge_config::TopicPrefix;
+use tracing::error;
 use tracing::warn;
 
 use super::payload::SmartrestPayload;
@@ -32,6 +33,9 @@ impl Operations {
         self.operations.push(operation);
     }
 
+    /// Loads operations defined in the operations directory.
+    ///
+    /// Invalid operation files are ignored and logged.
     pub fn try_new(
         dir: impl AsRef<Path>,
         bridge_config: &impl Record,
@@ -291,10 +295,16 @@ pub fn get_operations(
                 continue;
             }
 
-            let mut details = match fs::read(&path) {
-                Ok(bytes) => toml::from_str::<Operation>(&String::from_utf8(bytes)?)
-                    .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
-                Err(err) => return Err(OperationsError::FromIo(err)),
+            let mut details = match get_operation(&path) {
+                Ok(operation) => operation,
+                Err(err) => {
+                    error!(
+                        path = %path.to_string_lossy(),
+                        error = %err,
+                        "Failed to load an operation from file"
+                    );
+                    continue;
+                }
             };
 
             if let Some(ref mut exec) = details.exec {
@@ -302,10 +312,6 @@ pub fn get_operations(
                     exec.topic = Some(bridge_config.inject_values_into_template(topic))
                 }
             }
-            path.file_name()
-                .and_then(|filename| filename.to_str())
-                .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
-                .clone_into(&mut details.name);
 
             if details.is_valid_operation_handler() || details.is_supported_operation_file() {
                 operations.add_operation(details);
@@ -340,13 +346,10 @@ pub fn get_child_ops(
     Ok(child_ops)
 }
 
-pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
-    let mut details = match fs::read(&path) {
-        Ok(bytes) => toml::from_str::<Operation>(&String::from_utf8(bytes)?)
-            .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
-
-        Err(err) => return Err(OperationsError::FromIo(err)),
-    };
+pub fn get_operation(path: &Path) -> Result<Operation, OperationsError> {
+    let text = fs::read_to_string(path)?;
+    let mut details = toml::from_str::<Operation>(&text)
+        .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?;
 
     path.file_name()
         .and_then(|filename| filename.to_str())
