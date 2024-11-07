@@ -13,7 +13,6 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 c8y_api = { workspace = true }
 c8y_firmware_manager = { workspace = true }
-c8y_http_proxy = { workspace = true }
 clap = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }

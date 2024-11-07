@@ -159,7 +159,7 @@ impl C8yEndPoint {
             .unwrap_or(valid_url))
     }
 
-    pub fn maybe_tenant_url(&self, url: &str) -> Option<Url> {
+    fn maybe_tenant_url(&self, url: &str) -> Option<Url> {
         // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
         // * <tenant_name>.<domain> eg: sample.c8y.io
         // * <tenant_id>.<domain> eg: t12345.c8y.io

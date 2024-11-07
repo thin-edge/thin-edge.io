@@ -927,13 +927,9 @@ impl CumulocityConverter {
         command.payload.update_list.iter_mut().for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
                 if let Some(url) = &mut module.url {
-                    *url = if let Some(cumulocity_url) =
-                        self.c8y_endpoint.maybe_tenant_url(url.url())
-                    {
-                        DownloadInfo::new(self.auth_proxy.proxy_url(cumulocity_url).as_ref())
-                    } else {
-                        DownloadInfo::new(url.url())
-                    };
+                    if let Ok(package_url) = self.c8y_endpoint.local_proxy_url(url.url()) {
+                        *url = DownloadInfo::new(package_url.as_str());
+                    }
                 }
             });
         });
