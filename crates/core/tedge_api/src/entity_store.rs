@@ -22,6 +22,7 @@ use log::error;
 use log::info;
 use log::warn;
 use mqtt_channel::MqttMessage;
+use mqtt_channel::QoS;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
@@ -590,6 +591,35 @@ impl EntityStore {
         Ok(register_messages)
     }
 
+    /// Recursively deregister an entity, its child devices and services
+    pub fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityTopicId> {
+        let mut removed_entities = vec![];
+        self.entities.remove(topic_id, &mut removed_entities);
+        removed_entities
+    }
+
+    /// Recursively deregister an entity, its child devices and services
+    ///
+    /// Persist the deregistration message
+    pub fn deregister_and_persist_entity(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<Vec<EntityTopicId>, Error> {
+        let removed_entities = self.deregister_entity(topic_id);
+
+        if !removed_entities.is_empty() {
+            let topic = self
+                .mqtt_schema
+                .topic_for(topic_id, &Channel::EntityMetadata);
+            let message = MqttMessage::new(&topic, "")
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce);
+            self.message_log.append_message(&message)?;
+        }
+
+        Ok(removed_entities)
+    }
+
     /// Updates the entity twin data with the provided fragment data.
     /// Returns `true`, if the twin data got updated with the new fragment value.
     /// If the provided fragment already existed, `false` is returned.
@@ -772,6 +802,25 @@ impl EntityTree {
         debug!("Updated entity map: {:?}", self.entities);
         debug!("Updated external id map: {:?}", self.entity_id_index);
         outcome
+    }
+
+    /// Recursively remove an entity, its child devices and services
+    ///
+    /// Populate the given vector with the topic identifiers of the removed entities
+    fn remove(&mut self, topic_id: &EntityTopicId, removed_entities: &mut Vec<EntityTopicId>) {
+        if let Some((external_id, children)) = self
+            .entities
+            .get(topic_id)
+            .map(|node| (node.metadata.external_id.clone(), node.children.clone()))
+        {
+            children
+                .iter()
+                .for_each(|sub_topic| self.remove(sub_topic, removed_entities));
+
+            self.entities.remove(topic_id);
+            self.entity_id_index.remove(&external_id);
+            removed_entities.push(topic_id.clone())
+        }
     }
 }
 
@@ -1243,6 +1292,7 @@ mod tests {
 
     #[test]
     fn list_ancestors() {
+        // XOXOX
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
 
@@ -1931,6 +1981,59 @@ mod tests {
         }
     }
 
+    #[test]
+    fn deregister_entities() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+
+        register_child(&mut store, "device/main//", "device/001//");
+        register_child(&mut store, "device/main//", "device/002//");
+        register_child(&mut store, "device/main//", "device/003//");
+        register_service(&mut store, "device/main//", "device/main/service/004");
+
+        register_child(&mut store, "device/002//", "device/005//");
+        register_child(&mut store, "device/002//", "device/006//");
+        register_child(&mut store, "device/002//", "device/007//");
+        register_service(&mut store, "device/002//", "device/002/service/008");
+
+        register_child(&mut store, "device/006//", "device/009//");
+        register_child(&mut store, "device/006//", "device/00A//");
+        register_child(&mut store, "device/006//", "device/00B//");
+        register_service(&mut store, "device/006//", "device/006/service/00C");
+
+        register_child(&mut store, "device/003//", "device/00D//");
+        register_child(&mut store, "device/003//", "device/00E//");
+
+        let mut removed = store.deregister_entity(&entity("device/002//"));
+        removed.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        assert_eq!(
+            removed,
+            vec![
+                entity("device/002//"),
+                entity("device/002/service/008"),
+                entity("device/005//"),
+                entity("device/006//"),
+                entity("device/006/service/00C"),
+                entity("device/007//"),
+                entity("device/009//"),
+                entity("device/00A//"),
+                entity("device/00B//"),
+            ]
+        );
+
+        for topic_id in removed.iter() {
+            assert!(store.get(topic_id).is_none());
+        }
+
+        assert!(store.get(&entity("device/main//")).is_some());
+        assert!(store.get(&entity("device/001//")).is_some());
+        assert!(store.get(&entity("device/003//")).is_some());
+        assert!(store.get(&entity("device/main/service/004")).is_some());
+        assert!(store.get(&entity("device/00D//")).is_some());
+        assert!(store.get(&entity("device/00E//")).is_some());
+    }
+
     fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {
         EntityStore::with_main_device_and_default_service_type(
             MqttSchema::default(),
@@ -1949,5 +2052,34 @@ mod tests {
             clean_start,
         )
         .unwrap()
+    }
+
+    fn register(store: &mut EntityStore, topic_id: &str, payload: JsonValue) {
+        let registration = EntityRegistrationMessage::new(&MqttMessage::new(
+            &Topic::new(&format!("te/{topic_id}")).unwrap(),
+            payload.to_string(),
+        ));
+        store.update(registration.unwrap()).unwrap();
+        assert!(store.get(&entity(topic_id)).is_some());
+    }
+
+    fn register_child(store: &mut EntityStore, parent: &str, topic_id: &str) {
+        register(
+            store,
+            topic_id,
+            json!({"@type": "child-device", "@parent": parent}),
+        )
+    }
+
+    fn register_service(store: &mut EntityStore, parent: &str, topic_id: &str) {
+        register(
+            store,
+            topic_id,
+            json!({"@type": "service", "@parent": parent}),
+        )
+    }
+
+    fn entity(topic_id: &str) -> EntityTopicId {
+        EntityTopicId::from_str(topic_id).unwrap()
     }
 }
