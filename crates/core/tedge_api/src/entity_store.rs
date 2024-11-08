@@ -134,8 +134,7 @@ type ExternalIdValidatorFn =
 pub struct EntityStore {
     mqtt_schema: MqttSchema,
     main_device: EntityTopicId,
-    entities: HashMap<EntityTopicId, EntityMetadata>,
-    entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
+    entities: EntityTree,
     external_id_mapper: ExternalIdMapperFn,
     external_id_validator_fn: ExternalIdValidatorFn,
     // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.
@@ -199,8 +198,7 @@ impl EntityStore {
         let mut entity_store = EntityStore {
             mqtt_schema: mqtt_schema.clone(),
             main_device: main_device.topic_id.clone(),
-            entities: HashMap::from([(main_device.topic_id.clone(), metadata)]),
-            entity_id_index: HashMap::from([(entity_id, main_device.topic_id)]),
+            entities: EntityTree::new(entity_id, main_device.topic_id, metadata),
             external_id_mapper: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
             default_service_type,
@@ -329,8 +327,7 @@ impl EntityStore {
 
     /// Returns information for an entity under a given device/service id.
     pub fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&EntityMetadata> {
-        let topic_id = self.entity_id_index.get(external_id)?;
-        self.get(topic_id)
+        self.entities.get_by_external_id(external_id)
     }
 
     /// Tries to get information about an entity using its `EntityExternalId`,
@@ -529,38 +526,17 @@ impl EntityStore {
             twin_data: Map::new(),
         };
 
-        // device is affected if it was previously registered and was updated
-        // (i.e. EntityMetadata has changed)
-        let previous = self.entities.entry(topic_id.clone());
-        match previous {
-            Entry::Occupied(mut occupied) => {
-                // if there is no change, no entities were affected
-                let existing_entity = occupied.get().clone();
-
-                let mut merged_other = existing_entity.other.clone();
-                merged_other.extend(entity_metadata.other.clone());
-                let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data.clone(),
-                    other: merged_other,
-                    ..entity_metadata
-                };
-
-                if existing_entity == merged_entity {
-                    return Ok(vec![]);
-                }
-
-                occupied.insert(merged_entity);
+        match self
+            .entities
+            .insert(external_id, topic_id.clone(), entity_metadata)
+        {
+            InsertOutcome::Unchanged => Ok(vec![]),
+            InsertOutcome::Inserted => Ok(affected_entities),
+            InsertOutcome::Updated => {
                 affected_entities.push(topic_id);
-            }
-            Entry::Vacant(vacant) => {
-                vacant.insert(entity_metadata);
-                self.entity_id_index.insert(external_id, topic_id);
+                Ok(affected_entities)
             }
         }
-        debug!("Updated entity map: {:?}", self.entities);
-        debug!("Updated external id map: {:?}", self.entity_id_index);
-
-        Ok(affected_entities)
     }
 
     fn register_and_persist_entity(
@@ -574,11 +550,6 @@ impl EntityStore {
         }
 
         Ok(affected_entities)
-    }
-
-    /// An iterator over all registered entities.
-    pub fn iter(&self) -> impl Iterator<Item = (&EntityTopicId, &EntityMetadata)> {
-        self.entities.iter()
     }
 
     /// Performs auto-registration process for an entity under a given
@@ -674,6 +645,101 @@ impl EntityStore {
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entity_store.cache_early_data_message(message)
     }
+}
+
+/// In-memory representation of the entity tree
+struct EntityTree {
+    entities: HashMap<EntityTopicId, EntityMetadata>,
+    entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
+}
+
+impl EntityTree {
+    /// Create the tree of entities for the main device, given its name, topic id and metadata
+    pub fn new(
+        device_name: EntityExternalId,
+        topic_id: EntityTopicId,
+        metadata: EntityMetadata,
+    ) -> Self {
+        EntityTree {
+            entities: HashMap::from([(topic_id.clone(), metadata)]),
+            entity_id_index: HashMap::from([(device_name, topic_id)]),
+        }
+    }
+
+    pub fn contains_key(&self, topic_id: &EntityTopicId) -> bool {
+        self.entities.contains_key(topic_id)
+    }
+
+    /// Returns information about an entity under a given MQTT entity topic identifier.
+    pub fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
+        self.entities.get(entity_topic_id)
+    }
+
+    /// Returns a mutable reference to the `EntityMetadata` for the given `EntityTopicId`.
+    fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut EntityMetadata> {
+        self.entities.get_mut(entity_topic_id)
+    }
+
+    /// An iterator over all registered entities.
+    pub fn iter(&self) -> impl Iterator<Item = (&EntityTopicId, &EntityMetadata)> {
+        self.entities.iter()
+    }
+
+    /// Returns information for an entity under a given device/service id.
+    pub fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&EntityMetadata> {
+        let topic_id = self.entity_id_index.get(external_id)?;
+        self.get(topic_id)
+    }
+
+    /// Insert a new entity
+    ///
+    /// Return Inserted if the entity is new
+    /// Return Updated if the entity was previously registered and has been updated by this call
+    /// Return Unchanged if the entity not affected by this call
+    pub fn insert(
+        &mut self,
+        external_id: EntityExternalId,
+        topic_id: EntityTopicId,
+        entity_metadata: EntityMetadata,
+    ) -> InsertOutcome {
+        let previous = self.entities.entry(topic_id.clone());
+        let outcome = match previous {
+            Entry::Occupied(mut occupied) => {
+                // if there is no change, no entities were affected
+                let existing_entity = occupied.get().clone();
+
+                let mut merged_other = existing_entity.other.clone();
+                merged_other.extend(entity_metadata.other.clone());
+                let merged_entity = EntityMetadata {
+                    twin_data: existing_entity.twin_data.clone(),
+                    other: merged_other,
+                    ..entity_metadata
+                };
+
+                if existing_entity == merged_entity {
+                    InsertOutcome::Unchanged
+                } else {
+                    occupied.insert(merged_entity);
+                    InsertOutcome::Updated
+                }
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(entity_metadata);
+                self.entity_id_index.insert(external_id, topic_id.clone());
+                InsertOutcome::Inserted
+            }
+        };
+
+        debug!("Updated entity map: {:?}", self.entities);
+        debug!("Updated external id map: {:?}", self.entity_id_index);
+        outcome
+    }
+}
+
+enum InsertOutcome {
+    Unchanged,
+    Updated,
+    Inserted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1671,7 +1737,7 @@ mod tests {
         };
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
-        assert!(!affected_entities.0.is_empty());
+        assert_eq!(affected_entities.0.get(0).unwrap(), "device/main//");
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
         assert!(affected_entities.0.is_empty());
@@ -1696,7 +1762,7 @@ mod tests {
         };
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
-        assert!(!affected_entities.0.is_empty());
+        assert_eq!(affected_entities.0.get(0).unwrap(), "device/main//");
 
         // Update the entity twin data
         store
