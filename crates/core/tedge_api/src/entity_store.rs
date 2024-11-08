@@ -26,6 +26,7 @@ use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::Path;
 use thiserror::Error;
@@ -400,12 +401,9 @@ impl EntityStore {
     /// Returns MQTT identifiers of child devices of a given device.
     pub fn child_devices(&self, entity_topic: &EntityTopicId) -> Vec<&EntityTopicId> {
         self.entities
-            .iter()
-            .filter(|(_, e)| {
-                // can be replaced by `is_some_and` after MSRV upgrade to 1.70
-                e.parent.as_ref().map_or(false, |p| p == entity_topic)
-                    && e.r#type == EntityType::ChildDevice
-            })
+            .children(entity_topic)
+            .into_iter()
+            .filter(|(_, e)| e.r#type == EntityType::ChildDevice)
             .map(|(k, _)| k)
             .collect()
     }
@@ -413,12 +411,9 @@ impl EntityStore {
     /// Returns MQTT identifiers of services running on a given device.
     pub fn services(&self, entity_topic: &EntityTopicId) -> Vec<&EntityTopicId> {
         self.entities
-            .iter()
-            .filter(|(_, e)| {
-                // can be replaced by `is_some_and` after MSRV upgrade to 1.70
-                e.parent.as_ref().map_or(false, |p| p == entity_topic)
-                    && e.r#type == EntityType::Service
-            })
+            .children(entity_topic)
+            .into_iter()
+            .filter(|(_, e)| e.r#type == EntityType::Service)
             .map(|(k, _)| k)
             .collect()
     }
@@ -649,8 +644,30 @@ impl EntityStore {
 
 /// In-memory representation of the entity tree
 struct EntityTree {
-    entities: HashMap<EntityTopicId, EntityMetadata>,
+    entities: HashMap<EntityTopicId, EntityNode>,
     entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
+}
+
+#[derive(Debug)]
+struct EntityNode {
+    metadata: EntityMetadata,
+    children: HashSet<EntityTopicId>,
+}
+
+impl EntityNode {
+    pub fn new(metadata: EntityMetadata) -> Self {
+        EntityNode {
+            metadata,
+            children: HashSet::new(),
+        }
+    }
+
+    pub fn metadata(&self) -> &EntityMetadata {
+        &self.metadata
+    }
+    pub fn mut_metadata(&mut self) -> &mut EntityMetadata {
+        &mut self.metadata
+    }
 }
 
 impl EntityTree {
@@ -661,7 +678,7 @@ impl EntityTree {
         metadata: EntityMetadata,
     ) -> Self {
         EntityTree {
-            entities: HashMap::from([(topic_id.clone(), metadata)]),
+            entities: HashMap::from([(topic_id.clone(), EntityNode::new(metadata))]),
             entity_id_index: HashMap::from([(device_name, topic_id)]),
         }
     }
@@ -672,17 +689,27 @@ impl EntityTree {
 
     /// Returns information about an entity under a given MQTT entity topic identifier.
     pub fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
-        self.entities.get(entity_topic_id)
+        self.entities.get(entity_topic_id).map(EntityNode::metadata)
     }
 
     /// Returns a mutable reference to the `EntityMetadata` for the given `EntityTopicId`.
     fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut EntityMetadata> {
-        self.entities.get_mut(entity_topic_id)
+        self.entities
+            .get_mut(entity_topic_id)
+            .map(EntityNode::mut_metadata)
     }
 
-    /// An iterator over all registered entities.
-    pub fn iter(&self) -> impl Iterator<Item = (&EntityTopicId, &EntityMetadata)> {
-        self.entities.iter()
+    /// All the entities with a given parent.
+    pub fn children(&self, parent_id: &EntityTopicId) -> Vec<(&EntityTopicId, &EntityMetadata)> {
+        let Some(children) = self.entities.get(parent_id).map(|node| &node.children) else {
+            return vec![];
+        };
+
+        children
+            .iter()
+            .filter_map(|topic_id| self.entities.get_key_value(topic_id))
+            .map(|(k, v)| (k, v.metadata()))
+            .collect()
     }
 
     /// Returns information for an entity under a given device/service id.
@@ -702,11 +729,13 @@ impl EntityTree {
         topic_id: EntityTopicId,
         entity_metadata: EntityMetadata,
     ) -> InsertOutcome {
+        let maybe_parent = entity_metadata.parent.clone();
         let previous = self.entities.entry(topic_id.clone());
         let outcome = match previous {
             Entry::Occupied(mut occupied) => {
                 // if there is no change, no entities were affected
-                let existing_entity = occupied.get().clone();
+                let existing_entity = occupied.get().metadata.clone();
+                let existing_children = occupied.get().children.clone();
 
                 let mut merged_other = existing_entity.other.clone();
                 merged_other.extend(entity_metadata.other.clone());
@@ -719,16 +748,26 @@ impl EntityTree {
                 if existing_entity == merged_entity {
                     InsertOutcome::Unchanged
                 } else {
-                    occupied.insert(merged_entity);
+                    let updated_entity = EntityNode {
+                        metadata: merged_entity,
+                        children: existing_children,
+                    };
+                    occupied.insert(updated_entity);
                     InsertOutcome::Updated
                 }
             }
             Entry::Vacant(vacant) => {
-                vacant.insert(entity_metadata);
+                vacant.insert(EntityNode::new(entity_metadata));
                 self.entity_id_index.insert(external_id, topic_id.clone());
                 InsertOutcome::Inserted
             }
         };
+
+        if let Some(parent) = maybe_parent {
+            if let Some(parent_entry) = self.entities.get_mut(&parent) {
+                parent_entry.children.insert(topic_id);
+            }
+        }
 
         debug!("Updated entity map: {:?}", self.entities);
         debug!("Updated external id map: {:?}", self.entity_id_index);
