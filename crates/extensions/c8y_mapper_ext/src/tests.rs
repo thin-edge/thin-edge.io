@@ -2002,7 +2002,7 @@ async fn json_custom_operation_status_update_with_operation_id() {
                      "text": "do something"
                  },
             "externalSource":{
-           "externalId":"TST_haul_searing_set",
+           "externalId":"test-device",
            "type":"c8y_Serial"
         }
              })
@@ -2049,7 +2049,7 @@ async fn json_custom_operation_status_update_with_operation_name() {
                      "text": "do something"
                  },
             "externalSource":{
-           "externalId":"TST_haul_searing_set",
+           "externalId":"test-device",
            "type":"c8y_Serial"
         }
              })
@@ -2150,7 +2150,7 @@ async fn json_custom_operation_status_update_with_custom_topic() {
                      "text": "do something"
                  },
             "externalSource":{
-           "externalId":"TST_haul_searing_set",
+           "externalId":"test-device",
            "type":"c8y_Serial"
         }
              })
