@@ -9,6 +9,7 @@ use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_default_state_dir;
+use crate::state_repository::state::agent_state_dir;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use crate::Capabilities;
@@ -24,6 +25,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
@@ -109,6 +111,7 @@ impl AgentConfig {
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
             .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
+        let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
 
         let mqtt_device_topic_id = cliopts
             .mqtt_device_topic_id
@@ -138,6 +141,7 @@ impl AgentConfig {
             key_path: tedge_config.http.key_path.clone(),
             ca_path: tedge_config.http.ca_path.clone(),
             bind_addr: SocketAddr::from((http_bind_address, http_port)),
+            mqtt_schema,
         };
 
         // Restart config
@@ -365,6 +369,7 @@ impl Agent {
             let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
             runtime.spawn(tedge_to_te_converter).await?;
 
+            let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
             //TODO: Migrate the existing `clean_start` setting which is C8Y specific without breaking backward compatibility.
             let clean_start = true;
             let main_device =
@@ -376,13 +381,18 @@ impl Agent {
                 Self::dummy_external_id_mapper,
                 Self::dummy_external_id_validator,
                 EARLY_MESSAGE_BUFFER_SIZE,
-                self.config.state_dir,
+                state_dir,
                 clean_start,
             )
             .unwrap();
+            let entity_store = Arc::new(Mutex::new(entity_store));
 
-            let file_transfer_server_builder =
-                FileTransferServerBuilder::try_bind(self.config.http_config, entity_store).await?;
+            let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
+                self.config.http_config,
+                entity_store.clone(),
+                &mut mqtt_actor_builder,
+            )
+            .await?;
             runtime.spawn(file_transfer_server_builder).await?;
 
             let operation_file_cache_builder = FileCacheActorBuilder::new(
