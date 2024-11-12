@@ -1,4 +1,5 @@
 use crate::device_profile_manager::DeviceProfileManagerBuilder;
+use crate::entity_manager::builder::EntityManagerActorBuilder;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
@@ -386,6 +387,10 @@ impl Agent {
             )
             .unwrap();
             let entity_store = Arc::new(Mutex::new(entity_store));
+
+            let entity_store_actor_builder =
+                EntityManagerActorBuilder::try_new(&mut mqtt_actor_builder, entity_store.clone());
+            runtime.spawn(entity_store_actor_builder).await?;
 
             let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
                 self.config.http_config,
