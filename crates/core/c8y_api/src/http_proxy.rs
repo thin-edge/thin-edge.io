@@ -109,14 +109,34 @@ impl C8yEndPoint {
         url_get_id
     }
 
-    pub fn get_url_for_sw_list(&self, internal_id: String) -> String {
+    pub fn proxy_url_for_internal_id(&self, device_id: &str) -> String {
+        let c8y_url = self.get_url_for_internal_id(device_id);
+        self.local_proxy_url(&c8y_url).unwrap().to_string()
+    }
+
+    pub fn proxy_url_for_sw_list(&self, internal_id: String) -> String {
+        let c8y_url = self.get_url_for_sw_list(internal_id);
+        self.local_proxy_url(&c8y_url).unwrap().to_string()
+    }
+
+    pub fn proxy_url_for_create_event(&self) -> String {
+        let c8y_url = self.get_url_for_create_event();
+        self.local_proxy_url(&c8y_url).unwrap().to_string()
+    }
+
+    pub fn proxy_url_for_event_binary_upload(&self, event_id: &str) -> Url {
+        let c8y_url = self.get_url_for_event_binary_upload(event_id);
+        self.local_proxy_url(&c8y_url).unwrap()
+    }
+
+    fn get_url_for_sw_list(&self, internal_id: String) -> String {
         let mut url_update_swlist = self.get_base_url();
         url_update_swlist.push_str("/inventory/managedObjects/");
         url_update_swlist.push_str(&internal_id);
         url_update_swlist
     }
 
-    pub fn get_url_for_internal_id(&self, device_id: &str) -> String {
+    fn get_url_for_internal_id(&self, device_id: &str) -> String {
         let mut url_get_id = self.get_base_url();
         url_get_id.push_str("/identity/externalIds/c8y_Serial/");
         url_get_id.push_str(device_id);
@@ -124,14 +144,14 @@ impl C8yEndPoint {
         url_get_id
     }
 
-    pub fn get_url_for_create_event(&self) -> String {
+    fn get_url_for_create_event(&self) -> String {
         let mut url_create_event = self.get_base_url();
         url_create_event.push_str("/event/events/");
 
         url_create_event
     }
 
-    pub fn get_url_for_event_binary_upload(&self, event_id: &str) -> String {
+    fn get_url_for_event_binary_upload(&self, event_id: &str) -> String {
         let mut url_event_binary = self.get_url_for_create_event();
         url_event_binary.push_str(event_id);
         url_event_binary.push_str("/binaries");

@@ -230,8 +230,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut header_actor = C8YHeaderRetriever::try_builder(&tedge_config, c8y_profile)?;
         let mut http_actor = HttpActor::new(&tedge_config).builder();
         let c8y_http_config = C8YHttpConfig::try_new(&tedge_config, c8y_profile)?;
-        let mut c8y_http_proxy_actor =
-            C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut header_actor);
+        let mut c8y_http_proxy_actor = C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor);
         let c8y_auth_proxy_actor =
             C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile, &mut header_actor)?;
 

@@ -1,6 +1,3 @@
-use crate::credentials::HttpHeaderRequest;
-use crate::credentials::HttpHeaderResult;
-use crate::credentials::HttpHeaderRetriever;
 use crate::messages::C8YConnectionError;
 use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
@@ -22,7 +19,6 @@ use log::error;
 use log::info;
 use std::future::Future;
 use std::time::Duration;
-use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageReceiver;
@@ -51,15 +47,7 @@ pub struct C8YHttpProxyMessageBox {
 
     /// Connection to an HTTP actor
     pub(crate) http: ClientMessageBox<HttpRequest, HttpResult>,
-
-    /// Connection to an HTTP header value retriever
-    pub(crate) header_retriever: HttpHeaderRetriever,
 }
-
-pub type C8YRestRequestEnvelope = RequestEnvelope<C8YRestRequest, C8YRestResult>;
-
-fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestEnvelope, HttpResult, HttpHeaderResult] : Debug);
-fan_in_message_type!(C8YHttpProxyOutput[HttpRequest, HttpHeaderRequest] : Debug);
 
 #[async_trait]
 impl Actor for C8YHttpProxyActor {
@@ -161,58 +149,42 @@ impl C8YHttpProxyActor {
         &mut self,
         device_id: String,
     ) -> Result<String, C8YRestError> {
-        let url_get_id: String = self.end_point.get_url_for_internal_id(&device_id);
-        self.refresh_headers().await?;
+        let url_get_id: String = self.end_point.proxy_url_for_internal_id(&device_id);
 
         let mut attempt = 0;
-        let mut token_refreshed = false;
         loop {
             attempt += 1;
-            let request = HttpRequestBuilder::get(&url_get_id)
-                .headers(&self.end_point.headers)
-                .build()?;
+            let request = HttpRequestBuilder::get(&url_get_id).build()?;
             let endpoint = request.uri().path().to_owned();
             let method = request.method().to_owned();
 
             match self.peers.http.await_response(request).await? {
-                Ok(response) => {
-                    match response.status() {
-                        StatusCode::OK => {
-                            let internal_id_response: InternalIdResponse = response.json().await?;
-                            let internal_id = internal_id_response.id();
+                Ok(response) => match response.status() {
+                    StatusCode::OK => {
+                        let internal_id_response: InternalIdResponse = response.json().await?;
+                        let internal_id = internal_id_response.id();
 
-                            return Ok(internal_id);
-                        }
-                        StatusCode::NOT_FOUND => {
-                            if attempt > 3 {
-                                error!("Failed to fetch internal id for {device_id} even after multiple attempts");
-                                response.error_for_status()?;
-                            }
-                            info!("Re-fetching internal id for {device_id}, attempt: {attempt}");
-                            sleep(self.config.retry_interval).await;
-                            continue;
-                        }
-                        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                            if token_refreshed {
-                                error!("Failed to fetch internal id for {device_id} even with fresh token");
-                                response.error_for_status()?;
-                            }
-                            info!("Re-fetching internal id for {device_id} with fresh token");
-                            self.refresh_headers().await?;
-                            token_refreshed = true;
-                            continue;
-                        }
-                        code => {
-                            return Err(C8YRestError::FromHttpError(
-                                tedge_http_ext::HttpError::HttpStatusError {
-                                    code,
-                                    endpoint,
-                                    method,
-                                },
-                            ))
-                        }
+                        return Ok(internal_id);
                     }
-                }
+                    StatusCode::NOT_FOUND | StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                        if attempt > 3 {
+                            error!("Failed to fetch internal id for {device_id} even after multiple attempts");
+                            response.error_for_status()?;
+                        }
+                        info!("Re-fetching internal id for {device_id}, attempt: {attempt}");
+                        sleep(self.config.retry_interval).await;
+                        continue;
+                    }
+                    code => {
+                        return Err(C8YRestError::FromHttpError(
+                            tedge_http_ext::HttpError::HttpStatusError {
+                                code,
+                                endpoint,
+                                method,
+                            },
+                        ))
+                    }
+                },
 
                 Err(e) => return Err(C8YRestError::FromHttpError(e)),
             }
@@ -225,10 +197,7 @@ impl C8YHttpProxyActor {
         build_request: impl Fn(&C8yEndPoint) -> Fut,
     ) -> Result<HttpResult, C8YRestError> {
         let request_builder = build_request(&self.end_point);
-        let request = request_builder
-            .await?
-            .headers(&self.end_point.headers)
-            .build()?;
+        let request = request_builder.await?.build()?;
         let endpoint = request.uri().path().to_owned();
         let method = request.method().to_owned();
 
@@ -262,14 +231,9 @@ impl C8YHttpProxyActor {
         &mut self,
         build_request: impl Fn(&C8yEndPoint) -> Fut,
     ) -> Result<HttpResult, C8YRestError> {
-        // get new token not the cached one
-        self.refresh_headers().await?;
         // build the request
         let request_builder = build_request(&self.end_point);
-        let request = request_builder
-            .await?
-            .headers(&self.end_point.headers)
-            .build()?;
+        let request = request_builder.await?.build()?;
         // retry the request
         Ok(self.peers.http.await_response(request).await?)
     }
@@ -285,10 +249,7 @@ impl C8YHttpProxyActor {
         self.get_and_set_internal_id(device_id).await?;
 
         let request_builder = build_request(&self.end_point);
-        let request = request_builder
-            .await?
-            .headers(&self.end_point.headers)
-            .build()?;
+        let request = request_builder.await?.build()?;
         Ok(self.peers.http.await_response(request).await?)
     }
 
@@ -327,7 +288,7 @@ impl C8YHttpProxyActor {
             let internal_id = end_point
                 .get_internal_id(device_id.clone())
                 .map_err(|e| C8YRestError::CustomError(e.to_string()));
-            let url = internal_id.map(|id| end_point.get_url_for_sw_list(id));
+            let url = internal_id.map(|id| end_point.proxy_url_for_sw_list(id));
             async {
                 Ok::<_, C8YRestError>(
                     HttpRequestBuilder::put(url?)
@@ -345,22 +306,6 @@ impl C8YHttpProxyActor {
         Ok(())
     }
 
-    /// Update HTTP headers with the ones retried from the HttpHeaderRetriever actor
-    async fn refresh_headers(&mut self) -> Result<(), C8YRestError> {
-        match self.peers.header_retriever.await_response(()).await? {
-            Ok(headers) => {
-                self.end_point.headers.clear();
-                for (key, value) in headers {
-                    self.end_point.headers.insert(key.unwrap(), value);
-                }
-                Ok(())
-            }
-            Err(err) => Err(C8YRestError::CustomError(format!(
-                "Failed to retrieve headers with reason {err}"
-            ))),
-        }
-    }
-
     async fn send_event_internal(
         &mut self,
         device_id: String,
@@ -372,7 +317,7 @@ impl C8YHttpProxyActor {
         }
 
         let build_request = |end_point: &C8yEndPoint| {
-            let create_event_url = end_point.get_url_for_create_event();
+            let create_event_url = end_point.proxy_url_for_create_event();
             let internal_id = end_point
                 .get_internal_id(device_id.clone())
                 .map_err(|e| C8YRestError::CustomError(e.to_string()));

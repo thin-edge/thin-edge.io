@@ -1,30 +1,20 @@
-use crate::credentials::ConstJwtRetriever;
-use crate::credentials::HttpHeaderRequest;
-use crate::credentials::HttpHeaderResult;
 use crate::handle::C8YHttpProxy;
 use crate::messages::CreateEvent;
 use crate::C8YHttpConfig;
 use crate::C8YHttpProxyBuilder;
-use async_trait::async_trait;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
+use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
-use http::header::AUTHORIZATION;
-use http::HeaderMap;
 use http::StatusCode;
-use mockito::Matcher;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
-use tedge_actors::Server;
-use tedge_actors::ServerActor;
-use tedge_actors::ServerMessageBoxBuilder;
 use tedge_config::TEdgeConfigLocation;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpActor;
@@ -34,25 +24,19 @@ use tedge_http_ext::HttpResult;
 use tedge_test_utils::fs::TempTedgeDir;
 use time::macros::datetime;
 
-const JWT_TOKEN: &str = "JWT token";
-const BEARER_AUTH: &str = "Bearer JWT token";
-
 #[tokio::test]
 async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     let c8y_host = "c8y.tenant.io";
     let device_id = "device-001";
     let external_id = "external-device-001";
-    let tmp_dir = "/tmp";
 
-    let (_proxy, mut c8y) =
-        spawn_c8y_http_proxy(c8y_host.into(), device_id.into(), tmp_dir.into(), JWT_TOKEN).await;
+    let (_proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
 
     // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
     let init_request = HttpRequestBuilder::get(format!(
-        "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+        "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     assert_recv(&mut c8y, Some(init_request)).await;
@@ -71,17 +55,14 @@ async fn retry_internal_id_on_expired_jwt() {
     let c8y_host = "c8y.tenant.io";
     let device_id = "device-001";
     let external_id = "external-device-001";
-    let tmp_dir = "/tmp";
 
-    let (_proxy, mut c8y) =
-        spawn_c8y_http_proxy(c8y_host.into(), device_id.into(), tmp_dir.into(), JWT_TOKEN).await;
+    let (_proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
 
     // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
     let init_request = HttpRequestBuilder::get(format!(
-        "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+        "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     assert_recv(&mut c8y, Some(init_request)).await;
@@ -93,9 +74,8 @@ async fn retry_internal_id_on_expired_jwt() {
         &mut c8y,
         Some(
             HttpRequestBuilder::get(format!(
-                "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+                "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
             ))
-            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap(),
         ),
@@ -114,24 +94,16 @@ async fn retry_internal_id_on_expired_jwt() {
 async fn retry_get_internal_id_when_not_found() {
     let c8y_host = "c8y.tenant.io";
     let main_device_id = "device-001";
-    let tmp_dir = "/tmp";
     let child_device_id = "child-101";
 
-    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(
-        c8y_host.into(),
-        main_device_id.into(),
-        tmp_dir.into(),
-        JWT_TOKEN,
-    )
-    .await;
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), main_device_id.into()).await;
 
     // Mock server definition
     tokio::spawn(async move {
         // Respond to the initial get_id request for the main device
         let get_internal_id_url =
-            format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{main_device_id}");
+            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{main_device_id}");
         let init_request = HttpRequestBuilder::get(get_internal_id_url)
-            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap();
         assert_recv(&mut c8y, Some(init_request)).await;
@@ -143,7 +115,7 @@ async fn retry_get_internal_id_when_not_found() {
         c8y.send(Ok(c8y_response)).await.unwrap();
 
         let get_internal_id_url =
-            format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{child_device_id}");
+            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{child_device_id}");
 
         // Fail the first 2 internal id lookups for the child device
         for _ in 0..2 {
@@ -151,7 +123,6 @@ async fn retry_get_internal_id_when_not_found() {
                 &mut c8y,
                 Some(
                     HttpRequestBuilder::get(&get_internal_id_url)
-                        .headers(&get_test_auth_header(BEARER_AUTH))
                         .build()
                         .unwrap(),
                 ),
@@ -169,7 +140,6 @@ async fn retry_get_internal_id_when_not_found() {
             &mut c8y,
             Some(
                 HttpRequestBuilder::get(&get_internal_id_url)
-                    .headers(&get_test_auth_header(BEARER_AUTH))
                     .build()
                     .unwrap(),
             ),
@@ -187,13 +157,14 @@ async fn retry_get_internal_id_when_not_found() {
         assert_recv(
             &mut c8y,
             Some(
-                HttpRequestBuilder::put(format!("https://{c8y_host}/inventory/managedObjects/200"))
-                    .header("content-type", "application/json")
-                    .header("accept", "application/json")
-                    .headers(&get_test_auth_header(BEARER_AUTH))
-                    .json(&c8y_software_list)
-                    .build()
-                    .unwrap(),
+                HttpRequestBuilder::put(
+                    "http://localhost:8001/c8y/inventory/managedObjects/200".to_string(),
+                )
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .json(&c8y_software_list)
+                .build()
+                .unwrap(),
             ),
         )
         .await;
@@ -214,24 +185,16 @@ async fn retry_get_internal_id_when_not_found() {
 async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
     let c8y_host = "c8y.tenant.io";
     let main_device_id = "device-001";
-    let tmp_dir = "/tmp";
     let child_device_id = "child-101";
 
-    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(
-        c8y_host.into(),
-        main_device_id.into(),
-        tmp_dir.into(),
-        JWT_TOKEN,
-    )
-    .await;
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), main_device_id.into()).await;
 
     // Mock server definition
     tokio::spawn(async move {
         // On receipt of the initial get_id request for the main device...
         let get_internal_id_url =
-            format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{main_device_id}");
+            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{main_device_id}");
         let init_request = HttpRequestBuilder::get(get_internal_id_url)
-            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap();
         assert_recv(&mut c8y, Some(init_request)).await;
@@ -245,13 +208,13 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
 
         // Always fail the internal id lookup for the child device
         loop {
-            let get_internal_id_url =
-                format!("https://{c8y_host}/identity/externalIds/c8y_Serial/{child_device_id}");
+            let get_internal_id_url = format!(
+                "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{child_device_id}"
+            );
             assert_recv(
                 &mut c8y,
                 Some(
                     HttpRequestBuilder::get(&get_internal_id_url)
-                        .headers(&get_test_auth_header(BEARER_AUTH))
                         .build()
                         .unwrap(),
                 ),
@@ -278,7 +241,6 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
 #[tokio::test]
 async fn retry_internal_id_on_expired_jwt_with_mock() {
     let external_id = "device-001";
-    let tmp_dir = "/tmp";
     let internal_id = "internal-device-001";
 
     let response = InternalIdResponse::new(internal_id, external_id);
@@ -287,27 +249,25 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
     let mut server = mockito::Server::new_async().await;
 
     let _mock1 = server
-        .mock("GET", "/identity/externalIds/c8y_Serial/device-001")
-        .match_header(
-            "Authorization",
-            Matcher::Exact("Bearer Cached JWT token".into()),
-        )
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
         .with_status(401)
         .create_async()
         .await;
     let _mock2 = server
-        .mock("GET", "/identity/externalIds/c8y_Serial/device-001")
-        .match_header(
-            "Authorization",
-            Matcher::Exact("Bearer Fresh JWT token".into()),
-        )
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
         .with_status(200)
         .with_body(response)
         .create_async()
         .await;
 
-    let target_url = server.url();
-    let mut auth = ServerMessageBoxBuilder::new("Auth Actor", 16);
+    let target_url = "remote.c8y.com".to_string();
+    let server_url = server.host_with_port();
+    let (proxy_host, proxy_port) = server_url.split_once(':').unwrap();
+    let proxy = ProxyUrlGenerator::new(
+        proxy_host.into(),
+        proxy_port.parse().unwrap(),
+        Protocol::Http,
+    );
 
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -318,15 +278,12 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         c8y_http_host: target_url.clone(),
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
-        tmp_dir: tmp_dir.into(),
-        retry_interval: Duration::from_millis(100),
-        proxy: ProxyUrlGenerator::default(),
+        retry_interval: Duration::from_millis(10),
+        proxy,
     };
-    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut auth);
-    let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, auth.build());
+    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor);
 
     tokio::spawn(async move { http_actor.run().await });
-    tokio::spawn(async move { jwt_actor.run().await });
     let mut proxy = c8y_proxy_actor.build();
 
     let result = proxy.try_get_internal_id(external_id.into()).await;
@@ -336,7 +293,6 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
 #[tokio::test]
 async fn retry_create_event_on_expired_jwt_with_mock() {
     let external_id = "device-001";
-    let tmp_dir = "/tmp";
     let internal_id = "12345678";
     let event_id = "87654321";
 
@@ -356,28 +312,26 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     let mut server = mockito::Server::new_async().await;
 
     let _mock1 = server
-        .mock("POST", "/event/events/")
-        .match_header(
-            "authorization",
-            Matcher::Exact("Bearer Cached JWT Token".into()),
-        )
+        .mock("POST", "/c8y/event/events/")
         .with_status(401)
         .create_async()
         .await;
 
     let _mock2 = server
-        .mock("POST", "/event/events/")
-        .match_header(
-            "authorization",
-            Matcher::Exact("Bearer Fresh JWT token".into()),
-        )
+        .mock("POST", "/c8y/event/events/")
         .with_status(200)
         .with_body(response)
         .create_async()
         .await;
 
-    let target_url = server.url();
-    let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
+    let target_url = "remote.c8y.com".to_string();
+    let server_url = server.host_with_port();
+    let (proxy_host, proxy_port) = server_url.split_once(':').unwrap();
+    let proxy = ProxyUrlGenerator::new(
+        proxy_host.into(),
+        proxy_port.parse().unwrap(),
+        Protocol::Http,
+    );
 
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -388,23 +342,18 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         c8y_http_host: target_url.clone(),
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
-        tmp_dir: tmp_dir.into(),
-        retry_interval: Duration::from_millis(100),
-        proxy: ProxyUrlGenerator::default(),
+        retry_interval: Duration::from_millis(10),
+        proxy,
     };
-    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
-    let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
+    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor);
 
     tokio::spawn(async move { http_actor.run().await });
-    tokio::spawn(async move { jwt_actor.run().await });
     let mut proxy = c8y_proxy_actor.build();
     // initialize the endpoint for mocking purpose
     proxy.end_point.device_id = external_id.into();
     proxy
         .end_point
         .set_internal_id(external_id.into(), internal_id.into());
-    let headers = get_test_auth_header("Bearer Cached JWT Token");
-    proxy.end_point.headers = headers;
 
     let result = proxy.create_event(event).await;
     assert_eq!(event_id, result.unwrap());
@@ -415,17 +364,14 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     let c8y_host = "c8y.tenant.io";
     let device_id = "device-001";
     let external_id = "external-device-001";
-    let tmp_dir = "/tmp";
 
-    let (mut proxy, mut c8y) =
-        spawn_c8y_http_proxy(c8y_host.into(), device_id.into(), tmp_dir.into(), JWT_TOKEN).await;
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
 
     // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
     let _init_request = HttpRequestBuilder::get(format!(
-        "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+        "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
     ))
-    .headers(&get_test_auth_header(BEARER_AUTH))
     .build()
     .unwrap();
     // skip the message
@@ -456,11 +402,10 @@ async fn retry_software_list_once_with_fresh_internal_id() {
         &mut c8y,
         Some(
             HttpRequestBuilder::put(format!(
-                "https://{c8y_host}/inventory/managedObjects/{device_id}"
+                "http://localhost:8001/c8y/inventory/managedObjects/{device_id}"
             ))
             .header("content-type", "application/json")
             .header("accept", "application/json")
-            .headers(&get_test_auth_header(BEARER_AUTH))
             .json(&c8y_software_list)
             .build()
             .unwrap(),
@@ -481,9 +426,8 @@ async fn retry_software_list_once_with_fresh_internal_id() {
         &mut c8y,
         Some(
             HttpRequestBuilder::get(format!(
-                "https://{c8y_host}/identity/externalIds/c8y_Serial/{device_id}"
+                "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
             ))
-            .headers(&get_test_auth_header(BEARER_AUTH))
             .build()
             .unwrap(),
         ),
@@ -504,9 +448,8 @@ async fn retry_software_list_once_with_fresh_internal_id() {
         &mut c8y,
         Some(
             HttpRequestBuilder::put(format!(
-                "https://{c8y_host}/inventory/managedObjects/{device_id}"
+                "http://localhost:8001/c8y/inventory/managedObjects/{device_id}"
             ))
-            .headers(&get_test_auth_header(BEARER_AUTH))
             .header("content-type", "application/json")
             .header("accept", "application/json")
             .json(&c8y_software_list)
@@ -527,69 +470,24 @@ async fn retry_software_list_once_with_fresh_internal_id() {
 async fn spawn_c8y_http_proxy(
     c8y_host: String,
     device_id: String,
-    tmp_dir: PathBuf,
-    token: &str,
 ) -> (C8YHttpProxy, FakeServerBox<HttpRequest, HttpResult>) {
-    let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
-
     let mut http = FakeServerBox::builder();
 
     let config = C8YHttpConfig {
         c8y_http_host: c8y_host.clone(),
         c8y_mqtt_host: c8y_host,
         device_id,
-        tmp_dir,
         retry_interval: Duration::from_millis(10),
         proxy: ProxyUrlGenerator::default(),
     };
-    let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
+    let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http);
     let proxy = C8YHttpProxy::new(&mut c8y_proxy_actor);
-
-    let jwt_actor = ServerActor::new(
-        ConstJwtRetriever {
-            token: token.to_string(),
-        },
-        jwt.build(),
-    );
-
-    tokio::spawn(async move { jwt_actor.run().await });
     tokio::spawn(async move {
         let actor = c8y_proxy_actor.build();
         let _ = actor.run().await;
     });
 
     (proxy, http.build())
-}
-
-pub(crate) struct DynamicJwtRetriever {
-    pub count: usize,
-}
-
-#[async_trait]
-impl Server for DynamicJwtRetriever {
-    type Request = HttpHeaderRequest;
-    type Response = HttpHeaderResult;
-
-    fn name(&self) -> &str {
-        "DynamicJwtRetriever"
-    }
-
-    async fn handle(&mut self, _request: Self::Request) -> Self::Response {
-        let mut headers = HeaderMap::new();
-        if self.count == 0 {
-            self.count += 1;
-            headers.insert(AUTHORIZATION, "Bearer Cached JWT token".parse().unwrap());
-        } else {
-            headers.insert(AUTHORIZATION, "Bearer Fresh JWT token".parse().unwrap());
-        }
-        Ok(headers)
-    }
-}
-
-fn get_test_auth_header(value: &str) -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, value.parse().unwrap());
-    headers
 }
 
 async fn assert_recv(

@@ -60,26 +60,3 @@ pub enum HttpHeaderError {
     #[error(transparent)]
     InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
 }
-
-/// A JwtRetriever that simply always returns the same JWT token (possibly none)
-#[cfg(test)]
-pub(crate) struct ConstJwtRetriever {
-    pub token: String,
-}
-
-#[async_trait]
-#[cfg(test)]
-impl Server for ConstJwtRetriever {
-    type Request = HttpHeaderRequest;
-    type Response = HttpHeaderResult;
-
-    fn name(&self) -> &str {
-        "ConstJwtRetriever"
-    }
-
-    async fn handle(&mut self, _request: Self::Request) -> Self::Response {
-        let mut header_map = HeaderMap::new();
-        header_map.insert(AUTHORIZATION, format!("Bearer {}", self.token).parse()?);
-        Ok(header_map)
-    }
-}

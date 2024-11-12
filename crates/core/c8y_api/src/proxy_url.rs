@@ -9,7 +9,7 @@ pub struct ProxyUrlGenerator {
 
 impl Default for ProxyUrlGenerator {
     fn default() -> Self {
-        ProxyUrlGenerator::new("localhost".into(), 8000, Protocol::Http)
+        ProxyUrlGenerator::new("localhost".into(), 8001, Protocol::Http)
     }
 }
 
