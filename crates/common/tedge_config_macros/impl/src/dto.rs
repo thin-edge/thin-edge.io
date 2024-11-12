@@ -28,7 +28,7 @@ pub fn generate(
                         parse_quote_spanned!(ty.span()=> Option<#ty>)
                     });
                     sub_dtos.push(None);
-                    preserved_attrs.push(field.attrs().iter().filter(is_preserved).collect());
+                    preserved_attrs.push(field.dto_attrs().iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {});
                 }
             }
@@ -39,7 +39,7 @@ pub fn generate(
                     idents.push(&group.ident);
                     tys.push(parse_quote_spanned!(group.ident.span()=> #sub_dto_name));
                     sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
-                    preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
+                    preserved_attrs.push(group.dto_attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
                         #[serde(skip_serializing_if = #is_default)]
@@ -54,7 +54,7 @@ pub fn generate(
                         parse_quote_spanned!(group.ident.span()=> MultiDto<#sub_dto_name>);
                     tys.push(field_ty);
                     sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
-                    preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
+                    preserved_attrs.push(group.dto_attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
                         #[serde(skip_serializing_if = "MultiDto::is_default")]

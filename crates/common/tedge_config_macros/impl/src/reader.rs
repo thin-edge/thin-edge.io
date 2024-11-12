@@ -55,7 +55,7 @@ fn generate_structs(
         match item {
             FieldOrGroup::Field(field) => {
                 let ty = field.ty();
-                attrs.push(field.attrs().to_vec());
+                attrs.push(field.reader_attrs().to_vec());
                 idents.push(field.ident());
                 if field.is_optional() {
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
@@ -85,7 +85,7 @@ fn generate_structs(
                     parents,
                     "",
                 )?));
-                attrs.push(group.attrs.to_vec());
+                attrs.push(group.reader_attrs.to_vec());
                 vis.push(match group.reader.private {
                     true => parse_quote!(),
                     false => parse_quote!(pub),
@@ -103,7 +103,7 @@ fn generate_structs(
                     parents,
                     "",
                 )?));
-                attrs.push(group.attrs.to_vec());
+                attrs.push(group.reader_attrs.to_vec());
                 vis.push(match group.reader.private {
                     true => parse_quote!(),
                     false => parse_quote!(pub),
@@ -153,7 +153,7 @@ fn generate_structs(
     let doc_comment_attr =
         (!doc_comment.is_empty()).then(|| quote_spanned!(name.span()=> #[doc = #doc_comment]));
     Ok(quote_spanned! {name.span()=>
-        #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+        #[derive(::doku::Document, Debug, Clone)]
         #[non_exhaustive]
         #doc_comment_attr
         pub struct #name {
@@ -164,8 +164,7 @@ fn generate_structs(
         }
 
         #(
-            #[derive(::serde::Serialize, Clone, Debug, Default)]
-            #[serde(into = "()")]
+            #[derive(Clone, Debug, Default)]
             pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>);
 
             impl From<#lr_names> for () {

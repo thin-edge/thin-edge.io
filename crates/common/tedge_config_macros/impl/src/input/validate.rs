@@ -42,7 +42,8 @@ impl TryFrom<super::parse::Configuration> for Configuration {
 
 #[derive(Debug)]
 pub struct ConfigurationGroup {
-    pub attrs: Vec<syn::Attribute>,
+    pub dto_attrs: Vec<syn::Attribute>,
+    pub reader_attrs: Vec<syn::Attribute>,
     pub rename: Option<SpannedValue<String>>,
     pub dto: GroupDtoSettings,
     pub reader: ReaderSettings,
@@ -53,7 +54,7 @@ pub struct ConfigurationGroup {
 impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
     type Error = syn::Error;
 
-    fn try_from(mut value: super::parse::ConfigurationGroup) -> Result<Self, Self::Error> {
+    fn try_from(value: super::parse::ConfigurationGroup) -> Result<Self, Self::Error> {
         deny_attribute(
             &value.attrs,
             "serde",
@@ -69,16 +70,17 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
             "supply an alias for a group",
         )?;
 
+        let mut dto_attrs = value.attrs.clone();
+        let reader_attrs = value.attrs;
         for name in value.deprecated_names {
             // TODO similar errors to fields?
             let name_str = name.as_str();
-            value
-                .attrs
-                .push(parse_quote_spanned! {name.span() => #[serde(alias = #name_str)]})
+            dto_attrs.push(parse_quote_spanned! {name.span() => #[serde(alias = #name_str)]});
         }
 
         Ok(Self {
-            attrs: value.attrs,
+            dto_attrs,
+            reader_attrs,
             rename: value.rename,
             dto: value.dto,
             reader: value.reader,
@@ -162,7 +164,8 @@ pub enum ConfigurableField {
 
 #[derive(Debug)]
 pub struct ReadOnlyField {
-    pub attrs: Vec<syn::Attribute>,
+    pub dto_attrs: Vec<syn::Attribute>,
+    pub reader_attrs: Vec<syn::Attribute>,
     pub deprecated_keys: Vec<SpannedValue<String>>,
     pub readonly: ReadonlySettings,
     pub rename: Option<SpannedValue<String>>,
@@ -197,7 +200,8 @@ impl ReadOnlyField {
 
 #[derive(Debug)]
 pub struct ReadWriteField {
-    pub attrs: Vec<syn::Attribute>,
+    pub dto_attrs: Vec<syn::Attribute>,
+    pub reader_attrs: Vec<syn::Attribute>,
     pub deprecated_keys: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
@@ -210,10 +214,17 @@ pub struct ReadWriteField {
 }
 
 impl ConfigurableField {
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn dto_attrs(&self) -> &[syn::Attribute] {
         match self {
-            Self::ReadOnly(ReadOnlyField { attrs, .. })
-            | Self::ReadWrite(ReadWriteField { attrs, .. }) => attrs,
+            Self::ReadOnly(ReadOnlyField { dto_attrs, .. })
+            | Self::ReadWrite(ReadWriteField { dto_attrs, .. }) => dto_attrs,
+        }
+    }
+
+    pub fn reader_attrs(&self) -> &[syn::Attribute] {
+        match self {
+            Self::ReadOnly(ReadOnlyField { reader_attrs, .. })
+            | Self::ReadWrite(ReadWriteField { reader_attrs, .. }) => reader_attrs,
         }
     }
 
@@ -332,12 +343,13 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
         )
         .append_err_to(&mut custom_errors);
 
+        let mut dto_attrs = Vec::<syn::Attribute>::new();
+        let mut reader_attrs = Vec::<syn::Attribute>::new();
         if let Some(renamed_to) = &value.rename {
             let span = renamed_to.span();
             let literal = renamed_to.as_str();
-            value
-                .attrs
-                .push(parse_quote_spanned!(span=> #[serde(rename = #literal)]))
+            dto_attrs.push(parse_quote_spanned!(span=> #[serde(rename = #literal)]));
+            reader_attrs.push(parse_quote_spanned!(span=> #[doku(rename = #literal)]));
         }
 
         for name in value.deprecated_names {
@@ -348,9 +360,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                     format!("this a path rather than a field or group name. Did you mean to use #[tedge_config(deprecated_key = \"{name_str}\")] instead?")
                 ));
             }
-            value
-                .attrs
-                .push(parse_quote_spanned! {name.span()=> #[serde(alias = #name_str)]})
+            dto_attrs.push(parse_quote_spanned! {name.span()=> #[serde(alias = #name_str)]});
         }
 
         for key in &value.deprecated_keys {
@@ -389,7 +399,8 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
 
         if let Some(readonly) = value.readonly {
             Ok(Self::ReadOnly(ReadOnlyField {
-                attrs: value.attrs,
+                dto_attrs: [value.attrs.clone(), dto_attrs].concat(),
+                reader_attrs: [value.attrs, reader_attrs].concat(),
                 deprecated_keys: value.deprecated_keys,
                 rename: value.rename,
                 ident: value.ident.unwrap(),
@@ -401,7 +412,8 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             }))
         } else {
             Ok(Self::ReadWrite(ReadWriteField {
-                attrs: value.attrs,
+                dto_attrs: [value.attrs.clone(), dto_attrs].concat(),
+                reader_attrs: [value.attrs, reader_attrs].concat(),
                 deprecated_keys: value.deprecated_keys,
                 rename: value.rename,
                 examples: value.examples,
