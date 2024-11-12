@@ -2,9 +2,9 @@
 //!
 //! When reading the configuration, we want to see default values if nothing has
 //! been configured
-use std::iter;
 use std::iter::once;
 
+use heck::ToPascalCase;
 use itertools::Itertools;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -77,7 +77,7 @@ fn generate_structs(
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> MultiReader<#sub_reader_name>));
                 let mut parents = parents.clone();
-                parents.push(PathItem::Static(group.ident.clone()));
+                parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
                 parents.push(PathItem::Dynamic(group.ident.span()));
                 sub_readers.push(Some(generate_structs(
                     &sub_reader_name,
@@ -96,7 +96,7 @@ fn generate_structs(
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
                 let mut parents = parents.clone();
-                parents.push(PathItem::Static(group.ident.clone()));
+                parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
                 sub_readers.push(Some(generate_structs(
                     &sub_reader_name,
                     &group.contents,
@@ -235,7 +235,7 @@ fn find_field<'a>(
 /// Part of a path in the DTO
 pub enum PathItem {
     /// A static field e.g. `c8y` or `topic_prefix`
-    Static(syn::Ident),
+    Static(syn::Ident, String),
     /// A dynamic field that will be replaced by `.try_get(key0)` when reading the field
     Dynamic(Span),
 }
@@ -243,7 +243,14 @@ pub enum PathItem {
 impl PathItem {
     pub fn as_static(&self) -> Option<&syn::Ident> {
         match self {
-            Self::Static(s) => Some(s),
+            Self::Static(s, _rename) => Some(s),
+            Self::Dynamic(_) => None,
+        }
+    }
+
+    pub fn rename(&self) -> Option<&str> {
+        match self {
+            Self::Static(_, rename) => Some(rename),
             Self::Dynamic(_) => None,
         }
     }
@@ -253,7 +260,7 @@ fn read_field(parents: &[PathItem]) -> impl Iterator<Item = TokenStream> + '_ {
     let mut id_gen = SequentialIdGenerator::default();
     let mut parent_key = String::new();
     parents.iter().map(move |parent| match parent {
-        PathItem::Static(name) => {
+        PathItem::Static(name, _rename) => {
             parent_key += &name.to_string();
             quote!(#name)
         }
@@ -272,43 +279,38 @@ fn reader_value_for_field<'a>(
 ) -> syn::Result<TokenStream> {
     let name = field.ident();
     Ok(match field {
-        ConfigurableField::ReadWrite(field) => {
-            let key: syn::Expr = if parents.iter().all(|p| p.as_static().is_some()) {
-                #[allow(unstable_name_collisions)]
-                let key_str = parents
-                    .iter()
-                    .map(|p| match p {
-                        PathItem::Static(p) => p.to_string(),
-                        PathItem::Dynamic(_) => {
-                            unreachable!("all pathitems are static in this if branch")
-                        }
-                    })
-                    .chain(iter::once(name.to_string()))
-                    .intersperse(".".to_owned())
-                    .collect::<String>();
-                parse_quote!(#key_str.into())
+        ConfigurableField::ReadWrite(rw_field) => {
+            let mut ident: String = parents
+                .iter()
+                .filter_map(PathItem::rename)
+                .map(|name| name.to_pascal_case())
+                .collect();
+            let mut id_gen = SequentialIdGenerator::default();
+            // let (mut ident, args) =
+            //     parents
+            //         .iter()
+            //         .fold((String::new(), Vec::new()), |(mut ident, mut args), p| {
+            //             match p {
+            //                 PathItem::Static(p) => ident.push_str(&p.to_string().to_pascal_case()),
+            //                 PathItem::Dynamic(span) => args.push(id_gen.next_id(*span)),
+            //             }
+            //             (ident, args)
+            //         });
+            ident.push_str(&field.name().to_pascal_case());
+            let ident = syn::Ident::new(&ident, rw_field.ident.span());
+            let args = parents.iter().fold(Vec::new(), |mut args, p| {
+                if let PathItem::Dynamic(span) = p {
+                    args.push(id_gen.next_id(*span));
+                }
+                args
+            });
+            let key: syn::Expr = if args.is_empty() {
+                parse_quote!(ReadableKey::#ident.to_cow_str())
             } else {
-                let mut id_gen = SequentialIdGenerator::default();
-                let elems = parents
-                    .iter()
-                    .map::<syn::Expr, _>(|p| match p {
-                        PathItem::Static(p) => {
-                            let p_str = p.to_string();
-                            parse_quote!(Some(#p_str))
-                        }
-                        PathItem::Dynamic(span) => {
-                            let ident = id_gen.next_id(*span);
-                            parse_quote!(#ident)
-                        }
-                    })
-                    .chain({
-                        let name = name.to_string();
-                        iter::once(parse_quote!(Some(#name)))
-                    });
-                parse_quote!([#(#elems),*].into_iter().filter_map(|id| id).collect::<Vec<_>>().join(".").into())
+                parse_quote!(ReadableKey::#ident(#(#args.map(<_>::to_owned)),*).to_cow_str())
             };
             let read_path = read_field(parents);
-            match &field.default {
+            match &rw_field.default {
                 FieldDefault::None => quote! {
                     match &dto.#(#read_path).*.#name {
                         None => OptionalConfig::Empty(#key),
@@ -348,7 +350,7 @@ fn reader_value_for_field<'a>(
                     )?;
 
                     let (default, value) =
-                        if matches!(&field.default, FieldDefault::FromOptionalKey(_)) {
+                        if matches!(&rw_field.default, FieldDefault::FromOptionalKey(_)) {
                             (
                                 quote!(#default.map(|v| v.into())),
                                 quote!(OptionalConfig::Present { value: value.clone(), key: #key }),
@@ -434,8 +436,12 @@ fn parents_for(
     let mut fields = root_fields;
     let mut new_parents = vec![];
     for (i, field) in key.iter().take(key.len() - 1).enumerate() {
-        new_parents.push(PathItem::Static(field.to_owned()));
-        if let Some(PathItem::Static(s)) = parents.next() {
+        let root_field = fields.iter().find(|fog| fog.ident() == field).unwrap();
+        new_parents.push(PathItem::Static(
+            field.to_owned(),
+            root_field.name().to_string(),
+        ));
+        if let Some(PathItem::Static(s, _rename)) = parents.next() {
             if field == s {
                 if let Some(PathItem::Dynamic(span)) = parents.peek() {
                     parents.next();
@@ -447,7 +453,6 @@ fn parents_for(
                 while parents.next().is_some() {}
             }
         }
-        let root_field = fields.iter().find(|fog| fog.ident() == field).unwrap();
         match root_field {
             FieldOrGroup::Multi(m) => {
                 if matches!(new_parents.last().unwrap(), PathItem::Dynamic(_)) {
@@ -487,7 +492,7 @@ fn generate_conversions(
     let extra_args: Vec<_> = parents
         .iter()
         .filter_map(|path_item| match path_item {
-            PathItem::Static(_) => None,
+            PathItem::Static(_, _) => None,
             PathItem::Dynamic(span) => {
                 let id = id_gen.next_id(*span);
                 Some(quote_spanned!(*span=> #id: Option<&str>))
@@ -507,12 +512,15 @@ fn generate_conversions(
                 let name = &group.ident;
 
                 let mut parents = parents.clone();
-                parents.push(PathItem::Static(group.ident.clone()));
+                parents.push(PathItem::Static(
+                    group.ident.clone(),
+                    item.name().to_string(),
+                ));
                 let mut id_gen = SequentialIdGenerator::default();
                 let extra_call_args: Vec<_> = parents
                     .iter()
                     .filter_map(|path_item| match path_item {
-                        PathItem::Static(_) => None,
+                        PathItem::Static(_, _) => None,
                         PathItem::Dynamic(span) => Some(id_gen.next_id(*span)),
                     })
                     .collect();
@@ -533,18 +541,21 @@ fn generate_conversions(
                     .iter()
                     .chain(once(&new_arg))
                     .filter_map(|path_item| match path_item {
-                        PathItem::Static(_) => None,
+                        PathItem::Static(_, _rename) => None,
                         PathItem::Dynamic(span) => Some(id_gen.next_id(*span)),
                     })
                     .collect();
                 let mut parents = parents.clone();
-                parents.push(PathItem::Static(group.ident.clone()));
+                parents.push(PathItem::Static(
+                    group.ident.clone(),
+                    item.name().to_string(),
+                ));
                 let read_path = read_field(&parents);
                 #[allow(unstable_name_collisions)]
                 let parent_key = parents
                     .iter()
                     .filter_map(|p| match p {
-                        PathItem::Static(s) => Some(s.to_string()),
+                        PathItem::Static(s, _) => Some(s.to_string()),
                         _ => None,
                     })
                     .intersperse(".".to_owned())
@@ -601,7 +612,7 @@ mod tests {
         let actual = reader_value_for_field(
             http,
             &[
-                PathItem::Static(parse_quote!(c8y)),
+                PathItem::Static(parse_quote!(c8y), "c8y".into()),
                 PathItem::Dynamic(Span::call_site()),
             ],
             &input.groups,
@@ -610,20 +621,10 @@ mod tests {
         .unwrap();
         let actual: syn::File = parse_quote!(fn dummy() { #actual });
         let c8y_http_key = quote! {
-            [Some("c8y"), key0, Some("http")]
-                .into_iter()
-                .filter_map(|id| id)
-                .collect::<Vec<_>>()
-                .join(".")
-                .into()
+            ReadableKey::C8yHttp(key0.map(<_>::to_owned)).to_cow_str()
         };
         let c8y_url_key = quote! {
-            [Some("c8y"), key0, Some("url")]
-                .into_iter()
-                .filter_map(|id| id)
-                .collect::<Vec<_>>()
-                .join(".")
-                .into()
+            ReadableKey::C8yUrl(key0.map(<_>::to_owned)).to_cow_str()
         };
         let expected: syn::Expr = parse_quote!(match &dto.c8y.try_get(key0, "c8y").unwrap().http {
             Some(value) => {
@@ -670,7 +671,7 @@ mod tests {
         let az_url = g.contents[0].field().unwrap();
         let error = reader_value_for_field(
             az_url,
-            &[PathItem::Static(parse_quote!(az))],
+            &[PathItem::Static(parse_quote!(az), "az".into())],
             &input.groups,
             vec![],
         )

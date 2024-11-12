@@ -780,7 +780,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
         let re = segments
             .iter()
             .map(|fog| match fog {
-                FieldOrGroup::Multi(m) => format!("{}(?:\\.(@[A-z_]+))?", m.ident),
+                FieldOrGroup::Multi(m) => format!("{}(?:@([^\\.]+))?", m.ident),
                 FieldOrGroup::Field(f) => f.ident().to_string(),
                 FieldOrGroup::Group(g) => g.ident.to_string(),
             })
@@ -810,7 +810,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                                 if *opt == none {
                                     m.ident.to_string()
                                 } else {
-                                    format!("{}.{{{}}}", m.ident, binding)
+                                    format!("{}@{{{}}}", m.ident, binding)
                                 }
                             }
                             FieldOrGroup::Group(g) => g.ident.to_string(),
@@ -964,7 +964,7 @@ mod tests {
                         },
                         _ => unimplemented!("just a test, no error handling"),
                     };
-                    if let Some(captures) = ::regex::Regex::new("^c8y(?:\\.(@[A-z_]+))?\\.url$").unwrap().captures(value) {
+                    if let Some(captures) = ::regex::Regex::new("^c8y(?:@([^\\.]+))?\\.url$").unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         return Ok(Self::C8yUrl(key0));
                     };
@@ -1208,7 +1208,7 @@ mod tests {
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::C8yUrl(None) => ::std::borrow::Cow::Borrowed("c8y.url"),
-                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y.{key0}.url")),
+                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y@{key0}.url")),
                     }
                 }
             }
@@ -1240,9 +1240,9 @@ mod tests {
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::TopNestedField(None, None) => ::std::borrow::Cow::Borrowed("top.nested.field"),
-                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested.{key1}.field")),
-                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top.{key0}.nested.field")),
-                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top.{key0}.nested.{key1}.field")),
+                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested@{key1}.field")),
+                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top@{key0}.nested.field")),
+                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top@{key0}.nested@{key1}.field")),
                     }
                 }
             }
