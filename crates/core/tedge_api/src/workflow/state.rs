@@ -8,6 +8,7 @@ use crate::workflow::ExitHandlers;
 use crate::workflow::OperationName;
 use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
+use crate::CommandStatus;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use mqtt_channel::MqttMessage;
@@ -390,6 +391,22 @@ impl GenericCommandState {
 
     pub fn is_cleared(&self) -> bool {
         self.payload.is_null()
+    }
+
+    pub fn get_command_status(&self) -> CommandStatus {
+        match self.status.as_str() {
+            INIT => CommandStatus::Init,
+            SCHEDULED => CommandStatus::Scheduled,
+            EXECUTING => CommandStatus::Executing,
+            SUCCESSFUL => CommandStatus::Successful,
+            FAILED => CommandStatus::Failed {
+                reason: self
+                    .failure_reason()
+                    .unwrap_or("unknown reason")
+                    .to_string(),
+            },
+            _ => CommandStatus::Unknown,
+        }
     }
 }
 
