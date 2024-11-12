@@ -1,4 +1,5 @@
 use super::models::timestamp::TimeFormat;
+use crate::auth_method::try_get_device_id_from_credentials_file;
 use crate::auth_method::AuthMethod;
 use crate::AptConfig;
 use crate::AutoFlag;
@@ -1195,6 +1196,20 @@ fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
 }
 
 fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
+    let c8y_profile: Option<&ProfileName> = None;
+    let c8y_config = reader.c8y.try_get(c8y_profile)?;
+
+    if c8y_config
+        .auth_method
+        .is_basic(&c8y_config.credentials_path)
+    {
+        if let Some(device_id) =
+            try_get_device_id_from_credentials_file(&c8y_config.credentials_path)
+        {
+            return Ok(device_id);
+        }
+    }
+
     let pem = PemCertificate::from_pem_file(&reader.device.cert_path)
         .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.to_cow_str(), err))?;
     let device_id = pem
