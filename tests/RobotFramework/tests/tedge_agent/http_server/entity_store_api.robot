@@ -25,6 +25,17 @@ CRUD apis
     ...    te/device/child01//
     ...    message_contains="@type":"child-device"
 
+MQTT HTTP interoperability
+    Execute Command    tedge mqtt pub --retain 'te/device/child02//' '{"@type":"child-device"}'
+    Should Have MQTT Messages
+    ...    c8y/s/us
+    ...    message_contains=101,${DEVICE_SN}:device:child02
+
+    ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child02//
+    Should Be Equal
+    ...    ${get}
+    ...    {"@topic-id":"device/child02//","@parent":"device/main//","@type":"child-device","@id":"device:child02"}
+
 
 *** Keywords ***
 Custom Setup
