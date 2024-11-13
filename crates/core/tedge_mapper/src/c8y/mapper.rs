@@ -4,7 +4,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
-use c8y_http_proxy::credentials::C8YHeaderRetriever;
 use c8y_http_proxy::C8YHttpConfig;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
@@ -227,12 +226,11 @@ impl TEdgeComponent for CumulocityMapper {
                 .await?;
         }
 
-        let mut header_actor = C8YHeaderRetriever::try_builder(&tedge_config, c8y_profile)?;
         let mut http_actor = HttpActor::new(&tedge_config).builder();
         let c8y_http_config = C8YHttpConfig::try_new(&tedge_config, c8y_profile)?;
         let mut c8y_http_proxy_actor = C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor);
         let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile, &mut header_actor)?;
+            C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile)?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
@@ -280,7 +278,6 @@ impl TEdgeComponent for CumulocityMapper {
         };
 
         runtime.spawn(mqtt_actor).await?;
-        runtime.spawn(header_actor).await?;
         runtime.spawn(http_actor).await?;
         runtime.spawn(c8y_http_proxy_actor).await?;
         runtime.spawn(c8y_auth_proxy_actor).await?;

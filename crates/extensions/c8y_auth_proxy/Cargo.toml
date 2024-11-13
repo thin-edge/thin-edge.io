@@ -14,7 +14,7 @@ anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros", "ws", "headers"] }
 axum-server = { workspace = true }
 axum_tls = { workspace = true }
-c8y_http_proxy = { workspace = true }
+c8y_api = { workspace = true }
 camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
@@ -38,7 +38,6 @@ httparse = { workspace = true }
 mockito = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
-tedge_http_ext = { workspace = true, features = ["test_helpers"] }
 
 [lints]
 workspace = true

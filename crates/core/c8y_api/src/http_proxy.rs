@@ -309,7 +309,7 @@ impl C8yAuthRetriever {
         }
     }
 
-    pub async fn get_auth_header_value(&mut self) -> Result<HeaderValue, C8yAuthRetrieverError> {
+    pub async fn get_auth_header_value(&self) -> Result<HeaderValue, C8yAuthRetrieverError> {
         let header_value = match &self {
             Self::Basic { credentials_path } => {
                 debug!("Using basic authentication.");

@@ -21,7 +21,6 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 
 mod actor;
-pub mod credentials;
 pub mod handle;
 pub mod messages;
 
