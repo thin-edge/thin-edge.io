@@ -11,6 +11,7 @@ use crate::command::Command;
 use crate::ConfigError;
 use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8PathBuf;
+use mqtt_channel::Topic;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
@@ -22,6 +23,10 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::TopicIdError;
+use tedge_api::service_health_topic;
 use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
 use tedge_config::TEdgeConfig;
@@ -310,6 +315,25 @@ pub fn bridge_config(
     }
 }
 
+fn bridge_health_topic(
+    prefix: &TopicPrefix,
+    tedge_config: &TEdgeConfig,
+) -> Result<Topic, TopicIdError> {
+    let bridge_name = format!("tedge-mapper-bridge-{prefix}");
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+    let device_topic_id = tedge_config.mqtt.device_topic_id.parse::<EntityTopicId>()?;
+    Ok(service_health_topic(
+        &mqtt_schema,
+        &device_topic_id,
+        &bridge_name,
+    ))
+}
+
+fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
+    message.topic == health_topic
+        && std::str::from_utf8(&message.payload).map_or(false, |msg| msg.contains("\"up\""))
+}
+
 // Check the connection by using the jwt token retrieval over the mqtt.
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(
@@ -326,7 +350,8 @@ fn check_device_status_c8y(
         return Ok(DeviceStatus::AlreadyExists);
     }
 
-    let prefix = c8y_config.bridge.topic_prefix.clone();
+    let prefix = &c8y_config.bridge.topic_prefix;
+    let built_in_bridge_health_topic = bridge_health_topic(prefix, tedge_config).unwrap().name;
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -347,6 +372,10 @@ fn check_device_status_c8y(
     let mut acknowledged = false;
     let mut exists = false;
 
+    let built_in_bridge = tedge_config.mqtt.bridge.built_in;
+    if built_in_bridge {
+        client.subscribe(&built_in_bridge_health_topic, AtLeastOnce)?;
+    }
     client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
     for event in connection.iter() {
@@ -365,12 +394,21 @@ fn check_device_status_c8y(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                // We got a response
-                let token = String::from_utf8(response.payload.to_vec()).unwrap();
-                // FIXME: what does this magic number mean?
-                if token.contains("71") {
-                    exists = true;
-                    break;
+                if response.topic == c8y_topic_builtin_jwt_token_downstream {
+                    // We got a response
+                    let token = String::from_utf8(response.payload.to_vec()).unwrap();
+                    // FIXME: what does this magic number mean?
+                    if token.contains("71") {
+                        exists = true;
+                        break;
+                    }
+                } else if is_bridge_health_up_message(&response, &built_in_bridge_health_topic) {
+                    client.publish(
+                        &c8y_topic_builtin_jwt_token_upstream,
+                        rumqttc::QoS::AtMostOnce,
+                        false,
+                        "",
+                    )?;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
@@ -424,6 +462,9 @@ fn check_device_status_azure(
 ) -> Result<DeviceStatus, ConnectError> {
     let az_config = tedge_config.az.try_get(profile)?;
     let topic_prefix = &az_config.bridge.topic_prefix;
+    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
+        .unwrap()
+        .name;
     let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);
     let azure_topic_device_twin_upstream = format!(r#"{topic_prefix}/twin/GET/?$rid=1"#);
     const CLIENT_ID: &str = "check_connection_az";
@@ -441,6 +482,9 @@ fn check_device_status_azure(
     let mut acknowledged = false;
     let mut exists = false;
 
+    if tedge_config.mqtt.bridge.built_in {
+        client.subscribe(&built_in_bridge_health, AtLeastOnce)?;
+    }
     client.subscribe(&azure_topic_device_twin_downstream, AtLeastOnce)?;
 
     for event in connection.iter() {
@@ -464,6 +508,13 @@ fn check_device_status_azure(
                     println!("Received expected response message.");
                     exists = true;
                     break;
+                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                    client.publish(
+                        &azure_topic_device_twin_upstream,
+                        AtLeastOnce,
+                        false,
+                        REGISTRATION_PAYLOAD,
+                    )?;
                 } else {
                     break;
                 }
@@ -515,6 +566,9 @@ fn check_device_status_aws(
     let topic_prefix = &aws_config.bridge.topic_prefix;
     let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
     let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");
+    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
+        .unwrap()
+        .name;
     const CLIENT_ID: &str = "check_connection_aws";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
 
@@ -528,6 +582,9 @@ fn check_device_status_aws(
     let mut acknowledged = false;
     let mut exists = false;
 
+    if tedge_config.mqtt.bridge.built_in {
+        client.subscribe(&built_in_bridge_health, AtLeastOnce)?;
+    }
     client.subscribe(&aws_topic_sub_check_connection, AtLeastOnce)?;
 
     for event in connection.iter() {
@@ -546,10 +603,20 @@ fn check_device_status_aws(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                // We got a response
-                println!("Received expected response on topic {}.", response.topic);
-                exists = true;
-                break;
+                if response.topic == aws_topic_sub_check_connection {
+                    // We got a response
+                    println!("Received expected response on topic {}.", response.topic);
+                    exists = true;
+                    break;
+                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                    // Built in bridge is now up, republish the message in case it was never received by the bridge
+                    client.publish(
+                        &aws_topic_pub_check_connection,
+                        AtLeastOnce,
+                        false,
+                        REGISTRATION_PAYLOAD,
+                    )?;
+                }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
@@ -868,10 +935,11 @@ fn check_connected_c8y_tenant_as_configured(
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 struct Timeout;
 
 fn retry_until_success<T, E>(
-    action: impl Fn() -> Result<T, E>,
+    mut action: impl FnMut() -> Result<T, E>,
     timeout: Duration,
     min_loop_time: Duration,
 ) -> Result<T, Timeout> {
@@ -888,6 +956,87 @@ fn retry_until_success<T, E>(
 
         if start_loop.elapsed() < min_loop_time {
             std::thread::sleep(min_loop_time - start_loop.elapsed());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod is_bridge_health_up_message {
+        use super::*;
+
+        #[test]
+        fn health_message_up_is_detected_successfully() {
+            let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+            let message = test_message(health_topic, "up");
+            assert!(is_bridge_health_up_message(&message, health_topic))
+        }
+
+        #[test]
+        fn message_on_wrong_topic_is_ignored() {
+            let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+            let message = test_message("a/different/topic", "up");
+            assert!(!is_bridge_health_up_message(&message, health_topic))
+        }
+
+        #[test]
+        fn health_message_down_is_ignored() {
+            let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+            let message = test_message(health_topic, "down");
+            assert!(!is_bridge_health_up_message(&message, health_topic))
+        }
+
+        fn test_message(topic: &str, status: &str) -> rumqttc::Publish {
+            let payload = serde_json::json!({ "status": status}).to_string();
+            rumqttc::Publish::new(topic, AtLeastOnce, payload)
+        }
+    }
+
+    mod retry_until_success {
+        use super::*;
+
+        #[test]
+        fn returns_okay_upon_immediate_success() {
+            assert_eq!(
+                retry_until_success(|| Ok::<_, ()>(()), secs(5), secs(0)),
+                Ok(())
+            )
+        }
+
+        #[test]
+        fn returns_okay_upon_retry_success() {
+            let mut results = [Err(()), Ok(())].into_iter();
+            assert_eq!(
+                retry_until_success(move || results.next().unwrap(), secs(5), secs(0)),
+                Ok(())
+            )
+        }
+
+        #[test]
+        fn returns_timeout_on_failure() {
+            assert_eq!(
+                retry_until_success(|| Err::<(), _>(()), millis(50), secs(0)),
+                Err(Timeout)
+            )
+        }
+
+        #[test]
+        fn avoids_hard_looping() {
+            let mut results = [Err(()), Ok(())].into_iter();
+            let min_loop_time = millis(50);
+            let start = Instant::now();
+            retry_until_success(|| results.next().unwrap(), secs(5), min_loop_time).unwrap();
+            assert!(dbg!(start.elapsed()) > min_loop_time);
+        }
+
+        fn secs(n: u64) -> Duration {
+            Duration::from_secs(n)
+        }
+
+        fn millis(n: u64) -> Duration {
+            Duration::from_millis(n)
         }
     }
 }
