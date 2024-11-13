@@ -379,25 +379,8 @@ impl Downloader {
             request
                 .send()
                 .await
-                .map_err(|err| {
-                    // rustls errors are caused by e.g. CertificateRequired
-                    // If this is the case, retrying won't help us
-                    if err.is_builder()
-                        || err.is_connect()
-                        || axum_tls::rustls_error_from_reqwest(&err).is_some()
-                    {
-                        backoff::Error::Permanent(err)
-                    } else {
-                        backoff::Error::transient(err)
-                    }
-                })?
-                .error_for_status()
-                .map_err(|err| match err.status() {
-                    Some(status_error) if status_error.is_client_error() => {
-                        backoff::Error::Permanent(err)
-                    }
-                    _ => backoff::Error::transient(err),
-                })
+                .and_then(|response| response.error_for_status())
+                .map_err(reqwest_err_to_backoff)
         };
 
         retry_notify(backoff, operation, |err, dur: Duration| {
@@ -406,6 +389,19 @@ impl Downloader {
         })
         .await
     }
+}
+
+/// Decides whether HTTP request error is retryable.
+fn reqwest_err_to_backoff(err: reqwest::Error) -> backoff::Error<reqwest::Error> {
+    if err.is_timeout() || err.is_connect() {
+        return backoff::Error::transient(err);
+    }
+    if let Some(status) = err.status() {
+        if status.is_server_error() {
+            return backoff::Error::transient(err);
+        }
+    }
+    backoff::Error::permanent(err)
 }
 
 /// Saves a response body chunks starting from an offset.
@@ -931,7 +927,7 @@ mod tests {
         let target_path = target_dir_path.path().join("test_download");
         let mut downloader = Downloader::new(target_path, None, CloudRootCerts::from([]));
         downloader.set_backoff(ExponentialBackoff {
-            current_interval: Duration::ZERO,
+            max_elapsed_time: Some(Duration::ZERO),
             ..Default::default()
         });
         match downloader.download(&url).await {
