@@ -378,60 +378,6 @@ c8y/measurement/measurements/create
 
 </div>
 
-#### Measurement with unit
-
-The unit is a metadata associated with measurements which can be registered as a metadata message for a given measurement type.
-If the following metadata message is registered for the `environment` measurement type:
-
-```sh te2mqtt formats=v1
-tedge mqtt pub -r te/device/main///m/environment/meta '{
-  "units": {
-    "temperature": "°C"
-  }
-}'
-```
-
-Then subsequent messages will be mapped with the registered unit value as follows.
-
-<div class="code-indent-left">
-
-**%%te%% (input)**
-
-```text title="Topic"
-te/device/main///m/environment
-```
-
-```json5 title="Payload"
-{
-  "temperature": 23.4
-}
-```
-
-</div>
-
-<div class="code-indent-right">
-
-**Cumulocity IoT (output)**
-
-```text title="Topic"
-c8y/measurement/measurements/create
-```
-
-```json5 title="Payload"
-{
-  "type": "environment",
-  "time": "2021-04-22T17:05:26.958340390+00:00",
-  "temperature": {
-    "temperature": {
-      "value": 23,
-      "unit": "°C"
-    }
-  }
-}
-```
-
-</div>
-
 ### Events
 
 <div class="code-indent-left">
