@@ -16,9 +16,12 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use std::net::TcpStream;
+use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
 use tedge_config::TEdgeConfig;
@@ -34,7 +37,7 @@ use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
-const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
+const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 20;
 const MQTT_TLS_PORT: u16 = 8883;
 
 pub struct ConnectCommand {
@@ -96,6 +99,7 @@ impl Command for ConnectCommand {
             &self.config_location,
             device_type,
             self.offline_mode,
+            config,
         ) {
             Ok(()) => println!("Successfully created bridge connection!\n"),
             Err(ConnectError::SystemServiceError(
@@ -593,6 +597,7 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
     device_type: &str,
     offline_mode: bool,
+    tedge_config: &TEdgeConfig,
 ) -> Result<(), ConnectError> {
     println!("Checking if {} is available.\n", service_manager.name());
     let service_manager_result = service_manager.check_operational();
@@ -660,13 +665,7 @@ fn new_bridge(
 
     restart_mosquitto(bridge_config, service_manager, config_location)?;
 
-    println!(
-        "Awaiting mosquitto to start. This may take up to {} seconds.\n",
-        MOSQUITTO_RESTART_TIMEOUT_SECONDS
-    );
-    std::thread::sleep(std::time::Duration::from_secs(
-        MOSQUITTO_RESTART_TIMEOUT_SECONDS,
-    ));
+    wait_for_mosquitto_listening(&tedge_config.mqtt);
 
     println!("Enabling mosquitto service on reboots.\n");
     if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
@@ -715,6 +714,27 @@ fn restart_mosquitto(
     }
 
     Ok(())
+}
+
+fn wait_for_mosquitto_listening(mqtt: &TEdgeConfigReaderMqtt) {
+    let addr = format!("{}:{}", mqtt.client.host, mqtt.client.port);
+    if let Some(addr) = addr.to_socket_addrs().ok().and_then(|mut o| o.next()) {
+        println!(
+            "Waiting for mosquitto to start. This may take up to {} seconds.\n",
+            MOSQUITTO_RESTART_TIMEOUT_SECONDS
+        );
+
+        let timeout = Duration::from_secs(MOSQUITTO_RESTART_TIMEOUT_SECONDS);
+        let min_loop_time = Duration::from_millis(10);
+        let connect = || TcpStream::connect_timeout(&addr, Duration::from_secs(1));
+        if retry_until_success(connect, timeout, min_loop_time).is_err() {
+            println!("ERROR: Timed out attempting to connect to mosquitto");
+        }
+    } else {
+        let sleep_seconds = 5;
+        println!("Couldn't resolve configured mosquitto address, waiting {sleep_seconds} seconds for mosquitto to start");
+        std::thread::sleep(Duration::from_secs(sleep_seconds));
+    }
 }
 
 fn enable_software_management(
@@ -845,5 +865,29 @@ fn check_connected_c8y_tenant_as_configured(
             url, configured_url
         ),
         Err(_) => println!("Failed to get the connected tenant URL from Cumulocity.\n"),
+    }
+}
+
+struct Timeout;
+
+fn retry_until_success<T, E>(
+    action: impl Fn() -> Result<T, E>,
+    timeout: Duration,
+    min_loop_time: Duration,
+) -> Result<T, Timeout> {
+    let start = Instant::now();
+    loop {
+        let start_loop = Instant::now();
+        if let Ok(res) = action() {
+            return Ok(res);
+        }
+
+        if start.elapsed() > timeout {
+            return Err(Timeout);
+        }
+
+        if start_loop.elapsed() < min_loop_time {
+            std::thread::sleep(min_loop_time - start_loop.elapsed());
+        }
     }
 }
