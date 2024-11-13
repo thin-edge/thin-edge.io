@@ -22,10 +22,12 @@ use log::error;
 use log::info;
 use log::warn;
 use mqtt_channel::MqttMessage;
+use mqtt_channel::QoS;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::Path;
 use thiserror::Error;
@@ -134,8 +136,7 @@ type ExternalIdValidatorFn =
 pub struct EntityStore {
     mqtt_schema: MqttSchema,
     main_device: EntityTopicId,
-    entities: HashMap<EntityTopicId, EntityMetadata>,
-    entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
+    entities: EntityTree,
     external_id_mapper: ExternalIdMapperFn,
     external_id_validator_fn: ExternalIdValidatorFn,
     // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.
@@ -199,8 +200,7 @@ impl EntityStore {
         let mut entity_store = EntityStore {
             mqtt_schema: mqtt_schema.clone(),
             main_device: main_device.topic_id.clone(),
-            entities: HashMap::from([(main_device.topic_id.clone(), metadata)]),
-            entity_id_index: HashMap::from([(entity_id, main_device.topic_id)]),
+            entities: EntityTree::new(entity_id, main_device.topic_id, metadata),
             external_id_mapper: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
             default_service_type,
@@ -329,8 +329,7 @@ impl EntityStore {
 
     /// Returns information for an entity under a given device/service id.
     pub fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&EntityMetadata> {
-        let topic_id = self.entity_id_index.get(external_id)?;
-        self.get(topic_id)
+        self.entities.get_by_external_id(external_id)
     }
 
     /// Tries to get information about an entity using its `EntityExternalId`,
@@ -403,12 +402,9 @@ impl EntityStore {
     /// Returns MQTT identifiers of child devices of a given device.
     pub fn child_devices(&self, entity_topic: &EntityTopicId) -> Vec<&EntityTopicId> {
         self.entities
-            .iter()
-            .filter(|(_, e)| {
-                // can be replaced by `is_some_and` after MSRV upgrade to 1.70
-                e.parent.as_ref().map_or(false, |p| p == entity_topic)
-                    && e.r#type == EntityType::ChildDevice
-            })
+            .children(entity_topic)
+            .into_iter()
+            .filter(|(_, e)| e.r#type == EntityType::ChildDevice)
             .map(|(k, _)| k)
             .collect()
     }
@@ -416,12 +412,9 @@ impl EntityStore {
     /// Returns MQTT identifiers of services running on a given device.
     pub fn services(&self, entity_topic: &EntityTopicId) -> Vec<&EntityTopicId> {
         self.entities
-            .iter()
-            .filter(|(_, e)| {
-                // can be replaced by `is_some_and` after MSRV upgrade to 1.70
-                e.parent.as_ref().map_or(false, |p| p == entity_topic)
-                    && e.r#type == EntityType::Service
-            })
+            .children(entity_topic)
+            .into_iter()
+            .filter(|(_, e)| e.r#type == EntityType::Service)
             .map(|(k, _)| k)
             .collect()
     }
@@ -529,38 +522,17 @@ impl EntityStore {
             twin_data: Map::new(),
         };
 
-        // device is affected if it was previously registered and was updated
-        // (i.e. EntityMetadata has changed)
-        let previous = self.entities.entry(topic_id.clone());
-        match previous {
-            Entry::Occupied(mut occupied) => {
-                // if there is no change, no entities were affected
-                let existing_entity = occupied.get().clone();
-
-                let mut merged_other = existing_entity.other.clone();
-                merged_other.extend(entity_metadata.other.clone());
-                let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data.clone(),
-                    other: merged_other,
-                    ..entity_metadata
-                };
-
-                if existing_entity == merged_entity {
-                    return Ok(vec![]);
-                }
-
-                occupied.insert(merged_entity);
+        match self
+            .entities
+            .insert(external_id, topic_id.clone(), entity_metadata)
+        {
+            InsertOutcome::Unchanged => Ok(vec![]),
+            InsertOutcome::Inserted => Ok(affected_entities),
+            InsertOutcome::Updated => {
                 affected_entities.push(topic_id);
-            }
-            Entry::Vacant(vacant) => {
-                vacant.insert(entity_metadata);
-                self.entity_id_index.insert(external_id, topic_id);
+                Ok(affected_entities)
             }
         }
-        debug!("Updated entity map: {:?}", self.entities);
-        debug!("Updated external id map: {:?}", self.entity_id_index);
-
-        Ok(affected_entities)
     }
 
     fn register_and_persist_entity(
@@ -574,11 +546,6 @@ impl EntityStore {
         }
 
         Ok(affected_entities)
-    }
-
-    /// An iterator over all registered entities.
-    pub fn iter(&self) -> impl Iterator<Item = (&EntityTopicId, &EntityMetadata)> {
-        self.entities.iter()
     }
 
     /// Performs auto-registration process for an entity under a given
@@ -622,6 +589,35 @@ impl EntityStore {
         }
 
         Ok(register_messages)
+    }
+
+    /// Recursively deregister an entity, its child devices and services
+    pub fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityTopicId> {
+        let mut removed_entities = vec![];
+        self.entities.remove(topic_id, &mut removed_entities);
+        removed_entities
+    }
+
+    /// Recursively deregister an entity, its child devices and services
+    ///
+    /// Persist the deregistration message
+    pub fn deregister_and_persist_entity(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<Vec<EntityTopicId>, Error> {
+        let removed_entities = self.deregister_entity(topic_id);
+
+        if !removed_entities.is_empty() {
+            let topic = self
+                .mqtt_schema
+                .topic_for(topic_id, &Channel::EntityMetadata);
+            let message = MqttMessage::new(&topic, "")
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce);
+            self.message_log.append_message(&message)?;
+        }
+
+        Ok(removed_entities)
     }
 
     /// Updates the entity twin data with the provided fragment data.
@@ -674,6 +670,164 @@ impl EntityStore {
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entity_store.cache_early_data_message(message)
     }
+}
+
+/// In-memory representation of the entity tree
+struct EntityTree {
+    entities: HashMap<EntityTopicId, EntityNode>,
+    entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
+}
+
+#[derive(Debug)]
+struct EntityNode {
+    metadata: EntityMetadata,
+    children: HashSet<EntityTopicId>,
+}
+
+impl EntityNode {
+    pub fn new(metadata: EntityMetadata) -> Self {
+        EntityNode {
+            metadata,
+            children: HashSet::new(),
+        }
+    }
+
+    pub fn metadata(&self) -> &EntityMetadata {
+        &self.metadata
+    }
+    pub fn mut_metadata(&mut self) -> &mut EntityMetadata {
+        &mut self.metadata
+    }
+}
+
+impl EntityTree {
+    /// Create the tree of entities for the main device, given its name, topic id and metadata
+    pub fn new(
+        device_name: EntityExternalId,
+        topic_id: EntityTopicId,
+        metadata: EntityMetadata,
+    ) -> Self {
+        EntityTree {
+            entities: HashMap::from([(topic_id.clone(), EntityNode::new(metadata))]),
+            entity_id_index: HashMap::from([(device_name, topic_id)]),
+        }
+    }
+
+    pub fn contains_key(&self, topic_id: &EntityTopicId) -> bool {
+        self.entities.contains_key(topic_id)
+    }
+
+    /// Returns information about an entity under a given MQTT entity topic identifier.
+    pub fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
+        self.entities.get(entity_topic_id).map(EntityNode::metadata)
+    }
+
+    /// Returns a mutable reference to the `EntityMetadata` for the given `EntityTopicId`.
+    fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut EntityMetadata> {
+        self.entities
+            .get_mut(entity_topic_id)
+            .map(EntityNode::mut_metadata)
+    }
+
+    /// All the entities with a given parent.
+    pub fn children(&self, parent_id: &EntityTopicId) -> Vec<(&EntityTopicId, &EntityMetadata)> {
+        let Some(children) = self.entities.get(parent_id).map(|node| &node.children) else {
+            return vec![];
+        };
+
+        children
+            .iter()
+            .filter_map(|topic_id| self.entities.get_key_value(topic_id))
+            .map(|(k, v)| (k, v.metadata()))
+            .collect()
+    }
+
+    /// Returns information for an entity under a given device/service id.
+    pub fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&EntityMetadata> {
+        let topic_id = self.entity_id_index.get(external_id)?;
+        self.get(topic_id)
+    }
+
+    /// Insert a new entity
+    ///
+    /// Return Inserted if the entity is new
+    /// Return Updated if the entity was previously registered and has been updated by this call
+    /// Return Unchanged if the entity not affected by this call
+    pub fn insert(
+        &mut self,
+        external_id: EntityExternalId,
+        topic_id: EntityTopicId,
+        entity_metadata: EntityMetadata,
+    ) -> InsertOutcome {
+        let maybe_parent = entity_metadata.parent.clone();
+        let previous = self.entities.entry(topic_id.clone());
+        let outcome = match previous {
+            Entry::Occupied(mut occupied) => {
+                // if there is no change, no entities were affected
+                let existing_entity = occupied.get().metadata.clone();
+                let existing_children = occupied.get().children.clone();
+
+                let mut merged_other = existing_entity.other.clone();
+                merged_other.extend(entity_metadata.other.clone());
+                let merged_entity = EntityMetadata {
+                    twin_data: existing_entity.twin_data.clone(),
+                    other: merged_other,
+                    ..entity_metadata
+                };
+
+                if existing_entity == merged_entity {
+                    InsertOutcome::Unchanged
+                } else {
+                    let updated_entity = EntityNode {
+                        metadata: merged_entity,
+                        children: existing_children,
+                    };
+                    occupied.insert(updated_entity);
+                    InsertOutcome::Updated
+                }
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(EntityNode::new(entity_metadata));
+                self.entity_id_index.insert(external_id, topic_id.clone());
+                InsertOutcome::Inserted
+            }
+        };
+
+        if let Some(parent) = maybe_parent {
+            if let Some(parent_entry) = self.entities.get_mut(&parent) {
+                parent_entry.children.insert(topic_id);
+            }
+        }
+
+        debug!("Updated entity map: {:?}", self.entities);
+        debug!("Updated external id map: {:?}", self.entity_id_index);
+        outcome
+    }
+
+    /// Recursively remove an entity, its child devices and services
+    ///
+    /// Populate the given vector with the topic identifiers of the removed entities
+    fn remove(&mut self, topic_id: &EntityTopicId, removed_entities: &mut Vec<EntityTopicId>) {
+        if let Some((external_id, children)) = self
+            .entities
+            .get(topic_id)
+            .map(|node| (node.metadata.external_id.clone(), node.children.clone()))
+        {
+            children
+                .iter()
+                .for_each(|sub_topic| self.remove(sub_topic, removed_entities));
+
+            self.entities.remove(topic_id);
+            self.entity_id_index.remove(&external_id);
+            removed_entities.push(topic_id.clone())
+        }
+    }
+}
+
+enum InsertOutcome {
+    Unchanged,
+    Updated,
+    Inserted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1138,6 +1292,7 @@ mod tests {
 
     #[test]
     fn list_ancestors() {
+        // XOXOX
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
 
@@ -1671,7 +1826,7 @@ mod tests {
         };
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
-        assert!(!affected_entities.0.is_empty());
+        assert_eq!(affected_entities.0.get(0).unwrap(), "device/main//");
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
         assert!(affected_entities.0.is_empty());
@@ -1696,7 +1851,7 @@ mod tests {
         };
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
-        assert!(!affected_entities.0.is_empty());
+        assert_eq!(affected_entities.0.get(0).unwrap(), "device/main//");
 
         // Update the entity twin data
         store
@@ -1826,6 +1981,59 @@ mod tests {
         }
     }
 
+    #[test]
+    fn deregister_entities() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+
+        register_child(&mut store, "device/main//", "device/001//");
+        register_child(&mut store, "device/main//", "device/002//");
+        register_child(&mut store, "device/main//", "device/003//");
+        register_service(&mut store, "device/main//", "device/main/service/004");
+
+        register_child(&mut store, "device/002//", "device/005//");
+        register_child(&mut store, "device/002//", "device/006//");
+        register_child(&mut store, "device/002//", "device/007//");
+        register_service(&mut store, "device/002//", "device/002/service/008");
+
+        register_child(&mut store, "device/006//", "device/009//");
+        register_child(&mut store, "device/006//", "device/00A//");
+        register_child(&mut store, "device/006//", "device/00B//");
+        register_service(&mut store, "device/006//", "device/006/service/00C");
+
+        register_child(&mut store, "device/003//", "device/00D//");
+        register_child(&mut store, "device/003//", "device/00E//");
+
+        let mut removed = store.deregister_entity(&entity("device/002//"));
+        removed.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        assert_eq!(
+            removed,
+            vec![
+                entity("device/002//"),
+                entity("device/002/service/008"),
+                entity("device/005//"),
+                entity("device/006//"),
+                entity("device/006/service/00C"),
+                entity("device/007//"),
+                entity("device/009//"),
+                entity("device/00A//"),
+                entity("device/00B//"),
+            ]
+        );
+
+        for topic_id in removed.iter() {
+            assert!(store.get(topic_id).is_none());
+        }
+
+        assert!(store.get(&entity("device/main//")).is_some());
+        assert!(store.get(&entity("device/001//")).is_some());
+        assert!(store.get(&entity("device/003//")).is_some());
+        assert!(store.get(&entity("device/main/service/004")).is_some());
+        assert!(store.get(&entity("device/00D//")).is_some());
+        assert!(store.get(&entity("device/00E//")).is_some());
+    }
+
     fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {
         EntityStore::with_main_device_and_default_service_type(
             MqttSchema::default(),
@@ -1844,5 +2052,34 @@ mod tests {
             clean_start,
         )
         .unwrap()
+    }
+
+    fn register(store: &mut EntityStore, topic_id: &str, payload: JsonValue) {
+        let registration = EntityRegistrationMessage::new(&MqttMessage::new(
+            &Topic::new(&format!("te/{topic_id}")).unwrap(),
+            payload.to_string(),
+        ));
+        store.update(registration.unwrap()).unwrap();
+        assert!(store.get(&entity(topic_id)).is_some());
+    }
+
+    fn register_child(store: &mut EntityStore, parent: &str, topic_id: &str) {
+        register(
+            store,
+            topic_id,
+            json!({"@type": "child-device", "@parent": parent}),
+        )
+    }
+
+    fn register_service(store: &mut EntityStore, parent: &str, topic_id: &str) {
+        register(
+            store,
+            topic_id,
+            json!({"@type": "service", "@parent": parent}),
+        )
+    }
+
+    fn entity(topic_id: &str) -> EntityTopicId {
+        EntityTopicId::from_str(topic_id).unwrap()
     }
 }
