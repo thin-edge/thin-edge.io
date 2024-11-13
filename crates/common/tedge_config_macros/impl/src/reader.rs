@@ -286,16 +286,6 @@ fn reader_value_for_field<'a>(
                 .map(|name| name.to_pascal_case())
                 .collect();
             let mut id_gen = SequentialIdGenerator::default();
-            // let (mut ident, args) =
-            //     parents
-            //         .iter()
-            //         .fold((String::new(), Vec::new()), |(mut ident, mut args), p| {
-            //             match p {
-            //                 PathItem::Static(p) => ident.push_str(&p.to_string().to_pascal_case()),
-            //                 PathItem::Dynamic(span) => args.push(id_gen.next_id(*span)),
-            //             }
-            //             (ident, args)
-            //         });
             ident.push_str(&field.name().to_pascal_case());
             let ident = syn::Ident::new(&ident, rw_field.ident.span());
             let args = parents.iter().fold(Vec::new(), |mut args, p| {
