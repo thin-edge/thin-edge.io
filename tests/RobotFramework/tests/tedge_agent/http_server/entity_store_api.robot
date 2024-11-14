@@ -25,6 +25,14 @@ CRUD apis
     ...    te/device/child01//
     ...    message_contains="@type":"child-device"
 
+    ${status}=    Execute Command
+    ...    curl -o /dev/null --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
+    Should Be Equal    ${status}    200
+
+    ${get}=    Execute Command
+    ...    curl -o /dev/null --silent --write-out "%\{http_code\}" http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
+    Should Be Equal    ${get}    404
+
 MQTT HTTP interoperability
     Execute Command    tedge mqtt pub --retain 'te/device/child02//' '{"@type":"child-device"}'
     Should Have MQTT Messages

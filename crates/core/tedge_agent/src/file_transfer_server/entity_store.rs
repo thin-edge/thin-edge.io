@@ -24,8 +24,11 @@ use tedge_actors::Sender;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EntityDef {
@@ -67,7 +70,9 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
     Router::new()
         .route(
             "/v1/entities/*path",
-            post(register_entity).get(get_entity), // .delete(deregister_entity),
+            post(register_entity)
+                .get(get_entity)
+                .delete(deregister_entity),
         )
         .with_state(state)
 }
@@ -100,6 +105,29 @@ async fn get_entity(
     } else {
         Err(Error::EntityNotFound(topic_id))
     }
+}
+
+async fn deregister_entity(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+) -> Result<StatusCode, Error> {
+    let deleted = {
+        let mut entity_store = state.entity_store.lock().unwrap();
+        let topic_id = EntityTopicId::from_str(&path)?;
+        entity_store.deregister_and_persist_entity(&topic_id)?
+    };
+
+    for topic_id in deleted {
+        let topic = state
+            .mqtt_schema
+            .topic_for(&topic_id, &Channel::EntityMetadata);
+        let clear_entity_msg = MqttMessage::new(&topic, "")
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce);
+
+        state.mqtt_publisher.clone().send(clear_entity_msg).await?;
+    }
+    Ok(StatusCode::OK)
 }
 
 #[cfg(test)]
@@ -210,6 +238,45 @@ mod tests {
 
         assert_eq!(entity.topic_id.as_str(), topic_id);
         assert_eq!(entity.r#type, EntityType::ChildDevice);
+    }
+
+    #[tokio::test]
+    async fn entity_delete() {
+        let TestHandle {
+            ttd: _,
+            agent_state,
+            mqtt_box: _,
+        } = setup();
+
+        let entity_store = agent_state.entity_store.clone();
+        {
+            let mut entity_store = entity_store.lock().unwrap();
+            let _ = entity_store
+                .update(EntityRegistrationMessage {
+                    topic_id: EntityTopicId::default_child_device("test-child").unwrap(),
+                    external_id: Some("test-child".into()),
+                    r#type: EntityType::ChildDevice,
+                    parent: None,
+                    other: Map::new(),
+                })
+                .unwrap();
+        }
+
+        let mut app = entity_store_router(agent_state);
+
+        let topic_id = "device/test-child//";
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri(format!("/v1/entities/{topic_id}"))
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let entity_store = entity_store.lock().unwrap();
+        let entity = entity_store.get(&EntityTopicId::default_child_device("test-child").unwrap());
+        assert_eq!(entity, None);
     }
 
     struct TestHandle {
