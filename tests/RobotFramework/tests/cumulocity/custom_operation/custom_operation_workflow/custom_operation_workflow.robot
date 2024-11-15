@@ -17,7 +17,7 @@ ${CHILD_SN}     ${EMPTY}
 
 *** Test Cases ***
 Run custom operation with workflow execution
-    File Should Exist    /etc/tedge/operations/c8y/c8y_TakePicture
+    Symlink Should Exist    /etc/tedge/operations/c8y/c8y_TakePicture
     Should Contain Supported Operations    c8y_TakePicture
 
     ${operation}=    Cumulocity.Create Operation
@@ -38,7 +38,7 @@ Run custom operation with workflow execution on child device
     Set Test Variable    $CHILD_XID    ${PARENT_SN}:device:${CHILD_SN}
 
     Set Device Context    ${PARENT_SN}
-    File Should Exist    /etc/tedge/operations/c8y/${CHILD_XID}/c8y_TakePicture
+    Symlink Should Exist    /etc/tedge/operations/c8y/${CHILD_XID}/c8y_TakePicture
 
     Cumulocity.Device Should Exist    ${CHILD_XID}
     Should Contain Supported Operations    c8y_TakePicture
