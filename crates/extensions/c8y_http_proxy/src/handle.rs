@@ -1,5 +1,6 @@
 use crate::messages::C8YRestError;
 use crate::messages::CreateEvent;
+use crate::messages::EventId;
 use crate::messages::SoftwareListResponse;
 use crate::C8YHttpConfig;
 use crate::C8YHttpProxyActor;
@@ -52,7 +53,7 @@ impl C8YHttpProxy {
             .proxy_url_for_event_binary_upload(event_id)
     }
 
-    pub async fn send_event(&mut self, c8y_event: CreateEvent) -> Result<String, C8YRestError> {
+    pub async fn send_event(&mut self, c8y_event: CreateEvent) -> Result<EventId, C8YRestError> {
         self.c8y.init().await?;
         self.c8y.create_event(c8y_event).await
     }

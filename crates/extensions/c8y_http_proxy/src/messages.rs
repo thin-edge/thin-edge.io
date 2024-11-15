@@ -1,5 +1,4 @@
 use c8y_api::json_c8y::*;
-use c8y_api::smartrest::error::SMCumulocityMapperError;
 use std::collections::HashMap;
 use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
@@ -9,24 +8,11 @@ pub enum C8YRestError {
     #[error(transparent)]
     FromChannel(#[from] ChannelError),
 
-    // TODO impl a proper C8YRest Error type
-    #[error(transparent)]
-    FromC8YRest(#[from] SMCumulocityMapperError),
-
     #[error(transparent)]
     FromHttpError(#[from] HttpError),
 
     #[error("Failed with {0}")]
     CustomError(String),
-
-    #[error(transparent)]
-    FromDownloadError(#[from] download::DownloadError),
-
-    #[error(transparent)]
-    FromFileError(#[from] tedge_utils::file::FileError),
-
-    #[error(transparent)]
-    FromIOError(#[from] std::io::Error),
 
     // `Display` impl of `C8yRestError` is used as part of an error message sent to the cloud in a smartrest message.
     // Using `{anyhow::Error:?}` also prints the lower-level cause, so using it here will result in a more detailed
@@ -49,7 +35,7 @@ pub struct CreateEvent {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct SoftwareListResponse {
+pub(crate) struct SoftwareListResponse {
     pub c8y_software_list: C8yUpdateSoftwareListResponse,
     pub device_id: String,
 }
