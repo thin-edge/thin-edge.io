@@ -800,12 +800,11 @@ mod tests {
 
         let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
             FakeServerBoxBuilder::default();
-        let auth_proxy = ProxyUrlGenerator::default();
         let http_config = C8YHttpConfig::new(
             c8y_mapper_config.device_id.clone(),
             c8y_mapper_config.c8y_host.clone(),
             c8y_mapper_config.c8y_mqtt.clone(),
-            auth_proxy.clone(),
+            ProxyUrlGenerator::default(),
         );
         let c8y_proxy = C8YHttpProxy::new(http_config, &mut http_builder);
 

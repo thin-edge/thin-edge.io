@@ -334,7 +334,6 @@ pub struct C8yMapperBuilder {
     timer_sender: DynSender<SyncStart>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
@@ -399,7 +398,6 @@ impl C8yMapperBuilder {
             timer_sender,
             uploader,
             downloader,
-            auth_proxy,
             bridge_monitor_builder,
             message_handlers,
         })
@@ -451,7 +449,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.config,
             mqtt_publisher.clone(),
             self.http_proxy,
-            self.auth_proxy,
             self.uploader,
             self.downloader,
         )

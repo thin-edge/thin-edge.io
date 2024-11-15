@@ -19,7 +19,6 @@ use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
 use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
-use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
@@ -193,7 +192,6 @@ pub struct CumulocityConverter {
     pub service_type: String,
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
-    pub auth_proxy: ProxyUrlGenerator,
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
@@ -207,7 +205,6 @@ impl CumulocityConverter {
         config: C8yMapperConfig,
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
-        auth_proxy: ProxyUrlGenerator,
         uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<Self, CumulocityConverterBuildError> {
@@ -280,7 +277,6 @@ impl CumulocityConverter {
             service_type,
             mqtt_schema: mqtt_schema.clone(),
             entity_store,
-            auth_proxy,
             command_id,
             active_commands: HashSet::new(),
             operation_handler,
@@ -3462,7 +3458,7 @@ pub(crate) mod tests {
             config.device_id.clone(),
             config.c8y_host.clone(),
             config.c8y_mqtt.clone(),
-            auth_proxy.clone(),
+            auth_proxy,
         );
         let http_proxy = C8YHttpProxy::new(http_config, &mut http_builder);
 
@@ -3474,15 +3470,9 @@ pub(crate) mod tests {
             FakeServerBox::builder();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let converter = CumulocityConverter::new(
-            config,
-            mqtt_publisher,
-            http_proxy,
-            auth_proxy,
-            uploader,
-            downloader,
-        )
-        .unwrap();
+        let converter =
+            CumulocityConverter::new(config, mqtt_publisher, http_proxy, uploader, downloader)
+                .unwrap();
 
         (converter, http_builder.build())
     }
