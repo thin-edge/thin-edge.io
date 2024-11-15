@@ -13,7 +13,6 @@ use crate::operations;
 use crate::operations::OperationHandler;
 use anyhow::anyhow;
 use anyhow::Context;
-use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -192,7 +191,6 @@ pub struct CumulocityConverter {
     pub http_proxy: C8YHttpProxy,
     pub children: HashMap<String, Operations>,
     pub service_type: String,
-    pub c8y_endpoint: C8yEndPoint,
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
@@ -223,9 +221,6 @@ impl CumulocityConverter {
             config.service.ty.clone()
         };
 
-        let c8y_host = &config.c8y_host;
-        let c8y_mqtt = &config.c8y_mqtt;
-
         let size_threshold = SizeThreshold(config.max_mqtt_payload_size as usize);
 
         let prefix = &config.bridge_config.c8y_prefix;
@@ -238,8 +233,6 @@ impl CumulocityConverter {
 
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir)?;
-
-        let c8y_endpoint = C8yEndPoint::new(c8y_host, c8y_mqtt, &device_id, auth_proxy.clone());
 
         let mqtt_schema = config.mqtt_schema.clone();
 
@@ -286,7 +279,6 @@ impl CumulocityConverter {
             children,
             mqtt_publisher,
             service_type,
-            c8y_endpoint,
             mqtt_schema: mqtt_schema.clone(),
             entity_store,
             auth_proxy,
@@ -927,7 +919,7 @@ impl CumulocityConverter {
         command.payload.update_list.iter_mut().for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
                 if let Some(url) = &mut module.url {
-                    if let Ok(package_url) = self.c8y_endpoint.local_proxy_url(url.url()) {
+                    if let Ok(package_url) = self.http_proxy.local_proxy_url(url.url()) {
                         *url = DownloadInfo::new(package_url.as_str());
                     }
                 }

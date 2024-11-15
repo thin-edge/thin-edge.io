@@ -195,12 +195,12 @@ impl CumulocityConverter {
         };
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
 
-        let tedge_url =
-            if let Ok(c8y_url) = self.c8y_endpoint.local_proxy_url(&firmware_request.url) {
-                c8y_url.to_string()
-            } else {
-                firmware_request.url.clone()
-            };
+        let tedge_url = if let Ok(c8y_url) = self.http_proxy.local_proxy_url(&firmware_request.url)
+        {
+            c8y_url.to_string()
+        } else {
+            firmware_request.url.clone()
+        };
 
         let request = FirmwareUpdateCmdPayload {
             status: CommandStatus::Init,
@@ -266,7 +266,7 @@ impl CumulocityConverter {
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
 
         let remote_url = self
-            .c8y_endpoint
+            .http_proxy
             .local_proxy_url(&config_download_request.url)
             .map(|url| url.to_string())
             .unwrap_or(config_download_request.url.to_string());
@@ -336,7 +336,7 @@ impl CumulocityConverter {
         };
 
         if let Some(mut firmware) = device_profile_request.firmware {
-            if let Ok(cumulocity_url) = self.c8y_endpoint.local_proxy_url(&firmware.url) {
+            if let Ok(cumulocity_url) = self.http_proxy.local_proxy_url(&firmware.url) {
                 firmware.url = cumulocity_url.into();
             }
             request.add_firmware(firmware.into());
@@ -345,7 +345,7 @@ impl CumulocityConverter {
         if let Some(mut software) = device_profile_request.software {
             software.lists.iter_mut().for_each(|module| {
                 if let Some(url) = &mut module.url {
-                    if let Ok(cumulocity_url) = self.c8y_endpoint.local_proxy_url(url) {
+                    if let Ok(cumulocity_url) = self.http_proxy.local_proxy_url(url) {
                         *url = cumulocity_url.into();
                     }
                 }
@@ -354,7 +354,7 @@ impl CumulocityConverter {
         }
 
         for mut config in device_profile_request.configuration {
-            if let Ok(cumulocity_url) = self.c8y_endpoint.local_proxy_url(&config.url) {
+            if let Ok(cumulocity_url) = self.http_proxy.local_proxy_url(&config.url) {
                 config.url = cumulocity_url.into();
             }
             request.add_config(config.into());
