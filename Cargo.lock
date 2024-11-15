@@ -3995,7 +3995,6 @@ dependencies = [
  "anyhow",
  "camino",
  "doku",
- "itertools 0.13.0",
  "once_cell",
  "regex",
  "serde",

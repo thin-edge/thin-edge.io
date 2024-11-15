@@ -217,6 +217,11 @@ impl ConfigurableField {
         }
     }
 
+    pub fn name(&self) -> Cow<str> {
+        self.rename()
+            .map_or_else(|| Cow::Owned(self.ident().to_string()), Cow::Borrowed)
+    }
+
     pub fn has_guaranteed_default(&self) -> bool {
         match self {
             Self::ReadWrite(_) => !self.is_optional(),
