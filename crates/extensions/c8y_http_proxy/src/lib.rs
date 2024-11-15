@@ -1,17 +1,6 @@
 use crate::actor::C8YHttpProxyActor;
-use crate::actor::C8YHttpProxyMessageBox;
-use crate::messages::C8YRestRequest;
-use crate::messages::C8YRestResult;
-use std::convert::Infallible;
 use std::time::Duration;
-use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::DynSender;
-use tedge_actors::MessageSink;
-use tedge_actors::RequestEnvelope;
-use tedge_actors::RuntimeRequest;
-use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::Service;
 use tedge_config::ConfigNotSet;
 use tedge_config::MultiError;
@@ -42,6 +31,21 @@ pub struct C8YHttpConfig {
 }
 
 impl C8YHttpConfig {
+    pub fn new(
+        device_id: String,
+        c8y_http_host: String,
+        c8y_mqtt_host: String,
+        proxy: ProxyUrlGenerator,
+    ) -> Self {
+        C8YHttpConfig {
+            c8y_http_host,
+            c8y_mqtt_host,
+            device_id,
+            retry_interval: Duration::from_secs(5),
+            proxy,
+        }
+    }
+
     pub fn try_new(
         tedge_config: &TEdgeConfig,
         c8y_profile: Option<&str>,
@@ -103,50 +107,17 @@ pub struct C8YHttpProxyBuilder {
     /// Config
     config: C8YHttpConfig,
 
-    /// Message box for client requests and responses
-    clients: ServerMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
-
     /// Connection to an HTTP actor
     http: ClientMessageBox<HttpRequest, HttpResult>,
 }
 
 impl C8YHttpProxyBuilder {
     pub fn new(config: C8YHttpConfig, http: &mut impl Service<HttpRequest, HttpResult>) -> Self {
-        let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
         let http = ClientMessageBox::new(http);
-        C8YHttpProxyBuilder {
-            config,
-            clients,
-            http,
-        }
-    }
-}
-
-impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
-    type Error = Infallible;
-
-    fn try_build(self) -> Result<C8YHttpProxyActor, Self::Error> {
-        Ok(self.build())
+        C8YHttpProxyBuilder { config, http }
     }
 
-    fn build(self) -> C8YHttpProxyActor {
-        let message_box = C8YHttpProxyMessageBox {
-            clients: self.clients.build(),
-            http: self.http,
-        };
-
-        C8YHttpProxyActor::new(self.config, message_box)
-    }
-}
-
-impl MessageSink<RequestEnvelope<C8YRestRequest, C8YRestResult>> for C8YHttpProxyBuilder {
-    fn get_sender(&self) -> DynSender<RequestEnvelope<C8YRestRequest, C8YRestResult>> {
-        self.clients.get_sender()
-    }
-}
-
-impl RuntimeRequestSink for C8YHttpProxyBuilder {
-    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        self.clients.get_signal_sender()
+    pub fn build(self) -> C8YHttpProxyActor {
+        C8YHttpProxyActor::new(self.config, self.http)
     }
 }

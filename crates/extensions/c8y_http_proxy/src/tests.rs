@@ -11,7 +11,6 @@ use http::StatusCode;
 use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
-use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
@@ -30,10 +29,13 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     let device_id = "device-001";
     let external_id = "external-device-001";
 
-    let (_proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
 
-    // Even before any request is sent to the c8y_proxy
-    // the proxy requests over HTTP the internal device id.
+    tokio::spawn(async move {
+        proxy.connect().await.unwrap();
+    });
+
+    // On start the proxy requests over HTTP the internal device id.
     let init_request = HttpRequestBuilder::get(format!(
         "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
     ))
@@ -56,7 +58,11 @@ async fn retry_internal_id_on_expired_jwt() {
     let device_id = "device-001";
     let external_id = "external-device-001";
 
-    let (_proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
+
+    tokio::spawn(async move {
+        proxy.connect().await.unwrap();
+    });
 
     // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
@@ -366,6 +372,15 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     let external_id = "external-device-001";
 
     let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
+    // Create  the  software list and publish
+    let c8y_software_list = C8yUpdateSoftwareListResponse::default();
+
+    tokio::spawn(async move {
+        // NOTE: this is done in the background because this call awaits for the response.
+        proxy
+            .send_software_list_http(c8y_software_list, device_id.into())
+            .await
+    });
 
     // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
@@ -386,15 +401,6 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     c8y.send(Ok(c8y_response)).await.unwrap();
 
     // This internal id is then used by the proxy for subsequent requests.
-    // Create  the  software list and publish
-    let c8y_software_list = C8yUpdateSoftwareListResponse::default();
-
-    tokio::spawn(async move {
-        // NOTE: this is done in the background because this call awaits for the response.
-        proxy
-            .send_software_list_http(c8y_software_list, device_id.into())
-            .await
-    });
 
     let c8y_software_list = C8yUpdateSoftwareListResponse::default();
     // then the upload request received by c8y is related to the internal id
@@ -460,13 +466,9 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     .await;
 }
 
-/// Spawn an `C8YHttpProxyActor` instance
 /// Return two handles:
-/// - one `C8YHttpProxy` to send requests to the actor
+/// - one `C8YHttpProxy` to send HTTP requests to C8Y
 /// - one `ServerMessageBoxBuilder<HttpRequest,HttpResponse> to fake the behavior of C8Y REST.
-///
-/// This also spawns an actor to generate fake JWT tokens.
-/// The tests will only check that the http requests include this token.
 async fn spawn_c8y_http_proxy(
     c8y_host: String,
     device_id: String,
@@ -480,12 +482,7 @@ async fn spawn_c8y_http_proxy(
         retry_interval: Duration::from_millis(10),
         proxy: ProxyUrlGenerator::default(),
     };
-    let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http);
-    let proxy = C8YHttpProxy::new(&mut c8y_proxy_actor);
-    tokio::spawn(async move {
-        let actor = c8y_proxy_actor.build();
-        let _ = actor.run().await;
-    });
+    let proxy = C8YHttpProxy::new(config, &mut http);
 
     (proxy, http.build())
 }

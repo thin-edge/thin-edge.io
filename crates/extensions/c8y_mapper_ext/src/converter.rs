@@ -1776,22 +1776,19 @@ pub(crate) mod tests {
     use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::C8yTopic;
     use c8y_http_proxy::handle::C8YHttpProxy;
-    use c8y_http_proxy::messages::C8YRestRequest;
-    use c8y_http_proxy::messages::C8YRestResult;
     use serde_json::json;
     use serde_json::Value;
+    use std::str::FromStr;
     use tedge_config::TopicPrefix;
 
-    use std::str::FromStr;
-
+    use crate::tests::spawn_dummy_c8y_http_proxy;
+    use c8y_http_proxy::C8YHttpConfig;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
     use tedge_actors::ClientMessageBox;
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
-    use tedge_actors::MessageReceiver;
-    use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::Channel;
@@ -1806,6 +1803,8 @@ pub(crate) mod tests {
     use tedge_config::AutoLogUpload;
     use tedge_config::SoftwareManagementApiFlag;
     use tedge_config::TEdgeConfig;
+    use tedge_http_ext::HttpRequest;
+    use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
@@ -2700,16 +2699,8 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_event() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, mut http_proxy) = create_c8y_converter(&tmp_dir).await;
-        tokio::spawn(async move {
-            if let Some(C8YRestRequest::CreateEvent(_)) = http_proxy.recv().await {
-                let _ = http_proxy
-                    .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
-                        "event-id".into(),
-                    )))
-                    .await;
-            }
-        });
+        let (mut converter, http_proxy) = create_c8y_converter(&tmp_dir).await;
+        spawn_dummy_c8y_http_proxy(http_proxy);
 
         let event_topic = "te/device/main///e/click_event";
         let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
@@ -2723,17 +2714,8 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_event_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, mut http_proxy) = create_c8y_converter(&tmp_dir).await;
-        tokio::spawn(async move {
-            if let Some(C8YRestRequest::CreateEvent(_)) = http_proxy.recv().await {
-                http_proxy
-                    .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
-                        "event-id".into(),
-                    )))
-                    .await
-                    .unwrap()
-            }
-        });
+        let (mut converter, http_proxy) = create_c8y_converter(&tmp_dir).await;
+        spawn_dummy_c8y_http_proxy(http_proxy);
 
         let event_topic = "te/device/child1///e/click_event";
         let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
@@ -3412,10 +3394,7 @@ pub(crate) mod tests {
 
     pub(crate) async fn create_c8y_converter(
         tmp_dir: &TempTedgeDir,
-    ) -> (
-        CumulocityConverter,
-        FakeServerBox<C8YRestRequest, C8YRestResult>,
-    ) {
+    ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let config = c8y_converter_config(tmp_dir);
         create_c8y_converter_from_config(config)
     }
@@ -3478,21 +3457,23 @@ pub(crate) mod tests {
 
     fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
-    ) -> (
-        CumulocityConverter,
-        FakeServerBox<C8YRestRequest, C8YRestResult>,
-    ) {
+    ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MQTT", 5);
         let mqtt_publisher = LoggingSender::new("MQTT".into(), mqtt_builder.build().sender_clone());
 
-        let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+        let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
             FakeServerBox::builder();
-        let http_proxy = C8YHttpProxy::new(&mut c8y_proxy_builder);
-
         let auth_proxy_addr = config.auth_proxy_addr.clone();
         let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
+        let http_config = C8YHttpConfig::new(
+            config.device_id.clone(),
+            config.c8y_host.clone(),
+            config.c8y_mqtt.clone(),
+            auth_proxy.clone(),
+        );
+        let http_proxy = C8YHttpProxy::new(http_config, &mut http_builder);
 
         let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
             FakeServerBox::builder();
@@ -3512,7 +3493,7 @@ pub(crate) mod tests {
         )
         .unwrap();
 
-        (converter, c8y_proxy_builder.build())
+        (converter, http_builder.build())
     }
 
     fn create_packet(size: usize) -> String {

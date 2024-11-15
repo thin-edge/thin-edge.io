@@ -1,14 +1,10 @@
 use crate::messages::C8YConnectionError;
 use crate::messages::C8YRestError;
-use crate::messages::C8YRestRequest;
-use crate::messages::C8YRestResult;
 use crate::messages::CreateEvent;
 use crate::messages::EventId;
 use crate::messages::SoftwareListResponse;
-use crate::messages::Unit;
 use crate::C8YHttpConfig;
 use anyhow::Context;
-use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yEventResponse;
@@ -19,14 +15,7 @@ use log::error;
 use log::info;
 use std::future::Future;
 use std::time::Duration;
-use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::MessageReceiver;
-use tedge_actors::RequestEnvelope;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
-use tedge_actors::Sender;
-use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
@@ -35,53 +24,17 @@ use tokio::time::sleep;
 
 const RETRY_TIMEOUT_SECS: u64 = 20;
 
+#[derive(Clone)]
 pub struct C8YHttpProxyActor {
     config: C8YHttpConfig,
     pub(crate) end_point: C8yEndPoint,
-    peers: C8YHttpProxyMessageBox,
-}
-
-pub struct C8YHttpProxyMessageBox {
-    /// Connection to the clients
-    pub(crate) clients: ServerMessageBox<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
     pub(crate) http: ClientMessageBox<HttpRequest, HttpResult>,
 }
 
-#[async_trait]
-impl Actor for C8YHttpProxyActor {
-    fn name(&self) -> &str {
-        "C8Y-REST"
-    }
-
-    async fn run(mut self) -> Result<(), RuntimeError> {
-        self.init().await.map_err(Box::new)?;
-
-        while let Some(RequestEnvelope {
-            request,
-            mut reply_to,
-        }) = self.peers.clients.recv().await
-        {
-            let result = match request {
-                C8YRestRequest::CreateEvent(request) => self
-                    .create_event(request)
-                    .await
-                    .map(|response| response.into()),
-
-                C8YRestRequest::SoftwareListResponse(request) => self
-                    .send_software_list_http(request)
-                    .await
-                    .map(|response| response.into()),
-            };
-            reply_to.send(result).await?;
-        }
-        Ok(())
-    }
-}
-
 impl C8YHttpProxyActor {
-    pub fn new(config: C8YHttpConfig, message_box: C8YHttpProxyMessageBox) -> Self {
+    pub fn new(config: C8YHttpConfig, http: ClientMessageBox<HttpRequest, HttpResult>) -> Self {
         let end_point = C8yEndPoint::new(
             &config.c8y_http_host,
             &config.c8y_mqtt_host,
@@ -91,12 +44,19 @@ impl C8YHttpProxyActor {
         C8YHttpProxyActor {
             config,
             end_point,
-            peers: message_box,
+            http,
         }
     }
 
-    async fn init(&mut self) -> Result<(), C8YConnectionError> {
-        info!(target: self.name(), "start initialisation");
+    pub(crate) async fn init(&mut self) -> Result<(), C8YConnectionError> {
+        if self
+            .end_point
+            .get_internal_id(self.end_point.device_id.clone())
+            .is_ok()
+        {
+            return Ok(());
+        }
+        info!(target: "c8y http proxy", "start initialisation");
 
         while self
             .end_point
@@ -112,29 +72,11 @@ impl C8YHttpProxyActor {
                     RETRY_TIMEOUT_SECS, error
                 );
 
-                match tokio::time::timeout(
-                    Duration::from_secs(RETRY_TIMEOUT_SECS),
-                    self.peers.clients.recv_signal(),
-                )
-                .await
-                {
-                    Ok(Some(RuntimeRequest::Shutdown)) => {
-                        // Give up as requested
-                        return Err(C8YConnectionError::Interrupted);
-                    }
-                    Err(_timeout) => {
-                        // No interruption raised, so just continue
-                        continue;
-                    }
-                    Ok(None) => {
-                        // This actor is not connected to the runtime and will never be interrupted
-                        tokio::time::sleep(Duration::from_secs(RETRY_TIMEOUT_SECS)).await;
-                        continue;
-                    }
-                }
+                // This actor is not connected to the runtime and will never be interrupted
+                tokio::time::sleep(Duration::from_secs(RETRY_TIMEOUT_SECS)).await;
             };
         }
-        info!(target: self.name(), "initialisation done.");
+        info!(target: "c8y http proxy", "initialisation done.");
         Ok(())
     }
 
@@ -158,7 +100,7 @@ impl C8YHttpProxyActor {
             let endpoint = request.uri().path().to_owned();
             let method = request.method().to_owned();
 
-            match self.peers.http.await_response(request).await? {
+            match self.http.await_response(request).await? {
                 Ok(response) => match response.status() {
                     StatusCode::OK => {
                         let internal_id_response: InternalIdResponse = response.json().await?;
@@ -201,7 +143,7 @@ impl C8YHttpProxyActor {
         let endpoint = request.uri().path().to_owned();
         let method = request.method().to_owned();
 
-        let resp = self.peers.http.await_response(request).await?;
+        let resp = self.http.await_response(request).await?;
         match resp {
             Ok(response) => match response.status() {
                 StatusCode::OK | StatusCode::CREATED => Ok(Ok(response)),
@@ -235,7 +177,7 @@ impl C8YHttpProxyActor {
         let request_builder = build_request(&self.end_point);
         let request = request_builder.await?.build()?;
         // retry the request
-        Ok(self.peers.http.await_response(request).await?)
+        Ok(self.http.await_response(request).await?)
     }
 
     async fn try_request_with_fresh_internal_id<
@@ -250,7 +192,7 @@ impl C8YHttpProxyActor {
 
         let request_builder = build_request(&self.end_point);
         let request = request_builder.await?.build()?;
-        Ok(self.peers.http.await_response(request).await?)
+        Ok(self.http.await_response(request).await?)
     }
 
     pub(crate) async fn create_event(
@@ -271,10 +213,10 @@ impl C8YHttpProxyActor {
             .await
     }
 
-    async fn send_software_list_http(
+    pub(crate) async fn send_software_list_http(
         &mut self,
         software_list: SoftwareListResponse,
-    ) -> Result<Unit, C8YRestError> {
+    ) -> Result<(), C8YRestError> {
         let device_id = software_list.device_id;
 
         // Get and set child device internal id

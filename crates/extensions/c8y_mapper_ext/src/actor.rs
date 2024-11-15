@@ -5,8 +5,7 @@ use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use c8y_http_proxy::messages::C8YRestRequest;
-use c8y_http_proxy::messages::C8YRestResult;
+use c8y_http_proxy::C8YHttpConfig;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -34,6 +33,8 @@ use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
@@ -343,7 +344,7 @@ impl C8yMapperBuilder {
     pub fn try_new(
         config: C8yMapperConfig,
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
-        http: &mut impl Service<C8YRestRequest, C8YRestResult>,
+        http: &mut impl Service<HttpRequest, HttpResult>,
         timer: &mut impl Service<SyncStart, SyncComplete>,
         uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
         downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
@@ -357,20 +358,27 @@ impl C8yMapperBuilder {
 
         let mqtt_publisher = mqtt.get_sender();
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
-        let http_proxy = C8YHttpProxy::new(http);
-        let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
 
+        let auth_proxy = ProxyUrlGenerator::new(
+            config.auth_proxy_addr.clone(),
+            config.auth_proxy_port,
+            config.auth_proxy_protocol,
+        );
+        let http_config = C8YHttpConfig::new(
+            config.device_id.clone(),
+            config.c8y_host.clone(),
+            config.c8y_mqtt.clone(),
+            auth_proxy.clone(),
+        );
+        let http_proxy = C8YHttpProxy::new(http_config, http);
+
+        let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
         let downloader = ClientMessageBox::new(downloader);
         let uploader = ClientMessageBox::new(uploader);
 
         fs_watcher.connect_sink(
             config.ops_dir.as_std_path().to_path_buf(),
             &box_builder.get_sender(),
-        );
-        let auth_proxy = ProxyUrlGenerator::new(
-            config.auth_proxy_addr.clone(),
-            config.auth_proxy_port,
-            config.auth_proxy_protocol,
         );
 
         let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
