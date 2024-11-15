@@ -1,6 +1,7 @@
 use tedge_config::ReadableKey;
 
 use crate::command::Command;
+use crate::log::MaybeFancy;
 
 pub struct GetConfigCommand {
     pub key: ReadableKey,
@@ -12,7 +13,7 @@ impl Command for GetConfigCommand {
         format!("get the configuration value for key: '{}'", self.key)
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         match self.config.read_string(&self.key) {
             Ok(value) => {
                 println!("{}", value);
@@ -25,7 +26,7 @@ impl Command for GetConfigCommand {
                 eprintln!("The provided config key: '{key}' is not configured: {message}",);
                 std::process::exit(1)
             }
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(anyhow::Error::new(err).into()),
         }
 
         Ok(())

@@ -81,6 +81,8 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             ],
             bridge_location,
             connection_check_attempts: 1,
+            auth_method: None,
+            mosquitto_version: None,
         }
     }
 }
@@ -136,6 +138,8 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 1,
+        auth_method: None,
+        mosquitto_version: None,
     };
 
     assert_eq!(bridge, expected);
@@ -194,6 +198,8 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 1,
+        auth_method: None,
+        mosquitto_version: None,
     };
 
     assert_eq!(bridge, expected);

@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::log::MaybeFancy;
+
 /// A trait to be implemented by all tedge sub-commands.
 ///
 /// A command encapsulates all the required parameters and provides an `execute()` method
@@ -73,7 +75,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self) -> anyhow::Result<()>;
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
 
     /// Helper method to be used in the `BuildCommand` trait.
     ///

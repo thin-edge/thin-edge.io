@@ -1,6 +1,7 @@
 use crate::cli::connect::ConnectError;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use crate::cli::connect::RESPONSE_TIMEOUT;
+use anyhow::anyhow;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
@@ -33,6 +34,7 @@ pub(crate) fn get_connected_c8y_url(
     let mut c8y_url: Option<String> = None;
 
     client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
+    let mut err = None;
 
     for event in connection.iter() {
         match event {
@@ -57,16 +59,27 @@ pub(crate) fn get_connected_c8y_url(
                 break;
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                let rest = if acknowledged {
+                    // The request has been sent but without a response
+                    "The request has been sent, however, no response was received"
+                } else {
+                    // The request has not even been sent
+                    "Make sure mosquitto is running."
+                };
                 // No messages have been received for a while
-                println!("Local MQTT publish has timed out.");
+                err = Some(anyhow!("Timed out obtaining Cumulocity URL. {rest}"));
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
-                eprintln!("ERROR: Disconnected");
+                err = Some(anyhow!(
+                    "Client was disconnected from mosquitto while obtaining Cumulocity URL."
+                ));
                 break;
             }
-            Err(err) => {
-                eprintln!("ERROR: {:?}", err);
+            Err(e) => {
+                err = Some(anyhow::Error::from(e).context(
+                    "Client failed to connect to mosquitto while obtaining Cumulocity URL",
+                ));
                 break;
             }
             _ => {}
@@ -83,17 +96,9 @@ pub(crate) fn get_connected_c8y_url(
     }
 
     if let Some(c8y_url) = c8y_url {
-        return Ok(c8y_url);
-    }
-
-    if acknowledged {
-        // The request has been sent but without a response
-        println!("\nThe request has been sent, however, no response.");
-        Err(ConnectError::TimeoutElapsedError)
+        Ok(c8y_url)
     } else {
-        // The request has not even been sent
-        println!("\nMake sure mosquitto is running.");
-        Err(ConnectError::TimeoutElapsedError)
+        Err(err.map_or(ConnectError::TimeoutElapsedError, Into::into))
     }
 }
 

@@ -114,19 +114,13 @@ impl SystemConfig {
         let config_path = config_root.join(SERVICE_CONFIG_FILE);
 
         match fs::read_to_string(config_path.clone()) {
-            Ok(contents) => {
-                let config: SystemConfig = toml::from_str(contents.as_str()).map_err(|e| {
-                    SystemServiceError::SystemConfigInvalidToml {
-                        path: config_path,
-                        reason: e.to_string(),
-                    }
-                })?;
-                Ok(config)
-            }
-            Err(_) => {
-                println!("The system config file '{}' doesn't exist. Using '/bin/systemctl' as the default service manager\n", config_path);
-                Ok(Self::default())
-            }
+            Ok(contents) => toml::from_str(contents.as_str()).map_err(|e| {
+                SystemServiceError::SystemConfigInvalidToml {
+                    path: config_path,
+                    reason: e.to_string(),
+                }
+            }),
+            Err(_) => Ok(Self::default()),
         }
     }
 }

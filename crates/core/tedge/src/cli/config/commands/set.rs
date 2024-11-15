@@ -1,4 +1,5 @@
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::WritableKey;
 
@@ -17,11 +18,13 @@ impl Command for SetConfigCommand {
         )
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
-        self.config_location.update_toml(&|dto, _reader| {
-            dto.try_update_str(&self.key, &self.value)
-                .map_err(|e| e.into())
-        })?;
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.config_location
+            .update_toml(&|dto, _reader| {
+                dto.try_update_str(&self.key, &self.value)
+                    .map_err(|e| e.into())
+            })
+            .map_err(anyhow::Error::new)?;
         Ok(())
     }
 }

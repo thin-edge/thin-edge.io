@@ -2,6 +2,7 @@ use crate::cli::common::Cloud;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use std::sync::Arc;
 use tedge_config::system_services::SystemServiceManager;
 use tedge_config::ProfileName;
@@ -23,7 +24,8 @@ impl Command for ReconnectBridgeCommand {
     }
 
     /// calls the disconnect command, followed by the connect command
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        println!("Disconnecting from {}", self.cloud);
         let disconnect_cmd: DisconnectBridgeCommand = self.into();
         disconnect_cmd.execute()?;
 
@@ -55,6 +57,7 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
             offline_mode: false,
             service_manager: reconnect_cmd.service_manager.clone(),
             profile: reconnect_cmd.profile.clone(),
+            is_reconnect: true,
         }
     }
 }

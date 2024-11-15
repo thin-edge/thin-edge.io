@@ -1,6 +1,8 @@
+use core::fmt;
 use std::borrow::Cow;
 
 use camino::Utf8PathBuf;
+use tedge_config::auth_method::AuthMethod;
 use tedge_config::HostPort;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::MQTT_TLS_PORT;
@@ -38,12 +40,23 @@ pub struct BridgeConfig {
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
     pub connection_check_attempts: i32,
+    pub auth_method: Option<AuthMethod>,
+    pub mosquitto_version: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum BridgeLocation {
     Mosquitto,
     BuiltIn,
+}
+
+impl fmt::Display for BridgeLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BuiltIn => write!(f, "built-in"),
+            Self::Mosquitto => write!(f, "mosquitto"),
+        }
+    }
 }
 
 impl BridgeConfig {
@@ -102,6 +115,7 @@ impl BridgeConfig {
     }
 
     pub fn validate(&self, use_basic_auth: bool) -> Result<(), ConnectError> {
+        // TODO improve error messages
         if !self.bridge_root_cert_path.exists() {
             return Err(ConnectError::Certificate);
         }
@@ -187,6 +201,8 @@ mod test {
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: None,
+            mosquitto_version: None,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -255,6 +271,8 @@ bridge_attempt_unsubscribe false
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: None,
+            mosquitto_version: None,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -325,6 +343,8 @@ bridge_attempt_unsubscribe false
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: None,
+            mosquitto_version: None,
         };
 
         let mut buffer = Vec::new();
@@ -395,6 +415,8 @@ bridge_attempt_unsubscribe false
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: None,
+            mosquitto_version: None,
         };
 
         let mut buffer = Vec::new();
@@ -512,6 +534,8 @@ bridge_attempt_unsubscribe false
             topics: vec![],
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: None,
+            mosquitto_version: None,
         }
     }
 }

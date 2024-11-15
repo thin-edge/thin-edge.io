@@ -21,6 +21,7 @@ pub mod config;
 mod connect;
 mod disconnect;
 mod init;
+pub mod log;
 mod mqtt;
 mod reconnect;
 mod refresh_bridges;

@@ -2,6 +2,7 @@ use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
 use crate::bridge::BridgeLocation;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use crate::CreateCertCmd;
 use camino::Utf8PathBuf;
 use certificate::NewCertificateConfig;
@@ -17,7 +18,7 @@ impl Command for RenewCertCmd {
         "Renew the self-signed certificate of the device.".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
         self.renew_test_certificate(&config)?;
         eprintln!("Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud");

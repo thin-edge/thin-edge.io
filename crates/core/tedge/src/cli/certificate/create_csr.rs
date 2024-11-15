@@ -2,6 +2,7 @@ use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
 use crate::bridge::BridgeLocation;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use crate::CreateCertCmd;
 use camino::Utf8PathBuf;
 use certificate::NewCertificateConfig;
@@ -19,7 +20,7 @@ impl Command for CreateCsrCmd {
         "Generate a Certificate Signing Request.".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
         self.create_certificate_signing_request(&config)?;
         eprintln!("Certificate Signing Request was successfully created.");

@@ -1,5 +1,5 @@
 use crate::command::Command;
-use crate::ConfigError;
+use crate::log::MaybeFancy;
 use pad::PadStr;
 use std::io::stdout;
 use std::io::IsTerminal;
@@ -18,7 +18,7 @@ impl Command for ListConfigCommand {
         "list the configuration keys and values".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.is_doc {
             print_config_doc(&self.config);
         } else {
@@ -29,7 +29,7 @@ impl Command for ListConfigCommand {
     }
 }
 
-fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
+fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), anyhow::Error> {
     let mut keys_without_values = Vec::new();
     for config_key in config.readable_keys() {
         match config.read_string(&config_key).ok() {
@@ -51,10 +51,6 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
 }
 
 fn print_config_doc(config: &TEdgeConfig) {
-    if !stdout().is_terminal() {
-        yansi::disable();
-    }
-
     let max_length = config
         .readable_keys()
         .map(|c| c.to_cow_str().len())

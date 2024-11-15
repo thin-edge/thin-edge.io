@@ -1,6 +1,8 @@
 use super::ConnectError;
 use crate::bridge::BridgeConfig;
 use crate::cli::connect::CONNECTION_TIMEOUT;
+use anyhow::bail;
+use anyhow::Context as _;
 use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
@@ -17,12 +19,14 @@ use rumqttc::QoS;
 use rumqttc::TlsError;
 use rumqttc::Transport;
 
+const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
+
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub fn create_device_with_direct_connection(
     use_basic_auth: bool,
     bridge_config: &BridgeConfig,
     device_type: &str,
-) -> Result<(), ConnectError> {
+) -> anyhow::Result<()> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
 
@@ -96,8 +100,7 @@ pub fn create_device_with_direct_connection(
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
-                eprintln!("ERROR: Disconnected");
-                break;
+                bail!("Unexpectedly disconnected from Cumulocity while attempting to create device")
             }
             Err(ConnectionError::Io(err)) if err.kind() == std::io::ErrorKind::InvalidData => {
                 if let Some(Error::AlertReceived(alert_description)) = err
@@ -107,18 +110,15 @@ pub fn create_device_with_direct_connection(
                     if let AlertDescription::CertificateUnknown = alert_description {
                         // Either the device cert is not uploaded to c8y or
                         // another cert is set in device.cert_path
-                        eprintln!("The device certificate is not trusted by Cumulocity.");
-                        return Err(ConnectError::ConnectionCheckError);
+                        bail!("The device certificate is not trusted by Cumulocity. Upload the certificate using `tedge cert upload c8y`");
                     } else if let AlertDescription::HandshakeFailure = alert_description {
                         // Non-paired private key is set in device.key_path
-                        eprintln!(
+                        bail!(
                             "The private key is not paired with the certificate. Check your 'device.key_path'."
                         );
-                        return Err(ConnectError::ConnectionCheckError);
                     }
                 }
-                eprintln!("ERROR: {:?}", err);
-                return Err(ConnectError::ConnectionCheckError);
+                return Err(err).context(CONNECTION_ERROR_CONTEXT);
             }
             Err(ConnectionError::Tls(TlsError::Io(err)))
                 if err.kind() == std::io::ErrorKind::InvalidData =>
@@ -128,25 +128,17 @@ pub fn create_device_with_direct_connection(
                     .and_then(|custom_err| custom_err.downcast_ref::<Error>())
                 {
                     Some(Error::InvalidCertificate(CertificateError::UnknownIssuer)) => {
-                        eprintln!("Cumulocity certificate is not trusted by the device. Check your 'c8y.root_cert_path'.");
+                        bail!("Cumulocity certificate is not trusted by the device. Check your 'c8y.root_cert_path'.");
                     }
-                    _ => {
-                        eprintln!("ERROR: {:?}", err);
-                    }
+                    _ => return Err(err).context(CONNECTION_ERROR_CONTEXT),
                 }
-                return Err(ConnectError::ConnectionCheckError);
             }
-            Err(err) => {
-                eprintln!("ERROR: {:?}", err);
-                return Err(ConnectError::ConnectionCheckError);
-            }
+            Err(err) => return Err(err).context(CONNECTION_ERROR_CONTEXT),
             _ => {}
         }
     }
 
-    // The request has not even been sent
-    println!("No response from Cumulocity");
-    Err(ConnectError::TimeoutElapsedError)
+    bail!("Timed-out attempting to create device in Cumulocity")
 }
 
 fn publish_device_create_message(
