@@ -88,10 +88,10 @@ impl C8yEndPoint {
         }
     }
 
-    pub fn get_internal_id(&self, device_id: String) -> Result<String, C8yEndPointError> {
-        match self.devices_internal_id.get(&device_id) {
+    pub fn get_internal_id(&self, device_id: &str) -> Result<String, C8yEndPointError> {
+        match self.devices_internal_id.get(device_id) {
             Some(internal_id) => Ok(internal_id.to_string()),
-            None => Err(C8yEndPointError::InternalIdNotFound(device_id.clone())),
+            None => Err(C8yEndPointError::InternalIdNotFound(device_id.to_string())),
         }
     }
 
@@ -450,7 +450,7 @@ mod tests {
         );
         c8y.devices_internal_id
             .insert("test_device".to_string(), "12345".to_string());
-        let internal_id = c8y.get_internal_id("test_device".to_string()).unwrap();
+        let internal_id = c8y.get_internal_id("test_device").unwrap();
         let res = c8y.get_url_for_sw_list(internal_id);
 
         assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
@@ -580,7 +580,7 @@ mod tests {
         );
         c8y.devices_internal_id
             .insert("test_device".to_string(), "12345".to_string());
-        let end_pt_err = c8y.get_internal_id("test_child".into()).unwrap_err();
+        let end_pt_err = c8y.get_internal_id("test_child").unwrap_err();
 
         assert_eq!(
             end_pt_err.to_string(),

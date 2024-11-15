@@ -1,10 +1,5 @@
-use crate::actor::C8YHttpProxyActor;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use std::time::Duration;
-use tedge_actors::ClientMessageBox;
-use tedge_actors::Service;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpResult;
 
 mod actor;
 pub mod handle;
@@ -37,25 +32,5 @@ impl C8YHttpConfig {
             retry_interval: Duration::from_secs(5),
             proxy,
         }
-    }
-}
-
-/// A proxy to C8Y REST API
-pub struct C8YHttpProxyBuilder {
-    /// Config
-    config: C8YHttpConfig,
-
-    /// Connection to an HTTP actor
-    http: ClientMessageBox<HttpRequest, HttpResult>,
-}
-
-impl C8YHttpProxyBuilder {
-    pub fn new(config: C8YHttpConfig, http: &mut impl Service<HttpRequest, HttpResult>) -> Self {
-        let http = ClientMessageBox::new(http);
-        C8YHttpProxyBuilder { config, http }
-    }
-
-    pub fn build(self) -> C8YHttpProxyActor {
-        C8YHttpProxyActor::new(self.config, self.http)
     }
 }

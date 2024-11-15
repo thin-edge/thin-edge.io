@@ -48,25 +48,15 @@ impl C8YHttpProxyActor {
         }
     }
 
-    pub(crate) async fn init(&mut self) -> Result<(), C8YConnectionError> {
-        if self
-            .end_point
-            .get_internal_id(self.end_point.device_id.clone())
-            .is_ok()
-        {
-            return Ok(());
+    pub(crate) async fn init(&mut self) -> Result<String, C8YConnectionError> {
+        let external_id = self.end_point.device_id.clone();
+        if let Ok(internal_id) = self.end_point.get_internal_id(&external_id) {
+            return Ok(internal_id);
         }
         info!(target: "c8y http proxy", "start initialisation");
 
-        while self
-            .end_point
-            .get_internal_id(self.end_point.device_id.clone())
-            .is_err()
-        {
-            if let Err(error) = self
-                .get_and_set_internal_id(self.end_point.device_id.clone())
-                .await
-            {
+        while self.end_point.get_internal_id(&external_id).is_err() {
+            if let Err(error) = self.get_and_set_internal_id(external_id.clone()).await {
                 error!(
                     "An error occurred while retrieving internal Id, operation will retry in {} seconds\n Error: {:?}",
                     RETRY_TIMEOUT_SECS, error
@@ -77,7 +67,7 @@ impl C8YHttpProxyActor {
             };
         }
         info!(target: "c8y http proxy", "initialisation done.");
-        Ok(())
+        Ok(self.end_point.get_internal_id(&external_id).unwrap())
     }
 
     async fn get_and_set_internal_id(&mut self, device_id: String) -> Result<(), C8YRestError> {
@@ -221,14 +211,14 @@ impl C8YHttpProxyActor {
 
         // Get and set child device internal id
         if device_id.ne(&self.end_point.device_id)
-            && self.end_point.get_internal_id(device_id.clone()).is_err()
+            && self.end_point.get_internal_id(&device_id).is_err()
         {
             self.get_and_set_internal_id(device_id.clone()).await?;
         }
 
         let build_request = |end_point: &C8yEndPoint| {
             let internal_id = end_point
-                .get_internal_id(device_id.clone())
+                .get_internal_id(&device_id)
                 .map_err(|e| C8YRestError::CustomError(e.to_string()));
             let url = internal_id.map(|id| end_point.proxy_url_for_sw_list(id));
             async {
@@ -261,7 +251,7 @@ impl C8YHttpProxyActor {
         let build_request = |end_point: &C8yEndPoint| {
             let create_event_url = end_point.proxy_url_for_create_event();
             let internal_id = end_point
-                .get_internal_id(device_id.clone())
+                .get_internal_id(&device_id)
                 .map_err(|e| C8YRestError::CustomError(e.to_string()));
 
             async {

@@ -1,7 +1,6 @@
 use crate::handle::C8YHttpProxy;
 use crate::messages::CreateEvent;
 use crate::C8YHttpConfig;
-use crate::C8YHttpProxyBuilder;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
@@ -287,12 +286,11 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         retry_interval: Duration::from_millis(10),
         proxy,
     };
-    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor);
+    let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
     tokio::spawn(async move { http_actor.run().await });
-    let mut proxy = c8y_proxy_actor.build();
 
-    let result = proxy.try_get_internal_id(external_id.into()).await;
+    let result = proxy.connect().await;
     assert_eq!(internal_id, result.unwrap());
 }
 
@@ -302,6 +300,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     let internal_id = "12345678";
     let event_id = "87654321";
 
+    let c8y_serial = InternalIdResponse::new(internal_id, external_id);
     let event = CreateEvent {
         event_type: "click_event".into(),
         time: datetime!(2021-04-23 19:00:00 +05:00),
@@ -316,6 +315,13 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
     let response = serde_json::to_string(&response).unwrap();
     // Start a lightweight mock server.
     let mut server = mockito::Server::new_async().await;
+
+    let _mock0 = server
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
+        .with_status(200)
+        .with_body(serde_json::to_string(&c8y_serial).unwrap())
+        .create_async()
+        .await;
 
     let _mock1 = server
         .mock("POST", "/c8y/event/events/")
@@ -351,17 +357,16 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         retry_interval: Duration::from_millis(10),
         proxy,
     };
-    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor);
+    let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
     tokio::spawn(async move { http_actor.run().await });
-    let mut proxy = c8y_proxy_actor.build();
     // initialize the endpoint for mocking purpose
-    proxy.end_point.device_id = external_id.into();
+    /*proxy.end_point.device_id = external_id.into();
     proxy
         .end_point
-        .set_internal_id(external_id.into(), internal_id.into());
+        .set_internal_id(external_id.into(), internal_id.into());*/
 
-    let result = proxy.create_event(event).await;
+    let result = proxy.send_event(event).await;
     assert_eq!(event_id, result.unwrap());
 }
 
