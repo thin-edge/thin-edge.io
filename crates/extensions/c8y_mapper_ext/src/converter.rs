@@ -1759,7 +1759,6 @@ pub(crate) mod tests {
     use assert_json_diff::assert_json_include;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use c8y_api::proxy_url::Protocol;
-    use c8y_api::proxy_url::ProxyUrlGenerator;
     use c8y_api::smartrest::operations::ResultFormat;
     use c8y_api::smartrest::topic::C8yTopic;
     use c8y_http_proxy::handle::C8YHttpProxy;
@@ -1769,7 +1768,6 @@ pub(crate) mod tests {
     use tedge_config::TopicPrefix;
 
     use crate::tests::spawn_dummy_c8y_http_proxy;
-    use c8y_http_proxy::C8YHttpConfig;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -3451,16 +3449,7 @@ pub(crate) mod tests {
 
         let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
             FakeServerBox::builder();
-        let auth_proxy_addr = config.auth_proxy_addr.clone();
-        let auth_proxy_port = config.auth_proxy_port;
-        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
-        let http_config = C8YHttpConfig::new(
-            config.device_id.clone(),
-            config.c8y_host.clone(),
-            config.c8y_mqtt.clone(),
-            auth_proxy,
-        );
-        let http_proxy = C8YHttpProxy::new(http_config, &mut http_builder);
+        let http_proxy = C8YHttpProxy::new(&config, &mut http_builder);
 
         let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
             FakeServerBox::builder();

@@ -3,9 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
-use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use c8y_http_proxy::C8YHttpConfig;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -358,18 +356,7 @@ impl C8yMapperBuilder {
         let mqtt_publisher = mqtt.get_sender();
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
 
-        let auth_proxy = ProxyUrlGenerator::new(
-            config.auth_proxy_addr.clone(),
-            config.auth_proxy_port,
-            config.auth_proxy_protocol,
-        );
-        let http_config = C8YHttpConfig::new(
-            config.device_id.clone(),
-            config.c8y_host.clone(),
-            config.c8y_mqtt.clone(),
-            auth_proxy.clone(),
-        );
-        let http_proxy = C8YHttpProxy::new(http_config, http);
+        let http_proxy = C8YHttpProxy::new(&config, http);
 
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
         let downloader = ClientMessageBox::new(downloader);

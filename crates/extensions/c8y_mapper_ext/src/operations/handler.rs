@@ -279,11 +279,7 @@ fn is_operation_status_transition_valid(previous: &str, next: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use std::time::Duration;
-
-    use c8y_api::proxy_url::ProxyUrlGenerator;
-    use c8y_http_proxy::C8YHttpConfig;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::test_helpers::MessageReceiverExt;
@@ -800,13 +796,7 @@ mod tests {
 
         let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
             FakeServerBoxBuilder::default();
-        let http_config = C8YHttpConfig::new(
-            c8y_mapper_config.device_id.clone(),
-            c8y_mapper_config.c8y_host.clone(),
-            c8y_mapper_config.c8y_mqtt.clone(),
-            ProxyUrlGenerator::default(),
-        );
-        let c8y_proxy = C8YHttpProxy::new(http_config, &mut http_builder);
+        let c8y_proxy = C8YHttpProxy::new(&c8y_mapper_config, &mut http_builder);
 
         let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
             FakeServerBoxBuilder::default();

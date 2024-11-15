@@ -18,8 +18,11 @@ pub struct C8YHttpProxy {
 }
 
 impl C8YHttpProxy {
-    pub fn new(config: C8YHttpConfig, http: &mut impl Service<HttpRequest, HttpResult>) -> Self {
-        let c8y = C8YHttpProxyBuilder::new(config, http).build();
+    pub fn new(
+        config: impl Into<C8YHttpConfig>,
+        http: &mut impl Service<HttpRequest, HttpResult>,
+    ) -> Self {
+        let c8y = C8YHttpProxyBuilder::new(config.into(), http).build();
         C8YHttpProxy { c8y }
     }
 
