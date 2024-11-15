@@ -338,6 +338,9 @@ Setup Main Device Agent
 
     Execute Command    chown -R tedge:tedge /etc/tedge/device-local-certs
 
+    # TODO: Replace this with tedge config set device.id once #3242 is done
+    Execute Command    sudo tedge cert create --device-id ${PARENT_SN}
+
     Execute Command    sudo dpkg -i packages/tedge-agent*.deb
     Execute Command    sudo systemctl enable tedge-agent
     Execute Command    sudo systemctl start tedge-agent
