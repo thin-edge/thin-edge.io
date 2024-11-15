@@ -1547,6 +1547,12 @@ fn is_child_operation_path(path: &Path) -> bool {
 
 impl CumulocityConverter {
     /// Register on C8y an operation capability for a device.
+    ///
+    /// Additionally when the target is a child device, operation directory for the device will be loaded and operations
+    /// not already registered will be registered.
+    ///
+    /// Returns a Set Supported Operations (114) message if among registered operations there were new operations that
+    /// were not announced to the cloud.
     pub fn register_operation(
         &mut self,
         target: &EntityTopicId,
@@ -1570,27 +1576,45 @@ impl CumulocityConverter {
             }
         };
 
+        // Save the operation to the operation directory
         let ops_file = ops_dir.join(c8y_operation_name);
         create_directory_with_defaults(&*ops_dir)?;
         create_file_with_defaults(&ops_file, None)?;
 
-        let operation = c8y_api::smartrest::operations::get_operation(
-            ops_file.as_std_path(),
-            &self.config.bridge_config,
-        )?;
-        let operations = self
-            .operations_for_device_mut(target)
-            .expect("entity should've been checked before that it's not a service");
+        let ops_dir = ops_dir.as_std_path();
 
-        let prev_operation = operations.remove_operation(&operation.name);
-        // even if the body of the operation is different, as long as it has the same name, supported operations message
-        // will be the same, so we don't need to resend
-        let need_cloud_update = prev_operation.is_none();
-        operations.add_operation(operation);
+        let need_cloud_update = match is_child_operation_path(ops_dir) {
+            // for devices other than the main device, dynamic update of supported operations via file events is
+            // disabled, so we have to additionally load new operations from the c8y operations for that device
+            true => self.update_operations(ops_dir)?,
+
+            // for main devices new operation files are loaded dynamically as they are created, so only register one
+            // operation we need
+            false => {
+                let bridge_config = &self.config.bridge_config;
+                let operation = c8y_api::smartrest::operations::get_operation(
+                    ops_file.as_std_path(),
+                    bridge_config,
+                )?;
+
+                let current_operations = self
+                    .operations_for_device_mut(target)
+                    .expect("entity should've been checked before that it's not a service");
+
+                let prev_operation = current_operations.remove_operation(&operation.name);
+
+                // even if the body of the operation is different, as long as it has the same name, supported operations message
+                // will be the same, so we don't need to resend
+                let need_cloud_update = prev_operation.is_none();
+
+                current_operations.add_operation(operation);
+
+                need_cloud_update
+            }
+        };
 
         if need_cloud_update {
-            let cloud_update_operations_message =
-                self.create_supported_operations(ops_dir.as_std_path())?;
+            let cloud_update_operations_message = self.create_supported_operations(ops_dir)?;
 
             return Ok(vec![cloud_update_operations_message]);
         }
@@ -1598,10 +1622,13 @@ impl CumulocityConverter {
         Ok(vec![])
     }
 
-    /// Saves a new supported operation set for a given device.
+    /// Loads and saves a new supported operation set for a given device.
     ///
-    /// If the supported operation set changed, `Ok(true)` is returned to denote that this change
-    /// should be sent to the cloud.
+    /// All operation files from the given operation directory are loaded and set as the new supported operation set for
+    /// a given device. Invalid operation files are ignored.
+    ///
+    /// If the supported operation set changed, `Ok(true)` is returned to denote that this change should be sent to the
+    /// cloud.
     fn update_operations(&mut self, dir: &Path) -> Result<bool, ConversionError> {
         let operations = get_operations(dir, &self.config.bridge_config)?;
         let current_operations = if is_child_operation_path(dir) {

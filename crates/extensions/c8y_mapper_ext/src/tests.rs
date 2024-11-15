@@ -1425,8 +1425,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
 }
 
 #[tokio::test]
-// TODO: fix or remove test
-#[ignore = "asserts that publishing a single operation capability message causes full rescan of c8y operations directory, which is undesirable behaviour"]
 async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     // The test assures tedge-mapper reads the operations for the child devices from the operations directory, and then it publishes them on to `c8y/s/us/child1`.
     // When mapper is running test adds a new operation for a child into the operations directory, then the mapper discovers the new
