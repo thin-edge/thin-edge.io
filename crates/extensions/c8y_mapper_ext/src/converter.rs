@@ -262,7 +262,6 @@ impl CumulocityConverter {
             uploader,
             mqtt_publisher.clone(),
             http_proxy.clone(),
-            auth_proxy.clone(),
         );
 
         Ok(CumulocityConverter {

@@ -16,8 +16,6 @@ use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
-use c8y_api::http_proxy::C8yEndPoint;
-use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::payload::SmartrestPayload;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
@@ -58,11 +56,7 @@ pub(super) struct OperationContext {
     pub(super) software_management_api: SoftwareManagementApiFlag,
     pub(super) command_id: IdGenerator,
     pub(super) smart_rest_use_operation_id: bool,
-
     pub(super) http_proxy: C8YHttpProxy,
-    pub(super) c8y_endpoint: C8yEndPoint,
-    pub(super) auth_proxy: ProxyUrlGenerator,
-
     pub(super) downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     pub(super) uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     pub(super) mqtt_publisher: LoggingSender<MqttMessage>,

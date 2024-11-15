@@ -38,12 +38,8 @@ impl OperationContext {
 
         let mut c8y_http_proxy = self.http_proxy.clone();
         let event_response_id = c8y_http_proxy.send_event(create_event).await?;
-
-        let binary_upload_event_url = self
-            .c8y_endpoint
-            .get_url_for_event_binary_upload_unchecked(&event_response_id);
-
-        let proxy_url = self.auth_proxy.proxy_url(binary_upload_event_url.clone());
+        let c8y_url = c8y_http_proxy.c8y_url_for_event_binary_upload(&event_response_id);
+        let proxy_url = c8y_http_proxy.proxy_url_for_event_binary_upload(&event_response_id);
 
         let external_id = external_id.as_ref();
         let file_name = file_name.unwrap_or_else(|| {
@@ -68,7 +64,7 @@ impl OperationContext {
             .await_response((cmd_id.into(), upload_request))
             .await?;
 
-        Ok((binary_upload_event_url, download_result))
+        Ok((c8y_url, download_result))
     }
 
     pub async fn upload_operation_log(

@@ -35,6 +35,20 @@ impl C8YHttpProxy {
         self.c8y.end_point.local_proxy_url(remote_url)
     }
 
+    // Returns the c8y url to upload an attachment onto an event
+    pub fn c8y_url_for_event_binary_upload(&self, event_id: &str) -> Url {
+        self.c8y
+            .end_point
+            .get_url_for_event_binary_upload_unchecked(event_id)
+    }
+
+    // Returns the local url to upload an attachment onto an event
+    pub fn proxy_url_for_event_binary_upload(&self, event_id: &str) -> Url {
+        self.c8y
+            .end_point
+            .proxy_url_for_event_binary_upload(event_id)
+    }
+
     pub async fn send_event(&mut self, c8y_event: CreateEvent) -> Result<String, C8YRestError> {
         self.c8y.init().await?;
         self.c8y.create_event(c8y_event).await

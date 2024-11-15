@@ -7,8 +7,6 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::config::C8yMapperConfig;
 use crate::Capabilities;
-use c8y_api::http_proxy::C8yEndPoint;
-use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -55,7 +53,6 @@ impl OperationHandler {
         mqtt_publisher: LoggingSender<MqttMessage>,
 
         http_proxy: C8YHttpProxy,
-        auth_proxy: ProxyUrlGenerator,
     ) -> Self {
         Self {
             context: Arc::new(OperationContext {
@@ -75,14 +72,7 @@ impl OperationHandler {
                 downloader,
                 uploader,
 
-                c8y_endpoint: C8yEndPoint::new(
-                    &c8y_mapper_config.c8y_host,
-                    &c8y_mapper_config.c8y_mqtt,
-                    &c8y_mapper_config.device_id,
-                    auth_proxy.clone(),
-                ),
                 http_proxy: http_proxy.clone(),
-                auth_proxy: auth_proxy.clone(),
             }),
 
             running_operations: Default::default(),
@@ -292,7 +282,7 @@ mod tests {
 
     use std::time::Duration;
 
-    use c8y_api::proxy_url::Protocol;
+    use c8y_api::proxy_url::ProxyUrlGenerator;
     use c8y_http_proxy::C8YHttpConfig;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
@@ -827,17 +817,12 @@ mod tests {
             FakeServerBoxBuilder::default();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let auth_proxy_addr = c8y_mapper_config.auth_proxy_addr.clone();
-        let auth_proxy_port = c8y_mapper_config.auth_proxy_port;
-        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
-
         let operation_handler = OperationHandler::new(
             &c8y_mapper_config,
             downloader,
             uploader,
             mqtt_publisher,
             c8y_proxy,
-            auth_proxy,
         );
 
         let mqtt = mqtt_builder.build();
