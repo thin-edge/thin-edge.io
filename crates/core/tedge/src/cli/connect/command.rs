@@ -94,8 +94,15 @@ impl ConnectCommand {
                 match self.check_connection(config, self.profile.as_ref()) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
-                        self.check_c8y_url(config)?;
-                        println!("Connection check to {cloud} cloud is successful.");
+                        match self.tenant_matches_configured_url(config)? {
+                            // Check failed, warning has been printed already
+                            // Don't tell them the connection test succeeded because that's not true
+                            Some(false) => {}
+                            // Either the check succceded or it wasn't relevant (e.g. non-Cumulocity connection)
+                            Some(true) | None => {
+                                println!("Connection check to {cloud} cloud is successful.")
+                            }
+                        }
 
                         Ok(())
                     }
@@ -175,15 +182,7 @@ impl ConnectCommand {
                 .auth_method
                 .is_basic(&c8y_config.credentials_path);
             if !use_basic_auth && !self.offline_mode && connection_check_success {
-                check_connected_c8y_tenant_as_configured(
-                    config,
-                    self.profile.as_deref(),
-                    &c8y_config
-                        .mqtt
-                        .or_none()
-                        .map(|u| u.host().to_string())
-                        .unwrap_or_default(),
-                );
+                let _ = self.tenant_matches_configured_url(config);
             }
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
@@ -193,7 +192,10 @@ impl ConnectCommand {
 }
 
 impl ConnectCommand {
-    fn check_c8y_url(&self, config: &TEdgeConfig) -> Result<(), ConnectError> {
+    fn tenant_matches_configured_url(
+        &self,
+        config: &TEdgeConfig,
+    ) -> Result<Option<bool>, Fancy<ConnectError>> {
         if let Cloud::C8y = self.cloud {
             let c8y_config = config.c8y.try_get(self.profile.as_deref())?;
 
@@ -201,7 +203,7 @@ impl ConnectCommand {
                 .auth_method
                 .is_basic(&c8y_config.credentials_path);
             if !use_basic_auth && !self.offline_mode {
-                check_connected_c8y_tenant_as_configured(
+                tenant_matches_configured_url(
                     config,
                     self.profile.as_deref(),
                     &c8y_config
@@ -209,10 +211,14 @@ impl ConnectCommand {
                         .or_none()
                         .map(|u| u.host().to_string())
                         .unwrap_or_default(),
-                );
+                )
+                .map(Some)
+            } else {
+                Ok(None)
             }
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
     fn check_connection_with_retries(
@@ -958,22 +964,25 @@ fn get_common_mosquitto_config_file_path(
 }
 
 // To confirm the connected c8y tenant is the one that user configured.
-fn check_connected_c8y_tenant_as_configured(
+fn tenant_matches_configured_url(
     tedge_config: &TEdgeConfig,
     c8y_prefix: Option<&str>,
     configured_url: &str,
-) {
+) -> Result<bool, Fancy<ConnectError>> {
     let spinner = Spinner::start("Checking Cumulocity is connected to intended tenant");
     let res = get_connected_c8y_url(tedge_config, c8y_prefix);
     match spinner.finish(res) {
-        Ok(url) if url == configured_url => {}
-        Ok(url) => warning!(
+        Ok(url) if url == configured_url => Ok(true),
+        Ok(url) => {
+            warning!(
             "The device is connected to {}, but the configured URL is {}.\
             \n    To connect the device to the intended tenant, remove the device certificate from {url}, and then run `tedge reconnect c8y`", 
             url.bold(),
             configured_url.bold(),
-        ),
-        Err(_) => {},
+        );
+            Ok(false)
+        }
+        Err(e) => Err(e),
     }
 }
 
