@@ -15,7 +15,7 @@ use tedge::log::MaybeFancy;
 use tedge::Component;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
-use tedge_config::system_services::set_log_level;
+use tedge_config::system_services::log_init;
 use tracing::log;
 
 #[global_allocator]
@@ -56,8 +56,19 @@ fn main() -> anyhow::Result<()> {
             block_on(tedge_watchdog::run(opt))
         }
         TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => tedge_write::bin::run(opt),
-        TEdgeOptMulticall::Tedge { cmd, config_dir } => {
-            set_log_level(tracing::Level::WARN);
+        TEdgeOptMulticall::Tedge {
+            cmd,
+            config_dir,
+            log_args,
+        } => {
+            let tedge_config_location =
+                tedge_config::TEdgeConfigLocation::from_custom_root(&config_dir);
+
+            log_init(
+                "tedge",
+                &log_args,
+                &tedge_config_location.tedge_config_root_path,
+            )?;
 
             let build_context = BuildContext::new(config_dir);
             let cmd = cmd
