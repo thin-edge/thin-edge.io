@@ -9,6 +9,7 @@ use crate::log::MaybeFancy;
 ///
 /// ```
 /// use tedge::command::Command;
+/// use tedge::log::MaybeFancy;
 ///
 /// struct SayHello {
 ///     name: String,
@@ -19,7 +20,7 @@ use crate::log::MaybeFancy;
 ///        format!("say hello to '{}'", self.name)
 ///     }
 ///
-///     fn execute(&self) -> anyhow::Result<()> {
+///     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        println!("Hello {}!", self.name);
 ///        Ok(())
 ///     }
@@ -34,6 +35,7 @@ use crate::log::MaybeFancy;
 /// use tedge_config::TEdgeConfig;
 /// use tedge_config::ReadError;
 /// use tedge_config::ReadableKey;
+/// use tedge::log::MaybeFancy;
 ///
 /// struct GetConfigKey {
 ///     config: TEdgeConfig,
@@ -45,11 +47,11 @@ use crate::log::MaybeFancy;
 ///        format!("get the value of the configuration key '{}'", self.key)
 ///     }
 ///
-///     fn execute(&self) -> anyhow::Result<()> {
+///     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        match self.config.read_string(&self.key) {
 ///             Ok(value) => println!("{}", value),
 ///             Err(ReadError::ConfigNotSet(_)) => eprintln!("The configuration key `{}` is not set", self.key),
-///             Err(e) => return Err(e.into()),
+///             Err(e) => return Err(MaybeFancy::Unfancy(e.into())),
 ///        };
 ///        Ok(())
 ///     }
