@@ -54,7 +54,7 @@ Remote access session is independent from mapper (when using socket activation)
     ...    exp_exit_code=0
     ...    user=root
     ...    key_file=${KEY_FILE}
-    Should Contain    ${stdout}    tedge-agent service successfully started and enabled
+    Should Contain    ${stdout}    Enabling tedge-agent... ✓
     Cumulocity.Should Only Have Completed Operations
 
     # Transfer a test script to the device to reduce errors with complex one-liners
@@ -91,7 +91,7 @@ Remote access session is not independent from mapper (when socket activation is 
     ...    key_file=${KEY_FILE}
     Should Not Contain
     ...    ${stdout}
-    ...    tedge-agent service successfully started and enabled
+    ...    Enabling tedge-agent...
     ...    msg=This message should not be present as the connection will be severed due to being a child process of the tedge-mapper-c8y
     Cumulocity.Should Only Have Completed Operations
 

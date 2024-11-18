@@ -23,14 +23,14 @@ use super::ConnectError;
 #[macro_export]
 macro_rules! warning {
     ($($arg:tt)+) => ({
-        use yansi::Paint as _; println!("{} {}", "warning:".yellow().bold(), format_args!($($arg)+))
+        use yansi::Paint as _; eprintln!("{} {}", "warning:".yellow().bold(), format_args!($($arg)+))
     });
 }
 
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)+) => ({
-        use yansi::Paint as _; println!("{} {}", "error:".red().bold(), format_args!($($arg)+))
+        use yansi::Paint as _; eprintln!("{} {}", "error:".red().bold(), format_args!($($arg)+))
     });
 }
 
@@ -126,16 +126,16 @@ where
         };
 
         match res.as_ref().err().filter(|&e| filter_err(e)) {
-            None => writeln!(stdout, "{title}... {}", "✓".green().bold()),
-            Some(e) => writeln!(
-                stdout,
-                "{title}... {}\n{} {e:#}",
-                "✗".red().bold(),
-                "error:".red().bold()
-            ),
+            None => {
+                writeln!(stdout, "{title}... {}", "✓".green().bold()).unwrap();
+                stdout.flush().unwrap();
+            }
+            Some(e) => {
+                writeln!(stdout, "{title}... {}", "✗".red().bold(),).unwrap();
+                stdout.flush().unwrap();
+                error!("{e:#}");
+            }
         }
-        .unwrap();
-        stdout.flush().unwrap();
 
         tx_return.send(res).unwrap();
     }
@@ -189,7 +189,7 @@ impl<E> Fancy<E> {
     where
         E: fmt::Display,
     {
-        println!("{} {err:#}", "error:".red().bold());
+        error!("{err:#}");
         Self { err, _secret: () }
     }
 }

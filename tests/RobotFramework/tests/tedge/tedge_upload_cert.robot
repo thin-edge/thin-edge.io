@@ -37,7 +37,8 @@ Renew the certificate
     ...    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
     ...    log_output=${False}
     ${output}=    Execute Command    sudo tedge connect c8y
-    Should Contain    ${output}    Connection check is successful.
+    Should Contain    ${output}    Verifying device is connected to cloud... ✓
+    Should Contain    ${output}    Checking Cumulocity is connected to intended tenant... ✓
 
 Cert upload prompts for username (from stdin)
     # Note: Use bash process substitution to simulate user input from /dev/stdin
@@ -55,7 +56,8 @@ Cert upload prompts for username (from stdin)
     ...    cmd=sudo env --unset=C8Y_USER C8Y_PASSWORD='${C8Y_CONFIG.password}' bash -c "tedge cert upload c8y < <(echo '${C8Y_CONFIG.username}')"
     ...    log_output=${False}
     ${output}=    Execute Command    sudo tedge connect c8y
-    Should Contain    ${output}    Connection check is successful.
+    Should Contain    ${output}    Verifying device is connected to cloud... ✓
+    Should Contain    ${output}    Checking Cumulocity is connected to intended tenant... ✓
 
 Cert upload supports reading username/password from go-c8y-cli env variables
     [Setup]    Setup With Self-Signed Certificate
@@ -72,7 +74,8 @@ Cert upload supports reading username/password from go-c8y-cli env variables
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
     ...    log_output=${False}
     ${output}=    Execute Command    sudo tedge connect c8y
-    Should Contain    ${output}    Connection check is successful.
+    Should Contain    ${output}    Verifying device is connected to cloud... ✓
+    Should Contain    ${output}    Checking Cumulocity is connected to intended tenant... ✓
 
 Renew certificate fails
     [Setup]    Setup Without Certificate
