@@ -268,7 +268,7 @@ impl ConnectCommand {
         if which("tedge-mapper").is_err() {
             warning!("tedge-mapper is not installed.");
         } else {
-            let spinner = Spinner::start(format!("Starting {}", self.cloud.mapper_service()));
+            let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
             let _ = spinner.finish(
                 self.service_manager
                     .as_ref()
