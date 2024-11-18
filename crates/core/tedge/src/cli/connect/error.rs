@@ -9,7 +9,7 @@ pub enum ConnectError {
     #[error(transparent)]
     Configuration(#[from] crate::ConfigError),
 
-    #[error("Connection is already established. To remove existing connection use 'tedge disconnect {cloud}' and try again.",)]
+    #[error("Connection is already established. To remove the existing connection, run `tedge disconnect {cloud}` and try again.",)]
     ConfigurationExists { cloud: String },
 
     #[error(transparent)]
@@ -61,4 +61,7 @@ pub enum ConnectError {
 
     #[error(transparent)]
     MultiError(#[from] tedge_config::MultiError),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }

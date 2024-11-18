@@ -3,6 +3,7 @@ use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
 use std::process::Command;
+use tedge_config::auth_method::AuthMethod;
 use tedge_config::AutoFlag;
 use tedge_config::HostPort;
 use tedge_config::TemplatesSet;
@@ -127,10 +128,16 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             topics.extend(templates_set);
         }
 
-        let include_local_clean_session = match include_local_clean_session {
-            AutoFlag::True => true,
-            AutoFlag::False => false,
+        let (include_local_clean_session, mosquitto_version) = match include_local_clean_session {
+            AutoFlag::True => (true, None),
+            AutoFlag::False => (false, None),
             AutoFlag::Auto => is_mosquitto_version_above_2(),
+        };
+
+        let auth_method = if remote_username.is_some() {
+            AuthMethod::Basic
+        } else {
+            AuthMethod::Certificate
         };
 
         Self {
@@ -161,6 +168,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             topics,
             bridge_location,
             connection_check_attempts: 1,
+            auth_method: Some(auth_method),
+            mosquitto_version,
         }
     }
 }
@@ -173,23 +182,28 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
 /// as this used to generate configuration files
 /// with recent mosquitto properties (such as `local_cleansession`)
 /// which make crash old versions (< 2.0.0).
-pub fn is_mosquitto_version_above_2() -> bool {
+pub fn is_mosquitto_version_above_2() -> (bool, Option<String>) {
     if let Ok(mosquitto) = which("mosquitto") {
         if let Ok(mosquitto_help) = Command::new(mosquitto).args(["--help"]).output() {
             if let Ok(help_content) = String::from_utf8(mosquitto_help.stdout) {
                 let is_above_2 = help_content.starts_with("mosquitto version 2");
-                if is_above_2 {
-                    eprintln!("Detected mosquitto version >= 2.0.0");
-                } else {
-                    eprintln!("Detected mosquitto version < 2.0.0");
-                }
-                return is_above_2;
+                return (
+                    is_above_2,
+                    Some(
+                        help_content
+                            .lines()
+                            .next()
+                            .unwrap_or("unknown")
+                            .trim_start_matches("mosquitto version ")
+                            .into(),
+                    ),
+                );
             }
         }
     }
 
     eprintln!("Failed to detect mosquitto version: assuming mosquitto version < 2.0.0");
-    false
+    (false, None)
 }
 
 #[cfg(test)]
@@ -278,6 +292,8 @@ mod tests {
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: Some(AuthMethod::Certificate),
+            mosquitto_version: None,
         };
 
         assert_eq!(bridge, expected);
@@ -374,6 +390,8 @@ mod tests {
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
+            auth_method: Some(AuthMethod::Basic),
+            mosquitto_version: None,
         };
 
         assert_eq!(bridge, expected);

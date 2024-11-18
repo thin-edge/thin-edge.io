@@ -23,6 +23,7 @@ certificate = { workspace = true, features = ["reqwest-blocking"] }
 clap = { workspace = true }
 doku = { workspace = true }
 hyper = { workspace = true, default-features = false }
+mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
 reqwest = { workspace = true, features = [
@@ -42,6 +43,7 @@ tedge-apt-plugin = { workspace = true }
 tedge-mapper = { workspace = true }
 tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
+tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }

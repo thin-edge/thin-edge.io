@@ -9,6 +9,7 @@ use tedge_config::TEdgeConfigLocation;
 
 use super::common::Cloud;
 use super::connect::ConnectError;
+use super::log::MaybeFancy;
 use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
@@ -27,7 +28,29 @@ impl Command for RefreshBridgesCmd {
         "Refresh all currently active mosquitto bridges (restarts mosquitto)".to_string()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.execute_unfancy().map_err(<_>::into)
+    }
+}
+
+impl RefreshBridgesCmd {
+    pub fn new(context: &BuildContext) -> Result<Self, crate::ConfigError> {
+        let config = context.load_config()?;
+        let config_location = context.config_location.clone();
+        let service_manager = tedge_config::system_services::service_manager(
+            &config_location.tedge_config_root_path,
+        )?;
+
+        let cmd = Self {
+            config,
+            config_location,
+            service_manager,
+        };
+
+        Ok(cmd)
+    }
+
+    fn execute_unfancy(&self) -> anyhow::Result<()> {
         let clouds = established_bridges(&self.config_location, &self.config);
 
         if clouds.is_empty() && !self.config.mqtt.bridge.built_in {
@@ -69,24 +92,6 @@ impl Command for RefreshBridgesCmd {
             .restart_service(SystemService::Mosquitto)?;
 
         Ok(())
-    }
-}
-
-impl RefreshBridgesCmd {
-    pub fn new(context: &BuildContext) -> Result<Self, crate::ConfigError> {
-        let config = context.load_config()?;
-        let config_location = context.config_location.clone();
-        let service_manager = tedge_config::system_services::service_manager(
-            &config_location.tedge_config_root_path,
-        )?;
-
-        let cmd = Self {
-            config,
-            config_location,
-            service_manager,
-        };
-
-        Ok(cmd)
     }
 }
 

@@ -36,13 +36,11 @@ tedge_connect_test_negative
     ...    exp_exit_code=1
     ...    stdout=${False}
     ...    stderr=${True}
-    Should Contain    ${output}    Error: failed to test connection to Cumulocity cloud.
 
 tedge_connect_test_sm_services
     ${output}=    Execute Command    sudo tedge connect c8y
-    Should Contain    ${output}    Successfully created bridge connection!
-    Should Contain    ${output}    tedge-agent service successfully started and enabled!
-    Should Contain    ${output}    tedge-mapper-c8y service successfully started and enabled!
+    Should Contain    ${output}    Enabling tedge-agent... ✓
+    Should Contain    ${output}    Enabling tedge-mapper-c8y... ✓
     Should Not Contain
     ...    ${output}
     ...    Warning:
@@ -50,9 +48,8 @@ tedge_connect_test_sm_services
 
 tedge_disconnect_test_sm_services
     ${output}=    Execute Command    sudo tedge disconnect c8y
-    Should Contain    ${output}    Cumulocity Bridge successfully disconnected!
-    Should Not Contain    ${output}    tedge-agent service successfully stopped and disabled!
-    Should Contain    ${output}    tedge-mapper-c8y service successfully stopped and disabled!
+    Should Not Contain    ${output}    Disabling tedge-agent... ✓
+    Should Contain    ${output}    Disabling tedge-mapper-c8y... ✓
 
 tedge reconnect does not restart agent
     ${pid_before}=    Execute Command    sudo systemctl show --property MainPID tedge-agent

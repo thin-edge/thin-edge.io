@@ -86,6 +86,8 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             // to create the "Thing", so the first connection attempt can fail, but retrying
             // will give it a higher chance of success
             connection_check_attempts: 5,
+            auth_method: None,
+            mosquitto_version: None,
         }
     }
 }
@@ -137,6 +139,8 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 5,
+        auth_method: None,
+        mosquitto_version: None,
     };
 
     assert_eq!(bridge, expected);
@@ -191,6 +195,8 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 5,
+        auth_method: None,
+        mosquitto_version: None,
     };
 
     assert_eq!(bridge, expected);

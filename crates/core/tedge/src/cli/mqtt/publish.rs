@@ -1,5 +1,7 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
+use crate::error;
+use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
@@ -38,12 +40,12 @@ impl Command for MqttPublishCommand {
         )
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         Ok(publish(self)?)
     }
 }
 
-fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
+fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
     options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
@@ -131,9 +133,9 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     }
 
     if !published {
-        eprintln!("ERROR: the message has not been published");
+        error!("the message has not been published");
     } else if !acknowledged {
-        eprintln!("ERROR: the message has not been acknowledged");
+        error!("the message has not been acknowledged");
     }
 
     client.disconnect()?;
@@ -145,7 +147,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     }
 
     if let Some(err) = any_error {
-        Err(err)
+        Err(err.into())
     } else {
         Ok(())
     }

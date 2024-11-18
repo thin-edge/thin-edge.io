@@ -1,5 +1,5 @@
-use crate::cli::mqtt::MqttError;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
@@ -16,6 +16,7 @@ use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 use super::MAX_PACKET_SIZE;
+use crate::error;
 
 pub struct MqttSubscribeCommand {
     pub host: String,
@@ -37,12 +38,12 @@ impl Command for MqttSubscribeCommand {
         )
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         Ok(subscribe(self)?)
     }
 }
 
-fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
+fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
     options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
@@ -102,9 +103,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                             println!("[{}] {}", &message.topic, payload);
                         }
                     }
-                    Err(err) => {
-                        eprintln!("ERROR: {}", err);
-                    }
+                    Err(err) => error!("{err}"),
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
@@ -122,8 +121,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                 if interrupted.load(Ordering::Relaxed) {
                     break;
                 }
-                let err_msg = err.to_string();
-                eprintln!("ERROR: {}", err_msg);
+                error!("{err}");
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             _ => {}

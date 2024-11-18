@@ -13,6 +13,8 @@ use tedge_utils::file::create_directory;
 use tedge_utils::file::PermissionEntry;
 use tracing::debug;
 
+use super::log::MaybeFancy;
+
 #[derive(Debug)]
 pub struct TEdgeInitCmd {
     user: String,
@@ -114,9 +116,10 @@ impl Command for TEdgeInitCmd {
         "Initialize tedge".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.initialize_tedge()
             .with_context(|| "Failed to initialize tedge. You have to run tedge with sudo.")
+            .map_err(<_>::into)
     }
 }
 

@@ -11,3 +11,4 @@ mod upload;
 
 pub use self::cli::*;
 pub use self::create::*;
+pub use self::error::*;

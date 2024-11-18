@@ -73,6 +73,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
                 profile,
+                is_reconnect: false,
             },
             TEdgeConnectOpt::Az {
                 is_test_connection,
@@ -86,6 +87,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
                 profile,
+                is_reconnect: false,
             },
             TEdgeConnectOpt::Aws {
                 is_test_connection,
@@ -99,6 +101,7 @@ impl BuildCommand for TEdgeConnectOpt {
                 offline_mode,
                 service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
                 profile,
+                is_reconnect: false,
             },
         }
         .into_boxed())

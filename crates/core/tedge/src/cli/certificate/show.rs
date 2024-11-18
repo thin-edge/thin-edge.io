@@ -1,5 +1,6 @@
 use super::error::CertError;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
@@ -15,7 +16,7 @@ impl Command for ShowCertCmd {
         "show the device certificate".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.show_certificate()?;
         Ok(())
     }

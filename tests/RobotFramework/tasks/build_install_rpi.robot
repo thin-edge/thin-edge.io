@@ -164,7 +164,7 @@ Upload certificate
 Connect to c8y
     ${output}=    Execute Command    sudo tedge connect c8y    # You can then check the content of that certificate.
     Sleep    3s
-    Should Contain    ${output}    tedge-agent service successfully started and enabled!
+    Should Contain    ${output}    Enabling tedge-agent... ✓
     Execute Command    rm *.deb | rm *.zip | rm *.sh*
 
 

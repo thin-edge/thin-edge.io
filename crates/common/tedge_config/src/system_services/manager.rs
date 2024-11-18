@@ -30,19 +30,6 @@ pub trait SystemServiceManager: Debug {
 
     /// Queries status of the specified system service. "Running" here means the same as "active".
     fn is_service_running(&self, service: SystemService) -> Result<bool, SystemServiceError>;
-
-    /// Utility method that only restarts the `service` if it is already running.
-    fn restart_service_if_running(
-        &self,
-        service: SystemService,
-    ) -> Result<bool, SystemServiceError> {
-        if self.is_service_running(service)? {
-            self.restart_service(service)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
 }
 
 pub fn service_manager(

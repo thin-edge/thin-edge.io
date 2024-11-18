@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::log::MaybeFancy;
+
 /// A trait to be implemented by all tedge sub-commands.
 ///
 /// A command encapsulates all the required parameters and provides an `execute()` method
@@ -7,6 +9,7 @@ use std::path::Path;
 ///
 /// ```
 /// use tedge::command::Command;
+/// use tedge::log::MaybeFancy;
 ///
 /// struct SayHello {
 ///     name: String,
@@ -17,7 +20,7 @@ use std::path::Path;
 ///        format!("say hello to '{}'", self.name)
 ///     }
 ///
-///     fn execute(&self) -> anyhow::Result<()> {
+///     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        println!("Hello {}!", self.name);
 ///        Ok(())
 ///     }
@@ -32,6 +35,7 @@ use std::path::Path;
 /// use tedge_config::TEdgeConfig;
 /// use tedge_config::ReadError;
 /// use tedge_config::ReadableKey;
+/// use tedge::log::MaybeFancy;
 ///
 /// struct GetConfigKey {
 ///     config: TEdgeConfig,
@@ -43,11 +47,11 @@ use std::path::Path;
 ///        format!("get the value of the configuration key '{}'", self.key)
 ///     }
 ///
-///     fn execute(&self) -> anyhow::Result<()> {
+///     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        match self.config.read_string(&self.key) {
 ///             Ok(value) => println!("{}", value),
 ///             Err(ReadError::ConfigNotSet(_)) => eprintln!("The configuration key `{}` is not set", self.key),
-///             Err(e) => return Err(e.into()),
+///             Err(e) => return Err(MaybeFancy::Unfancy(e.into())),
 ///        };
 ///        Ok(())
 ///     }
@@ -73,7 +77,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self) -> anyhow::Result<()>;
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
 
     /// Helper method to be used in the `BuildCommand` trait.
     ///

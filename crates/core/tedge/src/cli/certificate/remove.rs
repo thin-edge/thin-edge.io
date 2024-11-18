@@ -1,9 +1,11 @@
 use std::fs;
 use std::io;
 
-use super::error::CertError;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
+
+use super::error::CertError;
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
@@ -19,7 +21,7 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         match self.remove_certificate()? {
             RemoveCertResult::Removed => eprintln!("Certificate was successfully removed"),
             RemoveCertResult::NotFound => eprintln!("There is no certificate to remove"),

@@ -6,10 +6,12 @@ use cap::Cap;
 use clap::Parser;
 use std::alloc;
 use std::future::Future;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge::command::BuildCommand;
 use tedge::command::BuildContext;
+use tedge::log::MaybeFancy;
 use tedge::Component;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
@@ -62,8 +64,19 @@ fn main() -> anyhow::Result<()> {
                 .build_command(build_context)
                 .with_context(|| "missing configuration parameter")?;
 
-            cmd.execute()
-                .with_context(|| format!("failed to {}", cmd.description()))
+            if !std::io::stdout().is_terminal() {
+                yansi::disable();
+            }
+
+            match cmd.execute() {
+                Ok(()) => Ok(()),
+                // If the command already prints its own nicely formatted errors
+                // don't also print the error by returning it
+                Err(MaybeFancy::Fancy(_)) => std::process::exit(1),
+                Err(MaybeFancy::Unfancy(err)) => {
+                    Err(err.context(format!("failed to {}", cmd.description())))
+                }
+            }
         }
     }
 }

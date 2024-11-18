@@ -1,6 +1,8 @@
 use super::error::get_webpki_error_from_reqwest;
 use super::error::CertError;
 use crate::command::Command;
+use crate::log::MaybeFancy;
+use crate::warning;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use reqwest::StatusCode;
@@ -38,7 +40,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         Ok(self.upload_certificate()?)
     }
 }
@@ -46,7 +48,7 @@ impl Command for UploadCertCmd {
 impl UploadCertCmd {
     fn upload_certificate(&self) -> Result<(), CertError> {
         if std::env::var("C8YPASS").is_ok() {
-            eprintln!("WARN: Detected use of a deprecated env variable, C8YPASS. Please use C8Y_PASSWORD instead\n");
+            warning!("Detected use of a deprecated env variable, C8YPASS. Please use C8Y_PASSWORD instead\n");
         }
 
         // Prompt if not already set

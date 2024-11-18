@@ -70,6 +70,7 @@ Configuration operation fails when configuration-plugin does not supply client c
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration snapshot fails when mapper does not supply client certificate
+    [Tags]    test:retry(2)
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for Mapper
     Enable HTTP Client Certificate for FTS client

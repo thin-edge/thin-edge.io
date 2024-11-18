@@ -7,18 +7,33 @@ use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
 use crate::cli::connect::jwt_token::*;
 use crate::cli::connect::*;
+use crate::cli::log::ConfigLogger;
+use crate::cli::log::Fancy;
+use crate::cli::log::Spinner;
 use crate::command::Command;
+use crate::log::MaybeFancy;
+use crate::warning;
 use crate::ConfigError;
+use anyhow::anyhow;
+use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8PathBuf;
+use mqtt_channel::Topic;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use std::net::TcpStream;
+use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::TopicIdError;
+use tedge_api::service_health_topic;
 use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
 use tedge_config::TEdgeConfig;
@@ -31,10 +46,9 @@ use which::which;
 
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 
-const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
-const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
+const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 20;
 const MQTT_TLS_PORT: u16 = 8883;
 
 pub struct ConnectCommand {
@@ -45,6 +59,7 @@ pub struct ConnectCommand {
     pub offline_mode: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
     pub profile: Option<ProfileName>,
+    pub is_reconnect: bool,
 }
 
 pub enum DeviceStatus {
@@ -61,7 +76,13 @@ impl Command for ConnectCommand {
         }
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.execute_inner().map_err(<_>::into)
+    }
+}
+
+impl ConnectCommand {
+    fn execute_inner(&self) -> Result<(), Fancy<ConnectError>> {
         let config = &self.config;
         let bridge_config = bridge_config(config, self.cloud, self.profile.as_ref())?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
@@ -73,11 +94,20 @@ impl Command for ConnectCommand {
                 match self.check_connection(config, self.profile.as_ref()) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
-                        println!("Connection check to {} cloud is successful.\n", cloud);
+                        match self.tenant_matches_configured_url(config)? {
+                            // Check failed, warning has been printed already
+                            // Don't tell them the connection test succeeded because that's not true
+                            Some(false) => {}
+                            // Either the check succceded or it wasn't relevant (e.g. non-Cumulocity connection)
+                            Some(true) | None => {
+                                println!("Connection check to {cloud} cloud is successful.")
+                            }
+                        }
+
                         Ok(())
                     }
                     Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
-                    Err(err) => Err(err.into()),
+                    Err(err) => Err(err),
                 }
             } else {
                 Err((ConnectError::DeviceNotConnected {
@@ -86,6 +116,12 @@ impl Command for ConnectCommand {
                 .into())
             };
         }
+
+        let title = match self.is_reconnect {
+            false => format!("Connecting to {} with config", self.cloud),
+            true => "Reconnecting with config".into(),
+        };
+        ConfigLogger::log(title, &bridge_config, &*self.service_manager);
 
         let device_type = &config.device.ty;
 
@@ -96,12 +132,17 @@ impl Command for ConnectCommand {
             &self.config_location,
             device_type,
             self.offline_mode,
+            config,
         ) {
-            Ok(()) => println!("Successfully created bridge connection!\n"),
-            Err(ConnectError::SystemServiceError(
-                SystemServiceError::ServiceManagerUnavailable { .. },
-            )) => return Ok(()),
-            Err(err) => return Err(err.into()),
+            Ok(()) => (),
+            Err(Fancy {
+                err:
+                    ConnectError::SystemServiceError(SystemServiceError::ServiceManagerUnavailable {
+                        ..
+                    }),
+                ..
+            }) => return Ok(()),
+            Err(err) => return Err(err),
         }
 
         if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::BuiltIn {
@@ -110,22 +151,20 @@ impl Command for ConnectCommand {
             self.start_mapper();
         }
 
-        if self.offline_mode {
-            println!("Offline mode. Skipping connection check.\n");
-        } else {
+        let mut connection_check_success = true;
+        if !self.offline_mode {
             match self.check_connection_with_retries(
                 config,
                 bridge_config.connection_check_attempts,
                 self.profile.as_ref(),
             ) {
-                Ok(DeviceStatus::AlreadyExists) => {
-                    println!("Connection check is successful.\n");
-                }
+                Ok(DeviceStatus::AlreadyExists) => {}
                 _ => {
-                    println!(
-                        "Warning: Bridge has been configured, but {} connection check failed.\n",
+                    warning!(
+                        "Bridge has been configured, but {} connection check failed.",
                         self.cloud
                     );
+                    connection_check_success = false;
                 }
             }
         }
@@ -142,18 +181,8 @@ impl Command for ConnectCommand {
             let use_basic_auth = c8y_config
                 .auth_method
                 .is_basic(&c8y_config.credentials_path);
-            if use_basic_auth {
-                println!("Skipped tenant URL check due to basic authentication.\n");
-            } else if !self.offline_mode {
-                check_connected_c8y_tenant_as_configured(
-                    config,
-                    self.profile.as_deref(),
-                    &c8y_config
-                        .mqtt
-                        .or_none()
-                        .map(|u| u.host().to_string())
-                        .unwrap_or_default(),
-                );
+            if !use_basic_auth && !self.offline_mode && connection_check_success {
+                let _ = self.tenant_matches_configured_url(config);
             }
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
@@ -163,12 +192,41 @@ impl Command for ConnectCommand {
 }
 
 impl ConnectCommand {
+    fn tenant_matches_configured_url(
+        &self,
+        config: &TEdgeConfig,
+    ) -> Result<Option<bool>, Fancy<ConnectError>> {
+        if let Cloud::C8y = self.cloud {
+            let c8y_config = config.c8y.try_get(self.profile.as_deref())?;
+
+            let use_basic_auth = c8y_config
+                .auth_method
+                .is_basic(&c8y_config.credentials_path);
+            if !use_basic_auth && !self.offline_mode {
+                tenant_matches_configured_url(
+                    config,
+                    self.profile.as_deref(),
+                    &c8y_config
+                        .mqtt
+                        .or_none()
+                        .map(|u| u.host().to_string())
+                        .unwrap_or_default(),
+                )
+                .map(Some)
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
     fn check_connection_with_retries(
         &self,
         config: &TEdgeConfig,
         max_attempts: i32,
         profile: Option<&ProfileName>,
-    ) -> Result<DeviceStatus, ConnectError> {
+    ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         for i in 1..max_attempts {
             let result = self.check_connection(config, profile);
             if let Ok(DeviceStatus::AlreadyExists) = result {
@@ -186,16 +244,14 @@ impl ConnectCommand {
         &self,
         config: &TEdgeConfig,
         profile: Option<&ProfileName>,
-    ) -> Result<DeviceStatus, ConnectError> {
-        println!(
-            "Sending packets to check connection. This may take up to {} seconds.\n",
-            WAIT_FOR_CHECK_SECONDS
-        );
-        match self.cloud {
+    ) -> Result<DeviceStatus, Fancy<ConnectError>> {
+        let spinner = Spinner::start("Verifying device is connected to cloud");
+        let res = match self.cloud {
             Cloud::Azure => check_device_status_azure(config, profile),
             Cloud::Aws => check_device_status_aws(config, profile),
             Cloud::C8y => check_device_status_c8y(config, profile),
-        }
+        };
+        spinner.finish(res)
     }
 
     fn check_if_bridge_exists(&self, br_config: &BridgeConfig) -> bool {
@@ -205,19 +261,19 @@ impl ConnectCommand {
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(&*br_config.config_file);
 
-        br_config.bridge_location == BridgeLocation::BuiltIn
-            || Path::new(&bridge_conf_path).exists()
+        Path::new(&bridge_conf_path).exists()
     }
 
     fn start_mapper(&self) {
-        println!("Checking if tedge-mapper is installed.\n");
-
         if which("tedge-mapper").is_err() {
-            println!("Warning: tedge-mapper is not installed.\n");
+            warning!("tedge-mapper is not installed.");
         } else {
-            self.service_manager
-                .as_ref()
-                .start_and_enable_service(self.cloud.mapper_service(), std::io::stdout());
+            let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
+            let _ = spinner.finish(
+                self.service_manager
+                    .as_ref()
+                    .start_and_enable_service(self.cloud.mapper_service()),
+            );
         }
     }
 }
@@ -273,12 +329,8 @@ pub fn bridge_config(
 
             let (remote_username, remote_password) =
                 match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
-                    AuthType::Certificate => {
-                        println!("Using device certificate authentication.\n");
-                        (None, None)
-                    }
+                    AuthType::Certificate => (None, None),
                     AuthType::Basic => {
-                        println!("Using basic authentication.\n");
                         let (username, password) =
                             read_c8y_credentials(&c8y_config.credentials_path)?;
                         (Some(username), Some(password))
@@ -306,6 +358,25 @@ pub fn bridge_config(
     }
 }
 
+fn bridge_health_topic(
+    prefix: &TopicPrefix,
+    tedge_config: &TEdgeConfig,
+) -> Result<Topic, TopicIdError> {
+    let bridge_name = format!("tedge-mapper-bridge-{prefix}");
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+    let device_topic_id = tedge_config.mqtt.device_topic_id.parse::<EntityTopicId>()?;
+    Ok(service_health_topic(
+        &mqtt_schema,
+        &device_topic_id,
+        &bridge_name,
+    ))
+}
+
+fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
+    message.topic == health_topic
+        && std::str::from_utf8(&message.payload).map_or(false, |msg| msg.contains("\"up\""))
+}
+
 // Check the connection by using the jwt token retrieval over the mqtt.
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
 fn check_device_status_c8y(
@@ -322,7 +393,8 @@ fn check_device_status_c8y(
         return Ok(DeviceStatus::AlreadyExists);
     }
 
-    let prefix = c8y_config.bridge.topic_prefix.clone();
+    let prefix = &c8y_config.bridge.topic_prefix;
+    let built_in_bridge_health = bridge_health_topic(prefix, tedge_config).unwrap().name;
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -341,10 +413,14 @@ fn check_device_status_c8y(
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
-    let mut exists = false;
 
+    let built_in_bridge = tedge_config.mqtt.bridge.built_in;
+    if built_in_bridge {
+        client.subscribe(&built_in_bridge_health, AtLeastOnce)?;
+    }
     client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
 
+    let mut err = None;
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
@@ -361,25 +437,42 @@ fn check_device_status_c8y(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                // We got a response
-                let token = String::from_utf8(response.payload.to_vec()).unwrap();
-                // FIXME: what does this magic number mean?
-                if token.contains("71") {
-                    exists = true;
-                    break;
+                if response.topic == c8y_topic_builtin_jwt_token_downstream {
+                    // We got a response
+                    let token = String::from_utf8(response.payload.to_vec()).unwrap();
+                    // FIXME: what does this magic number mean?
+                    if token.contains("71") {
+                        break;
+                    }
+                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                    client.publish(
+                        &c8y_topic_builtin_jwt_token_upstream,
+                        rumqttc::QoS::AtMostOnce,
+                        false,
+                        "",
+                    )?;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                eprintln!("ERROR: Local MQTT publish has timed out.");
+                err = Some(if acknowledged {
+                    anyhow!("Didn't receive response from Cumulocity")
+                } else {
+                    anyhow!("Local MQTT publish has timed out")
+                });
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
-                eprintln!("ERROR: Disconnected");
+                err = Some(anyhow!(
+                    "Client was disconnected from mosquitto during connection check"
+                ));
                 break;
             }
-            Err(err) => {
-                eprintln!("ERROR: {:?}", err);
+            Err(e) => {
+                err = Some(
+                    anyhow::Error::from(e)
+                        .context("Failed to connect to mosquitto for connection check"),
+                );
                 break;
             }
             _ => {}
@@ -395,16 +488,14 @@ fn check_device_status_c8y(
         }
     }
 
-    if exists {
-        return Ok(DeviceStatus::AlreadyExists);
-    }
-
-    if acknowledged {
+    match err {
+        None => Ok(DeviceStatus::AlreadyExists),
         // The request has been sent but without a response
-        Ok(DeviceStatus::Unknown)
-    } else {
+        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
         // The request has not even been sent
-        Err(ConnectError::TimeoutElapsedError)
+        Some(err) => Err(err
+            .context("Failed to verify device is connected to Cumulocity")
+            .into()),
     }
 }
 
@@ -420,6 +511,9 @@ fn check_device_status_azure(
 ) -> Result<DeviceStatus, ConnectError> {
     let az_config = tedge_config.az.try_get(profile)?;
     let topic_prefix = &az_config.bridge.topic_prefix;
+    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
+        .unwrap()
+        .name;
     let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);
     let azure_topic_device_twin_upstream = format!(r#"{topic_prefix}/twin/GET/?$rid=1"#);
     const CLIENT_ID: &str = "check_connection_az";
@@ -435,10 +529,13 @@ fn check_device_status_azure(
 
     let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
-    let mut exists = false;
 
+    if tedge_config.mqtt.bridge.built_in {
+        client.subscribe(&built_in_bridge_health, AtLeastOnce)?;
+    }
     client.subscribe(&azure_topic_device_twin_downstream, AtLeastOnce)?;
 
+    let mut err = None;
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
@@ -455,26 +552,40 @@ fn check_device_status_azure(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                // We got a response
                 if response.topic.contains(REGISTRATION_OK) {
-                    println!("Received expected response message.");
-                    exists = true;
+                    // We got a response
                     break;
+                } else if response.topic == built_in_bridge_health {
+                    client.publish(
+                        &azure_topic_device_twin_upstream,
+                        AtLeastOnce,
+                        false,
+                        REGISTRATION_PAYLOAD,
+                    )?;
                 } else {
                     break;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                eprintln!("ERROR: Local MQTT publish has timed out.");
+                err = Some(if acknowledged {
+                    anyhow!("Didn't receive response from Azure")
+                } else {
+                    anyhow!("Local MQTT publish has timed out")
+                });
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
-                eprintln!("ERROR: Disconnected");
+                err = Some(anyhow!(
+                    "Client was disconnected from mosquitto during connection check"
+                ));
                 break;
             }
-            Err(err) => {
-                eprintln!("ERROR: {:?}", err);
+            Err(e) => {
+                err = Some(
+                    anyhow::Error::from(e)
+                        .context("Failed to connect to mosquitto for connection check"),
+                );
                 break;
             }
             _ => {}
@@ -490,16 +601,14 @@ fn check_device_status_azure(
         }
     }
 
-    if exists {
-        return Ok(DeviceStatus::AlreadyExists);
-    }
-
-    if acknowledged {
+    match err {
+        None => Ok(DeviceStatus::AlreadyExists),
         // The request has been sent but without a response
-        Ok(DeviceStatus::Unknown)
-    } else {
+        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
         // The request has not even been sent
-        Err(ConnectError::TimeoutElapsedError)
+        Some(err) => Err(err
+            .context("Failed to verify device is connected to Azure")
+            .into()),
     }
 }
 
@@ -511,6 +620,9 @@ fn check_device_status_aws(
     let topic_prefix = &aws_config.bridge.topic_prefix;
     let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
     let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");
+    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
+        .unwrap()
+        .name;
     const CLIENT_ID: &str = "check_connection_aws";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
 
@@ -522,10 +634,13 @@ fn check_device_status_aws(
 
     let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
-    let mut exists = false;
 
+    if tedge_config.mqtt.bridge.built_in {
+        client.subscribe(&built_in_bridge_health, AtLeastOnce)?;
+    }
     client.subscribe(&aws_topic_sub_check_connection, AtLeastOnce)?;
 
+    let mut err = None;
     for event in connection.iter() {
         match event {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
@@ -542,22 +657,39 @@ fn check_device_status_aws(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                // We got a response
-                println!("Received expected response on topic {}.", response.topic);
-                exists = true;
-                break;
+                if response.topic == aws_topic_sub_check_connection {
+                    // We got a response
+                    break;
+                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                    // Built in bridge is now up, republish the message in case it was never received by the bridge
+                    client.publish(
+                        &aws_topic_pub_check_connection,
+                        AtLeastOnce,
+                        false,
+                        REGISTRATION_PAYLOAD,
+                    )?;
+                }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                eprintln!("ERROR: Local MQTT publish has timed out.");
+                err = Some(if acknowledged {
+                    anyhow!("Didn't receive response from AWS")
+                } else {
+                    anyhow!("Local MQTT publish has timed out")
+                });
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
-                eprintln!("ERROR: Disconnected");
+                err = Some(anyhow!(
+                    "Client was disconnected from mosquitto during connection check"
+                ));
                 break;
             }
-            Err(err) => {
-                eprintln!("ERROR: {:?}", err);
+            Err(e) => {
+                err = Some(
+                    anyhow::Error::from(e)
+                        .context("Failed to connect to mosquitto for connection check"),
+                );
                 break;
             }
             _ => {}
@@ -573,16 +705,14 @@ fn check_device_status_aws(
         }
     }
 
-    if exists {
-        return Ok(DeviceStatus::AlreadyExists);
-    }
-
-    if acknowledged {
+    match err {
+        None => Ok(DeviceStatus::AlreadyExists),
         // The request has been sent but without a response
-        Ok(DeviceStatus::Unknown)
-    } else {
+        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
         // The request has not even been sent
-        Err(ConnectError::TimeoutElapsedError)
+        Some(err) => Err(err
+            .context("Failed to verify device is connected to AWS")
+            .into()),
     }
 }
 
@@ -593,40 +723,34 @@ fn new_bridge(
     config_location: &TEdgeConfigLocation,
     device_type: &str,
     offline_mode: bool,
-) -> Result<(), ConnectError> {
-    println!("Checking if {} is available.\n", service_manager.name());
+    tedge_config: &TEdgeConfig,
+) -> Result<(), Fancy<ConnectError>> {
     let service_manager_result = service_manager.check_operational();
 
     if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
         &service_manager_result
     {
-        println!(
-            "Warning: '{}' service manager is not available on the system.\n",
-            name
-        );
+        warning!("'{name}' service manager is not available on the system.",);
     }
 
-    if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-        println!("Checking if configuration for requested bridge already exists.\n");
-        bridge_config_exists(config_location, bridge_config)?;
-    }
+    fail_if_already_connected(config_location, bridge_config)?;
 
     let use_basic_auth =
         bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
 
-    println!("Validating the bridge certificates.\n");
     bridge_config.validate(use_basic_auth)?;
 
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
-            println!("Offline mode. Skipping device creation in Cumulocity cloud.\n")
+            println!("Offline mode. Skipping device creation in Cumulocity cloud.")
         } else {
-            println!("Creating the device in Cumulocity cloud.\n");
-            c8y_direct_connection::create_device_with_direct_connection(
+            let spinner = Spinner::start("Creating device in Cumulocity cloud");
+            let res = c8y_direct_connection::create_device_with_direct_connection(
                 use_basic_auth,
                 bridge_config,
                 device_type,
-            )?;
+            );
+            spinner.finish(res)?;
         }
     }
 
@@ -635,19 +759,16 @@ fn new_bridge(
     {
         // We want to preserve previous errors and therefore discard result of this function.
         let _ = clean_up(config_location, bridge_config);
-        return Err(err);
+        return Err(err.into());
     }
 
     if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-        println!("Saving configuration for requested bridge.\n");
-
         if let Err(err) = write_bridge_config_to_file(config_location, bridge_config) {
             // We want to preserve previous errors and therefore discard result of this function.
             let _ = clean_up(config_location, bridge_config);
-            return Err(err);
+            return Err(err.into());
         }
     } else {
-        println!("Deleting mosquitto bridge configuration in favour of built-in bridge\n");
         use_built_in_bridge(config_location, bridge_config)?;
     }
 
@@ -660,15 +781,9 @@ fn new_bridge(
 
     restart_mosquitto(bridge_config, service_manager, config_location)?;
 
-    println!(
-        "Awaiting mosquitto to start. This may take up to {} seconds.\n",
-        MOSQUITTO_RESTART_TIMEOUT_SECONDS
-    );
-    std::thread::sleep(std::time::Duration::from_secs(
-        MOSQUITTO_RESTART_TIMEOUT_SECONDS,
-    ));
+    let spinner = Spinner::start("Waiting for mosquitto to be listening for connections");
+    spinner.finish(wait_for_mosquitto_listening(&tedge_config.mqtt))?;
 
-    println!("Enabling mosquitto service on reboots.\n");
     if let Err(err) = service_manager.enable_service(SystemService::Mosquitto) {
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
@@ -699,34 +814,52 @@ fn restart_mosquitto(
     bridge_config: &BridgeConfig,
     service_manager: &dyn SystemServiceManager,
     config_location: &TEdgeConfigLocation,
+) -> Result<(), Fancy<ConnectError>> {
+    let spinner = Spinner::start("Restarting mosquitto");
+    spinner
+        .finish(restart_mosquitto_inner(bridge_config, service_manager))
+        .inspect_err(|_| {
+            // We want to preserve existing errors and therefore discard result of this function.
+            let _ = clean_up(config_location, bridge_config);
+        })
+}
+fn restart_mosquitto_inner(
+    bridge_config: &BridgeConfig,
+    service_manager: &dyn SystemServiceManager,
 ) -> Result<(), ConnectError> {
-    println!("Restarting mosquitto service.\n");
-
-    if let Err(err) = service_manager.stop_service(SystemService::Mosquitto) {
-        clean_up(config_location, bridge_config)?;
-        return Err(err.into());
-    }
-
+    service_manager.stop_service(SystemService::Mosquitto)?;
     chown_certificate_and_key(bridge_config);
-
-    if let Err(err) = service_manager.restart_service(SystemService::Mosquitto) {
-        clean_up(config_location, bridge_config)?;
-        return Err(err.into());
-    }
+    service_manager.restart_service(SystemService::Mosquitto)?;
 
     Ok(())
+}
+
+fn wait_for_mosquitto_listening(mqtt: &TEdgeConfigReaderMqtt) -> Result<(), anyhow::Error> {
+    let addr = format!("{}:{}", mqtt.client.host, mqtt.client.port);
+    if let Some(addr) = addr.to_socket_addrs().ok().and_then(|mut o| o.next()) {
+        let timeout = Duration::from_secs(MOSQUITTO_RESTART_TIMEOUT_SECONDS);
+        let min_loop_time = Duration::from_millis(10);
+        let connect = || TcpStream::connect_timeout(&addr, Duration::from_secs(1));
+        match retry_until_success(connect, timeout, min_loop_time) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(anyhow!(
+                "Timed out after {timeout:?} waiting for mosquitto to be listening"
+            )),
+        }
+    } else {
+        bail!("Couldn't resolve configured mosquitto address");
+    }
 }
 
 fn enable_software_management(
     bridge_config: &BridgeConfig,
     service_manager: &dyn SystemServiceManager,
 ) {
-    println!("Enabling software management.\n");
     if bridge_config.use_agent {
-        println!("Checking if tedge-agent is installed.\n");
         if which("tedge-agent").is_ok() {
-            service_manager
-                .start_and_enable_service(SystemService::TEdgeSMAgent, std::io::stdout());
+            let spinner = Spinner::start("Enabling tedge-agent");
+            let _ = spinner
+                .finish(service_manager.start_and_enable_service(SystemService::TEdgeSMAgent));
         } else {
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
@@ -738,9 +871,10 @@ fn enable_software_management(
 pub fn clean_up(
     config_location: &TEdgeConfigLocation,
     bridge_config: &BridgeConfig,
-) -> Result<(), ConnectError> {
+) -> Result<(), Fancy<ConnectError>> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    std::fs::remove_file(path).or_else(ok_if_not_found)?;
+    Spinner::start(format!("Cleaning up {path} due to failure"))
+        .finish(std::fs::remove_file(path).or_else(ok_if_not_found))?;
     Ok(())
 }
 
@@ -757,7 +891,7 @@ pub fn use_built_in_bridge(
     Ok(())
 }
 
-fn bridge_config_exists(
+fn fail_if_already_connected(
     config_location: &TEdgeConfigLocation,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
@@ -830,20 +964,130 @@ fn get_common_mosquitto_config_file_path(
 }
 
 // To confirm the connected c8y tenant is the one that user configured.
-fn check_connected_c8y_tenant_as_configured(
+fn tenant_matches_configured_url(
     tedge_config: &TEdgeConfig,
     c8y_prefix: Option<&str>,
     configured_url: &str,
-) {
-    match get_connected_c8y_url(tedge_config, c8y_prefix) {
-        Ok(url) if url == configured_url => {
-            println!("Tenant URL check is successful.\n")
+) -> Result<bool, Fancy<ConnectError>> {
+    let spinner = Spinner::start("Checking Cumulocity is connected to intended tenant");
+    let res = get_connected_c8y_url(tedge_config, c8y_prefix);
+    match spinner.finish(res) {
+        Ok(url) if url == configured_url => Ok(true),
+        Ok(url) => {
+            warning!(
+            "The device is connected to {}, but the configured URL is {}.\
+            \n    To connect the device to the intended tenant, remove the device certificate from {url}, and then run `tedge reconnect c8y`", 
+            url.bold(),
+            configured_url.bold(),
+        );
+            Ok(false)
         }
-        Ok(url) => println!(
-            "Warning: Connecting to {}, but the configured URL is {}.\n\
-            The device certificate has to be removed from the former tenant.\n",
-            url, configured_url
-        ),
-        Err(_) => println!("Failed to get the connected tenant URL from Cumulocity.\n"),
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct Timeout;
+
+fn retry_until_success<T, E>(
+    mut action: impl FnMut() -> Result<T, E>,
+    timeout: Duration,
+    min_loop_time: Duration,
+) -> Result<T, Timeout> {
+    let start = Instant::now();
+    loop {
+        let start_loop = Instant::now();
+        if let Ok(res) = action() {
+            return Ok(res);
+        }
+
+        if start.elapsed() > timeout {
+            return Err(Timeout);
+        }
+
+        if start_loop.elapsed() < min_loop_time {
+            std::thread::sleep(min_loop_time - start_loop.elapsed());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod is_bridge_health_up_message {
+        use super::*;
+
+        #[test]
+        fn health_message_up_is_detected_successfully() {
+            let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+            let message = test_message(health_topic, "up");
+            assert!(is_bridge_health_up_message(&message, health_topic))
+        }
+
+        #[test]
+        fn message_on_wrong_topic_is_ignored() {
+            let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+            let message = test_message("a/different/topic", "up");
+            assert!(!is_bridge_health_up_message(&message, health_topic))
+        }
+
+        #[test]
+        fn health_message_down_is_ignored() {
+            let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
+            let message = test_message(health_topic, "down");
+            assert!(!is_bridge_health_up_message(&message, health_topic))
+        }
+
+        fn test_message(topic: &str, status: &str) -> rumqttc::Publish {
+            let payload = serde_json::json!({ "status": status}).to_string();
+            rumqttc::Publish::new(topic, AtLeastOnce, payload)
+        }
+    }
+
+    mod retry_until_success {
+        use super::*;
+
+        #[test]
+        fn returns_okay_upon_immediate_success() {
+            assert_eq!(
+                retry_until_success(|| Ok::<_, ()>(()), secs(5), secs(0)),
+                Ok(())
+            )
+        }
+
+        #[test]
+        fn returns_okay_upon_retry_success() {
+            let mut results = [Err(()), Ok(())].into_iter();
+            assert_eq!(
+                retry_until_success(move || results.next().unwrap(), secs(5), secs(0)),
+                Ok(())
+            )
+        }
+
+        #[test]
+        fn returns_timeout_on_failure() {
+            assert_eq!(
+                retry_until_success(|| Err::<(), _>(()), millis(50), secs(0)),
+                Err(Timeout)
+            )
+        }
+
+        #[test]
+        fn avoids_hard_looping() {
+            let mut results = [Err(()), Ok(())].into_iter();
+            let min_loop_time = millis(50);
+            let start = Instant::now();
+            retry_until_success(|| results.next().unwrap(), secs(5), min_loop_time).unwrap();
+            assert!(dbg!(start.elapsed()) > min_loop_time);
+        }
+
+        fn secs(n: u64) -> Duration {
+            Duration::from_secs(n)
+        }
+
+        fn millis(n: u64) -> Duration {
+            Duration::from_millis(n)
+        }
     }
 }

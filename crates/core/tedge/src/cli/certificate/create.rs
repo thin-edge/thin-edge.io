@@ -1,6 +1,7 @@
 use super::error::CertError;
 use crate::bridge::BridgeLocation;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
@@ -37,7 +38,7 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self) -> anyhow::Result<()> {
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
         self.create_test_certificate(&config)?;
         eprintln!("Certificate was successfully created");

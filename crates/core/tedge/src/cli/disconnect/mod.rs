@@ -1,5 +1,5 @@
 mod cli;
 pub(crate) mod disconnect_bridge;
-mod error;
+pub(crate) mod error;
 
 pub use cli::*;
