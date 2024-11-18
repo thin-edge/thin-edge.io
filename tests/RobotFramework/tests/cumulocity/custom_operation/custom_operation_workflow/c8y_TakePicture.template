@@ -1,5 +1,7 @@
 [exec]
 topic = "c8y/devicecontrol/notifications"
 on_fragment = "c8y_TakePicture"
-command_name = "take_picture"
-command_payload = "${.payload.c8y_TakePicture.parameters}"
+
+[exec.workflow]
+operation = "take_picture"
+input = "${.payload.c8y_TakePicture.parameters}"

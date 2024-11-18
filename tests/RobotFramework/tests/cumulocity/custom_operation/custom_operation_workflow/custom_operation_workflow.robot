@@ -18,20 +18,29 @@ ${CHILD_SN}     ${EMPTY}
 *** Test Cases ***
 Run custom operation with workflow execution
     Symlink Should Exist    /etc/tedge/operations/c8y/c8y_TakePicture
-    Should Contain Supported Operations    c8y_TakePicture
+    Cumulocity.Should Contain Supported Operations    c8y_TakePicture
 
     ${operation}=    Cumulocity.Create Operation
     ...    description=take a picture
     ...    fragments={"c8y_TakePicture":{"parameters": {"duration": "5s", "quality": "HD"}}}
+    Verify Local Command    main    take_picture
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
 
-    Verify Local Command    te/device/main///cmd/take_picture/#    executing
-    Verify Local Command    te/device/main///cmd/take_picture/#    successful
-    Operation Should Be SUCCESSFUL    ${operation}
+Add template and workflow file dynamically
+    Transfer To Device    ${CURDIR}/c8y_OpenDoor.template    /etc/tedge/operations/c8y/
+    Transfer To Device    ${CURDIR}/open_door.toml    /etc/tedge/operations/
+
     Should Have MQTT Messages
-    ...    c8y/s/us
-    ...    message_pattern=^(504|505|506),[0-9]+
-    ...    minimum=2
-    ...    maximum=2
+    ...    te/device/main///cmd/open_door
+    ...    pattern="^{}$"
+    Symlink Should Exist    /etc/tedge/operations/c8y/c8y_OpenDoor
+    Cumulocity.Should Contain Supported Operations    c8y_OpenDoor
+
+    ${operation}=    Cumulocity.Create Operation
+    ...    description=open a door
+    ...    fragments={"c8y_OpenDoor":{"delay": "5s", "user": "cat"}}
+    Verify Local Command    main    open_door
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
 
 Run custom operation with workflow execution on child device
     Child Setup
@@ -41,36 +50,35 @@ Run custom operation with workflow execution on child device
     Symlink Should Exist    /etc/tedge/operations/c8y/${CHILD_XID}/c8y_TakePicture
 
     Cumulocity.Device Should Exist    ${CHILD_XID}
-    Should Contain Supported Operations    c8y_TakePicture
+    Cumulocity.Should Contain Supported Operations    c8y_TakePicture
 
     ${operation}=    Cumulocity.Create Operation
     ...    description=take a picture
     ...    fragments={"c8y_TakePicture":{"parameters": {"duration": "5s", "quality": "HD"}}}
 
-    Verify Local Command    te/device/${CHILD_SN}///cmd/take_picture/#    executing
-    Verify Local Command    te/device/${CHILD_SN}///cmd/take_picture/#    successful
-    Operation Should Be SUCCESSFUL    ${operation}
-    Should Have MQTT Messages
-    ...    c8y/s/us/${CHILD_XID}
-    ...    message_pattern=^(504|505|506),[0-9]+
-    ...    minimum=2
-    ...    maximum=2
+    Verify Local Command    ${CHILD_SN}    take_picture
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
 
 
 *** Keywords ***
 Verify Local Command
-    [Arguments]    ${topic}    ${expected_status}
+    [Arguments]    ${device}    ${cmd}
     Should Have MQTT Messages
-    ...    ${topic}
+    ...    te/device/${device}///cmd/${cmd}/#
     ...    minimum=1
     ...    maximum=1
-    ...    message_contains="status":"${expected_status}"
+    ...    message_contains="status":"executing"
+    Should Have MQTT Messages
+    ...    te/device/${device}///cmd/${cmd}/#
+    ...    minimum=1
+    ...    maximum=1
+    ...    message_contains="status":"successful"
 
-Trasfer Configuration Files
+Transfer Configuration Files
     Transfer To Device    ${CURDIR}/c8y_TakePicture.template    /etc/tedge/operations/c8y/
     Transfer To Device    ${CURDIR}/take_picture.toml    /etc/tedge/operations/
-    Transfer To Device    ${CURDIR}/take_picture.sh    /etc/tedge/operations/
-    Execute Command    chmod a+x /etc/tedge/operations/take_picture.sh
+    Transfer To Device    ${CURDIR}/do_something.sh    /etc/tedge/operations/
+    Execute Command    chmod a+x /etc/tedge/operations/do_something.sh
 
 Child Setup
     ${child_sn}=    Setup    skip_bootstrap=True
@@ -86,7 +94,7 @@ Child Setup
     Execute Command    tedge config set mqtt.topic_root te
     Execute Command    tedge config set mqtt.device_topic_id "device/${CHILD_SN}//"
 
-    Trasfer Configuration Files
+    Transfer Configuration Files
 
     Start Service    tedge-agent
     Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
@@ -100,9 +108,9 @@ Custom Setup
     Set Suite Variable    $PARENT_IP    ${parent_ip}
 
     Set Device Context    ${PARENT_SN}
-    Trasfer Configuration Files
+    Transfer Configuration Files
     Execute Command    tedge config set mqtt.external.bind.address ${PARENT_IP}
     Execute Command    tedge config set mqtt.external.bind.port 1883
     Execute Command    tedge reconnect c8y
 
-    Device Should Exist    ${PARENT_SN}
+    Cumulocity.Device Should Exist    ${PARENT_SN}

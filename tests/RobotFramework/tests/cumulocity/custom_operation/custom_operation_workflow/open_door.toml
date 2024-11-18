@@ -1,11 +1,11 @@
-operation = "take_picture"
+operation = "open_door"
 
 [init]
 action = "proceed"
 on_success = "executing"
 
 [executing]
-script = "/etc/tedge/operations/do_something.sh ${.payload.duration} ${.payload.quality}"
+script = "/etc/tedge/operations/do_something.sh ${.payload.delay} ${.payload.user}"
 on_success = "successful"
 
 [successful]

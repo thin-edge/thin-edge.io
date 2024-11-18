@@ -1,10 +1,10 @@
 #!/bin/sh
 set -e
 
-DURATION=$1
-QUALITY=$2
+ARG1=$1
+ARG2=$2
 
-echo Took it. DURATION="$DURATION", QUALITY="$QUALITY"
+echo ARG1="$ARG1", ARG2="$ARG2"
 
 echo ':::begin-tedge:::'
 echo '{"status":"successful"}'
