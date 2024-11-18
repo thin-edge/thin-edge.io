@@ -6,7 +6,7 @@ Library             ThinEdgeIO
 Test Setup          Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:c8y    theme:troubleshooting    theme:plugins    adapter:docker
+Test Tags           theme:c8y    theme:troubleshooting    theme:plugins    theme:remoteaccess    adapter:docker
 
 
 *** Test Cases ***
