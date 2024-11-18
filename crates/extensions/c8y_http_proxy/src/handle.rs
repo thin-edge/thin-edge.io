@@ -28,11 +28,9 @@ impl C8YHttpProxy {
         C8YHttpProxy { c8y }
     }
 
-    /// Establish the connection with Cumulocity
-    ///
-    /// Return the Cumulocity internal id of this device
-    pub async fn connect(&mut self) -> Result<String, C8YRestError> {
-        Ok(self.c8y.init().await?)
+    /// Return the Cumulocity internal id of a device, given its public id
+    pub async fn c8y_internal_id(&mut self, device_id: &str) -> Result<String, C8YRestError> {
+        self.c8y.try_get_internal_id(device_id).await
     }
 
     /// Return the local url going through the local auth proxy to reach the given remote url

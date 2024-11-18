@@ -30,7 +30,7 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
 
     tokio::spawn(async move {
-        proxy.connect().await.unwrap();
+        proxy.c8y_internal_id(device_id).await.unwrap();
     });
 
     // On start the proxy requests over HTTP the internal device id.
@@ -59,7 +59,7 @@ async fn get_internal_id() {
     let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), device_id.into()).await;
 
     tokio::spawn(async move {
-        proxy.connect().await.unwrap();
+        proxy.c8y_internal_id(device_id).await.unwrap();
     });
 
     // the proxy requests over HTTP the internal device id.
@@ -241,7 +241,7 @@ async fn get_internal_id_with_mock() {
 
     tokio::spawn(async move { http_actor.run().await });
 
-    let result = proxy.connect().await;
+    let result = proxy.c8y_internal_id(external_id).await;
     assert_eq!(internal_id, result.unwrap());
 }
 

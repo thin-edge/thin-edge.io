@@ -626,7 +626,6 @@ async fn spawn_firmware_manager(
     let c8y_end_point = C8yEndPoint::new(
         C8Y_HOST,
         C8Y_HOST,
-        device_id,
         ProxyUrlGenerator::new("localhost".into(), 8000, Protocol::Http),
     );
     let config = FirmwareManagerConfig::new(
