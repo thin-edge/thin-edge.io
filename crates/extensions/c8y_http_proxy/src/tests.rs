@@ -8,7 +8,6 @@ use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use http::StatusCode;
 use std::collections::HashMap;
-use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
@@ -52,7 +51,7 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
 }
 
 #[tokio::test]
-async fn retry_internal_id_on_expired_jwt() {
+async fn get_internal_id() {
     let c8y_host = "c8y.tenant.io";
     let device_id = "device-001";
     let external_id = "external-device-001";
@@ -63,18 +62,7 @@ async fn retry_internal_id_on_expired_jwt() {
         proxy.connect().await.unwrap();
     });
 
-    // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
-    let init_request = HttpRequestBuilder::get(format!(
-        "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
-    ))
-    .build()
-    .unwrap();
-    assert_recv(&mut c8y, Some(init_request)).await;
-
-    // Cumulocity returns unauthorized error (401), because the jwt token has expired
-    let c8y_response = HttpResponseBuilder::new().status(401).build().unwrap();
-    c8y.send(Ok(c8y_response)).await.unwrap();
     assert_recv(
         &mut c8y,
         Some(
@@ -86,7 +74,8 @@ async fn retry_internal_id_on_expired_jwt() {
         ),
     )
     .await;
-    // Mapper retries to get the internal device id, after getting a fresh jwt token
+
+    // C8Y send back the internal id
     let c8y_response = HttpResponseBuilder::new()
         .status(200)
         .json(&InternalIdResponse::new(device_id, external_id))
@@ -96,7 +85,7 @@ async fn retry_internal_id_on_expired_jwt() {
 }
 
 #[tokio::test]
-async fn retry_get_internal_id_when_not_found() {
+async fn get_internal_id_before_posting_software_list() {
     let c8y_host = "c8y.tenant.io";
     let main_device_id = "device-001";
     let child_device_id = "child-101";
@@ -105,40 +94,8 @@ async fn retry_get_internal_id_when_not_found() {
 
     // Mock server definition
     tokio::spawn(async move {
-        // Respond to the initial get_id request for the main device
-        let get_internal_id_url =
-            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{main_device_id}");
-        let init_request = HttpRequestBuilder::get(get_internal_id_url)
-            .build()
-            .unwrap();
-        assert_recv(&mut c8y, Some(init_request)).await;
-        let c8y_response = HttpResponseBuilder::new()
-            .status(200)
-            .json(&InternalIdResponse::new("100", main_device_id))
-            .build()
-            .unwrap();
-        c8y.send(Ok(c8y_response)).await.unwrap();
-
         let get_internal_id_url =
             format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{child_device_id}");
-
-        // Fail the first 2 internal id lookups for the child device
-        for _ in 0..2 {
-            assert_recv(
-                &mut c8y,
-                Some(
-                    HttpRequestBuilder::get(&get_internal_id_url)
-                        .build()
-                        .unwrap(),
-                ),
-            )
-            .await;
-            let c8y_response = HttpResponseBuilder::new()
-                .status(StatusCode::NOT_FOUND)
-                .build()
-                .unwrap();
-            c8y.send(Ok(c8y_response)).await.unwrap();
-        }
 
         // Let the next get_id request succeed
         assert_recv(
@@ -244,7 +201,7 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
 }
 
 #[tokio::test]
-async fn retry_internal_id_on_expired_jwt_with_mock() {
+async fn get_internal_id_with_mock() {
     let external_id = "device-001";
     let internal_id = "internal-device-001";
 
@@ -254,11 +211,6 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
     let mut server = mockito::Server::new_async().await;
 
     let _mock1 = server
-        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
-        .with_status(401)
-        .create_async()
-        .await;
-    let _mock2 = server
         .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
         .with_status(200)
         .with_body(response)
@@ -283,7 +235,6 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         c8y_http_host: target_url.clone(),
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
-        retry_interval: Duration::from_millis(10),
         proxy,
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
@@ -295,7 +246,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
 }
 
 #[tokio::test]
-async fn retry_create_event_on_expired_jwt_with_mock() {
+async fn request_internal_id_before_posting_new_event() {
     let external_id = "device-001";
     let internal_id = "12345678";
     let event_id = "87654321";
@@ -323,12 +274,6 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         .create_async()
         .await;
 
-    let _mock1 = server
-        .mock("POST", "/c8y/event/events/")
-        .with_status(401)
-        .create_async()
-        .await;
-
     let _mock2 = server
         .mock("POST", "/c8y/event/events/")
         .with_status(200)
@@ -354,24 +299,18 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         c8y_http_host: target_url.clone(),
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
-        retry_interval: Duration::from_millis(10),
         proxy,
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
     tokio::spawn(async move { http_actor.run().await });
-    // initialize the endpoint for mocking purpose
-    /*proxy.end_point.device_id = external_id.into();
-    proxy
-        .end_point
-        .set_internal_id(external_id.into(), internal_id.into());*/
 
     let result = proxy.send_event(event).await;
     assert_eq!(event_id, result.unwrap());
 }
 
 #[tokio::test]
-async fn retry_software_list_once_with_fresh_internal_id() {
+async fn request_internal_id_before_posting_software_list() {
     let c8y_host = "c8y.tenant.io";
     let device_id = "device-001";
     let external_id = "external-device-001";
@@ -387,52 +326,7 @@ async fn retry_software_list_once_with_fresh_internal_id() {
             .await
     });
 
-    // Even before any request is sent to the c8y_proxy
-    // the proxy requests over HTTP the internal device id.
-    let _init_request = HttpRequestBuilder::get(format!(
-        "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{device_id}"
-    ))
-    .build()
-    .unwrap();
-    // skip the message
-    c8y.recv().await;
-
-    // Cumulocity returns the internal device id
-    let c8y_response = HttpResponseBuilder::new()
-        .status(200)
-        .json(&InternalIdResponse::new(device_id, external_id))
-        .build()
-        .unwrap();
-    c8y.send(Ok(c8y_response)).await.unwrap();
-
-    // This internal id is then used by the proxy for subsequent requests.
-
-    let c8y_software_list = C8yUpdateSoftwareListResponse::default();
-    // then the upload request received by c8y is related to the internal id
-    assert_recv(
-        &mut c8y,
-        Some(
-            HttpRequestBuilder::put(format!(
-                "http://localhost:8001/c8y/inventory/managedObjects/{device_id}"
-            ))
-            .header("content-type", "application/json")
-            .header("accept", "application/json")
-            .json(&c8y_software_list)
-            .build()
-            .unwrap(),
-        ),
-    )
-    .await;
-
-    // The software list upload fails because the device identified with internal id not found
-    let c8y_response = HttpResponseBuilder::new()
-        .status(404)
-        .json(&InternalIdResponse::new(device_id, external_id))
-        .build()
-        .unwrap();
-    c8y.send(Ok(c8y_response)).await.unwrap();
-
-    // Now the mapper gets a new internal id for the specific device id
+    // The proxy requests over HTTP the internal device id.
     assert_recv(
         &mut c8y,
         Some(
@@ -445,13 +339,15 @@ async fn retry_software_list_once_with_fresh_internal_id() {
     )
     .await;
 
-    // Cumulocity returns the internal device id, after retrying with the fresh jwt token
+    // Cumulocity returns the internal device id
     let c8y_response = HttpResponseBuilder::new()
         .status(200)
         .json(&InternalIdResponse::new(device_id, external_id))
         .build()
         .unwrap();
     c8y.send(Ok(c8y_response)).await.unwrap();
+
+    // This internal id is then used by the proxy for subsequent requests.
 
     let c8y_software_list = C8yUpdateSoftwareListResponse::default();
     // then the upload request received by c8y is related to the internal id
@@ -484,7 +380,6 @@ async fn spawn_c8y_http_proxy(
         c8y_http_host: c8y_host.clone(),
         c8y_mqtt_host: c8y_host,
         device_id,
-        retry_interval: Duration::from_millis(10),
         proxy: ProxyUrlGenerator::default(),
     };
     let proxy = C8YHttpProxy::new(config, &mut http);

@@ -1,5 +1,4 @@
 use c8y_api::proxy_url::ProxyUrlGenerator;
-use std::time::Duration;
 
 mod actor;
 pub mod handle;
@@ -14,7 +13,6 @@ pub struct C8YHttpConfig {
     pub c8y_http_host: String,
     pub c8y_mqtt_host: String,
     pub device_id: String,
-    retry_interval: Duration,
     proxy: ProxyUrlGenerator,
 }
 
@@ -29,7 +27,6 @@ impl C8YHttpConfig {
             c8y_http_host,
             c8y_mqtt_host,
             device_id,
-            retry_interval: Duration::from_secs(5),
             proxy,
         }
     }

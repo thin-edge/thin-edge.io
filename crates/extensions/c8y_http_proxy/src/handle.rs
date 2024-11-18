@@ -57,7 +57,6 @@ impl C8YHttpProxy {
     }
 
     pub async fn send_event(&mut self, c8y_event: CreateEvent) -> Result<EventId, C8YRestError> {
-        self.c8y.init().await?;
         self.c8y.create_event(c8y_event).await
     }
 
@@ -66,7 +65,6 @@ impl C8YHttpProxy {
         c8y_software_list: C8yUpdateSoftwareListResponse,
         device_id: String,
     ) -> Result<(), C8YRestError> {
-        self.c8y.init().await?;
         let request = SoftwareListResponse {
             c8y_software_list,
             device_id,
