@@ -6,7 +6,7 @@ Library             ThinEdgeIO
 Test Setup          Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:c8y    theme:troubleshooting    theme:plugins
+Test Tags           theme:c8y    theme:troubleshooting    theme:plugins    theme:remoteaccess
 
 
 *** Test Cases ***
