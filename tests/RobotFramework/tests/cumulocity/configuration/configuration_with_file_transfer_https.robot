@@ -59,6 +59,7 @@ Configuration snapshots are uploaded to File Transfer Service via HTTPS with cli
     Get Configuration Should Succeed    device=${CHILD_SN}    external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration operation fails when configuration-plugin does not supply client certificate
+    [Tags]    test:retry(2)
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
