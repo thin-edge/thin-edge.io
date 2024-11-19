@@ -10,6 +10,7 @@ use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
 use tedge_config::get_config_dir;
+use tedge_config::system_services::LogConfigArgs;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
@@ -50,6 +51,9 @@ pub enum TEdgeOptMulticall {
             global = true,
         )]
         config_dir: PathBuf,
+
+        #[command(flatten)]
+        log_args: LogConfigArgs,
     },
 
     #[clap(flatten)]

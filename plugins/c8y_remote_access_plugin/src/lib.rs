@@ -8,6 +8,7 @@ use miette::Context;
 use miette::IntoDiagnostic;
 use std::io;
 use std::process::Stdio;
+use tedge_config::system_services::log_init;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory_with_user_group;
@@ -39,6 +40,13 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let tedge_config = TEdgeConfig::try_new(config_dir.clone())
         .into_diagnostic()
         .context("Reading tedge config")?;
+
+    log_init(
+        "c8y_remote_access_plugin",
+        &opt.log_args,
+        &config_dir.tedge_config_root_path,
+    )
+    .into_diagnostic()?;
 
     let command = parse_arguments(opt)?;
 
