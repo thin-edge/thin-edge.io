@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::substitution::Record;
 use tedge_config::TopicPrefix;
+use tracing::error;
 use tracing::warn;
 
 use super::payload::SmartrestPayload;
@@ -30,8 +31,22 @@ pub struct Operations {
 impl Operations {
     pub fn add_operation(&mut self, operation: Operation) {
         self.operations.push(operation);
+        // as we insert, we need to maintain order, because depending on if `Operations` is created
+        // by adding operations one by one or by directory scan, we can end up with a different order
+        // TODO: refactor to provide more sane API, potentially using a backing `BTreeMap`
+        self.operations
+            .sort_unstable_by(|o1, o2| o1.name.cmp(&o2.name));
     }
 
+    pub fn remove_operation(&mut self, name: &str) -> Option<Operation> {
+        self.operations.dedup();
+        let pos = self.operations.iter().position(|op| op.name == name);
+        pos.map(|pos| self.operations.remove(pos))
+    }
+
+    /// Loads operations defined in the operations directory.
+    ///
+    /// Invalid operation files are ignored and logged.
     pub fn try_new(
         dir: impl AsRef<Path>,
         bridge_config: &impl Record,
@@ -92,6 +107,7 @@ impl Operations {
         let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
         declare_supported_operations(&ops)
     }
+
     pub fn get_json_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
         Ok(self
             .operations
@@ -291,21 +307,17 @@ pub fn get_operations(
                 continue;
             }
 
-            let mut details = match fs::read(&path) {
-                Ok(bytes) => toml::from_str::<Operation>(&String::from_utf8(bytes)?)
-                    .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
-                Err(err) => return Err(OperationsError::FromIo(err)),
-            };
-
-            if let Some(ref mut exec) = details.exec {
-                if let Some(ref topic) = exec.topic {
-                    exec.topic = Some(bridge_config.inject_values_into_template(topic))
+            let details = match get_operation(&path, bridge_config) {
+                Ok(operation) => operation,
+                Err(err) => {
+                    error!(
+                        path = %path.to_string_lossy(),
+                        error = %err,
+                        "Failed to load an operation from file"
+                    );
+                    continue;
                 }
-            }
-            path.file_name()
-                .and_then(|filename| filename.to_str())
-                .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
-                .clone_into(&mut details.name);
+            };
 
             if details.is_valid_operation_handler() || details.is_supported_operation_file() {
                 operations.add_operation(details);
@@ -340,18 +352,24 @@ pub fn get_child_ops(
     Ok(child_ops)
 }
 
-pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
-    let mut details = match fs::read(&path) {
-        Ok(bytes) => toml::from_str::<Operation>(&String::from_utf8(bytes)?)
-            .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
-
-        Err(err) => return Err(OperationsError::FromIo(err)),
-    };
+pub fn get_operation(
+    path: &Path,
+    bridge_config: &impl Record,
+) -> Result<Operation, OperationsError> {
+    let text = fs::read_to_string(path)?;
+    let mut details = toml::from_str::<Operation>(&text)
+        .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?;
 
     path.file_name()
         .and_then(|filename| filename.to_str())
         .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
         .clone_into(&mut details.name);
+
+    if let Some(ref mut exec) = details.exec {
+        if let Some(ref topic) = exec.topic {
+            exec.topic = Some(bridge_config.inject_values_into_template(topic))
+        }
+    }
 
     Ok(details)
 }
@@ -519,6 +537,29 @@ mod tests {
         .unwrap();
 
         assert_eq!(operations.operations.len(), ops_count);
+    }
+
+    #[test]
+    fn get_operations_skips_operations_with_invalid_names_and_content() {
+        let test_operations = TestOperations::builder().with_operations(5).build();
+
+        // change name of one file so that operation name is invalid
+        let path = &test_operations.operations[1];
+        let new_path = path.parent().unwrap().join(".command?");
+        std::fs::rename(path, new_path).unwrap();
+
+        // fill one operation file with invalid content
+        std::fs::write(&test_operations.operations[2], "hello world").unwrap();
+
+        let operations = get_operations(
+            test_operations.temp_dir(),
+            &TestBridgeConfig {
+                c8y_prefix: TopicPrefix::try_from("c8y").unwrap(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(operations.operations.len(), 3);
     }
 
     #[test_case("file_a?", false)]

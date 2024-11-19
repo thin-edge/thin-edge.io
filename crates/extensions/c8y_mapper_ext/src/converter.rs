@@ -231,6 +231,7 @@ impl CumulocityConverter {
         let prefix = &config.bridge_config.c8y_prefix;
 
         let operations = Operations::try_new(&*config.ops_dir, &config.bridge_config)?;
+
         let children = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
 
         let alarm_converter = AlarmConverter::new();
@@ -1301,7 +1302,6 @@ impl CumulocityConverter {
                     warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing capabilities is not currently supported");
                     return Ok(vec![]);
                 }
-
                 self.validate_operation_supported(operation, &source)?;
                 match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
@@ -1438,10 +1438,8 @@ impl CumulocityConverter {
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = self.parse_base_inventory_file()?;
 
-        let supported_operations_message = self.create_supported_operations(
-            self.config.ops_dir.as_std_path(),
-            &self.config.bridge_config.c8y_prefix,
-        )?;
+        let supported_operations_message =
+            self.create_supported_operations(self.config.ops_dir.as_std_path())?;
 
         let device_data_message = self.inventory_device_type_update_message()?;
 
@@ -1456,11 +1454,25 @@ impl CumulocityConverter {
         Ok(messages)
     }
 
-    fn create_supported_operations(
-        &self,
-        path: &Path,
-        prefix: &TopicPrefix,
-    ) -> Result<MqttMessage, ConversionError> {
+    fn create_supported_operations(&self, path: &Path) -> Result<MqttMessage, ConversionError> {
+        let is_child = is_child_operation_path(path);
+        let device = if is_child {
+            let external_id = get_child_external_id(path)?;
+            self.entity_store
+                .get_by_external_id(&EntityExternalId::from(external_id))
+                .expect("should be registered")
+        } else {
+            self.entity_store
+                .get(self.entity_store.main_device())
+                .expect("should be registered")
+        };
+
+        let operations = self
+            .operations_for_device(&device.topic_id)
+            .expect("should exist");
+
+        let prefix = &self.config.bridge_config.c8y_prefix;
+
         let topic = if is_child_operation_path(path) {
             let child_id = get_child_external_id(path)?;
             let child_external_id = Self::validate_external_id(&child_id)?;
@@ -1472,9 +1484,7 @@ impl CumulocityConverter {
 
         Ok(MqttMessage::new(
             &topic,
-            Operations::try_new(path, &self.config.bridge_config)?
-                .create_smartrest_ops_message()
-                .into_inner(),
+            operations.create_smartrest_ops_message().into_inner(),
         ))
     }
 
@@ -1491,10 +1501,7 @@ impl CumulocityConverter {
         let needs_cloud_update = self.update_operations(&message.ops_dir)?;
 
         if needs_cloud_update {
-            Ok(Some(self.create_supported_operations(
-                &message.ops_dir,
-                &self.config.bridge_config.c8y_prefix,
-            )?))
+            Ok(Some(self.create_supported_operations(&message.ops_dir)?))
         } else {
             Ok(None)
         }
@@ -1540,6 +1547,12 @@ fn is_child_operation_path(path: &Path) -> bool {
 
 impl CumulocityConverter {
     /// Register on C8y an operation capability for a device.
+    ///
+    /// Additionally when the target is a child device, operation directory for the device will be loaded and operations
+    /// not already registered will be registered.
+    ///
+    /// Returns a Set Supported Operations (114) message if among registered operations there were new operations that
+    /// were not announced to the cloud.
     pub fn register_operation(
         &mut self,
         target: &EntityTopicId,
@@ -1553,32 +1566,69 @@ impl CumulocityConverter {
                 self.config.ops_dir.join(child_dir_name).into()
             }
             EntityType::Service => {
-                let target = &device.topic_id;
-                error!("Unsupported {c8y_operation_name} operation for a service: {target}");
-                return Ok(vec![]);
+                error!(
+                    %target,
+                    "{c8y_operation_name} operation for services are currently unsupported"
+                );
+                return Err(ConversionError::UnexpectedError(anyhow!(
+                    "{c8y_operation_name} operation for services are currently unsupported"
+                )));
             }
         };
+
+        // Save the operation to the operation directory
         let ops_file = ops_dir.join(c8y_operation_name);
         create_directory_with_defaults(&*ops_dir)?;
-        create_file_with_defaults(ops_file, None)?;
+        create_file_with_defaults(&ops_file, None)?;
 
-        let need_cloud_update = self.update_operations(ops_dir.as_std_path())?;
+        let ops_dir = ops_dir.as_std_path();
+
+        let need_cloud_update = match is_child_operation_path(ops_dir) {
+            // for devices other than the main device, dynamic update of supported operations via file events is
+            // disabled, so we have to additionally load new operations from the c8y operations for that device
+            true => self.update_operations(ops_dir)?,
+
+            // for main devices new operation files are loaded dynamically as they are created, so only register one
+            // operation we need
+            false => {
+                let bridge_config = &self.config.bridge_config;
+                let operation = c8y_api::smartrest::operations::get_operation(
+                    ops_file.as_std_path(),
+                    bridge_config,
+                )?;
+
+                let current_operations = self
+                    .operations_for_device_mut(target)
+                    .expect("entity should've been checked before that it's not a service");
+
+                let prev_operation = current_operations.remove_operation(&operation.name);
+
+                // even if the body of the operation is different, as long as it has the same name, supported operations message
+                // will be the same, so we don't need to resend
+                let need_cloud_update = prev_operation.is_none();
+
+                current_operations.add_operation(operation);
+
+                need_cloud_update
+            }
+        };
 
         if need_cloud_update {
-            let device_operations = self.create_supported_operations(
-                ops_dir.as_std_path(),
-                &self.config.bridge_config.c8y_prefix,
-            )?;
-            return Ok(vec![device_operations]);
+            let cloud_update_operations_message = self.create_supported_operations(ops_dir)?;
+
+            return Ok(vec![cloud_update_operations_message]);
         }
 
         Ok(vec![])
     }
 
-    /// Saves a new supported operation set for a given device.
+    /// Loads and saves a new supported operation set for a given device.
     ///
-    /// If the supported operation set changed, `Ok(true)` is returned to denote that this change
-    /// should be sent to the cloud.
+    /// All operation files from the given operation directory are loaded and set as the new supported operation set for
+    /// a given device. Invalid operation files are ignored.
+    ///
+    /// If the supported operation set changed, `Ok(true)` is returned to denote that this change should be sent to the
+    /// cloud.
     fn update_operations(&mut self, dir: &Path) -> Result<bool, ConversionError> {
         let operations = get_operations(dir, &self.config.bridge_config)?;
         let current_operations = if is_child_operation_path(dir) {
@@ -1657,6 +1707,41 @@ impl CumulocityConverter {
 
         registration.push(self.request_software_list(target));
         Ok(registration)
+    }
+
+    fn operations_for_device(&self, device: &EntityTopicId) -> Option<&Operations> {
+        let device = self.entity_store.get(device)?;
+
+        match device.r#type {
+            EntityType::MainDevice => Some(&self.operations),
+            EntityType::ChildDevice => self.children.get(device.external_id.as_ref()),
+            EntityType::Service => None,
+        }
+    }
+
+    /// Return `Operations` struct for a given entity.
+    ///
+    /// Returns `None` if an entity is a service, as services can't have operations.
+    /// If `Operations` wasn't yet created for a device, this function creates it.
+    fn operations_for_device_mut(&mut self, device: &EntityTopicId) -> Option<&mut Operations> {
+        let device = self
+            .entity_store
+            .get(device)
+            .expect("Entity should've been registered");
+
+        match device.r#type {
+            EntityType::MainDevice => Some(&mut self.operations),
+            EntityType::ChildDevice => {
+                let key = device.external_id.as_ref();
+                // can't avoid the double hash+lookup because of borrow checker limitation
+                // https://www.reddit.com/r/rust/comments/qi3ye9/comment/hih04qs/
+                if !self.children.contains_key(key) {
+                    self.children.insert(key.to_string(), Operations::default());
+                }
+                self.children.get_mut(key)
+            }
+            EntityType::Service => None,
+        }
     }
 }
 
@@ -3229,6 +3314,93 @@ pub(crate) mod tests {
                 ),
             ],
         );
+    }
+
+    /// Check that register_operation correctly registers operations from MQTT and handles error conditions
+    #[tokio::test]
+    async fn test_register_operation() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.enable_auto_register = false;
+
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
+        // main device command
+        let main_device = converter.entity_store.main_device().clone();
+
+        let operation_topic = converter.mqtt_schema.topic_for(
+            &main_device,
+            &Channel::CommandMetadata {
+                operation: OperationType::Custom("my_operation".to_string()),
+            },
+        );
+        let operation_msg = MqttMessage::new(&operation_topic, "{}");
+
+        let msgs = converter.convert(&operation_msg).await;
+        assert_messages_matching(&msgs, [("c8y/s/us", "114,my_operation".into())]);
+
+        // child device command
+        let reg_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child0//"),
+            json!({
+                "@type": "child-device",
+                "@id": "child0",
+                "name": "child0",
+                "@parent": "device/main//",
+            })
+            .to_string(),
+        );
+
+        converter
+            .try_register_source_entities(&reg_message)
+            .await
+            .unwrap();
+
+        let child_device = EntityTopicId::default_child_device("child0").unwrap();
+        let operation_topic = converter.mqtt_schema.topic_for(
+            &child_device,
+            &Channel::CommandMetadata {
+                operation: OperationType::Custom("my_operation".to_string()),
+            },
+        );
+        let operation_msg = MqttMessage::new(&operation_topic, "{}");
+
+        let msgs = converter.convert(&operation_msg).await;
+        assert_messages_matching(&msgs, [("c8y/s/us/child0", "114,my_operation".into())]);
+
+        // service command
+        let reg_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/service0"),
+            json!({
+                "@type": "service",
+                "@id": "service0",
+                "name": "service0",
+                "@parent": "device/main//",
+            })
+            .to_string(),
+        );
+
+        converter
+            .try_register_source_entities(&reg_message)
+            .await
+            .unwrap();
+
+        let service = main_device.default_service_for_device("service0").unwrap();
+        let operation_topic = converter.mqtt_schema.topic_for(
+            &service,
+            &Channel::CommandMetadata {
+                operation: OperationType::Custom("my_operation".to_string()),
+            },
+        );
+        let operation_msg = MqttMessage::new(&operation_topic, "{}");
+
+        let msgs = converter.convert(&operation_msg).await;
+
+        assert_messages_matching(&msgs, [(
+                "te/errors",
+                "Failed to convert a message on topic 'te/device/main/service/service0/cmd/my_operation': \
+                Unexpected error: my_operation operation for services are currently unsupported".into()
+            )]);
     }
 
     fn pending_entities_into_mqtt_messages(entities: Vec<PendingEntityData>) -> Vec<MqttMessage> {
