@@ -153,21 +153,6 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
 
     // Mock server definition
     tokio::spawn(async move {
-        // On receipt of the initial get_id request for the main device...
-        let get_internal_id_url =
-            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{main_device_id}");
-        let init_request = HttpRequestBuilder::get(get_internal_id_url)
-            .build()
-            .unwrap();
-        assert_recv(&mut c8y, Some(init_request)).await;
-        // ...respond with its internal id
-        let c8y_response = HttpResponseBuilder::new()
-            .status(200)
-            .json(&InternalIdResponse::new("100", main_device_id))
-            .build()
-            .unwrap();
-        c8y.send(Ok(c8y_response)).await.unwrap();
-
         // Always fail the internal id lookup for the child device
         loop {
             let get_internal_id_url = format!(
@@ -229,7 +214,8 @@ async fn get_internal_id_with_mock() {
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
     let tedge_config = config_loc.load().unwrap();
-    let mut http_actor = HttpActor::new(&tedge_config).builder();
+    let tls_config = tedge_config.http.client_tls_config().unwrap();
+    let mut http_actor = HttpActor::new(tls_config).builder();
 
     let config = C8YHttpConfig {
         c8y_http_host: target_url.clone(),
@@ -293,7 +279,8 @@ async fn request_internal_id_before_posting_new_event() {
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
     let tedge_config = config_loc.load().unwrap();
-    let mut http_actor = HttpActor::new(&tedge_config).builder();
+    let tls_config = tedge_config.http.client_tls_config().unwrap();
+    let mut http_actor = HttpActor::new(tls_config).builder();
 
     let config = C8YHttpConfig {
         c8y_http_host: target_url.clone(),

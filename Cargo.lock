@@ -4118,8 +4118,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tedge_actors",
- "tedge_config",
- "tedge_test_utils",
  "thiserror",
  "tokio",
 ]

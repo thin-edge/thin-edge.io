@@ -13,7 +13,6 @@ use actor::*;
 use tedge_actors::Concurrent;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_config::TEdgeConfig;
 
 #[derive(Debug)]
 pub struct HttpActor {
@@ -22,10 +21,10 @@ pub struct HttpActor {
 }
 
 impl HttpActor {
-    pub fn new(tedge_config: &TEdgeConfig) -> Self {
+    pub fn new(tls_client_config: rustls::ClientConfig) -> Self {
         Self {
             config: <_>::default(),
-            tls_client_config: tedge_config.cloud_client_tls_config(),
+            tls_client_config,
         }
     }
 

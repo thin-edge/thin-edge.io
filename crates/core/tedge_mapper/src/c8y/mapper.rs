@@ -224,7 +224,7 @@ impl TEdgeComponent for CumulocityMapper {
                 .await?;
         }
 
-        let mut http_actor = HttpActor::new(&tedge_config).builder();
+        let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
         let c8y_auth_proxy_actor =
             C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile)?;
 

@@ -29,7 +29,6 @@ rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
-tedge_config = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = [
     "macros",
@@ -38,7 +37,6 @@ tokio = { workspace = true, default-features = false, features = [
 
 [dev-dependencies]
 mockito = { workspace = true }
-tedge_test_utils = { workspace = true }
 
 [lints]
 workspace = true
