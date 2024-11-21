@@ -13,7 +13,7 @@ use std::path::Path;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
 
-/// Create self-signed device certificate
+/// Create a self-signed device certificate
 pub struct CreateCertCmd {
     /// The device identifier
     pub id: String,

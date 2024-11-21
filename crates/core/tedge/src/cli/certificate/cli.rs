@@ -49,6 +49,10 @@ pub enum TEdgeCertCli {
 
     /// Upload root certificate
     Upload(UploadCertCli),
+
+    /// Request and download the device certificate
+    #[clap(subcommand)]
+    Download(DownloadCertCli),
 }
 
 impl BuildCommand for TEdgeCertCli {
@@ -130,6 +134,21 @@ impl BuildCommand for TEdgeCertCli {
                 };
                 cmd.into_boxed()
             }
+
+            TEdgeCertCli::Download(DownloadCertCli::C8y { id, token, profile }) => {
+                let c8y_config = config.c8y.try_get(profile.as_deref())?;
+                let cmd = c8y::DownloadCertCmd {
+                    device_id: id,
+                    security_token: token,
+                    c8y_url: c8y_config.http.or_err()?.to_owned(),
+                    root_certs: config.cloud_root_certs(),
+                    cert_path: c8y_config.device.cert_path.to_owned(),
+                    key_path: c8y_config.device.key_path.to_owned(),
+                    csr_path: c8y_config.device.csr_path.to_owned(),
+                };
+                cmd.into_boxed()
+            }
+
             TEdgeCertCli::Renew { cloud } => {
                 let cmd = RenewCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
@@ -167,4 +186,50 @@ pub struct UploadCertCli {
 
     #[clap(long, hide = true)]
     profile: Option<ProfileName>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum DownloadCertCli {
+    #[clap(verbatim_doc_comment)]
+    /// Request and download the device certificate from Cumulocity
+    ///
+    /// - Generate a private key and Signing Certificate Request (CSR) for the device
+    /// - Upload this CSR on Cumulocity, using the provided device identifier and security token
+    /// - Loop till the device is registered by an administrator and the CSR accepted
+    /// - Store the certificate created by Cumulocity
+    ///
+    /// Use the following settings from the config:
+    /// - c8y.http  HTTP Endpoint to the Cumulocity tenant, with optional port
+    /// - device.key_path  Path where the device's private key is stored
+    /// - device.cert_path  Path where the device's certificate is stored
+    /// - device.csr_path  Path where the device's certificate signing request is stored
+    C8y {
+        /// The device identifier to be used as the common name for the certificate
+        ///
+        /// You will be prompted for input if the value is not provided or is empty
+        #[clap(long = "device-id")]
+        #[arg(
+            env = "C8Y_DEVICE",
+            hide_env_values = true,
+            hide_default_value = true,
+            default_value = ""
+        )]
+        id: String,
+
+        #[clap(long)]
+        #[arg(
+            env = "C8Y_TOKEN",
+            hide_env_values = true,
+            hide_default_value = true,
+            default_value = ""
+        )]
+        /// The security token assigned to this device when registered to Cumulocity
+        ///
+        /// You will be prompted for input if the value is not provided or is empty
+        token: String,
+
+        #[clap(long)]
+        /// The Cumulocity cloud profile (when the device is connected to several tenants)
+        profile: Option<ProfileName>,
+    },
 }
