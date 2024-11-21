@@ -30,6 +30,12 @@ pub type CommandId = String;
 pub type JsonPath = String;
 pub type WorkflowVersion = String;
 
+const BUILT_IN: &str = "builtin";
+
+pub fn version_is_builtin(version: &WorkflowVersion) -> bool {
+    version == BUILT_IN
+}
+
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
 #[serde(try_from = "toml_config::TomlOperationWorkflow")]

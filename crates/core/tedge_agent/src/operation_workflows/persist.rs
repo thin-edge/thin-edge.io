@@ -6,6 +6,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::supervisor::WorkflowSource;
+use tedge_api::workflow::version_is_builtin;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::IllFormedOperationWorkflow;
@@ -265,6 +266,9 @@ impl WorkflowRepository {
         operation: &OperationName,
         version: &WorkflowVersion,
     ) {
+        if version_is_builtin(version) {
+            return;
+        }
         if let Some(count) = self.in_use_copies.get_mut(version) {
             *count += 1;
             return;
@@ -302,6 +306,9 @@ impl WorkflowRepository {
     }
 
     async fn release_in_use_copy(&mut self, operation: &OperationName, version: &WorkflowVersion) {
+        if version_is_builtin(version) {
+            return;
+        }
         if let Some(count) = self.in_use_copies.get_mut(version) {
             *count -= 1;
             if *count > 0 {
