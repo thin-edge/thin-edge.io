@@ -19,7 +19,7 @@ const EMPTY_STRING: &str = "";
 const DEFAULT_ALARM_SEVERITY: AlarmSeverity = AlarmSeverity::Minor;
 const DEFAULT_ALARM_TYPE: &str = "ThinEdgeAlarm";
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yCreateEvent {
     #[serde(skip_serializing_if = "Option::is_none")]

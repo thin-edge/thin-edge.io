@@ -12,11 +12,11 @@ use crate::config::BridgeConfig;
 use crate::operations::OperationHandler;
 use crate::Capabilities;
 use assert_json_diff::assert_json_include;
+use c8y_api::json_c8y::C8yEventResponse;
+use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
+use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_auth_proxy::url::Protocol;
-use c8y_http_proxy::messages::C8YRestRequest;
-use c8y_http_proxy::messages::C8YRestResult;
 use serde_json::json;
 use std::fs;
 use std::fs::File;
@@ -44,6 +44,9 @@ use tedge_config::TopicPrefix;
 use tedge_config::C8Y_MQTT_PAYLOAD_LIMIT;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::test_helpers::HttpResponseBuilder;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
 use tedge_mqtt_ext::MqttMessage;
@@ -2961,7 +2964,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -
 
 pub(crate) struct TestHandle {
     pub mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
-    pub http: FakeServerBox<C8YRestRequest, C8YRestResult>,
+    pub http: FakeServerBox<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBox<NoMessage, FsWatchEvent>,
     pub timer: FakeServerBox<SyncStart, SyncComplete>,
     pub ul: FakeServerBox<IdUploadRequest, IdUploadResult>,
@@ -2981,7 +2984,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
-    let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+    let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
         FakeServerBoxBuilder::default();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
@@ -2998,7 +3001,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
         &mut mqtt_builder,
-        &mut c8y_proxy_builder,
+        &mut http_builder,
         &mut timer_builder,
         &mut uploader_builder,
         &mut downloader_builder,
@@ -3022,7 +3025,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     TestHandle {
         mqtt: mqtt_builder.build(),
-        http: c8y_proxy_builder.build(),
+        http: http_builder.build(),
         fs: fs_watcher_builder.build(),
         timer: timer_builder.build(),
         ul: uploader_builder.build(),
@@ -3111,23 +3114,37 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
     .await;
 }
 
-pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<C8YRestRequest, C8YRestResult>) {
+pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, HttpResult>) {
     tokio::spawn(async move {
-        loop {
-            match http.recv().await {
-                Some(C8YRestRequest::SoftwareListResponse(_)) => {
-                    let _ = http
-                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Unit(())))
-                        .await;
-                }
-                Some(C8YRestRequest::CreateEvent(_)) => {
-                    let _ = http
-                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
-                            "dummy-event-id-1234".to_string(),
-                        )))
-                        .await;
-                }
-                _ => {}
+        while let Some(request) = http.recv().await {
+            let uri = request.uri().path();
+            eprintln!("C8Y Proxy: {} {uri}", request.method());
+            if uri.starts_with("/c8y/inventory/managedObjects/") {
+                let _ = http
+                    .send(HttpResponseBuilder::new().status(200).build())
+                    .await;
+            } else if uri == "/c8y/event/events/" {
+                let response = C8yEventResponse {
+                    id: "dummy-event-id-1234".to_string(),
+                };
+                let _ = http
+                    .send(
+                        HttpResponseBuilder::new()
+                            .status(200)
+                            .json(&response)
+                            .build(),
+                    )
+                    .await;
+            } else if let Some(id) = uri.strip_prefix("/c8y/identity/externalIds/c8y_Serial/") {
+                let response = InternalIdResponse::new(id, id);
+                let _ = http
+                    .send(
+                        HttpResponseBuilder::new()
+                            .status(200)
+                            .json(&response)
+                            .build(),
+                    )
+                    .await;
             }
         }
     });

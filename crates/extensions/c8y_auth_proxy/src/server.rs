@@ -497,13 +497,9 @@ mod tests {
     use axum::body::Bytes;
     use axum::headers::authorization::Bearer;
     use axum::headers::Authorization;
-    use axum::http::header::AUTHORIZATION;
     use axum::http::Request;
     use axum::middleware::Next;
     use axum::TypedHeader;
-    use c8y_http_proxy::credentials::HttpHeaderRequest;
-    use c8y_http_proxy::credentials::HttpHeaderResult;
-    use c8y_http_proxy::credentials::HttpHeaderRetriever;
     use camino::Utf8PathBuf;
     use futures::channel::mpsc;
     use futures::future::ready;
@@ -516,13 +512,10 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Duration;
     use std::time::SystemTime;
-    use tedge_actors::Sequential;
-    use tedge_actors::Server;
-    use tedge_actors::ServerActorBuilder;
-    use tedge_actors::ServerConfig;
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpStream;
+    use tokio::sync::Mutex;
     use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
     use tokio_tungstenite::tungstenite::protocol::CloseFrame;
     use tokio_tungstenite::tungstenite::Message;
@@ -1120,13 +1113,13 @@ mod tests {
         certificate: rcgen::Certificate,
         ca_dir: Option<Utf8PathBuf>,
     ) -> u16 {
-        let mut retriever = IterJwtRetriever::builder(tokens);
+        let jwt_retriever = IterJwtRetriever::new(tokens).shared();
         let mut last_error = None;
         for port in 3000..3100 {
             let state = AppData {
                 is_https: false,
                 host: target_host.into(),
-                token_manager: TokenManager::new(HttpHeaderRetriever::new(&mut retriever)).shared(),
+                token_manager: jwt_retriever.clone(),
                 client: reqwest::Client::new(),
             };
             let trust_store = ca_dir
@@ -1143,7 +1136,6 @@ mod tests {
             match res {
                 Ok(server) => {
                     tokio::spawn(server);
-                    tokio::spawn(retriever.run());
                     return port;
                 }
                 Err(e) => last_error = Some(e),
@@ -1155,42 +1147,37 @@ mod tests {
 
     /// A JwtRetriever that returns a sequence of JWT tokens
     pub(crate) struct IterJwtRetriever {
-        pub tokens: std::vec::IntoIter<Cow<'static, str>>,
+        tokens: std::vec::IntoIter<Cow<'static, str>>,
+        cached: Option<Arc<str>>,
     }
 
     #[async_trait]
-    impl Server for IterJwtRetriever {
-        type Request = HttpHeaderRequest;
-        type Response = HttpHeaderResult;
-
-        fn name(&self) -> &str {
-            "IterJwtRetriever"
+    impl TokenManager for IterJwtRetriever {
+        async fn refresh(&mut self) -> Result<Arc<str>, anyhow::Error> {
+            let jwt: Arc<str> = format!("Bearer {}", self.tokens.next().unwrap()).into();
+            self.cached = Some(jwt.clone());
+            Ok(jwt)
         }
 
-        async fn handle(&mut self, _request: Self::Request) -> Self::Response {
-            let mut header_map = HeaderMap::new();
-            header_map.insert(
-                AUTHORIZATION,
-                format!("Bearer {}", self.tokens.next().unwrap())
-                    .parse()
-                    .unwrap(),
-            );
-            Ok(header_map)
+        fn cached_mut(&mut self) -> Option<&mut Arc<str>> {
+            self.cached.as_mut()
         }
     }
 
     impl IterJwtRetriever {
-        pub fn builder(
-            tokens: Vec<impl Into<Cow<'static, str>>>,
-        ) -> ServerActorBuilder<IterJwtRetriever, Sequential> {
-            let server = IterJwtRetriever {
+        pub fn new(tokens: Vec<impl Into<Cow<'static, str>>>) -> Self {
+            IterJwtRetriever {
                 tokens: tokens
                     .into_iter()
                     .map(|token| token.into())
                     .collect::<Vec<_>>()
                     .into_iter(),
-            };
-            ServerActorBuilder::new(server, &ServerConfig::default(), Sequential)
+                cached: None,
+            }
+        }
+
+        pub fn shared(self) -> SharedTokenManager {
+            SharedTokenManager(Arc::new(Mutex::new(self)))
         }
     }
 }

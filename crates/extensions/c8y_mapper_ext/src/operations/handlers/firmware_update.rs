@@ -223,7 +223,7 @@ mod tests {
                     "name": "myFirmware",
                     "version": "1.0",
                     "remoteUrl": "http://www.my.url",
-                    "tedgeUrl": "http://www.my.url"
+                    "tedgeUrl": "http://www.my.url/"
                 }),
             )],
         )
@@ -325,7 +325,7 @@ mod tests {
                     "name": "myFirmware",
                     "version": "1.0",
                     "remoteUrl": "http://www.my.url",
-                    "tedgeUrl": "http://www.my.url"
+                    "tedgeUrl": "http://www.my.url/"
                 }),
             )],
         )

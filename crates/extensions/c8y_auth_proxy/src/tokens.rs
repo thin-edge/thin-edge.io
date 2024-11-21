@@ -1,12 +1,11 @@
 use anyhow::Context;
-use hyper::header::AUTHORIZATION;
+use axum::async_trait;
+use c8y_api::http_proxy::C8yAuthRetriever;
 use std::sync::Arc;
-
-use c8y_http_proxy::credentials::HttpHeaderRetriever;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
-pub struct SharedTokenManager(Arc<Mutex<TokenManager>>);
+pub struct SharedTokenManager(pub(crate) Arc<Mutex<dyn TokenManager>>);
 
 impl SharedTokenManager {
     /// Returns a JWT that doesn't match the provided JWT
@@ -17,24 +16,10 @@ impl SharedTokenManager {
     }
 }
 
-pub struct TokenManager {
-    recv: HttpHeaderRetriever,
-    cached: Option<Arc<str>>,
-}
-
-impl TokenManager {
-    pub fn new(recv: HttpHeaderRetriever) -> Self {
-        Self { recv, cached: None }
-    }
-
-    pub fn shared(self) -> SharedTokenManager {
-        SharedTokenManager(Arc::new(Mutex::new(self)))
-    }
-}
-
-impl TokenManager {
+#[async_trait]
+pub(crate) trait TokenManager: Send {
     async fn not_matching(&mut self, input: Option<&Arc<str>>) -> Result<Arc<str>, anyhow::Error> {
-        match (self.cached.as_mut(), input) {
+        match (self.cached_mut(), input) {
             (Some(token), None) => Ok(token.clone()),
             // The token should have arisen from this TokenManager, so pointer equality is sufficient
             (Some(token), Some(no_match)) if !Arc::ptr_eq(token, no_match) => Ok(token.clone()),
@@ -42,12 +27,42 @@ impl TokenManager {
         }
     }
 
+    async fn refresh(&mut self) -> Result<Arc<str>, anyhow::Error>;
+
+    fn cached_mut(&mut self) -> Option<&mut Arc<str>>;
+}
+
+pub struct C8yTokenManager {
+    auth_retriever: C8yAuthRetriever,
+    cached: Option<Arc<str>>,
+}
+
+impl C8yTokenManager {
+    pub fn new(auth_retriever: C8yAuthRetriever) -> Self {
+        Self {
+            auth_retriever,
+            cached: None,
+        }
+    }
+
+    pub fn shared(self) -> SharedTokenManager {
+        SharedTokenManager(Arc::new(Mutex::new(self)))
+    }
+}
+
+#[async_trait]
+impl TokenManager for C8yTokenManager {
     async fn refresh(&mut self) -> Result<Arc<str>, anyhow::Error> {
-        let header_map = self.recv.await_response(()).await??;
-        let auth_header_value = header_map
-            .get(AUTHORIZATION)
+        let auth = self
+            .auth_retriever
+            .get_auth_header_value()
+            .await
             .context("Authorization is missing from header")?;
-        self.cached = Some(auth_header_value.to_str()?.into());
+        self.cached = Some(auth.to_str()?.into());
         Ok(self.cached.as_ref().unwrap().clone())
+    }
+
+    fn cached_mut(&mut self) -> Option<&mut Arc<str>> {
+        self.cached.as_mut()
     }
 }

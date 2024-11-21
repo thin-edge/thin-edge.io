@@ -3,10 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
-use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use c8y_http_proxy::messages::C8YRestRequest;
-use c8y_http_proxy::messages::C8YRestResult;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -34,6 +31,8 @@ use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
@@ -333,7 +332,6 @@ pub struct C8yMapperBuilder {
     timer_sender: DynSender<SyncStart>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    auth_proxy: ProxyUrlGenerator,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
@@ -343,7 +341,7 @@ impl C8yMapperBuilder {
     pub fn try_new(
         config: C8yMapperConfig,
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
-        http: &mut impl Service<C8YRestRequest, C8YRestResult>,
+        http: &mut impl Service<HttpRequest, HttpResult>,
         timer: &mut impl Service<SyncStart, SyncComplete>,
         uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
         downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
@@ -357,20 +355,16 @@ impl C8yMapperBuilder {
 
         let mqtt_publisher = mqtt.get_sender();
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
-        let http_proxy = C8YHttpProxy::new(http);
-        let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
 
+        let http_proxy = C8YHttpProxy::new(&config, http);
+
+        let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
         let downloader = ClientMessageBox::new(downloader);
         let uploader = ClientMessageBox::new(uploader);
 
         fs_watcher.connect_sink(
             config.ops_dir.as_std_path().to_path_buf(),
             &box_builder.get_sender(),
-        );
-        let auth_proxy = ProxyUrlGenerator::new(
-            config.auth_proxy_addr.clone(),
-            config.auth_proxy_port,
-            config.auth_proxy_protocol,
         );
 
         let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
@@ -391,7 +385,6 @@ impl C8yMapperBuilder {
             timer_sender,
             uploader,
             downloader,
-            auth_proxy,
             bridge_monitor_builder,
             message_handlers,
         })
@@ -443,7 +436,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.config,
             mqtt_publisher.clone(),
             self.http_proxy,
-            self.auth_proxy,
             self.uploader,
             self.downloader,
         )

@@ -142,7 +142,7 @@ pub trait HttpResponseExt {
     /// Get the full response body as Bytes.
     async fn bytes(self) -> Result<HttpBytes, HttpError>;
 
-    /// Get the full response body as Bytes.
+    /// Get the full response body as String.
     async fn text(self) -> Result<String, HttpError>;
 
     /// Try to deserialize the response body as JSON.

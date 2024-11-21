@@ -56,6 +56,9 @@ pub enum FirmwareManagementError {
         time_limit_sec: u64,
         operation_id: String,
     },
+
+    #[error(transparent)]
+    InvalidUrl(#[from] c8y_api::http_proxy::InvalidUrl),
 }
 
 impl From<FirmwareManagementError> for RuntimeError {
@@ -74,4 +77,7 @@ pub enum FirmwareManagementConfigBuildError {
 
     #[error(transparent)]
     MultiError(#[from] tedge_config::MultiError),
+
+    #[error(transparent)]
+    C8yEndPointConfigError(#[from] c8y_api::http_proxy::C8yEndPointConfigError),
 }

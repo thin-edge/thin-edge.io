@@ -1,10 +1,12 @@
 use crate::operations::OperationHandler;
 use crate::Capabilities;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
+use c8y_api::proxy_url::Protocol;
+use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_auth_proxy::url::Protocol;
+use c8y_http_proxy::C8YHttpConfig;
 use camino::Utf8Path;
 use serde_json::Value;
 use std::path::Path;
@@ -320,6 +322,21 @@ impl C8yMapperConfig {
 
     pub fn id_generator(&self) -> IdGenerator {
         IdGenerator::new(&format!("{}-mapper", self.bridge_config.c8y_prefix))
+    }
+}
+
+impl From<&C8yMapperConfig> for C8YHttpConfig {
+    fn from(config: &C8yMapperConfig) -> Self {
+        C8YHttpConfig::new(
+            config.device_id.clone(),
+            config.c8y_host.clone(),
+            config.c8y_mqtt.clone(),
+            ProxyUrlGenerator::new(
+                config.auth_proxy_addr.clone(),
+                config.auth_proxy_port,
+                config.auth_proxy_protocol,
+            ),
+        )
     }
 }
 

@@ -7,8 +7,6 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::config::C8yMapperConfig;
 use crate::Capabilities;
-use c8y_api::http_proxy::C8yEndPoint;
-use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -55,7 +53,6 @@ impl OperationHandler {
         mqtt_publisher: LoggingSender<MqttMessage>,
 
         http_proxy: C8YHttpProxy,
-        auth_proxy: ProxyUrlGenerator,
     ) -> Self {
         Self {
             context: Arc::new(OperationContext {
@@ -75,13 +72,7 @@ impl OperationHandler {
                 downloader,
                 uploader,
 
-                c8y_endpoint: C8yEndPoint::new(
-                    &c8y_mapper_config.c8y_host,
-                    &c8y_mapper_config.c8y_mqtt,
-                    &c8y_mapper_config.device_id,
-                ),
                 http_proxy: http_proxy.clone(),
-                auth_proxy: auth_proxy.clone(),
             }),
 
             running_operations: Default::default(),
@@ -288,12 +279,7 @@ fn is_operation_status_transition_valid(previous: &str, next: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use std::time::Duration;
-
-    use c8y_auth_proxy::url::Protocol;
-    use c8y_http_proxy::messages::C8YRestRequest;
-    use c8y_http_proxy::messages::C8YRestResult;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::test_helpers::MessageReceiverExt;
@@ -310,10 +296,13 @@ mod tests {
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::CommandStatus;
     use tedge_downloader_ext::DownloadResponse;
+    use tedge_http_ext::HttpRequest;
+    use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_uploader_ext::UploadResponse;
 
+    use crate::tests::spawn_dummy_c8y_http_proxy;
     use crate::tests::test_mapper_config;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -444,7 +433,7 @@ mod tests {
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
-        let mut c8y_proxy = c8y_proxy.with_timeout(TEST_TIMEOUT_MS);
+        spawn_dummy_c8y_http_proxy(c8y_proxy);
 
         let mqtt_schema = sut.context.mqtt_schema.clone();
 
@@ -491,18 +480,6 @@ mod tests {
         ))
         .await
         .unwrap();
-
-        c8y_proxy
-            .recv()
-            .await
-            .expect("C8yProxy should receive CreateEvent");
-
-        c8y_proxy
-            .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
-                "asdf".to_string(),
-            )))
-            .await
-            .unwrap();
 
         ul.recv()
             .await
@@ -613,18 +590,12 @@ mod tests {
     async fn shouldnt_process_duplicate_messages() {
         let TestHandle {
             operation_handler: mut sut,
-            downloader: dl,
-            uploader: ul,
             mqtt,
-            c8y_proxy,
             ttd: _ttd,
             ..
         } = setup_operation_handler();
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        let _dl = dl.with_timeout(TEST_TIMEOUT_MS);
-        let _ul = ul.with_timeout(TEST_TIMEOUT_MS);
-        let _c8y_proxy = c8y_proxy.with_timeout(TEST_TIMEOUT_MS);
 
         let mqtt_schema = sut.context.mqtt_schema.clone();
 
@@ -823,9 +794,9 @@ mod tests {
             SimpleMessageBoxBuilder::new("MQTT", 10);
         let mqtt_publisher = LoggingSender::new("MQTT".to_string(), mqtt_builder.get_sender());
 
-        let mut c8y_proxy_builder: FakeServerBoxBuilder<C8YRestRequest, C8YRestResult> =
+        let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
             FakeServerBoxBuilder::default();
-        let c8y_proxy = C8YHttpProxy::new(&mut c8y_proxy_builder);
+        let c8y_proxy = C8YHttpProxy::new(&c8y_mapper_config, &mut http_builder);
 
         let mut uploader_builder: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult> =
             FakeServerBoxBuilder::default();
@@ -835,29 +806,24 @@ mod tests {
             FakeServerBoxBuilder::default();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let auth_proxy_addr = c8y_mapper_config.auth_proxy_addr.clone();
-        let auth_proxy_port = c8y_mapper_config.auth_proxy_port;
-        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, Protocol::Http);
-
         let operation_handler = OperationHandler::new(
             &c8y_mapper_config,
             downloader,
             uploader,
             mqtt_publisher,
             c8y_proxy,
-            auth_proxy,
         );
 
         let mqtt = mqtt_builder.build();
         let downloader = downloader_builder.build();
         let uploader = uploader_builder.build();
-        let c8y_proxy = c8y_proxy_builder.build();
+        let http = http_builder.build();
 
         TestHandle {
             mqtt,
             downloader,
             uploader,
-            c8y_proxy,
+            c8y_proxy: http,
             operation_handler,
             ttd,
         }
@@ -866,7 +832,7 @@ mod tests {
     struct TestHandle {
         operation_handler: OperationHandler,
         mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
-        c8y_proxy: FakeServerBox<C8YRestRequest, C8YRestResult>,
+        c8y_proxy: FakeServerBox<HttpRequest, HttpResult>,
         uploader: FakeServerBox<IdUploadRequest, IdUploadResult>,
         downloader: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
         ttd: TempTedgeDir,

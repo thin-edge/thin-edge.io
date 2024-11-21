@@ -18,6 +18,7 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::client_config_for_ca_certificates;
 use certificate::parse_root_certificate::create_tls_config;
+use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use certificate::read_trust_store;
 use certificate::CertificateError;
 use certificate::CloudRootCerts;
@@ -1338,24 +1339,21 @@ pub struct MqttAuthClientConfig {
 }
 
 impl TEdgeConfigReaderHttp {
-    pub fn client_tls_config(&self) -> anyhow::Result<Option<rustls::ClientConfig>> {
+    pub fn client_tls_config(&self) -> anyhow::Result<rustls::ClientConfig> {
         let client_cert_key = crate::all_or_nothing((
             self.client.auth.key_file.as_ref(),
             self.client.auth.cert_file.as_ref(),
         ))
         .map_err(|e| anyhow!("{e}"))?;
 
+        let root_certificates = self
+            .ca_path
+            .or_none()
+            .map_or(DEFAULT_ROOT_CERT_PATH, |ca| ca.as_str());
+
         client_cert_key
-            .map(|(key, cert)| {
-                create_tls_config(
-                    self.ca_path
-                        .or_none()
-                        .map_or(DEFAULT_ROOT_CERT_PATH, |ca| ca.as_str()),
-                    key,
-                    cert,
-                )
-            })
-            .transpose()
+            .map(|(key, cert)| create_tls_config(root_certificates, key, cert))
+            .unwrap_or_else(|| create_tls_config_without_client_cert(root_certificates))
             .map_err(|e| anyhow!("{e}"))
     }
 }

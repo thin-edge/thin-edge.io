@@ -1,7 +1,6 @@
 use anyhow::Context;
 use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
-use c8y_http_proxy::credentials::C8YHeaderRetriever;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::DeviceTopicId;
@@ -89,7 +88,6 @@ async fn run_with(
 
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
-    let mut jwt_actor = C8YHeaderRetriever::try_builder(&tedge_config, c8y_profile)?;
     let identity = tedge_config.http.client.auth.identity()?;
     let cloud_root_certs = tedge_config.cloud_root_certs();
     let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
@@ -128,7 +126,6 @@ async fn run_with(
     let firmware_actor = FirmwareManagerBuilder::try_new(
         firmware_manager_config,
         &mut mqtt_actor,
-        &mut jwt_actor,
         &mut downloader_actor,
     )?;
 
@@ -138,7 +135,6 @@ async fn run_with(
     // Run the actors
     runtime.spawn(signal_actor).await?;
     runtime.spawn(mqtt_actor).await?;
-    runtime.spawn(jwt_actor).await?;
     runtime.spawn(downloader_actor).await?;
     runtime.spawn(firmware_actor).await?;
     runtime.spawn(health_actor).await?;

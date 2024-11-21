@@ -12,7 +12,6 @@ use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_http_proxy::credentials::HttpHeaderRetriever;
 use log::error;
 use log::info;
 use log::warn;
@@ -84,7 +83,6 @@ impl FirmwareManagerActor {
         config: FirmwareManagerConfig,
         input_receiver: LoggingReceiver<FirmwareInput>,
         mqtt_publisher: DynSender<MqttMessage>,
-        header_retriever: HttpHeaderRetriever,
         download_sender: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
         progress_sender: DynSender<OperationOutcome>,
     ) -> Self {
@@ -93,7 +91,6 @@ impl FirmwareManagerActor {
             worker: FirmwareManagerWorker::new(
                 config,
                 mqtt_publisher,
-                header_retriever,
                 download_sender,
                 progress_sender,
             ),

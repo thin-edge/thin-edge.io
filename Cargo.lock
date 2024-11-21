@@ -619,7 +619,6 @@ dependencies = [
  "anyhow",
  "c8y_api",
  "c8y_firmware_manager",
- "c8y_http_proxy",
  "clap",
  "tedge_actors",
  "tedge_api",
@@ -690,6 +689,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -700,7 +700,7 @@ dependencies = [
  "axum 0.6.20",
  "axum-server",
  "axum_tls",
- "c8y_http_proxy",
+ "c8y_api",
  "camino",
  "env_logger",
  "futures",
@@ -713,11 +713,9 @@ dependencies = [
  "tedge_actors",
  "tedge_config",
  "tedge_config_macros",
- "tedge_http_ext",
  "tokio",
  "tokio-tungstenite",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -728,7 +726,6 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "c8y_api",
- "c8y_http_proxy",
  "camino",
  "log",
  "mockall",
@@ -784,7 +781,6 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "c8y_api",
- "c8y_auth_proxy",
  "c8y_http_proxy",
  "camino",
  "clock",
@@ -4122,8 +4118,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tedge_actors",
- "tedge_config",
- "tedge_test_utils",
  "thiserror",
  "tokio",
 ]

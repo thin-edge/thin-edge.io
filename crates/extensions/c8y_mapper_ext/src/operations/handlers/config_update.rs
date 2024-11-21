@@ -120,7 +120,7 @@ mod tests {
                 "te/device/main///cmd/config_update/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "remoteUrl": "http://www.my.url",
+                    "remoteUrl": "http://www.my.url/",
                     "type": "path/config/A",
                 }),
             )],
@@ -172,7 +172,7 @@ mod tests {
                 "te/device/child1///cmd/config_update/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "remoteUrl": "http://www.my.url",
+                    "remoteUrl": "http://www.my.url/",
                     "type": "configA",
                 }),
             )],

@@ -11,7 +11,7 @@ impl Auth {
     }
 
     pub async fn retrieve(config: &TEdgeConfig, c8y_profile: Option<&str>) -> miette::Result<Auth> {
-        let mut retriever =
+        let retriever =
             C8yAuthRetriever::from_tedge_config(config, c8y_profile).into_diagnostic()?;
 
         retriever

@@ -261,7 +261,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "remoteUrl": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url/"
                             }
                         },
                         {
@@ -292,7 +292,7 @@ mod tests {
                             "skip": false,
                             "payload": {
                                 "type": "path/config/test-software-1",
-                                "remoteUrl":"http://www.my.url"
+                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -381,7 +381,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "remoteUrl": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url/"
                             }
                         },
                         {
@@ -412,7 +412,7 @@ mod tests {
                             "skip": false,
                             "payload": {
                                 "type": "path/config/test-software-1",
-                                "remoteUrl":"http://www.my.url"
+                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -489,7 +489,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "remoteUrl": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url/"
                             }
                         },
                         {
@@ -520,7 +520,7 @@ mod tests {
                             "skip": false,
                             "payload": {
                                 "type": "path/config/test-software-1",
-                                "remoteUrl":"http://www.my.url"
+                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -708,7 +708,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "remoteUrl": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url/"
                             }
                         },
                         {
@@ -739,7 +739,7 @@ mod tests {
                             "skip": false,
                             "payload": {
                                 "type": "path/config/test-software-1",
-                                "remoteUrl":"http://www.my.url"
+                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -835,7 +835,7 @@ mod tests {
                             "skip": false,
                             "payload": {
                                 "type": "path/config/test-software-1",
-                                "remoteUrl":"http://www.my.url"
+                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -898,7 +898,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "remoteUrl": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url/"
                             }
                         },
                         {
@@ -906,7 +906,7 @@ mod tests {
                             "skip": false,
                             "payload": {
                                 "type": "path/config/test-software-1",
-                                "remoteUrl":"http://www.my.url"
+                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -978,7 +978,7 @@ mod tests {
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
-                                "remoteUrl": "http://www.my.url"
+                                "remoteUrl": "http://www.my.url/"
                             }
                         },
                         {

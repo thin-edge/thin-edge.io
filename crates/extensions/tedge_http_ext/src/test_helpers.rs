@@ -2,7 +2,24 @@ use crate::HttpError;
 use crate::HttpRequest;
 use crate::HttpResponse;
 use crate::HttpResult;
+use async_trait::async_trait;
 use http::StatusCode;
+use serde::de::DeserializeOwned;
+
+/// Test helper aimed to decode HttpRequest
+#[async_trait]
+pub trait HttpRequestExt {
+    /// Try to deserialize the request body as JSON.
+    async fn json<T: DeserializeOwned>(self) -> Result<T, HttpError>;
+}
+
+#[async_trait]
+impl HttpRequestExt for HttpRequest {
+    async fn json<T: DeserializeOwned>(self) -> Result<T, HttpError> {
+        let bytes = hyper::body::to_bytes(self.into_body()).await?;
+        Ok(serde_json::from_slice(&bytes)?)
+    }
+}
 
 /// An Http Response builder
 pub struct HttpResponseBuilder {
