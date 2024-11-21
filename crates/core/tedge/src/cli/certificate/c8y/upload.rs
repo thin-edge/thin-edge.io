@@ -1,6 +1,7 @@
 use crate::command::Command;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
+use crate::read_cert_to_string;
 use crate::warning;
 use crate::CertError;
 use camino::Utf8PathBuf;
@@ -8,7 +9,6 @@ use certificate::CloudRootCerts;
 use reqwest::StatusCode;
 use reqwest::Url;
 use std::io::prelude::*;
-use std::path::Path;
 use tedge_config::HostPort;
 use tedge_config::HTTPS_PORT;
 
@@ -157,17 +157,6 @@ fn get_tenant_id_blocking(
 
     let body = res.json::<CumulocityResponse>()?;
     Ok(body.name)
-}
-
-fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
-    let mut file = std::fs::File::open(path.as_ref()).map_err(|err| {
-        let path = path.as_ref().display().to_string();
-        CertError::CertificateReadFailed(err, path)
-    })?;
-    let mut content = String::new();
-    file.read_to_string(&mut content)?;
-
-    Ok(content)
 }
 
 #[cfg(test)]
