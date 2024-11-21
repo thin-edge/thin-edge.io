@@ -1641,15 +1641,11 @@ impl CumulocityConverter {
                     .operations_for_device_mut(target)
                     .expect("entity should've been checked before that it's not a service");
 
-                let prev_operation = current_operations.remove_operation(&operation.name);
+                let prev_operation = current_operations.insert_operation(operation);
 
                 // even if the body of the operation is different, as long as it has the same name, supported operations message
                 // will be the same, so we don't need to resend
-                let need_cloud_update = prev_operation.is_none();
-
-                current_operations.add_operation(operation);
-
-                need_cloud_update
+                prev_operation.is_none()
             }
         };
 

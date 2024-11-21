@@ -4,6 +4,7 @@ use crate::smartrest::smartrest_serializer::declare_supported_operations;
 use mqtt_channel::TopicFilter;
 use serde::Deserialize;
 use serde::Deserializer;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -20,29 +21,23 @@ use super::payload::SmartrestPayload;
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
 
+type OperationName = String;
+
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Operations {
-    operations: Vec<Operation>,
+    operations: BTreeMap<OperationName, Operation>,
     templates: Vec<Operation>,
 }
 
 impl Operations {
-    pub fn add_operation(&mut self, operation: Operation) {
-        self.operations.push(operation);
-        // as we insert, we need to maintain order, because depending on if `Operations` is created
-        // by adding operations one by one or by directory scan, we can end up with a different order
-        // TODO: refactor to provide more sane API, potentially using a backing `BTreeMap`
-        self.operations
-            .sort_unstable_by(|o1, o2| o1.name.cmp(&o2.name));
-    }
-
-    pub fn remove_operation(&mut self, name: &str) -> Option<Operation> {
-        self.operations.dedup();
-        let pos = self.operations.iter().position(|op| op.name == name);
-        pos.map(|pos| self.operations.remove(pos))
+    /// Inserts a new operation.
+    ///
+    /// If an operation under such name was already present, the old value is returned.
+    pub fn insert_operation(&mut self, operation: Operation) -> Option<Operation> {
+        self.operations.insert(operation.name.clone(), operation)
     }
 
     /// Loads operations defined in the operations directory.
@@ -59,17 +54,12 @@ impl Operations {
         self.templates.push(template);
     }
 
-    pub fn get_operations_list(&self) -> Vec<String> {
-        let mut ops_name: Vec<String> = Vec::default();
-        for op in &self.operations {
-            ops_name.push(op.name.clone());
-        }
-
-        ops_name
+    pub fn get_operations_list(&self) -> Vec<&str> {
+        self.operations.keys().map(String::as_str).collect()
     }
 
-    pub fn matching_smartrest_template(&self, operation_template: &str) -> Option<Operation> {
-        for op in self.operations.clone() {
+    pub fn matching_smartrest_template(&self, operation_template: &str) -> Option<&Operation> {
+        for op in self.operations.values() {
             if let Some(template) = op.template() {
                 if template.eq(operation_template) {
                     return Some(op);
@@ -85,7 +75,7 @@ impl Operations {
         prefix: &TopicPrefix,
     ) -> Vec<(String, Operation)> {
         let mut vec: Vec<(String, Operation)> = Vec::new();
-        for op in self.operations.iter() {
+        for op in self.operations.values() {
             match (op.topic(), op.on_fragment()) {
                 (None, Some(on_fragment)) if C8yDeviceControlTopic::name(prefix) == topic_name => {
                     vec.push((on_fragment, op.clone()))
@@ -101,22 +91,20 @@ impl Operations {
 
     pub fn topics_for_operations(&self) -> HashSet<String> {
         self.operations
-            .iter()
+            .values()
             .filter_map(|operation| operation.topic())
             .collect::<HashSet<String>>()
     }
 
     pub fn create_smartrest_ops_message(&self) -> SmartrestPayload {
-        let mut ops = self.get_operations_list();
-        ops.sort();
-        let ops = ops.iter().map(|op| op.as_str()).collect::<Vec<_>>();
+        let ops = self.get_operations_list();
         declare_supported_operations(&ops)
     }
 
     pub fn get_json_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
         Ok(self
             .operations
-            .iter()
+            .values()
             .filter(|operation| operation.on_fragment().is_some())
             .filter_map(|operation| operation.topic())
             .collect::<HashSet<String>>()
@@ -126,7 +114,7 @@ impl Operations {
     pub fn get_smartrest_custom_operation_topics(&self) -> Result<TopicFilter, OperationsError> {
         Ok(self
             .operations
-            .iter()
+            .values()
             .filter(|operation| operation.on_message().is_some())
             .filter_map(|operation| operation.topic())
             .collect::<HashSet<String>>()
@@ -390,7 +378,9 @@ fn get_operations(
 
             if details.is_valid_operation_handler() || details.is_supported_operation_file() {
                 match path.extension() {
-                    None => operations.add_operation(details),
+                    None => {
+                        operations.insert_operation(details);
+                    }
                     Some(extension) if extension.eq("template") => operations.add_template(details),
                     Some(_) => {
                         return Err(OperationsError::InvalidOperationName(path.to_owned()));
