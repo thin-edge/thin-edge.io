@@ -585,15 +585,6 @@ mod tests {
         }
     }
 
-    impl Operation {
-        fn new(exec: OnMessageExec) -> Self {
-            Self {
-                name: "name".to_string(),
-                exec: Some(exec),
-            }
-        }
-    }
-
     struct TestBridgeConfig {
         c8y_prefix: TopicPrefix,
     }
@@ -696,7 +687,10 @@ mod tests {
     )]
     fn valid_custom_operation_handlers(toml: &str) {
         let exec: OnMessageExec = toml::from_str(toml).unwrap();
-        let operation = Operation::new(exec);
+        let operation = Operation {
+            name: "operation".to_string(),
+            exec: Some(exec),
+        };
         assert!(operation.is_valid_operation_handler());
     }
 
@@ -727,7 +721,10 @@ mod tests {
     )]
     fn invalid_custom_operation_handlers(toml: &str) {
         let exec: OnMessageExec = toml::from_str(toml).unwrap();
-        let operation = Operation::new(exec);
+        let operation = Operation {
+            name: "operation".to_string(),
+            exec: Some(exec),
+        };
         assert!(!operation.is_valid_operation_handler());
     }
 
@@ -744,13 +741,22 @@ mod tests {
     )]
     fn filter_by_topic_(toml1: &str, toml2: &str) {
         let exec: OnMessageExec = toml::from_str(toml1).unwrap();
-        let operation1 = Operation::new(exec);
+        let operation1 = Operation {
+            name: "operation1".to_string(),
+            exec: Some(exec),
+        };
 
         let exec: OnMessageExec = toml::from_str(toml2).unwrap();
-        let operation2 = Operation::new(exec);
+        let operation2 = Operation {
+            name: "operation2".to_string(),
+            exec: Some(exec),
+        };
 
         let ops = Operations {
-            operations: vec![operation1.clone(), operation2.clone()],
+            operations: BTreeMap::from([
+                (operation1.name.clone(), operation1.clone()),
+                (operation2.name.clone(), operation2.clone()),
+            ]),
             ..Default::default()
         };
 
