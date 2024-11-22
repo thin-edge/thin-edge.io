@@ -1,27 +1,21 @@
-use crate::cli::certificate::create_csr::CreateCsrCmd;
+use crate::cli::certificate::c8y::create_device_csr;
+use crate::cli::certificate::c8y::store_device_cert;
 use crate::command::Command;
 use crate::error;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
-use crate::read_cert_to_string;
 use crate::warning;
-use crate::CertError;
 use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
-use certificate::NewCertificateConfig;
 use hyper::StatusCode;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Response;
-use std::fs::Permissions;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 use tedge_config::models::HostPort;
 use tedge_config::models::HTTPS_PORT;
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
 use url::Url;
 
 /// Command to request and download a device certificate from Cumulocity
@@ -65,10 +59,13 @@ impl Command for DownloadCertCmd {
 impl DownloadCertCmd {
     async fn download_device_certificate(&self) -> Result<(), Error> {
         let (common_name, security_token) = self.get_registration_data()?;
-        let csr = self
-            .create_device_csr(common_name.clone())
-            .await
-            .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
+        let csr = create_device_csr(
+            common_name.clone(),
+            self.key_path.clone(),
+            self.csr_path.clone(),
+        )
+        .await
+        .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
 
         let http = self.root_certs.client();
         let url = format!("https://{}/.well-known/est/simpleenroll", self.c8y_url);
@@ -81,7 +78,7 @@ impl DownloadCertCmd {
             match result {
                 Ok(response) if response.status() == StatusCode::OK => {
                     if let Ok(cert) = response.text().await {
-                        self.store_device_cert(cert).await?;
+                        store_device_cert(&self.cert_path, cert).await?;
                         return Ok(());
                     }
                     error!(
@@ -107,7 +104,7 @@ impl DownloadCertCmd {
                 }
             }
             warning!("Will retry in 5 seconds");
-            std::thread::sleep(Duration::from_secs(5));
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
 
@@ -135,22 +132,6 @@ impl DownloadCertCmd {
         Ok((device_id, security_token))
     }
 
-    /// Create the device private key and CSR
-    async fn create_device_csr(&self, common_name: String) -> Result<String, CertError> {
-        let config = NewCertificateConfig::default();
-        let create_cmd = CreateCsrCmd {
-            id: common_name,
-            csr_path: self.csr_path.clone(),
-            key_path: self.key_path.clone(),
-            user: "tedge".to_string(),
-            group: "tedge".to_string(),
-        };
-        create_cmd
-            .create_certificate_signing_request(&config)
-            .await?;
-        read_cert_to_string(&self.csr_path)
-    }
-
     /// Post the device CSR
     async fn post_device_csr(
         &self,
@@ -166,18 +147,5 @@ impl DownloadCertCmd {
             .body(csr.to_string())
             .send()
             .await
-    }
-
-    async fn store_device_cert(&self, cert: String) -> Result<(), CertError> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&self.cert_path)
-            .await?;
-
-        file.write_all(cert.as_bytes()).await?;
-        file.sync_all().await?;
-        file.set_permissions(Permissions::from_mode(0o444)).await?;
-        Ok(())
     }
 }
