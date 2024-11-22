@@ -338,15 +338,10 @@ impl<T> WorkflowSource<T> {
 use WorkflowSource::*;
 
 impl WorkflowVersions {
-    const BUILT_IN: &'static str = "builtin";
-
     fn new(source: WorkflowSource<WorkflowVersion>, workflow: OperationWorkflow) -> Self {
         let operation = workflow.operation.to_string();
         let (current, in_use) = match source {
-            BuiltIn => (
-                None,
-                HashMap::from([(Self::BUILT_IN.to_string(), workflow)]),
-            ),
+            BuiltIn => (None, HashMap::from([(BUILT_IN.to_string(), workflow)])),
             UserDefined(version) => (Some((version, workflow)), HashMap::new()),
             InUseCopy(version) => (None, HashMap::from([(version, workflow)])),
         };
@@ -361,7 +356,7 @@ impl WorkflowVersions {
     fn add(&mut self, source: WorkflowSource<WorkflowVersion>, workflow: OperationWorkflow) {
         match source {
             BuiltIn => {
-                self.in_use.insert(Self::BUILT_IN.to_string(), workflow);
+                self.in_use.insert(BUILT_IN.to_string(), workflow);
             }
             UserDefined(version) => {
                 self.current = Some((version, workflow));
@@ -371,7 +366,7 @@ impl WorkflowVersions {
             }
         };
 
-        if self.current.is_some() && self.in_use.contains_key(Self::BUILT_IN) {
+        if self.current.is_some() && self.in_use.contains_key(BUILT_IN) {
             info!(
                 "The built-in {operation} operation has been customized",
                 operation = self.operation
@@ -391,7 +386,7 @@ impl WorkflowVersions {
 
             None => self
                 .in_use
-                .get_key_value(Self::BUILT_IN)
+                .get_key_value(BUILT_IN)
                 .map(|(builtin, _)| builtin),
         }
     }
@@ -400,7 +395,7 @@ impl WorkflowVersions {
     fn remove(&mut self, version: &WorkflowVersion) {
         if self.current.as_ref().map(|(v, _)| v == version) == Some(true) {
             self.current = None;
-        } else if version != Self::BUILT_IN {
+        } else if version != BUILT_IN {
             self.in_use.remove(version);
         }
     }
@@ -410,7 +405,7 @@ impl WorkflowVersions {
     }
 
     fn is_builtin(&self) -> bool {
-        self.in_use.contains_key(Self::BUILT_IN)
+        self.in_use.contains_key(BUILT_IN)
     }
 
     fn get(&self, version: &WorkflowVersion) -> Result<&OperationWorkflow, WorkflowExecutionError> {
@@ -426,7 +421,7 @@ impl WorkflowVersions {
         self.current
             .as_ref()
             .map(|(_, workflow)| workflow)
-            .or_else(|| self.in_use.get(Self::BUILT_IN))
+            .or_else(|| self.in_use.get(BUILT_IN))
     }
 }
 
