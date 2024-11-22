@@ -3,21 +3,19 @@ use super::create_csr::CreateCsrCmd;
 use super::remove::RemoveCertCmd;
 use super::renew::RenewCertCmd;
 use super::show::ShowCertCmd;
-use super::upload::*;
-
-use anyhow::anyhow;
-use camino::Utf8PathBuf;
-use clap::ValueHint;
-use tedge_config::OptionalConfigError;
-use tedge_config::ProfileName;
-use tedge_config::TEdgeConfig;
-
+use crate::cli::certificate::c8y;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
+use anyhow::anyhow;
+use camino::Utf8PathBuf;
+use clap::ValueHint;
+use tedge_config::OptionalConfigError;
+use tedge_config::ProfileName;
+use tedge_config::TEdgeConfig;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeCertCli {
@@ -132,7 +130,7 @@ impl BuildCommand for TEdgeCertCli {
                 profile,
             }) => {
                 let c8y = config.c8y.try_get(profile.as_deref())?;
-                let cmd = UploadCertCmd {
+                let cmd = c8y::UploadCertCmd {
                     device_id: c8y.device.id()?.clone(),
                     path: c8y.device.cert_path.clone(),
                     host: c8y.http.or_err()?.to_owned(),
