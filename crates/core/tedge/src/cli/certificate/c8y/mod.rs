@@ -1,4 +1,5 @@
 mod download;
+mod renew;
 mod upload;
 
 use crate::cli::certificate::create_csr::CreateCsrCmd;
@@ -8,6 +9,7 @@ use crate::CertError;
 use camino::Utf8PathBuf;
 use certificate::NewCertificateConfig;
 pub use download::DownloadCertCmd;
+pub use renew::RenewCertCmd;
 pub use upload::UploadCertCmd;
 
 /// Create a device private key and CSR

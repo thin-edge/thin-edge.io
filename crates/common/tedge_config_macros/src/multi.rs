@@ -46,6 +46,12 @@ impl AsRef<OsStr> for ProfileName {
     }
 }
 
+impl AsRef<str> for ProfileName {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
 fn validate_profile_name(value: &str) -> Result<(), anyhow::Error> {
     ensure!(
         value
