@@ -39,7 +39,15 @@ pub enum TEdgeCertCli {
     },
 
     /// Renew the device certificate
-    Renew { cloud: Option<Cloud> },
+    Renew {
+        /// CA from which the certificate will be renew
+        #[arg(value_enum, default_value = "self-signed")]
+        ca: CertRenewalCA,
+
+        /// Cloud of which the certificate has to be renewed
+        #[clap(long)]
+        cloud: Option<Cloud>,
+    },
 
     /// Show the device certificate, if any
     Show { cloud: Option<Cloud> },
@@ -149,10 +157,38 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Renew { cloud } => {
+            TEdgeCertCli::Renew {
+                ca: CertRenewalCA::SelfSigned,
+                cloud,
+            } => {
                 let cmd = RenewCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                };
+                cmd.into_boxed()
+            }
+
+            TEdgeCertCli::Renew {
+                ca: CertRenewalCA::C8y,
+                cloud,
+            } => {
+                let c8y_config = match cloud.map(<_>::into) {
+                    None => config.c8y.try_get::<str>(None)?,
+                    Some(Cloud::C8y(profile)) => config.c8y.try_get(profile.as_deref())?,
+                    Some(cloud) => {
+                        return Err(
+                            anyhow!("Certificate renewal is not supported for {cloud}").into()
+                        )
+                    }
+                };
+                let cmd = c8y::RenewCertCmd {
+                    device_id: c8y_config.device.id()?.to_string(),
+                    c8y_mqtt: c8y_config.mqtt.or_err()?.to_owned(),
+                    c8y_url: c8y_config.http.or_err()?.to_owned(),
+                    root_certs: config.cloud_root_certs(),
+                    cert_path: c8y_config.device.cert_path.clone(),
+                    key_path: c8y_config.device.key_path.clone(),
+                    csr_path: c8y_config.device.csr_path.clone(),
                 };
                 cmd.into_boxed()
             }
@@ -232,4 +268,13 @@ pub enum DownloadCertCli {
         /// The Cumulocity cloud profile (when the device is connected to several tenants)
         profile: Option<ProfileName>,
     },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum CertRenewalCA {
+    /// Self-signed a new device certificate
+    SelfSigned,
+
+    /// Renew the device certificate from Cumulocity
+    C8y,
 }

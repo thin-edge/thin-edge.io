@@ -1,24 +1,20 @@
-use crate::cli::certificate::create_csr::CreateCsrCmd;
+use crate::cli::certificate::c8y::create_device_csr;
+use crate::cli::certificate::c8y::store_device_cert;
 use crate::command::Command;
 use crate::error;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
-use crate::read_cert_to_string;
 use crate::warning;
-use crate::CertError;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
-use certificate::NewCertificateConfig;
 use hyper::StatusCode;
 use reqwest::blocking::Response;
 use reqwest::header::CONTENT_TYPE;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Duration;
 use tedge_config::HostPort;
 use tedge_config::HTTPS_PORT;
-use tedge_utils::paths::set_permission;
 use url::Url;
 
 /// Command to request and download a device certificate from Cumulocity
@@ -61,7 +57,11 @@ impl Command for DownloadCertCmd {
 impl DownloadCertCmd {
     fn download_device_certificate(&self) -> Result<(), Error> {
         let (common_name, security_token) = self.get_registration_data()?;
-        let csr = self.create_device_csr(common_name.clone())?;
+        let csr = create_device_csr(
+            common_name.clone(),
+            self.key_path.clone(),
+            self.csr_path.clone(),
+        )?;
 
         let http = self.root_certs.blocking_client();
         let url = format!("https://{}/.well-known/est/simpleenroll", self.c8y_url);
@@ -72,7 +72,7 @@ impl DownloadCertCmd {
             match result {
                 Ok(response) if response.status() == StatusCode::OK => {
                     if let Ok(cert) = response.text() {
-                        self.store_device_cert(cert)?;
+                        store_device_cert(&self.cert_path, cert)?;
                         return Ok(());
                     }
                     error!(
@@ -125,20 +125,6 @@ impl DownloadCertCmd {
         Ok((device_id, security_token))
     }
 
-    /// Create the device private key and CSR
-    fn create_device_csr(&self, common_name: String) -> Result<String, CertError> {
-        let config = NewCertificateConfig::default();
-        let create_cmd = CreateCsrCmd {
-            id: common_name,
-            csr_path: self.csr_path.clone(),
-            key_path: self.key_path.clone(),
-            user: "tedge".to_string(),
-            group: "tedge".to_string(),
-        };
-        create_cmd.create_certificate_signing_request(&config)?;
-        read_cert_to_string(&self.csr_path)
-    }
-
     /// Post the device CSR
     fn post_device_csr(
         &self,
@@ -153,18 +139,5 @@ impl DownloadCertCmd {
             .header(CONTENT_TYPE, "text/plain")
             .body(csr.to_string())
             .send()
-    }
-
-    fn store_device_cert(&self, cert: String) -> Result<(), CertError> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&self.cert_path)?;
-
-        file.write_all(cert.as_bytes())?;
-        file.sync_all()?;
-
-        set_permission(&file, 0o444)?;
-        Ok(())
     }
 }
