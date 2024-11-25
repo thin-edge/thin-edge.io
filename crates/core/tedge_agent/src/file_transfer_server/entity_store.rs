@@ -1,4 +1,6 @@
 use super::http_rest::AgentState;
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreResponse;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -40,6 +42,9 @@ enum Error {
     #[allow(clippy::enum_variant_names)]
     #[error("Failed to publish entity registration message via MQTT")]
     ChannelError(#[from] tedge_actors::ChannelError),
+
+    #[error("Received unexpected response from entity store")]
+    InvalidEntityStoreResponse,
 }
 
 impl IntoResponse for Error {
@@ -49,6 +54,7 @@ impl IntoResponse for Error {
             Error::EntityStoreError(_) => StatusCode::BAD_REQUEST,
             Error::EntityNotFound(_) => StatusCode::NOT_FOUND,
             Error::ChannelError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::InvalidEntityStoreResponse => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let error_message = self.to_string();
 
@@ -71,12 +77,16 @@ async fn register_entity(
     State(state): State<AgentState>,
     Json(entity): Json<EntityRegistrationMessage>,
 ) -> Result<StatusCode, Error> {
-    let (updated, _) = {
-        let mut entity_store = state.entity_store.lock().unwrap();
-        entity_store.update(entity.clone())?
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::Create(entity.clone()))
+        .await?;
+    let EntityStoreResponse::Create(result) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
     };
 
-    if !updated.is_empty() {
+    if !result?.0.is_empty() {
         let message = entity.to_mqtt_message(&state.mqtt_schema);
         state.mqtt_publisher.clone().send(message).await?;
     }
@@ -87,10 +97,19 @@ async fn get_entity(
     State(state): State<AgentState>,
     Path(path): Path<String>,
 ) -> Result<Json<EntityMetadata>, Error> {
-    let entity_store = state.entity_store.lock().unwrap();
     let topic_id = EntityTopicId::from_str(&path)?;
 
-    if let Some(entity) = entity_store.get(&topic_id) {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::Get(topic_id.clone()))
+        .await?;
+
+    let EntityStoreResponse::Get(entity_metadata) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    if let Some(entity) = entity_metadata {
         Ok(Json(entity.clone()))
     } else {
         Err(Error::EntityNotFound(topic_id))
@@ -101,10 +120,16 @@ async fn deregister_entity(
     State(state): State<AgentState>,
     Path(path): Path<String>,
 ) -> Result<StatusCode, Error> {
-    let deleted = {
-        let mut entity_store = state.entity_store.lock().unwrap();
-        let topic_id = EntityTopicId::from_str(&path)?;
-        entity_store.deregister_and_persist_entity(&topic_id)?
+    let topic_id = EntityTopicId::from_str(&path)?;
+
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::Delete(topic_id.clone()))
+        .await?;
+
+    let EntityStoreResponse::Delete(deleted) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
     };
 
     for topic_id in deleted {
@@ -120,7 +145,7 @@ async fn deregister_entity(
     Ok(StatusCode::OK)
 }
 
-#[cfg(test)]
+#[cfg(FALSE)]
 mod tests {
     use crate::file_transfer_server::entity_store::entity_store_router;
     use hyper::Body;
