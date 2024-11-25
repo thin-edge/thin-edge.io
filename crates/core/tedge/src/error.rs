@@ -38,4 +38,7 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     FromCredentialsFileError(#[from] c8y_api::http_proxy::CredentialsFileError),
+
+    #[error(transparent)]
+    FromAnyhow(#[from] anyhow::Error),
 }

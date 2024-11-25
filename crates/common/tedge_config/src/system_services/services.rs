@@ -1,25 +1,38 @@
+use std::fmt;
+
+use tedge_config_macros::ProfileName;
+
 /// An enumeration of all supported system services.
-#[derive(Debug, Copy, Clone, strum_macros::Display, strum_macros::IntoStaticStr)]
-pub enum SystemService {
+#[derive(Debug, Copy, Clone, strum_macros::IntoStaticStr)]
+pub enum SystemService<'a> {
     #[strum(serialize = "mosquitto")]
     /// Mosquitto broker
     Mosquitto,
     #[strum(serialize = "tedge-mapper-az")]
     /// Azure TEdge mapper
-    TEdgeMapperAz,
+    TEdgeMapperAz(Option<&'a ProfileName>),
     #[strum(serialize = "tedge-mapper-aws")]
     /// AWS TEdge mapper
-    TEdgeMapperAws,
+    TEdgeMapperAws(Option<&'a ProfileName>),
     #[strum(serialize = "tedge-mapper-c8y")]
     /// Cumulocity TEdge mapper
-    TEdgeMapperC8y,
+    TEdgeMapperC8y(Option<&'a ProfileName>),
     #[strum(serialize = "tedge-agent")]
     /// TEdge SM agent
     TEdgeSMAgent,
 }
 
-impl SystemService {
-    pub(crate) fn as_service_name(service: SystemService) -> &'static str {
-        service.into()
+impl fmt::Display for SystemService<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Mosquitto => write!(f, "mosquitto"),
+            Self::TEdgeMapperAz(None) => write!(f, "tedge-mapper-az"),
+            Self::TEdgeMapperAz(Some(profile)) => write!(f, "tedge-mapper-az@{profile}"),
+            Self::TEdgeMapperAws(None) => write!(f, "tedge-mapper-aws"),
+            Self::TEdgeMapperAws(Some(profile)) => write!(f, "tedge-mapper-aws@{profile}"),
+            Self::TEdgeMapperC8y(None) => write!(f, "tedge-mapper-c8y"),
+            Self::TEdgeMapperC8y(Some(profile)) => write!(f, "tedge-mapper-c8y@{profile}"),
+            Self::TEdgeSMAgent => write!(f, "tedge-agent"),
+        }
     }
 }

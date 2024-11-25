@@ -93,16 +93,13 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Config(config::ConfigCmd),
 
-    /// Connect to connector provider
-    #[clap(subcommand)]
+    /// Connect to cloud provider
     Connect(connect::TEdgeConnectOpt),
 
     /// Remove bridge connection for a provider
-    #[clap(subcommand)]
     Disconnect(disconnect::TEdgeDisconnectBridgeCli),
 
     /// Reconnect command, calls disconnect followed by connect
-    #[clap(subcommand)]
     Reconnect(reconnect::TEdgeReconnectCli),
 
     /// Refresh all currently active mosquitto bridges

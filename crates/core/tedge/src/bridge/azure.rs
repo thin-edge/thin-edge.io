@@ -3,6 +3,7 @@ use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
 use tedge_config::HostPort;
+use tedge_config::ProfileName;
 use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
 
@@ -18,6 +19,7 @@ pub struct BridgeConfigAzureParams {
     pub bridge_keyfile: Utf8PathBuf,
     pub bridge_location: BridgeLocation,
     pub topic_prefix: TopicPrefix,
+    pub profile_name: Option<ProfileName>,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -31,6 +33,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             bridge_keyfile,
             bridge_location,
             topic_prefix,
+            profile_name,
         } = params;
 
         let address = mqtt_host.clone();
@@ -46,13 +49,21 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
         Self {
             cloud_name: "az".into(),
             config_file,
-            connection: "edge_to_az".into(),
+            connection: if let Some(profile) = &profile_name {
+                format!("edge_to_az@{profile}")
+            } else {
+                "edge_to_az".into()
+            },
             address,
             remote_username: Some(user_name),
             remote_password: None,
             bridge_root_cert_path,
             remote_clientid,
-            local_clientid: "Azure".into(),
+            local_clientid: if let Some(profile) = &profile_name {
+                format!("Azure@{profile}")
+            } else {
+                "Azure".into()
+            },
             bridge_certfile,
             bridge_keyfile,
             use_mapper: true,
@@ -100,6 +111,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_keyfile: "./test-private-key.pem".into(),
         bridge_location: BridgeLocation::Mosquitto,
         topic_prefix: "az".try_into().unwrap(),
+        profile_name: None,
     };
 
     let bridge = BridgeConfig::from(params);
@@ -160,6 +172,7 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         bridge_keyfile: "./test-private-key.pem".into(),
         bridge_location: BridgeLocation::Mosquitto,
         topic_prefix: "custom".try_into().unwrap(),
+        profile_name: Some("profile".parse().unwrap()),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -167,13 +180,13 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
     let expected = BridgeConfig {
         cloud_name: "az".into(),
         config_file: "az-bridge.conf".into(),
-        connection: "edge_to_az".into(),
+        connection: "edge_to_az@profile".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
         remote_password: None,
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),
-        local_clientid: "Azure".into(),
+        local_clientid: "Azure@profile".into(),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         use_mapper: true,

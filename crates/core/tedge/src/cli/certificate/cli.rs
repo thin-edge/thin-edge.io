@@ -1,3 +1,5 @@
+use crate::cli::common::Cloud;
+use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
@@ -44,7 +46,6 @@ pub enum TEdgeCertCli {
     Remove,
 
     /// Upload root certificate
-    #[clap(subcommand)]
     Upload(UploadCertCli),
 }
 
@@ -102,12 +103,8 @@ impl BuildCommand for TEdgeCertCli {
             }
 
             TEdgeCertCli::Upload(cmd) => {
-                let cmd = match cmd {
-                    UploadCertCli::C8y {
-                        username,
-                        password,
-                        profile,
-                    } => UploadCertCmd {
+                let cmd = match cmd.cloud {
+                    Cloud::C8y(profile) => UploadCertCmd {
                         device_id: config.device.id.try_read(&config)?.clone(),
                         path: config.device.cert_path.clone(),
                         host: config
@@ -117,9 +114,15 @@ impl BuildCommand for TEdgeCertCli {
                             .or_err()?
                             .to_owned(),
                         cloud_root_certs: config.cloud_root_certs(),
-                        username,
-                        password,
+                        username: cmd.username,
+                        password: cmd.password,
                     },
+                    cloud => {
+                        return Err(anyhow!(
+                            "Uploading certificates via the tedge cli isn't supported for {cloud}"
+                        )
+                        .into())
+                    }
                 };
                 cmd.into_boxed()
             }
@@ -135,33 +138,29 @@ impl BuildCommand for TEdgeCertCli {
     }
 }
 
-#[derive(clap::Subcommand, Debug)]
-pub enum UploadCertCli {
-    /// Upload root certificate to Cumulocity
+#[derive(clap::Args, Debug)]
+pub struct UploadCertCli {
+    cloud: Cloud,
+    #[clap(long = "user")]
+    #[arg(
+        env = "C8Y_USER",
+        hide_env_values = true,
+        hide_default_value = true,
+        default_value = ""
+    )]
+    /// Provided username should be a Cumulocity IoT user with tenant management permissions.
+    /// You will be prompted for input if the value is not provided or is empty
+    username: String,
+
+    #[clap(long = "password")]
+    #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
+    // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
+    /// Cumulocity IoT Password.
+    /// You will be prompted for input if the value is not provided or is empty
     ///
-    /// The command will upload root certificate to Cumulocity.
-    C8y {
-        #[clap(long = "user")]
-        #[arg(
-            env = "C8Y_USER",
-            hide_env_values = true,
-            hide_default_value = true,
-            default_value = ""
-        )]
-        /// Provided username should be a Cumulocity IoT user with tenant management permissions.
-        /// You will be prompted for input if the value is not provided or is empty
-        username: String,
+    /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
+    password: String,
 
-        #[clap(long = "password")]
-        #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
-        // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
-        /// Cumulocity IoT Password.
-        /// You will be prompted for input if the value is not provided or is empty
-        ///
-        /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
-        password: String,
-
-        #[clap(long, hide = true)]
-        profile: Option<ProfileName>,
-    },
+    #[clap(long, hide = true)]
+    profile: Option<ProfileName>,
 }

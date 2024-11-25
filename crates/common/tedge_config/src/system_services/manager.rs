@@ -14,22 +14,22 @@ pub trait SystemServiceManager: Debug {
     fn check_operational(&self) -> Result<(), SystemServiceError>;
 
     /// Stops the specified system service.
-    fn stop_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
+    fn stop_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
 
     /// Starts the specified system service.
-    fn start_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
+    fn start_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
 
     /// Restarts the specified system service.
-    fn restart_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
+    fn restart_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
 
     /// Enables the specified system service. This does not start the service, unless you reboot.
-    fn enable_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
+    fn enable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
 
     /// Disables the specified system service. This does not stop the service.
-    fn disable_service(&self, service: SystemService) -> Result<(), SystemServiceError>;
+    fn disable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
 
     /// Queries status of the specified system service. "Running" here means the same as "active".
-    fn is_service_running(&self, service: SystemService) -> Result<bool, SystemServiceError>;
+    fn is_service_running(&self, service: SystemService<'_>) -> Result<bool, SystemServiceError>;
 }
 
 pub fn service_manager(

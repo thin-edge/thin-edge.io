@@ -5,6 +5,7 @@ use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::cli::common::Cloud;
+use crate::cli::common::MaybeBorrowedCloud;
 use crate::cli::connect::jwt_token::*;
 use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
@@ -24,6 +25,7 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use std::borrow::Cow;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::path::Path;
@@ -58,7 +60,6 @@ pub struct ConnectCommand {
     pub is_test_connection: bool,
     pub offline_mode: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
-    pub profile: Option<ProfileName>,
     pub is_reconnect: bool,
 }
 
@@ -84,14 +85,14 @@ impl Command for ConnectCommand {
 impl ConnectCommand {
     fn execute_inner(&self) -> Result<(), Fancy<ConnectError>> {
         let config = &self.config;
-        let bridge_config = bridge_config(config, self.cloud, self.profile.as_ref())?;
+        let bridge_config = bridge_config(config, &self.cloud)?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
 
         if self.is_test_connection {
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
             return if self.check_if_bridge_exists(&bridge_config) {
-                match self.check_connection(config, self.profile.as_ref()) {
+                match self.check_connection(config) {
                     Ok(DeviceStatus::AlreadyExists) => {
                         let cloud = bridge_config.cloud_name;
                         match self.tenant_matches_configured_url(config)? {
@@ -153,11 +154,9 @@ impl ConnectCommand {
 
         let mut connection_check_success = true;
         if !self.offline_mode {
-            match self.check_connection_with_retries(
-                config,
-                bridge_config.connection_check_attempts,
-                self.profile.as_ref(),
-            ) {
+            match self
+                .check_connection_with_retries(config, bridge_config.connection_check_attempts)
+            {
                 Ok(DeviceStatus::AlreadyExists) => {}
                 _ => {
                     warning!(
@@ -175,8 +174,8 @@ impl ConnectCommand {
             self.start_mapper();
         }
 
-        if let Cloud::C8y = self.cloud {
-            let c8y_config = config.c8y.try_get(self.profile.as_deref())?;
+        if let Cloud::C8y(profile) = &self.cloud {
+            let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
             let use_basic_auth = c8y_config
                 .auth_method
@@ -196,8 +195,8 @@ impl ConnectCommand {
         &self,
         config: &TEdgeConfig,
     ) -> Result<Option<bool>, Fancy<ConnectError>> {
-        if let Cloud::C8y = self.cloud {
-            let c8y_config = config.c8y.try_get(self.profile.as_deref())?;
+        if let Cloud::C8y(profile) = &self.cloud {
+            let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
             let use_basic_auth = c8y_config
                 .auth_method
@@ -205,7 +204,7 @@ impl ConnectCommand {
             if !use_basic_auth && !self.offline_mode {
                 tenant_matches_configured_url(
                     config,
-                    self.profile.as_deref(),
+                    profile.as_ref().map(|g| &***g),
                     &c8y_config
                         .mqtt
                         .or_none()
@@ -225,10 +224,9 @@ impl ConnectCommand {
         &self,
         config: &TEdgeConfig,
         max_attempts: i32,
-        profile: Option<&ProfileName>,
     ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         for i in 1..max_attempts {
-            let result = self.check_connection(config, profile);
+            let result = self.check_connection(config);
             if let Ok(DeviceStatus::AlreadyExists) = result {
                 return result;
             }
@@ -238,18 +236,14 @@ impl ConnectCommand {
             );
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
-        self.check_connection(config, profile)
+        self.check_connection(config)
     }
-    fn check_connection(
-        &self,
-        config: &TEdgeConfig,
-        profile: Option<&ProfileName>,
-    ) -> Result<DeviceStatus, Fancy<ConnectError>> {
+    fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, Fancy<ConnectError>> {
         let spinner = Spinner::start("Verifying device is connected to cloud");
-        let res = match self.cloud {
-            Cloud::Azure => check_device_status_azure(config, profile),
-            Cloud::Aws => check_device_status_aws(config, profile),
-            Cloud::C8y => check_device_status_c8y(config, profile),
+        let res = match &self.cloud {
+            Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()),
+            Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()),
+            Cloud::C8y(profile) => check_device_status_c8y(config, profile.as_deref()),
         };
         spinner.finish(res)
     }
@@ -280,52 +274,53 @@ impl ConnectCommand {
 
 pub fn bridge_config(
     config: &TEdgeConfig,
-    cloud: self::Cloud,
-    profile: Option<&ProfileName>,
+    cloud: &MaybeBorrowedCloud<'_>,
 ) -> Result<BridgeConfig, ConfigError> {
     let bridge_location = match config.mqtt.bridge.built_in {
         true => BridgeLocation::BuiltIn,
         false => BridgeLocation::Mosquitto,
     };
     match cloud {
-        Cloud::Azure => {
-            let az_config = config.az.try_get(profile)?;
+        MaybeBorrowedCloud::Azure(profile) => {
+            let az_config = config.az.try_get(profile.as_deref())?;
             let params = BridgeConfigAzureParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
                     az_config.url.or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
-                config_file: Cloud::Azure.bridge_config_filename(profile),
+                config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: az_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 bridge_location,
                 topic_prefix: az_config.bridge.topic_prefix.clone(),
+                profile_name: profile.clone().map(Cow::into_owned),
             };
 
             Ok(BridgeConfig::from(params))
         }
-        Cloud::Aws => {
-            let aws_config = config.aws.try_get(profile)?;
+        MaybeBorrowedCloud::Aws(profile) => {
+            let aws_config = config.aws.try_get(profile.as_deref())?;
             let params = BridgeConfigAwsParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
                     aws_config.url.or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
-                config_file: Cloud::Aws.bridge_config_filename(profile),
+                config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: aws_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 bridge_certfile: config.device.cert_path.clone(),
                 bridge_keyfile: config.device.key_path.clone(),
                 bridge_location,
                 topic_prefix: aws_config.bridge.topic_prefix.clone(),
+                profile_name: profile.clone().map(Cow::into_owned),
             };
 
             Ok(BridgeConfig::from(params))
         }
-        Cloud::C8y => {
-            let c8y_config = config.c8y.try_get(profile)?;
+        MaybeBorrowedCloud::C8y(profile) => {
+            let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
             let (remote_username, remote_password) =
                 match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
@@ -339,7 +334,7 @@ pub fn bridge_config(
 
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
-                config_file: Cloud::C8y.bridge_config_filename(profile),
+                config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone(),
                 remote_clientid: config.device.id.try_read(config)?.clone(),
                 remote_username,
@@ -351,6 +346,7 @@ pub fn bridge_config(
                 include_local_clean_session: c8y_config.bridge.include.local_cleansession.clone(),
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
+                profile_name: profile.clone().map(Cow::into_owned),
             };
 
             Ok(BridgeConfig::from(params))

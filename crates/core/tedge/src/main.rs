@@ -3,6 +3,8 @@
 
 use anyhow::Context;
 use cap::Cap;
+use clap::error::ErrorFormatter;
+use clap::error::RichFormatter;
 use clap::Parser;
 use std::alloc;
 use std::future::Future;
@@ -125,5 +127,13 @@ fn parse_multicall_if_known<T: Parser>(executable_name: &Option<String>) -> T {
         .as_deref()
         .map_or(false, |name| cmd.find_subcommand(name).is_some());
     let cmd = cmd.multicall(is_known_subcommand);
-    T::from_arg_matches(&cmd.get_matches()).expect("get_matches panics if invalid arguments are provided, so we won't have arg matches to convert")
+
+    let cmd2 = cmd.clone();
+    match T::from_arg_matches(&cmd.get_matches()) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("{}", RichFormatter::format_error(&e.with_cmd(&cmd2)));
+            std::process::exit(1);
+        }
+    }
 }
