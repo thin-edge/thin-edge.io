@@ -1,5 +1,7 @@
 use crate::device_profile_manager::DeviceProfileManagerBuilder;
-use crate::entity_manager::builder::EntityManagerActorBuilder;
+use crate::entity_manager;
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreServer;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::actor::FileTransferServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
@@ -26,15 +28,18 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::Mutex;
 use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::NullSender;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::Runtime;
+use tedge_actors::Sequential;
 use tedge_actors::ServerActorBuilder;
+use tedge_actors::ServerConfig;
 use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::InvalidExternalIdError;
@@ -386,19 +391,26 @@ impl Agent {
                 clean_start,
             )
             .unwrap();
-            let entity_store = Arc::new(Mutex::new(entity_store));
-
-            let entity_store_actor_builder =
-                EntityManagerActorBuilder::try_new(&mut mqtt_actor_builder, entity_store.clone());
-            runtime.spawn(entity_store_actor_builder).await?;
+            let entity_store_server = EntityStoreServer::new(entity_store);
+            let mut entity_store_actor_builder =
+                ServerActorBuilder::new(entity_store_server, &ServerConfig::default(), Sequential);
+            mqtt_actor_builder.connect_mapped_sink(
+                entity_manager::server::subscriptions(self.config.mqtt_topic_root.as_ref()),
+                &entity_store_actor_builder,
+                |message| {
+                    EntityRegistrationMessage::new(&message).map(|reg_message| RequestEnvelope {
+                        request: EntityStoreRequest::Create(reg_message),
+                        reply_to: Box::new(NullSender),
+                    })
+                },
+            );
 
             let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
                 self.config.http_config,
-                entity_store.clone(),
+                &mut entity_store_actor_builder,
                 &mut mqtt_actor_builder,
             )
             .await?;
-            runtime.spawn(file_transfer_server_builder).await?;
 
             let operation_file_cache_builder = FileCacheActorBuilder::new(
                 mqtt_schema,
@@ -407,6 +419,9 @@ impl Agent {
                 &mut downloader_actor_builder,
                 &mut mqtt_actor_builder,
             );
+
+            runtime.spawn(file_transfer_server_builder).await?;
+            runtime.spawn(entity_store_actor_builder).await?;
             runtime.spawn(operation_file_cache_builder).await?;
         } else {
             info!("Running as a child device, tedge_to_te_converter and File Transfer Service disabled");

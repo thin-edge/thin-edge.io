@@ -1,3 +1,5 @@
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreResponse;
 use crate::file_transfer_server::error::FileTransferError;
 use crate::file_transfer_server::http_rest::http_server;
 use crate::file_transfer_server::http_rest::AgentState;
@@ -10,20 +12,19 @@ use camino::Utf8PathBuf;
 use rustls::ServerConfig;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::Mutex;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Service;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::EntityStore;
 use tedge_config::OptionalConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tokio::net::TcpListener;
@@ -34,7 +35,7 @@ pub struct FileTransferServerActor {
     rustls_config: Option<ServerConfig>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
-    entity_store: Arc<Mutex<EntityStore>>,
+    entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     mqtt_schema: MqttSchema,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -61,7 +62,7 @@ impl Actor for FileTransferServerActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         let agent_state = AgentState::new(
             self.file_transfer_dir,
-            self.entity_store,
+            self.entity_store_handle,
             self.mqtt_schema,
             self.mqtt_publisher,
         );
@@ -87,7 +88,7 @@ pub struct FileTransferServerBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
-    entity_store: Arc<Mutex<EntityStore>>,
+    entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     mqtt_schema: MqttSchema,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -95,7 +96,7 @@ pub struct FileTransferServerBuilder {
 impl FileTransferServerBuilder {
     pub(crate) async fn try_bind(
         config: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
-        entity_store: Arc<Mutex<EntityStore>>,
+        entity_store_service: &mut impl Service<EntityStoreRequest, EntityStoreResponse>,
         mqtt_actor: &mut impl MessageSink<MqttMessage>,
     ) -> Result<Self, anyhow::Error> {
         let listener = TcpListener::bind(config.bind_addr)
@@ -103,6 +104,7 @@ impl FileTransferServerBuilder {
             .with_context(|| format!("Binding file-transfer server to {}", config.bind_addr))?;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_actor.get_sender());
+        let entity_store_handle = ClientMessageBox::new(entity_store_service);
 
         Ok(Self {
             rustls_config: load_ssl_config(
@@ -115,7 +117,7 @@ impl FileTransferServerBuilder {
             signal_sender,
             signal_receiver,
             listener,
-            entity_store,
+            entity_store_handle,
             mqtt_schema: config.mqtt_schema,
             mqtt_publisher,
         })
@@ -137,7 +139,7 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
             rustls_config: self.rustls_config,
             signal_receiver: self.signal_receiver,
             listener: self.listener,
-            entity_store: self.entity_store,
+            entity_store_handle: self.entity_store_handle,
             mqtt_schema: self.mqtt_schema,
             mqtt_publisher: self.mqtt_publisher,
         })
@@ -146,8 +148,6 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
     use anyhow::ensure;
     use axum_tls::config::InjectedValue;
@@ -157,13 +157,8 @@ mod tests {
     use reqwest::Certificate;
     use reqwest::Identity;
     use rustls::RootCertStore;
-    use serde_json::Map;
+    use tedge_actors::ServerMessageBoxBuilder;
     use tedge_actors::SimpleMessageBoxBuilder;
-    use tedge_api::entity_store::EntityExternalId;
-    use tedge_api::entity_store::EntityRegistrationMessage;
-    use tedge_api::entity_store::EntityType;
-    use tedge_api::entity_store::InvalidExternalIdError;
-    use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -197,13 +192,13 @@ mod tests {
     async fn check_server_does_not_panic_when_port_is_in_use() -> anyhow::Result<()> {
         let ttd = TempTedgeDir::new();
         let (_listener, port_in_use) = create_listener().await?;
-        let entity_store = new_entity_store(&ttd, true);
         let mut mqtt_actor: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MqttBox", 10);
+        let mut entity_store_service = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
 
         let binding_res = FileTransferServerBuilder::try_bind(
             http_config(&ttd, port_in_use),
-            entity_store,
+            &mut entity_store_service,
             &mut mqtt_actor,
         )
         .await;
@@ -275,12 +270,12 @@ mod tests {
         async fn new_http() -> anyhow::Result<Self> {
             let temp_dir = TempTedgeDir::new();
             let config = http_config(&temp_dir, 0);
-            let entity_store = new_entity_store(&temp_dir, true);
             let (tx, rx) = mpsc::channel(1);
             let mut mqtt_actor: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
                 SimpleMessageBoxBuilder::new("MqttBox", 10);
+            let mut entity_store_service = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
 
-            let port = Self::spawn(config, tx, &mut mqtt_actor, entity_store).await?;
+            let port = Self::spawn(config, tx, &mut mqtt_actor, &mut entity_store_service).await?;
 
             Ok(TestFileTransferService {
                 port,
@@ -319,12 +314,12 @@ mod tests {
         ) -> anyhow::Result<Self> {
             let temp_dir = TempTedgeDir::new();
             let config = https_config(&temp_dir, &server_cert, trusted_root)?;
-            let entity_store = new_entity_store(&temp_dir, true);
             let (tx, rx) = mpsc::channel(1);
             let mut mqtt_actor: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
                 SimpleMessageBoxBuilder::new("MqttBox", 10);
+            let mut entity_store_service = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
 
-            let port = Self::spawn(config, tx, &mut mqtt_actor, entity_store).await?;
+            let port = Self::spawn(config, tx, &mut mqtt_actor, &mut entity_store_service).await?;
 
             Ok(TestFileTransferService {
                 port,
@@ -386,10 +381,11 @@ mod tests {
             config: TestConfig,
             mut error_tx: Sender<RuntimeError>,
             mqtt_actor: &mut impl MessageSink<MqttMessage>,
-            entity_store: Arc<Mutex<EntityStore>>,
+            entity_store_service: &mut impl Service<EntityStoreRequest, EntityStoreResponse>,
         ) -> anyhow::Result<u16> {
             let builder =
-                FileTransferServerBuilder::try_bind(config, entity_store, mqtt_actor).await?;
+                FileTransferServerBuilder::try_bind(config, entity_store_service, mqtt_actor)
+                    .await?;
             let port = builder.listener.local_addr()?.port();
             let actor = builder.build();
 
@@ -452,50 +448,5 @@ mod tests {
             bind_addr: ([127, 0, 0, 1], 0).into(),
             mqtt_schema: MqttSchema::default(),
         })
-    }
-
-    pub fn new_entity_store(temp_dir: &TempTedgeDir, clean_start: bool) -> Arc<Mutex<EntityStore>> {
-        let entity_store = EntityStore::with_main_device_and_default_service_type(
-            MqttSchema::default(),
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                external_id: Some("test-device".into()),
-                r#type: EntityType::MainDevice,
-                parent: None,
-                other: Map::new(),
-            },
-            "service".into(),
-            dummy_external_id_mapper,
-            dummy_external_id_validator,
-            5,
-            temp_dir.path(),
-            clean_start,
-        )
-        .unwrap();
-        Arc::new(Mutex::new(entity_store))
-    }
-
-    fn dummy_external_id_mapper(
-        entity_topic_id: &EntityTopicId,
-        _main_device_xid: &EntityExternalId,
-    ) -> EntityExternalId {
-        entity_topic_id
-            .to_string()
-            .trim_end_matches('/')
-            .replace('/', ":")
-            .into()
-    }
-
-    fn dummy_external_id_validator(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
-        let forbidden_chars = HashSet::from(['/', '+', '#']);
-        for c in id.chars() {
-            if forbidden_chars.contains(&c) {
-                return Err(InvalidExternalIdError {
-                    external_id: id.into(),
-                    invalid_char: c,
-                });
-            }
-        }
-        Ok(id.into())
     }
 }

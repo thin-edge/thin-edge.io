@@ -1,16 +1,16 @@
 use super::entity_store::entity_store_router;
 use super::file_transfer::file_transfer_router;
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreResponse;
 use crate::file_transfer_server::error::FileTransferError;
 use axum::Router;
 use camino::Utf8PathBuf;
 use futures::future::FutureExt;
 use rustls::ServerConfig;
 use std::future::Future;
-use std::sync::Arc;
-use std::sync::Mutex;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::EntityStore;
 use tedge_mqtt_ext::MqttMessage;
 use tokio::io;
 use tokio::net::TcpListener;
@@ -18,7 +18,7 @@ use tokio::net::TcpListener;
 #[derive(Clone)]
 pub(crate) struct AgentState {
     pub(crate) file_transfer_dir: Utf8PathBuf,
-    pub(crate) entity_store: Arc<Mutex<EntityStore>>,
+    pub(crate) entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     pub(crate) mqtt_schema: MqttSchema,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -26,13 +26,13 @@ pub(crate) struct AgentState {
 impl AgentState {
     pub fn new(
         file_transfer_dir: Utf8PathBuf,
-        entity_store: Arc<Mutex<EntityStore>>,
+        entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
         mqtt_schema: MqttSchema,
         mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
         AgentState {
             file_transfer_dir,
-            entity_store,
+            entity_store_handle,
             mqtt_schema,
             mqtt_publisher,
         }
