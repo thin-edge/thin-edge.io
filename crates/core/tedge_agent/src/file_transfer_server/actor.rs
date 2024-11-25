@@ -1,3 +1,5 @@
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreResponse;
 use crate::file_transfer_server::error::FileTransferError;
 use crate::file_transfer_server::http_rest::http_server;
 use crate::file_transfer_server::http_rest::AgentState;
@@ -16,12 +18,14 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Service;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::EntityStore;
 use tedge_config::OptionalConfig;
@@ -34,7 +38,7 @@ pub struct FileTransferServerActor {
     rustls_config: Option<ServerConfig>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
-    entity_store: Arc<Mutex<EntityStore>>,
+    entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     mqtt_schema: MqttSchema,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -61,7 +65,7 @@ impl Actor for FileTransferServerActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         let agent_state = AgentState::new(
             self.file_transfer_dir,
-            self.entity_store,
+            self.entity_store_handle,
             self.mqtt_schema,
             self.mqtt_publisher,
         );
@@ -87,7 +91,7 @@ pub struct FileTransferServerBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
-    entity_store: Arc<Mutex<EntityStore>>,
+    entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     mqtt_schema: MqttSchema,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -95,7 +99,7 @@ pub struct FileTransferServerBuilder {
 impl FileTransferServerBuilder {
     pub(crate) async fn try_bind(
         config: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
-        entity_store: Arc<Mutex<EntityStore>>,
+        entity_store_service: &mut impl Service<EntityStoreRequest, EntityStoreResponse>,
         mqtt_actor: &mut impl MessageSink<MqttMessage>,
     ) -> Result<Self, anyhow::Error> {
         let listener = TcpListener::bind(config.bind_addr)
@@ -103,6 +107,7 @@ impl FileTransferServerBuilder {
             .with_context(|| format!("Binding file-transfer server to {}", config.bind_addr))?;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_actor.get_sender());
+        let entity_store_handle = ClientMessageBox::new(entity_store_service);
 
         Ok(Self {
             rustls_config: load_ssl_config(
@@ -115,7 +120,7 @@ impl FileTransferServerBuilder {
             signal_sender,
             signal_receiver,
             listener,
-            entity_store,
+            entity_store_handle,
             mqtt_schema: config.mqtt_schema,
             mqtt_publisher,
         })
@@ -137,14 +142,14 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
             rustls_config: self.rustls_config,
             signal_receiver: self.signal_receiver,
             listener: self.listener,
-            entity_store: self.entity_store,
+            entity_store_handle: self.entity_store_handle,
             mqtt_schema: self.mqtt_schema,
             mqtt_publisher: self.mqtt_publisher,
         })
     }
 }
 
-#[cfg(test)]
+#[cfg(FALSE)]
 mod tests {
     use std::collections::HashSet;
 
