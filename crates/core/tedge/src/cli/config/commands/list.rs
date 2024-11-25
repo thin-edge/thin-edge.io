@@ -10,6 +10,7 @@ use yansi::Paint;
 pub struct ListConfigCommand {
     pub is_all: bool,
     pub is_doc: bool,
+    pub filter: Option<String>,
     pub config: TEdgeConfig,
 }
 
@@ -20,18 +21,25 @@ impl Command for ListConfigCommand {
 
     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.is_doc {
-            print_config_doc(&self.config);
+            print_config_doc(self.filter.as_deref());
         } else {
-            print_config_list(&self.config, self.is_all)?;
+            print_config_list(&self.config, self.is_all, self.filter.as_deref())?;
         }
 
         Ok(())
     }
 }
 
-fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), anyhow::Error> {
+fn print_config_list(
+    config: &TEdgeConfig,
+    all: bool,
+    filter: Option<&str>,
+) -> Result<(), anyhow::Error> {
     let mut keys_without_values = Vec::new();
     for config_key in config.readable_keys() {
+        if !key_matches_filter(&config_key.to_cow_str(), filter) {
+            continue;
+        }
         match config.read_string(&config_key).ok() {
             Some(value) => {
                 println!("{}={}", config_key, value);
@@ -50,14 +58,18 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-fn print_config_doc(config: &TEdgeConfig) {
-    let max_length = config
-        .readable_keys()
-        .map(|c| c.to_cow_str().len())
+fn print_config_doc(filter: Option<&str>) {
+    let max_length = READABLE_KEYS
+        .iter()
+        .filter(|(key, _)| key_matches_filter(key, filter))
+        .map(|(key, _)| key.len())
         .max()
         .unwrap_or_default();
 
     for (key, ty) in READABLE_KEYS.iter() {
+        if !key_matches_filter(key, filter) {
+            continue;
+        }
         let docs = ty
             .comment
             .map(|c| {
@@ -114,5 +126,12 @@ fn print_config_doc(config: &TEdgeConfig) {
         if !stdout().is_terminal() {
             println!();
         }
+    }
+}
+
+fn key_matches_filter(key: &str, filter: Option<&str>) -> bool {
+    match filter {
+        Some(filter) => key.contains(filter),
+        None => true,
     }
 }
