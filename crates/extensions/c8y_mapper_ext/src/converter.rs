@@ -165,15 +165,12 @@ impl CumulocityConverter {
         }
     }
 
-    pub fn process_operation_update_message(&mut self, message: DiscoverOp) -> MqttMessage {
+    pub fn process_operation_update_message(&mut self, message: DiscoverOp) -> Option<MqttMessage> {
         let message_or_err = self.try_process_operation_update_message(&message);
         match message_or_err {
-            Ok(Some(msg)) => msg,
-            Ok(None) => MqttMessage::new(
-                &self.get_mapper_config().errors_topic,
-                "No operation update required",
-            ),
-            Err(err) => self.new_error_message(err),
+            Ok(Some(msg)) => Some(msg),
+            Ok(None) => None,
+            Err(err) => Some(self.new_error_message(err)),
         }
     }
 }

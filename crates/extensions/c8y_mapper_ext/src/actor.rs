@@ -294,12 +294,12 @@ impl C8yMapperActor {
                         file_event,
                     ) {
                         Ok(Some(discovered_ops)) => {
-                            self.mqtt_publisher
-                                .send(
-                                    self.converter
-                                        .process_operation_update_message(discovered_ops),
-                                )
-                                .await?;
+                            if let Some(update_message) = self
+                                .converter
+                                .process_operation_update_message(discovered_ops)
+                            {
+                                self.mqtt_publisher.send(update_message).await?;
+                            }
                         }
                         Ok(None) => {}
                         Err(e) => {
