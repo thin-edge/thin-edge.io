@@ -8,7 +8,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use time::Duration;
 use time::OffsetDateTime;
-use zeroize::Zeroizing;
+pub use zeroize::Zeroizing;
 #[cfg(feature = "reqwest")]
 mod cloud_root_certificate;
 #[cfg(feature = "reqwest")]
