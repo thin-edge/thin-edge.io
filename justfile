@@ -22,6 +22,23 @@ info:
 version TYPE="all":
     @./ci/build_scripts/version.sh {{TYPE}} 2>/dev/null || exit 0
 
+# Publish the dev container to provide more reproducible dev environments
+#
+# docker login ghcr.io
+publish-dev-container TAG="latest" IMAGE="ghcr.io/thin-edge/devcontainer" VARIANT="bookworm" OUTPUT_TYPE="registry":
+    docker buildx install
+    cd .devcontainer && docker buildx build \
+        --platform linux/amd64,linux/arm64,linux/arm/7 \
+        --build-arg "VARIANT={{VARIANT}}" \
+        --label "org.opencontainers.image.version={{VERSION}}-{{VARIANT}}" \
+        --label "org.opencontainers.image.source=https://github.com/thin-edge/thin-edge.io" \
+        -t "{{IMAGE}}:{{TAG}}-{{VARIANT}}" \
+        -t "{{IMAGE}}:latest-{{VARIANT}}" \
+        -f Dockerfile \
+        --output=type="{{OUTPUT_TYPE}}",oci-mediatypes=false \
+        --provenance=false \
+        .
+
 # Default recipe
 [private]
 default:
