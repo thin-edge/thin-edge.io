@@ -39,7 +39,6 @@ impl RenewCertCmd {
             id,
             cert_path: self.cert_path.clone(),
             key_path: self.key_path.clone(),
-            csr_path: None,
             bridge_location: self.bridge_location,
         };
 
@@ -65,7 +64,6 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            csr_path: None,
             bridge_location: BridgeLocation::Mosquitto,
         };
 

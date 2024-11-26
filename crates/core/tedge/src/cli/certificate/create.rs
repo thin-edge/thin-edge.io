@@ -14,19 +14,16 @@ use std::path::Path;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
 
-/// Create a self-signed device certificate
+/// Create self-signed device certificate and signing request
 pub struct CreateCertCmd {
     /// The device identifier
     pub id: String,
 
-    /// The path where the device certificate will be stored
+    /// The path where the device certificate / request will be stored
     pub cert_path: Utf8PathBuf,
 
     /// The path where the device private key will be stored
     pub key_path: Utf8PathBuf,
-
-    /// The path where the device CSR file will be stored
-    pub csr_path: Option<Utf8PathBuf>,
 
     /// The component that is configured to host the MQTT bridge logic
     pub bridge_location: BridgeLocation,
@@ -76,12 +73,7 @@ impl CreateCertCmd {
         &self,
         config: &NewCertificateConfig,
     ) -> Result<(), CertError> {
-        // FIXME the current implementation of CreateCertCmd is ambiguous
-        //       One can prepare to create a self-signed certificate and then try to create a CSR
-        let csr_path = self
-            .csr_path
-            .as_ref()
-            .expect("creating a CSR instead of a self-signed certificate");
+        let csr_path = &self.cert_path;
         let key_path = &self.key_path;
 
         let previous_key = reuse_private_key(key_path).unwrap_or(KeyKind::New);
@@ -226,7 +218,6 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            csr_path: None,
             bridge_location: BridgeLocation::Mosquitto,
         };
 
@@ -255,7 +246,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            csr_path: None,
             bridge_location: BridgeLocation::Mosquitto,
         };
 
@@ -278,7 +268,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            csr_path: None,
             bridge_location: BridgeLocation::Mosquitto,
         };
 
@@ -298,7 +287,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            csr_path: None,
             bridge_location: BridgeLocation::Mosquitto,
         };
 
@@ -318,7 +306,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            csr_path: None,
             bridge_location: BridgeLocation::Mosquitto,
         };
 

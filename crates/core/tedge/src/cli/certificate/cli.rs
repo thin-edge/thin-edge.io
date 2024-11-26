@@ -64,7 +64,6 @@ impl BuildCommand for TEdgeCertCli {
                     id,
                     cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
-                    csr_path: None,
                     bridge_location,
                 };
                 cmd.into_boxed()
