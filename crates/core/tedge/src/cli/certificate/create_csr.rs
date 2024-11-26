@@ -2,15 +2,27 @@ use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use crate::CreateCertCmd;
+use crate::override_public_key;
+use crate::persist_new_private_key;
+use crate::reuse_private_key;
 use camino::Utf8PathBuf;
+use certificate::KeyCertPair;
+use certificate::KeyKind;
 use certificate::NewCertificateConfig;
 
+/// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
+    /// The device identifier (either explicitly given or extracted from a previous certificate)
     pub id: Option<String>,
     pub cert_path: Utf8PathBuf,
+
+    /// The path where the device private key will be stored
     pub key_path: Utf8PathBuf,
+
+    /// The path where the device CSR will be stored
     pub csr_path: Utf8PathBuf,
+
+    /// The owner of the private key
     pub user: String,
     pub group: String,
 }
@@ -38,16 +50,24 @@ impl CreateCsrCmd {
             Some(id) => id.clone(),
             None => cn_of_self_signed_certificate(&self.cert_path)?,
         };
+        let csr_path = &self.csr_path;
+        let key_path = &self.key_path;
 
-        let create_cmd = CreateCertCmd {
-            id,
-            cert_path: self.csr_path.clone(),
-            key_path: self.key_path.clone(),
-            user: self.user.clone(),
-            group: self.group.clone(),
-        };
+        let previous_key = reuse_private_key(key_path).unwrap_or(KeyKind::New);
+        let cert = KeyCertPair::new_certificate_sign_request(config, &id, &previous_key)?;
 
-        create_cmd.create_certificate_signing_request(config)
+        if let KeyKind::New = previous_key {
+            persist_new_private_key(
+                key_path,
+                cert.private_key_pem_string()?,
+                &self.user,
+                &self.group,
+            )
+            .map_err(|err| err.key_context(key_path.clone()))?;
+        }
+        override_public_key(csr_path, cert.certificate_signing_request_string()?)
+            .map_err(|err| err.cert_context(csr_path.clone()))?;
+        Ok(())
     }
 }
 

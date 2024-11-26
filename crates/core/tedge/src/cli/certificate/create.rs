@@ -13,12 +13,12 @@ use std::path::Path;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
 
-/// Create self-signed device certificate and signing request
+/// Create self-signed device certificate
 pub struct CreateCertCmd {
     /// The device identifier
     pub id: String,
 
-    /// The path where the device certificate / request will be stored
+    /// The path where the device certificate will be stored
     pub cert_path: Utf8PathBuf,
 
     /// The path where the device private key will be stored
@@ -65,46 +65,9 @@ impl CreateCertCmd {
         .map_err(|err| err.key_context(key_path.clone()))?;
         Ok(())
     }
-
-    pub fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
-        let cert_path = &self.cert_path;
-        let key_path = &self.key_path;
-
-        let previous_key = reuse_private_key(key_path)
-            .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
-        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &previous_key)?;
-
-        override_public_key(cert_path, cert.certificate_pem_string()?)
-            .map_err(|err| err.cert_context(cert_path.clone()))?;
-        Ok(())
-    }
-
-    pub fn create_certificate_signing_request(
-        &self,
-        config: &NewCertificateConfig,
-    ) -> Result<(), CertError> {
-        let csr_path = &self.cert_path;
-        let key_path = &self.key_path;
-
-        let previous_key = reuse_private_key(key_path).unwrap_or(KeyKind::New);
-        let cert = KeyCertPair::new_certificate_sign_request(config, &self.id, &previous_key)?;
-
-        if let KeyKind::New = previous_key {
-            persist_new_private_key(
-                key_path,
-                cert.private_key_pem_string()?,
-                &self.user,
-                &self.group,
-            )
-            .map_err(|err| err.key_context(key_path.clone()))?;
-        }
-        override_public_key(csr_path, cert.certificate_signing_request_string()?)
-            .map_err(|err| err.cert_context(csr_path.clone()))?;
-        Ok(())
-    }
 }
 
-fn persist_new_public_key(
+pub fn persist_new_public_key(
     cert_path: &Utf8PathBuf,
     pem_string: String,
     user: &str,
@@ -115,7 +78,7 @@ fn persist_new_public_key(
     Ok(())
 }
 
-fn persist_new_private_key(
+pub fn persist_new_private_key(
     key_path: &Utf8PathBuf,
     key: certificate::Zeroizing<String>,
     user: &str,
@@ -126,7 +89,7 @@ fn persist_new_private_key(
     Ok(())
 }
 
-fn override_public_key(cert_path: &Utf8PathBuf, pem_string: String) -> Result<(), CertError> {
+pub fn override_public_key(cert_path: &Utf8PathBuf, pem_string: String) -> Result<(), CertError> {
     validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
     persist_public_key(override_file(cert_path)?, pem_string)?;
     Ok(())
@@ -158,7 +121,7 @@ fn override_file(path: impl AsRef<Path>) -> Result<File, std::io::Error> {
         .open(path.as_ref())
 }
 
-fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::io::Error> {
+pub fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::io::Error> {
     std::fs::read_to_string(key_path).map(|keypair_pem| KeyKind::Reuse { keypair_pem })
 }
 
@@ -300,26 +263,6 @@ mod tests {
             .create_test_certificate(&NewCertificateConfig::default())
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
-    }
-
-    #[test]
-    fn renew_certificate_without_key() {
-        let dir = tempdir().unwrap();
-        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
-        let key_path = Utf8PathBuf::from("/non/existent/key/path");
-
-        let cmd = CreateCertCmd {
-            id: "my-device-id".into(),
-            cert_path,
-            key_path,
-            user: "mosquitto".to_string(),
-            group: "mosquitto".to_string(),
-        };
-
-        let cert_error = cmd
-            .renew_test_certificate(&NewCertificateConfig::default())
-            .unwrap_err();
-        assert_matches!(cert_error, CertError::KeyNotFound { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {

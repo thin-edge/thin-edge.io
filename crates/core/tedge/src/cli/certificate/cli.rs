@@ -123,8 +123,6 @@ impl BuildCommand for TEdgeCertCli {
                 let cmd = RenewCertCmd {
                     cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
-                    user: user.to_owned(),
-                    group: group.to_owned(),
                 };
                 cmd.into_boxed()
             }
