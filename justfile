@@ -28,7 +28,7 @@ version TYPE="all":
 publish-dev-container TAG="latest" IMAGE="ghcr.io/thin-edge/devcontainer" VARIANT="bookworm" OUTPUT_TYPE="registry":
     docker buildx install
     cd .devcontainer && docker buildx build \
-        --platform linux/amd64,linux/arm64,linux/arm/7 \
+        --platform linux/amd64,linux/arm64 \
         --build-arg "VARIANT={{VARIANT}}" \
         --label "org.opencontainers.image.version={{VERSION}}-{{VARIANT}}" \
         --label "org.opencontainers.image.source=https://github.com/thin-edge/thin-edge.io" \
