@@ -1,6 +1,5 @@
 use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
-use crate::bridge::BridgeLocation;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::CreateCertCmd;
@@ -10,7 +9,8 @@ use certificate::NewCertificateConfig;
 pub struct RenewCertCmd {
     pub cert_path: Utf8PathBuf,
     pub key_path: Utf8PathBuf,
-    pub bridge_location: BridgeLocation,
+    pub user: String,
+    pub group: String,
 }
 
 impl Command for RenewCertCmd {
@@ -39,7 +39,8 @@ impl RenewCertCmd {
             id,
             cert_path: self.cert_path.clone(),
             key_path: self.key_path.clone(),
-            bridge_location: self.bridge_location,
+            user: self.user.clone(),
+            group: self.group.clone(),
         };
 
         create_cmd.renew_test_certificate(config)
@@ -64,7 +65,8 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         // First create both cert and key
@@ -83,7 +85,8 @@ mod tests {
         let cmd = RenewCertCmd {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
         cmd.renew_test_certificate(&NewCertificateConfig::default())
             .unwrap();

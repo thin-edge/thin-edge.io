@@ -1,5 +1,4 @@
 use super::error::CertError;
-use crate::bridge::BridgeLocation;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
@@ -25,8 +24,9 @@ pub struct CreateCertCmd {
     /// The path where the device private key will be stored
     pub key_path: Utf8PathBuf,
 
-    /// The component that is configured to host the MQTT bridge logic
-    pub bridge_location: BridgeLocation,
+    /// The owner of the private key
+    pub user: String,
+    pub group: String,
 }
 
 impl Command for CreateCertCmd {
@@ -47,12 +47,22 @@ impl CreateCertCmd {
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &KeyKind::New)?;
 
         let cert_path = &self.cert_path;
-        self.persist_new_public_key(cert_path, cert.certificate_pem_string()?)
-            .map_err(|err| err.cert_context(cert_path.clone()))?;
+        persist_new_public_key(
+            cert_path,
+            cert.certificate_pem_string()?,
+            &self.user,
+            &self.group,
+        )
+        .map_err(|err| err.cert_context(cert_path.clone()))?;
 
         let key_path = &self.key_path;
-        self.persist_new_private_key(key_path, cert.private_key_pem_string()?)
-            .map_err(|err| err.key_context(key_path.clone()))?;
+        persist_new_private_key(
+            key_path,
+            cert.private_key_pem_string()?,
+            &self.user,
+            &self.group,
+        )
+        .map_err(|err| err.key_context(key_path.clone()))?;
         Ok(())
     }
 
@@ -64,7 +74,7 @@ impl CreateCertCmd {
             .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &previous_key)?;
 
-        self.override_public_key(cert_path, cert.certificate_pem_string()?)
+        override_public_key(cert_path, cert.certificate_pem_string()?)
             .map_err(|err| err.cert_context(cert_path.clone()))?;
         Ok(())
     }
@@ -80,54 +90,46 @@ impl CreateCertCmd {
         let cert = KeyCertPair::new_certificate_sign_request(config, &self.id, &previous_key)?;
 
         if let KeyKind::New = previous_key {
-            self.persist_new_private_key(key_path, cert.private_key_pem_string()?)
-                .map_err(|err| err.key_context(key_path.clone()))?;
+            persist_new_private_key(
+                key_path,
+                cert.private_key_pem_string()?,
+                &self.user,
+                &self.group,
+            )
+            .map_err(|err| err.key_context(key_path.clone()))?;
         }
-        self.override_public_key(csr_path, cert.certificate_signing_request_string()?)
+        override_public_key(csr_path, cert.certificate_signing_request_string()?)
             .map_err(|err| err.cert_context(csr_path.clone()))?;
         Ok(())
     }
+}
 
-    fn persist_new_public_key(
-        &self,
-        cert_path: &Utf8PathBuf,
-        pem_string: String,
-    ) -> Result<(), CertError> {
-        let (user, group) = self.certificate_user_group();
+fn persist_new_public_key(
+    cert_path: &Utf8PathBuf,
+    pem_string: String,
+    user: &str,
+    group: &str,
+) -> Result<(), CertError> {
+    validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
+    persist_public_key(create_new_file(cert_path, user, group)?, pem_string)?;
+    Ok(())
+}
 
-        validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
-        persist_public_key(create_new_file(cert_path, user, group)?, pem_string)?;
-        Ok(())
-    }
+fn persist_new_private_key(
+    key_path: &Utf8PathBuf,
+    key: certificate::Zeroizing<String>,
+    user: &str,
+    group: &str,
+) -> Result<(), CertError> {
+    validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
+    persist_private_key(create_new_file(key_path, user, group)?, key)?;
+    Ok(())
+}
 
-    fn persist_new_private_key(
-        &self,
-        key_path: &Utf8PathBuf,
-        key: certificate::Zeroizing<String>,
-    ) -> Result<(), CertError> {
-        let (user, group) = self.certificate_user_group();
-
-        validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
-        persist_private_key(create_new_file(key_path, user, group)?, key)?;
-        Ok(())
-    }
-
-    fn override_public_key(
-        &self,
-        cert_path: &Utf8PathBuf,
-        pem_string: String,
-    ) -> Result<(), CertError> {
-        validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
-        persist_public_key(override_file(cert_path)?, pem_string)?;
-        Ok(())
-    }
-
-    fn certificate_user_group(&self) -> (&str, &str) {
-        match self.bridge_location {
-            BridgeLocation::BuiltIn => ("tedge", "tedge"),
-            BridgeLocation::Mosquitto => (crate::BROKER_USER, crate::BROKER_GROUP),
-        }
-    }
+fn override_public_key(cert_path: &Utf8PathBuf, pem_string: String) -> Result<(), CertError> {
+    validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
+    persist_public_key(override_file(cert_path)?, pem_string)?;
+    Ok(())
 }
 
 fn create_new_file(
@@ -218,7 +220,8 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         assert_matches!(
@@ -246,7 +249,8 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         assert!(cmd
@@ -268,7 +272,8 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         let cert_error = cmd
@@ -287,7 +292,8 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         let cert_error = cmd
@@ -306,7 +312,8 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         let cert_error = cmd
