@@ -118,7 +118,8 @@ impl FromArgMatches for MapperName {
     }
 
     fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
-        todo!()
+        *self = Self::from_arg_matches(matches)?;
+        Ok(())
     }
 }
 
@@ -131,7 +132,7 @@ impl clap::Subcommand for MapperName {
     }
 
     fn augment_subcommands_for_update(cmd: clap::Command) -> clap::Command {
-        todo!()
+        Self::augment_subcommands(cmd)
     }
 
     fn has_subcommand(name: &str) -> bool {
