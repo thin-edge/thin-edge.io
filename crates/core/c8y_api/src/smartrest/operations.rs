@@ -140,10 +140,11 @@ impl SupportedOperations {
         device_xid: &ExternalIdRef,
         c8y_operation_name: &OperationNameRef,
         bridge_config: &impl Record,
+        c8y_prefix: &TopicPrefix,
     ) -> Result<bool, anyhow::Error> {
         let ops_file = self.ops_file_name_for_device(device_xid, c8y_operation_name);
 
-        let operation = get_operation(ops_file.as_std_path(), bridge_config)?;
+        let operation = get_operation(ops_file.as_std_path(), bridge_config, c8y_prefix)?;
 
         let current_operations =
             if let Some(current_operations) = self.operations_by_xid.get_mut(device_xid) {
@@ -374,8 +375,9 @@ impl Operations {
     pub fn try_new(
         dir: impl AsRef<Path>,
         bridge_config: &impl Record,
+        c8y_prefix: &TopicPrefix,
     ) -> Result<Self, OperationsError> {
-        get_operations(dir.as_ref(), bridge_config)
+        get_operations(dir.as_ref(), bridge_config, c8y_prefix)
     }
 
     pub fn add_template(&mut self, template: Operation) {
@@ -636,6 +638,7 @@ struct ExecWorkflow {
 fn get_operations(
     dir: impl AsRef<Path>,
     bridge_config: &impl Record,
+    c8y_prefix: &TopicPrefix,
 ) -> Result<Operations, OperationsError> {
     let mut operations = Operations::default();
     let dir_entries = fs::read_dir(&dir)
@@ -657,7 +660,7 @@ fn get_operations(
                 continue;
             }
 
-            let details = match get_operation(&path, bridge_config) {
+            let details = match get_operation(&path, bridge_config, c8y_prefix) {
                 Ok(operation) => operation,
                 Err(err) => {
                     error!(
@@ -689,6 +692,7 @@ fn get_operations(
 pub fn get_child_ops(
     ops_dir: impl AsRef<Path>,
     bridge_config: &impl Record,
+    c8y_prefix: &TopicPrefix,
 ) -> Result<HashMap<String, Operations>, OperationsError> {
     let mut child_ops: HashMap<String, Operations> = HashMap::new();
     let child_entries = fs::read_dir(&ops_dir)
@@ -701,7 +705,7 @@ pub fn get_child_ops(
         .filter(|path| path.is_dir())
         .collect::<Vec<PathBuf>>();
     for cdir in child_entries {
-        let ops = Operations::try_new(&cdir, bridge_config)?;
+        let ops = Operations::try_new(&cdir, bridge_config, c8y_prefix)?;
         if let Some(id) = cdir.file_name() {
             if let Some(id_str) = id.to_str() {
                 child_ops.insert(id_str.to_string(), ops);
@@ -714,6 +718,7 @@ pub fn get_child_ops(
 pub fn get_operation(
     path: &Path,
     bridge_config: &impl Record,
+    c8y_prefix: &TopicPrefix,
 ) -> Result<Operation, OperationsError> {
     let text = fs::read_to_string(path)?;
     let mut details = toml::from_str::<Operation>(&text)
@@ -726,7 +731,10 @@ pub fn get_operation(
 
     if let Some(ref mut exec) = details.exec {
         if let Some(ref topic) = exec.topic {
-            exec.topic = Some(bridge_config.inject_values_into_template(topic))
+            let mut templated_topic = bridge_config.inject_values_into_template(topic);
+            // TODO is this robust?
+            templated_topic = templated_topic.replace("c8y/", &format!("{c8y_prefix}/"));
+            exec.topic = Some(templated_topic)
         }
     }
 
@@ -892,6 +900,7 @@ mod tests {
             &TestBridgeConfig {
                 c8y_prefix: TopicPrefix::try_from("c8y").unwrap(),
             },
+            &"c8y".parse().unwrap(),
         )
         .unwrap();
 
@@ -915,6 +924,7 @@ mod tests {
             &TestBridgeConfig {
                 c8y_prefix: TopicPrefix::try_from("c8y").unwrap(),
             },
+            &"c8y".parse().unwrap(),
         )
         .unwrap();
 

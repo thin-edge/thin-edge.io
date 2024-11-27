@@ -282,6 +282,7 @@ impl C8yMapperConfig {
                 .join(SUPPORTED_OPERATIONS_DIRECTORY)
                 .join(C8Y_CLOUD),
             bridge_config,
+            &bridge_config.c8y_prefix,
         ) {
             for topic in operations.topics_for_operations() {
                 topic_filter.add(&topic)?;
