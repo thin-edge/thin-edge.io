@@ -1,6 +1,7 @@
 use core::fmt;
 use std::borrow::Cow;
 
+use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use tedge_config::auth_method::AuthMethod;
 use tedge_config::HostPort;
@@ -115,18 +116,17 @@ impl BridgeConfig {
     }
 
     pub fn validate(&self, use_basic_auth: bool) -> Result<(), ConnectError> {
-        // TODO improve error messages
         if !self.bridge_root_cert_path.exists() {
-            return Err(ConnectError::Certificate);
+            return Err(ConnectError::Certificate(anyhow!("Bridge root cert path {:?} does not exist", self.bridge_root_cert_path)));
         }
 
         if !use_basic_auth {
             if !self.bridge_certfile.exists() {
-                return Err(ConnectError::Certificate);
+                return Err(ConnectError::Certificate(anyhow!("Bridge certificate {:?} does not exist", self.bridge_certfile)));
             }
 
             if !self.bridge_keyfile.exists() {
-                return Err(ConnectError::Certificate);
+                return Err(ConnectError::Certificate(anyhow!("Bridge key {:?} does not exist", self.bridge_keyfile)));
             }
         }
 
