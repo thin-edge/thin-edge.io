@@ -46,6 +46,7 @@ default:
 
 # Install necessary tools
 install-tools:
+    rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
     cargo install taplo-cli cargo-nextest
 
