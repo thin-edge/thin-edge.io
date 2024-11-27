@@ -63,14 +63,16 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             remove_supported_operation(config_dir.tedge_config_root_path());
             Ok(())
         }
-        Command::Connect(command) => proxy(command, tedge_config, c8y_profile).await,
+        Command::Connect((command, p)) => {
+            proxy(command, tedge_config, c8y_profile.or(p.as_deref())).await
+        }
         Command::SpawnChild(command) => {
             spawn_child(command, config_dir.tedge_config_root_path(), c8y_profile).await
         }
         Command::TryConnectUnixSocket(command) => match UnixStream::connect(UNIX_SOCKFILE).await {
             Ok(mut unix_stream) => {
                 eprintln!("sock: Connected to Unix socket at {UNIX_SOCKFILE}");
-                write_request_and_shutdown(&mut unix_stream, command).await?;
+                write_request_and_shutdown(&mut unix_stream, c8y_profile, command).await?;
                 read_from_stream(&mut unix_stream).await?;
                 Ok(())
             }
@@ -149,7 +151,7 @@ async fn spawn_child(
         .args(
             c8y_profile
                 .iter()
-                .flat_map(|profile| ["--c8y-profile", profile]),
+                .flat_map(|profile| ["--profile", profile]),
         )
         .arg("--child")
         .arg(command)
@@ -214,6 +216,7 @@ struct UnixSocketError<E: std::error::Error + 'static>(#[source] E, &'static str
 
 async fn write_request_and_shutdown(
     unix_stream: &mut UnixStream,
+    profile: Option<&str>,
     command: String,
 ) -> miette::Result<()> {
     unix_stream
@@ -221,6 +224,14 @@ async fn write_request_and_shutdown(
         .await
         .into_diagnostic()
         .context("sock: Socket is not writable")?;
+
+    if let Some(profile) = profile {
+        unix_stream
+            .write_all(format!("{profile}\n").as_bytes())
+            .await
+            .into_diagnostic()
+            .context("sock: Could not write to socket")?;
+    }
 
     eprintln!("sock: Writing message ({command}) to socket");
     unix_stream
@@ -255,7 +266,7 @@ async fn read_from_stream(unix_stream: &mut UnixStream) -> miette::Result<()> {
     while let Ok(maybe_line) = lines.next_line().await {
         match maybe_line {
             Some(line) => {
-                eprintln!("sock: Received line: {line}");
+                eprintln!("{line}");
                 match line.as_str() {
                     str if str == SUCCESS_MESSAGE => {
                         eprintln!("sock: Detected successful response");
