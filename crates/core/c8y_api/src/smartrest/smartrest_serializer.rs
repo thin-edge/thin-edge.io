@@ -175,7 +175,7 @@ pub fn succeed_operation_with_id(
     succeed_operation("506", operation, reason)
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum CumulocitySupportedOperations {
     C8ySoftwareUpdate,
     C8yLogFileRequest,
@@ -184,11 +184,12 @@ pub enum CumulocitySupportedOperations {
     C8yDownloadConfigFile,
     C8yFirmware,
     C8yDeviceProfile,
+    C8yCustom(String),
 }
 
-impl From<CumulocitySupportedOperations> for &'static str {
-    fn from(op: CumulocitySupportedOperations) -> Self {
-        match op {
+impl CumulocitySupportedOperations {
+    fn as_str(&self) -> &str {
+        match self {
             CumulocitySupportedOperations::C8ySoftwareUpdate => "c8y_SoftwareUpdate",
             CumulocitySupportedOperations::C8yLogFileRequest => "c8y_LogfileRequest",
             CumulocitySupportedOperations::C8yRestartRequest => "c8y_Restart",
@@ -196,6 +197,7 @@ impl From<CumulocitySupportedOperations> for &'static str {
             CumulocitySupportedOperations::C8yDownloadConfigFile => "c8y_DownloadConfigFile",
             CumulocitySupportedOperations::C8yFirmware => "c8y_Firmware",
             CumulocitySupportedOperations::C8yDeviceProfile => "c8y_DeviceProfile",
+            CumulocitySupportedOperations::C8yCustom(operation) => operation.as_str(),
         }
     }
 }
@@ -303,7 +305,7 @@ pub trait C8yOperation {
 
 impl C8yOperation for CumulocitySupportedOperations {
     fn name(&self) -> &str {
-        (*self).into()
+        self.as_str()
     }
 }
 

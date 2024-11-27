@@ -1513,7 +1513,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     );
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let TestHandle { mqtt, mut fs, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1557,10 +1557,28 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     )
     .await;
 
+    // Add a new operation for the child device
+    // Simulate FsEvent for the creation of a new operation file
+    fs.send(FsWatchEvent::FileCreated(
+        ttd.dir("operations")
+            .dir("c8y")
+            .dir("child11")
+            .file("c8y_ChildTestOp3")
+            .to_path_buf(),
+    ))
+    .await
+    .expect("Send failed");
+
+    // Assert that the creation of the operation file alone doesn't trigger the supported operations update
+    assert!(
+        mqtt.recv().await.is_none(),
+        "No messages expected on operation file creation event"
+    );
+
     // Send any command metadata message to trigger the supported operations update
     mqtt.send(
         MqttMessage::new(
-            &Topic::new_unchecked("te/device/child11///cmd/c8y_ChildTestOp3"),
+            &Topic::new_unchecked("te/device/child11///cmd/restart"),
             "{}",
         )
         .with_retain(),
@@ -1573,7 +1591,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
         &mut mqtt,
         [(
             "c8y/s/us/child11",
-            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3",
+            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
         )],
     )
     .await;
@@ -1987,7 +2005,7 @@ async fn json_custom_operation_status_update_with_operation_id() {
                      "text": "do something"
                  },
             "externalSource":{
-           "externalId":"TST_haul_searing_set",
+           "externalId":"test-device",
            "type":"c8y_Serial"
         }
              })
@@ -2034,7 +2052,7 @@ async fn json_custom_operation_status_update_with_operation_name() {
                      "text": "do something"
                  },
             "externalSource":{
-           "externalId":"TST_haul_searing_set",
+           "externalId":"test-device",
            "type":"c8y_Serial"
         }
              })
@@ -2135,7 +2153,7 @@ async fn json_custom_operation_status_update_with_custom_topic() {
                      "text": "do something"
                  },
             "externalSource":{
-           "externalId":"TST_haul_searing_set",
+           "externalId":"test-device",
            "type":"c8y_Serial"
         }
              })
@@ -2147,6 +2165,282 @@ async fn json_custom_operation_status_update_with_custom_topic() {
     assert_received_contains_str(
         &mut mqtt,
         [("c8y/s/us", "503,c8y_Command,\"do something\n\"")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapper_converts_custom_operation_for_main_device() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command.template")
+        .with_raw_content(
+            r#"[exec]
+            topic = "c8y/devicecontrol/notifications"
+            on_fragment = "c8y_Command"
+            
+            [exec.workflow]
+            operation = "command"
+            input = "${.payload.c8y_Command}"
+            "#,
+        );
+
+    let config = test_mapper_config(&ttd);
+
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // indicate that main device supports the operation
+    let capability_message =
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/command"), "{}");
+
+    mqtt.send(capability_message).await.unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_Command")]).await;
+
+    assert!(ttd.path().join("operations/c8y/c8y_Command").is_symlink());
+
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"test-device",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/main///cmd/command/c8y-mapper-1234",
+            json!({
+                "status": "init",
+                "text": "do something"
+            }),
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapper_converts_custom_operation_for_main_device_without_workflow_input() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command.template")
+        .with_raw_content(
+            r#"[exec]
+            topic = "c8y/devicecontrol/notifications"
+            on_fragment = "c8y_Command"
+            
+            [exec.workflow]
+            operation = "command"
+            "#,
+        );
+
+    let config = test_mapper_config(&ttd);
+
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // indicate that main device supports the operation
+    let capability_message =
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/command"), "{}");
+
+    mqtt.send(capability_message).await.unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_Command")]).await;
+
+    assert!(ttd.path().join("operations/c8y/c8y_Command").is_symlink());
+
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"test-device",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/main///cmd/command/c8y-mapper-1234",
+            json!({
+                "status": "init",
+            }),
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapper_converts_custom_operation_for_main_device_with_invalid_workflow_input() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command.template")
+        .with_raw_content(
+            r#"[exec]
+            topic = "c8y/devicecontrol/notifications"
+            on_fragment = "c8y_Command"
+            
+            [exec.workflow]
+            operation = "command"
+            input = "invalid input"
+            "#,
+        );
+
+    let config = test_mapper_config(&ttd);
+
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // indicate that main device supports the operation
+    let capability_message =
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/command"), "{}");
+
+    mqtt.send(capability_message).await.unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_Command")]).await;
+
+    assert!(ttd.path().join("operations/c8y/c8y_Command").is_symlink());
+
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"test-device",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    // message should not be sent due to incorrect payload
+    assert!(mqtt.recv().await.is_none());
+}
+
+#[tokio::test]
+async fn mapper_converts_custom_operation_for_child_device() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command.template")
+        .with_raw_content(
+            r#"[exec]
+            topic = "c8y/devicecontrol/notifications"
+            on_fragment = "c8y_Command"
+
+            [exec.workflow]
+            operation = "command"
+            input = "${.payload.c8y_Command}"
+            "#,
+        );
+
+    let config = test_mapper_config(&ttd);
+
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    //register child device
+    let reg_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        json!({
+            "@type":"child-device",
+            "@parent":"device/main//",
+            "@id":"child1"
+        })
+        .to_string(),
+    );
+    mqtt.send(reg_message).await.unwrap();
+
+    mqtt.skip(1).await;
+
+    // indicate that child device supports the operation
+    let capability_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/command"),
+        "{}",
+    );
+
+    mqtt.send(capability_message).await.unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "114,c8y_Command")]).await;
+
+    assert!(ttd
+        .path()
+        .join("operations/c8y/child1/c8y_Command")
+        .is_symlink());
+
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_Command": {
+                     "text": "do something"
+                 },
+            "externalSource":{
+           "externalId":"child1",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child1///cmd/command/c8y-mapper-1234",
+            json!({
+                "status": "init",
+                "text": "do something"
+            }),
+        )],
     )
     .await;
 }

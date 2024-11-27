@@ -2,6 +2,7 @@
 
 mod config_snapshot;
 mod config_update;
+mod custom_operation;
 mod device_profile;
 mod firmware_update;
 mod log_upload;
@@ -81,7 +82,7 @@ impl OperationContext {
         };
 
         let operation_result = match operation {
-            OperationType::Health | OperationType::Custom(_) => {
+            OperationType::Health => {
                 debug!(
                     topic = message.topic.name,
                     ?operation,
@@ -141,8 +142,16 @@ impl OperationContext {
                 self.handle_device_profile_state_change(&entity, &cmd_id, &message)
                     .await
             }
+            OperationType::Custom(ref custom_operation) => {
+                self.handle_custom_operation_state_change(
+                    &entity,
+                    &cmd_id,
+                    &message,
+                    custom_operation,
+                )
+                .await
+            }
         };
-
         let mut mqtt_publisher = self.mqtt_publisher.clone();
 
         // unwrap is safe: at this point all local operations that are not regular c8y
@@ -151,7 +160,7 @@ impl OperationContext {
 
         match self.to_response(
             operation_result,
-            c8y_operation,
+            c8y_operation.clone(),
             &entity.smartrest_publish_topic,
             &cmd_id,
         ) {
@@ -299,13 +308,14 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
         OperationType::DeviceProfile => Some(CumulocitySupportedOperations::C8yDeviceProfile),
+        OperationType::Custom(operation) => Some(CumulocitySupportedOperations::C8yCustom(
+            operation.to_string(),
+        )),
         // software list is not an c8y, only a fragment, but is a local operation that is spawned as
         // part of C8y_SoftwareUpdate operation
         OperationType::SoftwareList => None,
         // local-only operation, not always invoked by c8y, handled in other codepath
         OperationType::Health => None,
-        // other custom operations, no c8y equivalent
-        OperationType::Custom(_) => None,
     }
 }
 /// An MQTT message that contains an operation payload.

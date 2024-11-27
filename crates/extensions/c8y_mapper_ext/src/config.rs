@@ -1,4 +1,3 @@
-use crate::operations::OperationHandler;
 use crate::Capabilities;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
@@ -12,13 +11,12 @@ use serde_json::Value;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use tedge_api::mqtt_topics::ChannelFilter::Command;
-use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
+use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
+use tedge_api::mqtt_topics::ChannelFilter::AnyCommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
 use tedge_api::service_health_topic;
@@ -208,21 +206,9 @@ impl C8yMapperConfig {
         let smartrest_use_operation_id = c8y_config.smartrest.use_operation_id;
         let max_mqtt_payload_size = c8y_config.mapper.mqtt.max_payload_size.0;
 
-        // Add feature topic filters
-        for cmd in [
-            OperationType::Restart,
-            OperationType::SoftwareList,
-            OperationType::SoftwareUpdate,
-        ] {
-            topics.add_all(mqtt_schema.topics(AnyEntity, Command(cmd.clone())));
-            topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(cmd)));
-        }
-
-        let operation_topics = OperationHandler::topic_filter(&capabilities)
-            .into_iter()
-            .map(|(e, c)| mqtt_schema.topics(e, c))
-            .collect();
-        topics.add_all(operation_topics);
+        // Add command topics
+        topics.add_all(mqtt_schema.topics(AnyEntity, AnyCommand));
+        topics.add_all(mqtt_schema.topics(AnyEntity, AnyCommandMetadata));
 
         // Add user configurable external topic filters
         for topic in c8y_config.topics.0.clone() {

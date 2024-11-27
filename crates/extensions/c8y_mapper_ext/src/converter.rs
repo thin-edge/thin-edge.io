@@ -30,7 +30,6 @@ use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message::sanitize_bytes_for_smartrest;
 use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::operations::get_child_ops;
-use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operation;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
@@ -93,6 +92,7 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::create_symlink;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
@@ -716,7 +716,13 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::Custom => {
                 return self
-                    .process_json_custom_operation(operation_id, extras, message)
+                    .process_json_custom_operation(
+                        operation_id,
+                        cmd_id,
+                        device_xid,
+                        extras,
+                        message,
+                    )
                     .await;
             }
         };
@@ -730,6 +736,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let operation = C8yOperation::from_json(message.payload.as_str()?)?;
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+        let device_xid = operation.external_source.external_id;
 
         if self.active_commands.contains(&cmd_id) {
             info!("{cmd_id} is already addressed");
@@ -737,7 +744,13 @@ impl CumulocityConverter {
         }
 
         let result = self
-            .process_json_custom_operation(operation.op_id.clone(), &operation.extras, message)
+            .process_json_custom_operation(
+                operation.op_id.clone(),
+                cmd_id,
+                device_xid,
+                &operation.extras,
+                message,
+            )
             .await;
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
@@ -748,12 +761,16 @@ impl CumulocityConverter {
     async fn process_json_custom_operation(
         &self,
         operation_id: String,
+        cmd_id: String,
+        device_xid: String,
         extras: &HashMap<String, Value>,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let handlers = self
-            .operations
-            .filter_by_topic(&message.topic.name, &self.config.bridge_config.c8y_prefix);
+        let handlers = self.get_operation_handlers(
+            device_xid.as_str(),
+            &message.topic.name,
+            &self.config.bridge_config.c8y_prefix,
+        )?;
 
         if handlers.is_empty() {
             info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
@@ -761,14 +778,49 @@ impl CumulocityConverter {
 
         for (on_fragment, custom_handler) in &handlers {
             if extras.contains_key(on_fragment) {
-                self.execute_custom_operation(custom_handler, message, &operation_id)
-                    .await?;
-                break;
+                if let Some(command_name) = custom_handler.workflow_operation() {
+                    return self.convert_custom_operation_request(
+                        device_xid,
+                        cmd_id,
+                        command_name.to_string(),
+                        custom_handler,
+                        message,
+                    );
+                } else {
+                    self.execute_custom_operation(custom_handler, message, &operation_id)
+                        .await?;
+                    break;
+                }
             }
         }
 
         // MQTT messages are sent during the operation execution
         Ok(vec![])
+    }
+
+    fn get_operation_handlers(
+        &self,
+        device_xid: &str,
+        topic: &str,
+        prefix: &TopicPrefix,
+    ) -> Result<Vec<(String, Operation)>, CumulocityMapperError> {
+        let entity_xid = device_xid.into();
+        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+
+        match target.r#type {
+            EntityType::MainDevice => Ok(self.operations.filter_by_topic(topic, prefix)),
+            EntityType::ChildDevice => {
+                if let Some(operations) = self.children.get(device_xid) {
+                    Ok(operations.filter_by_topic(topic, prefix))
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+            EntityType::Service => {
+                warn!("operation for services are currently unsupported");
+                Ok(Vec::new())
+            }
+        }
     }
 
     async fn execute_custom_operation(
@@ -1303,8 +1355,8 @@ impl CumulocityConverter {
                         self.register_firmware_update_operation(&source)
                     }
                     OperationType::DeviceProfile => self.register_device_profile_operation(&source),
-                    OperationType::Custom(c8y_op_name) => {
-                        self.register_custom_operation(&source, c8y_op_name)
+                    OperationType::Custom(command_name) => {
+                        self.register_custom_operation(&source, command_name)
                     }
                     _ => Ok(vec![]),
                 }
@@ -1556,10 +1608,18 @@ impl CumulocityConverter {
             }
         };
 
-        // Save the operation to the operation directory
         let ops_file = ops_dir.join(c8y_operation_name);
+
+        // Save the operation to the operation directory
         create_directory_with_defaults(&*ops_dir)?;
-        create_file_with_defaults(&ops_file, None)?;
+        if let Some(template_name) = self
+            .operations
+            .get_template_name_by_operation_name(c8y_operation_name)
+        {
+            create_symlink(self.config.ops_dir.join(template_name), &ops_file)?;
+        } else {
+            create_file_with_defaults(&ops_file, None)?;
+        };
 
         let ops_dir = ops_dir.as_std_path();
 
@@ -1610,7 +1670,7 @@ impl CumulocityConverter {
     /// If the supported operation set changed, `Ok(true)` is returned to denote that this change should be sent to the
     /// cloud.
     fn update_operations(&mut self, dir: &Path) -> Result<bool, ConversionError> {
-        let operations = get_operations(dir, &self.config.bridge_config)?;
+        let operations = Operations::try_new(dir, &self.config.bridge_config)?;
         let current_operations = if is_child_operation_path(dir) {
             let child_id = get_child_external_id(dir)?;
             let Some(current_operations) = self.children.get_mut(&child_id) else {
@@ -1621,7 +1681,6 @@ impl CumulocityConverter {
         } else {
             &mut self.operations
         };
-
         let modified = *current_operations != operations;
         *current_operations = operations;
 
@@ -1644,14 +1703,22 @@ impl CumulocityConverter {
     fn register_custom_operation(
         &mut self,
         target: &EntityTopicId,
-        c8y_op_name: &str,
+        command_name: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        match self.register_operation(target, c8y_op_name) {
-            Err(_) => {
-                error!("Fail to register `{c8y_op_name}` operation for entity: {target}");
-                Ok(vec![])
+        if let Some(c8y_op_name) = self
+            .operations
+            .get_operation_name_by_workflow_operation(command_name)
+        {
+            match self.register_operation(target, &c8y_op_name) {
+                Err(_) => {
+                    error!("Fail to register `{c8y_op_name}` operation for entity: {target}");
+                    Ok(vec![])
+                }
+                Ok(messages) => Ok(messages),
             }
-            Ok(messages) => Ok(messages),
+        } else {
+            warn!("Failed to find the template file for `{command_name}`. Registration skipped");
+            Ok(vec![])
         }
     }
 
@@ -3280,6 +3347,19 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_register_operation() {
         let tmp_dir = TempTedgeDir::new();
+        tmp_dir
+            .dir("operations")
+            .dir("c8y")
+            .file("c8y_Operation.template")
+            .with_raw_content(
+                r#"[exec]
+            on_fragment = "c8y_Operation"
+            
+            [exec.workflow]
+            operation = "my_operation"
+            "#,
+            );
+
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
 
@@ -3297,7 +3377,7 @@ pub(crate) mod tests {
         let operation_msg = MqttMessage::new(&operation_topic, "{}");
 
         let msgs = converter.convert(&operation_msg).await;
-        assert_messages_matching(&msgs, [("c8y/s/us", "114,my_operation".into())]);
+        assert_messages_matching(&msgs, [("c8y/s/us", "114,c8y_Operation".into())]);
 
         // child device command
         let reg_message = MqttMessage::new(
@@ -3326,7 +3406,7 @@ pub(crate) mod tests {
         let operation_msg = MqttMessage::new(&operation_topic, "{}");
 
         let msgs = converter.convert(&operation_msg).await;
-        assert_messages_matching(&msgs, [("c8y/s/us/child0", "114,my_operation".into())]);
+        assert_messages_matching(&msgs, [("c8y/s/us/child0", "114,c8y_Operation".into())]);
 
         // service command
         let reg_message = MqttMessage::new(
