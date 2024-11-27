@@ -70,9 +70,13 @@ impl BuildCommand for TEdgeCertCli {
             }
 
             TEdgeCertCli::CreateCsr { id, output_path } => {
+                // Use the current device id if no id is provided
+                let id = match id {
+                    Some(id) => id,
+                    None => config.device.id.try_read(&config)?.clone(),
+                };
                 let cmd = CreateCsrCmd {
                     id,
-                    cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
                     // Use output file instead of csr_path from tedge config if provided
                     csr_path: output_path.unwrap_or_else(|| config.device.csr_path.clone()),

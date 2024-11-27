@@ -1,4 +1,3 @@
-use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
@@ -12,9 +11,8 @@ use certificate::NewCertificateConfig;
 
 /// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
-    /// The device identifier (either explicitly given or extracted from a previous certificate)
-    pub id: Option<String>,
-    pub cert_path: Utf8PathBuf,
+    /// The device identifier
+    pub id: String,
 
     /// The path where the device private key will be stored
     pub key_path: Utf8PathBuf,
@@ -45,16 +43,12 @@ impl CreateCsrCmd {
         &self,
         config: &NewCertificateConfig,
     ) -> Result<(), CertError> {
-        // Use id of public certificate if not provided
-        let id = match &self.id {
-            Some(id) => id.clone(),
-            None => cn_of_self_signed_certificate(&self.cert_path)?,
-        };
+        let id = &self.id;
         let csr_path = &self.csr_path;
         let key_path = &self.key_path;
 
         let previous_key = reuse_private_key(key_path).unwrap_or(KeyKind::New);
-        let cert = KeyCertPair::new_certificate_sign_request(config, &id, &previous_key)?;
+        let cert = KeyCertPair::new_certificate_sign_request(config, id, &previous_key)?;
 
         if let KeyKind::New = previous_key {
             persist_new_private_key(
@@ -84,14 +78,12 @@ mod tests {
     #[test]
     fn create_signing_request_when_private_key_does_not_exist() {
         let dir = tempdir().unwrap();
-        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let csr_path = temp_file_path(&dir, "my-device-csr.csr");
         let id = "my-device-id";
 
         let cmd = CreateCsrCmd {
-            id: Some(String::from(id)),
-            cert_path: cert_path.clone(),
+            id: id.to_string(),
             key_path: key_path.clone(),
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
@@ -135,8 +127,7 @@ mod tests {
         let first_x509_cert = first_pem.parse_x509().expect("X.509: decoding DER failed");
 
         let cmd = CreateCsrCmd {
-            id: Some(String::from(id)),
-            cert_path: cert_path.clone(),
+            id: id.to_string(),
             key_path: key_path.clone(),
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
