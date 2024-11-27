@@ -2237,6 +2237,87 @@ async fn mapper_converts_custom_operation_for_main_device() {
 }
 
 #[tokio::test]
+async fn mapper_converts_custom_operation_with_combined_input() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_CombinedInput.template")
+        .with_raw_content(
+            r#"[exec]
+            topic = "c8y/devicecontrol/notifications"
+            on_fragment = "c8y_CombinedInput"
+
+            [exec.workflow]
+            operation = "command"
+            input.x = "${.payload.c8y_CombinedInput.inner.x}"
+            input.y = "${.payload.c8y_CombinedInput.inner.y}"
+            input.z = { foo = "bar" }
+            "#,
+        );
+
+    let config = test_mapper_config(&ttd);
+
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // indicate that main device supports the operation
+    let capability_message =
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/command"), "{}");
+
+    mqtt.send(capability_message).await.unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_CombinedInput")]).await;
+
+    assert!(ttd
+        .path()
+        .join("operations/c8y/c8y_CombinedInput")
+        .is_symlink());
+
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+                 "status":"PENDING",
+                 "id": "1234",
+                 "c8y_CombinedInput": {
+                     "text": "do something",
+                     "inner": {
+                        "x": "x value",
+                        "y": 42,
+                        "z": "z unused value",
+                     },
+                 },
+            "externalSource":{
+           "externalId":"test-device",
+           "type":"c8y_Serial"
+        }
+             })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/main///cmd/command/c8y-mapper-1234",
+            json!({
+                "status": "init",
+                "x": "x value",
+                "y": 42,
+                "z": {
+                    "foo": "bar"
+                }
+            }),
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn mapper_converts_custom_operation_for_main_device_without_workflow_input() {
     let ttd = TempTedgeDir::new();
     ttd.dir("operations")

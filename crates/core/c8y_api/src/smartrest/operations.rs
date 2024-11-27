@@ -194,11 +194,11 @@ impl Operation {
         })
     }
 
-    pub fn workflow_input(&self) -> Option<&str> {
+    pub fn workflow_input(&self) -> Option<&serde_json::Value> {
         self.exec().and_then(|exec| {
             exec.workflow
                 .as_ref()
-                .and_then(|workflow| workflow.input.as_deref())
+                .and_then(|workflow| workflow.input.as_ref())
         })
     }
 
@@ -349,7 +349,7 @@ where
 #[serde(rename_all = "snake_case")]
 struct ExecWorkflow {
     operation: Option<String>,
-    input: Option<String>,
+    input: Option<serde_json::Value>,
 }
 
 fn get_operations(
