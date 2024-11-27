@@ -555,6 +555,7 @@ define_tedge_config! {
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
             },
+
             client: {
                 /// The address of the host on which the local Cumulocity HTTP Proxy is running, used by the Cumulocity
                 /// mapper.
@@ -564,7 +565,8 @@ define_tedge_config! {
 
                 /// The port number on the remote host on which the local Cumulocity HTTP Proxy is running, used by the
                 /// Cumulocity mapper.
-                #[tedge_config(example = "8001", default(value = 8001u16))]
+                #[tedge_config(example = "8001")]
+                #[tedge_config(default(from_key = "c8y.proxy.bind.port"))]
                 port: u16,
             },
 
