@@ -13,15 +13,20 @@
 //! For known c8y operations, the file can be empty. For custom c8y operations, the file should contain a
 //! [`OnMessageExec`] section describing how c8y mapper should convert this c8y operation to a local thin-edge command.
 
-use crate::json_c8y_deserializer::C8yDeviceControlTopic;
-use crate::smartrest::error::OperationsError;
-use crate::smartrest::smartrest_serializer::declare_supported_operations;
+use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
+use c8y_api::smartrest::payload::SmartrestPayload;
+use c8y_api::smartrest::smartrest_serializer::declare_supported_operations;
+use c8y_api::smartrest::topic::C8yTopic;
+use tedge_api::substitution::Record;
+use tedge_config::TopicPrefix;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::file;
+
 use anyhow::ensure;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use mqtt_channel::MqttMessage;
-use mqtt_channel::TopicFilter;
 use serde::Deserialize;
 use serde::Deserializer;
 use std::collections::BTreeMap;
@@ -32,14 +37,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tedge_api::substitution::Record;
-use tedge_config::TopicPrefix;
-use tedge_utils::file;
 use tracing::error;
 use tracing::warn;
-
-use super::payload::SmartrestPayload;
-use super::topic::C8yTopic;
 
 const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
 const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -418,30 +417,6 @@ impl Operations {
         declare_supported_operations(&ops)
     }
 
-    /// Return operation name if `workflow.operation` matches
-    pub fn get_operation_name_by_workflow_operation(&self, command_name: &str) -> Option<String> {
-        let matching_templates: Vec<&Operation> = self
-            .templates
-            .iter()
-            .filter(|template| {
-                template
-                    .workflow_operation()
-                    .is_some_and(|operation| operation.eq(command_name))
-            })
-            .collect();
-
-        if matching_templates.len() > 1 {
-            warn!(
-                "Found more than one template with the same `workflow.operation` field. Picking {}",
-                matching_templates.first().unwrap().name
-            );
-        }
-
-        matching_templates
-            .first()
-            .and_then(|template| template.on_fragment())
-    }
-
     pub fn get_template_name_by_operation_name(&self, operation_name: &str) -> Option<&str> {
         self.templates
             .iter()
@@ -791,6 +766,27 @@ pub enum InvalidCustomOperationHandler {
 
     #[error("'command' should not be provided with 'workflow.operation' or 'workflow.input'")]
     CommandExists,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OperationsError {
+    #[error("Failed to read directory: {dir}")]
+    ReadDirError { dir: PathBuf },
+
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error("Cannot extract the operation name from the path: {0}")]
+    InvalidOperationName(PathBuf),
+
+    #[error("Error while parsing operation file: '{0}': {1}.")]
+    TomlError(PathBuf, #[source] toml::de::Error),
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromMqttError(#[from] tedge_mqtt_ext::MqttError),
 }
 
 #[cfg(test)]

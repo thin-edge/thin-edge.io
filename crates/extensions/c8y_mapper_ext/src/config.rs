@@ -1,10 +1,10 @@
+use crate::supported_operations::C8yPrefix;
+use crate::supported_operations::Operations;
+use crate::supported_operations::OperationsError;
 use crate::Capabilities;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
-use c8y_api::smartrest::error::OperationsError;
-use c8y_api::smartrest::operations::C8yPrefix;
-use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::C8YHttpConfig;
 use camino::Utf8Path;
