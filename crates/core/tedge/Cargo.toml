@@ -29,6 +29,7 @@ pad = { workspace = true }
 reqwest = { workspace = true, features = [
     "blocking",
     "json",
+    "multipart",
     "rustls-tls-native-roots",
     "stream",
 ] }

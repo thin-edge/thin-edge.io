@@ -94,14 +94,15 @@ impl TempTedgeDir {
 }
 
 impl TempTedgeFile {
-    pub fn with_raw_content(self, content: &str) {
+    pub fn with_raw_content(self, content: &str) -> Self {
         let mut file = OpenOptions::new()
             .write(true)
             .create(false)
-            .open(self.file_path)
+            .open(self.file_path.clone())
             .unwrap();
         file.write_all(content.as_bytes()).unwrap();
         file.sync_all().unwrap();
+        self
     }
 
     pub fn with_toml_content(self, content: toml::Table) {

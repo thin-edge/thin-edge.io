@@ -13,6 +13,7 @@ use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
 
 use self::init::TEdgeInitCmd;
+mod c8y;
 mod certificate;
 mod common;
 pub mod config;
@@ -84,6 +85,10 @@ pub enum TEdgeOpt {
         #[clap(long)]
         relative_links: bool,
     },
+
+    /// Interact with Cumulocity
+    #[clap(subcommand)]
+    C8y(c8y::C8yCmd),
 
     /// Create and manage device certificate
     #[clap(subcommand)]
@@ -161,6 +166,7 @@ impl BuildCommand for TEdgeOpt {
                 relative_links,
                 context,
             ))),
+            TEdgeOpt::C8y(opt) => opt.build_command(context),
             TEdgeOpt::Cert(opt) => opt.build_command(context),
             TEdgeOpt::Config(opt) => opt.build_command(context),
             TEdgeOpt::Connect(opt) => opt.build_command(context),

@@ -41,4 +41,7 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     FromAnyhow(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    FromC8yEndPointConfigError(#[from] c8y_api::http_proxy::C8yEndPointConfigError),
 }
