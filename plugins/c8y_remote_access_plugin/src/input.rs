@@ -135,7 +135,7 @@ impl RemoteAccessConnect {
                 command.clear();
                 stdin.read_line(&mut command).unwrap();
             }
-            dbg!(c8y_profile, command)
+            (c8y_profile, command)
         } else {
             (None, message.to_string())
         };
