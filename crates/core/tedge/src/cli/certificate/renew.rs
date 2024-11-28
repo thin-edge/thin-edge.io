@@ -1,16 +1,20 @@
 use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
-use crate::bridge::BridgeLocation;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use crate::CreateCertCmd;
+use crate::override_public_key;
+use crate::reuse_private_key;
 use camino::Utf8PathBuf;
+use certificate::KeyCertPair;
 use certificate::NewCertificateConfig;
 
+/// Renew the self-signed device certificate
 pub struct RenewCertCmd {
+    /// The path of the certificate to be updated
     pub cert_path: Utf8PathBuf,
+
+    /// The path of the private key to re-use
     pub key_path: Utf8PathBuf,
-    pub bridge_location: BridgeLocation,
 }
 
 impl Command for RenewCertCmd {
@@ -28,28 +32,30 @@ impl Command for RenewCertCmd {
 
 impl RenewCertCmd {
     fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
-        let id = cn_of_self_signed_certificate(&self.cert_path)?;
+        let cert_path = &self.cert_path;
+        let key_path = &self.key_path;
+        let id = cn_of_self_signed_certificate(cert_path)?;
 
         // Remove only certificate
         std::fs::remove_file(&self.cert_path)
             .map_err(|e| CertError::IoError(e).cert_context(self.cert_path.clone()))?;
 
         // Re-create the certificate from the key, with new validity
-        let create_cmd = CreateCertCmd {
-            id,
-            cert_path: self.cert_path.clone(),
-            key_path: self.key_path.clone(),
-            csr_path: None,
-            bridge_location: self.bridge_location,
-        };
+        let previous_key = reuse_private_key(key_path)
+            .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
+        let cert = KeyCertPair::new_selfsigned_certificate(config, &id, &previous_key)?;
 
-        create_cmd.renew_test_certificate(config)
+        override_public_key(cert_path, cert.certificate_pem_string()?)
+            .map_err(|err| err.cert_context(cert_path.clone()))?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CreateCertCmd;
+    use assert_matches::assert_matches;
     use std::path::Path;
     use std::thread::sleep;
     use std::time::Duration;
@@ -65,8 +71,8 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            csr_path: None,
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         // First create both cert and key
@@ -85,7 +91,6 @@ mod tests {
         let cmd = RenewCertCmd {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
         };
         cmd.renew_test_certificate(&NewCertificateConfig::default())
             .unwrap();
@@ -109,6 +114,23 @@ mod tests {
             second_x509_cert.issuer().to_string(),
             "CN=my-device-id, O=Thin Edge, OU=Test Device"
         );
+    }
+
+    #[test]
+    fn renew_certificate_without_key() {
+        let dir = tempdir().unwrap();
+        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let key_path = Utf8PathBuf::from("/non/existent/key/path");
+
+        let cmd = RenewCertCmd {
+            cert_path,
+            key_path,
+        };
+
+        let cert_error = cmd
+            .renew_test_certificate(&NewCertificateConfig::default())
+            .unwrap_err();
+        assert_matches!(cert_error, CertError::CertificateNotFound { .. });
     }
 
     fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {

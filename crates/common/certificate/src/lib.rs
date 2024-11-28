@@ -8,7 +8,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use time::Duration;
 use time::OffsetDateTime;
-use zeroize::Zeroizing;
+pub use zeroize::Zeroizing;
 #[cfg(feature = "reqwest")]
 mod cloud_root_certificate;
 #[cfg(feature = "reqwest")]
@@ -124,6 +124,20 @@ impl KeyCertPair {
         let not_before = today - Duration::days(1); // Ensure the certificate is valid today
         let params =
             Self::create_selfsigned_certificate_parameters(config, id, key_kind, not_before)?;
+
+        Ok(KeyCertPair {
+            certificate: Zeroizing::new(Certificate::from_params(params)?),
+        })
+    }
+
+    pub fn new_certificate_sign_request(
+        config: &NewCertificateConfig,
+        id: &str,
+        key_kind: &KeyKind,
+    ) -> Result<KeyCertPair, CertificateError> {
+        // Create Certificate without `not_before` and `not_after` fields
+        // as rcgen library will not parse it for certificate signing request
+        let params = Self::create_csr_parameters(config, id, key_kind)?;
         Ok(KeyCertPair {
             certificate: Zeroizing::new(Certificate::from_params(params)?),
         })
@@ -135,48 +149,19 @@ impl KeyCertPair {
         key_kind: &KeyKind,
         not_before: OffsetDateTime,
     ) -> Result<CertificateParams, CertificateError> {
-        KeyCertPair::check_identifier(id, config.max_cn_size)?;
-        let mut distinguished_name = rcgen::DistinguishedName::new();
-        distinguished_name.push(rcgen::DnType::CommonName, id);
-        distinguished_name.push(rcgen::DnType::OrganizationName, &config.organization_name);
-        distinguished_name.push(
-            rcgen::DnType::OrganizationalUnitName,
-            &config.organizational_unit_name,
-        );
-
-        let mut params = CertificateParams::default();
-
-        params.distinguished_name = distinguished_name;
+        let mut params = Self::create_csr_parameters(config, id, key_kind)?;
 
         let not_after = not_before + Duration::days(config.validity_period_days.into());
         params.not_before = not_before;
         params.not_after = not_after;
 
-        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained); // IsCa::SelfSignedOnly is rejected by C8Y
-
-        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
-
-        if let KeyKind::Reuse { keypair_pem } = key_kind {
-            params.key_pair = Some(KeyPair::from_pem(keypair_pem)?);
-        }
+        // IsCa::SelfSignedOnly is rejected by C8Y with "422 Unprocessable Entity"
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
 
         Ok(params)
     }
 
-    // Create Certificate without `not_before` and `not_after` fields
-    // as rcgen library will not parse it for certificate signing request
-    pub fn new_certificate_sign_request(
-        config: &NewCertificateConfig,
-        id: &str,
-        key_kind: &KeyKind,
-    ) -> Result<KeyCertPair, CertificateError> {
-        let params = Self::create_certificate_sign_request_parameters(config, id, key_kind)?;
-        Ok(KeyCertPair {
-            certificate: Zeroizing::new(Certificate::from_params(params)?),
-        })
-    }
-
-    fn create_certificate_sign_request_parameters(
+    fn create_csr_parameters(
         config: &NewCertificateConfig,
         id: &str,
         key_kind: &KeyKind,
@@ -193,7 +178,8 @@ impl KeyCertPair {
         let mut params = CertificateParams::default();
         params.distinguished_name = distinguished_name;
 
-        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256; // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+        // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 
         if let KeyKind::Reuse { keypair_pem } = key_kind {
             params.key_pair = Some(KeyPair::from_pem(keypair_pem)?);
@@ -464,9 +450,8 @@ mod tests {
         let config = NewCertificateConfig::default();
         let id = "some-id";
 
-        let params =
-            KeyCertPair::create_certificate_sign_request_parameters(&config, id, &KeyKind::New)
-                .expect("Fail to get a certificate parameters");
+        let params = KeyCertPair::create_csr_parameters(&config, id, &KeyKind::New)
+            .expect("Fail to get a certificate parameters");
 
         let keypair = KeyCertPair {
             certificate: Zeroizing::new(

@@ -1,4 +1,3 @@
-use crate::bridge::BridgeLocation;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
@@ -52,10 +51,10 @@ pub enum TEdgeCertCli {
 impl BuildCommand for TEdgeCertCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.load_config()?;
-        let bridge_location = if config.mqtt.bridge.built_in {
-            BridgeLocation::BuiltIn
+        let (user, group) = if config.mqtt.bridge.built_in {
+            ("tedge", "tedge")
         } else {
-            BridgeLocation::Mosquitto
+            (crate::BROKER_USER, crate::BROKER_USER)
         };
 
         let cmd = match self {
@@ -64,20 +63,25 @@ impl BuildCommand for TEdgeCertCli {
                     id,
                     cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
-                    csr_path: None,
-                    bridge_location,
+                    user: user.to_owned(),
+                    group: group.to_owned(),
                 };
                 cmd.into_boxed()
             }
 
             TEdgeCertCli::CreateCsr { id, output_path } => {
+                // Use the current device id if no id is provided
+                let id = match id {
+                    Some(id) => id,
+                    None => config.device.id.try_read(&config)?.clone(),
+                };
                 let cmd = CreateCsrCmd {
                     id,
-                    cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
                     // Use output file instead of csr_path from tedge config if provided
                     csr_path: output_path.unwrap_or_else(|| config.device.csr_path.clone()),
-                    bridge_location,
+                    user: user.to_owned(),
+                    group: group.to_owned(),
                 };
                 cmd.into_boxed()
             }
@@ -123,7 +127,6 @@ impl BuildCommand for TEdgeCertCli {
                 let cmd = RenewCertCmd {
                     cert_path: config.device.cert_path.clone(),
                     key_path: config.device.key_path.clone(),
-                    bridge_location,
                 };
                 cmd.into_boxed()
             }

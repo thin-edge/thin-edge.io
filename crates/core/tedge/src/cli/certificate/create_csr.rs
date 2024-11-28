@@ -1,18 +1,28 @@
-use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
-use crate::bridge::BridgeLocation;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use crate::CreateCertCmd;
+use crate::override_public_key;
+use crate::persist_new_private_key;
+use crate::reuse_private_key;
 use camino::Utf8PathBuf;
+use certificate::KeyCertPair;
+use certificate::KeyKind;
 use certificate::NewCertificateConfig;
 
+/// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
-    pub id: Option<String>,
-    pub cert_path: Utf8PathBuf,
+    /// The device identifier
+    pub id: String,
+
+    /// The path where the device private key will be stored
     pub key_path: Utf8PathBuf,
+
+    /// The path where the device CSR will be stored
     pub csr_path: Utf8PathBuf,
-    pub bridge_location: BridgeLocation,
+
+    /// The owner of the private key
+    pub user: String,
+    pub group: String,
 }
 
 impl Command for CreateCsrCmd {
@@ -33,21 +43,25 @@ impl CreateCsrCmd {
         &self,
         config: &NewCertificateConfig,
     ) -> Result<(), CertError> {
-        // Use id of public certificate if not provided
-        let id = match &self.id {
-            Some(id) => id.clone(),
-            None => cn_of_self_signed_certificate(&self.cert_path)?,
-        };
+        let id = &self.id;
+        let csr_path = &self.csr_path;
+        let key_path = &self.key_path;
 
-        let create_cmd = CreateCertCmd {
-            id,
-            cert_path: self.cert_path.clone(),
-            key_path: self.key_path.clone(),
-            csr_path: Some(self.csr_path.clone()),
-            bridge_location: self.bridge_location,
-        };
+        let previous_key = reuse_private_key(key_path).unwrap_or(KeyKind::New);
+        let cert = KeyCertPair::new_certificate_sign_request(config, id, &previous_key)?;
 
-        create_cmd.create_certificate_signing_request(config)
+        if let KeyKind::New = previous_key {
+            persist_new_private_key(
+                key_path,
+                cert.private_key_pem_string()?,
+                &self.user,
+                &self.group,
+            )
+            .map_err(|err| err.key_context(key_path.clone()))?;
+        }
+        override_public_key(csr_path, cert.certificate_signing_request_string()?)
+            .map_err(|err| err.cert_context(csr_path.clone()))?;
+        Ok(())
     }
 }
 
@@ -64,17 +78,16 @@ mod tests {
     #[test]
     fn create_signing_request_when_private_key_does_not_exist() {
         let dir = tempdir().unwrap();
-        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let csr_path = temp_file_path(&dir, "my-device-csr.csr");
         let id = "my-device-id";
 
         let cmd = CreateCsrCmd {
-            id: Some(String::from(id)),
-            cert_path: cert_path.clone(),
+            id: id.to_string(),
             key_path: key_path.clone(),
             csr_path: csr_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         assert_matches!(
@@ -98,8 +111,8 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            csr_path: None,
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         // create private key and public cert with standard command
@@ -114,11 +127,11 @@ mod tests {
         let first_x509_cert = first_pem.parse_x509().expect("X.509: decoding DER failed");
 
         let cmd = CreateCsrCmd {
-            id: Some(String::from(id)),
-            cert_path: cert_path.clone(),
+            id: id.to_string(),
             key_path: key_path.clone(),
             csr_path: csr_path.clone(),
-            bridge_location: BridgeLocation::Mosquitto,
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
         };
 
         // create csr using existing private key and device_id from public cert
