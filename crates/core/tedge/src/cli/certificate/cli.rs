@@ -183,7 +183,6 @@ impl BuildCommand for TEdgeCertCli {
                 };
                 let cmd = c8y::RenewCertCmd {
                     device_id: c8y_config.device.id()?.to_string(),
-                    c8y_mqtt: c8y_config.mqtt.or_err()?.to_owned(),
                     c8y_url: c8y_config.http.or_err()?.to_owned(),
                     root_certs: config.cloud_root_certs(),
                     cert_path: c8y_config.device.cert_path.clone(),
