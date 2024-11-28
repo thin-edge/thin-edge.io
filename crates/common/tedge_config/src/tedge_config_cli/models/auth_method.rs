@@ -57,3 +57,22 @@ impl AuthMethod {
         }
     }
 }
+
+pub fn try_get_device_id_from_credentials_file(credentials_path: &Utf8Path) -> Option<String> {
+    if let Ok(contents) = std::fs::read_to_string(credentials_path) {
+        if let Ok(credentials) = toml::from_str::<CredentialsFile>(&contents) {
+            return Some(credentials.c8y.device_id);
+        }
+    }
+    None
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CredentialsFile {
+    c8y: C8y,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct C8y {
+    device_id: String,
+}
