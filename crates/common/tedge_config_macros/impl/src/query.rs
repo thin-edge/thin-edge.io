@@ -564,16 +564,18 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .field()
                 .expect("Back of path is guaranteed to be a field");
             let segments = generate_field_accessor(path, "try_get", true);
+            let mut parent_segments = generate_field_accessor(path, "try_get", true).collect::<Vec<_>>();
+            parent_segments.remove(parent_segments.len() - 1);
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             let match_variant = configuration_key.match_read_write;
             if field.read_only().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
                     parse_quote! {
-                        ReadableKey::#match_variant => Ok(self.#(#segments).*.try_read(self)?#to_string),
+                        ReadableKey::#match_variant => Ok(self.#(#segments).*()?#to_string),
                     }
                 } else {
                     parse_quote! {
-                        ReadableKey::#match_variant => Ok(self.#(#segments).*.read(self)#to_string),
+                        ReadableKey::#match_variant => Ok(self.#(#segments).*()#to_string),
                     }
                 }
             } else if field.has_guaranteed_default() {

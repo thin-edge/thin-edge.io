@@ -23,6 +23,8 @@ pub enum TEdgeCertCli {
         /// The device identifier to be used as the common name for the certificate
         #[clap(long = "device-id")]
         id: String,
+
+        cloud: Option<tedge_config::Cloud>,
     },
 
     /// Create a certificate signing request
@@ -34,16 +36,18 @@ pub enum TEdgeCertCli {
         /// Path where a Certificate signing request will be stored
         #[clap(long = "output-path")]
         output_path: Option<Utf8PathBuf>,
+
+        cloud: Option<tedge_config::Cloud>,
     },
 
     /// Renew the device certificate
-    Renew,
+    Renew { cloud: Option<tedge_config::Cloud> },
 
     /// Show the device certificate, if any
-    Show,
+    Show { cloud: Option<tedge_config::Cloud> },
 
     /// Remove the device certificate
-    Remove,
+    Remove { cloud: Option<tedge_config::Cloud> },
 
     /// Upload root certificate
     Upload(UploadCertCli),
@@ -59,26 +63,30 @@ impl BuildCommand for TEdgeCertCli {
         };
 
         let cmd = match self {
-            TEdgeCertCli::Create { id } => {
+            TEdgeCertCli::Create { id, cloud } => {
                 let cmd = CreateCertCmd {
                     id,
-                    cert_path: config.device.cert_path.clone(),
-                    key_path: config.device.key_path.clone(),
+                    cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
+                    key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     user: user.to_owned(),
                     group: group.to_owned(),
                 };
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::CreateCsr { id, output_path } => {
+            TEdgeCertCli::CreateCsr {
+                id,
+                output_path,
+                cloud,
+            } => {
                 // Use the current device id if no id is provided
                 let id = match id {
                     Some(id) => id,
-                    None => config.device.id.try_read(&config)?.clone(),
+                    None => config.device.id()?.clone(),
                 };
                 let cmd = CreateCsrCmd {
                     id,
-                    key_path: config.device.key_path.clone(),
+                    key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     // Use output file instead of csr_path from tedge config if provided
                     csr_path: output_path.unwrap_or_else(|| config.device.csr_path.clone()),
                     user: user.to_owned(),
@@ -87,36 +95,34 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Show => {
+            TEdgeCertCli::Show { cloud } => {
                 let cmd = ShowCertCmd {
-                    cert_path: config.device.cert_path.clone(),
+                    cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                 };
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Remove => {
+            TEdgeCertCli::Remove { cloud } => {
                 let cmd = RemoveCertCmd {
-                    cert_path: config.device.cert_path.clone(),
-                    key_path: config.device.key_path.clone(),
+                    cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
+                    key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                 };
                 cmd.into_boxed()
             }
 
             TEdgeCertCli::Upload(cmd) => {
                 let cmd = match cmd.cloud {
-                    Cloud::C8y(profile) => UploadCertCmd {
-                        device_id: config.device.id.try_read(&config)?.clone(),
-                        path: config.device.cert_path.clone(),
-                        host: config
-                            .c8y
-                            .try_get(profile.as_deref())?
-                            .http
-                            .or_err()?
-                            .to_owned(),
-                        cloud_root_certs: config.cloud_root_certs(),
-                        username: cmd.username,
-                        password: cmd.password,
-                    },
+                    Cloud::C8y(profile) => {
+                        let c8y = config.c8y.try_get(profile.as_deref())?;
+                        UploadCertCmd {
+                            device_id: c8y.device.id()?.clone(),
+                            path: c8y.device.cert_path.clone(),
+                            host: c8y.http.or_err()?.to_owned(),
+                            cloud_root_certs: config.cloud_root_certs(),
+                            username: cmd.username,
+                            password: cmd.password,
+                        }
+                    }
                     cloud => {
                         return Err(anyhow!(
                             "Uploading certificates via the tedge cli isn't supported for {cloud}"
@@ -126,10 +132,10 @@ impl BuildCommand for TEdgeCertCli {
                 };
                 cmd.into_boxed()
             }
-            TEdgeCertCli::Renew => {
+            TEdgeCertCli::Renew { cloud } => {
                 let cmd = RenewCertCmd {
-                    cert_path: config.device.cert_path.clone(),
-                    key_path: config.device.key_path.clone(),
+                    cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
+                    key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                 };
                 cmd.into_boxed()
             }

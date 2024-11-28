@@ -240,8 +240,24 @@ mod tests {
         };
 
         assert_eq!(
-            RemoteAccessConnect::deserialize_smartrest(input, Cursor::new("")).unwrap(),
+            RemoteAccessConnect::deserialize_smartrest("-", Cursor::new(input)).unwrap(),
             (expected, Some("profile".parse().unwrap()))
+        );
+    }
+
+    #[test]
+    fn ignores_profile_if_none_exists() {
+        let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
+        let expected = RemoteAccessConnect {
+            device_id: "jrh-rc-test0".into(),
+            host: "127.0.0.1".into(),
+            port: 22,
+            key: "cd8fc847-f4f2-4712-8dd7-31496aef0a7d".into(),
+        };
+
+        assert_eq!(
+            RemoteAccessConnect::deserialize_smartrest("-", Cursor::new(input)).unwrap(),
+            (expected, None)
         );
     }
 

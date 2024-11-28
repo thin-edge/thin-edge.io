@@ -30,4 +30,4 @@ Custom Setup
     Start Service    ssh
     Execute Command    sed -i 's/\\[c8y\\]/\[c8y.profiles.test\]/g' /etc/tedge/tedge.toml
     Execute Command    tedge disconnect c8y
-    Execute Command    tedge connect c8y@test        timeout=0
+    Execute Command    tedge connect c8y@test    timeout=0

@@ -182,11 +182,23 @@ impl ReadOnlyField {
                 .filter_map(PathItem::as_static)
                 .map(|p| p.to_string().to_upper_camel_case())
                 .collect::<Vec<_>>()
-                .join("."),
+                .join(""),
             self.rename()
                 .map(<_>::to_owned)
                 .unwrap_or_else(|| self.ident.to_string())
                 .to_upper_camel_case()
+        )
+    }
+
+    pub fn parent_name(&self, parents: &[PathItem]) -> syn::Ident {
+        format_ident!(
+            "TEdgeConfigReader{}",
+            parents
+                .iter()
+                .filter_map(PathItem::as_static)
+                .map(|p| p.to_string().to_upper_camel_case())
+                .collect::<Vec<_>>()
+                .join(""),
         )
     }
 

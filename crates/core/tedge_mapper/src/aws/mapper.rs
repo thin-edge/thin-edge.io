@@ -40,18 +40,18 @@ impl TEdgeComponent for AwsMapper {
 
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         if tedge_config.mqtt.bridge.built_in {
-            let device_id = tedge_config.device.id.try_read(&tedge_config)?;
+            let device_id = aws_config.device.id()?;
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
             let rules = built_in_bridge_rules(device_id, prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
-                tedge_config.device.id.try_read(&tedge_config)?,
+                device_id,
                 aws_config.url.or_config_not_set()?.to_string(),
                 8883,
             );
             cloud_config.set_clean_session(false);
-            use_key_and_cert(&mut cloud_config, &aws_config.root_cert_path, &tedge_config)?;
+            use_key_and_cert(&mut cloud_config, aws_config)?;
 
             let bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_name);

@@ -43,7 +43,7 @@ impl TEdgeComponent for AzureMapper {
         if tedge_config.mqtt.bridge.built_in {
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
-            let remote_clientid = tedge_config.device.id.try_read(&tedge_config)?;
+            let remote_clientid = az_config.device.id()?;
             let rules = built_in_bridge_rules(remote_clientid, prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
@@ -59,7 +59,7 @@ impl TEdgeComponent for AzureMapper {
                 ),
                 "",
             );
-            use_key_and_cert(&mut cloud_config, &az_config.root_cert_path, &tedge_config)?;
+            use_key_and_cert(&mut cloud_config, az_config)?;
 
             let built_in_bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic =
