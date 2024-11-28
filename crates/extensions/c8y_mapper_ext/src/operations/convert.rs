@@ -416,7 +416,7 @@ impl CumulocityConverter {
         })?;
 
         let payload: Value = if let Some(workflow_input) = custom_handler.workflow_input() {
-            let excerpt = StateExcerpt::from(Value::String(workflow_input.to_string()));
+            let excerpt = StateExcerpt::from(workflow_input.clone());
             match excerpt.extract_value_from(&state) {
                 Value::Object(obj) => Value::Object(obj),
                 _ => {
