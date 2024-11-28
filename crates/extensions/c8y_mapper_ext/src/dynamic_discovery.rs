@@ -1,4 +1,4 @@
-use crate::supported_operations::is_valid_operation_name;
+use crate::supported_operations::operation::is_valid_operation_name;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::Path;
