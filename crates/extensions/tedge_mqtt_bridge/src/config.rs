@@ -15,9 +15,9 @@ pub fn use_key_and_cert(
     cloud_config: &dyn CloudConfig,
 ) -> anyhow::Result<()> {
     let tls_config = create_tls_config(
-        &cloud_config.root_cert_path(),
-        &cloud_config.device_key_path(),
-        &cloud_config.device_cert_path(),
+        cloud_config.root_cert_path(),
+        cloud_config.device_key_path(),
+        cloud_config.device_cert_path(),
     )?;
     config.set_transport(Transport::tls_with_config(tls_config.into()));
     Ok(())

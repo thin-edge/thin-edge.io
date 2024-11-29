@@ -1363,7 +1363,7 @@ fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
 }
 
 fn device_id_from_cert(cert_path: &Utf8Path) -> Result<String, ReadError> {
-    let pem = PemCertificate::from_pem_file(&cert_path)
+    let pem = PemCertificate::from_pem_file(cert_path)
         .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.to_cow_str(), err))?;
     let device_id = pem
         .subject_common_name()
