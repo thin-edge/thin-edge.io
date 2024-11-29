@@ -1,4 +1,5 @@
 use crate::bridge::aws::BridgeConfigAwsParams;
+use std::hash::Hash;
 use crate::bridge::azure::BridgeConfigAzureParams;
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
@@ -25,7 +26,9 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use yansi::Paint as _;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::path::Path;
@@ -87,6 +90,8 @@ impl ConnectCommand {
         let config = &self.config;
         let bridge_config = bridge_config(config, &self.cloud)?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
+
+        validate_config(config, &self.cloud)?;
 
         if self.is_test_connection {
             // If the bridge is part of the mapper, the bridge config file won't exist
@@ -270,6 +275,49 @@ impl ConnectCommand {
             );
         }
     }
+}
+
+// TODO unit test this
+fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
+    match cloud {
+        MaybeBorrowedCloud::Aws(_) => {
+            let profiles = config.aws.keys().map(|s| Some(s?.to_string())).collect::<Vec<_>>();
+            disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
+        }
+        MaybeBorrowedCloud::Azure(_) => {
+            let profiles = config.az.keys().map(|s| Some(s?.to_string())).collect::<Vec<_>>();
+            disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
+        }
+        MaybeBorrowedCloud::C8y(_) => {
+            let profiles = config.c8y.keys().map(|s| Some(s?.to_string())).collect::<Vec<_>>();
+            disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
+            disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
+        }
+    }
+    Ok(())
+}
+
+fn disallow_matching_configurations(config: &TEdgeConfig, configuration: fn(Option<String>) -> ReadableKey, profiles: &[Option<String>]) -> anyhow::Result<()> {
+    let keys = profiles.into_iter().cloned().map(configuration).collect::<Vec<_>>();
+    let entries = keys.into_iter().filter_map(|key| {
+        let value = config.read_string(&key).ok()?;
+        Some((key, value))
+});
+    if let Some(matches) = find_matching(entries) {
+        let keys = matches.iter().map(|k| format!("{}", k.yellow().bold())).collect::<Vec<_>>().join(", ");
+        
+        bail!("The configurations: {keys} should be set to diffrent values, but are currently set to the same value");
+    }
+    Ok(())
+}
+
+fn find_matching<K, V: Hash + Eq>(entries: impl Iterator<Item = (K, V)>) -> Option<Vec<K>> {
+    let match_map = entries.fold(HashMap::<V, Vec<K>>::new(), |mut acc, (key, value)| {
+        acc.entry(value).or_default().push(key);
+        acc
+    });
+
+    match_map.into_iter().map(|(_, v)| v).find(|t| t.len() > 1)
 }
 
 pub fn bridge_config(
