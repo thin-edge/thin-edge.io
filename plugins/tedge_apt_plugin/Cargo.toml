@@ -10,13 +10,14 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+camino = { workspace = true }
 clap = { workspace = true }
 csv = { workspace = true }
-log = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
