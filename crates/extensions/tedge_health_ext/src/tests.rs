@@ -123,19 +123,19 @@ impl<'a> MqttActorBuilder<'a> {
     }
 }
 
-impl<'a> AsMut<MqttConfig> for MqttActorBuilder<'a> {
+impl AsMut<MqttConfig> for MqttActorBuilder<'_> {
     fn as_mut(&mut self) -> &mut MqttConfig {
         self.mqtt_config
     }
 }
 
-impl<'a> MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder<'a> {
+impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder<'_> {
     fn connect_sink(&mut self, config: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
         self.message_box.connect_sink(config, peer)
     }
 }
 
-impl<'a> MessageSink<MqttMessage> for MqttActorBuilder<'a> {
+impl MessageSink<MqttMessage> for MqttActorBuilder<'_> {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.message_box.get_sender()
     }
