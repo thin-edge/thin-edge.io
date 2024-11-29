@@ -89,7 +89,13 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && pip3 install --upgrade pip --break-system-packages \
     #
     # Delete the dummy systemctl command added by the base image
-    && rm -f /usr/local/bin/systemctl
+    && rm -f /usr/local/bin/systemctl \
+    #
+    # Install rust tools
+    && rustup component add rls rust-analysis rust-src rustfmt clippy \
+    && rustup toolchain install nightly \
+    && rustup component add rustfmt --toolchain nightly \
+    && cargo install taplo-cli cargo-nextest
 
 # Persist bash history
 USER root
