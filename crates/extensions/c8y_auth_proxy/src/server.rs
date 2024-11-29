@@ -772,6 +772,7 @@ mod tests {
         panic!("No free port found")
     }
 
+    #[allow(clippy::type_complexity)]
     fn auth<'a, B: Send + 'a>(
         token_is_valid: fn(&str) -> bool,
     ) -> impl Fn(

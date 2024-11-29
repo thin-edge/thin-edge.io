@@ -288,7 +288,7 @@ impl<'a> ConfigLogger<'a> {
     }
 }
 
-impl<'a> fmt::Display for ConfigLogger<'a> {
+impl fmt::Display for ConfigLogger<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:", self.title)?;
         self.log_single_entry(f, "device id", &self.device_id)?;
