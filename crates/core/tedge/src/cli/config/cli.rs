@@ -54,6 +54,9 @@ pub enum ConfigCmd {
         /// Prints all keys and descriptions with example values
         #[clap(long = "doc")]
         is_doc: bool,
+
+        /// Prints only the keys that contain the provided filter string
+        filter: Option<String>,
     },
 }
 
@@ -90,10 +93,15 @@ impl BuildCommand for ConfigCmd {
                 config_location,
             }
             .into_boxed()),
-            ConfigCmd::List { is_all, is_doc } => Ok(ListConfigCommand {
+            ConfigCmd::List {
+                is_all,
+                is_doc,
+                filter,
+            } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
                 config: config_location.load()?,
+                filter,
             }
             .into_boxed()),
         }
