@@ -10,7 +10,7 @@ use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process;
 use std::process::Command;
 use std::process::ExitStatus;
@@ -51,7 +51,7 @@ struct HealthStatusExt {
     pub time: Option<JsonValue>,
 }
 
-pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
+pub async fn start_watchdog(tedge_config_dir: &Path) -> Result<(), anyhow::Error> {
     // Send ready notification to systemd.
     notify_systemd(process::id(), "--ready")?;
 
@@ -91,9 +91,9 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
     }
 }
 
-async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
+async fn start_watchdog_for_tedge_services(tedge_config_dir: &Path) {
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&tedge_config_dir);
+        tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir);
     let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())
         .expect("Could not load config");
 

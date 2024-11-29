@@ -14,10 +14,8 @@
 use std::sync::Arc;
 
 use agent::AgentConfig;
-use camino::Utf8PathBuf;
-use tedge_config::get_config_dir;
+use tedge_config::cli::CommonArgs;
 use tedge_config::system_services::log_init;
-use tedge_config::system_services::LogConfigArgs;
 use tracing::log::warn;
 
 mod agent;
@@ -37,23 +35,12 @@ version = clap::crate_version!(),
 about = clap::crate_description!()
 )]
 pub struct AgentOpt {
-    #[command(flatten)]
-    pub log_args: LogConfigArgs,
-
     /// Start the agent with clean session off, subscribe to the topics, so that no messages are lost
     #[clap(short, long)]
     pub init: bool,
 
-    /// Start the agent from custom path
-    ///
-    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-    #[clap(
-        long = "config-dir",
-        default_value = get_config_dir().into_os_string(),
-        hide_env_values = true,
-        hide_default_value = true,
-    )]
-    pub config_dir: Utf8PathBuf,
+    #[command(flatten)]
+    pub common: CommonArgs,
 
     /// The device MQTT topic identifier
     #[clap(long)]
@@ -66,11 +53,11 @@ pub struct AgentOpt {
 
 pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
+        tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.common.config_dir.clone());
 
     log_init(
         "tedge-agent",
-        &agent_opt.log_args,
+        &agent_opt.common.log_args,
         &tedge_config_location.tedge_config_root_path,
     )?;
 

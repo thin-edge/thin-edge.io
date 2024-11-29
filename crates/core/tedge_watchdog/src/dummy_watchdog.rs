@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::Path;
 
-pub async fn start_watchdog(_config_dir: PathBuf) -> Result<(), anyhow::Error> {
+pub async fn start_watchdog(_config_dir: &Path) -> Result<(), anyhow::Error> {
     Err(anyhow::Error::from(WatchdogError::WatchdogNotAvailable))
 }
 

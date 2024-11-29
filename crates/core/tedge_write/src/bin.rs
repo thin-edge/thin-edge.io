@@ -4,8 +4,8 @@ use anyhow::bail;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::Parser;
+use tedge_config::cli::CommonArgs;
 use tedge_config::system_services::log_init;
-use tedge_config::system_services::LogConfigArgs;
 use tedge_utils::atomic::MaybePermissions;
 
 /// tee-like helper for writing to files which `tedge` user does not have write permissions to.
@@ -34,20 +34,15 @@ pub struct Args {
     group: Option<Box<str>>,
 
     #[command(flatten)]
-    log_args: LogConfigArgs,
-
-    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-    #[clap(
-        long = "config-dir",
-        default_value = tedge_config::get_config_dir().into_os_string(),
-        hide_env_values = true,
-        hide_default_value = true,
-    )]
-    config_dir: Utf8PathBuf,
+    common: CommonArgs,
 }
 
 pub fn run(args: Args) -> anyhow::Result<()> {
-    log_init("tedge-write", &args.log_args, &args.config_dir)?;
+    log_init(
+        "tedge-write",
+        &args.common.log_args,
+        &args.common.config_dir,
+    )?;
 
     // /etc/sudoers can contain rules where sudo permissions are given to `tedge` user depending on
     // the files we write to, e.g:
