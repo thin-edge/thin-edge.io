@@ -32,10 +32,10 @@ fn create_device_csr(
 
     let csr = read_cert_to_string(&csr_path)?;
     let csr = csr
-        .strip_prefix("-----BEGIN CERTIFICATE-----\n")
+        .strip_prefix("-----BEGIN CERTIFICATE REQUEST-----\n")
         .unwrap_or(&csr);
     let csr = csr
-        .strip_suffix("-----END CERTIFICATE-----\n")
+        .strip_suffix("-----END CERTIFICATE REQUEST-----\n")
         .unwrap_or(csr)
         .to_string();
     Ok(csr)
@@ -46,6 +46,6 @@ fn create_device_csr(
 /// Notably this adds PEM header and trailer.
 fn store_device_cert(cert_path: &Utf8PathBuf, cert: String) -> Result<(), CertError> {
     let pem_string =
-        String::new() + "-----BEGIN CERTIFICATE-----\n" + &cert + "-----END CERTIFICATE-----\n";
+        String::new() + "-----BEGIN CERTIFICATE-----\n" + &cert + "\n-----END CERTIFICATE-----\n";
     override_public_key(cert_path, pem_string)
 }

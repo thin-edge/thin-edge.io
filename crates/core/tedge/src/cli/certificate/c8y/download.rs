@@ -84,10 +84,11 @@ impl DownloadCertCmd {
                 }
                 Ok(response) => {
                     error!(
-                        "The device {} is not registered yet on {}: {:?}",
+                        "The device {} is not registered yet on {}: {}:{:?}",
                         common_name,
                         self.c8y_url,
-                        response.status()
+                        response.status(),
+                        response.text()
                     );
                 }
                 Err(err) => {
