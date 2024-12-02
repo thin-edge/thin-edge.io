@@ -6,9 +6,7 @@ use miette::Context;
 use serde::Deserialize;
 use std::io::stdin;
 use std::io::BufRead;
-use std::path::PathBuf;
-use tedge_config::get_config_dir;
-use tedge_config::system_services::LogConfigArgs;
+use tedge_config::cli::CommonArgs;
 use tedge_config::Path;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
@@ -33,18 +31,6 @@ about = clap::crate_description!(),
 arg_required_else_help(true),
 )]
 pub struct C8yRemoteAccessPluginOpt {
-    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-    #[clap(
-        long = "config-dir",
-        default_value = get_config_dir().into_os_string(),
-        hide_env_values = true,
-        hide_default_value = true,
-    )]
-    config_dir: PathBuf,
-
-    #[command(flatten)]
-    pub log_args: LogConfigArgs,
-
     #[arg(long)]
     /// Complete the installation of c8y-remote-access-plugin by declaring the supported operation.
     init: bool,
@@ -75,11 +61,14 @@ pub struct C8yRemoteAccessPluginOpt {
     #[arg(long, env = "C8Y_PROFILE", hide = true)]
     /// The c8y profile to use
     pub profile: Option<ProfileName>,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
 }
 
 impl C8yRemoteAccessPluginOpt {
     pub fn get_config_location(&self) -> TEdgeConfigLocation {
-        TEdgeConfigLocation::from_custom_root(&self.config_dir)
+        TEdgeConfigLocation::from_custom_root(&self.common.config_dir)
     }
 }
 

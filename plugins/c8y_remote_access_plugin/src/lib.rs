@@ -43,7 +43,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
 
     log_init(
         "c8y_remote_access_plugin",
-        &opt.log_args,
+        &opt.common.log_args,
         &config_dir.tedge_config_root_path,
     )
     .into_diagnostic()?;

@@ -1,15 +1,13 @@
 use anyhow::Context;
 use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
-use std::path::PathBuf;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
-use tedge_config::get_config_dir;
+use tedge_config::cli::CommonArgs;
 use tedge_config::system_services::log_init;
-use tedge_config::system_services::LogConfigArgs;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -38,21 +36,12 @@ about = clap::crate_description!(),
 after_help = AFTER_HELP_TEXT
 )]
 pub struct FirmwarePluginOpt {
-    #[command(flatten)]
-    pub log_args: LogConfigArgs,
-
     /// Create required directories
     #[clap(short, long)]
     pub init: bool,
 
-    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-    #[clap(
-        long = "config-dir",
-        default_value = get_config_dir().into_os_string(),
-        hide_env_values = true,
-        hide_default_value = true,
-    )]
-    pub config_dir: PathBuf,
+    #[command(flatten)]
+    pub common: CommonArgs,
 
     #[clap(long, env = "C8Y_PROFILE", hide = true)]
     pub profile: Option<ProfileName>,
@@ -61,11 +50,11 @@ pub struct FirmwarePluginOpt {
 pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::Error> {
     // Load tedge config from the provided location
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&firmware_plugin_opt.config_dir);
+        tedge_config::TEdgeConfigLocation::from_custom_root(&firmware_plugin_opt.common.config_dir);
 
     log_init(
         "c8y-firmware-plugin",
-        &firmware_plugin_opt.log_args,
+        &firmware_plugin_opt.common.log_args,
         &tedge_config_location.tedge_config_root_path,
     )?;
 

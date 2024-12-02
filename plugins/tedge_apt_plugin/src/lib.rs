@@ -3,7 +3,6 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
-use camino::Utf8PathBuf;
 use regex::Regex;
 use serde::Deserialize;
 use std::io;
@@ -11,9 +10,8 @@ use std::path::Path;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
-use tedge_config::get_config_dir;
+use tedge_config::cli::CommonArgs;
 use tedge_config::system_services::log_init;
-use tedge_config::system_services::LogConfigArgs;
 use tedge_config::AptConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
@@ -28,17 +26,8 @@ use tracing::warn;
     arg_required_else_help(true)
 )]
 pub struct AptCli {
-    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-    #[clap(
-        long = "config-dir",
-        default_value = get_config_dir().into_os_string(),
-        hide_env_values = true,
-        hide_default_value = true,
-    )]
-    config_dir: Utf8PathBuf,
-
     #[command(flatten)]
-    log_args: LogConfigArgs,
+    common: CommonArgs,
 
     #[clap(subcommand)]
     operation: PluginOp,
@@ -100,7 +89,11 @@ struct SoftwareModuleUpdate {
 }
 
 fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
-    if let Err(err) = log_init("tedge-apt-plugin", &apt.log_args, &apt.config_dir) {
+    if let Err(err) = log_init(
+        "tedge-apt-plugin",
+        &apt.common.log_args,
+        &apt.common.config_dir,
+    ) {
         error!("Can't enable logging due to error: {err}");
     }
     let status = match apt.operation {
@@ -154,7 +147,7 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             let (installer, _metadata) = get_installer(module, version, file_path)?;
-            let dpk_option = get_dpk_option(apt.config_dir.as_std_path());
+            let dpk_option = get_dpk_option(apt.common.config_dir.as_std_path());
             AptGetCmd::Install(dpk_option, vec![installer]).run()?
         }
 
@@ -180,7 +173,7 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
             // which will get cleaned up once it goes out of scope after this block
             let mut metadata_vec = Vec::new();
             let mut args: Vec<String> = Vec::new();
-            let dpk_option = get_dpk_option(apt.config_dir.as_std_path());
+            let dpk_option = get_dpk_option(apt.common.config_dir.as_std_path());
 
             for update_module in updates {
                 match update_module.action {
@@ -364,7 +357,7 @@ pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
     };
 
     if let PluginOp::List { name, maintainer } = &mut apt.operation {
-        if let Some(config) = get_config(apt.config_dir.as_std_path()) {
+        if let Some(config) = get_config(apt.common.config_dir.as_std_path()) {
             if name.is_none() {
                 *name = config.apt.name.or_none().cloned();
             }
@@ -400,6 +393,7 @@ pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tedge_config::cli::LogConfigArgs;
     use test_case::test_case;
 
     #[test_case(
@@ -420,11 +414,13 @@ mod tests {
             maintainer: Some("".into()),
         };
         let apt = AptCli {
-            config_dir: "".into(),
             operation: filters,
-            log_args: LogConfigArgs {
-                debug: false,
-                log_level: None,
+            common: CommonArgs {
+                log_args: LogConfigArgs {
+                    debug: false,
+                    log_level: None,
+                },
+                config_dir: "".into(),
             },
         };
         assert!(run_op(apt).is_ok())

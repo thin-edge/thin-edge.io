@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 pub use self::certificate::*;
 use self::refresh_bridges::RefreshBridgesCmd;
 use crate::command::BuildCommand;
@@ -9,8 +7,7 @@ use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
-use tedge_config::get_config_dir;
-use tedge_config::system_services::LogConfigArgs;
+use tedge_config::cli::CommonArgs;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
@@ -42,18 +39,8 @@ pub enum TEdgeOptMulticall {
         #[clap(subcommand)]
         cmd: TEdgeOpt,
 
-        /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-        #[clap(
-            long = "config-dir",
-            default_value = get_config_dir().into_os_string(),
-            hide_env_values = true,
-            hide_default_value = true,
-            global = true,
-        )]
-        config_dir: PathBuf,
-
         #[command(flatten)]
-        log_args: LogConfigArgs,
+        common: CommonArgs,
     },
 
     #[clap(flatten)]

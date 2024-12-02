@@ -7,10 +7,8 @@ use anyhow::Context;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::fmt;
-use tedge_config::get_config_dir;
+use tedge_config::cli::CommonArgs;
 use tedge_config::system_services::log_init;
-use tedge_config::system_services::LogConfigArgs;
-use tedge_config::PathBuf;
 use tedge_config::ProfileName;
 use tracing::log::warn;
 
@@ -64,9 +62,6 @@ pub struct MapperOpt {
     #[clap(subcommand)]
     pub name: MapperName,
 
-    #[command(flatten)]
-    pub log_args: LogConfigArgs,
-
     /// Start the mapper with clean session off, subscribe to the topics, so that no messages are lost
     #[clap(short, long)]
     pub init: bool,
@@ -77,16 +72,8 @@ pub struct MapperOpt {
     #[clap(short, long)]
     pub clear: bool,
 
-    /// Start the mapper from custom path
-    ///
-    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-    #[clap(
-        long = "config-dir",
-        default_value = get_config_dir().into_os_string(),
-        hide_env_values = true,
-        hide_default_value = true,
-    )]
-    pub config_dir: PathBuf,
+    #[command(flatten)]
+    pub common: CommonArgs,
 
     #[clap(long, global = true, hide = true)]
     pub profile: Option<ProfileName>,
@@ -115,12 +102,12 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
     let component = lookup_component(&mapper_opt.name, mapper_opt.profile.clone());
 
     let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
+        tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.common.config_dir);
     let config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
 
     log_init(
         "tedge-mapper",
-        &mapper_opt.log_args,
+        &mapper_opt.common.log_args,
         &tedge_config_location.tedge_config_root_path,
     )?;
 
@@ -139,7 +126,7 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
         Ok(())
     } else {
         component
-            .start(config, mapper_opt.config_dir.as_ref())
+            .start(config, mapper_opt.common.config_dir.as_ref())
             .await
     }
 }
