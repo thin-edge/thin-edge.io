@@ -113,12 +113,24 @@ fn create_new_file(
     Ok(file)
 }
 
+// Allow permissions_set_readonly_false as the file will be make readonly once its content updated
+#[allow(clippy::permissions_set_readonly_false)]
 fn override_file(path: impl AsRef<Path>) -> Result<File, std::io::Error> {
+    let path = path.as_ref();
+
+    // If the file already exists, make sure it can be overwritten.
+    // However defer any error to the open step, to give better context to the user
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let mut perm = metadata.permissions();
+        perm.set_readonly(false);
+        let _ = std::fs::set_permissions(path, perm);
+    };
+
     OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(path.as_ref())
+        .open(path)
 }
 
 pub fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::io::Error> {
