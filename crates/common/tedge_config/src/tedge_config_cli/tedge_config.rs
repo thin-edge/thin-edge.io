@@ -15,6 +15,7 @@ use crate::MQTT_TLS_PORT;
 use anyhow::anyhow;
 use anyhow::ensure;
 use anyhow::Context;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::client_config_for_ca_certificates;
 use certificate::parse_root_certificate::create_tls_config;
@@ -435,16 +436,17 @@ define_tedge_config! {
         ))]
         #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
         #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
+        #[tedge_config(reader(private))]
         #[doku(as = "String")]
         id: Result<String, ReadError>,
 
         /// Path where the device's private key is stored
-        #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(function = "default_device_key"))]
+        #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(function = "default_device_key"), reader(private))]
         #[doku(as = "PathBuf")]
         key_path: Utf8PathBuf,
 
         /// Path where the device's certificate is stored
-        #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(function = "default_device_cert"))]
+        #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(function = "default_device_cert"), reader(private))]
         #[doku(as = "PathBuf")]
         cert_path: Utf8PathBuf,
 
@@ -483,6 +485,31 @@ define_tedge_config! {
         #[tedge_config(example = "/etc/tedge/credentials.toml", default(function = "default_credentials_path"))]
         #[doku(as = "PathBuf")]
         credentials_path: Utf8PathBuf,
+
+        device: {
+            /// Identifier of the device within the fleet. It must be globally
+            /// unique and is derived from the device certificate.
+            #[tedge_config(readonly(
+                write_error = "\
+                    The device id is read from the device certificate and cannot be set directly.\n\
+                    To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+                function = "c8y_device_id",
+            ))]
+            #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
+            #[doku(as = "String")]
+            id: Result<String, ReadError>,
+
+            /// Path where the device's private key is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
+            #[doku(as = "PathBuf")]
+            key_path: Utf8PathBuf,
+
+            /// Path where the device's certificate is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
+            #[doku(as = "PathBuf")]
+            cert_path: Utf8PathBuf,
+        },
 
         smartrest: {
             /// Set of SmartREST template IDs the device should subscribe to
@@ -555,6 +582,7 @@ define_tedge_config! {
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
             },
+
             client: {
                 /// The address of the host on which the local Cumulocity HTTP Proxy is running, used by the Cumulocity
                 /// mapper.
@@ -564,7 +592,8 @@ define_tedge_config! {
 
                 /// The port number on the remote host on which the local Cumulocity HTTP Proxy is running, used by the
                 /// Cumulocity mapper.
-                #[tedge_config(example = "8001", default(value = 8001u16))]
+                #[tedge_config(example = "8001")]
+                #[tedge_config(default(from_key = "c8y.proxy.bind.port"))]
                 port: u16,
             },
 
@@ -653,6 +682,31 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
+        device: {
+            /// Identifier of the device within the fleet. It must be globally
+            /// unique and is derived from the device certificate.
+            #[tedge_config(readonly(
+                write_error = "\
+                    The device id is read from the device certificate and cannot be set directly.\n\
+                    To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+                function = "az_device_id",
+            ))]
+            #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
+            #[doku(as = "String")]
+            id: Result<String, ReadError>,
+
+            /// Path where the device's private key is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
+            #[doku(as = "PathBuf")]
+            key_path: Utf8PathBuf,
+
+            /// Path where the device's certificate is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
+            #[doku(as = "PathBuf")]
+            cert_path: Utf8PathBuf,
+        },
+
         mapper: {
             /// Whether the Azure IoT mapper should add a timestamp or not
             #[tedge_config(example = "true")]
@@ -697,6 +751,31 @@ define_tedge_config! {
         #[tedge_config(example = "/etc/tedge/aws-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
+
+        device: {
+            /// Identifier of the device within the fleet. It must be globally
+            /// unique and is derived from the device certificate.
+            #[tedge_config(readonly(
+                write_error = "\
+                    The device id is read from the device certificate and cannot be set directly.\n\
+                    To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+                function = "aws_device_id",
+            ))]
+            #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
+            #[doku(as = "String")]
+            id: Result<String, ReadError>,
+
+            /// Path where the device's private key is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
+            #[doku(as = "PathBuf")]
+            key_path: Utf8PathBuf,
+
+            /// Path where the device's certificate is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
+            #[doku(as = "PathBuf")]
+            cert_path: Utf8PathBuf,
+        },
 
         mapper: {
             /// Whether the AWS IoT mapper should add a timestamp or not
@@ -1088,6 +1167,85 @@ impl TEdgeConfigReader {
         )
         .unwrap()
     }
+
+    pub fn device_key_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<&Utf8Path, MultiError> {
+        Ok(match cloud.map(<_>::into) {
+            None => &self.device.key_path,
+            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.key_path,
+            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.key_path,
+            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.key_path,
+        })
+    }
+
+    pub fn device_cert_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<&Utf8Path, MultiError> {
+        Ok(match cloud.map(<_>::into) {
+            None => &self.device.cert_path,
+            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.cert_path,
+            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.cert_path,
+            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Cloud<'a> {
+    C8y(Option<&'a ProfileName>),
+    Az(Option<&'a ProfileName>),
+    Aws(Option<&'a ProfileName>),
+}
+
+pub trait CloudConfig {
+    fn device_key_path(&self) -> &Utf8Path;
+    fn device_cert_path(&self) -> &Utf8Path;
+    fn root_cert_path(&self) -> &Utf8Path;
+}
+
+impl CloudConfig for TEdgeConfigReaderC8y {
+    fn device_key_path(&self) -> &Utf8Path {
+        &self.device.key_path
+    }
+
+    fn device_cert_path(&self) -> &Utf8Path {
+        &self.device.cert_path
+    }
+
+    fn root_cert_path(&self) -> &Utf8Path {
+        &self.root_cert_path
+    }
+}
+
+impl CloudConfig for TEdgeConfigReaderAz {
+    fn device_key_path(&self) -> &Utf8Path {
+        &self.device.key_path
+    }
+
+    fn device_cert_path(&self) -> &Utf8Path {
+        &self.device.cert_path
+    }
+
+    fn root_cert_path(&self) -> &Utf8Path {
+        &self.root_cert_path
+    }
+}
+
+impl CloudConfig for TEdgeConfigReaderAws {
+    fn device_key_path(&self) -> &Utf8Path {
+        &self.device.key_path
+    }
+
+    fn device_cert_path(&self) -> &Utf8Path {
+        &self.device.cert_path
+    }
+
+    fn root_cert_path(&self) -> &Utf8Path {
+        &self.root_cert_path
+    }
 }
 
 fn c8y_topic_prefix() -> TopicPrefix {
@@ -1195,13 +1353,29 @@ fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
         .unwrap_or(Ipv4Addr::LOCALHOST.into())
 }
 
-fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
-    let pem = PemCertificate::from_pem_file(&reader.device.cert_path)
+fn device_id_from_cert(cert_path: &Utf8Path) -> Result<String, ReadError> {
+    let pem = PemCertificate::from_pem_file(cert_path)
         .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.to_cow_str(), err))?;
     let device_id = pem
         .subject_common_name()
         .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.to_cow_str(), err))?;
     Ok(device_id)
+}
+
+fn device_id(device: &TEdgeConfigReaderDevice) -> Result<String, ReadError> {
+    device_id_from_cert(&device.cert_path)
+}
+
+fn c8y_device_id(device: &TEdgeConfigReaderC8yDevice) -> Result<String, ReadError> {
+    device_id_from_cert(&device.cert_path)
+}
+
+fn az_device_id(device: &TEdgeConfigReaderAzDevice) -> Result<String, ReadError> {
+    device_id_from_cert(&device.cert_path)
+}
+
+fn aws_device_id(device: &TEdgeConfigReaderAwsDevice) -> Result<String, ReadError> {
+    device_id_from_cert(&device.cert_path)
 }
 
 fn cert_error_into_config_error(key: Cow<'static, str>, err: CertificateError) -> ReadError {

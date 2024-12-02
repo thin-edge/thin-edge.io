@@ -189,7 +189,7 @@ define_tedge_config! {
     }
 }
 
-fn device_id(_reader: &TEdgeConfigReader) -> Result<String, ReadError> {
+fn device_id(_reader: &TEdgeConfigReaderDevice) -> Result<String, ReadError> {
     Ok("dummy-device-id".to_owned())
 }
 
@@ -218,12 +218,7 @@ fn main() {
     let config = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
 
     // Typed reads
-    println!(
-        "Device id is {}.",
-        // We have to pass the config into try_read to avoid TEdgeConfigReader being
-        // self-referential
-        config.device.id.try_read(&config).as_ref().unwrap()
-    );
+    println!("Device id is {}.", config.device.id().unwrap());
     assert_eq!(u16::from(config.mqtt.bind.port), 1883);
     assert_eq!(config.mqtt.external.bind.port.or_none(), None);
     assert_eq!(

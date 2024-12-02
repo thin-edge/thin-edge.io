@@ -61,8 +61,15 @@ fn generate_structs(
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
                 } else if let Some(field) = field.read_only() {
                     let name = field.lazy_reader_name(&parents);
+                    let parent_ty = field.parent_name(&parents);
                     tys.push(parse_quote_spanned!(field.ty.span()=> #name));
-                    lazy_readers.push((name, &field.ty, &field.readonly.function));
+                    lazy_readers.push((
+                        name,
+                        &field.ty,
+                        &field.readonly.function,
+                        parent_ty,
+                        field.ident.clone(),
+                    ));
                 } else {
                     tys.push(ty.to_owned());
                 }
@@ -118,33 +125,48 @@ fn generate_structs(
         }
     }
 
-    let lazy_reader_impls = lazy_readers
-        .iter()
-        .map(|(name, ty, function)| -> syn::ItemImpl {
-            if let Some((ok, err)) = extract_type_from_result(ty) {
-                parse_quote_spanned! {name.span()=>
-                    impl #name {
-                        // TODO don't just guess we're called tedgeconfigreader
-                        pub fn try_read(&self, reader: &TEdgeConfigReader) -> Result<&#ok, #err> {
-                            self.0.get_or_try_init(|| #function(reader))
+    let lazy_reader_impls =
+        lazy_readers
+            .iter()
+            .map(|(name, ty, function, parent_ty, id)| -> syn::ItemImpl {
+                if let Some((ok, err)) = extract_type_from_result(ty) {
+                    parse_quote_spanned! {name.span()=>
+                        // impl #name {
+                        //     // TODO don't just guess we're called tedgeconfigreader
+                        //     #[deprecated]
+                        //     pub fn try_read(&self, reader: &#parent_ty) -> Result<&#ok, #err> {
+                        //         self.0.get_or_try_init(|| #function(reader))
+                        //     }
+                        // }
+
+                        impl #parent_ty {
+                            pub fn #id(&self) -> Result<&#ok, #err> {
+                                self.#id.0.get_or_try_init(|| #function(self))
+                            }
+                        }
+                    }
+                } else {
+                    parse_quote_spanned! {name.span()=>
+                        // impl #name {
+                        //     // TODO don't just guess we're called tedgeconfigreader
+                        //     #[deprecated]
+                        //     pub fn read(&self, reader: &#parent_ty) -> &#ty {
+                        //         self.0.get_or_init(|| #function(reader))
+                        //     }
+                        // }
+
+                        impl #parent_ty {
+                            pub fn #id(&self) -> &#ty {
+                                self.#id.0.get_or_init(|| #function(self))
+                            }
                         }
                     }
                 }
-            } else {
-                parse_quote_spanned! {name.span()=>
-                    impl #name {
-                        // TODO don't just guess we're called tedgeconfigreader
-                        pub fn read(&self, reader: &TEdgeConfigReader) -> &#ty {
-                            self.0.get_or_init(|| #function(reader))
-                        }
-                    }
-                }
-            }
-        });
+            });
 
     let (lr_names, lr_tys): (Vec<_>, Vec<_>) = lazy_readers
         .iter()
-        .map(|(name, ty, _)| match extract_type_from_result(ty) {
+        .map(|(name, ty, _, _, _)| match extract_type_from_result(ty) {
             Some((ok, _err)) => (name, ok),
             None => (name, *ty),
         })

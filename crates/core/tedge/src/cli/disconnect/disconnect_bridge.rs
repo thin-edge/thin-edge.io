@@ -7,7 +7,6 @@ use crate::log::MaybeFancy;
 use anyhow::Context;
 use std::sync::Arc;
 use tedge_config::system_services::*;
-use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 use which::which;
 
@@ -16,7 +15,6 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {
     pub config_location: TEdgeConfigLocation,
-    pub profile: Option<ProfileName>,
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
@@ -91,7 +89,7 @@ impl DisconnectBridgeCommand {
     }
 
     fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
-        let config_file = self.cloud.bridge_config_filename(self.profile.as_ref());
+        let config_file = self.cloud.bridge_config_filename();
         let bridge_conf_path = self
             .config_location
             .tedge_config_root_path

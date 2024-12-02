@@ -63,13 +63,13 @@ impl FirmwareManagerConfig {
         tedge_config: &TEdgeConfig,
         c8y_profile: Option<&str>,
     ) -> Result<Self, FirmwareManagementConfigBuildError> {
-        let tedge_device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let tedge_device_id = c8y_config.device.id()?.to_string();
         let local_http_address = tedge_config.http.client.host.clone();
         let local_http_port = tedge_config.http.client.port;
         let tmp_dir = tedge_config.tmp.path.clone();
         let data_dir = tedge_config.data.path.clone().into();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
 
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
         let c8y_end_point = C8yEndPoint::from_config(tedge_config, c8y_profile)?;

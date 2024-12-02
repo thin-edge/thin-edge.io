@@ -44,6 +44,17 @@ contents:
       mode: 0644
     packager: rpm
 
+  - src: ./configuration/init/systemd/tedge-mapper-aws@.service
+    dst: /lib/systemd/system/tedge-mapper-aws@.service
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-mapper-aws@.service
+    dst: /lib/systemd/system/tedge-mapper-aws@.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
   - src: ./configuration/init/systemd/tedge-mapper-az.service
     dst: /lib/systemd/system/tedge-mapper-az.service
     file_info:
@@ -55,6 +66,17 @@ contents:
       mode: 0644
     packager: rpm
 
+  - src: ./configuration/init/systemd/tedge-mapper-az@.service
+    dst: /lib/systemd/system/tedge-mapper-az@.service
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-mapper-az@.service
+    dst: /lib/systemd/system/tedge-mapper-az@.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
   - src: ./configuration/init/systemd/tedge-mapper-c8y.service
     dst: /lib/systemd/system/tedge-mapper-c8y.service
     file_info:
@@ -62,6 +84,17 @@ contents:
     packager: deb
   - src: ./configuration/init/systemd/tedge-mapper-c8y.service
     dst: /lib/systemd/system/tedge-mapper-c8y.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
+  - src: ./configuration/init/systemd/tedge-mapper-c8y@.service
+    dst: /lib/systemd/system/tedge-mapper-c8y@.service
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-mapper-c8y@.service
+    dst: /lib/systemd/system/tedge-mapper-c8y@.service
     file_info:
       mode: 0644
     packager: rpm

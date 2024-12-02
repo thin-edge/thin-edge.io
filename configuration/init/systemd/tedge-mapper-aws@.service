@@ -1,0 +1,14 @@
+[Unit]
+Description=tedge-mapper-aws checks Thin Edge JSON measurements and forwards to AWS IoT Hub.
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge
+ExecStartPre=+-/usr/bin/tedge init
+ExecStart=/usr/bin/tedge-mapper aws@%i
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

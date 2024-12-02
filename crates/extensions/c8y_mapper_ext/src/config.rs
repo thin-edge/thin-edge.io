@@ -3,6 +3,7 @@ use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::error::OperationsError;
+use c8y_api::smartrest::operations::C8yPrefix;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::C8YHttpConfig;
@@ -164,11 +165,11 @@ impl C8yMapperConfig {
         let data_dir: DataDir = tedge_config.data.path.clone().into();
         let tmp_dir = tedge_config.tmp.path.as_path().into();
 
-        let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let device_id = c8y_config.device.id()?.to_string();
         let device_type = tedge_config.device.ty.clone();
         let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
         let service = tedge_config.service.clone();
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
@@ -336,6 +337,12 @@ impl Record for BridgeConfig {
             ".bridge.topic_prefix" => Some(self.c8y_prefix.as_str().into()),
             _ => None,
         }
+    }
+}
+
+impl C8yPrefix for BridgeConfig {
+    fn c8y_prefix(&self) -> &TopicPrefix {
+        &self.c8y_prefix
     }
 }
 

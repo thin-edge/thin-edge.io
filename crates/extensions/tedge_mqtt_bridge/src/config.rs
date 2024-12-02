@@ -8,17 +8,16 @@ use rumqttc::MqttOptions;
 use rumqttc::Transport;
 use std::borrow::Cow;
 use std::path::Path;
-use tedge_config::TEdgeConfig;
+use tedge_config::CloudConfig;
 
 pub fn use_key_and_cert(
     config: &mut MqttOptions,
-    root_cert_path: impl AsRef<Path>,
-    tedge_config: &TEdgeConfig,
+    cloud_config: &dyn CloudConfig,
 ) -> anyhow::Result<()> {
     let tls_config = create_tls_config(
-        root_cert_path,
-        &tedge_config.device.key_path,
-        &tedge_config.device.cert_path,
+        cloud_config.root_cert_path(),
+        cloud_config.device_key_path(),
+        cloud_config.device_cert_path(),
     )?;
     config.set_transport(Transport::tls_with_config(tls_config.into()));
     Ok(())
@@ -261,8 +260,9 @@ mod tests {
             std::fs::write(&root_cert_path, c8y_cert.serialize_pem().unwrap()).unwrap();
             let tedge_config =
                 TEdgeConfig::try_new(TEdgeConfigLocation::from_custom_root(ttd.path())).unwrap();
+            let c8y_config = tedge_config.c8y.try_get::<str>(None).unwrap();
 
-            use_key_and_cert(&mut opts, &root_cert_path, &tedge_config).unwrap();
+            use_key_and_cert(&mut opts, c8y_config).unwrap();
 
             let Transport::Tls(tls) = opts.transport() else {
                 panic!("Transport should be type TLS")

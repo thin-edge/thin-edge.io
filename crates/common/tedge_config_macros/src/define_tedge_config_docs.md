@@ -938,7 +938,7 @@ define_tedge_config! {
   }
 }
 
-fn try_read_device_id(_reader: &TEdgeConfigReader) -> Result<String, ReadError> {
+fn try_read_device_id(_reader: &TEdgeConfigReaderDevice) -> Result<String, ReadError> {
     unimplemented!()
 }
 ```

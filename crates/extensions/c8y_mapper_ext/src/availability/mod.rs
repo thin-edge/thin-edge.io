@@ -65,8 +65,8 @@ impl AvailabilityConfig {
         tedge_config: &TEdgeConfig,
         c8y_profile: Option<&str>,
     ) -> Result<Self, ReadError> {
-        let xid = tedge_config.device.id.try_read(tedge_config)?;
         let c8y = tedge_config.c8y.try_get(c8y_profile)?;
+        let xid = c8y.device.id()?;
         Ok(Self {
             main_device_id: xid.into(),
             mqtt_schema: MqttSchema::with_root(tedge_config.mqtt.topic_root.clone()),

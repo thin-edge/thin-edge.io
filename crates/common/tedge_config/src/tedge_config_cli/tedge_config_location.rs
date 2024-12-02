@@ -189,6 +189,7 @@ impl TEdgeConfigLocation {
 mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
+    use crate::Cloud;
     use crate::TEdgeConfigReader;
 
     use super::*;
@@ -298,8 +299,14 @@ type = "a-service-type""#;
 
         let reader = TEdgeConfigReader::from_dto(&dto, &config_location);
 
-        assert_eq!(reader.device.cert_path, "/tedge/device-cert.pem");
-        assert_eq!(reader.device.key_path, "/tedge/device-key.pem");
+        assert_eq!(
+            reader.device_cert_path(None::<Void>).unwrap(),
+            "/tedge/device-cert.pem"
+        );
+        assert_eq!(
+            reader.device_key_path(None::<Void>).unwrap(),
+            "/tedge/device-key.pem"
+        );
         assert_eq!(reader.device.ty, "a-device");
         assert_eq!(u16::from(reader.mqtt.bind.port), 1886);
         assert_eq!(u16::from(reader.mqtt.client.port), 1885);
@@ -312,5 +319,13 @@ type = "a-service-type""#;
         dir.file("tedge.toml").with_raw_content(content);
         let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
         Ok((dir, config_location))
+    }
+
+    enum Void {}
+
+    impl From<Void> for Cloud<'_> {
+        fn from(value: Void) -> Self {
+            match value {}
+        }
     }
 }

@@ -6,6 +6,7 @@ use std::process::Command;
 use tedge_config::auth_method::AuthMethod;
 use tedge_config::AutoFlag;
 use tedge_config::HostPort;
+use tedge_config::ProfileName;
 use tedge_config::TemplatesSet;
 use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
@@ -28,6 +29,7 @@ pub struct BridgeConfigC8yParams {
     pub include_local_clean_session: AutoFlag,
     pub bridge_location: BridgeLocation,
     pub topic_prefix: TopicPrefix,
+    pub profile_name: Option<ProfileName>,
 }
 
 impl From<BridgeConfigC8yParams> for BridgeConfig {
@@ -46,6 +48,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             include_local_clean_session,
             bridge_location,
             topic_prefix,
+            profile_name,
         } = params;
 
         let mut topics: Vec<String> = vec![
@@ -143,13 +146,21 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
         Self {
             cloud_name: "c8y".into(),
             config_file,
-            connection: "edge_to_c8y".into(),
+            connection: if let Some(profile) = &profile_name {
+                format!("edge_to_c8y@{profile}")
+            } else {
+                "edge_to_c8y".into()
+            },
             address: mqtt_host,
             remote_username,
             remote_password,
             bridge_root_cert_path,
             remote_clientid,
-            local_clientid: "Cumulocity".into(),
+            local_clientid: if let Some(profile) = &profile_name {
+                format!("c8y-bridge@{profile}")
+            } else {
+                "c8y-bridge".into()
+            },
             bridge_certfile,
             bridge_keyfile,
             use_mapper: true,
@@ -227,6 +238,7 @@ mod tests {
             include_local_clean_session: AutoFlag::False,
             bridge_location: BridgeLocation::Mosquitto,
             topic_prefix: "c8y".try_into().unwrap(),
+            profile_name: None,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -240,7 +252,7 @@ mod tests {
             remote_password: None,
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             remote_clientid: "alpha".into(),
-            local_clientid: "Cumulocity".into(),
+            local_clientid: "c8y-bridge".into(),
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             use_mapper: true,
@@ -303,7 +315,6 @@ mod tests {
 
     #[test]
     fn test_bridge_config_from_c8y_params_basic_auth() -> anyhow::Result<()> {
-        use std::convert::TryFrom;
         let params = BridgeConfigC8yParams {
             mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             config_file: "c8y-bridge.conf".into(),
@@ -318,6 +329,7 @@ mod tests {
             include_local_clean_session: AutoFlag::False,
             bridge_location: BridgeLocation::Mosquitto,
             topic_prefix: "c8y".try_into().unwrap(),
+            profile_name: Some("profile".parse().unwrap()),
         };
 
         let bridge = BridgeConfig::from(params);
@@ -325,13 +337,13 @@ mod tests {
         let expected = BridgeConfig {
             cloud_name: "c8y".into(),
             config_file: "c8y-bridge.conf".into(),
-            connection: "edge_to_c8y".into(),
+            connection: "edge_to_c8y@profile".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
             remote_username: Some("octocat".into()),
             remote_password: Some("abcd1234".into()),
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             remote_clientid: "alpha".into(),
-            local_clientid: "Cumulocity".into(),
+            local_clientid: "c8y-bridge@profile".into(),
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             use_mapper: true,
