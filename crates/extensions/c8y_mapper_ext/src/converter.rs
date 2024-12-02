@@ -33,6 +33,7 @@ use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::Operation;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::operations::ResultFormat;
+use c8y_api::smartrest::operations::SupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
@@ -90,9 +91,6 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
-use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
-use tedge_utils::file::create_symlink;
 use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
@@ -181,11 +179,9 @@ pub struct CumulocityConverter {
     pub(crate) device_topic_id: EntityTopicId,
     pub(crate) device_type: String,
     alarm_converter: AlarmConverter,
-    pub operations: Operations,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
-    pub children: HashMap<String, Operations>,
     pub service_type: String,
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
@@ -194,6 +190,7 @@ pub struct CumulocityConverter {
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashSet<CmdId>,
 
+    supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
 }
 
@@ -219,9 +216,21 @@ impl CumulocityConverter {
 
         let prefix = &config.bridge_config.c8y_prefix;
 
-        let operations = Operations::try_new(&*config.ops_dir, &config.bridge_config)?;
+        let operations_by_xid = {
+            let mut operations = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
+            operations.insert(
+                config.device_id.clone(),
+                Operations::try_new(&*config.ops_dir, &config.bridge_config)?,
+            );
+            operations
+        };
+        let operation_manager = SupportedOperations {
+            device_id: device_id.clone(),
 
-        let children = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
+            base_ops_dir: Arc::clone(&config.ops_dir),
+
+            operations_by_xid,
+        };
 
         let alarm_converter = AlarmConverter::new();
 
@@ -266,10 +275,9 @@ impl CumulocityConverter {
             device_topic_id,
             device_type,
             alarm_converter,
-            operations,
+            supported_operations: operation_manager,
             operation_logs,
             http_proxy,
-            children,
             mqtt_publisher,
             service_type,
             mqtt_schema: mqtt_schema.clone(),
@@ -808,14 +816,10 @@ impl CumulocityConverter {
         let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
 
         match target.r#type {
-            EntityType::MainDevice => Ok(self.operations.filter_by_topic(topic, prefix)),
-            EntityType::ChildDevice => {
-                if let Some(operations) = self.children.get(device_xid) {
-                    Ok(operations.filter_by_topic(topic, prefix))
-                } else {
-                    Ok(Vec::new())
-                }
-            }
+            EntityType::MainDevice | EntityType::ChildDevice => Ok(self
+                .supported_operations
+                .get_operation_handlers(device_xid, topic, prefix)),
+
             EntityType::Service => {
                 warn!("operation for services are currently unsupported");
                 Ok(Vec::new())
@@ -997,7 +1001,10 @@ impl CumulocityConverter {
         payload: &str,
         template: &str,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        if let Some(operation) = self.operations.matching_smartrest_template(template) {
+        if let Some(operation) = self
+            .supported_operations
+            .matching_smartrest_template(template)
+        {
             if let Some(command) = operation.command() {
                 let script = ShellScript {
                     command,
@@ -1258,19 +1265,6 @@ impl CumulocityConverter {
         }
 
         let auto_registered_entities = self.entity_store.auto_register_entity(source)?;
-        for auto_registered_entity in &auto_registered_entities {
-            if auto_registered_entity.r#type == EntityType::ChildDevice {
-                self.children.insert(
-                    self.entity_store
-                        .get(source)
-                        .expect("Entity should have been auto registered in the previous step")
-                        .external_id
-                        .as_ref()
-                        .into(),
-                    Operations::default(),
-                );
-            }
-        }
         Ok(auto_registered_entities)
     }
 
@@ -1444,7 +1438,7 @@ impl CumulocityConverter {
             }
             topic
                 if self
-                    .operations
+                    .supported_operations
                     .get_json_custom_operation_topics()?
                     .accept_topic(topic) =>
             {
@@ -1452,7 +1446,7 @@ impl CumulocityConverter {
             }
             topic
                 if self
-                    .operations
+                    .supported_operations
                     .get_smartrest_custom_operation_topics()?
                     .accept_topic(topic) =>
             {
@@ -1470,8 +1464,12 @@ impl CumulocityConverter {
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = self.parse_base_inventory_file()?;
 
-        let supported_operations_message =
-            self.create_supported_operations(self.config.ops_dir.as_std_path())?;
+        self.supported_operations
+            .load_all(&self.config.device_id, &self.config.bridge_config)?;
+        let supported_operations_message = self.supported_operations.create_supported_operations(
+            &self.config.device_id,
+            &self.config.bridge_config.c8y_prefix,
+        )?;
 
         let device_data_message = self.inventory_device_type_update_message()?;
 
@@ -1486,40 +1484,6 @@ impl CumulocityConverter {
         Ok(messages)
     }
 
-    fn create_supported_operations(&self, path: &Path) -> Result<MqttMessage, ConversionError> {
-        let is_child = is_child_operation_path(path);
-        let device = if is_child {
-            let external_id = get_child_external_id(path)?;
-            self.entity_store
-                .get_by_external_id(&EntityExternalId::from(external_id))
-                .expect("should be registered")
-        } else {
-            self.entity_store
-                .get(self.entity_store.main_device())
-                .expect("should be registered")
-        };
-
-        let operations = self
-            .operations_for_device(&device.topic_id)
-            .expect("should exist");
-
-        let prefix = &self.config.bridge_config.c8y_prefix;
-
-        let topic = if is_child_operation_path(path) {
-            let child_id = get_child_external_id(path)?;
-            let child_external_id = Self::validate_external_id(&child_id)?;
-
-            C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic(prefix)?
-        } else {
-            C8yTopic::upstream_topic(prefix)
-        };
-
-        Ok(MqttMessage::new(
-            &topic,
-            operations.create_smartrest_ops_message().into_inner(),
-        ))
-    }
-
     pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
         let sync_messages: Vec<MqttMessage> = self.alarm_converter.sync();
         self.alarm_converter = AlarmConverter::Synced;
@@ -1530,29 +1494,21 @@ impl CumulocityConverter {
         &mut self,
         message: &DiscoverOp,
     ) -> Result<Option<MqttMessage>, ConversionError> {
-        let needs_cloud_update = self.update_operations(&message.ops_dir)?;
+        let needs_cloud_update = self
+            .supported_operations
+            .load_from_dir(&message.ops_dir, &self.config.bridge_config)?;
 
         if needs_cloud_update {
-            Ok(Some(self.create_supported_operations(&message.ops_dir)?))
+            let device_xid = self.supported_operations.xid_from_path(&message.ops_dir)?;
+            Ok(Some(
+                self.supported_operations.create_supported_operations(
+                    &device_xid,
+                    &self.config.bridge_config.c8y_prefix,
+                )?,
+            ))
         } else {
             Ok(None)
         }
-    }
-}
-
-// FIXME: this only extracts the final component of the path, the path prefix can be anything. this
-// should be simplified
-fn get_child_external_id(dir_path: &Path) -> Result<String, ConversionError> {
-    match dir_path.file_name() {
-        Some(child_id) => {
-            let child_id = child_id.to_string_lossy().to_string();
-            Ok(child_id)
-        }
-        // only returned when path is empty, e.g. "/", in practice this shouldn't ever be given as
-        // input
-        None => Err(ConversionError::DirPathComponentError {
-            dir: dir_path.to_owned(),
-        }),
     }
 }
 
@@ -1561,20 +1517,6 @@ fn create_get_pending_operations_message(
 ) -> Result<MqttMessage, ConversionError> {
     let topic = C8yTopic::SmartRestResponse.to_topic(prefix)?;
     Ok(MqttMessage::new(&topic, request_pending_operations()))
-}
-
-fn is_child_operation_path(path: &Path) -> bool {
-    // a `path` can contains operations for the parent or for the child
-    // example paths:
-    //  {cfg_dir}/operations/c8y/child_name/
-    //  {cfg_dir}/operations/c8y/
-    //
-    // the difference between an operation for the child or for the parent
-    // is the existence of a directory after `operations/c8y` or not.
-    match path.file_name() {
-        Some(file_name) => !file_name.eq("c8y"),
-        None => false,
-    }
 }
 
 impl CumulocityConverter {
@@ -1591,100 +1533,49 @@ impl CumulocityConverter {
         c8y_operation_name: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let device = self.entity_store.try_get(target)?;
-        let ops_dir = match device.r#type {
-            EntityType::MainDevice => self.config.ops_dir.clone(),
-            EntityType::ChildDevice => {
-                let child_dir_name = device.external_id.as_ref();
-                self.config.ops_dir.join(child_dir_name).into()
-            }
-            EntityType::Service => {
-                error!(
-                    %target,
-                    "{c8y_operation_name} operation for services are currently unsupported"
-                );
-                return Err(ConversionError::UnexpectedError(anyhow!(
-                    "{c8y_operation_name} operation for services are currently unsupported"
-                )));
-            }
-        };
 
-        let ops_file = ops_dir.join(c8y_operation_name);
+        if let EntityType::Service = device.r#type {
+            error!(
+                %target,
+                "{c8y_operation_name} operation for services are currently unsupported"
+            );
+            return Err(ConversionError::UnexpectedError(anyhow!(
+                "{c8y_operation_name} operation for services are currently unsupported"
+            )));
+        }
 
-        // Save the operation to the operation directory
-        create_directory_with_defaults(&*ops_dir)?;
-        if let Some(template_name) = self
-            .operations
-            .get_template_name_by_operation_name(c8y_operation_name)
-        {
-            create_symlink(self.config.ops_dir.join(template_name), &ops_file)?;
-        } else {
-            create_file_with_defaults(&ops_file, None)?;
-        };
+        self.supported_operations
+            .add_operation(device.external_id.as_ref(), c8y_operation_name)?;
 
-        let ops_dir = ops_dir.as_std_path();
-
-        let need_cloud_update = match is_child_operation_path(ops_dir) {
+        let need_cloud_update = match device.r#type {
             // for devices other than the main device, dynamic update of supported operations via file events is
             // disabled, so we have to additionally load new operations from the c8y operations for that device
-            true => self.update_operations(ops_dir)?,
+            EntityType::ChildDevice => self
+                .supported_operations
+                .load_all(device.external_id.as_ref(), &self.config.bridge_config)?,
 
             // for main devices new operation files are loaded dynamically as they are created, so only register one
             // operation we need
-            false => {
-                let bridge_config = &self.config.bridge_config;
-                let operation = c8y_api::smartrest::operations::get_operation(
-                    ops_file.as_std_path(),
-                    bridge_config,
-                )?;
+            EntityType::MainDevice => self.supported_operations.load(
+                device.external_id.as_ref(),
+                c8y_operation_name,
+                &self.config.bridge_config,
+            )?,
 
-                let current_operations = self
-                    .operations_for_device_mut(target)
-                    .expect("entity should've been checked before that it's not a service");
-
-                let prev_operation = current_operations.remove_operation(&operation.name);
-
-                // even if the body of the operation is different, as long as it has the same name, supported operations message
-                // will be the same, so we don't need to resend
-                let need_cloud_update = prev_operation.is_none();
-
-                current_operations.add_operation(operation);
-
-                need_cloud_update
-            }
+            EntityType::Service => unreachable!("error returned earlier"),
         };
 
         if need_cloud_update {
-            let cloud_update_operations_message = self.create_supported_operations(ops_dir)?;
+            let cloud_update_operations_message =
+                self.supported_operations.create_supported_operations(
+                    device.external_id.as_ref(),
+                    &self.config.bridge_config.c8y_prefix,
+                )?;
 
             return Ok(vec![cloud_update_operations_message]);
         }
 
         Ok(vec![])
-    }
-
-    /// Loads and saves a new supported operation set for a given device.
-    ///
-    /// All operation files from the given operation directory are loaded and set as the new supported operation set for
-    /// a given device. Invalid operation files are ignored.
-    ///
-    /// If the supported operation set changed, `Ok(true)` is returned to denote that this change should be sent to the
-    /// cloud.
-    fn update_operations(&mut self, dir: &Path) -> Result<bool, ConversionError> {
-        let operations = Operations::try_new(dir, &self.config.bridge_config)?;
-        let current_operations = if is_child_operation_path(dir) {
-            let child_id = get_child_external_id(dir)?;
-            let Some(current_operations) = self.children.get_mut(&child_id) else {
-                self.children.insert(child_id, operations);
-                return Ok(true);
-            };
-            current_operations
-        } else {
-            &mut self.operations
-        };
-        let modified = *current_operations != operations;
-        *current_operations = operations;
-
-        Ok(modified)
     }
 
     async fn register_restart_operation(
@@ -1706,7 +1597,7 @@ impl CumulocityConverter {
         command_name: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if let Some(c8y_op_name) = self
-            .operations
+            .supported_operations
             .get_operation_name_by_workflow_operation(command_name)
         {
             match self.register_operation(target, &c8y_op_name) {
@@ -1754,41 +1645,6 @@ impl CumulocityConverter {
 
         registration.push(self.request_software_list(target));
         Ok(registration)
-    }
-
-    fn operations_for_device(&self, device: &EntityTopicId) -> Option<&Operations> {
-        let device = self.entity_store.get(device)?;
-
-        match device.r#type {
-            EntityType::MainDevice => Some(&self.operations),
-            EntityType::ChildDevice => self.children.get(device.external_id.as_ref()),
-            EntityType::Service => None,
-        }
-    }
-
-    /// Return `Operations` struct for a given entity.
-    ///
-    /// Returns `None` if an entity is a service, as services can't have operations.
-    /// If `Operations` wasn't yet created for a device, this function creates it.
-    fn operations_for_device_mut(&mut self, device: &EntityTopicId) -> Option<&mut Operations> {
-        let device = self
-            .entity_store
-            .get(device)
-            .expect("Entity should've been registered");
-
-        match device.r#type {
-            EntityType::MainDevice => Some(&mut self.operations),
-            EntityType::ChildDevice => {
-                let key = device.external_id.as_ref();
-                // can't avoid the double hash+lookup because of borrow checker limitation
-                // https://www.reddit.com/r/rust/comments/qi3ye9/comment/hih04qs/
-                if !self.children.contains_key(key) {
-                    self.children.insert(key.to_string(), Operations::default());
-                }
-                self.children.get_mut(key)
-            }
-            EntityType::Service => None,
-        }
     }
 }
 
