@@ -5,6 +5,7 @@ use crate::error;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
 use crate::warning;
+use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
@@ -61,7 +62,8 @@ impl DownloadCertCmd {
             common_name.clone(),
             self.key_path.clone(),
             self.csr_path.clone(),
-        )?;
+        )
+        .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
 
         let http = self.root_certs.blocking_client();
         let url = format!("https://{}/.well-known/est/simpleenroll", self.c8y_url);
@@ -117,7 +119,7 @@ impl DownloadCertCmd {
 
         // Read the security token from /dev/tty
         let security_token = if self.security_token.is_empty() {
-            rpassword::read_password_from_tty(Some("Enter password: "))?
+            rpassword::read_password_from_tty(Some("Enter security token: "))?
         } else {
             self.security_token.clone()
         };
