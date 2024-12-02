@@ -11,6 +11,7 @@ on:
 
   # update on changes
   push:
+    branches: [ main ]
     paths:
       - '.devcontainer/**'
 
