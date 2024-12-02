@@ -24,7 +24,7 @@ pub enum TEdgeCertCli {
         #[clap(long = "device-id")]
         id: String,
 
-        cloud: Option<tedge_config::Cloud>,
+        cloud: Option<Cloud>,
     },
 
     /// Create a certificate signing request
@@ -37,17 +37,17 @@ pub enum TEdgeCertCli {
         #[clap(long = "output-path")]
         output_path: Option<Utf8PathBuf>,
 
-        cloud: Option<tedge_config::Cloud>,
+        cloud: Option<Cloud>,
     },
 
     /// Renew the device certificate
-    Renew { cloud: Option<tedge_config::Cloud> },
+    Renew { cloud: Option<Cloud> },
 
     /// Show the device certificate, if any
-    Show { cloud: Option<tedge_config::Cloud> },
+    Show { cloud: Option<Cloud> },
 
     /// Remove the device certificate
-    Remove { cloud: Option<tedge_config::Cloud> },
+    Remove { cloud: Option<Cloud> },
 
     /// Upload root certificate
     Upload(UploadCertCli),

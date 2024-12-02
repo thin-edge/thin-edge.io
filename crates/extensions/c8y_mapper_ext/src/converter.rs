@@ -217,10 +217,10 @@ impl CumulocityConverter {
         let prefix = &config.bridge_config.c8y_prefix;
 
         let operations_by_xid = {
-            let mut operations = get_child_ops(&*config.ops_dir, &config.bridge_config, prefix)?;
+            let mut operations = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
             operations.insert(
                 config.device_id.clone(),
-                Operations::try_new(&*config.ops_dir, &config.bridge_config, prefix)?,
+                Operations::try_new(&*config.ops_dir, &config.bridge_config)?,
             );
             operations
         };
@@ -1560,7 +1560,6 @@ impl CumulocityConverter {
                 device.external_id.as_ref(),
                 c8y_operation_name,
                 &self.config.bridge_config,
-                &bridge_config.c8y_prefix,
             )?,
 
             EntityType::Service => unreachable!("error returned earlier"),

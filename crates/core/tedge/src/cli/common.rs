@@ -1,7 +1,9 @@
+use anyhow::bail;
 use std::borrow::Cow;
 use std::str::FromStr;
 use tedge_config::system_services::SystemService;
 use tedge_config::ProfileName;
+use yansi::Paint;
 
 pub type Cloud = MaybeBorrowedCloud<'static>;
 
@@ -16,9 +18,21 @@ impl FromStr for Cloud {
             ("az", None) => Ok(Self::Azure(None)),
             (_, Some(("aws", profile))) => Ok(Self::aws(Some(profile.parse()?))),
             ("aws", None) => Ok(Self::Aws(None)),
-            _ => todo!(),
+            (cloud, _) => bail!(
+                "Unknown cloud type {cloud:?}. Valid cloud types are {}.",
+                valid_cloud_types()
+            ),
         }
     }
+}
+
+pub fn valid_cloud_types() -> String {
+    format!(
+        "{}, {}, {}",
+        "c8y".yellow().bold(),
+        "az".yellow().bold(),
+        "aws".yellow().bold()
+    )
 }
 
 pub type CloudBorrow<'a> = MaybeBorrowedCloud<'a>;
@@ -29,6 +43,16 @@ pub enum MaybeBorrowedCloud<'a> {
     C8y(Option<Cow<'a, ProfileName>>),
     Azure(Option<Cow<'a, ProfileName>>),
     Aws(Option<Cow<'a, ProfileName>>),
+}
+
+impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::Cloud<'a> {
+    fn from(value: &'a MaybeBorrowedCloud<'a>) -> tedge_config::Cloud<'a> {
+        match value {
+            MaybeBorrowedCloud::C8y(p) => tedge_config::Cloud::C8y(p.as_deref()),
+            MaybeBorrowedCloud::Azure(p) => tedge_config::Cloud::Az(p.as_deref()),
+            MaybeBorrowedCloud::Aws(p) => tedge_config::Cloud::Aws(p.as_deref()),
+        }
+    }
 }
 
 impl Cloud {

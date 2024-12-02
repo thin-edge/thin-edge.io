@@ -1168,45 +1168,36 @@ impl TEdgeConfigReader {
         .unwrap()
     }
 
-    pub fn device_key_path(&self, cloud: Option<&Cloud>) -> Result<&Utf8Path, MultiError> {
-        Ok(match cloud {
+    pub fn device_key_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<&Utf8Path, MultiError> {
+        Ok(match cloud.map(<_>::into) {
             None => &self.device.key_path,
-            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile.as_ref())?.device.key_path,
-            Some(Cloud::Az(profile)) => &self.az.try_get(profile.as_ref())?.device.key_path,
-            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile.as_ref())?.device.key_path,
+            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.key_path,
+            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.key_path,
+            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.key_path,
         })
     }
 
-    pub fn device_cert_path(&self, cloud: Option<&Cloud>) -> Result<&Utf8Path, MultiError> {
-        Ok(match cloud {
+    pub fn device_cert_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<&Utf8Path, MultiError> {
+        Ok(match cloud.map(<_>::into) {
             None => &self.device.cert_path,
-            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile.as_ref())?.device.cert_path,
-            Some(Cloud::Az(profile)) => &self.az.try_get(profile.as_ref())?.device.cert_path,
-            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile.as_ref())?.device.cert_path,
+            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.cert_path,
+            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.cert_path,
+            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
         })
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Cloud {
-    C8y(Option<ProfileName>),
-    Az(Option<ProfileName>),
-    Aws(Option<ProfileName>),
-}
-
-impl FromStr for Cloud {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match (s, s.split_once("@")) {
-            ("c8y", _) => Ok(Self::C8y(None)),
-            ("az", _) => Ok(Self::Az(None)),
-            ("aws", _) => Ok(Self::Aws(None)),
-            (_, Some(("c8y", profile))) => Ok(Self::C8y(Some(profile.parse()?))),
-            (_, Some(("az", profile))) => Ok(Self::Az(Some(profile.parse()?))),
-            (_, Some(("aws", profile))) => Ok(Self::Aws(Some(profile.parse()?))),
-            (_, _) => anyhow::bail!("Unrecognised cloud type: {s:?}"),
-        }
-    }
+pub enum Cloud<'a> {
+    C8y(Option<&'a ProfileName>),
+    Az(Option<&'a ProfileName>),
+    Aws(Option<&'a ProfileName>),
 }
 
 pub trait CloudConfig {

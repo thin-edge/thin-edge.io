@@ -1,5 +1,4 @@
 use crate::bridge::aws::BridgeConfigAwsParams;
-use std::hash::Hash;
 use crate::bridge::azure::BridgeConfigAzureParams;
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
@@ -26,9 +25,9 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
-use yansi::Paint as _;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::path::Path;
@@ -48,6 +47,7 @@ use tedge_utils::paths::ok_if_not_found;
 use tedge_utils::paths::DraftFile;
 use tracing::warn;
 use which::which;
+use yansi::Paint as _;
 
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 
@@ -281,15 +281,27 @@ impl ConnectCommand {
 fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
     match cloud {
         MaybeBorrowedCloud::Aws(_) => {
-            let profiles = config.aws.keys().map(|s| Some(s?.to_string())).collect::<Vec<_>>();
+            let profiles = config
+                .aws
+                .keys()
+                .map(|s| Some(s?.to_string()))
+                .collect::<Vec<_>>();
             disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
         }
         MaybeBorrowedCloud::Azure(_) => {
-            let profiles = config.az.keys().map(|s| Some(s?.to_string())).collect::<Vec<_>>();
+            let profiles = config
+                .az
+                .keys()
+                .map(|s| Some(s?.to_string()))
+                .collect::<Vec<_>>();
             disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
         }
         MaybeBorrowedCloud::C8y(_) => {
-            let profiles = config.c8y.keys().map(|s| Some(s?.to_string())).collect::<Vec<_>>();
+            let profiles = config
+                .c8y
+                .keys()
+                .map(|s| Some(s?.to_string()))
+                .collect::<Vec<_>>();
             disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
             disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
         }
@@ -297,15 +309,27 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
     Ok(())
 }
 
-fn disallow_matching_configurations(config: &TEdgeConfig, configuration: fn(Option<String>) -> ReadableKey, profiles: &[Option<String>]) -> anyhow::Result<()> {
-    let keys = profiles.into_iter().cloned().map(configuration).collect::<Vec<_>>();
+fn disallow_matching_configurations(
+    config: &TEdgeConfig,
+    configuration: fn(Option<String>) -> ReadableKey,
+    profiles: &[Option<String>],
+) -> anyhow::Result<()> {
+    let keys = profiles
+        .iter()
+        .cloned()
+        .map(configuration)
+        .collect::<Vec<_>>();
     let entries = keys.into_iter().filter_map(|key| {
         let value = config.read_string(&key).ok()?;
         Some((key, value))
-});
+    });
     if let Some(matches) = find_matching(entries) {
-        let keys = matches.iter().map(|k| format!("{}", k.yellow().bold())).collect::<Vec<_>>().join(", ");
-        
+        let keys = matches
+            .iter()
+            .map(|k| format!("{}", k.yellow().bold()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
         bail!("The configurations: {keys} should be set to diffrent values, but are currently set to the same value");
     }
     Ok(())
@@ -317,7 +341,7 @@ fn find_matching<K, V: Hash + Eq>(entries: impl Iterator<Item = (K, V)>) -> Opti
         acc
     });
 
-    match_map.into_iter().map(|(_, v)| v).find(|t| t.len() > 1)
+    match_map.into_values().find(|t| t.len() > 1)
 }
 
 pub fn bridge_config(

@@ -3,6 +3,7 @@ use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use c8y_api::smartrest::error::OperationsError;
+use c8y_api::smartrest::operations::C8yPrefix;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::C8YHttpConfig;
@@ -282,7 +283,6 @@ impl C8yMapperConfig {
                 .join(SUPPORTED_OPERATIONS_DIRECTORY)
                 .join(C8Y_CLOUD),
             bridge_config,
-            &bridge_config.c8y_prefix,
         ) {
             for topic in operations.topics_for_operations() {
                 topic_filter.add(&topic)?;
@@ -337,6 +337,12 @@ impl Record for BridgeConfig {
             ".bridge.topic_prefix" => Some(self.c8y_prefix.as_str().into()),
             _ => None,
         }
+    }
+}
+
+impl C8yPrefix for BridgeConfig {
+    fn c8y_prefix(&self) -> &TopicPrefix {
+        &self.c8y_prefix
     }
 }
 
