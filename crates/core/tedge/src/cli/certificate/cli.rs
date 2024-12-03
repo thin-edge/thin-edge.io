@@ -253,7 +253,7 @@ pub enum DownloadCertCli {
         /// You will be prompted for input if the value is not provided or is empty
         #[clap(long = "device-id")]
         #[arg(
-            env = "C8Y_DEVICE",
+            env = "DEVICE_ID",
             hide_env_values = true,
             hide_default_value = true,
             default_value = ""
@@ -262,7 +262,7 @@ pub enum DownloadCertCli {
 
         #[clap(long)]
         #[arg(
-            env = "C8Y_TOKEN",
+            env = "DEVICE_TOKEN",
             hide_env_values = true,
             hide_default_value = true,
             default_value = ""
