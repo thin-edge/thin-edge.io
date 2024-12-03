@@ -3825,6 +3825,7 @@ dependencies = [
  "certificate",
  "clap",
  "doku",
+ "humantime",
  "hyper 0.14.28",
  "mime_guess",
  "mockall",
