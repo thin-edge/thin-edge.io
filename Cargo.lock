@@ -3942,6 +3942,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "strum",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",

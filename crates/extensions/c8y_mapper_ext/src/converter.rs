@@ -107,6 +107,7 @@ const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
+//TODO Remove
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug)]
