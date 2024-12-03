@@ -7,13 +7,19 @@ use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::OffsetDateTime;
+use certificate::CloudRootCerts;
 use reqwest::blocking;
 use reqwest::blocking::multipart;
+use reqwest::Identity;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Upload a file to Cumulocity
 pub struct C8yUpload {
+    /// TLS Client configuration
+    pub identity: Option<Identity>,
+    pub cloud_root_certs: CloudRootCerts,
+
     /// Device identifier
     pub device_id: String,
 
@@ -52,9 +58,19 @@ impl Command for C8yUpload {
 }
 
 impl C8yUpload {
+    fn client(&self) -> Result<blocking::Client, Error> {
+        let builder = self.cloud_root_certs.blocking_client_builder();
+        let builder = if let Some(identity) = &self.identity {
+            builder.identity(identity.clone())
+        } else {
+            builder
+        };
+        Ok(builder.build()?)
+    }
+
     pub fn get_internal_id(&self) -> Result<String, Error> {
         let url_get_id: String = self.c8y.proxy_url_for_internal_id(&self.device_id);
-        let http_result = blocking::Client::new().get(url_get_id).send()?;
+        let http_result = self.client()?.get(url_get_id).send()?;
         let http_response = http_result.error_for_status()?;
         let object: InternalIdResponse = http_response.json()?;
         Ok(object.id())
@@ -69,7 +85,8 @@ impl C8yUpload {
             extras: self.json.clone(),
         };
         let create_event_url = self.c8y.proxy_url_for_create_event();
-        let http_result = blocking::Client::new()
+        let http_result = self
+            .client()?
             .post(create_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
@@ -88,7 +105,8 @@ impl C8yUpload {
             .text("type", mime_type)
             .part("file", file);
 
-        let http_result = blocking::Client::new()
+        let http_result = self
+            .client()?
             .post(upload_file_url)
             .header("Accept", "application/json")
             .header("Content-Type", "multipart/form-data")

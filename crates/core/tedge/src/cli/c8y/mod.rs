@@ -61,10 +61,14 @@ impl BuildCommand for C8yCmd {
                 mime_type,
                 profile,
             } => {
+                let identity = config.http.client.auth.identity()?;
+                let cloud_root_certs = config.cloud_root_certs();
                 let c8y = C8yEndPoint::from_config(&config, profile.as_deref())?;
                 let device_id = config.device.id()?.clone();
                 let text = text.unwrap_or_else(|| format!("Uploaded file: {file:?}"));
                 upload::C8yUpload {
+                    identity,
+                    cloud_root_certs,
                     device_id,
                     c8y,
                     event_type,
