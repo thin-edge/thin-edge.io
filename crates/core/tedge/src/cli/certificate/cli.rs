@@ -13,6 +13,7 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use clap::ValueHint;
+use std::time::Duration;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
@@ -149,7 +150,13 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Download(DownloadCertCli::C8y { id, token, profile }) => {
+            TEdgeCertCli::Download(DownloadCertCli::C8y {
+                id,
+                token,
+                profile,
+                retry_every,
+                max_timeout,
+            }) => {
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
                 let cmd = c8y::DownloadCertCmd {
                     device_id: id,
@@ -159,6 +166,8 @@ impl BuildCommand for TEdgeCertCli {
                     cert_path: c8y_config.device.cert_path.to_owned(),
                     key_path: c8y_config.device.key_path.to_owned(),
                     csr_path: c8y_config.device.csr_path.to_owned(),
+                    retry_every,
+                    max_timeout,
                 };
                 cmd.into_boxed()
             }
@@ -293,6 +302,16 @@ pub enum DownloadCertCli {
         #[clap(long)]
         /// The Cumulocity cloud profile (when the device is connected to several tenants)
         profile: Option<ProfileName>,
+
+        #[clap(long, default_value = "30s")]
+        #[arg(value_parser = humantime::parse_duration)]
+        /// Delay between two attempts, polling till the device is registered
+        retry_every: Duration,
+
+        #[clap(long, default_value = "10m")]
+        #[arg(value_parser = humantime::parse_duration)]
+        /// Maximum time waiting for the device to be registered
+        max_timeout: Duration,
     },
 }
 
