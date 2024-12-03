@@ -4113,7 +4113,9 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "regex",
  "syn 2.0.77",
+ "test-case",
 ]
 
 [[package]]

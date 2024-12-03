@@ -782,12 +782,14 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
         let re = segments
             .iter()
             .map(|fog| match fog {
-                FieldOrGroup::Multi(m) => format!("{}(?:@([^\\.]+))?", m.ident),
+                FieldOrGroup::Multi(m) => {
+                    format!("{}(?:(?:@|[\\._]profiles[\\._])([^\\.]+))?", m.ident)
+                }
                 FieldOrGroup::Field(f) => f.ident().to_string(),
                 FieldOrGroup::Group(g) => g.ident.to_string(),
             })
             .collect::<Vec<_>>()
-            .join("\\.");
+            .join("[\\._]");
         let re = format!("^{re}$");
         let regex_parser = parse_quote_spanned!(ident.span()=> if let Some(captures) = ::regex::Regex::new(#re).unwrap().captures(value) {});
         let formatters = field_names
@@ -882,6 +884,7 @@ fn is_read_write(path: &VecDeque<&FieldOrGroup>) -> bool {
 mod tests {
     use super::*;
     use syn::ItemImpl;
+    use test_case::test_case;
 
     #[test]
     fn output_parses() {
@@ -937,6 +940,34 @@ mod tests {
         );
     }
 
+    /// The regex generated for `c8y.url`
+    ///
+    /// This is used to verify both the output of the macro matches this regex
+    /// and that the regex itself functions as intended
+    const C8Y_URL_REGEX: &str = "^c8y(?:(?:@|[\\._]profiles[\\._])([^\\.]+))?[\\._]url$";
+
+    #[test_case("c8y.url", None; "with no profile specified")]
+    #[test_case("c8y@name.url", Some("name"); "with profile shorthand syntax")]
+    #[test_case("c8y@name_underscore.url", Some("name_underscore"); "with underscore profile shorthand syntax")]
+    #[test_case("c8y.profiles.name.url", Some("name"); "with profile toml syntax")]
+    #[test_case("c8y_profiles_name_url", Some("name"); "with environment variable profile")]
+    #[test_case("c8y_profiles_name_underscore_url", Some("name_underscore"); "with environment variable underscore profile")]
+    fn regex_matches(input: &str, output: Option<&str>) {
+        let re = regex::Regex::new(C8Y_URL_REGEX).unwrap();
+        assert_eq!(
+            re.captures(input).unwrap().get(1).map(|s| s.as_str()),
+            output
+        );
+    }
+
+    #[test_case("not.c8y.url"; "with an invalid prefix")]
+    #[test_case("c8y.url.something"; "with an invalid suffix")]
+    #[test_case("c8y@multiple.profile.sections.url"; "with an invalid profile name")]
+    fn regex_fails(input: &str) {
+        let re = regex::Regex::new(C8Y_URL_REGEX).unwrap();
+        assert!(re.captures(input).is_none());
+    }
+
     #[test]
     fn from_str_generates_regex_matches_for_multi_fields() {
         let input: crate::input::Configuration = parse_quote!(
@@ -966,7 +997,7 @@ mod tests {
                         },
                         _ => unimplemented!("just a test, no error handling"),
                     };
-                    if let Some(captures) = ::regex::Regex::new("^c8y(?:@([^\\.]+))?\\.url$").unwrap().captures(value) {
+                    if let Some(captures) = ::regex::Regex::new(#C8Y_URL_REGEX).unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         return Ok(Self::C8yUrl(key0));
                     };
