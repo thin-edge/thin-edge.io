@@ -101,8 +101,8 @@ We are using `sudo -u` to create the file because we want to make sure that the 
 :::
 
 Whenever a new operation file is added to this directory, the supported operations list for that device is updated
-by aggregating all the operation file names in that directory and this updated list is sent to the cloud
-using the [SmartRest 114 message](https://cumulocity.com/guides/reference/smartrest-two/#114).
+by aggregating all the operation file names in that directory and this updated list is sent to the cloud 
+using the [SmartREST 114 message](https://cumulocity.com/docs/smartrest/mqtt-static-templates/#114).
 
 :::warning
 Updating the supported operations list by manually adding files to the operations directory is currently deprecated
@@ -140,7 +140,20 @@ The `Supported Operations API` can also be used to add support for custom operat
 For e.g: Cumulocity supports the `c8y_Command` that enables execution of shell commands on the device from the cloud.
 The same operation files can be used to define how the mapper should handle these operations when triggered from the cloud.
 
-### Adding new custom operation
+### Creating new custom operation
+
+Custom operations can be triggered on the device by SmartREST message or JSON over MQTT.
+In both case the behavior of thin-edge is defined by the operation configuration file that tells to which messages the device must react and how.
+* With SmartREST, the SmartREST code of the message determines the operation to execute and  the SmartREST payload is passed unchanged to a script to which the command is delegated.
+* With JSON over MQTT the name of operation to execute is given by the JSON payload of the message and the operation is delegated by the agent running on the target device (which can be the main device of a child device ), possibly with some transformation of the JSON payload.
+
+:::note
+The operation file needs to be readable by %%te%% user - `tedge` - and should have permissions `644`.
+The filename **MUST** follow the Cumulocity naming constraints on operation names: i.e. only use alphanumeric and underscore characters, e.g. `A-Z`, `a-z`, `0-9` and `_`. Alternatively, it can have `.template` extension for a operation template file.
+You cannot use a dash "-", or any other characters in the filename, otherwise the custom operation definition will be ignored.
+:::
+
+#### Create operation delivered via SmartREST message
 
 An operation file must be created with the name of the operation:
 
@@ -148,32 +161,17 @@ An operation file must be created with the name of the operation:
 sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Command
 ```
 
-...with the following content:
+... with the definition containing `on_message` field:
 
 ```toml title="file: /etc/tedge/operations/c8y/c8y_Command"
 [exec]
-  topic = "c8y/s/ds"
-  on_message = "511"
-  command = "/etc/tedge/operations/command"
-  timeout = 10
+topic = "c8y/s/ds"
+on_message = "511"
+command = "/etc/tedge/operations/command"
+timeout = 10
 ```
 
-In this example, the mapper is configured to pick up the `c8y_Command` operation message received on `c8y/s/ds` topic
-with the SmartRest template message prefix `511`.
-When such a message is received, the operation plugin located at `/etc/tedge/operations/command` would be executed.
-The operation is configured to `timeout` after 10 seconds, to avoid it from running for too long/forever.
-
-:::note
-The operation file needs to be readable by %%te%% user - `tedge` - and should have permissions `644`.
-The filename **MUST** only use alphanumeric and underscore characters, e.g. `A-Z`, `a-z`, `0-9` and `_`.
-You cannot use a dash "-", or any other characters in the filename, otherwise the custom operation definition will be ignored.
-:::
-
-:::note
-The `timeout` that is configured will be in seconds.
-If a custom operation is not configured with a `timeout` value, then it will use default `timeout`,.i.e. 3600 seconds.
-If the operation does not complete within that specified `timeout` period, then the operation will be stopped/killed, and marked as failed in the cloud.
-:::
+The mapper is configured to pick up the `c8y_Command` operation message received on `c8y/s/ds` topic with the SmartREST template message prefix `511`. When such a message is received, the operation plugin located at `/etc/tedge/operations/command` would be executed. The operation is configured to `timeout` after 10 seconds, to avoid it from running for too long/forever.
 
 Here is a sample operation plugin that can handle the `c8y_Command`:
 
@@ -197,7 +195,7 @@ fi
 exit "$EXIT_CODE"
 ```
 
-This script is invoked with the received SmartREST message (`511,DeviceSerial,<shell-command>`).
+This script is invoked with the received SmartREST message (`511,<device-xid>,<shell-command>`).
 This simple script parses the third field of the received SmartREST message and executes that command.
 If it exits with the status code `0`, a successful message with the stdout content will be reported to Cumulocity.
 If it exits with a non-zero code, a failure message with the stderr content will be sent out.
@@ -219,12 +217,13 @@ For e.g: if a child device is incapable of receiving and processing the tedge `r
 but can be restarted directly from the tedge device via some remote restart commands,
 the `c8y_Restart` operation file for the child device can be defined to invoke those remote restart commands.
 
-### List of currently supported operations parameters
+##### Configuration parameters
 
 * `topic` - The topic on which the operation will be executed.
-* `on_message` - The SmartRest template on which the operation will be executed.
+* `on_message` - The SmartREST template on which the operation will be executed.
 * `command` - The command to execute.
 * `result_format` - The expected command output format: `"text"` or `"csv"`, `"text"` being the default.
+* `timeout` - The time in seconds after which the operation will be stopped/killed and marked as failed in cloud, by default it is 3600 seconds.
 
 :::info
 The `command` parameter accepts command arguments when provided as a one string, e.g.
@@ -247,3 +246,179 @@ Be aware that SmartREST payload is always added as the last argument. The comman
 python /etc/tedge/operations/command.py $SMART_REST_PAYLOAD
 ```
 :::
+
+#### Create operation delivered via Cumulocity JSON over MQTT  
+
+There are two approaches for handling custom operation via JSON over MQTT.
+* the commands can be processed by a user-provided script
+* the commands can be processed by the agent following a user-provided workflow
+
+The first one can only be used with main device, while the second one extends it to child devices. Here is a sample of incoming JSON over MQTT message with custom operation fragment on topic `c8y/devicecontrol/notifications`: 
+
+```json
+{
+  "delivery": {
+    "log": [],
+    "time": "2024-07-22T10:26:31.457Z",
+    "status": "PENDING"
+  },
+  "agentId":"201802315",
+  "creationTime":"2024-09-02T19:56:01.313Z",
+  "deviceId":"201802315",
+  "id":"1800380",
+  "status":"PENDING",
+  "c8y_Command":{
+    "text":"echo helloworld"
+  },
+  "description":"Execute command",
+  "externalSource":{
+    "externalId":"test-device",
+    "type":"c8y_Serial"
+  }
+}
+```
+
+The first approach assumes that user will create the operation file with the name of the operation:
+
+```sh
+sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Command
+```
+
+... with the definition containing `on_fragment` field:
+
+```toml title="file: /etc/tedge/operations/c8y/c8y_Command"
+[exec]
+topic = "c8y/devicecontrol/notifications"
+on_fragment = "c8y_Command"
+command = "/etc/tedge/operations/command ${.payload.c8y_Command.text}"
+skip_status_update = false
+```
+
+The mapper is configured to pick up the message received on the topic provided in the operation file field `topic` (if the field is not provided, the default topic `c8y/devicecontrol/notifications` will be used). Mapper checks if the received message contains the value of `on_fragment`. Then, the operation plugin located at `/etc/tedge/operations/command` will be executed with the arguments provided in message payload (in this example `${.payload.c8y_Command.text}` will be replaced with `echo helloworld`).
+
+:::info
+Users can provide their own custom topic in the operation file:
+
+```toml title="file: /etc/tedge/operations/c8y/c8y_Command"
+[exec]
+topic = "${.bridge.topic_prefix}/custom/topic"
+on_fragment = "c8y_Command"
+command = "/etc/tedge/operations/command ${.payload.c8y_Command.text}"
+skip_status_update = false
+```
+
+Instead of providing `topic_prefix` manually, you can use `${.bridge.topic_prefix}` template to derive it from the bridge config of current cloud instance.
+
+The mapper will automatically subscribe to all custom topic provided in operation file under `topic` field when connecting to the cloud.  
+:::
+
+:::note
+When `on_fragment` is provided with `on_message`, the mapper will ignore the operation.
+:::
+
+For the second approach, the user has to create a operation template file with `.template` extension, e.g.: 
+
+```toml title="file: /etc/tedge/operations/c8y/c8y_Command.template"
+[exec]
+topic = "c8y/devicecontrol/notifications"
+on_fragment = "c8y_Command"
+
+[exec.workflow]
+operation = "command"
+input = "${.payload.c8y_Command.text}"
+```
+
+To indicate that devices are supporting the operation, the device must publish a command capability message where command name is derived from `exec.workflow.operation`:
+
+```sh
+tedge mqtt pub -r 'te/device/<name>///cmd/command' '{}'
+```
+
+:::note
+If the workflow file with the same command name is defined, capability message will be sent automatically.
+:::
+
+On receiving, mapper creates a symlink at `/etc/tedge/operations/c8y/c8y_Command` (for main device) or `/etc/tedge/operations/c8y/<external_id>/c8y_Command` (for child device) to operation template file.
+
+The mapper detects the change in the `/etc/tedge/operations/c8y` directory except for `.template` file. When the change is detected, the SmartREST `114` (supported operation) message is sent to Cumulocity.
+
+After that, the received JSON over MQTT message is converted to %%te%% command, preserving all parameters provided in `input` field.
+
+```text title="Topic"
+te/device/<name>///cmd/command/c8y-mapper-1800380
+```
+
+```json5 title="Payload"
+{
+      "status": "init",
+      "text":"echo helloworld",
+}
+```
+
+:::info
+An operation file definition can contain multiple `input` fields:
+
+```toml title="file: /etc/tedge/operations/c8y/c8y_Command.template"
+[exec]
+topic = "c8y/devicecontrol/notifications"
+on_fragment = "c8y_Command"
+
+[exec.workflow]
+operation = "command"
+input.x = "${.payload.c8y_Command.text}"
+input.y = { foo = "bar" }
+```
+
+Conversion to %%te%% command will contain both of them:  
+
+```text title="Topic"
+te/device/<name>///cmd/command/c8y-mapper-1800380
+```
+
+```json5 title="Payload"
+{
+      "status": "init",
+      "text":"echo helloworld",
+      "foo":"bar",
+}
+```
+
+Make sure that provided input is JSON object, otherwise the operation execution will be skipped.  
+
+:::
+
+After conversion, the `tedge-agent` handles custom operation commands using the workflow definition at `/etc/tedge/operations/command.toml`.
+Workflow definition must be created by the user.
+
+Here is a sample workflow for `C8y_Command`:
+
+```toml
+operation = "command"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/command ${.payload.c8y_Command.text}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+```
+
+##### Configuration parameters
+Available in all operation files with the JSON over MQTT input:
+* `topic` - The topic on which the operation will be executed (by default: `c8y/devicecontrol/notifications`).
+* `on_fragment` - Used to check if the mapping file matches the input payload.
+
+Available only in non-template operation file definition: 
+* `command` - The command to execute.
+* `skip_status_update` - Optional boolean value that decide whether or not mapper should send operation status update messages (SmartREST messages `501`-`503`/`504`-`506`). The default value is `false`.
+
+Available only in the template operation file definition:
+* `workflow.operation` - The command name that will trigger workflow execution.
+* `workflow.input` - The JSON object input that can be used in the workflow.
