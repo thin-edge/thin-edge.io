@@ -1,5 +1,4 @@
 use std::io;
-use std::path::PathBuf;
 
 // allowing large size difference between variants warning,
 // because the enum `SmartRestSerializerError` is already Boxed
@@ -42,27 +41,6 @@ pub enum SmartRestDeserializerError {
 
     #[error("No response")]
     NoResponse,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum OperationsError {
-    #[error("Failed to read directory: {dir}")]
-    ReadDirError { dir: PathBuf },
-
-    #[error(transparent)]
-    FromIo(#[from] std::io::Error),
-
-    #[error("Cannot extract the operation name from the path: {0}")]
-    InvalidOperationName(PathBuf),
-
-    #[error("Error while parsing operation file: '{0}': {1}.")]
-    TomlError(PathBuf, #[source] toml::de::Error),
-
-    #[error(transparent)]
-    FromUtf8Error(#[from] std::string::FromUtf8Error),
-
-    #[error(transparent)]
-    FromMqttError(#[from] mqtt_channel::MqttError),
 }
 
 #[derive(thiserror::Error, Debug)]

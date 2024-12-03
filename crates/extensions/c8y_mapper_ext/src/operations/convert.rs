@@ -1,10 +1,10 @@
 //! Converting Cumulocity Smartrest operation messages into local thin-edge operation messages.
+use crate::supported_operations::operation::Operation;
 use c8y_api::json_c8y_deserializer::C8yDeviceProfile;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
-use c8y_api::smartrest::operations::Operation;
 use serde_json::Value;
 use std::sync::Arc;
 use tedge_api::commands::CommandStatus;

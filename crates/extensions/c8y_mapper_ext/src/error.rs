@@ -1,4 +1,4 @@
-use c8y_api::smartrest::error::OperationsError;
+use crate::supported_operations::OperationsError;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::error::SmartRestSerializerError;
