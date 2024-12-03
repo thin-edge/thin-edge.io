@@ -4139,6 +4139,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "doku",
+ "humantime",
  "hyper 1.6.0",
  "mime_guess",
  "mockall",
