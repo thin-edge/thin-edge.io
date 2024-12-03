@@ -3848,6 +3848,7 @@ dependencies = [
  "tedge-write",
  "tedge_api",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_utils",
  "tempfile",
  "test-case",
