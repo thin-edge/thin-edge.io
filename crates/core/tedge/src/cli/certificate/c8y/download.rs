@@ -40,6 +40,12 @@ pub struct DownloadCertCmd {
 
     /// The path where the device CSR file will be stored
     pub csr_path: Utf8PathBuf,
+
+    /// Delay between two attempts, polling till the device is registered
+    pub retry_every: Duration,
+
+    /// Maximum time waiting for the device to be registered
+    pub max_timeout: Duration,
 }
 
 #[async_trait::async_trait]
@@ -71,6 +77,7 @@ impl DownloadCertCmd {
         let url = format!("https://{}/.well-known/est/simpleenroll", self.c8y_url);
         let url = Url::parse(&url)?;
 
+        let started = std::time::Instant::now();
         loop {
             let result = self
                 .post_device_csr(&http, &url, &common_name, &security_token, &csr)
@@ -103,8 +110,13 @@ impl DownloadCertCmd {
                     )
                 }
             }
-            warning!("Will retry in 5 seconds");
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            if started.elapsed() > self.max_timeout {
+                return Err(anyhow::anyhow!(
+                    "Maximum timeout elapsed. No certificate has been downloaded"
+                ));
+            }
+            warning!("Will retry in {} seconds", self.retry_every.as_secs());
+            tokio::time::sleep(self.retry_every).await;
         }
     }
 
