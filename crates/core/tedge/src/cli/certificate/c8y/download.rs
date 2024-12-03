@@ -7,6 +7,7 @@ use crate::log::MaybeFancy;
 use crate::warning;
 use anyhow::Context;
 use anyhow::Error;
+use c8y_api::json_c8y_deserializer::C8yAPIError;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use hyper::StatusCode;
@@ -72,7 +73,8 @@ impl DownloadCertCmd {
         .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
 
         let http = self.root_certs.blocking_client();
-        let url = format!("https://{}/.well-known/est/simpleenroll", self.c8y_url);
+        let c8y_url = &self.c8y_url;
+        let url = format!("https://{c8y_url}/.well-known/est/simpleenroll");
         let url = Url::parse(&url)?;
 
         let started = std::time::Instant::now();
@@ -84,19 +86,11 @@ impl DownloadCertCmd {
                         store_device_cert(&self.cert_path, cert)?;
                         return Ok(());
                     }
-                    error!(
-                        "Fail to extract a certificate from the response returned by {}",
-                        self.c8y_url
-                    );
+                    error!("Fail to extract a certificate from the response returned by {c8y_url}");
                 }
                 Ok(response) => {
-                    error!(
-                        "The device {} is not registered yet on {}: {}:{:?}",
-                        common_name,
-                        self.c8y_url,
-                        response.status(),
-                        response.text()
-                    );
+                    let error = Self::c8y_error_message(response);
+                    error!("The device {common_name} is not registered yet on {c8y_url}: {error}");
                 }
                 Err(err) => {
                     error!(
@@ -155,5 +149,14 @@ impl DownloadCertCmd {
             .header(CONTENT_TYPE, "text/plain")
             .body(csr.to_string())
             .send()
+    }
+
+    fn c8y_error_message(response: Response) -> String {
+        let status = response.status().to_string();
+        if let Ok(C8yAPIError { message, .. }) = response.json() {
+            format!("{status}: {}", message)
+        } else {
+            status
+        }
     }
 }
