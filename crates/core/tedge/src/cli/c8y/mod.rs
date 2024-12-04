@@ -39,6 +39,7 @@ pub enum C8yCmd {
         json: HashMap<String, serde_json::Value>,
 
         /// Optional c8y cloud profile
+        #[clap(long)]
         profile: Option<ProfileName>,
     },
 }
