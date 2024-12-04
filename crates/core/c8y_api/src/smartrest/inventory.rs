@@ -9,13 +9,16 @@
 // smartrest messages are sent. There should be one comprehensive API for
 // generating them.
 
-use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::topic::publish_topic_from_ancestors;
 use crate::smartrest::topic::C8yTopic;
 use mqtt_channel::MqttMessage;
 use std::time::Duration;
 use tedge_config::TopicPrefix;
 
+use super::message_ids::CHILD_DEVICE_CREATION;
+use super::message_ids::SERVICE_CREATION;
+use super::message_ids::SET_DEVICE_PROFILE_THAT_IS_BEING_APPLIED;
+use super::message_ids::SET_REQUIRED_AVAILABILITY;
 use super::payload::SmartrestPayload;
 
 /// Create a SmartREST message for creating a child device under the given ancestors.
@@ -49,7 +52,7 @@ pub fn child_device_creation_message(
     }
 
     let payload = SmartrestPayload::serialize((
-        101,
+        CHILD_DEVICE_CREATION,
         child_id,
         device_name.unwrap_or(child_id),
         device_type.unwrap_or("thin-edge.io-child"),
@@ -115,11 +118,16 @@ pub fn service_creation_message_payload(
         });
     }
 
-    let payload =
-        SmartrestPayload::serialize((102, service_id, service_type, service_name, service_status))
-            .expect(
-            "TODO: message can get over the limit but none of the fields can be reasonably trimmed",
-        );
+    let payload = SmartrestPayload::serialize((
+        SERVICE_CREATION,
+        service_id,
+        service_type,
+        service_name,
+        service_status,
+    ))
+    .expect(
+        "TODO: message can get over the limit but none of the fields can be reasonably trimmed",
+    );
 
     Ok(payload)
 }
@@ -140,8 +148,9 @@ impl From<C8ySmartRestSetInterval117> for MqttMessage {
     fn from(value: C8ySmartRestSetInterval117) -> Self {
         let topic = value.c8y_topic.to_topic(&value.prefix).unwrap();
         let interval_in_minutes = value.interval.as_secs() / 60;
-        let payload = SmartrestPayload::serialize((117, &interval_in_minutes))
-            .expect("interval should not increase size over the limit");
+        let payload =
+            SmartrestPayload::serialize((SET_REQUIRED_AVAILABILITY, &interval_in_minutes))
+                .expect("interval should not increase size over the limit");
         MqttMessage::new(&topic, payload.into_inner())
     }
 }
@@ -152,8 +161,9 @@ impl From<C8ySmartRestSetInterval117> for MqttMessage {
 /// When all individual operations are finished (i.e. firmware update, software
 /// update and configuration update), the `profile_executed` field should be set
 /// to `true`, otherwise it should be `false`.
-pub fn set_c8y_profile_target_payload(profile_executed: bool) -> String {
-    fields_to_csv_string(["121", &profile_executed.to_string()])
+pub fn set_c8y_profile_target_payload(profile_executed: bool) -> SmartrestPayload {
+    SmartrestPayload::serialize((SET_DEVICE_PROFILE_THAT_IS_BEING_APPLIED, profile_executed))
+        .expect("shouldn't put payload over size limit")
 }
 
 #[derive(thiserror::Error, Debug)]
