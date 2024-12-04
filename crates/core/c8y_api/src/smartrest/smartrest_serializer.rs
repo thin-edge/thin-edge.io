@@ -10,35 +10,38 @@ use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareModule;
 use tracing::warn;
 
+use super::message_ids::*;
+
 pub type SmartRest = String;
 
-pub fn request_pending_operations() -> &'static str {
-    "500"
+pub fn request_pending_operations() -> SmartrestPayload {
+    SmartrestPayload::serialize(GET_PENDING_OPERATIONS)
+        .expect("shouldn't put payload over size limit")
 }
 
 /// Generates a SmartREST message to set the provided operation to executing
 pub fn set_operation_executing_with_name(operation: impl C8yOperation) -> SmartrestPayload {
-    SmartrestPayload::serialize(("501", operation.name()))
+    SmartrestPayload::serialize((SET_OPERATION_TO_EXECUTING, operation.name()))
         .expect("operation name shouldn't put payload over size limit")
 }
 
 /// Generates a SmartREST message to set the provided operation ID to executing
 pub fn set_operation_executing_with_id(op_id: &str) -> SmartrestPayload {
-    SmartrestPayload::serialize(("504", op_id))
+    SmartrestPayload::serialize((SET_OPERATION_TO_EXECUTING_ID, op_id))
         .expect("op_id shouldn't put payload over size limit")
 }
 
 /// Generates a SmartREST message to set the provided operation to failed with the provided reason
 pub fn fail_operation_with_name(operation: impl C8yOperation, reason: &str) -> SmartrestPayload {
-    fail_operation("502", operation.name(), reason)
+    fail_operation(SET_OPERATION_TO_FAILED, operation.name(), reason)
 }
 
 /// Generates a SmartREST message to set the provided operation ID to failed with the provided reason
 pub fn fail_operation_with_id(op_id: &str, reason: &str) -> SmartrestPayload {
-    fail_operation("505", op_id, reason)
+    fail_operation(SET_OPERATION_TO_FAILED_ID, op_id, reason)
 }
 
-fn fail_operation(template_id: &str, operation: &str, reason: &str) -> SmartrestPayload {
+fn fail_operation(template_id: usize, operation: &str, reason: &str) -> SmartrestPayload {
     // If the failure reason exceeds 500 bytes, truncate it
     if reason.len() <= 500 {
         SmartrestPayload::serialize((template_id, operation, reason))
@@ -62,7 +65,7 @@ pub fn succeed_static_operation_with_name(
     operation: CumulocitySupportedOperations,
     payload: Option<impl AsRef<str>>,
 ) -> SmartrestPayload {
-    succeed_static_operation("503", operation.name(), payload)
+    succeed_static_operation(SET_OPERATION_TO_SUCCESSFUL, operation.name(), payload)
 }
 
 /// Generates a SmartREST message to set the provided operation ID to successful without a payload
@@ -75,11 +78,11 @@ pub fn succeed_static_operation_with_id(
     op_id: &str,
     payload: Option<impl AsRef<str>>,
 ) -> SmartrestPayload {
-    succeed_static_operation("506", op_id, payload)
+    succeed_static_operation(SET_OPERATION_TO_SUCCESSFUL_ID, op_id, payload)
 }
 
 fn succeed_static_operation(
-    template_id: &str,
+    template_id: usize,
     operation: &str,
     payload: Option<impl AsRef<str>>,
 ) -> SmartrestPayload {
@@ -106,7 +109,7 @@ fn succeed_static_operation(
 /// # Errors
 /// This will return an error if the payload is a CSV with multiple records, or an empty CSV.
 pub fn succeed_operation(
-    template_id: &str,
+    template_id: usize,
     operation: &str,
     reason: impl Into<TextOrCsv>,
 ) -> Result<SmartrestPayload, SmartRestSerializerError> {
@@ -123,7 +126,9 @@ pub fn succeed_operation(
     }
 
     // payload too big, need to trim
-    let prefix = super::csv::fields_to_csv_string([template_id, operation]);
+    let prefix = SmartrestPayload::serialize((template_id, operation))
+        .unwrap()
+        .into_inner();
 
     let trim_indicator = "...<trimmed>";
 
@@ -165,14 +170,14 @@ pub fn succeed_operation_with_name(
     operation: &str,
     reason: impl Into<TextOrCsv>,
 ) -> Result<SmartrestPayload, SmartRestSerializerError> {
-    succeed_operation("503", operation, reason)
+    succeed_operation(SET_OPERATION_TO_SUCCESSFUL, operation, reason)
 }
 
 pub fn succeed_operation_with_id(
     operation: &str,
     reason: impl Into<TextOrCsv>,
 ) -> Result<SmartrestPayload, SmartRestSerializerError> {
-    succeed_operation("506", operation, reason)
+    succeed_operation(SET_OPERATION_TO_SUCCESSFUL_ID, operation, reason)
 }
 
 #[derive(Debug, Clone)]
@@ -203,7 +208,8 @@ impl CumulocitySupportedOperations {
 }
 
 pub fn declare_supported_operations(ops: &[&str]) -> SmartrestPayload {
-    SmartrestPayload::serialize((114, ops)).expect("TODO: ops list can increase payload over limit")
+    SmartrestPayload::serialize((SET_SUPPORTED_OPERATIONS, ops))
+        .expect("TODO: ops list can increase payload over limit")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,17 +244,21 @@ pub enum AdvancedSoftwareList {
 impl AdvancedSoftwareList {
     fn smartrest_payload(self) -> String {
         let vec = match self {
-            AdvancedSoftwareList::Set(items) => Self::create_software_list("140", items),
-            AdvancedSoftwareList::Append(items) => Self::create_software_list("141", items),
+            AdvancedSoftwareList::Set(items) => {
+                Self::create_software_list(SET_ADVANCED_SOFTWARE_LIST, items)
+            }
+            AdvancedSoftwareList::Append(items) => {
+                Self::create_software_list(APPEND_ADVANCED_SOFTWARE_ITEMS, items)
+            }
         };
         let list: Vec<&str> = vec.iter().map(std::ops::Deref::deref).collect();
 
         fields_to_csv_string(list.as_slice())
     }
 
-    fn create_software_list(id: &str, items: Vec<SmartRestSoftwareModuleItem>) -> Vec<String> {
+    fn create_software_list(id: usize, items: Vec<SmartRestSoftwareModuleItem>) -> Vec<String> {
         if items.is_empty() {
-            vec![id.into(), "".into(), "".into(), "".into(), "".into()]
+            vec![id.to_string(), "".into(), "".into(), "".into(), "".into()]
         } else {
             let mut vec = vec![id.to_string()];
             for item in items {
@@ -408,7 +418,7 @@ mod tests {
     #[test]
     fn serialize_smartrest_get_pending_operations() {
         let smartrest = request_pending_operations();
-        assert_eq!(smartrest, "500");
+        assert_eq!(smartrest.as_str(), "500");
     }
 
     #[test]
@@ -639,7 +649,8 @@ mod tests {
         let mut reason: String = "a".repeat(message_len - prefix_len - 2);
         reason.push('"');
 
-        let smartrest = succeed_operation("503", "c8y_Command", reason).unwrap();
+        let smartrest =
+            succeed_operation(SET_OPERATION_TO_SUCCESSFUL, "c8y_Command", reason).unwrap();
 
         // assert message is under size limit and has expected structure
         assert!(
