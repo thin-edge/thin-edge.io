@@ -3,6 +3,7 @@ use assert_json_diff::assert_json_include;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
+use c8y_api::smartrest::message_ids::FIRMWARE;
 use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use sha256::digest;
@@ -575,7 +576,7 @@ async fn publish_smartrest_firmware_operation(
 ) -> Result<(), DynError> {
     let c8y_firmware_update_msg = MqttMessage::new(
         &Topic::new_unchecked("c8y/s/ds"),
-        format!("515,{CHILD_DEVICE_ID},{FIRMWARE_NAME},{FIRMWARE_VERSION},{DOWNLOAD_URL}"),
+        format!("{FIRMWARE},{CHILD_DEVICE_ID},{FIRMWARE_NAME},{FIRMWARE_VERSION},{DOWNLOAD_URL}"),
     );
     mqtt_message_box.send(c8y_firmware_update_msg).await?;
     Ok(())
