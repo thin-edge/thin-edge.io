@@ -246,7 +246,7 @@ python /etc/tedge/operations/command.py $SMART_REST_PAYLOAD
 
 #### Create operation delivered via Cumulocity JSON over MQTT  
 
-There are two approaches for handling custom operation via C8Y Json.
+There are two approaches for handling custom operation via JSON over MQTT.
 * the commands can be processed by a user-provided script
 * the commands can be processed by the agent following a user-provided workflow
 
@@ -337,7 +337,7 @@ If the workflow file with the same command name is defined, capability message w
 
 On receiving, mapper creates a symlink at `/etc/tedge/operations/c8y/c8y_Command` (for main device) or `/etc/tedge/operations/c8y/<external_id>/c8y_Command` (for child device) to master template file.
 
-The Mapper detects the change in the `/etc/tedge/operations/c8y` directory except for `.template` file. When the change is detected, `114` (supported operation) message is sent to c8y.
+The mapper detects the change in the `/etc/tedge/operations/c8y` directory except for `.template` file. When the change is detected, the SmartREST `114` (supported operation) message is sent to Cumulocity.
 
 After that, the received JSON over MQTT message is converted to %%te%% command, preserving all parameters provided in `input` field.
 
