@@ -1,5 +1,5 @@
 use self::error::ThinEdgeJsonDeserializerError;
-use crate::entity_store::EntityMetadata;
+use crate::entity::EntityExternalId;
 use clock::Timestamp;
 use serde::Deserialize;
 use serde_json::Value;
@@ -51,7 +51,7 @@ pub mod error {
 impl ThinEdgeEvent {
     pub fn try_from(
         event_type: &str,
-        entity: &EntityMetadata,
+        entity_external_id: &EntityExternalId,
         mqtt_payload: &str,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let event_data = if mqtt_payload.is_empty() {
@@ -60,13 +60,10 @@ impl ThinEdgeEvent {
             Some(serde_json::from_str(mqtt_payload)?)
         };
 
-        // Parent exists means the device is child device
-        let external_source = entity.parent.as_ref().map(|_| entity.external_id.clone());
-
         Ok(Self {
             name: event_type.into(),
             data: event_data,
-            source: external_source.map(|v| v.into()),
+            source: Some(entity_external_id.into()),
         })
     }
 }
@@ -141,7 +138,7 @@ mod tests {
     )]
     fn parse_thin_edge_event_json(event_payload: Value, expected_event: ThinEdgeEvent) {
         let event_type = "click_event";
-        let entity = EntityMetadata::main_device("main-device".to_string());
+        let entity = "main-device".into();
         let event =
             ThinEdgeEvent::try_from(event_type, &entity, event_payload.to_string().as_str())
                 .unwrap();
@@ -183,7 +180,7 @@ mod tests {
         expected_event: ThinEdgeEvent,
     ) {
         let event_type = "click_event";
-        let entity = EntityMetadata::child_device("external_source".to_string()).unwrap();
+        let entity = "external_source".into();
         let event =
             ThinEdgeEvent::try_from(event_type, &entity, event_payload.to_string().as_str())
                 .unwrap();
@@ -193,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_serialize() {
-        let entity = EntityMetadata::main_device("main-device".to_string());
+        let entity = "main-device".into();
         let result = ThinEdgeEvent::try_from("click_event", &entity, "").unwrap();
 
         assert_eq!(result.name, "click_event".to_string());
@@ -213,7 +210,7 @@ mod tests {
             }
         });
 
-        let entity = EntityMetadata::main_device("main-device".to_string());
+        let entity = "main-device".into();
 
         let result =
             ThinEdgeEvent::try_from("click_event", &entity, event_json.to_string().as_str())

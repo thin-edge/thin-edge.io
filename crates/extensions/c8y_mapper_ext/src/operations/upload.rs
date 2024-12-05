@@ -2,7 +2,7 @@ use c8y_http_proxy::messages::CreateEvent;
 use camino::Utf8Path;
 use mime::Mime;
 use std::collections::HashMap;
-use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_config::AutoLogUpload;

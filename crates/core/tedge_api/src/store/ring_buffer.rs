@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 
 /// A bounded buffer that replaces older values with newer ones when full
 #[derive(Debug)]
-pub(crate) struct RingBuffer<T> {
+pub struct RingBuffer<T> {
     buffer: VecDeque<T>,
     size: usize,
 }

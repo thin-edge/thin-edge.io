@@ -1,12 +1,10 @@
 //! Converting Cumulocity Smartrest operation messages into local thin-edge operation messages.
-
-use std::sync::Arc;
-
 use c8y_api::json_c8y_deserializer::C8yDeviceProfile;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
+use std::sync::Arc;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
@@ -15,8 +13,7 @@ use tedge_api::commands::FirmwareUpdateCmdPayload;
 use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmdPayload;
 use tedge_api::device_profile::DeviceProfileCmdPayload;
-use tedge_api::entity_store::EntityExternalId;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::OperationType;
@@ -69,7 +66,7 @@ impl CumulocityConverter {
         config_upload_request: C8yUploadConfigFile,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let target = self
-            .entity_store
+            .entity_cache
             .try_get_by_external_id(&device_xid.into())?;
 
         let channel = Channel::Command {
@@ -109,7 +106,7 @@ impl CumulocityConverter {
         log_request: C8yLogfileRequest,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let target = self
-            .entity_store
+            .entity_cache
             .try_get_by_external_id(&device_xid.into())?;
 
         let channel = Channel::Command {
@@ -187,7 +184,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
 
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
 
         let channel = Channel::Command {
             operation: OperationType::FirmwareUpdate,
@@ -246,10 +243,13 @@ impl CumulocityConverter {
         config_download_request: C8yDownloadConfigFile,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
 
-        let message =
-            self.create_config_update_cmd(cmd_id.into(), &config_download_request, target);
+        let message = self.create_config_update_cmd(
+            cmd_id.into(),
+            &config_download_request,
+            &target.topic_id,
+        );
         Ok(message)
     }
 
@@ -257,13 +257,13 @@ impl CumulocityConverter {
         &self,
         cmd_id: Arc<str>,
         config_download_request: &C8yDownloadConfigFile,
-        target: &EntityMetadata,
+        target: &EntityTopicId,
     ) -> Vec<MqttMessage> {
         let channel = Channel::Command {
             operation: OperationType::ConfigUpdate,
             cmd_id: cmd_id.to_string(),
         };
-        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
+        let topic = self.mqtt_schema.topic_for(target, &channel);
 
         let proxy_url = self
             .c8y_endpoint
@@ -322,7 +322,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
 
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
 
         let channel = Channel::Command {
             operation: OperationType::DeviceProfile,
