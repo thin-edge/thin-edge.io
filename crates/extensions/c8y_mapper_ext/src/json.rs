@@ -5,20 +5,21 @@
 //!
 //! ```
 //! use c8y_mapper_ext::json::from_thin_edge_json;
-//! use tedge_api::entity_store::EntityMetadata;
+//! use c8y_mapper_ext::entity_cache::CloudEntityMetadata;
+//! use tedge_api::entity::EntityMetadata;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let entity = EntityMetadata::main_device("test-device".to_string());
+//! let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
 //! let output = from_thin_edge_json(single_value_thin_edge_json, &entity,"");
 //! ```
 
+use crate::entity_cache::CloudEntityMetadata;
 use crate::serializer;
 use clock::Clock;
 use clock::WallClock;
-use tedge_api::entity_store::EntityMetadata;
 use tedge_api::measurement::*;
 use time::OffsetDateTime;
 use time::{self};
@@ -35,7 +36,7 @@ pub enum CumulocityJsonError {
 /// Converts from thin-edge measurement JSON to C8Y measurement JSON
 pub fn from_thin_edge_json(
     input: &str,
-    entity: &EntityMetadata,
+    entity: &CloudEntityMetadata,
     m_type: &str,
 ) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
@@ -46,7 +47,7 @@ pub fn from_thin_edge_json(
 fn from_thin_edge_json_with_timestamp(
     input: &str,
     timestamp: OffsetDateTime,
-    entity: &EntityMetadata,
+    entity: &CloudEntityMetadata,
     m_type: &str,
 ) -> Result<String, CumulocityJsonError> {
     let mut serializer = serializer::C8yJsonSerializer::new(timestamp, entity, m_type);
@@ -61,6 +62,7 @@ mod tests {
     use proptest::prelude::*;
     use serde_json::json;
     use serde_json::Value;
+    use tedge_api::entity::EntityMetadata;
     use test_case::test_case;
     use time::format_description;
     use time::macros::datetime;
@@ -74,7 +76,8 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let entity = EntityMetadata::main_device("foo".to_string());
+        let entity =
+            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
         let output =
             from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, &entity, "");
 
@@ -111,7 +114,8 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let entity = EntityMetadata::main_device("foo".to_string());
+        let entity =
+            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
         let output =
             from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, &entity, "");
 
@@ -157,7 +161,8 @@ mod tests {
                     "type": "ThinEdgeMeasurement"
                   }"#;
 
-        let entity = EntityMetadata::main_device("foo".to_string());
+        let entity =
+            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
         let output = from_thin_edge_json(single_value_thin_edge_json, &entity, "");
 
         assert_eq!(
@@ -180,7 +185,8 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let entity = EntityMetadata::main_device("foo".to_string());
+        let entity =
+            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
         let output =
             from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, &entity, "");
 
@@ -236,7 +242,8 @@ mod tests {
             "type": "ThinEdgeMeasurement"
         }"#;
 
-        let entity = EntityMetadata::main_device("foo".to_string());
+        let entity =
+            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
         let output = from_thin_edge_json(input, &entity, "");
 
         let actual_output = output.unwrap().split_whitespace().collect::<String>();
@@ -269,7 +276,7 @@ mod tests {
                   "type": "ThinEdgeMeasurement"
                 }}"#, time, measurement, measurement);
 
-        let entity = EntityMetadata::main_device("foo".to_string());
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
         let output = from_thin_edge_json(input.as_str(), &entity, "").unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -317,7 +324,10 @@ mod tests {
         expected_output: Value,
     ) {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
-        let entity = EntityMetadata::child_device(child_id.to_string()).unwrap();
+        let entity = CloudEntityMetadata::new(
+            child_id.into(),
+            EntityMetadata::child_device(child_id.to_string()).unwrap(),
+        );
         let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, &entity, "");
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),

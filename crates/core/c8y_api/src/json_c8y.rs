@@ -7,10 +7,9 @@ use std::fmt;
 use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::alarm::ThinEdgeAlarmData;
 use tedge_api::commands::SoftwareListCommand;
-use tedge_api::entity_store::EntityMetadata;
-use tedge_api::entity_store::EntityType;
+use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_api::event::ThinEdgeEvent;
-use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareModule;
 use time::OffsetDateTime;
@@ -239,38 +238,36 @@ pub struct C8yClearAlarm {
 }
 
 impl C8yAlarm {
-    pub fn try_from(
+    pub fn from(
         alarm: &ThinEdgeAlarm,
-        entity_store: &EntityStore,
-    ) -> Result<Self, C8yAlarmError> {
-        if let Some(entity) = entity_store.get(&alarm.source) {
-            let source = Self::convert_source(entity);
-            let alarm_type = Self::convert_alarm_type(&alarm.alarm_type);
+        external_id: &EntityExternalId,
+        entity_type: &EntityType,
+    ) -> Self {
+        let source = Self::convert_source(external_id, entity_type);
+        let alarm_type = Self::convert_alarm_type(&alarm.alarm_type);
 
-            let c8y_alarm = match alarm.data.as_ref() {
-                None => C8yAlarm::Clear(C8yClearAlarm { alarm_type, source }),
-                Some(tedge_alarm_data) => C8yAlarm::Create(C8yCreateAlarm {
-                    alarm_type: alarm_type.clone(),
-                    source,
-                    severity: C8yCreateAlarm::convert_severity(tedge_alarm_data),
-                    text: C8yCreateAlarm::convert_text(tedge_alarm_data, &alarm_type),
-                    time: C8yCreateAlarm::convert_time(tedge_alarm_data),
-                    fragments: C8yCreateAlarm::convert_extras(tedge_alarm_data),
-                }),
-            };
-            Ok(c8y_alarm)
-        } else {
-            Err(C8yAlarmError::UnsupportedDeviceTopicId(
-                alarm.source.to_string(),
-            ))
-        }
+        let c8y_alarm = match alarm.data.as_ref() {
+            None => C8yAlarm::Clear(C8yClearAlarm { alarm_type, source }),
+            Some(tedge_alarm_data) => C8yAlarm::Create(C8yCreateAlarm {
+                alarm_type: alarm_type.clone(),
+                source,
+                severity: C8yCreateAlarm::convert_severity(tedge_alarm_data),
+                text: C8yCreateAlarm::convert_text(tedge_alarm_data, &alarm_type),
+                time: C8yCreateAlarm::convert_time(tedge_alarm_data),
+                fragments: C8yCreateAlarm::convert_extras(tedge_alarm_data),
+            }),
+        };
+        c8y_alarm
     }
 
-    fn convert_source(entity: &EntityMetadata) -> Option<SourceInfo> {
-        match entity.r#type {
+    fn convert_source(
+        external_id: &EntityExternalId,
+        entity_type: &EntityType,
+    ) -> Option<SourceInfo> {
+        match entity_type {
             EntityType::MainDevice => None,
-            EntityType::ChildDevice => Some(make_c8y_source_fragment(entity.external_id.as_ref())),
-            EntityType::Service => Some(make_c8y_source_fragment(entity.external_id.as_ref())),
+            EntityType::ChildDevice => Some(make_c8y_source_fragment(external_id.as_ref())),
+            EntityType::Service => Some(make_c8y_source_fragment(external_id.as_ref())),
         }
     }
 
@@ -360,19 +357,12 @@ mod tests {
     use crate::json_c8y::AlarmSeverity;
     use anyhow::Result;
     use assert_matches::assert_matches;
-    use mqtt_channel::MqttMessage;
-    use mqtt_channel::Topic;
     use serde_json::json;
-    use std::collections::HashSet;
     use tedge_api::alarm::ThinEdgeAlarm;
     use tedge_api::alarm::ThinEdgeAlarmData;
     use tedge_api::commands::SoftwareListCommandPayload;
-    use tedge_api::entity_store::EntityExternalId;
-    use tedge_api::entity_store::EntityRegistrationMessage;
-    use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::event::ThinEdgeEventData;
     use tedge_api::mqtt_topics::EntityTopicId;
-    use tedge_api::mqtt_topics::MqttSchema;
     use test_case::test_case;
     use time::macros::datetime;
 
@@ -709,28 +699,13 @@ mod tests {
         ;"convert to clear alarm"
     )]
     fn check_alarm_translation(tedge_alarm: ThinEdgeAlarm, expected_c8y_alarm: C8yAlarm) {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let mut entity_store = EntityStore::with_main_device_and_default_service_type(
-            MqttSchema::default(),
-            main_device,
-            "service".into(),
-            dummy_external_id_mapper,
-            dummy_external_id_validator,
-            5,
-            &temp_dir,
-            true,
-        )
-        .unwrap();
+        let (external_id, entity_type) = if tedge_alarm.source.is_default_main_device() {
+            ("main_device".into(), EntityType::MainDevice)
+        } else {
+            ("external_source".into(), EntityType::ChildDevice)
+        };
 
-        let child_registration = EntityRegistrationMessage::new(&MqttMessage::new(
-            &Topic::new_unchecked("te/device/external_source//"),
-            r#"{"@id": "external_source", "@type": "child-device"}"#,
-        ))
-        .unwrap();
-        entity_store.update(child_registration).unwrap();
-
-        let actual_c8y_alarm = C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap();
+        let actual_c8y_alarm = C8yAlarm::from(&tedge_alarm, &external_id, &entity_type);
         assert_eq!(actual_c8y_alarm, expected_c8y_alarm);
     }
 
@@ -746,50 +721,13 @@ mod tests {
                 extras: HashMap::new(),
             }),
         };
+        let external_id = "main".into();
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let entity_store = EntityStore::with_main_device_and_default_service_type(
-            MqttSchema::default(),
-            main_device,
-            "service".into(),
-            dummy_external_id_mapper,
-            dummy_external_id_validator,
-            5,
-            &temp_dir,
-            true,
-        )
-        .unwrap();
-
-        match C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap() {
+        match C8yAlarm::from(&tedge_alarm, &external_id, &EntityType::MainDevice) {
             C8yAlarm::Create(value) => {
                 assert!(value.time.millisecond() > 0);
             }
             C8yAlarm::Clear(_) => panic!("Must be C8yAlarm::Create"),
         };
-    }
-
-    fn dummy_external_id_mapper(
-        entity_topic_id: &EntityTopicId,
-        _main_device_xid: &EntityExternalId,
-    ) -> EntityExternalId {
-        entity_topic_id
-            .to_string()
-            .trim_end_matches('/')
-            .replace('/', ":")
-            .into()
-    }
-
-    fn dummy_external_id_validator(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
-        let forbidden_chars = HashSet::from(['/', '+', '#']);
-        for c in id.chars() {
-            if forbidden_chars.contains(&c) {
-                return Err(InvalidExternalIdError {
-                    external_id: id.into(),
-                    invalid_char: c,
-                });
-            }
-        }
-        Ok(id.into())
     }
 }
