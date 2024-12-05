@@ -22,11 +22,15 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id_no_parameters;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_name;
+use c8y_api::smartrest::smartrest_serializer::C8yOperation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
@@ -224,6 +228,27 @@ impl OperationContext {
                 fail_operation_with_id(&op_id, reason)
             }
             _ => fail_operation_with_name(operation, reason),
+        }
+    }
+
+    pub fn try_get_smartrest_successful_status_payload_with_args(
+        &self,
+        operation: CumulocitySupportedOperations,
+        cmd_id: &str,
+        text_or_csv: TextOrCsv,
+    ) -> SmartrestPayload {
+        let result = match self.get_operation_id(cmd_id) {
+            Some(op_id) if self.smart_rest_use_operation_id => {
+                succeed_operation_with_id(&op_id, text_or_csv)
+            }
+            _ => succeed_operation_with_name(operation.name(), text_or_csv),
+        };
+
+        match result {
+            Ok(successful_message) => successful_message,
+            Err(err) => {
+                self.get_smartrest_failed_status_payload(operation, &err.to_string(), cmd_id)
+            }
         }
     }
 
