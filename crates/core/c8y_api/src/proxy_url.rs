@@ -37,6 +37,15 @@ impl ProxyUrlGenerator {
         }
     }
 
+    pub fn base_url(&self) -> String {
+        format!(
+            "{}://{}:{}/c8y",
+            self.protocol.as_str(),
+            self.host,
+            self.port
+        )
+    }
+
     pub fn proxy_url(&self, mut cumulocity_url: url::Url) -> url::Url {
         cumulocity_url.set_host(Some(&self.host)).unwrap();
         cumulocity_url.set_scheme(self.protocol.as_str()).unwrap();

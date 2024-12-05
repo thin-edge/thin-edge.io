@@ -63,8 +63,8 @@ impl BuildCommand for C8yCmd {
             } => {
                 let identity = config.http.client.auth.identity()?;
                 let cloud_root_certs = config.cloud_root_certs();
-                let c8y = C8yEndPoint::from_config(&config, profile.as_deref())?;
-                let device_id = config.device.id()?.clone();
+                let c8y = C8yEndPoint::local_proxy(&config, profile.as_deref())?;
+                let device_id = get_device_id(&config);
                 let text = text.unwrap_or_else(|| format!("Uploaded file: {file:?}"));
                 upload::C8yUpload {
                     identity,
@@ -80,5 +80,16 @@ impl BuildCommand for C8yCmd {
             }
         };
         Ok(cmd.into_boxed())
+    }
+}
+
+fn get_device_id(config: &tedge_config::TEdgeConfig) -> String {
+    if let Ok(main_device_id) = config.device.id() {
+        return main_device_id.clone();
+    }
+    let child_topic_id = &config.mqtt.device_topic_id;
+    match child_topic_id.as_str().split('/').collect::<Vec<&str>>()[..] {
+        ["device", child, "", ""] => child.to_string(),
+        _ => child_topic_id.replace('/', ":"),
     }
 }
