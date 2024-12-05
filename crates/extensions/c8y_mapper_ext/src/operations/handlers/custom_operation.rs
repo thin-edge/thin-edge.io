@@ -1,4 +1,6 @@
 use anyhow::Context;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_id;
+use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
@@ -31,10 +33,19 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                let smartrest_set_operation = self.get_smartrest_successful_status_payload(
-                    CumulocitySupportedOperations::C8yCustom(operation_name.to_string()),
-                    cmd_id,
-                );
+                let payload = command.result();
+
+                let smartrest_set_operation = match self.get_operation_id(cmd_id) {
+                    Some(op_id) if self.smart_rest_use_operation_id => {
+                        succeed_static_operation_with_id(&op_id, payload)
+                    }
+                    _ => {
+                        let operation =
+                            CumulocitySupportedOperations::C8yCustom(operation_name.to_string());
+                        succeed_static_operation_with_name(operation, payload)
+                    }
+                };
+
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
 
                 Ok(OperationOutcome::Finished {
@@ -212,6 +223,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_custom_operation_successful_cmd_for_main_device_with_result() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate custom operation command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/command/c8y-mapper-1234"),
+            json!({
+                "status": "successful",
+                "text": "do something",
+                "result": "I did something"
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `506` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,I did something")]).await;
+    }
+
+    #[tokio::test]
     async fn handle_custom_operation_successful_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
         let config = C8yMapperConfig {
@@ -239,7 +280,8 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/command/c8y-mapper-1234"),
             json!({
                 "status": "successful",
-                "text": "do something"
+                "text": "do something",
+                "result": "we did something"
             })
             .to_string(),
         ))
@@ -247,6 +289,10 @@ mod tests {
         .expect("Send failed");
 
         // Expect `506` smartrest message on `c8y/s/us`.
-        assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "506,1234")]).await;
+        assert_received_contains_str(
+            &mut mqtt,
+            [("c8y/s/us/child1", "506,1234,we did something")],
+        )
+        .await;
     }
 }

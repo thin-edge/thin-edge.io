@@ -72,6 +72,7 @@ const EXECUTING: &str = "executing";
 const SUCCESSFUL: &str = "successful";
 const FAILED: &str = "failed";
 const REASON: &str = "reason";
+const RESULT: &str = "result";
 
 impl GenericCommandState {
     pub fn new(topic: Topic, status: String, payload: Value) -> Self {
@@ -271,6 +272,11 @@ impl GenericCommandState {
     /// Return the error reason if any
     pub fn failure_reason(&self) -> Option<&str> {
         GenericCommandState::extract_text_property(&self.payload, REASON)
+    }
+
+    /// Return value of the result field if any
+    pub fn result(&self) -> Option<&str> {
+        GenericCommandState::extract_text_property(&self.payload, RESULT)
     }
 
     /// Extract a text property from a Json object
