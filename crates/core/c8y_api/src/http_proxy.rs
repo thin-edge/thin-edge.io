@@ -63,6 +63,29 @@ impl C8yEndPoint {
         })
     }
 
+    pub fn local_proxy(
+        tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
+    ) -> Result<Self, C8yEndPointConfigError> {
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let c8y_host = "local-proxy".to_string();
+        let c8y_mqtt_host = c8y_host.clone();
+        let auth_proxy_addr = c8y_config.proxy.client.host.clone();
+        let auth_proxy_port = c8y_config.proxy.client.port;
+        let auth_proxy_protocol = c8y_config
+            .proxy
+            .cert_path
+            .or_none()
+            .map_or(Protocol::Http, |_| Protocol::Https);
+        let proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, auth_proxy_protocol);
+
+        Ok(C8yEndPoint {
+            c8y_host,
+            c8y_mqtt_host,
+            proxy,
+        })
+    }
+
     pub fn new(c8y_host: &str, c8y_mqtt_host: &str, proxy: ProxyUrlGenerator) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
@@ -72,13 +95,14 @@ impl C8yEndPoint {
     }
 
     fn get_base_url(&self) -> String {
-        let mut url_get_id = String::new();
-        if !self.c8y_host.starts_with("http") {
-            url_get_id.push_str("https://");
+        let c8y_host = &self.c8y_host;
+        if c8y_host == "local-proxy" {
+            self.proxy.base_url()
+        } else if c8y_host.starts_with("http") {
+            c8y_host.to_string()
+        } else {
+            format!("https://{c8y_host}")
         }
-        url_get_id.push_str(&self.c8y_host);
-
-        url_get_id
     }
 
     pub fn proxy_url_for_internal_id(&self, device_id: &str) -> String {
