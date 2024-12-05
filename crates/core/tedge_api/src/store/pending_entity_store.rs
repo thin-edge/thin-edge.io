@@ -11,7 +11,7 @@ use std::collections::HashMap;
 /// its registration message itself is received.
 /// It also stores all the child device registration messages received before
 /// their parents themselves are registered, including their data.
-pub(crate) struct PendingEntityStore {
+pub struct PendingEntityStore {
     mqtt_schema: MqttSchema,
     // This orphans map is keyed by the unregistered parent topic id to their children
     orphans: HashMap<EntityTopicId, Vec<EntityTopicId>>,

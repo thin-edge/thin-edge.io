@@ -15,7 +15,7 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;

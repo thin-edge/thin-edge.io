@@ -6,6 +6,8 @@ use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::dynamic_discovery::DiscoverOp;
+use crate::entity_cache::EntityCache;
+use crate::entity_cache::InvalidExternalIdError;
 use crate::error::ConversionError;
 use crate::error::MessageConversionError;
 use crate::json;
@@ -64,11 +66,9 @@ use tedge_actors::Sender;
 use tedge_api::commands::RestartCommand;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
-use tedge_api::entity_store;
-use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
-use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
@@ -81,7 +81,6 @@ use tedge_api::script::ShellScript;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
-use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
 use tedge_config::TEdgeConfigError;
@@ -184,7 +183,7 @@ pub struct CumulocityConverter {
     pub http_proxy: C8YHttpProxy,
     pub service_type: String,
     pub mqtt_schema: MqttSchema,
-    pub entity_store: EntityStore,
+    pub(crate) entity_cache: EntityCache,
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
@@ -244,18 +243,14 @@ impl CumulocityConverter {
             errors_topic: mqtt_schema.error_topic(),
         };
 
-        let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
-        let entity_store = EntityStore::with_main_device_and_default_service_type(
+        let entity_cache = EntityCache::new(
             mqtt_schema.clone(),
-            main_device,
-            service_type.clone(),
+            EntityTopicId::default_main_device(),
+            device_id.clone().into(),
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
             EARLY_MESSAGE_BUFFER_SIZE,
-            &*config.state_dir,
-            config.clean_start,
-        )
-        .unwrap();
+        );
 
         let command_id = config.id_generator();
 
@@ -281,7 +276,7 @@ impl CumulocityConverter {
             mqtt_publisher,
             service_type,
             mqtt_schema: mqtt_schema.clone(),
-            entity_store,
+            entity_cache,
             command_id,
             active_commands: HashSet::new(),
             operation_handler,
@@ -318,7 +313,7 @@ impl CumulocityConverter {
                 }
                 _ => {
                     // if the target entity is unregistered, try to register it first using auto-registration
-                    if self.entity_store.get(&source).is_none()
+                    if self.entity_cache.get(&source).is_none()
                         && self.config.enable_auto_register
                         && source.matches_default_topic_scheme()
                     {
@@ -332,7 +327,7 @@ impl CumulocityConverter {
                         // one with default topic scheme itself when auto registration disabled,
                         // since it is received before the entity itself is registered,
                         // cache it in the unregistered entity store to be processed after the entity is registered
-                        self.entity_store.cache_early_data_message(message.clone());
+                        self.entity_cache.cache_early_data_message(message.clone());
 
                         Ok(vec![])
                     }
@@ -372,15 +367,12 @@ impl CumulocityConverter {
         let display_type = input.other.get("type").and_then(|v| v.as_str());
 
         let entity_topic_id = &input.topic_id;
-        let entity = self.entity_store.try_get(entity_topic_id)?;
-        let external_id = &entity.external_id;
+        let external_id = self.entity_cache.try_get_external_id(entity_topic_id)?;
         match input.r#type {
-            EntityType::MainDevice => {
-                self.entity_store.update(input.clone())?;
-                Ok(vec![])
-            }
+            EntityType::MainDevice => Ok(vec![]),
             EntityType::ChildDevice => {
-                let parent_xid = self.entity_store.parent_external_id(entity_topic_id)?;
+                let parent_xid: Option<&EntityExternalId> =
+                    self.entity_cache.parent_external_id(entity_topic_id)?;
 
                 let child_creation_message = child_device_creation_message(
                     external_id.as_ref(),
@@ -394,7 +386,7 @@ impl CumulocityConverter {
                 Ok(vec![child_creation_message])
             }
             EntityType::Service => {
-                let parent_xid = self.entity_store.parent_external_id(entity_topic_id)?;
+                let parent_xid = self.entity_cache.parent_external_id(entity_topic_id)?;
 
                 let service_creation_message = service_creation_message(
                     external_id.as_ref(),
@@ -421,7 +413,7 @@ impl CumulocityConverter {
         &self,
         entity_topic_id: &EntityTopicId,
     ) -> Result<Topic, ConversionError> {
-        let entity = self.entity_store.try_get(entity_topic_id)?;
+        let entity = self.entity_cache.try_get(entity_topic_id)?;
         let topic = C8yTopic::smartrest_response_topic(
             &entity.external_id,
             &entity.r#type,
@@ -497,7 +489,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut mqtt_messages: Vec<MqttMessage> = Vec::new();
 
-        if let Some(entity) = self.entity_store.get(source) {
+        if let Some(entity) = self.entity_cache.get(source) {
             // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
             let c8y_json_payload =
                 json::from_thin_edge_json(input.payload_str()?, entity, measurement_type)?;
@@ -532,7 +524,7 @@ impl CumulocityConverter {
             false => event_type,
         };
 
-        if let Some(entity) = self.entity_store.get(source) {
+        if let Some(entity) = self.entity_cache.get(source) {
             let mqtt_topic = input.topic.name.clone();
             let mqtt_payload = input.payload_str().map_err(|e| {
                 ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
@@ -541,14 +533,19 @@ impl CumulocityConverter {
                 }
             })?;
 
-            let tedge_event =
-                ThinEdgeEvent::try_from(event_type, entity, mqtt_payload).map_err(|e| {
-                    ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
-                        topic: mqtt_topic.clone(),
-                        error: e.to_string(),
-                        payload: mqtt_payload.chars().take(50).collect(),
-                    }
-                })?;
+            let tedge_event = ThinEdgeEvent::try_from(
+                event_type,
+                &entity.r#type,
+                &entity.external_id,
+                mqtt_payload,
+            )
+            .map_err(
+                |e| ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
+                    topic: mqtt_topic.clone(),
+                    error: e.to_string(),
+                    payload: mqtt_payload.chars().take(50).collect(),
+                },
+            )?;
 
             let c8y_event = C8yCreateEvent::from(tedge_event);
 
@@ -594,12 +591,14 @@ impl CumulocityConverter {
         alarm_type: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         self.size_threshold.validate(input)?;
+        let entity = self.entity_cache.try_get(source)?;
 
         let mqtt_messages = self.alarm_converter.try_convert_alarm(
             source,
+            &entity.external_id,
+            &entity.r#type,
             input,
             alarm_type,
-            &self.entity_store,
             &self.config.bridge_config.c8y_prefix,
         )?;
 
@@ -611,14 +610,14 @@ impl CumulocityConverter {
         entity_tid: &EntityTopicId,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let entity = self.entity_store.try_get(entity_tid)?;
-        let parent_xid = self.entity_store.parent_external_id(entity_tid)?;
+        let entity = self.entity_cache.try_get(entity_tid)?;
+        let parent_xid = self.entity_cache.parent_external_id(entity_tid)?;
 
         Ok(convert_health_status_message(
             &self.config.mqtt_schema,
             entity,
             parent_xid,
-            &self.entity_store.main_device_external_id(),
+            self.entity_cache.main_device_external_id(),
             message,
             &self.config.bridge_config.c8y_prefix,
         ))
@@ -809,7 +808,7 @@ impl CumulocityConverter {
         prefix: &TopicPrefix,
     ) -> Result<Vec<(String, Operation)>, CumulocityMapperError> {
         let entity_xid = device_xid.into();
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
 
         match target.r#type {
             EntityType::MainDevice | EntityType::ChildDevice => Ok(self
@@ -956,7 +955,7 @@ impl CumulocityConverter {
         software_update_request: C8ySoftwareUpdate,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
         let mut command =
             software_update_request.into_software_update_command(&target.topic_id, cmd_id)?;
 
@@ -980,7 +979,7 @@ impl CumulocityConverter {
         cmd_id: String,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
-        let target = self.entity_store.try_get_by_external_id(&entity_xid)?;
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
         let command = RestartCommand::new(&target.topic_id, cmd_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
@@ -1241,12 +1240,12 @@ impl CumulocityConverter {
         &mut self,
         register_message: EntityRegistrationMessage,
     ) -> Result<Vec<PendingEntityData>, ConversionError> {
-        match self.entity_store.update(register_message.clone()) {
+        match self.entity_cache.register_entity(register_message.clone()) {
             Err(e) => {
                 error!("Entity registration failed: {e}");
                 Ok(vec![])
             }
-            Ok((_, pending_entities)) => Ok(pending_entities),
+            Ok(pending_entities) => Ok(pending_entities),
         }
     }
 
@@ -1260,7 +1259,7 @@ impl CumulocityConverter {
             ));
         }
 
-        let auto_registered_entities = self.entity_store.auto_register_entity(source)?;
+        let auto_registered_entities = self.entity_cache.auto_register_entity(source)?;
         Ok(auto_registered_entities)
     }
 
@@ -1271,7 +1270,7 @@ impl CumulocityConverter {
         let source = &register_message.topic_id;
 
         if register_message.external_id.is_none() {
-            if let Some(metadata) = self.entity_store.get(source) {
+            if let Some(metadata) = self.entity_cache.get(source) {
                 register_message.external_id = Some(metadata.external_id.clone());
             }
         }
@@ -1283,7 +1282,7 @@ impl CumulocityConverter {
         channel: Channel,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if self.entity_store.get(&source).is_none()
+        if self.entity_cache.get(&source).is_none()
             && !(self.config.enable_auto_register && source.matches_default_topic_scheme())
         {
             // Since the entity is still not present in the entity store,
@@ -1355,7 +1354,7 @@ impl CumulocityConverter {
             Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
                 self.active_commands.insert(cmd_id.clone());
 
-                let entity = self.entity_store.try_get(&source)?;
+                let entity = self.entity_cache.try_get(&source)?;
                 let external_id = entity.external_id.clone();
                 let entity = operations::EntityTarget {
                     topic_id: entity.topic_id.clone(),
@@ -1379,7 +1378,7 @@ impl CumulocityConverter {
         op_type: &OperationType,
         topic_id: &EntityTopicId,
     ) -> Result<(), ConversionError> {
-        let target = self.entity_store.try_get(topic_id)?;
+        let target = self.entity_cache.try_get(topic_id)?;
 
         match target.r#type {
             EntityType::MainDevice => Ok(()),
@@ -1526,7 +1525,7 @@ impl CumulocityConverter {
         target: &EntityTopicId,
         c8y_operation_name: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let device = self.entity_store.try_get(target)?;
+        let device = self.entity_cache.try_get(target)?;
 
         if let EntityType::Service = device.r#type {
             error!(
@@ -1668,7 +1667,9 @@ pub(crate) mod tests {
     use crate::actor::IdUploadResult;
     use crate::config::BridgeConfig;
     use crate::config::C8yMapperConfig;
+    use crate::entity_cache::InvalidExternalIdError;
     use crate::supported_operations::operation::ResultFormat;
+    use crate::tests::spawn_dummy_c8y_http_proxy;
     use crate::Capabilities;
     use anyhow::Result;
     use assert_json_diff::assert_json_include;
@@ -1679,9 +1680,6 @@ pub(crate) mod tests {
     use serde_json::json;
     use serde_json::Value;
     use std::str::FromStr;
-    use tedge_config::TopicPrefix;
-
-    use crate::tests::spawn_dummy_c8y_http_proxy;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -1689,7 +1687,6 @@ pub(crate) mod tests {
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::SimpleMessageBoxBuilder;
-    use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::ChannelFilter;
     use tedge_api::mqtt_topics::EntityFilter;
@@ -1702,6 +1699,7 @@ pub(crate) mod tests {
     use tedge_config::AutoLogUpload;
     use tedge_config::SoftwareManagementApiFlag;
     use tedge_config::TEdgeConfig;
+    use tedge_config::TopicPrefix;
     use tedge_http_ext::HttpRequest;
     use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
@@ -1885,7 +1883,6 @@ pub(crate) mod tests {
                 "te/device/child1//",
                 json!({
                     "@type":"child-device",
-                    "@id":"test-device:device:child1",
                     "name":"child1"
                 })
                 .into(),
@@ -1911,7 +1908,6 @@ pub(crate) mod tests {
                 "te/device/child2//",
                 json!({
                     "@type":"child-device",
-                    "@id":"test-device:device:child2",
                     "name":"child2"
                 })
                 .into(),
@@ -1952,7 +1948,6 @@ pub(crate) mod tests {
                     "te/device/child1//",
                     json!({
                         "@type":"child-device",
-                        "@id":"test-device:device:child1",
                         "name":"child1"
                     })
                     .into(),
@@ -3216,7 +3211,7 @@ pub(crate) mod tests {
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
         // main device command
-        let main_device = converter.entity_store.main_device().clone();
+        let main_device = converter.device_topic_id.clone();
 
         let operation_topic = converter.mqtt_schema.topic_for(
             &main_device,

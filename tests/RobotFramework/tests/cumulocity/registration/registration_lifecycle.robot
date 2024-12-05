@@ -306,6 +306,7 @@ Early data messages cached and processed
     END
 
 Entities persisted and restored
+    Skip    Persistence is not a mapper responsibility anymore
     Execute Command    sudo tedge config set c8y.entity_store.clean_start false
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y

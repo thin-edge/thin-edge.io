@@ -24,7 +24,6 @@ use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
 use reqwest::Identity;
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -40,9 +39,7 @@ use tedge_actors::Runtime;
 use tedge_actors::Sequential;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
-use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -71,7 +68,6 @@ use tracing::instrument;
 use tracing::warn;
 
 pub const TEDGE_AGENT: &str = "tedge-agent";
-const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
@@ -89,7 +85,6 @@ pub(crate) struct AgentConfig {
     pub data_dir: DataDir,
     pub state_dir: Utf8PathBuf,
     pub operations_dir: Utf8PathBuf,
-    pub device_id: Option<String>, //Some for main device, None for child devices
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub tedge_http_host: Arc<str>,
@@ -107,8 +102,6 @@ impl AgentConfig {
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
         let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
-
-        let device_id = tedge_config.device.id.try_read(&tedge_config).cloned().ok();
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
@@ -204,7 +197,6 @@ impl AgentConfig {
             agent_log_dir,
             operations_dir,
             state_dir,
-            device_id,
             mqtt_topic_root,
             mqtt_device_topic_id,
             tedge_http_host,
@@ -378,15 +370,11 @@ impl Agent {
             let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
             //TODO: Migrate the existing `clean_start` setting which is C8Y specific without breaking backward compatibility.
             let clean_start = true;
-            let main_device =
-                EntityRegistrationMessage::main_device(self.config.device_id.unwrap());
+            let main_device = EntityRegistrationMessage::main_device(None);
             let entity_store = EntityStore::with_main_device_and_default_service_type(
                 mqtt_schema.clone(),
                 main_device,
                 self.config.service.ty.clone(),
-                Self::dummy_external_id_mapper,
-                Self::dummy_external_id_validator,
-                EARLY_MESSAGE_BUFFER_SIZE,
                 state_dir,
                 clean_start,
             )
@@ -448,31 +436,6 @@ impl Agent {
         runtime.run_to_completion().await?;
 
         Ok(())
-    }
-
-    // TODO: Remove these dummy impls once external ID aspects are removed from entity store
-    fn dummy_external_id_mapper(
-        entity_topic_id: &EntityTopicId,
-        _main_device_xid: &EntityExternalId,
-    ) -> EntityExternalId {
-        entity_topic_id
-            .to_string()
-            .trim_end_matches('/')
-            .replace('/', ":")
-            .into()
-    }
-
-    fn dummy_external_id_validator(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
-        let forbidden_chars = HashSet::from(['/', '+', '#']);
-        for c in id.chars() {
-            if forbidden_chars.contains(&c) {
-                return Err(InvalidExternalIdError {
-                    external_id: id.into(),
-                    invalid_char: c,
-                });
-            }
-        }
-        Ok(id.into())
     }
 }
 

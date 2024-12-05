@@ -418,7 +418,6 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
             "te/device/external_sensor//",
             json!({
                 "@type":"child-device",
-                "@id":"test-device:device:external_sensor",
                 "name": "external_sensor"
             }),
         )],
@@ -533,7 +532,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
         &mut mqtt,
         [(
             "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+            json!({"@type":"child-device"}),
         )],
     )
     .await;
@@ -888,7 +887,7 @@ async fn c8y_mapper_child_event() {
         &mut mqtt,
         [(
             "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+            json!({"@type":"child-device"}),
         )],
     )
     .await;
@@ -953,7 +952,7 @@ async fn c8y_mapper_child_service_event() {
         &mut mqtt,
         [(
             "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+            json!({"@type":"child-device"}),
         )],
     )
     .await;
@@ -971,7 +970,6 @@ async fn c8y_mapper_child_service_event() {
         [(
             "te/device/external_sensor/service/service_child",
             json!({
-               "@id":"test-device:device:external_sensor:service:service_child",
                "@parent":"device/external_sensor//",
                "@type":"service",
                "name":"service_child",
@@ -1044,7 +1042,6 @@ async fn c8y_mapper_main_service_event() {
             json!({
                 "@type":"service",
                 "@parent":"device/main//",
-                "@id":"test-device:device:main:service:service_main",
                 "type":"service"
             }),
         )],
@@ -1112,7 +1109,7 @@ async fn c8y_mapper_child_service_alarm() {
         &mut mqtt,
         [(
             "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+            json!({"@type":"child-device"}),
         )],
     )
     .await;
@@ -1130,7 +1127,6 @@ async fn c8y_mapper_child_service_alarm() {
         [(
             "te/device/external_sensor/service/service_child",
             json!({
-               "@id":"test-device:device:external_sensor:service:service_child",
                "@parent":"device/external_sensor//",
                "@type":"service",
                "name":"service_child",
