@@ -313,7 +313,9 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
+        let msg = mqtt.recv().await.unwrap();
+        dbg!(&msg);
+        // mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(

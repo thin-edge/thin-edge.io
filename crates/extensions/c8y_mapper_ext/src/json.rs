@@ -18,7 +18,7 @@
 use crate::serializer;
 use clock::Clock;
 use clock::WallClock;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity::EntityMetadata;
 use tedge_api::measurement::*;
 use time::OffsetDateTime;
 use time::{self};

@@ -1,3 +1,4 @@
+use crate::entity_cache::InvalidExternalIdError;
 use crate::supported_operations::OperationsError;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
@@ -5,7 +6,6 @@ use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_http_proxy::messages::C8YRestError;
 use plugin_sm::operation_logs::OperationLogsError;
 use std::path::PathBuf;
-use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::measurement::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::MqttError;
@@ -128,6 +128,9 @@ pub enum ConversionError {
     FromEntityStoreError(#[from] tedge_api::entity_store::Error),
 
     #[error(transparent)]
+    FromEntityCacheError(#[from] crate::entity_cache::Error),
+
+    #[error(transparent)]
     InvalidExternalIdError(#[from] InvalidExternalIdError),
 
     #[error("Unexpected error: {0:?}")]
@@ -145,6 +148,9 @@ pub enum ConversionError {
 pub enum CumulocityMapperError {
     #[error(transparent)]
     FromEntityStore(#[from] tedge_api::entity_store::Error),
+
+    #[error(transparent)]
+    FromEntityCacheError(#[from] crate::entity_cache::Error),
 
     #[error(transparent)]
     InvalidTopicError(#[from] tedge_api::TopicError),

@@ -1,6 +1,6 @@
 use json_writer::JsonWriter;
 use json_writer::JsonWriterError;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_api::measurement::MeasurementVisitor;
 use time::format_description;
