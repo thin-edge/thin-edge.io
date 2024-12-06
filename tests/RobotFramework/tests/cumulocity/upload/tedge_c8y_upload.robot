@@ -30,19 +30,20 @@ Upload a file to Cumulocity from main device
 
 Upload a file to Cumulocity from child device
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
-    Cumulocity.Set Device    ${PARENT_SN}:device:${CHILD_SN}
+    Cumulocity.Set Managed Object    ${CHILD_SN}
     Execute Command    yes child | head>/tmp/sample.txt
     ${event_id}=   Execute Command
     ...    tedge c8y upload --file /tmp/sample.txt
     ${events}=    Device Should Have Event/s
     ...    type=tedge_UploadedFile
+    ...    expected_text=Uploaded file: "/tmp/sample.txt"
     ...    with_attachment=True
     ...    minimum=1
     ...    maximum=1
     Log    ${events}
     Should Be Equal    "${events[0]["id"]}\n"    "${event_id}"
     Should Be Equal    ${events[0]["c8y_IsBinary"]["name"]}    sample.txt
-    Should Be Equal    ${events[0]["c8y_IsBinary"]["type"]}    text/plain
+    Should Be Equal    ${events[0]["c8y_IsBinary"]["type"]}    application/octet-stream
 
 *** Keywords ***
 Custom Setup
