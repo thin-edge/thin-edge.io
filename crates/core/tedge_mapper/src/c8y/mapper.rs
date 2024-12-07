@@ -127,8 +127,15 @@ impl TEdgeComponent for CumulocityMapper {
                 local_prefix.clone(),
                 "",
             )?;
+            tc.forward_from_local(
+                "measurement/measurements/createBulk/#",
+                local_prefix.clone(),
+                "",
+            )?;
             tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("event/events/createBulk/#", local_prefix.clone(), "")?;
             tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
+            tc.forward_from_local("alarm/alarms/createBulk/#", local_prefix.clone(), "")?;
 
             // JWT token
             if use_certificate {
