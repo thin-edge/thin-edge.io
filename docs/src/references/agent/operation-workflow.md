@@ -206,7 +206,7 @@ when a state message is published for a command on a topic matching the global t
 i.e. `te/+/+/+/+/cmd/+/+`.
 - Each running instance of the __tedge_agent__ reacts only on commands targeting its own device.
 - If a user-defined workflow has been defined for this operation, then this workflow is used to determine the required action.
-- If no workflow has been defined by the user for this operation, then the built-in workflow is used.
+- If no workflow has been defined by the user for this operation, then the builtin workflow is used.
 - If there is no workflow or no defined action for the current state,
   then the __tedge_agent__ simply waits for another component to take over the command.
 
@@ -610,14 +610,14 @@ In order to customize a builtin operation, the first step is to materialize its 
 For instance, here is the builtin workflow for the `software_update` operation:
 
 ```toml title="/etc/tedge/operations/software_update.toml"
-operation = "software_update"            # any builtion operation can be customized
+operation = "software_update"            # any builtin operation can be customized
 
 ["init"]
 action = "proceed"                       # open to customization
 on_success = "scheduled"
 
 [scheduled]
-operation = "builtin:software_update"    # trigger the built-in behavior for software update
+operation = "builtin:software_update"    # trigger the builtin behavior for software update
 on_exec = "executing"
 
 [executing]
@@ -648,7 +648,7 @@ on_success = "scheduled"
 on_error = { status = "failed", reason = "not timely" }
 
 [scheduled]
-operation = "builtin:software_update"                     # trigger the built-in behavior for software update
+operation = "builtin:software_update"                     # trigger the builtin behavior for software update
 on_success = "executing"
 
 [executing]
