@@ -604,7 +604,7 @@ For each, there are *two* workflows: an internal workflow and a customized versi
   with a step triggering `operation = "builtin:<operation-name>"`.
   - A customized workflow can also be a complete rework of the feature, ignoring the builtin behavior.
   - However, the builtin behavior can only be invoked from the workflow for the same operation
-    (e.g. `builtin:sofware_update` can only be invoked from `sofware_update`).
+    (e.g. `builtin:software_update` can only be invoked from `software_update`).
 
 In order to customize a builtin operation, the first step is to materialize its definition in `/etc/tedge/operations`.
 For instance, here is the builtin workflow for the `software_update` operation:
