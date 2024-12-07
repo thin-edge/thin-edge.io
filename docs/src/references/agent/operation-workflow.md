@@ -349,11 +349,7 @@ Note that:
 - No `on_exit` nor `on_kill` status can be provided, as the script is not monitored.
 - If the script cannot be launched, the workflow will be moved to the final `"failed"` state.
 
-### 🚧 Sub-Operation Execution {#sub-operation-execution}
-
-:::info
-🚧 The syntax for triggering other workflows from an existing workflow is still being finalized so please avoid using it in production environments.
-:::
+### Sub-Operation Execution {#sub-operation-execution}
 
 An operation workflow can trigger a command defined by another workflow.
 
@@ -580,11 +576,7 @@ on_success = "scheduled"
 on_error = { status = "failed", reason = "not timely" }
 ```
 
-### 🚧 Customizing builtin operations
-
-:::info
-🚧 The syntax for customizing builtin workflows is still being finalized so please avoid using it in production environments.
-:::
+### Customizing builtin operations
 
 __tedge-agent__ supports out-of-the-box a set of so-called builtin operations:
 `software_list`, `software_update`, `restart`, `config_snapshot`, `config_update`, `log_upload`.
