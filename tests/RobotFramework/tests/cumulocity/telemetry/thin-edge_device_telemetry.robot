@@ -217,6 +217,49 @@ Thin-edge device supports sending custom Thin-edge device measurements directly 
     Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
     Should Be Equal    ${measurements[0]["type"]}    10min_average
 
+Thin-edge device supports sending custom bulk measurements directly to c8y
+    Execute Command
+    ...    tedge mqtt pub "c8y/measurement/measurements/createBulk" '{"measurements":[{"time":"2024-12-01T02:00:00Z","outside":{"temperature":{"value":2.5,"unit":"°C"}},"type":"1min_average"},{"time":"2024-12-01T02:01:00Z","outside":{"temperature":{"value":3.5,"unit":"°C"}},"type":"1min_average"}]}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${measurements}=    Device Should Have Measurements
+    ...    minimum=2
+    ...    maximum=2
+    ...    value=outside
+    ...    series=temperature
+    ...    type=1min_average
+    Should Be Equal As Numbers    ${measurements[0]["outside"]["temperature"]["value"]}    2.5
+    Should Be Equal As Numbers    ${measurements[1]["outside"]["temperature"]["value"]}    3.5
+    Should Be Equal    ${measurements[0]["type"]}    1min_average
+    Should Be Equal    ${measurements[1]["type"]}    1min_average
+
+Thin-edge device supports sending custom bulk events directly to c8y
+    Execute Command
+    ...    tedge mqtt pub "c8y/event/events/createBulk" '{"events":[{"time":"2024-12-01T02:00:00Z","text":"event 1","type":"bulkevent"},{"time":"2024-12-01T02:01:00Z","text":"event 2","type":"bulkevent"}]}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${events}=    Device Should Have Event/s
+    ...    minimum=2
+    ...    maximum=2
+    ...    type=bulkevent
+    Should Be Equal As Strings    ${events[0]["text"]}    event 2
+    Should Be Equal As Strings    ${events[1]["text"]}    event 1
+    Should Be Equal    ${events[0]["type"]}    bulkevent
+    Should Be Equal    ${events[1]["type"]}    bulkevent
+
+Thin-edge device supports sending custom bulk alarms directly to c8y
+    Execute Command
+    ...    tedge mqtt pub "c8y/alarm/alarms/createBulk" '{"alarms":[{"time":"2024-12-01T02:00:00Z","text":"alarm 1","severity":"MAJOR","type":"bulkalarm1"},{"time":"2024-12-01T02:01:00Z","text":"alarm 2","severity":"MINOR","type":"bulkalarm2"}]}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${alarms}=    Device Should Have Alarm/s
+    ...    minimum=2
+    ...    maximum=2
+    ...    type=bulkalarm1,bulkalarm2
+    Should Be Equal As Strings    ${alarms[0]["text"]}    alarm 2
+    Should Be Equal As Strings    ${alarms[1]["text"]}    alarm 1
+    Should Be Equal As Strings    ${alarms[0]["severity"]}    MINOR
+    Should Be Equal As Strings    ${alarms[1]["severity"]}    MAJOR
+    Should Be Equal    ${alarms[0]["type"]}    bulkalarm2
+    Should Be Equal    ${alarms[1]["type"]}    bulkalarm1
+
 Thin-edge device support sending inventory data via c8y topic
     Execute Command
     ...    tedge mqtt pub "c8y/inventory/managedObjects/update/${DEVICE_SN}" '{"parentInfo":{"nested":{"name":"complex"}},"subType":"customType"}'
