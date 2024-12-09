@@ -104,7 +104,7 @@ impl ConnectCommand {
                             // Check failed, warning has been printed already
                             // Don't tell them the connection test succeeded because that's not true
                             Some(false) => {}
-                            // Either the check succceded or it wasn't relevant (e.g. non-Cumulocity connection)
+                            // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
                             Some(true) | None => {
                                 println!("Connection check to {cloud} cloud is successful.")
                             }
@@ -330,7 +330,7 @@ fn disallow_matching_configurations(
             .collect::<Vec<_>>()
             .join(", ");
 
-        bail!("The configurations: {keys} should be set to diffrent values, but are currently set to the same value");
+        bail!("The configurations: {keys} should be set to different values, but are currently set to the same value");
     }
     Ok(())
 }
