@@ -7,16 +7,16 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tedge_config::ProfileName;
 
-mod upload;
+mod c8y;
 
 #[derive(clap::Subcommand, Debug)]
-pub enum C8yCmd {
+pub enum UploadCmd {
     /// Upload a file to Cumulocity
     ///
     /// The command create a new event for the device,
     /// attach the given file content to this new event,
     /// and return the event ID.
-    Upload {
+    C8y {
         /// Path to the uploaded file
         #[clap(long)]
         file: PathBuf,
@@ -48,12 +48,12 @@ fn parse_json(input: &str) -> Result<HashMap<String, serde_json::Value>, anyhow:
     Ok(serde_json::from_str(input)?)
 }
 
-impl BuildCommand for C8yCmd {
+impl BuildCommand for UploadCmd {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.load_config()?;
 
         let cmd = match self {
-            C8yCmd::Upload {
+            UploadCmd::C8y {
                 event_type,
                 text,
                 json,
@@ -66,7 +66,7 @@ impl BuildCommand for C8yCmd {
                 let c8y = C8yEndPoint::local_proxy(&config, profile.as_deref())?;
                 let device_id = get_device_id(&config);
                 let text = text.unwrap_or_else(|| format!("Uploaded file: {file:?}"));
-                upload::C8yUpload {
+                c8y::C8yUpload {
                     identity,
                     cloud_root_certs,
                     device_id,

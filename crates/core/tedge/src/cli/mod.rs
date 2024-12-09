@@ -13,7 +13,6 @@ use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
 
 use self::init::TEdgeInitCmd;
-mod c8y;
 mod certificate;
 mod common;
 pub mod config;
@@ -24,6 +23,7 @@ pub mod log;
 mod mqtt;
 mod reconnect;
 mod refresh_bridges;
+mod upload;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -86,9 +86,9 @@ pub enum TEdgeOpt {
         relative_links: bool,
     },
 
-    /// Interact with Cumulocity
+    /// Upload files to the cloud
     #[clap(subcommand)]
-    C8y(c8y::C8yCmd),
+    Upload(upload::UploadCmd),
 
     /// Create and manage device certificate
     #[clap(subcommand)]
@@ -166,7 +166,7 @@ impl BuildCommand for TEdgeOpt {
                 relative_links,
                 context,
             ))),
-            TEdgeOpt::C8y(opt) => opt.build_command(context),
+            TEdgeOpt::Upload(opt) => opt.build_command(context),
             TEdgeOpt::Cert(opt) => opt.build_command(context),
             TEdgeOpt::Config(opt) => opt.build_command(context),
             TEdgeOpt::Connect(opt) => opt.build_command(context),
