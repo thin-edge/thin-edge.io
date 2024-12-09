@@ -160,9 +160,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_root_cert_path,
             remote_clientid,
             local_clientid: if let Some(profile) = &profile_name {
-                format!("c8y-bridge@{profile}")
+                format!("Cumulocity@{profile}")
             } else {
-                "c8y-bridge".into()
+                "Cumulocity".into()
             },
             bridge_certfile,
             bridge_keyfile,
