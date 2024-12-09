@@ -115,3 +115,140 @@ impl Builder<AvailabilityActor> for AvailabilityBuilder {
         AvailabilityActor::new(self.config, message_box, timer_sender)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! The tests for the builders are more like integration tests in that we want to spawn the mapper with more or less
+    //! production configuration but only tweak the configuration of this actor to ensure correctness, so it's put here
+    //! to have access to private items.
+
+    use super::*;
+
+    use std::time::Duration;
+
+    use serde_json::json;
+    use tedge_actors::test_helpers::FakeServerBoxBuilder;
+    use tedge_actors::test_helpers::MessageReceiverExt;
+    use tedge_actors::Actor;
+    use tedge_actors::Sender;
+    use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
+    use tedge_mqtt_ext::Topic;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(7000);
+
+    /// Ensure that the `AvailabilityActor` doesn't enter into a deadlock with C8yMapperActor (#3279).
+    ///
+    /// If many messages are sent, we should never reach a state where both AvailabilityActor can't complete sending its
+    /// output and the actor sending registration messages to AvailabilityActor can't complete sending it its input
+    /// (because the channel is full).
+    #[tokio::test]
+    async fn no_deadlock_with_c8y_actor() {
+        // number of messages to send to trigger a deadlock, might depend on the hardware; for small values the test
+        // should pass everytime, for bigger values it can trigger a deadlock and fail if actors aren't connected
+        // correctly
+        const NUM_MESSAGES: u32 = 50;
+
+        // spawn the C8yMapperActor, because we're testing the interaction with it
+        let ttd = TempTedgeDir::new();
+        let c8y_actor_config = crate::tests::test_mapper_config(&ttd);
+        let mut test_builder = crate::tests::c8y_mapper_test_builder(c8y_actor_config);
+
+        let config = AvailabilityConfig {
+            main_device_id: "test-device".into(),
+            mqtt_schema: MqttSchema::default(),
+            c8y_prefix: "c8y".try_into().unwrap(),
+            enable: true,
+            interval: Duration::from_secs(10 * 60),
+        };
+
+        // spawn the AvailabilityActor with very small channel buffers so few messages can be queued and most has to be processed immediately
+        let mut box_builder: SimpleMessageBoxBuilder<AvailabilityInput, AvailabilityOutput> =
+            SimpleMessageBoxBuilder::new("AvailabilityMonitoring", 0);
+
+        // marcel: here we're essentially copying the builder's new method, which currently connects to c8y actor
+        // builder. this sucks because when we decide to change connections between actors, this call site will have to
+        // be updated as well for the test to keep working; an optimal way to handle this would be to basically spawn
+        // the actors how we would in a non-test environment, already connected, and then be able to change things in a
+        // given actor, or replace certain actors we're interested in with stubs, with the ability to preserve the
+        // connection to their peers
+        box_builder.connect_mapped_source(
+            AvailabilityBuilder::channels(),
+            &mut test_builder.c8y,
+            AvailabilityBuilder::mqtt_message_parser(config.clone()),
+        );
+
+        test_builder.c8y.connect_mapped_source(
+            NoConfig,
+            &mut box_builder,
+            AvailabilityBuilder::mqtt_message_builder(),
+        );
+
+        // don't have to use the same timer as c8y actor
+        let mut timer_builder: FakeServerBoxBuilder<TimerStart, TimerComplete> =
+            FakeServerBoxBuilder::default();
+
+        let timer_sender = timer_builder.connect_client(box_builder.get_sender().sender_clone());
+
+        let availability_builder = AvailabilityBuilder {
+            config: config.clone(),
+            box_builder,
+            timer_sender,
+        };
+
+        let availability_actor = availability_builder.build();
+        tokio::spawn(async move { availability_actor.run().await });
+
+        let test_handle =
+            crate::tests::spawn_c8y_mapper_actor_with_builder(test_builder, &ttd, true).await;
+
+        // assert that when registering a lot of child devices, all of them are processed and the deadlock doesn't happen
+        let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        // skip all the mapper init messages: twin, 114, 117 for the main device, etc.
+        mqtt.skip(6).await;
+
+        // send some messages and wait for response immediately to make sure the base functionality works and it's
+        // indeed a deadlock that causes the test to fail
+        for i in 0..5 {
+            let id = format!("te/device/child_correct{i}//");
+            let expected_xid = format!("test-device:device:child_correct{i}");
+            // registration message
+            let registration_message = MqttMessage::new(
+                &Topic::new_unchecked(&id),
+                json!({"@id": expected_xid, "@type": "child-device"}).to_string(),
+            );
+            // this will fail if channels become full and stop being drained due to a deadlock
+            mqtt.send(registration_message).await.unwrap();
+
+            let expected_topic = format!("c8y/s/us/test-device:device:child_correct{i}");
+            // skip 101 message for the child device
+            mqtt.skip(1).await;
+            // SmartREST 117 for the child device
+            assert_received_contains_str(&mut mqtt, [(expected_topic.as_str(), "117,10")]).await;
+        }
+
+        for i in 0..NUM_MESSAGES {
+            let id = format!("te/device/child{i}//");
+            let expected_xid = format!("test-device:device:child{i}");
+            // registration message
+            let registration_message = MqttMessage::new(
+                &Topic::new_unchecked(&id),
+                json!({"@id": expected_xid, "@type": "child-device"}).to_string(),
+            );
+            // this will fail if channels become full and stop being drained due to a deadlock
+            mqtt.send(registration_message)
+                .await
+                .expect("this channel should be drained by the connected MQTT message sink");
+        }
+
+        for i in 0..NUM_MESSAGES {
+            let expected_topic = format!("c8y/s/us/test-device:device:child{i}");
+            // skip 101 message for the child device
+            mqtt.skip(1).await;
+            // SmartREST 117 for the child device
+            assert_received_contains_str(&mut mqtt, [(expected_topic.as_str(), "117,10")]).await;
+        }
+    }
+}

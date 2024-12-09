@@ -355,7 +355,9 @@ where
     T: Sender<M>,
 {
     async fn send(&mut self, message: M) -> Result<(), ChannelError> {
-        self.inner.send(message).await
+        tokio::time::timeout(self.timeout, self.inner.send(message))
+            .await
+            .expect("couldn't send due to blocked channel")
     }
 }
 
