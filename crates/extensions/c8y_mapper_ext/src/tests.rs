@@ -3334,7 +3334,37 @@ async fn trigger_timeout(timer: &mut FakeServerBox<SyncStart, SyncComplete>) {
 }
 
 pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -> TestHandle {
-    spawn_c8y_mapper_actor_with_config(tmp_dir, test_mapper_config(tmp_dir), init).await
+    let config = test_mapper_config(tmp_dir);
+    let c8y_mapper_builder = c8y_mapper_test_builder(config);
+    spawn_c8y_mapper_actor_with_builder(c8y_mapper_builder, tmp_dir, init).await
+}
+
+pub(crate) async fn spawn_c8y_mapper_actor_with_config(
+    tmp_dir: &TempTedgeDir,
+    config: C8yMapperConfig,
+    init: bool,
+) -> TestHandle {
+    let c8y_mapper_builder = c8y_mapper_test_builder(config);
+    spawn_c8y_mapper_actor_with_builder(c8y_mapper_builder, tmp_dir, init).await
+}
+
+/// A collection of connected actor builders used for the test.
+///
+/// Can be used to change configuration of any actor for the purposes of testing its interactions with the main
+/// C8yMapperActor. If no changes are required, all of the actors can be built and spawned, obtaining a `TestHandle` to
+/// drive the particular test case.
+pub(crate) struct TestBuilder {
+    pub mqtt: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
+    pub http: FakeServerBoxBuilder<HttpRequest, HttpResult>,
+    pub fs: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent>,
+    pub timer: FakeServerBoxBuilder<SyncStart, SyncComplete>,
+    pub ul: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult>,
+    pub dl: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult>,
+    pub avail: SimpleMessageBoxBuilder<MqttMessage, PublishMessage>,
+    pub service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
+    // required to get bridge health topic, should be removed
+    pub c8y_config: C8yMapperConfig,
+    pub c8y: C8yMapperBuilder,
 }
 
 pub(crate) struct TestHandle {
@@ -3347,16 +3377,7 @@ pub(crate) struct TestHandle {
     pub avail: SimpleMessageBox<MqttMessage, PublishMessage>,
 }
 
-pub(crate) async fn spawn_c8y_mapper_actor_with_config(
-    tmp_dir: &TempTedgeDir,
-    config: C8yMapperConfig,
-    init: bool,
-) -> TestHandle {
-    if init {
-        tmp_dir.dir("operations").dir("c8y");
-        tmp_dir.dir(".tedge-mapper-c8y");
-    }
-
+pub(crate) fn c8y_mapper_test_builder(config: C8yMapperConfig) -> TestBuilder {
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
     let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
@@ -3372,9 +3393,8 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
-    let bridge_health_topic = config.bridge_health_topic.clone();
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
-        config,
+        config.clone(),
         &mut mqtt_builder,
         &mut http_builder,
         &mut timer_builder,
@@ -3391,21 +3411,45 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
-    let actor = c8y_mapper_builder.build();
-    tokio::spawn(async move { actor.run().await });
+    TestBuilder {
+        mqtt: mqtt_builder,
+        http: http_builder,
+        fs: fs_watcher_builder,
+        timer: timer_builder,
+        ul: uploader_builder,
+        dl: downloader_builder,
+        avail: availability_box_builder,
+        service_monitor_builder,
+        c8y_config: config,
+        c8y: c8y_mapper_builder,
+    }
+}
 
-    let mut service_monitor_box = service_monitor_builder.build();
-    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");
+pub async fn spawn_c8y_mapper_actor_with_builder(
+    builder: TestBuilder,
+    tmp_dir: &TempTedgeDir,
+    init: bool,
+) -> TestHandle {
+    if init {
+        tmp_dir.dir("operations").dir("c8y");
+        tmp_dir.dir(".tedge-mapper-c8y");
+    }
+
+    let c8y_actor = builder.c8y.build();
+    tokio::spawn(async move { c8y_actor.run().await });
+
+    let mut service_monitor_box = builder.service_monitor_builder.build();
+    let bridge_status_msg = MqttMessage::new(&builder.c8y_config.bridge_health_topic, "1");
     service_monitor_box.send(bridge_status_msg).await.unwrap();
 
     TestHandle {
-        mqtt: mqtt_builder.build(),
-        http: http_builder.build(),
-        fs: fs_watcher_builder.build(),
-        timer: timer_builder.build(),
-        ul: uploader_builder.build(),
-        dl: downloader_builder.build(),
-        avail: availability_box_builder.build(),
+        mqtt: builder.mqtt.build(),
+        http: builder.http.build(),
+        fs: builder.fs.build(),
+        timer: builder.timer.build(),
+        ul: builder.ul.build(),
+        dl: builder.dl.build(),
+        avail: builder.avail.build(),
     }
 }
 
