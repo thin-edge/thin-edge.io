@@ -42,9 +42,7 @@ impl C8YHttpProxy {
 
     /// Returns the c8y url to upload an attachment onto an event
     pub fn c8y_url_for_event_binary_upload(&self, event_id: &str) -> Url {
-        self.c8y
-            .end_point
-            .get_url_for_event_binary_upload_unchecked(event_id)
+        self.c8y.end_point.c8y_url_for_event_binary_upload(event_id)
     }
 
     /// Returns the local url to upload an attachment onto an event
