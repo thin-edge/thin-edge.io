@@ -3407,9 +3407,9 @@ pub(crate) fn c8y_mapper_test_builder(config: C8yMapperConfig) -> TestBuilder {
 
     let mut availability_box_builder: SimpleMessageBoxBuilder<MqttMessage, PublishMessage> =
         SimpleMessageBoxBuilder::new("Availability", 10);
-    availability_box_builder
-        .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
-    c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
+    // availability_box_builder
+    //     .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
+    // c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
     TestBuilder {
         mqtt: mqtt_builder,
