@@ -22,6 +22,8 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::HealthStatus;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
+use tedge_mqtt_ext::TopicFilter;
 
 pub struct AvailabilityBuilder {
     config: AvailabilityConfig,
@@ -32,19 +34,20 @@ pub struct AvailabilityBuilder {
 impl AvailabilityBuilder {
     pub fn new(
         config: AvailabilityConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, Vec<ChannelFilter>> + MessageSink<PublishMessage>),
+        mqtt_in: &mut impl MessageSource<MqttMessage, TopicFilter>,
+        mqtt_out: &mut impl MessageSink<PublishMessage>,
         timer: &mut impl Service<TimerStart, TimerComplete>,
     ) -> Self {
         let mut box_builder: SimpleMessageBoxBuilder<AvailabilityInput, AvailabilityOutput> =
             SimpleMessageBoxBuilder::new("AvailabilityMonitoring", 16);
 
         box_builder.connect_mapped_source(
-            Self::channels(),
-            mqtt,
+            Self::channels(&config),
+            mqtt_in,
             Self::mqtt_message_parser(config.clone()),
         );
 
-        mqtt.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
+        mqtt_out.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
 
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
 
@@ -55,11 +58,11 @@ impl AvailabilityBuilder {
         }
     }
 
-    pub(crate) fn channels() -> Vec<ChannelFilter> {
-        vec![ChannelFilter::EntityMetadata, ChannelFilter::Health]
+    pub(crate) fn channels(config: &AvailabilityConfig) -> TopicFilter {
+        TopicFilter::new(&format!("{}/+/+/+/+", &config.mqtt_schema.root)).unwrap()
     }
 
-    fn mqtt_message_parser(
+    pub fn mqtt_message_parser(
         config: AvailabilityConfig,
     ) -> impl Fn(MqttMessage) -> Option<AvailabilityInput> {
         move |message| {

@@ -419,19 +419,45 @@ struct TestHandler {
 }
 
 async fn spawn_availability_actor(config: AvailabilityConfig) -> TestHandler {
-    let mut mqtt_builder: SimpleMessageBoxBuilder<PublishMessage, MqttMessage> =
+    // create two separate Mqtt message boxes to circumvent "can't borrow the same object as mutable more than one time"
+    // use the message boxes because they implement `MessageSource` and `MessageSink` (receivers and senders alone do
+    // not) and then take out their halves not given to the actor and recombine them
+    //
+    // we need separate mqtt in and mqtt out because on the in-side CumulocityMapperActor attaches a `ChannelFilter`
+    // which we use to only get messages we care about, and on the out-side we want to output directly to the MQTT actor
+    // because on CumulocityMapperActor side the halves that send to AvailabilityActor and receive from
+    // AvailabilityActor aren't separate, so one can block the other
+    //
+    // TODO: find a cleaner and more permanent solution
+    let mut mqtt_in_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+        SimpleMessageBoxBuilder::new("MQTT", 10);
+    let mut mqtt_out_builder: SimpleMessageBoxBuilder<PublishMessage, PublishMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
     let mut timer_builder: FakeServerBoxBuilder<TimerStart, TimerComplete> =
         FakeServerBoxBuilder::default();
 
-    let availability_builder =
-        AvailabilityBuilder::new(config, &mut mqtt_builder, &mut timer_builder);
+    let availability_builder = AvailabilityBuilder::new(
+        config,
+        &mut mqtt_in_builder,
+        &mut mqtt_out_builder,
+        &mut timer_builder,
+    );
 
     let actor = availability_builder.build();
     tokio::spawn(async move { actor.run().await });
 
+    let mqtt_in_message_box = mqtt_in_builder.build();
+    let mqtt_out_message_box = mqtt_out_builder.build();
+
+    // in_receiver cloned to actor
+    let (in_tx, _) = mqtt_in_message_box.into_split();
+    // out_sender cloned to actor
+    let (_, out_rx) = mqtt_out_message_box.into_split();
+
+    let mqtt_box = SimpleMessageBox::new(out_rx, in_tx);
+
     TestHandler {
-        mqtt_box: mqtt_builder.build(),
+        mqtt_box,
         timer_box: timer_builder.build(),
     }
 }

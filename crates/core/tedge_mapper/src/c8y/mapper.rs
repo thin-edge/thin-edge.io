@@ -272,6 +272,7 @@ impl TEdgeComponent for CumulocityMapper {
         let availability_actor = if c8y_config.availability.enable {
             Some(AvailabilityBuilder::new(
                 AvailabilityConfig::try_new(&tedge_config, c8y_profile)?,
+                &mut mqtt_actor,
                 &mut c8y_mapper_actor,
                 &mut timer_actor,
             ))

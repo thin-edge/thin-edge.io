@@ -8,6 +8,7 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::actor::PublishMessage;
 use crate::availability::AvailabilityBuilder;
+use crate::availability::AvailabilityConfig;
 use crate::config::BridgeConfig;
 use crate::operations::OperationHandler;
 use crate::Capabilities;
@@ -35,6 +36,7 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::AutoLogUpload;
@@ -3373,7 +3375,14 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
     let bridge_health_topic = config.bridge_health_topic.clone();
-    let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
+    let availability_config = AvailabilityConfig {
+        main_device_id: EntityExternalId::from(config.device_id.clone()),
+        mqtt_schema: config.mqtt_schema.clone(),
+        c8y_prefix: config.bridge_config.c8y_prefix.clone(),
+        enable: true,
+        interval: Duration::from_secs(60 * 10),
+    };
+    let c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
         &mut mqtt_builder,
         &mut http_builder,
@@ -3387,9 +3396,12 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     let mut availability_box_builder: SimpleMessageBoxBuilder<MqttMessage, PublishMessage> =
         SimpleMessageBoxBuilder::new("Availability", 10);
-    availability_box_builder
-        .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
-    c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
+    // TODO: SimpleMessageBoxBuilder::connect_sink replaces previous sink instead of adding one
+    availability_box_builder.connect_source(
+        AvailabilityBuilder::channels(&availability_config),
+        &mut mqtt_builder,
+    );
+    // c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
     let actor = c8y_mapper_builder.build();
     tokio::spawn(async move { actor.run().await });
