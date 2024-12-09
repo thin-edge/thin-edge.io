@@ -285,7 +285,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .keys()
                 .map(|s| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_configurations(config, ReadableKey::AwsUrl, &profiles)?;
+            disallow_matching_configurations(config, ReadableKey::AwsUrl, &profiles).or_else(
+                |_| disallow_matching_configurations(config, ReadableKey::AwsDeviceId, &profiles),
+            )?;
             disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
         }
         MaybeBorrowedCloud::Azure(_) => {
@@ -294,7 +296,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .keys()
                 .map(|s| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_configurations(config, ReadableKey::AzUrl, &profiles)?;
+            disallow_matching_configurations(config, ReadableKey::AzUrl, &profiles).or_else(
+                |_| disallow_matching_configurations(config, ReadableKey::AzDeviceId, &profiles),
+            )?;
             disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
         }
         MaybeBorrowedCloud::C8y(_) => {
@@ -303,7 +307,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .keys()
                 .map(|s| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_configurations(config, ReadableKey::C8yUrl, &profiles)?;
+            disallow_matching_configurations(config, ReadableKey::C8yUrl, &profiles).or_else(
+                |_| disallow_matching_configurations(config, ReadableKey::C8yDeviceId, &profiles),
+            )?;
             disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
             disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
         }

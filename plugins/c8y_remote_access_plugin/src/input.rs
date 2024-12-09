@@ -58,7 +58,7 @@ pub struct C8yRemoteAccessPluginOpt {
     #[arg(long, requires("init"), default_value = "tedge")]
     group: Option<String>,
 
-    #[arg(long, env = "C8Y_PROFILE", hide = true)]
+    #[arg(long, env = "TEDGE_CLOUD_PROFILE", hide = true)]
     /// The c8y profile to use
     pub profile: Option<ProfileName>,
 

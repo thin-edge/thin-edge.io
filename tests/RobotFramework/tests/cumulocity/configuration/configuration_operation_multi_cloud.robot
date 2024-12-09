@@ -69,17 +69,20 @@ Setup Second Device
     Set Suite Variable    $SECOND_DEVICE_SN    ${second_device_sn}
 
     Execute Command
-    ...    tedge config set c8y@second.device.cert_path /etc/tedge/device-certs/tedge@second-certificate.pem
-    Execute Command    tedge config set c8y@second.device.key_path /etc/tedge/device-certs/tedge@second-key.pem
-    Execute Command    tedge config set c8y@second.proxy.bind.port 8002
-    Execute Command    tedge config set c8y@second.bridge.topic_prefix c8y-second
-    Execute Command    tedge config set c8y@second.url "$(tedge config get c8y.url)"
-
-    Execute Command    tedge cert create c8y@second --device-id ${second_device_sn}
+    ...    tedge config set c8y.device.cert_path --profile second /etc/tedge/device-certs/tedge@second-certificate.pem
     Execute Command
-    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y@second
+    ...    tedge config set c8y.device.key_path --profile second /etc/tedge/device-certs/tedge@second-key.pem
+    Execute Command    tedge config set c8y.proxy.bind.port --profile second 8002
+    Execute Command    tedge config set c8y.bridge.topic_prefix --profile second c8y-second
+    Execute Command    tedge config set c8y.url --profile second "$(tedge config get c8y.url)"
 
-    Execute Command    tedge connect c8y@second
+    Execute Command    tedge cert create c8y --profile second --device-id ${second_device_sn}
+    Execute Command
+    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y --profile second
+
+    Execute Command    tedge connect c8y --profile second
+    # Verify the mapper has actually started successfully
+    Execute Command    systemctl is-active tedge-mapper-c8y@second
 
     RETURN    ${second_device_sn}
 

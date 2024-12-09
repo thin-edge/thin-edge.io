@@ -209,7 +209,7 @@ impl TEdgeEnv {
 
     fn provider(&self) -> figment::providers::Env {
         static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
-        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR"]).map(move |name| {
+        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR", "CLOUD_PROFILE"]).map(move |name| {
             let lowercase_name = name.as_str().to_ascii_lowercase();
             Uncased::new(
                 tracing::subscriber::with_default(
