@@ -1,5 +1,6 @@
 use crate::json_c8y::AlarmSeverity;
 use crate::json_c8y::C8yAlarm;
+use crate::smartrest::message_ids::*;
 use time::format_description::well_known::Rfc3339;
 
 use super::payload::SmartrestPayload;
@@ -9,21 +10,23 @@ pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<SmartrestPayload, time::e
     let smartrest = match c8y_alarm {
         C8yAlarm::Create(alarm) => {
             let smartrest_code = match alarm.severity {
-                AlarmSeverity::Critical => "301",
-                AlarmSeverity::Major => "302",
-                AlarmSeverity::Minor => "303",
-                AlarmSeverity::Warning => "304",
+                AlarmSeverity::Critical => CREATE_CRITICAL_ALARM,
+                AlarmSeverity::Major => CREATE_MAJOR_ALARM,
+                AlarmSeverity::Minor => CREATE_MINOR_ALARM,
+                AlarmSeverity::Warning => CREATE_WARNING_ALARM,
             };
-            SmartrestPayload::serialize([
+            SmartrestPayload::serialize((
                 smartrest_code,
                 &alarm.alarm_type,
                 &alarm.text,
                 &alarm.time.format(&Rfc3339)?,
-            ])
+            ))
             .expect("TODO: should alarm text be trimmed?")
         }
-        C8yAlarm::Clear(alarm) => SmartrestPayload::serialize((306, &alarm.alarm_type))
-            .expect("alarm type should be shorter than payload size limit"),
+        C8yAlarm::Clear(alarm) => {
+            SmartrestPayload::serialize((CLEAR_EXISTING_ALARM, &alarm.alarm_type))
+                .expect("alarm type should be shorter than payload size limit")
+        }
     };
     Ok(smartrest)
 }
