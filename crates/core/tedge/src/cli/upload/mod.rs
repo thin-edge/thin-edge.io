@@ -41,6 +41,12 @@ pub enum UploadCmd {
         /// Optional c8y cloud profile
         #[clap(long)]
         profile: Option<ProfileName>,
+
+        /// Cumulocity external id of the device child on which the file has to be attached.
+        ///
+        /// If not given, the file is attached to the main device.
+        #[clap(long)]
+        device_id: Option<String>,
     },
 }
 
@@ -60,11 +66,15 @@ impl BuildCommand for UploadCmd {
                 file,
                 mime_type,
                 profile,
+                device_id,
             } => {
                 let identity = config.http.client.auth.identity()?;
                 let cloud_root_certs = config.cloud_root_certs();
                 let c8y = C8yEndPoint::local_proxy(&config, profile.as_deref())?;
-                let device_id = get_device_id(&config);
+                let device_id = match device_id {
+                    None => config.device.id()?.clone(),
+                    Some(device_id) => device_id,
+                };
                 let text = text.unwrap_or_else(|| format!("Uploaded file: {file:?}"));
                 c8y::C8yUpload {
                     identity,
@@ -80,16 +90,5 @@ impl BuildCommand for UploadCmd {
             }
         };
         Ok(cmd.into_boxed())
-    }
-}
-
-fn get_device_id(config: &tedge_config::TEdgeConfig) -> String {
-    if let Ok(main_device_id) = config.device.id() {
-        return main_device_id.clone();
-    }
-    let child_topic_id = &config.mqtt.device_topic_id;
-    match child_topic_id.as_str().split('/').collect::<Vec<&str>>()[..] {
-        ["device", child, "", ""] => child.to_string(),
-        _ => child_topic_id.replace('/', ":"),
     }
 }
