@@ -24,6 +24,12 @@ Run custom operation with workflow execution
     ...    description=take a picture
     ...    fragments={"c8y_TakePicture":{"parameters": {"duration": "5s", "quality": "HD"}}}
     Verify Local Command    main    take_picture
+
+    Should Have MQTT Messages
+    ...    c8y/s/us
+    ...    minimum=1
+    ...    maximum=1
+    ...    message_pattern=^506,[0-9]+,(5s HD)
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
 
 Add template and workflow file dynamically
