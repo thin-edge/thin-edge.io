@@ -1,4 +1,3 @@
-use crate::actor::PublishMessage;
 use crate::availability::actor::AvailabilityActor;
 use crate::availability::AvailabilityConfig;
 use crate::availability::AvailabilityInput;
@@ -32,7 +31,8 @@ pub struct AvailabilityBuilder {
 impl AvailabilityBuilder {
     pub fn new(
         config: AvailabilityConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, Vec<ChannelFilter>> + MessageSink<PublishMessage>),
+        mqtt_in: &mut impl MessageSource<MqttMessage, Vec<ChannelFilter>>,
+        mqtt_out: &mut impl MessageSink<MqttMessage>,
         timer: &mut impl Service<TimerStart, TimerComplete>,
     ) -> Self {
         let mut box_builder: SimpleMessageBoxBuilder<AvailabilityInput, AvailabilityOutput> =
@@ -40,11 +40,11 @@ impl AvailabilityBuilder {
 
         box_builder.connect_mapped_source(
             Self::channels(),
-            mqtt,
+            mqtt_in,
             Self::mqtt_message_parser(config.clone()),
         );
 
-        mqtt.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
+        mqtt_out.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
 
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
 
@@ -84,12 +84,10 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<PublishMessage> {
+    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                Some(PublishMessage(value.into()))
-            }
-            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(PublishMessage(value.into())),
+            AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(MqttMessage::from(value)),
+            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(MqttMessage::from(value)),
         }
     }
 }
@@ -173,13 +171,15 @@ mod tests {
         // the actors how we would in a non-test environment, already connected, and then be able to change things in a
         // given actor, or replace certain actors we're interested in with stubs, with the ability to preserve the
         // connection to their peers
+
+        // example: the fix requires changing test code, this is suboptimal
         box_builder.connect_mapped_source(
             AvailabilityBuilder::channels(),
             &mut test_builder.c8y,
             AvailabilityBuilder::mqtt_message_parser(config.clone()),
         );
 
-        test_builder.c8y.connect_mapped_source(
+        test_builder.mqtt.connect_mapped_source(
             NoConfig,
             &mut box_builder,
             AvailabilityBuilder::mqtt_message_builder(),
