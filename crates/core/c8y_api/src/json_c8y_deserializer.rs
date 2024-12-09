@@ -405,12 +405,19 @@ pub struct C8yLogfileRequest {
     pub maximum_lines: usize,
 }
 
+/// Type assigned to legacy configuration upload/download
+/// operations (e.g. when the type property is not set in the operation)
+fn legacy_config_type() -> String {
+    "legacy".to_string()
+}
+
 /// Representation of c8y_UploadConfigFile JSON object
 ///
 /// ```rust
 /// use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
 ///
 /// // Example input from c8y
+/// // Note: Legacy config upload operations will not have the type property
 /// let data = r#"
 /// {
 ///     "type": "/etc/tedge/tedge.toml"
@@ -422,7 +429,7 @@ pub struct C8yLogfileRequest {
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUploadConfigFile {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default = "legacy_config_type")]
     pub config_type: String,
 }
 
@@ -432,6 +439,7 @@ pub struct C8yUploadConfigFile {
 /// use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 ///
 /// // Example input from c8y
+/// // Note: Legacy config download operations will not have the type property
 /// let data = r#"
 /// {
 ///     "type": "/etc/tedge/tedge.toml",
@@ -444,7 +452,7 @@ pub struct C8yUploadConfigFile {
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yDownloadConfigFile {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default = "legacy_config_type")]
     pub config_type: String,
     pub url: String,
 }
