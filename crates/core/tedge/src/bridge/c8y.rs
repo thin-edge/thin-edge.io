@@ -160,9 +160,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_root_cert_path,
             remote_clientid,
             local_clientid: if let Some(profile) = &profile_name {
-                format!("c8y-bridge@{profile}")
+                format!("Cumulocity@{profile}")
             } else {
-                "c8y-bridge".into()
+                "Cumulocity".into()
             },
             bridge_certfile,
             bridge_keyfile,
@@ -255,7 +255,7 @@ mod tests {
             remote_password: None,
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             remote_clientid: "alpha".into(),
-            local_clientid: "c8y-bridge".into(),
+            local_clientid: "Cumulocity".into(),
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             use_mapper: true,
@@ -349,7 +349,7 @@ mod tests {
             remote_password: Some("abcd1234".into()),
             bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
             remote_clientid: "alpha".into(),
-            local_clientid: "c8y-bridge@profile".into(),
+            local_clientid: "Cumulocity@profile".into(),
             bridge_certfile: "./test-certificate.pem".into(),
             bridge_keyfile: "./test-private-key.pem".into(),
             use_mapper: true,

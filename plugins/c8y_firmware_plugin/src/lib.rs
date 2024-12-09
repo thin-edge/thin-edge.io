@@ -43,7 +43,7 @@ pub struct FirmwarePluginOpt {
     #[command(flatten)]
     pub common: CommonArgs,
 
-    #[clap(long, env = "C8Y_PROFILE", hide = true)]
+    #[clap(long, env = "TEDGE_CLOUD_PROFILE", hide = true)]
     pub profile: Option<ProfileName>,
 }
 

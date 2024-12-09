@@ -131,14 +131,6 @@ fn generate_structs(
             .map(|(name, ty, function, parent_ty, id)| -> syn::ItemImpl {
                 if let Some((ok, err)) = extract_type_from_result(ty) {
                     parse_quote_spanned! {name.span()=>
-                        // impl #name {
-                        //     // TODO don't just guess we're called tedgeconfigreader
-                        //     #[deprecated]
-                        //     pub fn try_read(&self, reader: &#parent_ty) -> Result<&#ok, #err> {
-                        //         self.0.get_or_try_init(|| #function(reader))
-                        //     }
-                        // }
-
                         impl #parent_ty {
                             pub fn #id(&self) -> Result<&#ok, #err> {
                                 self.#id.0.get_or_try_init(|| #function(self))
@@ -147,14 +139,6 @@ fn generate_structs(
                     }
                 } else {
                     parse_quote_spanned! {name.span()=>
-                        // impl #name {
-                        //     // TODO don't just guess we're called tedgeconfigreader
-                        //     #[deprecated]
-                        //     pub fn read(&self, reader: &#parent_ty) -> &#ty {
-                        //         self.0.get_or_init(|| #function(reader))
-                        //     }
-                        // }
-
                         impl #parent_ty {
                             pub fn #id(&self) -> &#ty {
                                 self.#id.0.get_or_init(|| #function(self))

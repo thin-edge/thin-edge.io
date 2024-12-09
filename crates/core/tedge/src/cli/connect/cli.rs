@@ -1,4 +1,4 @@
-use crate::cli::common::Cloud;
+use crate::cli::common::CloudArgs;
 use crate::cli::connect::*;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
@@ -7,9 +7,6 @@ use tedge_config::system_services::service_manager;
 
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeConnectOpt {
-    /// The cloud you wish to connect to, e.g. `c8y`, `az`, or `aws`
-    cloud: Cloud,
-
     /// Test an existing connection
     #[clap(long = "test")]
     is_test_connection: bool,
@@ -17,6 +14,9 @@ pub struct TEdgeConnectOpt {
     /// Ignore connection registration and connection check
     #[clap(long = "offline")]
     offline_mode: bool,
+
+    #[clap(flatten)]
+    cloud: CloudArgs,
 }
 
 impl BuildCommand for TEdgeConnectOpt {
@@ -29,7 +29,7 @@ impl BuildCommand for TEdgeConnectOpt {
         Ok(Box::new(ConnectCommand {
             config_location: context.config_location.clone(),
             config: context.load_config()?,
-            cloud,
+            cloud: cloud.try_into()?,
             is_test_connection,
             offline_mode,
             service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
