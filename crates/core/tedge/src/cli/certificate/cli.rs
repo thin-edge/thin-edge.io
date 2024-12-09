@@ -1,5 +1,5 @@
 use crate::cli::common::Cloud;
-use anyhow::anyhow;
+use crate::cli::common::OptionalCloudArgs;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
@@ -24,7 +24,8 @@ pub enum TEdgeCertCli {
         #[clap(long = "device-id")]
         id: String,
 
-        cloud: Option<Cloud>,
+        #[clap(flatten)]
+        cloud: OptionalCloudArgs,
     },
 
     /// Create a certificate signing request
@@ -37,19 +38,30 @@ pub enum TEdgeCertCli {
         #[clap(long = "output-path")]
         output_path: Option<Utf8PathBuf>,
 
-        cloud: Option<Cloud>,
+        #[clap(flatten)]
+        cloud: OptionalCloudArgs,
     },
 
     /// Renew the device certificate
-    Renew { cloud: Option<Cloud> },
+    Renew {
+        #[clap(flatten)]
+        cloud: OptionalCloudArgs,
+    },
 
     /// Show the device certificate, if any
-    Show { cloud: Option<Cloud> },
+    Show {
+        #[clap(flatten)]
+        cloud: OptionalCloudArgs,
+    },
 
     /// Remove the device certificate
-    Remove { cloud: Option<Cloud> },
+    Remove {
+        #[clap(flatten)]
+        cloud: OptionalCloudArgs,
+    },
 
     /// Upload root certificate
+    #[clap(subcommand)]
     Upload(UploadCertCli),
 }
 
@@ -64,6 +76,7 @@ impl BuildCommand for TEdgeCertCli {
 
         let cmd = match self {
             TEdgeCertCli::Create { id, cloud } => {
+                let cloud: Option<Cloud> = cloud.try_into()?;
                 let cmd = CreateCertCmd {
                     id,
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
@@ -79,6 +92,7 @@ impl BuildCommand for TEdgeCertCli {
                 output_path,
                 cloud,
             } => {
+                let cloud: Option<Cloud> = cloud.try_into()?;
                 // Use the current device id if no id is provided
                 let id = match id {
                     Some(id) => id,
@@ -96,6 +110,7 @@ impl BuildCommand for TEdgeCertCli {
             }
 
             TEdgeCertCli::Show { cloud } => {
+                let cloud: Option<Cloud> = cloud.try_into()?;
                 let cmd = ShowCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                 };
@@ -103,6 +118,7 @@ impl BuildCommand for TEdgeCertCli {
             }
 
             TEdgeCertCli::Remove { cloud } => {
+                let cloud: Option<Cloud> = cloud.try_into()?;
                 let cmd = RemoveCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
@@ -110,29 +126,24 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Upload(cmd) => {
-                let cmd = match cmd.cloud {
-                    Cloud::C8y(profile) => {
-                        let c8y = config.c8y.try_get(profile.as_deref())?;
-                        UploadCertCmd {
-                            device_id: c8y.device.id()?.clone(),
-                            path: c8y.device.cert_path.clone(),
-                            host: c8y.http.or_err()?.to_owned(),
-                            cloud_root_certs: config.cloud_root_certs(),
-                            username: cmd.username,
-                            password: cmd.password,
-                        }
-                    }
-                    cloud => {
-                        return Err(anyhow!(
-                            "Uploading certificates via the tedge cli isn't supported for {cloud}"
-                        )
-                        .into())
-                    }
+            TEdgeCertCli::Upload(UploadCertCli::C8y {
+                username,
+                password,
+                profile,
+            }) => {
+                let c8y = config.c8y.try_get(profile.as_deref())?;
+                let cmd = UploadCertCmd {
+                    device_id: c8y.device.id()?.clone(),
+                    path: c8y.device.cert_path.clone(),
+                    host: c8y.http.or_err()?.to_owned(),
+                    cloud_root_certs: config.cloud_root_certs(),
+                    username,
+                    password,
                 };
                 cmd.into_boxed()
             }
             TEdgeCertCli::Renew { cloud } => {
+                let cloud: Option<Cloud> = cloud.try_into()?;
                 let cmd = RenewCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
@@ -144,29 +155,34 @@ impl BuildCommand for TEdgeCertCli {
     }
 }
 
-#[derive(clap::Args, Debug)]
-pub struct UploadCertCli {
-    cloud: Cloud,
-    #[clap(long = "user")]
-    #[arg(
-        env = "C8Y_USER",
-        hide_env_values = true,
-        hide_default_value = true,
-        default_value = ""
-    )]
-    /// Provided username should be a Cumulocity IoT user with tenant management permissions.
-    /// You will be prompted for input if the value is not provided or is empty
-    username: String,
-
-    #[clap(long = "password")]
-    #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
-    // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
-    /// Cumulocity IoT Password.
-    /// You will be prompted for input if the value is not provided or is empty
+#[derive(clap::Subcommand, Debug)]
+pub enum UploadCertCli {
+    /// Upload root certificate to Cumulocity
     ///
-    /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
-    password: String,
+    /// The command will upload root certificate to Cumulocity.
+    C8y {
+        #[clap(long = "user")]
+        #[arg(
+            env = "C8Y_USER",
+            hide_env_values = true,
+            hide_default_value = true,
+            default_value = ""
+        )]
+        /// Provided username should be a Cumulocity IoT user with tenant management permissions.
+        /// You will be prompted for input if the value is not provided or is empty
+        username: String,
 
-    #[clap(long, hide = true)]
-    profile: Option<ProfileName>,
+        #[clap(long = "password")]
+        #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
+        // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
+        /// Cumulocity IoT Password.
+        /// You will be prompted for input if the value is not provided or is empty
+        ///
+        /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead
+        password: String,
+
+        /// The cloud profile you wish to upload the certificate to
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
 }

@@ -30,8 +30,7 @@ pub struct ProfileName(String);
 impl TryFrom<String> for ProfileName {
     type Error = anyhow::Error;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        validate_profile_name(&value)?;
-        Ok(Self(value))
+        value.parse()
     }
 }
 
@@ -54,6 +53,11 @@ fn validate_profile_name(value: &str) -> Result<(), anyhow::Error> {
             .all(|c| c.is_alphanumeric() || ['-', '_'].contains(&c)),
         "Profile names can only contain letters, numbers, `-` or `_`"
     );
+    ensure!(!value.is_empty(), "Profile names cannot be empty");
+    ensure!(
+        value.chars().any(|c| c.is_alphanumeric()),
+        "Profile names must contain at least one letter or number"
+    );
     Ok(())
 }
 
@@ -61,7 +65,7 @@ impl FromStr for ProfileName {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         validate_profile_name(s)?;
-        Ok(Self(s.to_owned()))
+        Ok(Self(s.to_lowercase()))
     }
 }
 
@@ -110,6 +114,12 @@ impl Deref for ProfileName {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl From<ProfileName> for String {
+    fn from(value: ProfileName) -> Self {
+        value.0
     }
 }
 

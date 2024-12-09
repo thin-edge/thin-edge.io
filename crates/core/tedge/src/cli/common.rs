@@ -1,48 +1,105 @@
-use anyhow::bail;
+use anyhow::Context;
 use std::borrow::Cow;
-use std::str::FromStr;
+use std::fmt;
 use tedge_config::system_services::SystemService;
 use tedge_config::ProfileName;
-use yansi::Paint;
 
-pub type Cloud = MaybeBorrowedCloud<'static>;
+#[derive(clap::Args, PartialEq, Eq, Debug, Clone)]
+pub struct CloudArgs {
+    /// The cloud you wish to interact with
+    cloud: CloudType,
 
-impl FromStr for Cloud {
-    type Err = <ProfileName as FromStr>::Err;
+    /// The cloud profile you wish to use, if not specified as part of the cloud
+    #[clap(long)]
+    profile: Option<ProfileName>,
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match (s, s.split_once("@")) {
-            (_, Some(("c8y", profile))) => Ok(Self::c8y(Some(profile.parse()?))),
-            ("c8y", None) => Ok(Self::c8y(None)),
-            (_, Some(("az", profile))) => Ok(Self::az(Some(profile.parse()?))),
-            ("az", None) => Ok(Self::Azure(None)),
-            (_, Some(("aws", profile))) => Ok(Self::aws(Some(profile.parse()?))),
-            ("aws", None) => Ok(Self::Aws(None)),
-            (cloud, _) => bail!(
-                "Unknown cloud type {cloud:?}. Valid cloud types are {}.",
-                valid_cloud_types()
-            ),
+#[derive(clap::Args, PartialEq, Eq, Debug, Clone)]
+pub struct OptionalCloudArgs {
+    /// The cloud you wish to interact with
+    cloud: Option<CloudType>,
+
+    /// The cloud profile you wish to use, if not specified as part of the cloud
+    #[clap(long)]
+    profile: Option<ProfileName>,
+}
+
+#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq)]
+#[clap(rename_all = "snake_case")]
+enum CloudType {
+    C8y,
+    Az,
+    Aws,
+}
+
+impl TryFrom<CloudArgs> for Cloud {
+    type Error = anyhow::Error;
+
+    fn try_from(args: CloudArgs) -> Result<Self, Self::Error> {
+        args.cloud.try_with_profile_and_env(args.profile)
+    }
+}
+
+impl TryFrom<OptionalCloudArgs> for Option<Cloud> {
+    type Error = anyhow::Error;
+
+    fn try_from(args: OptionalCloudArgs) -> Result<Self, Self::Error> {
+        args.cloud
+            .map(|cloud| cloud.try_with_profile_and_env(args.profile))
+            .transpose()
+    }
+}
+
+impl CloudType {
+    pub fn try_with_profile_and_env(self, profile: Option<ProfileName>) -> anyhow::Result<Cloud> {
+        let env = "TEDGE_CLOUD_PROFILE";
+
+        match profile {
+            Some(profile) => Ok(self.with_profile(Some(profile))),
+            None => match std::env::var(env).as_deref() {
+                Ok("") => Ok(self.with_profile(None)),
+                Ok(e) => Ok(self.with_profile(Some(e.parse().with_context(|| {
+                    format!("Parsing profile from environment variable {env}={e:?}")
+                })?))),
+                _ => Ok(self.with_profile(None)),
+            },
+        }
+    }
+
+    fn with_profile(self, profile: Option<ProfileName>) -> Cloud {
+        let profile = profile.map(Cow::Owned);
+        match self {
+            Self::Aws => Cloud::Aws(profile),
+            Self::Az => Cloud::Azure(profile),
+            Self::C8y => Cloud::C8y(profile),
         }
     }
 }
 
-pub fn valid_cloud_types() -> String {
-    format!(
-        "{}, {}, {}",
-        "c8y".yellow().bold(),
-        "az".yellow().bold(),
-        "aws".yellow().bold()
-    )
-}
+pub type Cloud = MaybeBorrowedCloud<'static>;
 
 pub type CloudBorrow<'a> = MaybeBorrowedCloud<'a>;
 
-#[derive(Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr, PartialEq, Eq)]
+#[derive(Clone, Debug, strum_macros::IntoStaticStr, PartialEq, Eq)]
 pub enum MaybeBorrowedCloud<'a> {
     #[strum(serialize = "Cumulocity")]
     C8y(Option<Cow<'a, ProfileName>>),
     Azure(Option<Cow<'a, ProfileName>>),
     Aws(Option<Cow<'a, ProfileName>>),
+}
+
+impl fmt::Display for MaybeBorrowedCloud<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::C8y(_) => "Cumulocity",
+                Self::Azure(_) => "Azure",
+                Self::Aws(_) => "Aws",
+            }
+        )
+    }
 }
 
 impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::Cloud<'a> {
@@ -59,9 +116,11 @@ impl Cloud {
     pub fn c8y(profile: Option<ProfileName>) -> Self {
         Self::C8y(profile.map(Cow::Owned))
     }
+
     pub fn az(profile: Option<ProfileName>) -> Self {
         Self::Azure(profile.map(Cow::Owned))
     }
+
     pub fn aws(profile: Option<ProfileName>) -> Self {
         Self::Aws(profile.map(Cow::Owned))
     }
