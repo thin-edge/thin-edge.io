@@ -1,9 +1,8 @@
 use anyhow::Context;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
+use serde_json::Value;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
 use tedge_mqtt_ext::MqttMessage;
@@ -35,26 +34,35 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                let result = command.payload.get("result").unwrap();
-                let text_or_csv = if result.is_array() {
-                    let vec = result.as_array().unwrap();
-                    let csv = vec.iter().map(|x| x.to_string() + ",").collect::<String>();
-                    EmbeddedCsv::new(csv).into()
-                } else {
-                    TextOrCsv::Text(result.as_str().unwrap().to_string())
-                };
+                let operation =
+                    CumulocitySupportedOperations::C8yCustom(operation_name.to_string());
 
-                let smartrest_set_operation = match self.get_operation_id(cmd_id) {
-                    Some(op_id) if self.smart_rest_use_operation_id => {
-                        succeed_operation_with_id(&op_id, text_or_csv)
+                let smartrest_set_operation = match command.result() {
+                    Value::Null => self.get_smartrest_successful_status_payload(operation, cmd_id),
+                    Value::String(text) => {
+                        let text_or_csv = TextOrCsv::Text(text.clone());
+                        self.try_get_smartrest_successful_status_payload_with_args(
+                            operation,
+                            cmd_id,
+                            text_or_csv,
+                        )
                     }
-                    _ => {
-                        // let operation =
-                        // CumulocitySupportedOperations::C8yCustom(operation_name.to_string());
-                        succeed_operation_with_name(operation_name, text_or_csv)
+                    Value::Array(vec) => {
+                        let csv = vec.iter().map(|x| x.to_string() + ",").collect::<String>();
+                        let text_or_csv = EmbeddedCsv::new(csv).into();
+                        self.try_get_smartrest_successful_status_payload_with_args(
+                            operation,
+                            cmd_id,
+                            text_or_csv,
+                        )
                     }
-                }
-                .unwrap();
+                    Value::Bool(_) | Value::Object(_) | Value::Number(_) => self
+                        .get_smartrest_failed_status_payload(
+                            operation,
+                            "'result' field must have String or Array",
+                            cmd_id,
+                        ),
+                };
 
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_set_operation);
 
@@ -260,6 +268,43 @@ mod tests {
 
         // Expect `506` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,on,off,on")]).await;
+    }
+
+    #[tokio::test]
+    async fn handle_custom_operation_successful_cmd_with_unsupported_result() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            smartrest_use_operation_id: false,
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate custom operation command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/command/c8y-mapper-1234"),
+            json!({
+                "status": "successful",
+                "text": "do something",
+                "result": true
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect `502` smartrest message on `c8y/s/us` as 'result' contains unsupported type
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "c8y/s/us",
+                "502,command,'result' field must have String or Array",
+            )],
+        )
+        .await;
     }
 
     #[tokio::test]

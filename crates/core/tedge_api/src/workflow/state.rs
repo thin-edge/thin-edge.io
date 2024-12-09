@@ -274,9 +274,9 @@ impl GenericCommandState {
         GenericCommandState::extract_text_property(&self.payload, REASON)
     }
 
-    /// Return value of the result field if any
-    pub fn result(&self) -> Option<&str> {
-        GenericCommandState::extract_text_property(&self.payload, RESULT)
+    /// Return value of the result field
+    pub fn result(&self) -> &Value {
+        self.payload.get(RESULT).unwrap_or(&Value::Null)
     }
 
     /// Extract a text property from a Json object
