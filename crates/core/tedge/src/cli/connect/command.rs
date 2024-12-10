@@ -284,8 +284,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
         MaybeBorrowedCloud::Aws(_) => {
             let profiles = config
                 .aws
-                .keys()
-                .map(|s| Some(s?.to_string()))
+                .entries()
+                .filter(|(_, config)| config.url.or_none().is_some())
+                .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
             disallow_matching_configurations(config, ReadableKey::AwsUrl, &profiles).or_else(
                 |_| disallow_matching_configurations(config, ReadableKey::AwsDeviceId, &profiles),
@@ -295,8 +296,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
         MaybeBorrowedCloud::Azure(_) => {
             let profiles = config
                 .az
-                .keys()
-                .map(|s| Some(s?.to_string()))
+                .entries()
+                .filter(|(_, config)| config.url.or_none().is_some())
+                .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
             disallow_matching_configurations(config, ReadableKey::AzUrl, &profiles).or_else(
                 |_| disallow_matching_configurations(config, ReadableKey::AzDeviceId, &profiles),
@@ -306,8 +308,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
         MaybeBorrowedCloud::C8y(_) => {
             let profiles = config
                 .c8y
-                .keys()
-                .map(|s| Some(s?.to_string()))
+                .entries()
+                .filter(|(_, config)| config.http.or_none().is_some())
+                .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
             disallow_matching_configurations(config, ReadableKey::C8yUrl, &profiles).or_else(
                 |_| disallow_matching_configurations(config, ReadableKey::C8yDeviceId, &profiles),
@@ -429,6 +432,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_topic_root: config.mqtt.topic_root.clone(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -1180,6 +1184,54 @@ mod tests {
             let cloud = MaybeBorrowedCloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_single_named_c8y_profile_without_default_profile() {
+            let cloud = MaybeBorrowedCloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_single_named_az_profile_without_default_profile() {
+            let cloud = MaybeBorrowedCloud::az(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"az@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_single_named_aws_profile_without_default_profile() {
+            let cloud = MaybeBorrowedCloud::aws(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"aws@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
             let config = loc.load().unwrap();
 
             validate_config(&config, &cloud).unwrap();
