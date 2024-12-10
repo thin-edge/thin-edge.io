@@ -1,0 +1,20 @@
+operation = "shell_execute"
+
+[init]
+  action = "proceed"
+  on_success = "executing"
+
+[executing]
+  action = "proceed"
+  on_success = "run"
+
+[run]
+  script = "/etc/tedge/operations/shell_execute.sh ${.payload.command}"
+  on_success = "successful"
+  on_error = { status = "failed", reason = "Command returned a non-zero exit code" }
+
+[successful]
+  action = "cleanup"
+
+[failed]
+  action = "cleanup"

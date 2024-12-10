@@ -1,0 +1,7 @@
+[exec]
+topic = "c8y/devicecontrol/notifications"
+on_fragment = "c8y_RelayArray"
+
+[exec.workflow]
+operation = "set_relay"
+input.relay = "${.payload.c8y_RelayArray}"
