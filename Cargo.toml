@@ -154,8 +154,7 @@ reqwest = { version = "0.11", default-features = false }
 rpassword = "5.0"
 rstest = "0.16.0"
 rumqttc = "0.23"
-# TODO: used git rev version to fix `unknown feature stdsimd` error: replace with 0.20 version after the release
-rumqttd = { git = "https://github.com/bytebeamio/rumqtt", rev = "0767080715699c34d8fe90b843716ba5ec12f8b9" }
+rumqttd = "0.19"
 rustls = "0.21.11"
 rustls-native-certs = "0.6.3"
 rustls-pemfile = "1.0.1"
@@ -191,7 +190,7 @@ walkdir = "2"
 which = "4.2"
 whoami = "1.5.0"
 ws_stream_tungstenite = "0.11"
-x509-parser = "0.15"
+x509-parser = "0.16"
 yansi = "1.0.1"
 zeroize = "1.5"
 
@@ -205,6 +204,3 @@ overflow-checks = true
 
 [workspace.lints.clippy]
 get_first = "allow"
-
-[patch.crates-io]
-x509-parser = { git = 'https://github.com/thin-edge/x509-parser.git', branch = "ring-0.17" }
