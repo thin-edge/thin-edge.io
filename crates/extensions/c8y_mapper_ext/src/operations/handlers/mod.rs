@@ -85,6 +85,8 @@ impl OperationContext {
             }
         };
 
+        let mut c8y_operation = to_c8y_operation(&operation);
+
         let operation_result = match operation {
             OperationType::Health => {
                 debug!(
@@ -146,21 +148,19 @@ impl OperationContext {
                 self.handle_device_profile_state_change(&entity, &cmd_id, &message)
                     .await
             }
-            OperationType::Custom(ref custom_operation) => {
-                self.handle_custom_operation_state_change(
-                    &entity,
-                    &cmd_id,
-                    &message,
-                    custom_operation,
-                )
-                .await
+            OperationType::Custom(_) => {
+                let (outcome, maybe_c8y_operation) = self
+                    .handle_custom_operation_state_change(&entity, &cmd_id, &message)
+                    .await;
+                c8y_operation = maybe_c8y_operation;
+                Ok(outcome)
             }
         };
         let mut mqtt_publisher = self.mqtt_publisher.clone();
 
-        // unwrap is safe: at this point all local operations that are not regular c8y
-        // operations should be handled above
-        let c8y_operation = to_c8y_operation(&operation).unwrap();
+        let c8y_operation = c8y_operation.unwrap_or(CumulocitySupportedOperations::C8yCustom(
+            "unknown".to_string(),
+        ));
 
         match self.to_response(
             operation_result,
@@ -333,9 +333,8 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
         OperationType::DeviceProfile => Some(CumulocitySupportedOperations::C8yDeviceProfile),
-        OperationType::Custom(operation) => Some(CumulocitySupportedOperations::C8yCustom(
-            operation.to_string(),
-        )),
+        // Cannot convert custom operation name systematically
+        OperationType::Custom(_) => None,
         // software list is not an c8y, only a fragment, but is a local operation that is spawned as
         // part of C8y_SoftwareUpdate operation
         OperationType::SoftwareList => None,
