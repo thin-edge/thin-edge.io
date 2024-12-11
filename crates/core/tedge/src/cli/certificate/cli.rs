@@ -1,5 +1,5 @@
 use crate::cli::common::Cloud;
-use crate::cli::common::OptionalCloudArgs;
+use crate::cli::common::CloudArg;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
@@ -24,8 +24,8 @@ pub enum TEdgeCertCli {
         #[clap(long = "device-id")]
         id: String,
 
-        #[clap(flatten)]
-        cloud: OptionalCloudArgs,
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
     },
 
     /// Create a certificate signing request
@@ -38,26 +38,26 @@ pub enum TEdgeCertCli {
         #[clap(long = "output-path")]
         output_path: Option<Utf8PathBuf>,
 
-        #[clap(flatten)]
-        cloud: OptionalCloudArgs,
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
     },
 
     /// Renew the device certificate
     Renew {
-        #[clap(flatten)]
-        cloud: OptionalCloudArgs,
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
     },
 
     /// Show the device certificate, if any
     Show {
-        #[clap(flatten)]
-        cloud: OptionalCloudArgs,
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
     },
 
     /// Remove the device certificate
     Remove {
-        #[clap(flatten)]
-        cloud: OptionalCloudArgs,
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
     },
 
     /// Upload root certificate
@@ -76,7 +76,7 @@ impl BuildCommand for TEdgeCertCli {
 
         let cmd = match self {
             TEdgeCertCli::Create { id, cloud } => {
-                let cloud: Option<Cloud> = cloud.try_into()?;
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cmd = CreateCertCmd {
                     id,
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
@@ -92,7 +92,7 @@ impl BuildCommand for TEdgeCertCli {
                 output_path,
                 cloud,
             } => {
-                let cloud: Option<Cloud> = cloud.try_into()?;
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 // Use the current device id if no id is provided
                 let id = match id {
                     Some(id) => id,
@@ -110,7 +110,7 @@ impl BuildCommand for TEdgeCertCli {
             }
 
             TEdgeCertCli::Show { cloud } => {
-                let cloud: Option<Cloud> = cloud.try_into()?;
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cmd = ShowCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                 };
@@ -118,7 +118,7 @@ impl BuildCommand for TEdgeCertCli {
             }
 
             TEdgeCertCli::Remove { cloud } => {
-                let cloud: Option<Cloud> = cloud.try_into()?;
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cmd = RemoveCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
@@ -143,7 +143,7 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
             TEdgeCertCli::Renew { cloud } => {
-                let cloud: Option<Cloud> = cloud.try_into()?;
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cmd = RenewCertCmd {
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
