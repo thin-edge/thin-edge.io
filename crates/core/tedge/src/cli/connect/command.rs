@@ -279,31 +279,42 @@ impl ConnectCommand {
     }
 }
 
-// TODO unit test this
 fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
     match cloud {
         MaybeBorrowedCloud::Aws(_) => {
             let profiles = config
                 .aws
-                .keys()
-                .map(|s| Some(s?.to_string()))
+                .entries()
+                .filter(|(_, config)| config.url.or_none().is_some())
+                .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
+            disallow_matching_configurations(config, ReadableKey::AwsUrl, &profiles).or_else(
+                |_| disallow_matching_configurations(config, ReadableKey::AwsDeviceId, &profiles),
+            )?;
             disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
         }
         MaybeBorrowedCloud::Azure(_) => {
             let profiles = config
                 .az
-                .keys()
-                .map(|s| Some(s?.to_string()))
+                .entries()
+                .filter(|(_, config)| config.url.or_none().is_some())
+                .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
+            disallow_matching_configurations(config, ReadableKey::AzUrl, &profiles).or_else(
+                |_| disallow_matching_configurations(config, ReadableKey::AzDeviceId, &profiles),
+            )?;
             disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
         }
         MaybeBorrowedCloud::C8y(_) => {
             let profiles = config
                 .c8y
-                .keys()
-                .map(|s| Some(s?.to_string()))
+                .entries()
+                .filter(|(_, config)| config.http.or_none().is_some())
+                .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
+            disallow_matching_configurations(config, ReadableKey::C8yUrl, &profiles).or_else(
+                |_| disallow_matching_configurations(config, ReadableKey::C8yDeviceId, &profiles),
+            )?;
             disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
             disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
         }
@@ -332,7 +343,7 @@ fn disallow_matching_configurations(
             .collect::<Vec<_>>()
             .join(", ");
 
-        bail!("The configurations: {keys} should be set to diffrent values, but are currently set to the same value");
+        bail!("The configurations: {keys} should be set to different values before connecting, but are currently set to the same value");
     }
     Ok(())
 }
@@ -354,6 +365,7 @@ pub fn bridge_config(
         true => BridgeLocation::BuiltIn,
         false => BridgeLocation::Mosquitto,
     };
+    let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
     match cloud {
         MaybeBorrowedCloud::Azure(profile) => {
             let az_config = config.az.try_get(profile.as_deref())?;
@@ -370,6 +382,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: az_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_schema,
             };
 
             Ok(BridgeConfig::from(params))
@@ -389,6 +402,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: aws_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_schema,
             };
 
             Ok(BridgeConfig::from(params))
@@ -421,6 +435,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_schema,
             };
 
             Ok(BridgeConfig::from(params))
@@ -1158,6 +1173,151 @@ mod tests {
 
         fn millis(n: u64) -> Duration {
             Duration::from_millis(n)
+        }
+    }
+
+    mod validate_config {
+        use super::super::validate_config;
+        use super::Cloud;
+        use tedge_config::TEdgeConfigLocation;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[test]
+        fn allows_default_config() {
+            let cloud = Cloud::C8y(None);
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_single_named_c8y_profile_without_default_profile() {
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_single_named_az_profile_without_default_profile() {
+            let cloud = Cloud::az(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"az@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_single_named_aws_profile_without_default_profile() {
+            let cloud = Cloud::aws(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"aws@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn rejects_conflicting_topic_prefixes() {
+            let cloud = Cloud::C8y(None);
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y@new.proxy.bind.port".parse().unwrap(), "8002")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            let err = validate_config(&config, &cloud).unwrap_err();
+            eprintln!("err={err}");
+            assert!(err.to_string().contains("c8y.bridge.topic_prefix"));
+            assert!(err.to_string().contains("c8y@new.bridge.topic_prefix"));
+        }
+
+        #[test]
+        fn rejects_conflicting_bind_ports() {
+            let cloud = Cloud::C8y(None);
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y@new.bridge.topic_prefix".parse().unwrap(), "c8y-new")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            let err = validate_config(&config, &cloud).unwrap_err();
+            eprintln!("err={err}");
+            assert!(err.to_string().contains("c8y.proxy.bind.port"));
+            assert!(err.to_string().contains("c8y@new.proxy.bind.port"));
+        }
+
+        #[test]
+        fn ignores_conflicting_configs_for_other_clouds() {
+            let cloud = Cloud::Azure(None);
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_non_conflicting_topic_prefixes() {
+            let cloud = Cloud::Azure(None);
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"az@new.bridge.topic_prefix".parse().unwrap(), "az-new")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
         }
     }
 }
