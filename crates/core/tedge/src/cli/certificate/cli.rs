@@ -21,7 +21,7 @@ pub enum TEdgeCertCli {
     /// Create a self-signed device certificate
     Create {
         /// The device identifier to be used as the common name for the certificate
-        #[clap(long = "device-id")]
+        #[clap(long = "device-id", global = true)]
         id: String,
 
         #[clap(subcommand)]
@@ -31,11 +31,11 @@ pub enum TEdgeCertCli {
     /// Create a certificate signing request
     CreateCsr {
         /// The device identifier to be used as the common name for the certificate
-        #[clap(long = "device-id")]
+        #[clap(long = "device-id", global = true)]
         id: Option<String>,
 
         /// Path where a Certificate signing request will be stored
-        #[clap(long = "output-path")]
+        #[clap(long = "output-path", global = true)]
         output_path: Option<Utf8PathBuf>,
 
         #[clap(subcommand)]

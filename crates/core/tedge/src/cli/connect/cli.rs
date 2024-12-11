@@ -8,11 +8,11 @@ use tedge_config::system_services::service_manager;
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeConnectOpt {
     /// Test an existing connection
-    #[clap(long = "test")]
+    #[clap(long = "test", global = true)]
     is_test_connection: bool,
 
     /// Ignore connection registration and connection check
-    #[clap(long = "offline")]
+    #[clap(long = "offline", global = true)]
     offline_mode: bool,
 
     #[clap(subcommand)]
