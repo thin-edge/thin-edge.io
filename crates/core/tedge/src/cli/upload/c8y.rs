@@ -49,7 +49,7 @@ impl Command for C8yUpload {
 
     fn execute(&self) -> Result<(), MaybeFancy<Error>> {
         let internal_id = self.get_internal_id()?;
-        let event_id = self.create_event(internal_id)?;
+        let event_id = self.create_event(&internal_id)?;
         self.upload_file(&event_id)?;
 
         println!("{event_id}");
@@ -76,9 +76,11 @@ impl C8yUpload {
         Ok(object.id())
     }
 
-    pub fn create_event(&self, internal_id: String) -> Result<String, Error> {
+    pub fn create_event(&self, internal_id: &str) -> Result<String, Error> {
         let c8y_event = C8yCreateEvent {
-            source: Some(C8yManagedObject { id: internal_id }),
+            source: Some(C8yManagedObject {
+                id: internal_id.to_string(),
+            }),
             event_type: self.event_type.clone(),
             time: OffsetDateTime::now_utc(),
             text: self.text.clone(),
@@ -114,5 +116,87 @@ impl C8yUpload {
             .send()?;
         let _ = http_result.error_for_status()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use c8y_api::proxy_url::Protocol;
+    use c8y_api::proxy_url::ProxyUrlGenerator;
+    use mockito::Matcher;
+    use mockito::ServerGuard;
+    use serde_json::json;
+
+    #[test]
+    fn create_event() {
+        let c8y_event = C8yCreateEvent {
+            source: Some(C8yManagedObject {
+                id: "internal-test-device".to_string(),
+            }),
+            event_type: "test".to_string(),
+            time: OffsetDateTime::now_utc(),
+            text: "hello".to_string(),
+            extras: HashMap::default(),
+        };
+
+        let c8y = mock_auth_proxy("test-device", "event-123", &c8y_event);
+        let upload = upload_cmd(&c8y, "test-device", c8y_event);
+
+        assert_eq!(upload.get_internal_id().unwrap(), "internal-test-device");
+        assert_eq!(
+            upload.create_event("internal-test-device").unwrap(),
+            "event-123"
+        );
+    }
+
+    fn upload_cmd(c8y: &ServerGuard, device_id: &str, c8y_event: C8yCreateEvent) -> C8yUpload {
+        let proxy = ProxyUrlGenerator::new(
+            "localhost".into(),
+            c8y.socket_address().port(),
+            Protocol::Http,
+        );
+
+        C8yUpload {
+            identity: None,
+            cloud_root_certs: CloudRootCerts::from([]),
+            device_id: device_id.to_string(),
+            c8y: C8yEndPoint::new("test.c8y.com", "test.c8y.com", proxy),
+            event_type: c8y_event.event_type,
+            text: c8y_event.text,
+            json: Default::default(),
+            file: Default::default(),
+            mime_type: "".to_string(),
+        }
+    }
+
+    fn mock_auth_proxy(device_id: &str, event_id: &str, c8y_event: &C8yCreateEvent) -> ServerGuard {
+        let mut c8y = mockito::Server::new();
+
+        let xid = c8y_event.source.as_ref().unwrap().id.clone();
+        // let event = serde_json::to_value(c8y_event).unwrap();
+        let _internal_id = c8y
+            .mock(
+                "GET",
+                format!("/c8y/identity/externalIds/c8y_Serial/{device_id}").as_str(),
+            )
+            .with_body(
+                json!({
+                    "managedObject": { "id": xid },
+                    "externalId": device_id,
+                })
+                .to_string(),
+            )
+            .with_status(200)
+            .create();
+
+        let _create_event = c8y
+            .mock("POST", "/c8y/event/events/")
+            //.match_body(Matcher::PartialJson(event))
+            .with_body(json!({ "id": event_id}).to_string())
+            .with_status(200)
+            .create();
+
+        c8y
     }
 }
