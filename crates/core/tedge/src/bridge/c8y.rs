@@ -72,8 +72,11 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             // c8y JSON
             format!(r#"inventory/managedObjects/update/# out 1 {topic_prefix}/ """#),
             format!(r#"measurement/measurements/create out 1 {topic_prefix}/ """#),
+            format!(r#"measurement/measurements/createBulk out 1 {topic_prefix}/ """#),
             format!(r#"event/events/create out 1 {topic_prefix}/ """#),
+            format!(r#"event/events/createBulk out 1 {topic_prefix}/ """#),
             format!(r#"alarm/alarms/create out 1 {topic_prefix}/ """#),
+            format!(r#"alarm/alarms/createBulk out 1 {topic_prefix}/ """#),
             format!(r#"devicecontrol/notifications in 1 {topic_prefix}/ """#),
             format!(r#"error in 1 {topic_prefix}/ """#),
         ];
@@ -278,8 +281,11 @@ mod tests {
                 // c8y JSON
                 r#"inventory/managedObjects/update/# out 1 c8y/ """#.into(),
                 r#"measurement/measurements/create out 1 c8y/ """#.into(),
+                r#"measurement/measurements/createBulk out 1 c8y/ """#.into(),
                 r#"event/events/create out 1 c8y/ """#.into(),
+                r#"event/events/createBulk out 1 c8y/ """#.into(),
                 r#"alarm/alarms/create out 1 c8y/ """#.into(),
+                r#"alarm/alarms/createBulk out 1 c8y/ """#.into(),
                 r#"devicecontrol/notifications in 1 c8y/ """#.into(),
                 r#"error in 1 c8y/ """#.into(),
                 // c8y JWT token retrieval
@@ -369,8 +375,11 @@ mod tests {
                 // c8y JSON
                 r#"inventory/managedObjects/update/# out 1 c8y/ """#.into(),
                 r#"measurement/measurements/create out 1 c8y/ """#.into(),
+                r#"measurement/measurements/createBulk out 1 c8y/ """#.into(),
                 r#"event/events/create out 1 c8y/ """#.into(),
+                r#"event/events/createBulk out 1 c8y/ """#.into(),
                 r#"alarm/alarms/create out 1 c8y/ """#.into(),
+                r#"alarm/alarms/createBulk out 1 c8y/ """#.into(),
                 r#"devicecontrol/notifications in 1 c8y/ """#.into(),
                 r#"error in 1 c8y/ """#.into(),
                 // Important: no c8y JWT token topics!

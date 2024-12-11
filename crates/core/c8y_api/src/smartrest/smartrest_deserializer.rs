@@ -1,3 +1,5 @@
+use super::message_ids::GET_CHILDREN_OF_DEVICE;
+use super::message_ids::JWT_TOKEN;
 use crate::smartrest::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
 use serde::de::Error;
@@ -136,7 +138,7 @@ pub struct SmartRestJwtResponse {
 impl Default for SmartRestJwtResponse {
     fn default() -> Self {
         Self {
-            id: 71,
+            id: JWT_TOKEN as u16,
             token: "".into(),
         }
     }
@@ -153,7 +155,7 @@ impl SmartRestJwtResponse {
             jwt = result.unwrap();
         }
 
-        if jwt.id != 71 {
+        if jwt.id != JWT_TOKEN as u16 {
             return Err(SmartRestDeserializerError::InvalidMessageId(jwt.id));
         }
 
@@ -177,7 +179,7 @@ impl SmartRestRequestGeneric for AvailableChildDevices {}
 impl Default for AvailableChildDevices {
     fn default() -> Self {
         Self {
-            message_id: "106".into(),
+            message_id: GET_CHILDREN_OF_DEVICE.to_string(),
             devices: Default::default(),
         }
     }

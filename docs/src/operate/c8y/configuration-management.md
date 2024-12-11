@@ -32,6 +32,10 @@ files = [
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
 * `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. If not provided, the files will be created with `root` user. If the file exists already, its ownership will be retained.
 
+:::note
+The Cumulocity legacy configuration operations (e.g. non file-type operations) will be automatically given the "default" type. This will enable you to configure the file location as you would with any other configuration file.
+:::
+
 For more details on this configuration file format, refer to the [reference guide](../../references/agent/tedge-configuration-management.md#configuration).
 
 :::note

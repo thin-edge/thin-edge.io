@@ -10,6 +10,7 @@ use crate::worker::OperationOutcome;
 use async_trait::async_trait;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_smartrest_template_id;
+use c8y_api::smartrest::message_ids::FIRMWARE;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use log::error;
@@ -131,18 +132,21 @@ impl FirmwareManagerActor {
         message: MqttMessage,
     ) -> Result<(), FirmwareManagementError> {
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
-            let result = match get_smartrest_template_id(&smartrest_message).as_str() {
-                "515" => match SmartRestFirmwareRequest::from_smartrest(&smartrest_message) {
-                    Ok(firmware_request) => {
-                        // Addressing a new firmware operation to further step.
-                        self.handle_firmware_download_request(firmware_request)
-                            .await
+            let smartrest_template_id = get_smartrest_template_id(&smartrest_message);
+            let result = match smartrest_template_id.as_str().parse::<usize>() {
+                Ok(id) if id == FIRMWARE => {
+                    match SmartRestFirmwareRequest::from_smartrest(&smartrest_message) {
+                        Ok(firmware_request) => {
+                            // Addressing a new firmware operation to further step.
+                            self.handle_firmware_download_request(firmware_request)
+                                .await
+                        }
+                        Err(_) => {
+                            error!("Incorrect c8y_Firmware SmartREST payload: {smartrest_message}");
+                            Ok(())
+                        }
                     }
-                    Err(_) => {
-                        error!("Incorrect c8y_Firmware SmartREST payload: {smartrest_message}");
-                        Ok(())
-                    }
-                },
+                }
                 _ => {
                     // Ignore operation messages not meant for this plugin
                     Ok(())

@@ -405,12 +405,20 @@ pub struct C8yLogfileRequest {
     pub maximum_lines: usize,
 }
 
+/// Default type assigned to the upload/download operations
+/// in order to be compatible with the Cumulocity legacy configuration upload/download
+/// operations which don't have a type property set in the operation
+fn default_config_type() -> String {
+    "default".to_string()
+}
+
 /// Representation of c8y_UploadConfigFile JSON object
 ///
 /// ```rust
 /// use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
 ///
 /// // Example input from c8y
+/// // Note: Legacy config upload operations will not have the type property
 /// let data = r#"
 /// {
 ///     "type": "/etc/tedge/tedge.toml"
@@ -422,7 +430,7 @@ pub struct C8yLogfileRequest {
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUploadConfigFile {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default = "default_config_type")]
     pub config_type: String,
 }
 
@@ -432,6 +440,7 @@ pub struct C8yUploadConfigFile {
 /// use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 ///
 /// // Example input from c8y
+/// // Note: Legacy config download operations will not have the type property
 /// let data = r#"
 /// {
 ///     "type": "/etc/tedge/tedge.toml",
@@ -444,7 +453,7 @@ pub struct C8yUploadConfigFile {
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yDownloadConfigFile {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default = "default_config_type")]
     pub config_type: String,
     pub url: String,
 }

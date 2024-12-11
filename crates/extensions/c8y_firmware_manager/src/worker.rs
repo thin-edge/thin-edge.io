@@ -5,6 +5,7 @@ use crate::mpsc;
 use crate::operation::FirmwareOperationEntry;
 use crate::operation::OperationKey;
 use crate::FirmwareManagerConfig;
+use c8y_api::smartrest::message_ids::GET_PENDING_OPERATIONS;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
@@ -398,10 +399,11 @@ impl FirmwareManagerWorker {
         &mut self,
         operation_entry: &FirmwareOperationEntry,
     ) -> Result<(), FirmwareManagementError> {
+        use c8y_api::smartrest::message_ids::SET_FIRMWARE;
         let c8y_child_topic = C8yTopic::ChildSmartRestResponse(operation_entry.child_id.clone())
             .to_topic(&self.config.c8y_prefix)?;
         let installed_firmware_payload = format!(
-            "115,{},{},{}",
+            "{SET_FIRMWARE},{},{},{}",
             operation_entry.name, operation_entry.version, operation_entry.server_url
         );
         let installed_firmware_message =
@@ -437,7 +439,7 @@ impl FirmwareManagerWorker {
     ) -> Result<(), FirmwareManagementError> {
         let message = MqttMessage::new(
             &C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?,
-            "500",
+            GET_PENDING_OPERATIONS.to_string(),
         );
         self.mqtt_publisher.send(message).await?;
         Ok(())
