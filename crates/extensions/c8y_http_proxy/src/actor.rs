@@ -69,7 +69,7 @@ impl C8YHttpProxyActor {
         software_list: SoftwareListResponse,
     ) -> Result<(), C8YRestError> {
         let c8y_internal_id = self.try_get_internal_id(&software_list.device_id).await?;
-        let url = self.end_point.proxy_url_for_sw_list(c8y_internal_id);
+        let url = self.end_point.proxy_url_for_sw_list(&c8y_internal_id);
         let request = HttpRequestBuilder::put(url)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")

@@ -63,6 +63,29 @@ impl C8yEndPoint {
         })
     }
 
+    pub fn local_proxy(
+        tedge_config: &TEdgeConfig,
+        c8y_profile: Option<&str>,
+    ) -> Result<Self, C8yEndPointConfigError> {
+        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let c8y_host = c8y_config.proxy.client.host.to_string();
+        let c8y_mqtt_host = c8y_host.clone();
+        let auth_proxy_addr = c8y_config.proxy.client.host.clone();
+        let auth_proxy_port = c8y_config.proxy.client.port;
+        let auth_proxy_protocol = c8y_config
+            .proxy
+            .cert_path
+            .or_none()
+            .map_or(Protocol::Http, |_| Protocol::Https);
+        let proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, auth_proxy_protocol);
+
+        Ok(C8yEndPoint {
+            c8y_host,
+            c8y_mqtt_host,
+            proxy,
+        })
+    }
+
     pub fn new(c8y_host: &str, c8y_mqtt_host: &str, proxy: ProxyUrlGenerator) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
@@ -72,67 +95,61 @@ impl C8yEndPoint {
     }
 
     fn get_base_url(&self) -> String {
-        let mut url_get_id = String::new();
-        if !self.c8y_host.starts_with("http") {
-            url_get_id.push_str("https://");
+        let c8y_host = &self.c8y_host;
+        if c8y_host.starts_with("http") {
+            c8y_host.to_string()
+        } else {
+            format!("https://{c8y_host}")
         }
-        url_get_id.push_str(&self.c8y_host);
-
-        url_get_id
     }
 
     pub fn proxy_url_for_internal_id(&self, device_id: &str) -> String {
-        let c8y_url = self.get_url_for_internal_id(device_id);
-        self.local_proxy_url(&c8y_url).unwrap().to_string()
+        Self::url_for_internal_id(&self.proxy.base_url(), device_id)
     }
 
-    pub fn proxy_url_for_sw_list(&self, internal_id: String) -> String {
-        let c8y_url = self.get_url_for_sw_list(internal_id);
-        self.local_proxy_url(&c8y_url).unwrap().to_string()
+    pub fn proxy_url_for_sw_list(&self, internal_id: &str) -> String {
+        Self::url_for_sw_list(&self.proxy.base_url(), internal_id)
     }
 
     pub fn proxy_url_for_create_event(&self) -> String {
-        let c8y_url = self.get_url_for_create_event();
-        self.local_proxy_url(&c8y_url).unwrap().to_string()
+        Self::url_for_create_event(&self.proxy.base_url())
     }
 
     pub fn proxy_url_for_event_binary_upload(&self, event_id: &str) -> Url {
-        let c8y_url = self.get_url_for_event_binary_upload(event_id);
-        self.local_proxy_url(&c8y_url).unwrap()
+        let url = Self::url_for_event_binary_upload(&self.proxy.base_url(), event_id);
+        Url::parse(&url).unwrap()
     }
 
-    fn get_url_for_sw_list(&self, internal_id: String) -> String {
-        let mut url_update_swlist = self.get_base_url();
-        url_update_swlist.push_str("/inventory/managedObjects/");
-        url_update_swlist.push_str(&internal_id);
-        url_update_swlist
+    fn url_for_sw_list(host: &str, internal_id: &str) -> String {
+        format!("{host}/inventory/managedObjects/{internal_id}")
     }
 
-    fn get_url_for_internal_id(&self, device_id: &str) -> String {
-        let mut url_get_id = self.get_base_url();
-        url_get_id.push_str("/identity/externalIds/c8y_Serial/");
-        url_get_id.push_str(device_id);
-
-        url_get_id
+    fn url_for_internal_id(host: &str, device_id: &str) -> String {
+        format!("{host}/identity/externalIds/c8y_Serial/{device_id}")
     }
 
-    fn get_url_for_create_event(&self) -> String {
-        let mut url_create_event = self.get_base_url();
-        url_create_event.push_str("/event/events/");
-
-        url_create_event
+    fn url_for_create_event(host: &str) -> String {
+        format!("{host}/event/events/")
     }
 
-    fn get_url_for_event_binary_upload(&self, event_id: &str) -> String {
-        let mut url_event_binary = self.get_url_for_create_event();
-        url_event_binary.push_str(event_id);
-        url_event_binary.push_str("/binaries");
-
-        url_event_binary
+    fn url_for_event_binary_upload(host: &str, event_id: &str) -> String {
+        format!("{host}/event/events/{event_id}/binaries")
     }
 
-    pub fn get_url_for_event_binary_upload_unchecked(&self, event_id: &str) -> Url {
-        let url = self.get_url_for_event_binary_upload(event_id);
+    pub fn c8y_url_for_internal_id(&self, device_id: &str) -> String {
+        Self::url_for_internal_id(&self.get_base_url(), device_id)
+    }
+
+    pub fn c8y_url_for_sw_list(&self, internal_id: &str) -> String {
+        Self::url_for_sw_list(&self.get_base_url(), internal_id)
+    }
+
+    pub fn c8y_url_for_create_event(&self) -> String {
+        Self::url_for_create_event(&self.get_base_url())
+    }
+
+    pub fn c8y_url_for_event_binary_upload(&self, event_id: &str) -> Url {
+        let url = Self::url_for_event_binary_upload(&self.get_base_url(), event_id);
         Url::parse(&url).unwrap()
     }
 
@@ -399,7 +416,7 @@ mod tests {
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
         let c8y = C8yEndPoint::new("test_host", "test_host", ProxyUrlGenerator::default());
-        let res = c8y.get_url_for_internal_id("test_device");
+        let res = c8y.c8y_url_for_internal_id("test_device");
 
         assert_eq!(
             res,
@@ -410,7 +427,7 @@ mod tests {
     #[test]
     fn get_url_for_sw_list_returns_correct_address() {
         let c8y = C8yEndPoint::new("test_host", "test_host", ProxyUrlGenerator::default());
-        let res = c8y.get_url_for_sw_list("12345".to_string());
+        let res = c8y.c8y_url_for_sw_list("12345");
 
         assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
     }
