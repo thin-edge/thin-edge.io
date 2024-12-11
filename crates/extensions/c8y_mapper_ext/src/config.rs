@@ -113,7 +113,7 @@ impl C8yMapperConfig {
         let bridge_service_name = if bridge_in_mapper {
             format!("tedge-mapper-bridge-{}", bridge_config.c8y_prefix)
         } else {
-            "mosquitto-c8y-bridge".into()
+            format!("mosquitto-{}-bridge", bridge_config.c8y_prefix)
         };
         let bridge_health_topic =
             service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);

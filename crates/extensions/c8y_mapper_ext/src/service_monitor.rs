@@ -3,10 +3,13 @@ use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
+use tedge_api::Status;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::error;
+
+use crate::converter::create_get_pending_operations_message;
 
 pub fn is_c8y_bridge_established(
     message: &MqttMessage,
@@ -60,7 +63,16 @@ pub fn convert_health_status_message(
         return vec![];
     };
 
-    vec![status_message]
+    let mut value = vec![status_message];
+
+    if display_name == format!("mosquitto-{prefix}-bridge") && status == Status::Up {
+        // Receiving this message indicates mosquitto has reconnected (following a
+        // disconnection) to the cloud. We need to re-request operations in case any
+        // were triggered while we were down
+        value.push(create_get_pending_operations_message(prefix));
+    }
+
+    value
 }
 
 #[cfg(test)]

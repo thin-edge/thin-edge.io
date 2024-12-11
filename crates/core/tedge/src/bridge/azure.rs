@@ -2,14 +2,15 @@ use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::HostPort;
 use tedge_config::ProfileName;
 use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
 
-const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-az-bridge/status/health";
-
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct BridgeConfigAzureParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
     pub config_file: Cow<'static, str>,
@@ -20,6 +21,7 @@ pub struct BridgeConfigAzureParams {
     pub bridge_location: BridgeLocation,
     pub topic_prefix: TopicPrefix,
     pub profile_name: Option<ProfileName>,
+    pub mqtt_schema: MqttSchema,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -34,6 +36,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             bridge_location,
             topic_prefix,
             profile_name,
+            mqtt_schema,
         } = params;
 
         let address = mqtt_host.clone();
@@ -46,6 +49,12 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             format!("messages/events/# out 1 {topic_prefix}/ devices/{remote_clientid}/");
         let sub_msg_topic =
             format!("messages/devicebound/# in 1 {topic_prefix}/ devices/{remote_clientid}/");
+
+        let service_name = format!("mosquitto-{topic_prefix}-bridge");
+        let health = mqtt_schema.topic_for(
+            &EntityTopicId::default_main_service(&service_name).unwrap(),
+            &Channel::Health,
+        );
         Self {
             cloud_name: "az".into(),
             config_file,
@@ -75,7 +84,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
-            notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+            notification_topic: health.name,
             bridge_attempt_unsubscribe: false,
             topics: vec![
                 // See Azure IoT Hub documentation for detailed explanation on the topics
@@ -112,6 +121,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_location: BridgeLocation::Mosquitto,
         topic_prefix: "az".try_into().unwrap(),
         profile_name: None,
+        mqtt_schema: MqttSchema::with_root("te".into()),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -146,7 +156,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+        notification_topic: "te/device/main/service/mosquitto-az-bridge/status/health".into(),
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 1,
@@ -171,8 +181,9 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         bridge_location: BridgeLocation::Mosquitto,
-        topic_prefix: "custom".try_into().unwrap(),
+        topic_prefix: "az-custom".try_into().unwrap(),
         profile_name: Some("profile".parse().unwrap()),
+        mqtt_schema: MqttSchema::with_root("te".into()),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -192,13 +203,13 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         use_mapper: true,
         use_agent: false,
         topics: vec![
-            "messages/events/# out 1 custom/ devices/alpha/".into(),
-            "messages/devicebound/# in 1 custom/ devices/alpha/".into(),
-            "methods/POST/# in 1 custom/ $iothub/".into(),
-            "methods/res/# out 1 custom/ $iothub/".into(),
-            "twin/res/# in 1 custom/ $iothub/".into(),
-            "twin/GET/# out 1 custom/ $iothub/".into(),
-            "twin/PATCH/# out 1 custom/ $iothub/".into(),
+            "messages/events/# out 1 az-custom/ devices/alpha/".into(),
+            "messages/devicebound/# in 1 az-custom/ devices/alpha/".into(),
+            "methods/POST/# in 1 az-custom/ $iothub/".into(),
+            "methods/res/# out 1 az-custom/ $iothub/".into(),
+            "twin/res/# in 1 az-custom/ $iothub/".into(),
+            "twin/GET/# out 1 az-custom/ $iothub/".into(),
+            "twin/PATCH/# out 1 az-custom/ $iothub/".into(),
         ],
         try_private: false,
         start_type: "automatic".into(),
@@ -207,7 +218,8 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+        notification_topic: "te/device/main/service/mosquitto-az-custom-bridge/status/health"
+            .into(),
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 1,

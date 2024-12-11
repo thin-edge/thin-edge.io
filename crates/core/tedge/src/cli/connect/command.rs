@@ -365,6 +365,7 @@ pub fn bridge_config(
         true => BridgeLocation::BuiltIn,
         false => BridgeLocation::Mosquitto,
     };
+    let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
     match cloud {
         MaybeBorrowedCloud::Azure(profile) => {
             let az_config = config.az.try_get(profile.as_deref())?;
@@ -381,6 +382,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: az_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_schema,
             };
 
             Ok(BridgeConfig::from(params))
@@ -400,6 +402,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: aws_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
+                mqtt_schema,
             };
 
             Ok(BridgeConfig::from(params))
@@ -432,7 +435,7 @@ pub fn bridge_config(
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
-                mqtt_topic_root: config.mqtt.topic_root.clone(),
+                mqtt_schema,
             };
 
             Ok(BridgeConfig::from(params))

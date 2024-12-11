@@ -2,14 +2,15 @@ use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::HostPort;
 use tedge_config::ProfileName;
 use tedge_config::TopicPrefix;
 use tedge_config::MQTT_TLS_PORT;
 
-const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-aws-bridge/status/health";
-
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct BridgeConfigAwsParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
     pub config_file: Cow<'static, str>,
@@ -20,6 +21,7 @@ pub struct BridgeConfigAwsParams {
     pub bridge_location: BridgeLocation,
     pub topic_prefix: TopicPrefix,
     pub profile_name: Option<ProfileName>,
+    pub mqtt_schema: MqttSchema,
 }
 
 impl From<BridgeConfigAwsParams> for BridgeConfig {
@@ -34,6 +36,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             bridge_location,
             topic_prefix,
             profile_name,
+            mqtt_schema,
         } = params;
 
         let user_name = remote_clientid.to_string();
@@ -54,6 +57,11 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             r#""" in 1 {topic_prefix}/connection-success thinedge/devices/{remote_clientid}/test-connection"#
         );
 
+        let service_name = format!("mosquitto-{topic_prefix}-bridge");
+        let health = mqtt_schema.topic_for(
+            &EntityTopicId::default_main_service(&service_name).unwrap(),
+            &Channel::Health,
+        );
         Self {
             cloud_name: "aws".into(),
             config_file,
@@ -83,7 +91,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
-            notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+            notification_topic: health.name,
             bridge_attempt_unsubscribe: false,
             topics: vec![
                 pub_msg_topic,
@@ -115,6 +123,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         bridge_location: BridgeLocation::Mosquitto,
         topic_prefix: "aws".try_into().unwrap(),
         profile_name: None,
+        mqtt_schema: MqttSchema::with_root("te".into()),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -147,7 +156,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+        notification_topic: "te/device/main/service/mosquitto-aws-bridge/status/health".into(),
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 5,
@@ -170,8 +179,9 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         bridge_location: BridgeLocation::Mosquitto,
-        topic_prefix: "custom".try_into().unwrap(),
+        topic_prefix: "aws-custom".try_into().unwrap(),
         profile_name: Some("profile".parse().unwrap()),
+        mqtt_schema: MqttSchema::with_root("te".into()),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -191,11 +201,12 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         use_mapper: true,
         use_agent: false,
         topics: vec![
-            "td/# out 1 custom/ thinedge/alpha/".into(),
-            "cmd/# in 1 custom/ thinedge/alpha/".into(),
-            "shadow/# both 1 custom/ $aws/things/alpha/".into(),
-            r#""" out 1 custom/test-connection thinedge/devices/alpha/test-connection"#.into(),
-            r#""" in 1 custom/connection-success thinedge/devices/alpha/test-connection"#.into(),
+            "td/# out 1 aws-custom/ thinedge/alpha/".into(),
+            "cmd/# in 1 aws-custom/ thinedge/alpha/".into(),
+            "shadow/# both 1 aws-custom/ $aws/things/alpha/".into(),
+            r#""" out 1 aws-custom/test-connection thinedge/devices/alpha/test-connection"#.into(),
+            r#""" in 1 aws-custom/connection-success thinedge/devices/alpha/test-connection"#
+                .into(),
         ],
         try_private: false,
         start_type: "automatic".into(),
@@ -204,7 +215,8 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
+        notification_topic: "te/device/main/service/mosquitto-aws-custom-bridge/status/health"
+            .into(),
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 5,
