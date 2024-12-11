@@ -5,3 +5,4 @@ on_fragment = "c8y_Command"
 [exec.workflow]
 operation = "shell_execute"
 input.command = "${.payload.c8y_Command.text}"
+output = "${.payload.result}"
