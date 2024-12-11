@@ -84,9 +84,12 @@ impl Display for SmartrestPayload {
 mod tests {
     use super::*;
 
+    use crate::smartrest::message_ids::SET_DEVICE_PROFILE_THAT_IS_BEING_APPLIED;
+
     #[test]
     fn serializes_payload() {
-        let payload = SmartrestPayload::serialize((121, true)).unwrap();
+        let payload =
+            SmartrestPayload::serialize((SET_DEVICE_PROFILE_THAT_IS_BEING_APPLIED, true)).unwrap();
         assert_eq!(payload.as_str(), "121,true");
     }
 

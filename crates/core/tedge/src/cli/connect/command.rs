@@ -18,6 +18,8 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
+use c8y_api::smartrest::message::get_smartrest_template_id;
+use c8y_api::smartrest::message_ids::JWT_TOKEN;
 use camino::Utf8PathBuf;
 use mqtt_channel::Topic;
 use rumqttc::Event;
@@ -507,9 +509,9 @@ fn check_device_status_c8y(
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 if response.topic == c8y_topic_builtin_jwt_token_downstream {
                     // We got a response
-                    let token = String::from_utf8(response.payload.to_vec()).unwrap();
-                    // FIXME: what does this magic number mean?
-                    if token.contains("71") {
+                    let response = std::str::from_utf8(&response.payload).unwrap();
+                    let message_id = get_smartrest_template_id(response);
+                    if message_id.parse() == Ok(JWT_TOKEN) {
                         break;
                     }
                 } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {

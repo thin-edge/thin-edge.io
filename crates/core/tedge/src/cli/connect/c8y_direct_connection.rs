@@ -146,12 +146,13 @@ fn publish_device_create_message(
     device_id: &str,
     device_type: &str,
 ) -> Result<(), ConnectError> {
+    use c8y_api::smartrest::message_ids::DEVICE_CREATION;
     const DEVICE_CREATE_PUBLISH_TOPIC: &str = "s/us";
     client.publish(
         DEVICE_CREATE_PUBLISH_TOPIC,
         QoS::ExactlyOnce,
         false,
-        format!("100,{},{}", device_id, device_type).as_bytes(),
+        format!("{DEVICE_CREATION},{},{}", device_id, device_type).as_bytes(),
     )?;
     Ok(())
 }

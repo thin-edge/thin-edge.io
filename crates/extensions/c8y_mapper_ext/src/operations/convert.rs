@@ -5,6 +5,8 @@ use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
+use c8y_api::smartrest::message_ids::SET_SUPPORTED_CONFIGURATIONS;
+use c8y_api::smartrest::message_ids::SET_SUPPORTED_LOGS;
 use serde_json::Value;
 use std::sync::Arc;
 use tedge_api::commands::CommandStatus;
@@ -173,7 +175,7 @@ impl CumulocityConverter {
         let mut types = metadata.types;
         types.sort();
         let supported_log_types = types.join(",");
-        let payload = format!("118,{supported_log_types}");
+        let payload = format!("{SET_SUPPORTED_LOGS},{supported_log_types}");
         let c8y_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
         messages.push(MqttMessage::new(&c8y_topic, payload));
 
@@ -306,7 +308,7 @@ impl CumulocityConverter {
         let mut types = metadata.types;
         types.sort();
         let supported_config_types = types.join(",");
-        let payload = format!("119,{supported_config_types}");
+        let payload = format!("{SET_SUPPORTED_CONFIGURATIONS},{supported_config_types}");
         let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
         messages.push(MqttMessage::new(&sm_topic, payload));
 
