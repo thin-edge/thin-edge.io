@@ -853,6 +853,10 @@ impl IdGenerator {
             .strip_prefix(&self.prefix)
             .and_then(|s| s.strip_prefix('-'))
     }
+
+    pub fn prefix(&self) -> &str {
+        self.prefix.as_str()
+    }
 }
 
 #[cfg(test)]
