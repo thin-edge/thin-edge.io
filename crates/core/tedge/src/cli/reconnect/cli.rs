@@ -1,12 +1,12 @@
 use super::command::ReconnectBridgeCommand;
-use crate::cli::common::CloudArgs;
+use crate::cli::common::CloudArg;
 use crate::command::*;
 use tedge_config::system_services::service_manager;
 
 #[derive(clap::Args, Debug)]
 pub struct TEdgeReconnectCli {
-    #[clap(flatten)]
-    cloud: CloudArgs,
+    #[clap(subcommand)]
+    cloud: CloudArg,
 }
 
 impl BuildCommand for TEdgeReconnectCli {

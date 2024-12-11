@@ -1,4 +1,4 @@
-use crate::cli::common::CloudArgs;
+use crate::cli::common::CloudArg;
 use crate::cli::connect::*;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
@@ -15,8 +15,8 @@ pub struct TEdgeConnectOpt {
     #[clap(long = "offline")]
     offline_mode: bool,
 
-    #[clap(flatten)]
-    cloud: CloudArgs,
+    #[clap(subcommand)]
+    cloud: CloudArg,
 }
 
 impl BuildCommand for TEdgeConnectOpt {

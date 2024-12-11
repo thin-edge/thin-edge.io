@@ -4,75 +4,63 @@ use std::fmt;
 use tedge_config::system_services::SystemService;
 use tedge_config::ProfileName;
 
-#[derive(clap::Args, PartialEq, Eq, Debug, Clone)]
-pub struct CloudArgs {
-    /// The cloud you wish to interact with
-    cloud: CloudType,
-
-    /// The cloud profile you wish to use, if not specified as part of the cloud
-    #[clap(long)]
-    profile: Option<ProfileName>,
-}
-
-#[derive(clap::Args, PartialEq, Eq, Debug, Clone)]
-pub struct OptionalCloudArgs {
-    /// The cloud you wish to interact with
-    cloud: Option<CloudType>,
-
-    /// The cloud profile you wish to use, if not specified as part of the cloud
-    #[clap(long)]
-    profile: Option<ProfileName>,
-}
-
-#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
 #[clap(rename_all = "snake_case")]
-enum CloudType {
-    C8y,
-    Az,
-    Aws,
+pub enum CloudArg {
+    C8y {
+        /// The cloud profile you wish to use
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+    Az {
+        /// The cloud profile you wish to use
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+    Aws {
+        /// The cloud profile you wish to use
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
 }
 
-impl TryFrom<CloudArgs> for Cloud {
+impl TryFrom<CloudArg> for Cloud {
     type Error = anyhow::Error;
 
-    fn try_from(args: CloudArgs) -> Result<Self, Self::Error> {
-        args.cloud.try_with_profile_and_env(args.profile)
+    fn try_from(args: CloudArg) -> Result<Self, Self::Error> {
+        args.try_with_profile_and_env()
     }
 }
 
-impl TryFrom<OptionalCloudArgs> for Option<Cloud> {
-    type Error = anyhow::Error;
-
-    fn try_from(args: OptionalCloudArgs) -> Result<Self, Self::Error> {
-        args.cloud
-            .map(|cloud| cloud.try_with_profile_and_env(args.profile))
-            .transpose()
-    }
-}
-
-impl CloudType {
-    pub fn try_with_profile_and_env(self, profile: Option<ProfileName>) -> anyhow::Result<Cloud> {
-        let env = "TEDGE_CLOUD_PROFILE";
-
-        match profile {
-            Some(profile) => Ok(self.with_profile(Some(profile))),
-            None => match std::env::var(env).as_deref() {
-                Ok("") => Ok(self.with_profile(None)),
-                Ok(e) => Ok(self.with_profile(Some(e.parse().with_context(|| {
-                    format!("Parsing profile from environment variable {env}={e:?}")
-                })?))),
-                _ => Ok(self.with_profile(None)),
-            },
-        }
-    }
-
-    fn with_profile(self, profile: Option<ProfileName>) -> Cloud {
-        let profile = profile.map(Cow::Owned);
-        match self {
-            Self::Aws => Cloud::Aws(profile),
-            Self::Az => Cloud::Azure(profile),
-            Self::C8y => Cloud::C8y(profile),
-        }
+impl CloudArg {
+    fn try_with_profile_and_env(self) -> anyhow::Result<Cloud> {
+        let read_env = || {
+            let env = "TEDGE_CLOUD_PROFILE";
+            match std::env::var(env).as_deref() {
+                Ok("") => Ok(None),
+                Ok(var) => var
+                    .parse()
+                    .with_context(|| {
+                        format!("Parsing profile from environment variable {env}={var:?}")
+                    })
+                    .map(Some),
+                _ => Ok(None),
+            }
+        };
+        Ok(match self {
+            Self::Aws {
+                profile: Some(profile),
+            } => Cloud::aws(Some(profile)),
+            Self::Az {
+                profile: Some(profile),
+            } => Cloud::az(Some(profile)),
+            Self::C8y {
+                profile: Some(profile),
+            } => Cloud::c8y(Some(profile)),
+            Self::Aws { profile: None } => Cloud::aws(read_env()?),
+            Self::Az { profile: None } => Cloud::az(read_env()?),
+            Self::C8y { profile: None } => Cloud::c8y(read_env()?),
+        })
     }
 }
 

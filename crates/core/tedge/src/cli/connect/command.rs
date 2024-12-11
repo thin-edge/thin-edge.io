@@ -1178,13 +1178,13 @@ mod tests {
 
     mod validate_config {
         use super::super::validate_config;
-        use super::MaybeBorrowedCloud;
+        use super::Cloud;
         use tedge_config::TEdgeConfigLocation;
         use tedge_test_utils::fs::TempTedgeDir;
 
         #[test]
         fn allows_default_config() {
-            let cloud = MaybeBorrowedCloud::C8y(None);
+            let cloud = Cloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             let config = loc.load().unwrap();
@@ -1194,7 +1194,7 @@ mod tests {
 
         #[test]
         fn allows_single_named_c8y_profile_without_default_profile() {
-            let cloud = MaybeBorrowedCloud::c8y(Some("new".parse().unwrap()));
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
@@ -1210,7 +1210,7 @@ mod tests {
 
         #[test]
         fn allows_single_named_az_profile_without_default_profile() {
-            let cloud = MaybeBorrowedCloud::az(Some("new".parse().unwrap()));
+            let cloud = Cloud::az(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
@@ -1226,7 +1226,7 @@ mod tests {
 
         #[test]
         fn allows_single_named_aws_profile_without_default_profile() {
-            let cloud = MaybeBorrowedCloud::aws(Some("new".parse().unwrap()));
+            let cloud = Cloud::aws(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
@@ -1242,7 +1242,7 @@ mod tests {
 
         #[test]
         fn rejects_conflicting_topic_prefixes() {
-            let cloud = MaybeBorrowedCloud::C8y(None);
+            let cloud = Cloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
@@ -1265,7 +1265,7 @@ mod tests {
 
         #[test]
         fn rejects_conflicting_bind_ports() {
-            let cloud = MaybeBorrowedCloud::C8y(None);
+            let cloud = Cloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
@@ -1288,7 +1288,7 @@ mod tests {
 
         #[test]
         fn ignores_conflicting_configs_for_other_clouds() {
-            let cloud = MaybeBorrowedCloud::Azure(None);
+            let cloud = Cloud::Azure(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
@@ -1306,7 +1306,7 @@ mod tests {
 
         #[test]
         fn allows_non_conflicting_topic_prefixes() {
-            let cloud = MaybeBorrowedCloud::Azure(None);
+            let cloud = Cloud::Azure(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
