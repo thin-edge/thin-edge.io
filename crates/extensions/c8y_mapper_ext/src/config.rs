@@ -38,6 +38,7 @@ const STATE_DIR_NAME: &str = ".tedge-mapper-c8y";
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 
+#[cfg_attr(test, derive(Clone))]
 pub struct C8yMapperConfig {
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
@@ -327,6 +328,7 @@ impl From<&C8yMapperConfig> for C8YHttpConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct BridgeConfig {
     pub c8y_prefix: TopicPrefix,
 }

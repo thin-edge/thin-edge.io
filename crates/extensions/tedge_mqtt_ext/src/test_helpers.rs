@@ -42,8 +42,7 @@ pub fn assert_message_contains_str(message: &MqttMessage, expected: (&str, &str)
     let expected_payload = expected.1;
     assert!(
         TopicFilter::new_unchecked(expected_topic).accept(message),
-        "\nReceived unexpected message: {:?} \nExpected: {expected_payload:?}",
-        message
+        "\nReceived unexpected message: {message:?} \nExpected: {expected:?}"
     );
     let payload = message.payload_str().expect("non UTF-8 payload");
     assert!(
