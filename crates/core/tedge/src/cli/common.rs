@@ -9,16 +9,19 @@ use tedge_config::ProfileName;
 pub enum CloudArg {
     C8y {
         /// The cloud profile you wish to use
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
     Az {
         /// The cloud profile you wish to use
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
     Aws {
         /// The cloud profile you wish to use
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
