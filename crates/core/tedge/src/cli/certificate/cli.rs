@@ -21,7 +21,7 @@ pub enum TEdgeCertCli {
     /// Create a self-signed device certificate
     Create {
         /// The device identifier to be used as the common name for the certificate
-        #[clap(long = "device-id", global = true)]
+        #[clap(long = "device-id")]
         id: String,
 
         #[clap(subcommand)]
