@@ -76,7 +76,7 @@ Setup Second Device
     Execute Command    tedge config set c8y.bridge.topic_prefix --profile second c8y-second
     Execute Command    tedge config set c8y.url --profile second "$(tedge config get c8y.url)"
 
-    Execute Command    tedge cert create c8y --profile second --device-id ${second_device_sn}
+    Execute Command    tedge cert create --device-id ${second_device_sn} c8y --profile second
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y --profile second
 

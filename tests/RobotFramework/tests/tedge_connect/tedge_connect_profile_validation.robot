@@ -33,5 +33,5 @@ Verify conflicting configuration error appears
     ${output}=    ThinEdgeIO.Execute Command    ${command}    exp_exit_code=1    stdout=False    stderr=True    timeout=0
     Should Be Equal
     ...    ${output}
-    ...    error: The configurations: c8y.${conflicting_configuration}, c8y@second.${conflicting_configuration} should be set to different values before connecting, but are currently set to the same value\n
+    ...    error: The configurations: c8y.${conflicting_configuration}, c8y.profiles.second.${conflicting_configuration} should be set to different values before connecting, but are currently set to the same value\n
 

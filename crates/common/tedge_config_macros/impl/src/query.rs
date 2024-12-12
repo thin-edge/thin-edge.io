@@ -824,7 +824,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             .iter()
             .map(|fog| match fog {
                 FieldOrGroup::Multi(m) => {
-                    format!("{}(?:(?:@|[\\._]profiles[\\._])([^\\.]+))?", m.ident)
+                    format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.ident)
                 }
                 FieldOrGroup::Field(f) => f.ident().to_string(),
                 FieldOrGroup::Group(g) => g.ident.to_string(),
@@ -855,7 +855,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                                 if *opt == none {
                                     m.ident.to_string()
                                 } else {
-                                    format!("{}@{{{}}}", m.ident, binding)
+                                    format!("{}.profiles.{{{}}}", m.ident, binding)
                                 }
                             }
                             FieldOrGroup::Group(g) => g.ident.to_string(),
@@ -1009,11 +1009,9 @@ mod tests {
     ///
     /// This is used to verify both the output of the macro matches this regex
     /// and that the regex itself functions as intended
-    const C8Y_URL_REGEX: &str = "^c8y(?:(?:@|[\\._]profiles[\\._])([^\\.]+))?[\\._]url$";
+    const C8Y_URL_REGEX: &str = "^c8y(?:[\\._]profiles[\\._]([^\\.]+))?[\\._]url$";
 
     #[test_case("c8y.url", None; "with no profile specified")]
-    #[test_case("c8y@name.url", Some("name"); "with profile shorthand syntax")]
-    #[test_case("c8y@name_underscore.url", Some("name_underscore"); "with underscore profile shorthand syntax")]
     #[test_case("c8y.profiles.name.url", Some("name"); "with profile toml syntax")]
     #[test_case("c8y_profiles_name_url", Some("name"); "with environment variable profile")]
     #[test_case("c8y_profiles_name_underscore_url", Some("name_underscore"); "with environment variable underscore profile")]
@@ -1027,7 +1025,7 @@ mod tests {
 
     #[test_case("not.c8y.url"; "with an invalid prefix")]
     #[test_case("c8y.url.something"; "with an invalid suffix")]
-    #[test_case("c8y@multiple.profile.sections.url"; "with an invalid profile name")]
+    #[test_case("c8y.profiles.multiple.profile.sections.url"; "with an invalid profile name")]
     fn regex_fails(input: &str) {
         let re = regex::Regex::new(C8Y_URL_REGEX).unwrap();
         assert!(re.captures(input).is_none());
@@ -1306,7 +1304,7 @@ mod tests {
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::C8yUrl(None) => ::std::borrow::Cow::Borrowed("c8y.url"),
-                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y@{key0}.url")),
+                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y.profiles.{key0}.url")),
                     }
                 }
             }
@@ -1338,9 +1336,9 @@ mod tests {
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::TopNestedField(None, None) => ::std::borrow::Cow::Borrowed("top.nested.field"),
-                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested@{key1}.field")),
-                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top@{key0}.nested.field")),
-                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top@{key0}.nested@{key1}.field")),
+                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested.profiles.{key1}.field")),
+                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top.profiles.{key0}.nested.field")),
+                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top.profiles.{key0}.nested.profiles.{key1}.field")),
                     }
                 }
             }

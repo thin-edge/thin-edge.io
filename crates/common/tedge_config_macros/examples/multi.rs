@@ -86,19 +86,15 @@ fn main() {
         ReadableKey::C8yUrl(None)
     );
     assert_eq!(
-        "c8y@cloud.url".parse::<ReadableKey>().unwrap(),
-        ReadableKey::C8yUrl(Some("cloud".to_owned()))
-    );
-    assert_eq!(
         "c8y.profiles.cloud.url".parse::<ReadableKey>().unwrap(),
         ReadableKey::C8yUrl(Some("cloud".to_owned()))
     );
     assert_eq!(
-        "c8y@cloud.not_a_real_key"
+        "c8y.profiles.cloud.not_a_real_key"
             .parse::<ReadableKey>()
             .unwrap_err()
             .to_string(),
-        "Unknown key: 'c8y@cloud.not_a_real_key'"
+        "Unknown key: 'c8y.profiles.cloud.not_a_real_key'"
     );
     assert_eq!(
         "c8y.urll".parse::<ReadableKey>().unwrap_err().to_string(),
@@ -117,12 +113,12 @@ fn main() {
             "c8y.http",
             "c8y.smartrest.use_operation_id",
             "c8y.url",
-            "c8y@cloud.http",
-            "c8y@cloud.smartrest.use_operation_id",
-            "c8y@cloud.url",
-            "c8y@edge.http",
-            "c8y@edge.smartrest.use_operation_id",
-            "c8y@edge.url"
+            "c8y.profiles.cloud.http",
+            "c8y.profiles.cloud.smartrest.use_operation_id",
+            "c8y.profiles.cloud.url",
+            "c8y.profiles.edge.http",
+            "c8y.profiles.edge.smartrest.use_operation_id",
+            "c8y.profiles.edge.url"
         ]
     );
 }

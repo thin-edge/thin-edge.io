@@ -1198,7 +1198,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
                 Ok(())
             })
@@ -1214,7 +1214,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"az@new.url".parse().unwrap(), "example.com")
+                dto.try_update_str(&"az.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
                 Ok(())
             })
@@ -1230,7 +1230,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"aws@new.url".parse().unwrap(), "example.com")
+                dto.try_update_str(&"aws.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
                 Ok(())
             })
@@ -1248,9 +1248,9 @@ mod tests {
             loc.update_toml(&|dto, _| {
                 dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
                     .unwrap();
-                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
-                dto.try_update_str(&"c8y@new.proxy.bind.port".parse().unwrap(), "8002")
+                dto.try_update_str(&"c8y.profiles.new.proxy.bind.port".parse().unwrap(), "8002")
                     .unwrap();
                 Ok(())
             })
@@ -1260,7 +1260,7 @@ mod tests {
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
             assert!(err.to_string().contains("c8y.bridge.topic_prefix"));
-            assert!(err.to_string().contains("c8y@new.bridge.topic_prefix"));
+            assert!(err.to_string().contains("c8y.profiles.new.bridge.topic_prefix"));
         }
 
         #[test]
@@ -1271,9 +1271,9 @@ mod tests {
             loc.update_toml(&|dto, _| {
                 dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
                     .unwrap();
-                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
-                dto.try_update_str(&"c8y@new.bridge.topic_prefix".parse().unwrap(), "c8y-new")
+                dto.try_update_str(&"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(), "c8y-new")
                     .unwrap();
                 Ok(())
             })
@@ -1283,7 +1283,7 @@ mod tests {
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
             assert!(err.to_string().contains("c8y.proxy.bind.port"));
-            assert!(err.to_string().contains("c8y@new.proxy.bind.port"));
+            assert!(err.to_string().contains("c8y.profiles.new.proxy.bind.port"));
         }
 
         #[test]
@@ -1294,7 +1294,7 @@ mod tests {
             loc.update_toml(&|dto, _| {
                 dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
                     .unwrap();
-                dto.try_update_str(&"c8y@new.url".parse().unwrap(), "example.com")
+                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
                 Ok(())
             })
@@ -1310,7 +1310,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"az@new.bridge.topic_prefix".parse().unwrap(), "az-new")
+                dto.try_update_str(&"az.profiles.new.bridge.topic_prefix".parse().unwrap(), "az-new")
                     .unwrap();
                 Ok(())
             })
