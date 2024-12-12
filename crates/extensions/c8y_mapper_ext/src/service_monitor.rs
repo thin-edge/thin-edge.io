@@ -1,4 +1,5 @@
 use c8y_api::smartrest;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -23,7 +24,7 @@ pub fn is_c8y_bridge_established(
 pub fn convert_health_status_message(
     mqtt_schema: &MqttSchema,
     entity: &EntityMetadata,
-    ancestors_external_ids: &[String],
+    parent_xid: Option<&EntityExternalId>,
     message: &MqttMessage,
     prefix: &TopicPrefix,
 ) -> Vec<MqttMessage> {
@@ -53,7 +54,7 @@ pub fn convert_health_status_message(
         display_name,
         display_type,
         &status.to_string(),
-        ancestors_external_ids,
+        parent_xid.map(|v| v.as_ref()),
         prefix,
     ) else {
         error!("Can't create 102 for service status update");
@@ -208,14 +209,17 @@ mod tests {
         entity_store.update(entity_registration).unwrap();
 
         let entity = entity_store.get(&entity_topic_id).unwrap();
-        let ancestors_external_ids = entity_store
-            .ancestors_external_ids(&entity_topic_id)
-            .unwrap();
+        let parent = entity
+            .parent
+            .as_ref()
+            .filter(|tid| *tid != "device/main//")
+            .map(|tid| &entity_store.try_get(tid).unwrap().external_id);
+        dbg!(&parent);
 
         let msg = convert_health_status_message(
             &mqtt_schema,
             entity,
-            &ancestors_external_ids,
+            parent,
             &health_message,
             &"c8y".try_into().unwrap(),
         );
