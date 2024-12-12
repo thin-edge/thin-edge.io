@@ -23,6 +23,7 @@ certificate = { workspace = true, features = ["reqwest-blocking"] }
 clap = { workspace = true }
 doku = { workspace = true }
 hyper = { workspace = true, default-features = false }
+mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }

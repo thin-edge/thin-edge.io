@@ -45,7 +45,7 @@ Upload a file to Cumulocity from child device
     Log    ${events}
     Should Be Equal    "${events[0]["id"]}\n"    "${event_id}"
     Should Be Equal    ${events[0]["c8y_IsBinary"]["name"]}    sample.txt
-    Should Be Equal    ${events[0]["c8y_IsBinary"]["type"]}    application/octet-stream
+    Should Be Equal    ${events[0]["c8y_IsBinary"]["type"]}    text/plain
 
 Upload a file to Cumulocity from the main device on behalf of a child device
     ThinEdgeIO.Set Device Context    ${PARENT_SN}    # Run on the main device
@@ -62,7 +62,7 @@ Upload a file to Cumulocity from the main device on behalf of a child device
     Log    ${events}
     Should Be Equal    "${events[0]["id"]}\n"    "${event_id}"
     Should Be Equal    ${events[0]["c8y_IsBinary"]["name"]}    child-data.txt
-    Should Be Equal    ${events[0]["c8y_IsBinary"]["type"]}    application/octet-stream
+    Should Be Equal    ${events[0]["c8y_IsBinary"]["type"]}    text/plain
 
 
 *** Keywords ***

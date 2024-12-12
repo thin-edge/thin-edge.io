@@ -22,8 +22,12 @@ pub enum UploadCmd {
         file: PathBuf,
 
         /// MIME type of the file content
-        #[clap(long, default_value = "application/octet-stream")]
-        mime_type: String,
+        ///
+        /// If not provided, the mime type is determined from the file extension
+        /// If no rules apply, application/octet-stream is taken as a default
+        #[clap(long, verbatim_doc_comment)]
+        #[arg(value_parser = parse_mime_type)]
+        mime_type: Option<String>,
 
         /// Type of the event
         #[clap(long = "type", default_value = "tedge_UploadedFile")]
@@ -54,6 +58,10 @@ fn parse_json(input: &str) -> Result<HashMap<String, serde_json::Value>, anyhow:
     Ok(serde_json::from_str(input)?)
 }
 
+fn parse_mime_type(input: &str) -> Result<String, anyhow::Error> {
+    Ok(input.parse::<mime_guess::mime::Mime>()?.to_string())
+}
+
 impl BuildCommand for UploadCmd {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.load_config()?;
@@ -76,6 +84,11 @@ impl BuildCommand for UploadCmd {
                     Some(device_id) => device_id,
                 };
                 let text = text.unwrap_or_else(|| format!("Uploaded file: {file:?}"));
+                let mime_type = mime_type.unwrap_or_else(|| {
+                    mime_guess::from_path(&file)
+                        .first_or_octet_stream()
+                        .to_string()
+                });
                 c8y::C8yUpload {
                     identity,
                     cloud_root_certs,
@@ -90,5 +103,29 @@ impl BuildCommand for UploadCmd {
             }
         };
         Ok(cmd.into_boxed())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case("text/plain")]
+    #[test_case("image/svg+xml")]
+    #[test_case("foo/bar")]
+    #[test_case("foo/bar+zoo")]
+    fn accept_mime_type(input: &str) {
+        assert_eq!(parse_mime_type(input).ok().as_deref(), Some(input))
+    }
+
+    #[test_case("text", "(/) was missing")]
+    #[test_case("text/svg/xml", "invalid token")]
+    fn reject_incorrect_mime_type(input: &str, error: &str) {
+        assert!(parse_mime_type(input)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains(error))
     }
 }
