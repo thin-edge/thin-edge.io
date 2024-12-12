@@ -1260,7 +1260,9 @@ mod tests {
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
             assert!(err.to_string().contains("c8y.bridge.topic_prefix"));
-            assert!(err.to_string().contains("c8y.profiles.new.bridge.topic_prefix"));
+            assert!(err
+                .to_string()
+                .contains("c8y.profiles.new.bridge.topic_prefix"));
         }
 
         #[test]
@@ -1273,8 +1275,11 @@ mod tests {
                     .unwrap();
                 dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(), "c8y-new")
-                    .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(),
+                    "c8y-new",
+                )
+                .unwrap();
                 Ok(())
             })
             .unwrap();
@@ -1310,8 +1315,11 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
             loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"az.profiles.new.bridge.topic_prefix".parse().unwrap(), "az-new")
-                    .unwrap();
+                dto.try_update_str(
+                    &"az.profiles.new.bridge.topic_prefix".parse().unwrap(),
+                    "az-new",
+                )
+                .unwrap();
                 Ok(())
             })
             .unwrap();
