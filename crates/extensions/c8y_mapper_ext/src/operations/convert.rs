@@ -436,8 +436,7 @@ impl CumulocityConverter {
 
         let mapper_id = self.command_id.prefix();
         let inject_object = json!({
-            "status": "init",
-           mapper_id: {
+            mapper_id: {
                 "on_fragment": custom_handler.on_fragment(),
                 "output": custom_handler.workflow_output(),
             }

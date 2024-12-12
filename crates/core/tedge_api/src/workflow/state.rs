@@ -74,8 +74,9 @@ const FAILED: &str = "failed";
 const REASON: &str = "reason";
 
 impl GenericCommandState {
-    pub fn new(topic: Topic, status: String, payload: Value) -> Self {
+    pub fn new(topic: Topic, status: String, mut payload: Value) -> Self {
         let invoking_command_topic = Self::infer_invoking_command_topic(topic.as_ref());
+        Self::inject_text_property(&mut payload, STATUS, &status);
         GenericCommandState {
             topic,
             status,
