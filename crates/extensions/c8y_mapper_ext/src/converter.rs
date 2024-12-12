@@ -43,7 +43,6 @@ use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
-use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
@@ -372,31 +371,29 @@ impl CumulocityConverter {
         let display_type = input.other.get("type").and_then(|v| v.as_str());
 
         let entity_topic_id = &input.topic_id;
-        let external_id = self
-            .entity_store
-            .try_get(entity_topic_id)
-            .map(|e| &e.external_id)?;
+        let entity = self.entity_store.try_get(entity_topic_id)?;
+        let external_id = &entity.external_id;
         match input.r#type {
             EntityType::MainDevice => {
                 self.entity_store.update(input.clone())?;
                 Ok(vec![])
             }
             EntityType::ChildDevice => {
-                let ancestors_external_ids =
-                    self.entity_store.ancestors_external_ids(entity_topic_id)?;
+                let parent_xid = self.entity_store.parent_external_id(entity_topic_id)?;
+
                 let child_creation_message = child_device_creation_message(
                     external_id.as_ref(),
                     display_name,
                     display_type,
-                    &ancestors_external_ids,
+                    parent_xid.map(|xid| xid.as_ref()),
+                    &self.device_name,
                     &self.config.bridge_config.c8y_prefix,
                 )
                 .context("Could not create device creation message")?;
                 Ok(vec![child_creation_message])
             }
             EntityType::Service => {
-                let ancestors_external_ids =
-                    self.entity_store.ancestors_external_ids(entity_topic_id)?;
+                let parent_xid = self.entity_store.parent_external_id(entity_topic_id)?;
 
                 let service_creation_message = service_creation_message(
                     external_id.as_ref(),
@@ -407,7 +404,8 @@ impl CumulocityConverter {
                     }),
                     display_type.unwrap_or(&self.service_type),
                     "up",
-                    &ancestors_external_ids,
+                    parent_xid.map(|xid| xid.as_ref()),
+                    &self.device_name,
                     &self.config.bridge_config.c8y_prefix,
                 )
                 .context("Could not create service creation message")?;
@@ -423,14 +421,13 @@ impl CumulocityConverter {
         entity_topic_id: &EntityTopicId,
     ) -> Result<Topic, ConversionError> {
         let entity = self.entity_store.try_get(entity_topic_id)?;
-
-        let mut ancestors_external_ids =
-            self.entity_store.ancestors_external_ids(entity_topic_id)?;
-        ancestors_external_ids.insert(0, entity.external_id.as_ref().into());
-        Ok(publish_topic_from_ancestors(
-            &ancestors_external_ids,
+        let topic = C8yTopic::smartrest_response_topic(
+            &entity.external_id,
+            &entity.r#type,
             &self.config.bridge_config.c8y_prefix,
-        ))
+        )
+        .expect("Topic must have been valid as the external id is pre-validated");
+        Ok(topic)
     }
 
     /// Generates external ID of the given entity.
@@ -610,19 +607,17 @@ impl CumulocityConverter {
 
     pub async fn process_health_status_message(
         &mut self,
-        entity: &EntityTopicId,
+        entity_tid: &EntityTopicId,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let entity_metadata = self
-            .entity_store
-            .get(entity)
-            .expect("entity was registered");
+        let entity = self.entity_store.try_get(entity_tid)?;
+        let parent_xid = self.entity_store.parent_external_id(entity_tid)?;
 
-        let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
         Ok(convert_health_status_message(
             &self.config.mqtt_schema,
-            entity_metadata,
-            &ancestors_external_ids,
+            entity,
+            parent_xid,
+            &self.entity_store.main_device_external_id(),
             message,
             &self.config.bridge_config.c8y_prefix,
         ))
