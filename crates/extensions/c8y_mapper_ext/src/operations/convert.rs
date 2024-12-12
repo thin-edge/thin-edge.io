@@ -7,6 +7,7 @@ use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
 use c8y_api::smartrest::message_ids::SET_SUPPORTED_CONFIGURATIONS;
 use c8y_api::smartrest::message_ids::SET_SUPPORTED_LOGS;
+use serde_json::json;
 use serde_json::Value;
 use std::sync::Arc;
 use tedge_api::commands::CommandStatus;
@@ -433,7 +434,16 @@ impl CumulocityConverter {
             serde_json::Value::Object(serde_json::Map::new())
         };
 
-        let request = GenericCommandState::new(topic, CommandStatus::Init.to_string(), payload);
+        let mapper_id = self.command_id.prefix();
+        let inject_object = json!({
+            mapper_id: {
+                "on_fragment": custom_handler.on_fragment(),
+                "output": custom_handler.workflow_output(),
+            }
+        });
+
+        let request = GenericCommandState::new(topic, CommandStatus::Init.to_string(), payload)
+            .update_with_json(inject_object);
 
         Ok(vec![request.into_message()])
     }

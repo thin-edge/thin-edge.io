@@ -22,11 +22,15 @@ use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id_no_parameters;
+use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_name;
+use c8y_api::smartrest::smartrest_serializer::C8yOperation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
 use std::sync::Arc;
@@ -80,6 +84,8 @@ impl OperationContext {
                 return;
             }
         };
+
+        let mut c8y_operation = to_c8y_operation(&operation);
 
         let operation_result = match operation {
             OperationType::Health => {
@@ -142,21 +148,19 @@ impl OperationContext {
                 self.handle_device_profile_state_change(&entity, &cmd_id, &message)
                     .await
             }
-            OperationType::Custom(ref custom_operation) => {
-                self.handle_custom_operation_state_change(
-                    &entity,
-                    &cmd_id,
-                    &message,
-                    custom_operation,
-                )
-                .await
+            OperationType::Custom(_) => {
+                let (outcome, maybe_c8y_operation) = self
+                    .handle_custom_operation_state_change(&entity, &cmd_id, &message)
+                    .await;
+                c8y_operation = maybe_c8y_operation;
+                Ok(outcome)
             }
         };
         let mut mqtt_publisher = self.mqtt_publisher.clone();
 
-        // unwrap is safe: at this point all local operations that are not regular c8y
-        // operations should be handled above
-        let c8y_operation = to_c8y_operation(&operation).unwrap();
+        let c8y_operation = c8y_operation.unwrap_or(CumulocitySupportedOperations::C8yCustom(
+            "unknown".to_string(),
+        ));
 
         match self.to_response(
             operation_result,
@@ -224,6 +228,27 @@ impl OperationContext {
                 fail_operation_with_id(&op_id, reason)
             }
             _ => fail_operation_with_name(operation, reason),
+        }
+    }
+
+    pub fn try_get_smartrest_successful_status_payload_with_args(
+        &self,
+        operation: CumulocitySupportedOperations,
+        cmd_id: &str,
+        text_or_csv: TextOrCsv,
+    ) -> SmartrestPayload {
+        let result = match self.get_operation_id(cmd_id) {
+            Some(op_id) if self.smart_rest_use_operation_id => {
+                succeed_operation_with_id(&op_id, text_or_csv)
+            }
+            _ => succeed_operation_with_name(operation.name(), text_or_csv),
+        };
+
+        match result {
+            Ok(successful_message) => successful_message,
+            Err(err) => {
+                self.get_smartrest_failed_status_payload(operation, &err.to_string(), cmd_id)
+            }
         }
     }
 
@@ -308,9 +333,8 @@ fn to_c8y_operation(operation_type: &OperationType) -> Option<CumulocitySupporte
         OperationType::FirmwareUpdate => Some(CumulocitySupportedOperations::C8yFirmware),
         OperationType::SoftwareUpdate => Some(CumulocitySupportedOperations::C8ySoftwareUpdate),
         OperationType::DeviceProfile => Some(CumulocitySupportedOperations::C8yDeviceProfile),
-        OperationType::Custom(operation) => Some(CumulocitySupportedOperations::C8yCustom(
-            operation.to_string(),
-        )),
+        // Cannot convert custom operation name systematically
+        OperationType::Custom(_) => None,
         // software list is not an c8y, only a fragment, but is a local operation that is spawned as
         // part of C8y_SoftwareUpdate operation
         OperationType::SoftwareList => None,

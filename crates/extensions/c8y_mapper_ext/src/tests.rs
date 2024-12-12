@@ -2183,6 +2183,7 @@ async fn mapper_converts_custom_operation_for_main_device() {
             [exec.workflow]
             operation = "command"
             input = "${.payload.c8y_Command}"
+            output = "${.payload.result}"
             "#,
         );
 
@@ -2229,7 +2230,11 @@ async fn mapper_converts_custom_operation_for_main_device() {
             "te/device/main///cmd/command/c8y-mapper-1234",
             json!({
                 "status": "init",
-                "text": "do something"
+                "text": "do something",
+                "c8y-mapper": {
+                    "on_fragment": "c8y_Command",
+                    "output": "${.payload.result}"
+                }
             }),
         )],
     )
@@ -2310,6 +2315,9 @@ async fn mapper_converts_custom_operation_with_combined_input() {
                 "y": 42,
                 "z": {
                     "foo": "bar"
+                },
+                "c8y-mapper": {
+                    "on_fragment": "c8y_CombinedInput"
                 }
             }),
         )],
@@ -2376,6 +2384,9 @@ async fn mapper_converts_custom_operation_for_main_device_without_workflow_input
             "te/device/main///cmd/command/c8y-mapper-1234",
             json!({
                 "status": "init",
+                "c8y-mapper": {
+                    "on_fragment": "c8y_Command"
+                }
             }),
         )],
     )
@@ -2519,7 +2530,10 @@ async fn mapper_converts_custom_operation_for_child_device() {
             "te/device/child1///cmd/command/c8y-mapper-1234",
             json!({
                 "status": "init",
-                "text": "do something"
+                "text": "do something",
+                "c8y-mapper": {
+                    "on_fragment": "c8y_Command"
+                }
             }),
         )],
     )
