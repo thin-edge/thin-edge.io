@@ -51,6 +51,14 @@ impl Operation {
         })
     }
 
+    pub fn workflow_output(&self) -> Option<&serde_json::Value> {
+        self.exec().and_then(|exec| {
+            exec.workflow
+                .as_ref()
+                .and_then(|workflow| workflow.output.as_ref())
+        })
+    }
+
     pub fn topic(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.topic.clone())
     }
@@ -199,6 +207,7 @@ where
 struct ExecWorkflow {
     operation: Option<String>,
     input: Option<serde_json::Value>,
+    output: Option<serde_json::Value>,
 }
 
 pub fn get_operations<C: Record + C8yPrefix>(

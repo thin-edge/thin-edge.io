@@ -1,0 +1,20 @@
+operation = "set_relay"
+
+[init]
+  action = "proceed"
+  on_success = "executing"
+
+[executing]
+  action = "proceed"
+  on_success = "run"
+
+[run]
+  script = "/etc/tedge/operations/set_relay.sh ${.payload.relay}"
+  on_success = "successful"
+  on_error = { status = "failed", reason = "Command returned a non-zero exit code" }
+
+[successful]
+  action = "cleanup"
+
+[failed]
+  action = "cleanup"
