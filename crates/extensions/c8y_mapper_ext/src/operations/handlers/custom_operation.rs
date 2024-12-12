@@ -32,8 +32,7 @@ impl OperationContext {
         };
 
         let mapper_id = self.command_id.prefix();
-        let operation = match self
-            .get_c8y_operation(mapper_id, &command.payload)
+        let operation = match get_c8y_operation(mapper_id, &command.payload)
             .context("Could not get CumulocitySupportedOperation from payload")
         {
             Ok(c8y_operation) => c8y_operation,
@@ -69,23 +68,6 @@ impl OperationContext {
         (result, Some(operation))
     }
 
-    fn get_c8y_operation(
-        &self,
-        mapper_id: &str,
-        value: &serde_json::Value,
-    ) -> Option<CumulocitySupportedOperations> {
-        if let Some(value) = value.get(mapper_id) {
-            if let Some(c8y_operation) = value.get("on_fragment") {
-                if let Some(c8y_operation) = c8y_operation.as_str() {
-                    return Some(CumulocitySupportedOperations::C8yCustom(
-                        c8y_operation.to_string(),
-                    ));
-                }
-            }
-        }
-        None
-    }
-
     fn convert_output(
         &self,
         mapper_id: &str,
@@ -93,7 +75,7 @@ impl OperationContext {
         operation: CumulocitySupportedOperations,
         cmd_id: &str,
     ) -> SmartrestPayload {
-        match state.payload.get(mapper_id).unwrap().get("output") {
+        match state.payload.pointer(&format!("/{mapper_id}/output")) {
             Some(output) => {
                 let excerpt = StateExcerpt::from(output.clone());
                 match excerpt.extract_value_from(state) {
@@ -126,6 +108,20 @@ impl OperationContext {
             None => self.get_smartrest_successful_status_payload(operation, cmd_id),
         }
     }
+}
+
+fn get_c8y_operation(
+    mapper_id: &str,
+    value: &serde_json::Value,
+) -> Option<CumulocitySupportedOperations> {
+    if let Some(maybe_c8y_operation) = value.pointer(&format!("/{mapper_id}/on_fragment")) {
+        if let Some(c8y_operation) = maybe_c8y_operation.as_str() {
+            return Some(CumulocitySupportedOperations::C8yCustom(
+                c8y_operation.to_string(),
+            ));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
