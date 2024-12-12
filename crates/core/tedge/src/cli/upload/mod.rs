@@ -13,9 +13,9 @@ mod c8y;
 pub enum UploadCmd {
     /// Upload a file to Cumulocity
     ///
-    /// The command create a new event for the device,
-    /// attach the given file content to this new event,
-    /// and return the event ID.
+    /// The command creates a new event for the device,
+    /// attaches the given file content to this new event,
+    /// and returns the event ID.
     C8y {
         /// Path to the uploaded file
         #[clap(long)]
@@ -46,7 +46,7 @@ pub enum UploadCmd {
         #[clap(long)]
         profile: Option<ProfileName>,
 
-        /// Cumulocity external id of the device child on which the file has to be attached.
+        /// Cumulocity external id of the device/service on which the file has to be attached.
         ///
         /// If not given, the file is attached to the main device.
         #[clap(long)]

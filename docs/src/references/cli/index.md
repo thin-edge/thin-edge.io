@@ -19,12 +19,14 @@ OPTIONS:
     -V, --version                    Print version information
 
 SUBCOMMANDS:
-    cert          Create and manage device certificate
-    config        Configure Thin Edge
-    connect       Connect to connector provider
-    disconnect    Remove bridge connection for a provider
-    help          Print this message or the help of the given subcommand(s)
-    init          Initialize Thin Edge
-    mqtt          Publish a message on a topic and subscribe a topic
-    reconnect     Reconnect command, calls disconnect followed by connect
+  init             Initialize Thin Edge
+  cert             Create and manage device certificate
+  config           Configure Thin Edge
+  connect          Connect to cloud provider
+  disconnect       Remove bridge connection for a provider
+  reconnect        Reconnect command, calls disconnect followed by connect
+  refresh-bridges  Refresh all currently active mosquitto bridges
+  upload           Upload files to the cloud
+  mqtt             Publish a message on a topic and subscribe a topic
+  help             Print this message or the help of the given subcommand(s)
 ```
