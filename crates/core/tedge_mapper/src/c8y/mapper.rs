@@ -336,7 +336,7 @@ pub fn service_monitor_client_config(
         c8y_mapper_name,
         service_type.as_str(),
         "down",
-        &[],
+        None,
         prefix,
     )?;
 
