@@ -23,7 +23,11 @@ Device ID must be unique if cloud URLs are the same
     ThinEdgeIO.Execute Command
     ...    sudo tedge config set c8y.url --profile second "$(tedge config get c8y.url)"
     ...    timeout=0
-    Verify conflicting configuration error appears    sudo tedge connect c8y --profile second    device.id
+    # Just assert the command fails, we have unit tests that assert the correct error message appears
+    ThinEdgeIO.Execute Command
+    ...    sudo tedge connect c8y --test --profile second
+    ...    exp_exit_code=1
+    ...    timeout=0
 
 Proxy bind port must be unique
     ThinEdgeIO.Execute Command    sudo tedge config set c8y.url --profile second example.com    timeout=0

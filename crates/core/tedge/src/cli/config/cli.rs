@@ -12,7 +12,11 @@ pub enum ConfigCmd {
         /// Configuration key. Run `tedge config list --doc` for available keys
         key: ReadableKey,
 
-        /// Cloud profile
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
@@ -25,7 +29,11 @@ pub enum ConfigCmd {
         /// Configuration value.
         value: String,
 
-        /// Cloud profile
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
@@ -35,7 +43,11 @@ pub enum ConfigCmd {
         /// Configuration key. Run `tedge config list --doc` for available keys
         key: WritableKey,
 
-        /// Cloud profile
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
@@ -48,7 +60,11 @@ pub enum ConfigCmd {
         /// Configuration value.
         value: String,
 
-        /// Cloud profile
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
@@ -61,8 +77,12 @@ pub enum ConfigCmd {
         /// Configuration value.
         value: String,
 
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
-        /// Cloud profile
         profile: Option<ProfileName>,
     },
 

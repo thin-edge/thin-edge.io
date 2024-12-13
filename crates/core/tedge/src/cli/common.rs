@@ -9,18 +9,21 @@ use tedge_config::ProfileName;
 pub enum CloudArg {
     C8y {
         /// The cloud profile you wish to use
+        ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
     Az {
         /// The cloud profile you wish to use
+        ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
     },
     Aws {
         /// The cloud profile you wish to use
+        ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
         profile: Option<ProfileName>,
@@ -146,6 +149,12 @@ impl MaybeBorrowedCloud<'_> {
             Self::Aws(Some(profile)) => format!("aws@{profile}-bridge.conf").into(),
             Self::Azure(None) => "az-bridge.conf".into(),
             Self::Azure(Some(profile)) => format!("az@{profile}-bridge.conf").into(),
+        }
+    }
+
+    pub fn profile_name(&self) -> Option<&ProfileName> {
+        match self {
+            Self::Aws(profile) | Self::Azure(profile) | Self::C8y(profile) => profile.as_deref(),
         }
     }
 }

@@ -96,6 +96,12 @@ impl ConnectCommand {
         validate_config(config, &self.cloud)?;
 
         if self.is_test_connection {
+            ConfigLogger::log(
+                format!("Testing {} connection with config", self.cloud),
+                &bridge_config,
+                &*self.service_manager,
+                &self.cloud,
+            );
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
             return if self.check_if_bridge_exists(&bridge_config) {
@@ -129,7 +135,7 @@ impl ConnectCommand {
             false => format!("Connecting to {} with config", self.cloud),
             true => "Reconnecting with config".into(),
         };
-        ConfigLogger::log(title, &bridge_config, &*self.service_manager);
+        ConfigLogger::log(title, &bridge_config, &*self.service_manager, &self.cloud);
 
         let device_type = &config.device.ty;
 
@@ -288,8 +294,11 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .filter(|(_, config)| config.url.or_none().is_some())
                 .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_configurations(config, ReadableKey::AwsUrl, &profiles).or_else(
-                |_| disallow_matching_configurations(config, ReadableKey::AwsDeviceId, &profiles),
+            disallow_matching_url_device_id(
+                config,
+                ReadableKey::AwsUrl,
+                ReadableKey::AwsDeviceId,
+                &profiles,
             )?;
             disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
         }
@@ -300,8 +309,11 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .filter(|(_, config)| config.url.or_none().is_some())
                 .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_configurations(config, ReadableKey::AzUrl, &profiles).or_else(
-                |_| disallow_matching_configurations(config, ReadableKey::AzDeviceId, &profiles),
+            disallow_matching_url_device_id(
+                config,
+                ReadableKey::AzUrl,
+                ReadableKey::AzDeviceId,
+                &profiles,
             )?;
             disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
         }
@@ -312,11 +324,57 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .filter(|(_, config)| config.http.or_none().is_some())
                 .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_configurations(config, ReadableKey::C8yUrl, &profiles).or_else(
-                |_| disallow_matching_configurations(config, ReadableKey::C8yDeviceId, &profiles),
+            disallow_matching_url_device_id(
+                config,
+                ReadableKey::C8yUrl,
+                ReadableKey::C8yDeviceId,
+                &profiles,
             )?;
             disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
             disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
+        }
+    }
+    Ok(())
+}
+
+fn disallow_matching_url_device_id(
+    config: &TEdgeConfig,
+    url: fn(Option<String>) -> ReadableKey,
+    device_id: fn(Option<String>) -> ReadableKey,
+    profiles: &[Option<String>],
+) -> anyhow::Result<()> {
+    let url_entries = profiles.iter().map(|profile| {
+        let key = url(profile.clone());
+        let value = config.read_string(&key).ok();
+        ((profile, key), value)
+    });
+
+    for url_matches in find_all_matching(url_entries) {
+        let device_id_entries = profiles.iter().filter_map(|profile| {
+            url_matches.iter().find(|(p, _)| *p == profile)?;
+            let key = device_id(profile.clone());
+            let value = config.read_string(&key).ok();
+            Some(((profile, key), value))
+        });
+        if let Some(matches) = find_matching(device_id_entries) {
+            let url_keys: String = matches
+                .iter()
+                .map(|&(k, _)| format!("{}", url(k.clone()).yellow().bold()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let device_id_keys: String = matches
+                .iter()
+                .map(|(_, key)| format!("{}", key.yellow().bold()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!(
+                "You have matching URLs and device IDs for different profiles.
+
+{url_keys} are set to the same value, but so are {device_id_keys}.
+
+Each cloud profile requires either a unique URL or unique device ID, \
+so it corresponds to a unique device in the associated cloud."
+            );
         }
     }
     Ok(())
@@ -337,7 +395,7 @@ fn disallow_matching_configurations(
         Some((key, value))
     });
     if let Some(matches) = find_matching(entries) {
-        let keys = matches
+        let keys: String = matches
             .iter()
             .map(|k| format!("{}", k.yellow().bold()))
             .collect::<Vec<_>>()
@@ -355,6 +413,15 @@ fn find_matching<K, V: Hash + Eq>(entries: impl Iterator<Item = (K, V)>) -> Opti
     });
 
     match_map.into_values().find(|t| t.len() > 1)
+}
+
+fn find_all_matching<K, V: Hash + Eq>(entries: impl Iterator<Item = (K, V)>) -> Vec<Vec<K>> {
+    let match_map = entries.fold(HashMap::<V, Vec<K>>::new(), |mut acc, (key, value)| {
+        acc.entry(value).or_default().push(key);
+        acc
+    });
+
+    match_map.into_values().filter(|t| t.len() > 1).collect()
 }
 
 pub fn bridge_config(
@@ -1200,6 +1267,160 @@ mod tests {
             loc.update_toml(&|dto, _| {
                 dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn disallows_matching_device_id_same_urls() {
+            yansi::disable();
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            let err = validate_config(&config, &cloud).unwrap_err();
+            assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
+
+c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
+
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
+        }
+
+        #[test]
+        fn allows_different_urls() {
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.new.url".parse().unwrap(),
+                    "different.example.com",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(),
+                    "c8y-new",
+                )
+                .unwrap();
+                dto.try_update_str(&"c8y.profiles.new.proxy.bind.port".parse().unwrap(), "8002")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_different_device_ids() {
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
+            let mut cert_path = ttd.path().to_owned();
+            cert_path.push("test.crt");
+            let mut key_path = ttd.path().to_owned();
+            key_path.push("test.key");
+            std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
+            std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.new.device.cert_path".parse().unwrap(),
+                    &cert_path.display().to_string(),
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.new.device.key_path".parse().unwrap(),
+                    &key_path.display().to_string(),
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(),
+                    "c8y-new",
+                )
+                .unwrap();
+                dto.try_update_str(&"c8y.profiles.new.proxy.bind.port".parse().unwrap(), "8002")
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test]
+        fn allows_combination_of_urls_and_device_ids() {
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
+            let mut cert_path = ttd.path().to_owned();
+            cert_path.push("test.crt");
+            let mut key_path = ttd.path().to_owned();
+            key_path.push("test.key");
+            std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
+            std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(&"c8y.profiles.diff_id.url".parse().unwrap(), "example.com")
+                    .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_id.device.cert_path".parse().unwrap(),
+                    &cert_path.display().to_string(),
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_id.device.key_path".parse().unwrap(),
+                    &key_path.display().to_string(),
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_id.bridge.topic_prefix".parse().unwrap(),
+                    "c8y-diff-id",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_id.proxy.bind.port".parse().unwrap(),
+                    "8002",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_url.url".parse().unwrap(),
+                    "different.example.com",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_url.bridge.topic_prefix".parse().unwrap(),
+                    "c8y-diff-url",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_url.proxy.bind.port".parse().unwrap(),
+                    "8003",
+                )
+                .unwrap();
                 Ok(())
             })
             .unwrap();
