@@ -3,10 +3,6 @@ set -e
 
 
 
-
-
-
-
 enable_start_service() {
     name="$1"
 

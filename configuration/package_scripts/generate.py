@@ -88,6 +88,8 @@ def replace_variables(
 def write_script(
     input_contents, lines: List[str], output_file: Path, debug: bool = True
 ) -> str:
+    # filter out lines with only whitespace
+    lines = [line for line in lines if line.strip()]
     contents = replace_variables(
         input_contents,
         {
