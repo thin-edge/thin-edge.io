@@ -23,6 +23,7 @@ pub mod log;
 mod mqtt;
 mod reconnect;
 mod refresh_bridges;
+mod upload;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -105,6 +106,10 @@ pub enum TEdgeOpt {
     /// Refresh all currently active mosquitto bridges
     RefreshBridges,
 
+    /// Upload files to the cloud
+    #[clap(subcommand)]
+    Upload(upload::UploadCmd),
+
     /// Publish a message on a topic and subscribe a topic.
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
@@ -161,6 +166,7 @@ impl BuildCommand for TEdgeOpt {
                 relative_links,
                 context,
             ))),
+            TEdgeOpt::Upload(opt) => opt.build_command(context),
             TEdgeOpt::Cert(opt) => opt.build_command(context),
             TEdgeOpt::Config(opt) => opt.build_command(context),
             TEdgeOpt::Connect(opt) => opt.build_command(context),
