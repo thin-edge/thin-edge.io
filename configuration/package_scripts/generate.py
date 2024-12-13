@@ -106,7 +106,8 @@ def write_script(
     output_file.write_text(contents, encoding="utf8")
     return contents
 
-def format_unit_name(name: str, default_suffix = ".service") -> str:
+
+def format_unit_name(name: str, default_suffix=".service") -> str:
     if "." not in name:
         return name + default_suffix
     return name
@@ -120,7 +121,9 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
     prerm = []
     postrm = []
 
-    service_names = [format_unit_name((service.name or name), ".service") for service in services]
+    service_names = [
+        format_unit_name((service.name or name), ".service") for service in services
+    ]
     log.info("Processing package: %s, type=%s", name, package_type)
 
     variables = {
@@ -157,7 +160,33 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
             )
         )
 
-    if service:
+    #
+    # Group services files based on their properties as they grouped to be executed as a single command
+    # The following template make use of UNITFILES, but since each package can contain multiple files
+    # the services functionality needs to be grouped.
+    #
+    if services:
+        # Helper
+        def append_matching_services(
+            script: List, template: str, predicate, variables: Dict
+        ):
+            matches = [
+                format_unit_name((service.name or name), ".service")
+                for service in services
+                if predicate(service)
+            ]
+            if matches:
+                script.append(
+                    replace_variables(
+                        get_template(f"templates/{package_type}/{template}"),
+                        {
+                            **variables,
+                            "UNITFILES": " ".join(matches),
+                        },
+                        wrap=True,
+                    )
+                )
+
         # postrm
         postrm.append(
             replace_variables(
@@ -167,64 +196,65 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
             )
         )
 
+        # postrm
         # Special case for rpm packages:
         # By default rpm maintainer scripts restart mark a service to be restarted in the postrm script
         # unlike debian which does this in the postinst.
-        if package_type != "rpm" or (
-            service and package_type == "rpm" and service.stop_on_upgrade
-        ):
-            postrm.append(
-                replace_variables(
-                    get_template(f"templates/{package_type}/postrm-systemd"),
-                    variables,
-                    wrap=True,
-                )
+        if package_type == "deb":
+            append_matching_services(
+                postrm, "postrm-systemd", lambda x: True, variables
+            )
+        elif package_type == "rpm":
+            append_matching_services(
+                postrm, "postrm-systemd", lambda x: service.stop_on_upgrade, variables
             )
 
-        if service.restart_after_upgrade:
-            snippet = {
-                True: ("postinst-systemd-restart", "restart"),
-                False: ("postinst-systemd-restartnostart", "try-restart"),
-            }[service.start]
+        ## postinst: restart after upgrade and start
+        append_matching_services(
+            postinst,
+            "postinst-systemd-restart",
+            lambda x: x.restart_after_upgrade and x.start,
+            {
+                **variables,
+                "RESTART_ACTION": "restart",
+            },
+        )
 
-            postinst.append(
-                replace_variables(
-                    get_template(f"templates/{package_type}/{snippet[0]}"),
-                    {
-                        **variables,
-                        "RESTART_ACTION": snippet[1],
-                    },
-                    wrap=True,
-                )
-            )
-        elif service.start:
-            postinst.append(
-                replace_variables(
-                    get_template(f"templates/{package_type}/postinst-systemd-start"),
-                    variables,
-                    wrap=True,
-                )
-            )
+        ## postinst: restart after upgrade and no start
+        append_matching_services(
+            postinst,
+            "postinst-systemd-restartnostart",
+            lambda x: x.restart_after_upgrade and not x.start,
+            {
+                **variables,
+                "RESTART_ACTION": "try-restart",
+            },
+        )
 
-        # prerm
-        if not service.stop_on_upgrade or service.restart_after_upgrade:
-            # stop service only on remove
-            prerm.append(
-                replace_variables(
-                    get_template(f"templates/{package_type}/prerm-systemd-restart"),
-                    variables,
-                    wrap=True,
-                )
-            )
-        elif service.start:
-            # always stop service
-            prerm.append(
-                replace_variables(
-                    get_template(f"templates/{package_type}/prerm-systemd"),
-                    variables,
-                    wrap=True,
-                )
-            )
+        # postinst: restart_after_upgrade=false and start=true
+        append_matching_services(
+            postinst,
+            "postinst-systemd-start",
+            lambda x: not x.restart_after_upgrade and x.start,
+            variables,
+        )
+
+        # prerm: stop_on_upgrade=false or restart_after_upgrade=true
+        append_matching_services(
+            prerm,
+            "prerm-systemd-restart",
+            lambda x: not x.stop_on_upgrade or x.restart_after_upgrade,
+            variables,
+        )
+
+        # prerm: always stop service
+        append_matching_services(
+            prerm,
+            "prerm-systemd",
+            lambda x: not (not x.stop_on_upgrade or x.restart_after_upgrade)
+            and x.start,
+            variables,
+        )
 
     # Default script contents if the script does not already exist
     default_t = "\n".join(
