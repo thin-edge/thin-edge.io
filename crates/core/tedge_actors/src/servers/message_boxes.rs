@@ -50,8 +50,8 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
 
         loop {
             tokio::select! {
-                Some(request) = self.requests.recv() => {
-                    return Some(request);
+                received = self.requests.recv() => {
+                    return received
                 }
                 Some(result) = self.running_request_handlers.next() => {
                     if let Err(err) = result {
@@ -156,7 +156,7 @@ impl<Request: Message, Response: Message> Sender<Request> for RequestSender<Requ
 
 #[cfg(test)]
 #[cfg(feature = "test-helpers")]
-mod tests {
+mod tests_using_helpers {
     use super::*;
 
     use crate::Builder;
@@ -338,5 +338,68 @@ mod tests {
             .await,
             Ok(())
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Builder;
+    use crate::ConcurrentServerMessageBox;
+    use crate::RuntimeRequest;
+    use crate::RuntimeRequestSink;
+    use crate::ServerMessageBox;
+    use crate::ServerMessageBoxBuilder;
+    use tokio::time::timeout;
+    use tokio::time::Duration;
+
+    #[tokio::test]
+    async fn does_not_block_runtime_exit_with_non_finishing_requests() {
+        let box_builder = ServerMessageBoxBuilder::new("ConcurrentServerMessageBoxTest", 16);
+
+        let mut sig = box_builder.get_signal_sender();
+        let message_box: ServerMessageBox<i32, i32> = box_builder.build();
+        let mut message_box = ConcurrentServerMessageBox::new(4, message_box);
+        message_box
+            .running_request_handlers
+            .push(tokio::spawn(async { std::future::pending().await }));
+
+        sig.send(RuntimeRequest::Shutdown).await.unwrap();
+
+        loop {
+            let res = timeout(Duration::from_millis(500), message_box.next_request()).await;
+
+            match res {
+                Err(_elapsed) => panic!("Timeout elapsed: actor ignored shutdown request"),
+                Ok(None) => break,
+                Ok(_) => {}
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn does_not_block_runtime_exit_with_well_behaved_requests() {
+        let box_builder = ServerMessageBoxBuilder::new("ConcurrentServerMessageBoxTest", 16);
+
+        let mut sig = box_builder.get_signal_sender();
+        let message_box: ServerMessageBox<i32, i32> = box_builder.build();
+        let mut message_box = ConcurrentServerMessageBox::new(4, message_box);
+        message_box
+            .running_request_handlers
+            .push(tokio::spawn(async {}));
+        message_box
+            .running_request_handlers
+            .push(tokio::spawn(async {}));
+
+        sig.send(RuntimeRequest::Shutdown).await.unwrap();
+
+        loop {
+            let res = timeout(Duration::from_millis(500), message_box.next_request()).await;
+
+            match res {
+                Err(_elapsed) => panic!("Timeout elapsed: actor ignored shutdown request"),
+                Ok(None) => break,
+                Ok(_) => {}
+            }
+        }
     }
 }
