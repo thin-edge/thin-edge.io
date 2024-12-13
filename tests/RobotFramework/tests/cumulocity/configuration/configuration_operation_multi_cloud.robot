@@ -26,6 +26,13 @@ Get Configuration from Second Device
     Text file    topic_prefix=c8y-second    external_id=${SECOND_DEVICE_SN}    config_type=CONFIG1    device_file=/etc/config1.json
     Binary file    topic_prefix=c8y-second    external_id=${SECOND_DEVICE_SN}    config_type=CONFIG1_BINARY    device_file=/etc/binary-config1.tar.gz
 
+Mapper Services Are Restarted After Updates
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${pid_before}=    Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y@second
+    Execute Command    dpkg -i packages/tedge-mapper*.deb
+    ${pid_after}=    Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y@second
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
 
 *** Keywords ***
 Get Configuration from Device
