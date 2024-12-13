@@ -209,7 +209,7 @@ impl TEdgeEnv {
 
     fn provider(&self) -> figment::providers::Env {
         static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
-        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR"]).map(move |name| {
+        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR", "CLOUD_PROFILE"]).map(move |name| {
             let lowercase_name = name.as_str().to_ascii_lowercase();
             Uncased::new(
                 tracing::subscriber::with_default(
@@ -237,6 +237,7 @@ mod tests {
     use std::path::PathBuf;
 
     use serde::Deserialize;
+    use tedge_config_macros::define_tedge_config;
 
     use super::*;
 
@@ -259,6 +260,7 @@ mod tests {
             Ok(())
         })
     }
+
     #[test]
     fn environment_variables_override_config_file() {
         #[derive(Deserialize)]
@@ -373,6 +375,100 @@ mod tests {
 
             let data = extract_data::<Config, FileOnly>("tedge.toml").unwrap();
             assert_eq!(data.0.value, "config");
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn environment_variables_can_override_profiled_configurations() {
+        use crate::AppendRemoveItem;
+        use crate::ReadError;
+        use tedge_config_macros::*;
+
+        define_tedge_config!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            }
+        );
+
+        figment::Jail::expect_with(|jail| {
+            jail.create_file(
+                "tedge.toml",
+                r#"
+            [c8y.profiles.test]
+            url = "test.c8y.io"
+            "#,
+            )?;
+
+            jail.set_env("TEDGE_C8Y_PROFILES_TEST_URL", "override.c8y.io");
+
+            let dto =
+                extract_data::<TEdgeConfigDto, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .0;
+            assert_eq!(
+                dto.c8y.try_get(Some("test"), "c8y").unwrap().url.as_deref(),
+                Some("override.c8y.io")
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn environment_variable_profile_warnings_use_key_with_correct_format() {
+        use crate::AppendRemoveItem;
+        use crate::ReadError;
+        use tedge_config_macros::*;
+
+        define_tedge_config!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            }
+        );
+
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("TEDGE_C8Y_PROFILES_TEST_UNKNOWN", "override.c8y.io");
+
+            let warnings =
+                extract_data::<TEdgeConfigDto, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .1;
+            assert_eq!(
+                warnings.0,
+                ["Unknown configuration field \"c8y_profiles_test_unknown\" from environment variable TEDGE_C8Y_PROFILES_TEST_UNKNOWN"]
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn toml_profile_warnings_use_key_with_correct_format() {
+        use crate::AppendRemoveItem;
+        use crate::ReadError;
+        use tedge_config_macros::*;
+
+        define_tedge_config!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            }
+        );
+
+        figment::Jail::expect_with(|jail| {
+            jail.create_file(
+                "tedge.toml",
+                r#"
+            [c8y.profiles.test]
+            unknown = "test.c8y.io"
+            "#,
+            )?;
+            let warnings =
+                extract_data::<TEdgeConfigDto, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .1;
+            assert!(dbg!(warnings.0.first().unwrap()).contains("c8y.profiles.test.unknown"));
             Ok(())
         })
     }

@@ -438,7 +438,7 @@ impl FirmwareManagerWorker {
         &mut self,
     ) -> Result<(), FirmwareManagementError> {
         let message = MqttMessage::new(
-            &C8yTopic::SmartRestResponse.to_topic(&self.config.c8y_prefix)?,
+            &C8yTopic::upstream_topic(&self.config.c8y_prefix),
             GET_PENDING_OPERATIONS.to_string(),
         );
         self.mqtt_publisher.send(message).await?;

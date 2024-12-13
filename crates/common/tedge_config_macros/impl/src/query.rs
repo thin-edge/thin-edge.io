@@ -482,6 +482,43 @@ fn keys_enum(
         .is_empty()
         .then_some::<syn::Arm>(parse_quote!(_ => unimplemented!("Cope with empty enum")));
 
+    let (wp_match, wp_ret): (Vec<_>, Vec<_>) = configuration_key
+        .iter()
+        .flat_map(|k| k.insert_profiles.clone())
+        .unzip();
+
+    let max_profile_count = configuration_key.iter().map(|k| k.field_names.len()).max();
+
+    let try_with_profile_impl = match max_profile_count {
+        Some(1) => quote! {
+            pub fn try_with_profile(self, profile: ProfileName) -> ::anyhow::Result<Self> {
+                match self {
+                    #(
+                        #wp_match => #wp_ret,
+                    )*
+                    other => {
+                        ::anyhow::bail!("You've supplied a profile, but {other} is not a profiled configuration")
+                    },
+                }
+            }
+        },
+
+        // If no profiles, just don't implement the method
+        Some(0) | None => quote! {},
+
+        // If profiles are nested, we need to rethink this method entirely
+        // This likely won't ever be needed, but it's good to have a clear error message if someone does stumble across it
+        Some(2..) => {
+            let error_loc = format!("{}:{}", file!(), line!() + 1);
+            let error = format!("try_with_profile cannot be implemented (in its current form) for nested profiles. You'll need to modify the code at {error_loc} to support this.");
+            quote! {
+                pub fn try_with_profile(self, profile: ProfileName) -> ::anyhow::Result<Self> {
+                    compile_error!(#error)
+                }
+            }
+        }
+    };
+
     quote! {
         #[derive(Clone, Debug, PartialEq, Eq)]
         #[non_exhaustive]
@@ -509,6 +546,8 @@ fn keys_enum(
                     #uninhabited_catch_all
                 }
             }
+
+            #try_with_profile_impl
         }
 
         impl ::std::fmt::Display for #type_name {
@@ -744,6 +783,8 @@ struct ConfigurationKey {
     /// ]
     /// ```
     formatters: Vec<(syn::Pat, syn::Expr)>,
+
+    insert_profiles: Vec<(syn::Pat, syn::Expr)>,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -782,12 +823,14 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
         let re = segments
             .iter()
             .map(|fog| match fog {
-                FieldOrGroup::Multi(m) => format!("{}(?:@([^\\.]+))?", m.ident),
+                FieldOrGroup::Multi(m) => {
+                    format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.ident)
+                }
                 FieldOrGroup::Field(f) => f.ident().to_string(),
                 FieldOrGroup::Group(g) => g.ident.to_string(),
             })
             .collect::<Vec<_>>()
-            .join("\\.");
+            .join("[\\._]");
         let re = format!("^{re}$");
         let regex_parser = parse_quote_spanned!(ident.span()=> if let Some(captures) = ::regex::Regex::new(#re).unwrap().captures(value) {});
         let formatters = field_names
@@ -812,7 +855,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                                 if *opt == none {
                                     m.ident.to_string()
                                 } else {
-                                    format!("{}@{{{}}}", m.ident, binding)
+                                    format!("{}.profiles.{{{}}}", m.ident, binding)
                                 }
                             }
                             FieldOrGroup::Group(g) => g.ident.to_string(),
@@ -827,6 +870,27 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                 }
             })
             .collect();
+        let insert_profiles = field_names
+            .iter()
+            .map(|_| [parse_quote!(None), parse_quote!(Some(_))])
+            .multi_cartesian_product()
+            .enumerate()
+            .map(|(i, options): (_, Vec<syn::Pat>)| {
+                if i == 0 {
+                    (
+                        parse_quote!(Self::#ident(#(#options),*)),
+                        parse_quote!(Ok(Self::#ident(Some(profile.into())))),
+                    )
+                } else {
+                    (
+                        parse_quote!(c @ Self::#ident(#(#options),*)),
+                        parse_quote!(::anyhow::bail!(
+                            "Multiple profiles selected from the arguments {c} and --profile {profile}"
+                        )),
+                    )
+                }
+            })
+            .collect();
         ConfigurationKey {
             enum_variant,
             iter_field,
@@ -835,6 +899,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             regex_parser: Some(regex_parser),
             field_names,
             formatters,
+            insert_profiles,
         }
     } else {
         ConfigurationKey {
@@ -848,6 +913,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                 parse_quote!(#ident),
                 parse_quote!(::std::borrow::Cow::Borrowed(#key_str)),
             )],
+            insert_profiles: vec![],
         }
     }
 }
@@ -881,7 +947,9 @@ fn is_read_write(path: &VecDeque<&FieldOrGroup>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syn::ImplItem;
     use syn::ItemImpl;
+    use test_case::test_case;
 
     #[test]
     fn output_parses() {
@@ -937,6 +1005,32 @@ mod tests {
         );
     }
 
+    /// The regex generated for `c8y.url`
+    ///
+    /// This is used to verify both the output of the macro matches this regex
+    /// and that the regex itself functions as intended
+    const C8Y_URL_REGEX: &str = "^c8y(?:[\\._]profiles[\\._]([^\\.]+))?[\\._]url$";
+
+    #[test_case("c8y.url", None; "with no profile specified")]
+    #[test_case("c8y.profiles.name.url", Some("name"); "with profile toml syntax")]
+    #[test_case("c8y_profiles_name_url", Some("name"); "with environment variable profile")]
+    #[test_case("c8y_profiles_name_underscore_url", Some("name_underscore"); "with environment variable underscore profile")]
+    fn regex_matches(input: &str, output: Option<&str>) {
+        let re = regex::Regex::new(C8Y_URL_REGEX).unwrap();
+        assert_eq!(
+            re.captures(input).unwrap().get(1).map(|s| s.as_str()),
+            output
+        );
+    }
+
+    #[test_case("not.c8y.url"; "with an invalid prefix")]
+    #[test_case("c8y.url.something"; "with an invalid suffix")]
+    #[test_case("c8y.profiles.multiple.profile.sections.url"; "with an invalid profile name")]
+    fn regex_fails(input: &str) {
+        let re = regex::Regex::new(C8Y_URL_REGEX).unwrap();
+        assert!(re.captures(input).is_none());
+    }
+
     #[test]
     fn from_str_generates_regex_matches_for_multi_fields() {
         let input: crate::input::Configuration = parse_quote!(
@@ -966,7 +1060,7 @@ mod tests {
                         },
                         _ => unimplemented!("just a test, no error handling"),
                     };
-                    if let Some(captures) = ::regex::Regex::new("^c8y(?:@([^\\.]+))?\\.url$").unwrap().captures(value) {
+                    if let Some(captures) = ::regex::Regex::new(#C8Y_URL_REGEX).unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         return Ok(Self::C8yUrl(key0));
                     };
@@ -1175,7 +1269,7 @@ mod tests {
         );
         let paths = configuration_paths_from(&input.groups);
         let config_keys = configuration_strings(paths.iter());
-        let impl_block = keys_enum_impl_block(&config_keys);
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
             impl ReadableKey {
@@ -1203,14 +1297,14 @@ mod tests {
         );
         let paths = configuration_paths_from(&input.groups);
         let config_keys = configuration_strings(paths.iter());
-        let impl_block = keys_enum_impl_block(&config_keys);
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
             impl ReadableKey {
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::C8yUrl(None) => ::std::borrow::Cow::Borrowed("c8y.url"),
-                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y@{key0}.url")),
+                        Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y.profiles.{key0}.url")),
                     }
                 }
             }
@@ -1235,16 +1329,56 @@ mod tests {
         );
         let paths = configuration_paths_from(&input.groups);
         let config_keys = configuration_strings(paths.iter());
-        let impl_block = keys_enum_impl_block(&config_keys);
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
             impl ReadableKey {
                 pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
                     match self {
                         Self::TopNestedField(None, None) => ::std::borrow::Cow::Borrowed("top.nested.field"),
-                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested@{key1}.field")),
-                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top@{key0}.nested.field")),
-                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top@{key0}.nested@{key1}.field")),
+                        Self::TopNestedField(None, Some(key1)) => ::std::borrow::Cow::Owned(format!("top.nested.profiles.{key1}.field")),
+                        Self::TopNestedField(Some(key0), None) => ::std::borrow::Cow::Owned(format!("top.profiles.{key0}.nested.field")),
+                        Self::TopNestedField(Some(key0), Some(key1)) => ::std::borrow::Cow::Owned(format!("top.profiles.{key0}.nested.profiles.{key1}.field")),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn impl_try_with_profile() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+
+                availability: {
+                    interval: i32,
+                }
+            },
+
+            sudo: {
+                enable: bool,
+            },
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let config_keys = configuration_strings(paths.iter());
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn try_with_profile(self, profile: ProfileName) -> ::anyhow::Result<Self> {
+                    match self {
+                        Self::C8yUrl(None) => Ok(Self::C8yUrl(Some(profile.into()))),
+                        c @ Self::C8yUrl(Some(_)) => ::anyhow::bail!("Multiple profiles selected from the arguments {c} and --profile {profile}"),
+                        Self::C8yAvailabilityInterval(None) => Ok(Self::C8yAvailabilityInterval(Some(profile.into()))),
+                        c @ Self::C8yAvailabilityInterval(Some(_)) => ::anyhow::bail!("Multiple profiles selected from the arguments {c} and --profile {profile}"),
+                        other => ::anyhow::bail!("You've supplied a profile, but {other} is not a profiled configuration"),
                     }
                 }
             }
@@ -1278,6 +1412,26 @@ mod tests {
             }
         }
 
+        impl_block
+    }
+
+    fn retain_fn(mut impl_block: ItemImpl, fn_name: &str) -> ItemImpl {
+        let ident = syn::Ident::new(fn_name, Span::call_site());
+        let all_fn_names: Vec<_> = impl_block
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                ImplItem::Fn(f) => Some(f.sig.ident.clone()),
+                _ => None,
+            })
+            .collect();
+        impl_block
+            .items
+            .retain(|i| matches!(i, ImplItem::Fn(f) if f.sig.ident == ident));
+        assert!(
+            !impl_block.items.is_empty(),
+            "{ident:?} did not appear in methods. The valid method names are {all_fn_names:?}"
+        );
         impl_block
     }
 }

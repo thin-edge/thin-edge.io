@@ -16,6 +16,7 @@ use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::error::TEdgeError;
 
+use super::common::MaybeBorrowedCloud;
 use super::disconnect::error::DisconnectBridgeError;
 use super::CertError;
 use super::ConnectError;
@@ -249,6 +250,7 @@ pub struct ConfigLogger<'a> {
     auth_method: Option<AuthMethod>,
     service_manager: &'a dyn SystemServiceManager,
     mosquitto_version: Option<&'a str>,
+    cloud: &'a MaybeBorrowedCloud<'a>,
 }
 
 impl<'a> ConfigLogger<'a> {
@@ -257,6 +259,7 @@ impl<'a> ConfigLogger<'a> {
         title: impl Into<Cow<'static, str>>,
         config: &'a BridgeConfig,
         service_manager: &'a dyn SystemServiceManager,
+        cloud: &'a MaybeBorrowedCloud<'a>,
     ) {
         println!(
             "{}",
@@ -269,6 +272,7 @@ impl<'a> ConfigLogger<'a> {
                 auth_method: None,
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
+                cloud,
             }
         )
     }
@@ -292,6 +296,11 @@ impl fmt::Display for ConfigLogger<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:", self.title)?;
         self.log_single_entry(f, "device id", &self.device_id)?;
+        if let Some(profile) = self.cloud.profile_name() {
+            self.log_single_entry(f, "cloud profile", profile)?;
+        } else {
+            self.log_single_entry(f, "cloud profile", &"<none>")?;
+        }
         self.log_single_entry(f, "cloud host", &self.cloud_host)?;
         self.log_single_entry(f, "certificate file", &self.cert_path)?;
         self.log_single_entry(f, "bridge", &self.bridge_location)?;

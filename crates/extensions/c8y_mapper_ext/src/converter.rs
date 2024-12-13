@@ -1079,7 +1079,7 @@ impl CumulocityConverter {
 
                 tokio::spawn(async move {
                     let op_name = op_name.as_str();
-                    let topic = C8yTopic::SmartRestResponse.to_topic(&c8y_prefix).unwrap();
+                    let topic = C8yTopic::upstream_topic(&c8y_prefix);
 
                     if !skip_status_update {
                         // mqtt client publishes executing
@@ -1474,7 +1474,7 @@ impl CumulocityConverter {
         let device_data_message = self.inventory_device_type_update_message()?;
 
         let pending_operations_message =
-            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix)?;
+            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix);
 
         messages.append(&mut vec![
             supported_operations_message,
@@ -1512,11 +1512,9 @@ impl CumulocityConverter {
     }
 }
 
-fn create_get_pending_operations_message(
-    prefix: &TopicPrefix,
-) -> Result<MqttMessage, ConversionError> {
-    let topic = C8yTopic::SmartRestResponse.to_topic(prefix)?;
-    Ok(MqttMessage::new(&topic, request_pending_operations()))
+pub fn create_get_pending_operations_message(prefix: &TopicPrefix) -> MqttMessage {
+    let topic = C8yTopic::upstream_topic(prefix);
+    MqttMessage::new(&topic, request_pending_operations())
 }
 
 impl CumulocityConverter {

@@ -1,48 +1,99 @@
-use anyhow::bail;
+use anyhow::Context;
 use std::borrow::Cow;
-use std::str::FromStr;
+use std::fmt;
 use tedge_config::system_services::SystemService;
 use tedge_config::ProfileName;
-use yansi::Paint;
 
-pub type Cloud = MaybeBorrowedCloud<'static>;
+#[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
+#[clap(rename_all = "snake_case")]
+pub enum CloudArg {
+    C8y {
+        /// The cloud profile you wish to use
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+    Az {
+        /// The cloud profile you wish to use
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+    Aws {
+        /// The cloud profile you wish to use
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+}
 
-impl FromStr for Cloud {
-    type Err = <ProfileName as FromStr>::Err;
+impl TryFrom<CloudArg> for Cloud {
+    type Error = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match (s, s.split_once("@")) {
-            (_, Some(("c8y", profile))) => Ok(Self::c8y(Some(profile.parse()?))),
-            ("c8y", None) => Ok(Self::c8y(None)),
-            (_, Some(("az", profile))) => Ok(Self::az(Some(profile.parse()?))),
-            ("az", None) => Ok(Self::Azure(None)),
-            (_, Some(("aws", profile))) => Ok(Self::aws(Some(profile.parse()?))),
-            ("aws", None) => Ok(Self::Aws(None)),
-            (cloud, _) => bail!(
-                "Unknown cloud type {cloud:?}. Valid cloud types are {}.",
-                valid_cloud_types()
-            ),
-        }
+    fn try_from(args: CloudArg) -> Result<Self, Self::Error> {
+        args.try_with_profile_and_env()
     }
 }
 
-pub fn valid_cloud_types() -> String {
-    format!(
-        "{}, {}, {}",
-        "c8y".yellow().bold(),
-        "az".yellow().bold(),
-        "aws".yellow().bold()
-    )
+impl CloudArg {
+    fn try_with_profile_and_env(self) -> anyhow::Result<Cloud> {
+        let read_env = || {
+            let env = "TEDGE_CLOUD_PROFILE";
+            match std::env::var(env).as_deref() {
+                Ok("") => Ok(None),
+                Ok(var) => var
+                    .parse()
+                    .with_context(|| {
+                        format!("Parsing profile from environment variable {env}={var:?}")
+                    })
+                    .map(Some),
+                _ => Ok(None),
+            }
+        };
+        Ok(match self {
+            Self::Aws {
+                profile: Some(profile),
+            } => Cloud::aws(Some(profile)),
+            Self::Az {
+                profile: Some(profile),
+            } => Cloud::az(Some(profile)),
+            Self::C8y {
+                profile: Some(profile),
+            } => Cloud::c8y(Some(profile)),
+            Self::Aws { profile: None } => Cloud::aws(read_env()?),
+            Self::Az { profile: None } => Cloud::az(read_env()?),
+            Self::C8y { profile: None } => Cloud::c8y(read_env()?),
+        })
+    }
 }
+
+pub type Cloud = MaybeBorrowedCloud<'static>;
 
 pub type CloudBorrow<'a> = MaybeBorrowedCloud<'a>;
 
-#[derive(Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr, PartialEq, Eq)]
+#[derive(Clone, Debug, strum_macros::IntoStaticStr, PartialEq, Eq)]
 pub enum MaybeBorrowedCloud<'a> {
     #[strum(serialize = "Cumulocity")]
     C8y(Option<Cow<'a, ProfileName>>),
     Azure(Option<Cow<'a, ProfileName>>),
     Aws(Option<Cow<'a, ProfileName>>),
+}
+
+impl fmt::Display for MaybeBorrowedCloud<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::C8y(_) => "Cumulocity",
+                Self::Azure(_) => "Azure",
+                Self::Aws(_) => "Aws",
+            }
+        )
+    }
 }
 
 impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::Cloud<'a> {
@@ -59,9 +110,11 @@ impl Cloud {
     pub fn c8y(profile: Option<ProfileName>) -> Self {
         Self::C8y(profile.map(Cow::Owned))
     }
+
     pub fn az(profile: Option<ProfileName>) -> Self {
         Self::Azure(profile.map(Cow::Owned))
     }
+
     pub fn aws(profile: Option<ProfileName>) -> Self {
         Self::Aws(profile.map(Cow::Owned))
     }
@@ -96,6 +149,12 @@ impl MaybeBorrowedCloud<'_> {
             Self::Aws(Some(profile)) => format!("aws@{profile}-bridge.conf").into(),
             Self::Azure(None) => "az-bridge.conf".into(),
             Self::Azure(Some(profile)) => format!("az@{profile}-bridge.conf").into(),
+        }
+    }
+
+    pub fn profile_name(&self) -> Option<&ProfileName> {
+        match self {
+            Self::Aws(profile) | Self::Azure(profile) | Self::C8y(profile) => profile.as_deref(),
         }
     }
 }

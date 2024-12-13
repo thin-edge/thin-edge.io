@@ -1,6 +1,7 @@
 use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
+use tedge_config::ProfileName;
 use tedge_config::ReadableKey;
 use tedge_config::WritableKey;
 
@@ -10,6 +11,14 @@ pub enum ConfigCmd {
     Get {
         /// Configuration key. Run `tedge config list --doc` for available keys
         key: ReadableKey,
+
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
     },
 
     /// Set or update the provided configuration key with the given value
@@ -19,12 +28,28 @@ pub enum ConfigCmd {
 
         /// Configuration value.
         value: String,
+
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
     },
 
     /// Unset the provided configuration key
     Unset {
         /// Configuration key. Run `tedge config list --doc` for available keys
         key: WritableKey,
+
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
     },
 
     /// Append or set the provided configuration key with the given value
@@ -34,6 +59,14 @@ pub enum ConfigCmd {
 
         /// Configuration value.
         value: String,
+
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
     },
 
     /// Remove value from the provided configuration key
@@ -43,6 +76,14 @@ pub enum ConfigCmd {
 
         /// Configuration value.
         value: String,
+
+        /// The cloud profile you wish to use, if accessing a cloud configuration
+        /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
+        /// or want to access the default profile, don't supply this.
+        ///
+        /// [env: TEDGE_CLOUD_PROFILE]
+        #[clap(long)]
+        profile: Option<ProfileName>,
     },
 
     /// Print the configuration keys and their values
@@ -60,35 +101,64 @@ pub enum ConfigCmd {
     },
 }
 
+macro_rules! try_with_profile {
+    ($key:ident, $profile:ident) => {{
+        use anyhow::Context;
+        let profiled_key = match $profile {
+            None => $key,
+            Some(profile) => $key.try_with_profile(profile)?,
+        };
+        match std::env::var("TEDGE_CLOUD_PROFILE").as_deref() {
+            Ok("") | Err(_) => profiled_key,
+            Ok(value) => profiled_key
+                .clone()
+                .try_with_profile(value.parse().context("Parsing TEDGE_CLOUD_PROFILE")?)
+                .unwrap_or(profiled_key),
+        }
+    }};
+}
+
 impl BuildCommand for ConfigCmd {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config_location = context.config_location;
 
         match self {
-            ConfigCmd::Get { key } => Ok(GetConfigCommand {
-                key,
+            ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
+                key: try_with_profile!(key, profile),
                 config: config_location.load()?,
             }
             .into_boxed()),
-            ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
+            ConfigCmd::Set {
                 key,
+                value,
+                profile,
+            } => Ok(SetConfigCommand {
+                key: try_with_profile!(key, profile),
                 value,
                 config_location,
             }
             .into_boxed()),
-            ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
-                key,
+            ConfigCmd::Unset { key, profile } => Ok(UnsetConfigCommand {
+                key: try_with_profile!(key, profile),
                 config_location,
             }
             .into_boxed()),
-            ConfigCmd::Add { key, value } => Ok(AddConfigCommand {
+            ConfigCmd::Add {
                 key,
+                value,
+                profile,
+            } => Ok(AddConfigCommand {
+                key: try_with_profile!(key, profile),
                 value,
                 config_location,
             }
             .into_boxed()),
-            ConfigCmd::Remove { key, value } => Ok(RemoveConfigCommand {
+            ConfigCmd::Remove {
                 key,
+                value,
+                profile,
+            } => Ok(RemoveConfigCommand {
+                key: try_with_profile!(key, profile),
                 value,
                 config_location,
             }
