@@ -326,6 +326,7 @@ on_fragment = "c8y_Command"
 [exec.workflow]
 operation = "command"
 input = "${.payload.c8y_Command.text}"
+output = "${.payload.result}"
 ```
 
 To indicate that devices are supporting the operation, the device must publish a command capability message where command name is derived from `exec.workflow.operation`:
@@ -343,6 +344,7 @@ On receiving, mapper creates a symlink at `/etc/tedge/operations/c8y/c8y_Command
 The mapper detects the change in the `/etc/tedge/operations/c8y` directory except for `.template` file. When the change is detected, the SmartREST `114` (supported operation) message is sent to Cumulocity.
 
 After that, the received JSON over MQTT message is converted to %%te%% command, preserving all parameters provided in `input` field.
+The payload also contains the parameters retrieved from the operation template file, notably `on_fragment` and `output`.
 
 ```text title="Topic"
 te/device/<name>///cmd/command/c8y-mapper-1800380
@@ -350,8 +352,12 @@ te/device/<name>///cmd/command/c8y-mapper-1800380
 
 ```json5 title="Payload"
 {
-      "status": "init",
-      "text":"echo helloworld",
+  "status": "init",
+  "text": "echo helloworld",
+  "c8y-mapper": {
+    "on_fragment": "c8y_Command",
+    "output": "${.payload.result}"
+  }
 }
 ```
 
@@ -377,13 +383,64 @@ te/device/<name>///cmd/command/c8y-mapper-1800380
 
 ```json5 title="Payload"
 {
-      "status": "init",
-      "text":"echo helloworld",
-      "foo":"bar",
+  "status": "init",
+  "text":"echo helloworld",
+  "foo":"bar"
 }
 ```
 
 Make sure that provided input is JSON object, otherwise the operation execution will be skipped.  
+
+:::
+
+:::info
+
+The `output` field is required for specific operations (e.g., `c8y_Command` and `c8y_RelayArray`) that need to send additional parameters to the cloud to complete an operation successfully.
+These parameters are extracted from the operation payload using the values specified in the `output` field.
+This field accepts either a `String` or an `Array` value.
+Placeholders in the output will be replaced with the actual payload values and appended as parameters to the SmartREST `503`/`506` messages.
+
+#### Example 1: c8y_Command
+
+For the `c8y_Command` operation, the execution output is stored in the `result` field. Here is an example JSON payload when it is successful:
+```json5 title="c8y_Command"
+{
+  "c8y-mapper": {
+    "on_fragment": "c8y_Command",
+    "output": "${.payload.result}"
+  },
+  "command":"echo helloworld",
+  "result":"helloworld",
+  "status": "successful"
+}
+```
+
+This message is converted to the following SmartREST message:
+```
+503,c8y_Command,helloworld
+```
+
+#### Example 2: c8y_RelayArray
+
+For the c8y_RelayArray operation, the output is an array. Here is an example JSON payload when it is successful:
+
+```json5 title="c8y_RelayArray"
+{
+  "c8y-mapper": {
+    "on_fragment": "c8y_RelayArray",
+    "output": "${.payload.states}"
+  },
+  "command":"echo helloworld",
+  "states":["OPEN","CLOSED"],
+  "status": "successful"
+}
+```
+
+This message is converted to the following SmartREST message:
+
+```
+503,c8y_RelayArray,OPEN,CLOSED
+```
 
 :::
 
@@ -422,3 +479,4 @@ Available only in non-template operation file definition:
 Available only in the template operation file definition:
 * `workflow.operation` - The command name that will trigger workflow execution.
 * `workflow.input` - The JSON object input that can be used in the workflow.
+* `workflow.output` - The JSON object that is converted to the additional parameters of the SmartREST successful status update messages (`503`/`506`)
