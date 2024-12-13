@@ -1,6 +1,7 @@
 [Unit]
 Description=tedge-mapper-az checks Thin Edge JSON measurements and forwards to Azure IoT Hub.
 After=syslog.target network.target mosquitto.service
+PartOf=tedge-mapper-az.target
 
 [Service]
 User=tedge

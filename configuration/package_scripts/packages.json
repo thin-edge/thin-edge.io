@@ -35,7 +35,10 @@
                 {"name": "tedge-mapper-aws", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
                 {"name": "tedge-mapper-az", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
                 {"name": "tedge-mapper-c8y", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
-                {"name": "tedge-mapper-collectd", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true}
+                {"name": "tedge-mapper-collectd", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-aws.target", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-az.target", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-c8y.target", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         }
     }

@@ -23,14 +23,14 @@ fi
 # Automatically added by thin-edge.io
 if [ "$1" = "remove" ]; then
 	if [ -x "/usr/bin/deb-systemd-helper" ]; then
-		deb-systemd-helper mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+		deb-systemd-helper mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
 	fi
 fi
 
 if [ "$1" = "purge" ]; then
 	if [ -x "/usr/bin/deb-systemd-helper" ]; then
-		deb-systemd-helper purge tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
-		deb-systemd-helper unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+		deb-systemd-helper purge tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		deb-systemd-helper unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
 	fi
 fi
 # End automatically added section

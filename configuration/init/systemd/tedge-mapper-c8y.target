@@ -1,0 +1,5 @@
+[Unit]
+Description=tedge-mapper-c8y cloud profile services
+
+[Install]
+WantedBy=multi-user.target
