@@ -5,7 +5,7 @@ sidebar_position: 3
 ---
 
 :::caution
-Yocto is the defacto embedded linux distribution toolkit, however it is famous for its steep learning curve. Due to this it is **critical** that you follow the instructions, as deviating from them will mostly lead to problems!
+Yocto is the defacto embedded linux distribution toolkit, however it is famous for its steep learning curve. Due to this, it is **critical** that you follow the instructions, as deviating from them will mostly lead to problems!
 :::
 
 This guide walks you through a building a custom image using Yocto. The images produced by Yocto are always for dedicated devices as this allows the size of the images to significantly reduced as only the components which are related to the device are included. For example the images produced in this tutorial are only about 80MB in size. In comparison the "lite" image from Raspberry Pi is about 550MB!
@@ -17,11 +17,16 @@ Whilst the methodology described on this page can be extended to support other d
 
 ## Setting up your build system
 
+:::info
+The instructions below were tested with the `kirkstone` release. If you want to use a different project version or check the most recent requirements, visit [Official Yocto quick guide](https://docs.yoctoproject.org/brief-yoctoprojectqs/index.html). Make sure you select the proper release, as the instructions may vary for different versions.
+:::
+
 Before being able to build your own image, you need to prepare an environment to run Yocto. Follow the instructions to get your build system setup.
 
 1. Create a Virtual Machine running Ubuntu 20.04 (LTS)
 
     The virtual machine should be created 
+    * Machine with a x86_64 CPU Architecture
     * Use a ubuntu 20.04 image (You can choose if you want a UI or not)
     * Disk with at least 100 GB, though more is better and generally it hard changing the size afterwards
     * Network enabled
@@ -32,13 +37,6 @@ Before being able to build your own image, you need to prepare an environment to
     sudo apt install file gawk wget git diffstat unzip texinfo gcc build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev xterm python3-subunit mesa-common-dev zstd liblz4-tool
     ```
 
-3. Install [git-lfs](https://git-lfs.com/) (this dependency will be removed in the next %%te%% release after 1.0.1)
-
-    ```sh tab={"label":"Ubuntu-20.04"}
-    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-    sudo apt-get install git-lfs
-    ```
-
 :::note
 The large disk size might seem like a lot, but Yocto builds everything from scratch, and this takes time and disk space!
 :::
@@ -46,9 +44,9 @@ The large disk size might seem like a lot, but Yocto builds everything from scra
 
 ## Building your image
 
-The [meta-tedge-project](https://github.com/thin-edge/meta-tedge-project) is a meta project which uses [kas](https://kas.readthedocs.io/en/latest/) to package multiple Yocto (bitbake) projects into a single repository where the user can select which project they would like to build. It supports reusing configuration files to make it easier to configure different image definitions to control what should be included in your image.
+The [meta-tedge](https://github.com/thin-edge/meta-tedge) repository is a Yocto layer but it also includes some [kas](https://kas.readthedocs.io/en/latest/) definitions to make it easier to build images. kas supports reusing configuration files to make it easier to configure different image definitions to control what should be included in your image.
 
-Feel free to clone the project if you want to make your own customizations, however please always refer back to the project if you run into any problems (as it may have changed in the meantime).
+Feel free to move the kas files into your own repository where it will reference the [meta-tedge](https://github.com/thin-edge/meta-tedge) Yocto layer, however please always refer back to the original kas project files if you run into any problems (as it may have changed in the meantime).
 
 The project uses different Yocto layers to build an image which contains:
 
@@ -64,8 +62,9 @@ The project uses different Yocto layers to build an image which contains:
 1. Clone the project and change directory to the locally checked out folder
 
     ```sh
-    git clone https://github.com/thin-edge/meta-tedge-project.git
-    cd meta-tedge-project
+    git clone https://github.com/thin-edge/meta-tedge.git
+    git checkout kirkstone
+    cd meta-tedge/kas
     ```
 
 2. Install [just](https://just.systems/man/en/chapter_5.html) which is used to run different tasks provided by the project
@@ -90,7 +89,11 @@ The project uses different Yocto layers to build an image which contains:
 
 Using shared folders will help reduce the overall build times when building for different targets as the downloaded files can be reused.
 
-1. Open a console in the project's root directory (e.g. inside the `tedge-meta-project` directory)
+1. Open a console in the project's root directory, and change to the `kas` directory
+
+    ```sh
+    cd kas
+    ```
 
 2. Create the following file with the given contents
 
@@ -114,7 +117,13 @@ Using shared folders will help reduce the overall build times when building for 
 
 The following steps will build an image with %%te%% and [RAUC](https://rauc.readthedocs.io/en/latest/) installed to perform firmware (OS) updates.
 
-1. Build an image for your device (machine)
+1. Open a console in the project's root directory, and change to the `kas` directory
+
+    ```sh
+    cd kas
+    ```
+
+2. Build an image for your device (machine)
 
     ```sh tab={"label":"RaspberryPi-3"}
     KAS_MACHINE=raspberrypi3-64 just build-project ./projects/tedge-rauc.yaml
@@ -130,13 +139,13 @@ The following steps will build an image with %%te%% and [RAUC](https://rauc.read
     Yocto build take a long time (&gt; 4 hours) to build so be patient. A build time of 12 hours is also not unheard of!
     :::
 
-2. Inspect the built image
+3. Inspect the built image
 
     ```sh
     ls -l tmp
     ```
 
-3. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image.md) page
+4. Flash the base image using the instructions on the [Flashing an image](../../flashing-an-image.md) page
 
 :::tip
 Check out the project files under the `./projects` directory for other available project examples. If you don't find a project that fits your needs, then just create your own project definition.
@@ -149,13 +158,6 @@ The **tedge-rauc** project includes a package manager (apt) so that additional p
 ## Tips
 
 This section contains general tips which can be helpful whilst either getting things setup, or what to do when you encounter an error.
-
-### Building on MacOS Apple Silicon
-
-If you are trying to build on a MacOS Apple Silicon computer, then you will have to create a Virtual Machine (e.g. [UTM](https://mac.getutm.app/), [lima](https://github.com/lima-vm/lima) or equivalents).
-
-* Ubuntu 20.04 (headless variant is enough)
-* Don't use CPU emulation, use the native `aarch64` option, otherwise your builds will be even slower!
 
 ### Unexpected/cryptic build errors
 
