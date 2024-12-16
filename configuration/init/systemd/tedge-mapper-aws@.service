@@ -1,6 +1,7 @@
 [Unit]
-Description=tedge-mapper-aws checks Thin Edge JSON measurements and forwards to AWS IoT Hub.
+Description=tedge-mapper-aws checks Thin Edge JSON measurements and forwards to AWS IoT Core.
 After=syslog.target network.target mosquitto.service
+PartOf=tedge-mapper-aws.target
 
 [Service]
 User=tedge

@@ -23,7 +23,7 @@ fi
 # Automatically added by thin-edge.io
 if [ $1 -ge 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
     # Package upgrade, not uninstall
-    /usr/lib/systemd/systemd-update-helper mark-restart-system-units tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service || :
+    /usr/lib/systemd/systemd-update-helper mark-restart-system-units tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target || :
 fi
 
 # End automatically added section

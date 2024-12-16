@@ -1,0 +1,5 @@
+[Unit]
+Description=tedge-mapper-aws cloud profile services
+
+[Install]
+WantedBy=multi-user.target
