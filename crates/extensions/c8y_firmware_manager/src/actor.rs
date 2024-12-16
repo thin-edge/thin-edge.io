@@ -8,7 +8,7 @@ use crate::worker::IdDownloadRequest;
 use crate::worker::IdDownloadResult;
 use crate::worker::OperationOutcome;
 use async_trait::async_trait;
-use c8y_api::smartrest::message::collect_smartrest_messages;
+use c8y_api::smartrest::message::collect_c8y_messages;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::FIRMWARE;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
@@ -131,7 +131,7 @@ impl FirmwareManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), FirmwareManagementError> {
-        for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
+        for smartrest_message in collect_c8y_messages(message.payload_str()?) {
             let smartrest_template_id = get_smartrest_template_id(&smartrest_message);
             let result = match smartrest_template_id.as_str().parse::<usize>() {
                 Ok(id) if id == FIRMWARE => {
