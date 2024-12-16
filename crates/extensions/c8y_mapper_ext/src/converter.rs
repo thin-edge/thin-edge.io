@@ -634,11 +634,11 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         // JSON over MQTT messages on c8y/devicecontrol/notifications can contain multiple operations in a single MQTT
         // message, so split them
-        let operation_payloads = collect_smartrest_messages(message.payload_str()?);
+        let operation_payloads = message.payload_str()?.lines();
 
         let mut output = vec![];
         for operation_payload in operation_payloads {
-            let operation = C8yOperation::from_json(operation_payload.as_str())?;
+            let operation = C8yOperation::from_json(operation_payload)?;
             let device_xid = operation.external_source.external_id;
             let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
