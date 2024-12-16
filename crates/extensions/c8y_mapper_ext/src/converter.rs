@@ -28,7 +28,7 @@ use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
 use c8y_api::smartrest::inventory::service_creation_message;
-use c8y_api::smartrest::message::collect_smartrest_messages;
+use c8y_api::smartrest::message::collect_c8y_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::message::get_smartrest_template_id;
@@ -632,24 +632,36 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let operation = C8yOperation::from_json(message.payload.as_str()?)?;
-        let device_xid = operation.external_source.external_id;
-        let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+        // JSON over MQTT messages on c8y/devicecontrol/notifications can contain multiple operations in a single MQTT
+        // message, so split them
+        let operation_payloads = collect_c8y_messages(message.payload_str()?);
 
-        if self.active_commands.contains(&cmd_id) {
-            info!("{cmd_id} is already addressed");
-            return Ok(vec![]);
+        let mut output = vec![];
+        for operation_payload in operation_payloads {
+            let operation = C8yOperation::from_json(operation_payload.as_str())?;
+            let device_xid = operation.external_source.external_id;
+            let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+
+            if self.active_commands.contains(&cmd_id) {
+                info!("{cmd_id} is already addressed");
+                return Ok(vec![]);
+            }
+
+            // wrap operation payload in a dummy MqttMessage wrapper because the code below assumes 1 MQTT message = 1 operation
+            // TODO: refactor to avoid this intermediate step and extra copies
+            let operation_message = MqttMessage::new(&message.topic, operation_payload);
+
+            let result = self
+                .process_json_over_mqtt(
+                    device_xid,
+                    operation.op_id.clone(),
+                    &operation.extras,
+                    &operation_message,
+                )
+                .await;
+            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+            output.extend(result);
         }
-
-        let result = self
-            .process_json_over_mqtt(
-                device_xid,
-                operation.op_id.clone(),
-                &operation.extras,
-                message,
-            )
-            .await;
-        let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
 
         Ok(output)
     }
@@ -872,7 +884,7 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut output: Vec<MqttMessage> = Vec::new();
-        for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
+        for smartrest_message in collect_c8y_messages(message.payload_str()?) {
             let result = self.process_smartrest(smartrest_message.as_str()).await;
             let mut msgs = self.handle_c8y_operation_result(&result, None);
             output.append(&mut msgs)
