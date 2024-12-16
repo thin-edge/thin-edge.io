@@ -125,22 +125,15 @@ impl From<ProfileName> for String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MultiError {
-    #[error(
-        "You are trying to access a profile `{1}` of {0}, but profiles are not enabled for {0}"
-    )]
-    SingleNotMulti(String, String),
-    #[error("A profile is required for the multi-profile property {0}")]
-    MultiNotSingle(String),
     #[error("Unknown profile `{1}` for the multi-profile property {0}")]
     MultiKeyNotFound(String, String),
     #[error("Invalid profile name `{1}` for the multi-profile property {0}")]
     InvalidProfileName(String, String, #[source] anyhow::Error),
 }
 
-fn try_profile_name<'a>(key: &'a str, parent: &str) -> Result<&'a str, MultiError> {
-    validate_profile_name(key)
-        .map_err(|e| MultiError::InvalidProfileName(parent.to_owned(), key.to_owned(), e))?;
-    Ok(key)
+fn parse_profile_name(name: &str, parent: &str) -> Result<ProfileName, MultiError> {
+    name.parse()
+        .map_err(|e| MultiError::InvalidProfileName(parent.to_owned(), name.to_owned(), e))
 }
 
 impl<T: Default + PartialEq> MultiDto<T> {
@@ -149,7 +142,7 @@ impl<T: Default + PartialEq> MultiDto<T> {
             None => Ok(&self.non_profile),
             Some(key) => self
                 .profiles
-                .get(try_profile_name(key, parent)?)
+                .get(&parse_profile_name(key, parent)?)
                 .ok_or_else(|| MultiError::MultiKeyNotFound(parent.to_owned(), key.to_owned())),
         }
     }
@@ -159,9 +152,7 @@ impl<T: Default + PartialEq> MultiDto<T> {
             None => Ok(&mut self.non_profile),
             Some(key) => Ok(self
                 .profiles
-                .entry(key.parse().map_err(|e| {
-                    MultiError::InvalidProfileName(parent.to_owned(), key.to_owned(), e)
-                })?)
+                .entry(parse_profile_name(key, parent)?)
                 .or_default()),
         }
     }
@@ -177,7 +168,7 @@ impl<T> MultiReader<T> {
             None => Ok(&self.non_profile),
             Some(key) => self
                 .profiles
-                .get(try_profile_name(key, self.parent)?)
+                .get(&parse_profile_name(key, self.parent)?)
                 .ok_or_else(|| MultiError::MultiKeyNotFound((*self.parent).into(), key.into())),
         }
     }
