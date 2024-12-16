@@ -2018,6 +2018,84 @@ async fn json_custom_operation_status_update_with_operation_id() {
 }
 
 #[tokio::test]
+async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "echo ${.payload.c8y_Command.text}"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate c8y_Command SmartREST request
+    let operation_1 = json!({
+             "status":"PENDING",
+             "id": "111",
+             "c8y_Command": {
+                 "text": "do something 1"
+             },
+        "externalSource":{
+       "externalId":"test-device",
+       "type":"c8y_Serial"
+    }
+         })
+    .to_string();
+    let operation_2 = json!({
+             "status":"PENDING",
+             "id": "222",
+             "c8y_Command": {
+                 "text": "do something 2"
+             },
+        "externalSource":{
+       "externalId":"test-device",
+       "type":"c8y_Serial"
+    }
+         })
+    .to_string();
+    let operation_3 = json!({
+             "status":"PENDING",
+             "id": "333",
+             "c8y_Command": {
+                 "text": "do something 3"
+             },
+        "externalSource":{
+       "externalId":"test-device",
+       "type":"c8y_Serial"
+    }
+         })
+    .to_string();
+
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        [operation_1, operation_2, operation_3].join("\n"),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,111")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,222")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,333")]).await;
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,111,\"do something 1\n\"")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,222,\"do something 2\n\"")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,333,\"do something 3\n\"")]).await;
+}
+
+#[tokio::test]
 async fn json_custom_operation_status_update_with_operation_name() {
     let ttd = TempTedgeDir::new();
     ttd.dir("operations")

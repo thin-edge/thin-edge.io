@@ -632,24 +632,36 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let operation = C8yOperation::from_json(message.payload.as_str()?)?;
-        let device_xid = operation.external_source.external_id;
-        let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+        // JSON over MQTT messages on c8y/devicecontrol/notifications can contain multiple operations in a single MQTT
+        // message, so split them
+        let operation_payloads = collect_smartrest_messages(message.payload_str()?);
 
-        if self.active_commands.contains(&cmd_id) {
-            info!("{cmd_id} is already addressed");
-            return Ok(vec![]);
+        let mut output = vec![];
+        for operation_payload in operation_payloads {
+            let operation = C8yOperation::from_json(operation_payload.as_str())?;
+            let device_xid = operation.external_source.external_id;
+            let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
+
+            if self.active_commands.contains(&cmd_id) {
+                info!("{cmd_id} is already addressed");
+                return Ok(vec![]);
+            }
+
+            // wrap operation payload in a dummy MqttMessage wrapper because the code below assumes 1 MQTT message = 1 operation
+            // TODO: refactor to avoid this intermediate step and extra copies
+            let operation_message = MqttMessage::new(&message.topic, operation_payload);
+
+            let result = self
+                .process_json_over_mqtt(
+                    device_xid,
+                    operation.op_id.clone(),
+                    &operation.extras,
+                    &operation_message,
+                )
+                .await;
+            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+            output.extend(result);
         }
-
-        let result = self
-            .process_json_over_mqtt(
-                device_xid,
-                operation.op_id.clone(),
-                &operation.extras,
-                message,
-            )
-            .await;
-        let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
 
         Ok(output)
     }
