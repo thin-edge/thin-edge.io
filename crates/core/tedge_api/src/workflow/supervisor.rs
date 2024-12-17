@@ -76,7 +76,25 @@ impl WorkflowSupervisor {
     }
 
     /// Update on start the set of pending commands
-    pub fn load_pending_commands(&mut self, commands: CommandBoard) -> Vec<GenericCommandState> {
+    pub fn load_pending_commands(
+        &mut self,
+        mut commands: CommandBoard,
+    ) -> Vec<GenericCommandState> {
+        // If the resumed commands have been triggered by an agent without workflow version management
+        // then these commands are assigned the current version for the operation.
+        // These currents versions have also to be marked as in use.
+        for (_, ref mut command) in commands.iter_mut() {
+            if command.workflow_version().is_none() {
+                if let Some(versions) = command
+                    .operation()
+                    .and_then(|operation| self.workflows.get_mut(&operation.as_str().into()))
+                {
+                    if let Some(current_version) = versions.use_current_version() {
+                        *command = command.clone().set_workflow_version(current_version);
+                    }
+                }
+            }
+        }
         self.commands = commands;
         self.commands
             .iter()
@@ -279,8 +297,15 @@ impl WorkflowSupervisor {
         timestamp: &Timestamp,
         command: &GenericCommandState,
     ) -> Option<GenericCommandState> {
-        let Ok(action) = self.get_action(command) else {
-            return None;
+        let action = match self.get_action(command) {
+            Ok(action) => action,
+            Err(err) => {
+                return Some(
+                    command
+                        .clone()
+                        .fail_with(format!("Fail to resume on start: {err:?}")),
+                );
+            }
         };
 
         let epoch = format!("{}.{}", timestamp.unix_timestamp(), timestamp.millisecond());
@@ -462,6 +487,10 @@ impl CommandBoard {
     /// Iterate over the pending commands
     pub fn iter(&self) -> impl Iterator<Item = &(Timestamp, GenericCommandState)> {
         self.commands.values()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Timestamp, GenericCommandState)> {
+        self.commands.values_mut()
     }
 
     /// Insert a new operation request into the [CommandBoard]

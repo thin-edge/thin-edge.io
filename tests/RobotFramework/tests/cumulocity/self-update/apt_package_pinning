@@ -1,0 +1,31 @@
+Package: tedge-full
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: tedge
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: tedge-mapper
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: tedge-agent
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: c8y-firmware-plugin
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: c8y-remote-access-plugin
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: tedge-apt-plugin
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
+Package: tedge-watchdog
+Pin: version %%VERSION%%
+Pin-Priority: 1001
