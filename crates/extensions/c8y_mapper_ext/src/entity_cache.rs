@@ -1,7 +1,11 @@
+use serde_json::Map;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::InsertOutcome;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::default_topic_schema;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -10,6 +14,7 @@ use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_api::pending_entity_store::PendingEntityStore;
 use tedge_mqtt_ext::MqttMessage;
 use thiserror::Error;
+use tracing::debug;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 #[error("Invalid external ID: {external_id} contains invalid character: {invalid_char}")]
@@ -62,14 +67,7 @@ impl EntityCache {
         SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
         SF: 'static + Send + Sync,
     {
-        let main_device_metadata = EntityMetadata {
-            topic_id: main_device_tid.clone(),
-            external_id: main_device_xid.clone(),
-            r#type: EntityType::MainDevice,
-            parent: None,
-            display_name: Some(main_device_xid.clone().into()),
-            display_type: Some("thin-edge.io".into()),
-        };
+        let main_device_metadata = EntityMetadata::main_device(main_device_xid.clone().into());
 
         Self {
             main_device_xid: main_device_xid.clone(),
@@ -85,10 +83,13 @@ impl EntityCache {
     pub(crate) fn register_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<Vec<PendingEntityData>, InvalidExternalIdError> {
+    ) -> Result<Vec<PendingEntityData>, Error> {
         let parent = entity.parent.as_ref().unwrap_or(&self.main_device_tid);
         if self.entities.contains_key(parent) {
-            self.register_single_entity(entity.clone())?;
+            let outcome = self.register_single_entity(entity.clone())?;
+            if outcome == InsertOutcome::Unchanged {
+                return Ok(vec![]);
+            }
 
             let topic_id = entity.topic_id.clone();
             let current_entity_data = self
@@ -115,7 +116,7 @@ impl EntityCache {
     pub fn register_single_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<(), InvalidExternalIdError> {
+    ) -> Result<InsertOutcome, InvalidExternalIdError> {
         let external_id = if let Some(id) = entity.external_id {
             (self.external_id_validator_fn)(id.as_ref())?
         } else {
@@ -150,13 +151,72 @@ impl EntityCache {
                 .get("type")
                 .and_then(|v| v.as_str())
                 .map(|v| v.to_string()),
+            twin_data: Map::new(),
         };
 
-        self.entities
-            .insert(entity.topic_id.clone(), entity_metadata);
+        let outcome = self.insert(entity.topic_id.clone(), entity_metadata);
         self.external_id_map.insert(external_id, entity.topic_id);
 
-        Ok(())
+        Ok(outcome)
+    }
+
+    /// Insert a new entity
+    ///
+    /// Return Inserted if the entity is new
+    /// Return Updated if the entity was previously registered and has been updated by this call
+    /// Return Unchanged if the entity not affected by this call
+    pub fn insert(
+        &mut self,
+        topic_id: EntityTopicId,
+        entity_metadata: EntityMetadata,
+    ) -> InsertOutcome {
+        let previous = self.entities.entry(topic_id.clone());
+        let outcome = match previous {
+            Entry::Occupied(mut occupied) => {
+                // if there is no change, no entities were affected
+                let existing_entity = occupied.get();
+
+                let merged_entity = EntityMetadata {
+                    twin_data: existing_entity.twin_data.clone(),
+                    ..entity_metadata
+                };
+
+                if existing_entity == &merged_entity {
+                    InsertOutcome::Unchanged
+                } else {
+                    occupied.insert(merged_entity);
+                    InsertOutcome::Updated
+                }
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(entity_metadata);
+                InsertOutcome::Inserted
+            }
+        };
+
+        debug!("Updated entity map: {:?}", self.entities);
+        outcome
+    }
+
+    pub fn update_twin_data(&mut self, twin_message: EntityTwinMessage) -> Result<bool, Error> {
+        let fragment_key = twin_message.fragment_key.clone();
+        let fragment_value = twin_message.fragment_value.clone();
+        let entity = self.try_get_mut(&twin_message.topic_id)?;
+        if fragment_value.is_null() {
+            let existing = entity.twin_data.remove(&fragment_key);
+            if existing.is_none() {
+                return Ok(false);
+            }
+        } else {
+            let existing = entity
+                .twin_data
+                .insert(fragment_key, fragment_value.clone());
+            if existing.is_some_and(|v| v.eq(&fragment_value)) {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 
     pub(crate) fn get_entity_metadata_by_external_id(
@@ -173,10 +233,25 @@ impl EntityCache {
         self.entities.get(entity_topic_id)
     }
 
+    /// Returns a mutable reference to the `EntityMetadata` for the given `EntityTopicId`.
+    fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut EntityMetadata> {
+        self.entities.get_mut(entity_topic_id)
+    }
+
     /// Tries to get information about an entity using its `EntityTopicId`,
     /// returning an error if the entity is not registered.
     pub fn try_get(&self, entity_topic_id: &EntityTopicId) -> Result<&EntityMetadata, Error> {
         self.get(entity_topic_id)
+            .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))
+    }
+
+    /// Tries to get a mutable reference to the `EntityMetadata` for the given `EntityTopicId`,
+    /// returning an error if the entity is not registered.
+    fn try_get_mut(
+        &mut self,
+        entity_topic_id: &EntityTopicId,
+    ) -> Result<&mut EntityMetadata, Error> {
+        self.get_mut(entity_topic_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))
     }
 
@@ -261,15 +336,24 @@ impl EntityCache {
     }
 }
 
-#[cfg(FALSE)]
+#[cfg(test)]
 mod tests {
+    use super::EntityCache;
+    use super::Error;
+    use crate::converter::CumulocityConverter;
+    use assert_matches::assert_matches;
+    use serde_json::Map;
+    use tedge_api::entity_store::EntityRegistrationMessage;
+    use tedge_api::entity_store::EntityType;
+    use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::mqtt_topics::MqttSchema;
+
     #[test]
     fn external_id_validation() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let mut store = new_entity_store(&temp_dir, true);
+        let mut cache = new_entity_cache();
 
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
-        let res = store.update(EntityRegistrationMessage {
+        let res = cache.register_entity(EntityRegistrationMessage {
             topic_id: entity_topic_id.clone(),
             r#type: EntityType::ChildDevice,
             external_id: Some("bad+id".into()),
@@ -278,30 +362,17 @@ mod tests {
         });
 
         // Assert service registered under main device with custom topic scheme
-        assert_matches!(res, Err(Error::InvalidExternalIdError(_)));
+        assert_matches!(res, Err(Error::InvalidExternalId(_)));
     }
 
-    fn dummy_external_id_mapper(
-        entity_topic_id: &EntityTopicId,
-        _main_device_xid: &EntityExternalId,
-    ) -> EntityExternalId {
-        entity_topic_id
-            .to_string()
-            .trim_end_matches('/')
-            .replace('/', ":")
-            .into()
-    }
-
-    fn dummy_external_id_sanitizer(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
-        let forbidden_chars = HashSet::from(['/', '+', '#']);
-        for c in id.chars() {
-            if forbidden_chars.contains(&c) {
-                return Err(InvalidExternalIdError {
-                    external_id: id.into(),
-                    invalid_char: c,
-                });
-            }
-        }
-        Ok(id.into())
+    fn new_entity_cache() -> EntityCache {
+        EntityCache::new(
+            MqttSchema::default(),
+            EntityTopicId::default_main_device(),
+            "test-device".into(),
+            CumulocityConverter::map_to_c8y_external_id,
+            CumulocityConverter::validate_external_id,
+            10,
+        )
     }
 }

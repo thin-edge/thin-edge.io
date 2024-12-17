@@ -77,6 +77,7 @@ pub fn convert_health_status_message(
 mod tests {
     use super::*;
     use crate::converter::CumulocityConverter;
+    use serde_json::Map;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Topic;
     use test_case::test_case;
@@ -203,6 +204,7 @@ mod tests {
             parent,
             display_name: None,
             display_type: None,
+            twin_data: Map::new(),
         };
 
         let msg = convert_health_status_message(

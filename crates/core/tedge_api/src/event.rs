@@ -1,5 +1,6 @@
 use self::error::ThinEdgeJsonDeserializerError;
-use crate::{entity::EntityExternalId, entity_store::EntityType};
+use crate::entity::EntityExternalId;
+use crate::entity_store::EntityType;
 use clock::Timestamp;
 use serde::Deserialize;
 use serde_json::Value;
