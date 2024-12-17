@@ -8,6 +8,7 @@
 // TODO: move entity business logic to its own module
 
 use crate::entity::EntityExternalId;
+use crate::entity::InsertOutcome;
 use crate::entity_store;
 use crate::mqtt_topics::default_topic_schema;
 use crate::mqtt_topics::Channel;
@@ -655,12 +656,7 @@ impl EntityTree {
     }
 }
 
-enum InsertOutcome {
-    Unchanged,
-    Updated,
-    Inserted,
-}
-
+//TODO Move out of entity_store and reuse in entity_cache
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityMetadata {
     #[serde(rename = "@topic-id")]
@@ -976,9 +972,9 @@ fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityTwinMessage {
-    topic_id: EntityTopicId,
-    fragment_key: String,
-    fragment_value: JsonValue,
+    pub topic_id: EntityTopicId,
+    pub fragment_key: String,
+    pub fragment_value: JsonValue,
 }
 
 impl EntityTwinMessage {

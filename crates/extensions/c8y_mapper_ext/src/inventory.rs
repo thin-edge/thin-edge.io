@@ -8,6 +8,7 @@ use serde_json::Value as JsonValue;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::MqttMessage;
@@ -47,12 +48,11 @@ impl CumulocityConverter {
         if let JsonValue::Object(map) = inventory_base {
             for (key, value) in map {
                 let main_device_tid = self.entity_cache.main_device_topic_id().clone();
-                // TODO: Move to agent entity store
-                // let _ = self.entity_store.update_twin_data(EntityTwinMessage::new(
-                //     main_device_tid.clone(),
-                //     key.clone(),
-                //     value.clone(),
-                // ))?;
+                let _ = self.entity_cache.update_twin_data(EntityTwinMessage::new(
+                    main_device_tid.clone(),
+                    key.clone(),
+                    value.clone(),
+                ))?;
                 let mapped_message =
                     self.entity_twin_data_message(&main_device_tid, key.clone(), value.clone());
                 messages.push(mapped_message);
@@ -98,15 +98,14 @@ impl CumulocityConverter {
             serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
-        // TODO: Should we maintain a copy of all twin data in entity cache as well, just for this delta check?
-        // let updated = self.entity_store.update_twin_data(EntityTwinMessage::new(
-        //     source.clone(),
-        //     fragment_key.into(),
-        //     fragment_value.clone(),
-        // ))?;
-        // if !updated {
-        //     return Ok(vec![]);
-        // }
+        let updated = self.entity_cache.update_twin_data(EntityTwinMessage::new(
+            source.clone(),
+            fragment_key.into(),
+            fragment_value.clone(),
+        ))?;
+        if !updated {
+            return Ok(vec![]);
+        }
 
         let mapped_json = json!({ fragment_key: fragment_value });
         let mapped_message = self.inventory_update_message(source, mapped_json)?;

@@ -3,6 +3,8 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Map;
+use serde_json::Value as JsonValue;
 
 /// Represents externally provided unique ID of an entity.
 ///
@@ -59,8 +61,11 @@ pub struct EntityMetadata {
     pub external_id: EntityExternalId,
     pub r#type: EntityType,
     pub parent: Option<EntityTopicId>,
+
     pub display_name: Option<String>,
     pub display_type: Option<String>,
+
+    pub twin_data: Map<String, JsonValue>,
 }
 
 impl EntityMetadata {
@@ -72,7 +77,8 @@ impl EntityMetadata {
             r#type: EntityType::MainDevice,
             parent: None,
             display_name: Some(device_id),
-            display_type: None,
+            display_type: Some("thin-edge.io".into()),
+            twin_data: Map::new(),
         }
     }
 
@@ -85,6 +91,14 @@ impl EntityMetadata {
             parent: Some(EntityTopicId::default_main_device()),
             display_name: Some(child_device_id),
             display_type: None,
+            twin_data: Map::new(),
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InsertOutcome {
+    Unchanged,
+    Updated,
+    Inserted,
 }
