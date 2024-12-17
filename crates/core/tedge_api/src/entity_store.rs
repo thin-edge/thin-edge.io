@@ -669,7 +669,7 @@ pub struct EntityMetadata {
     pub parent: Option<EntityTopicId>,
     #[serde(rename = "@type")]
     pub r#type: EntityType,
-    #[serde(rename = "@id")]
+    #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<EntityExternalId>,
 
     // TODO: use a dedicated struct for cloud-specific fields, have `EntityMetadata` be generic over
@@ -801,7 +801,7 @@ pub struct EntityRegistrationMessage {
     // fields used by thin-edge locally
     #[serde(rename = "@topic-id")]
     pub topic_id: EntityTopicId,
-    #[serde(rename = "@id")]
+    #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<EntityExternalId>,
     #[serde(rename = "@type")]
     pub r#type: EntityType,

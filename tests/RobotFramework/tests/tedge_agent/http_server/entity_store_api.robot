@@ -20,7 +20,7 @@ CRUD apis
     ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal
     ...    ${get}
-    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","@id":"device:child01"}
+    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
     Should Have MQTT Messages
     ...    te/device/child01//
     ...    message_contains="@type":"child-device"
@@ -42,7 +42,7 @@ MQTT HTTP interoperability
     ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child02//
     Should Be Equal
     ...    ${get}
-    ...    {"@topic-id":"device/child02//","@parent":"device/main//","@type":"child-device","@id":"device:child02"}
+    ...    {"@topic-id":"device/child02//","@parent":"device/main//","@type":"child-device"}
 
 
 *** Keywords ***
