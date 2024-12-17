@@ -2047,7 +2047,7 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
              "status":"PENDING",
              "id": "111",
              "c8y_Command": {
-                 "text": "do something 1"
+                 "text": "do something \"1\""
              },
         "externalSource":{
        "externalId":"test-device",
@@ -2059,7 +2059,7 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
              "status":"PENDING",
              "id": "222",
              "c8y_Command": {
-                 "text": "do something 2"
+                 "text": "do something \"2\""
              },
         "externalSource":{
        "externalId":"test-device",
@@ -2071,7 +2071,7 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
              "status":"PENDING",
              "id": "333",
              "c8y_Command": {
-                 "text": "do something 3"
+                 "text": "do something \"3\""
              },
         "externalSource":{
        "externalId":"test-device",
@@ -2090,9 +2090,23 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,222")]).await;
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,333")]).await;
 
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,111,\"do something 1\n\"")]).await;
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,222,\"do something 2\n\"")]).await;
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,333,\"do something 3\n\"")]).await;
+    // escapes: we input JSON over MQTT, but emit Smartrest, thus initial: `do something "1"` becomes `"do something
+    // ""1""\n"` (outer "" for the Smartrest record field, and then inside double quotes escape a single quote)
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "506,111,\"do something \"\"1\"\"\n\"")],
+    )
+    .await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "506,222,\"do something \"\"2\"\"\n\"")],
+    )
+    .await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "506,333,\"do something \"\"3\"\"\n\"")],
+    )
+    .await;
 }
 
 #[tokio::test]
