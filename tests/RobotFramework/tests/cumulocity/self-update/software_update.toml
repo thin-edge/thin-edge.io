@@ -1,0 +1,38 @@
+operation = "software_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "prepare"
+
+[prepare]
+script = "sudo /etc/tedge/sm-plugins/apt prepare"
+on_success = "self-update"
+
+[self-update]
+# Note: update tedge as it is used by the tedge-agent (as tedge is a multi-call binary)
+# Note: installing the new tedge package will not restart the tedge-agent service
+script = "sudo /etc/tedge/sm-plugins/apt install tedge"
+on_success = "restart-agent"
+
+[restart-agent]
+background_script = "sudo systemctl restart tedge-agent"
+on_exec = "await-restart-agent"
+
+[await-restart-agent]
+script = "sleep 10"
+on_success = "finalize"
+on_kill = "finalize"
+
+[finalize]
+script = "sh -c 'echo Executing state: ${.payload.status}'"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

@@ -144,6 +144,49 @@ Update tedge version from base to current using Cumulocity
     ${pid_after}=    Service Should Be Running    tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}
 
+Update tedge Using a Custom Software Update Workflow
+    [Documentation]    thin-edge.io needs to support updating across a non-versioned workflow
+    ...    which occurs when users are updating from tedge <= 1.3.1 to tedge >= 1.4.0
+    ...    Once the new version of tedge-agent starts, it needs to recognize workflows
+    ...    that don't have a version (as the workflow version feature did not exist prior to tedge 1.4.0)
+    ${PREV_VERSION}=    Set Variable    1.3.1
+
+    # Install base version (using apt package pinning, then remove it)
+    Pin thin-edge.io APT Packages    ${PREV_VERSION}
+    Execute Command    cmd=curl -fsSL thin-edge.io/install.sh | sh -s
+    Unpin thin-edge.io APT Packages
+
+    # Register device (using already installed version)
+    Execute Command
+    ...    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install --no-secure || true
+    Device Should Exist    ${DEVICE_SN}
+
+    Device Should Have Installed Software
+    ...    tedge-agent,${PREV_VERSION}
+
+    ${agent_version}=    Execute Command    tedge-agent --version    strip=${True}
+    Should Be Equal As Strings    ${agent_version}    tedge-agent ${PREV_VERSION}
+
+    # Allow tedge user to restart services (used in the workflow)
+    Execute Command
+    ...    cmd=echo "tedge ALL = (ALL) NOPASSWD: /usr/bin/systemctl restart *" | sudo tee /etc/sudoers.d/tedge_admin
+    # Copy Workflow
+    Transfer To Device    ${CURDIR}/software_update.toml    /etc/tedge/operations/
+    # Reload the workflows (as tedge <= 1.3.1 did not support reloading workflows at runtime)
+    Restart Service    tedge-agent
+
+    # Configure local repository containing the new version
+    Create Local Repository
+
+    # Note: this just trigger the operation, the contents does not
+    # actually matter as the workflow uses some hardcoded values
+    ${operation}=    Install Software
+    ...    tedge-agent,${NEW_VERSION}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ${agent_version}=    Execute Command    tedge-agent --version    strip=${True}
+    Should Be Equal As Strings    ${agent_version}    tedge-agent ${NEW_VERSION}
+
 
 *** Keywords ***
 Custom Setup
@@ -172,3 +215,13 @@ Create Local Repository
     Execute Command    cd /opt/repository/local && dpkg-scanpackages -m . > Packages
     Execute Command
     ...    cmd=echo 'deb [trusted=yes] file:/opt/repository/local /' > /etc/apt/sources.list.d/tedge-local.list
+
+Pin thin-edge.io APT Packages
+    [Arguments]    ${VERSION}
+    Transfer To Device    ${CURDIR}/apt_package_pinning    /etc/apt/preferences.d/tedge
+    Execute Command    cmd=sed -i 's/%%VERSION%%/${VERSION}/g' /etc/apt/preferences.d/tedge
+
+Unpin thin-edge.io APT Packages
+    Execute Command    cmd=rm -f /etc/apt/preferences.d/tedge
+    # Remove thin-edge.io public repositories to avoid affecting the selected version
+    Execute Command    cmd=rm -f /etc/apt/sources.list.d/thinedge-*.list
