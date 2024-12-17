@@ -19,7 +19,7 @@ You can customize the documentation and commands shown on this page by providing
 relevant settings which will be reflected in the instructions. It makes it even
 easier to explore and use %%te%%.
 
-<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_USER" />
+<UserContextForm settings="C8Y_PROFILE_NAME,C8Y_PROFILE_URL,C8Y_URL,DEVICE_ID" />
 
 The user context will be persisted in your web browser's local storage.
 :::
@@ -31,9 +31,11 @@ to a second Cumulocity tenant.
 ### URL
 To connect to a second tenant, start by configuring the URL of the new tenant:
 
+<UserContext>
 ```sh
-sudo tedge config set c8y.url other.cumulocity.com --profile second
+sudo tedge config set c8y.url $C8Y_PROFILE_URL --profile $C8Y_PROFILE_NAME
 ```
+</UserContext>
 
 The profile name can be any combination of letters and numbers, and is used only
 to identify the cloud profile within thin-edge. The names are case insensitive,
@@ -49,7 +51,7 @@ tedge config list url
 
 ```sh
 c8y.url=$C8Y_URL
-c8y.profiles.second.url=other.cumulocity.com
+c8y.profiles.$C8Y_PROFILE_NAME.url=$C8Y_PROFILE_URL
 ```
 
 </UserContext>
@@ -60,9 +62,11 @@ be set for the second mapper:
 - the Cumulocity proxy bind port
 
 ### MQTT bridge topic prefix
+<UserContext>
 ```sh
-sudo tedge config set c8y.bridge.topic_prefix c8y-second --profile second
+sudo tedge config set c8y.bridge.topic_prefix c8y-$C8Y_PROFILE_NAME --profile $C8Y_PROFILE_NAME
 ```
+</UserContext>
 
 Setting `c8y.bridge.topic_prefix` will change the MQTT topics that the
 Cumulocity bridge publishes to/listens to in mosquitto. The default value is
@@ -74,9 +78,11 @@ topic prefix, to make it clear that the relevant topics are bridge topics that
 will forward to and from Cumulocity.
 
 ### Cumulocity proxy bind port
-```sh
-sudo tedge config set c8y.proxy.bind.port 8002 --profile second
+<UserContext>
 ```
+sudo tedge config set c8y.proxy.bind.port 8002 --profile $C8Y_PROFILE_NAME
+```
+</UserContext>
 
 Since the Cumulocity mapper hosts a [proxy server for
 Cumulocity](../../references/cumulocity-proxy.md) and there will be a second
@@ -89,15 +95,19 @@ All the Cumulocity-specific configurations (those listed by `tedge config list
 ## Connecting
 Once the second cloud profile has been configured, you can finally connect the
 second mapper using:
-```sh
-sudo tedge connect --profile second
+
+<UserContext>
 ```
+sudo tedge connect --profile $C8Y_PROFILE_NAME
+```
+</UserContext>
+
 <UserContext language="" title="Output">
 ```
 Connecting to Cumulocity with config:
         device id: $DEVICE_ID
-        cloud profile: second
-        cloud host: other.cumulocity.com:8883
+        cloud profile: $C8Y_PROFILE_NAME
+        cloud host: $C8Y_PROFILE_URL:8883
         certificate file: /etc/tedge/device-certs/tedge-certificate.pem
         bridge: mosquitto
         service manager: systemd
@@ -106,7 +116,7 @@ Creating device in Cumulocity cloud... ✓
 Restarting mosquitto... ✓
 Waiting for mosquitto to be listening for connections... ✓
 Verifying device is connected to cloud... ✓
-Enabling tedge-mapper-c8y@second... ✓
+Enabling tedge-mapper-c8y@$C8Y_PROFILE_NAME... ✓
 Checking Cumulocity is connected to intended tenant... ✓
 Enabling tedge-agent... ✓
 ```
@@ -114,9 +124,11 @@ Enabling tedge-agent... ✓
 
 Once the mapper is running, you can restart it by running:
 
+<UserContext>
 ```
-sudo systemctl restart tedge-mapper-c8y@second
+sudo systemctl restart tedge-mapper-c8y@$C8Y_PROFILE_NAME
 ```
+</UserContext>
 
 This uses a systemd service template to create the `tedge-mapper-c8y@second`
 service. If you are not using systemd, you will need to create a service
@@ -128,14 +140,14 @@ For easy configuration of profiles in shell scripts, you can set the profile
 name using the environment variable `TEDGE_CLOUD_PROFILE`.
 
 <UserContext language="sh" title="With arguments">
-```sh
+```
 sudo tedge config set c8y.url $C8Y_URL
 sudo tedge connect c8y
 
-sudo tedge config set c8y.url other.cumulocity.com --profile second
-sudo tedge config set c8y.bridge.topic_prefix c8y-second --profile second
-sudo tedge config set c8y.proxy.bind.port 8002 --profile second
-sudo tedge connect c8y --profile second
+sudo tedge config set c8y.url $C8Y_PROFILE_URL --profile $C8Y_PROFILE_NAME
+sudo tedge config set c8y.bridge.topic_prefix c8y-$C8Y_PROFILE_NAME --profile $C8Y_PROFILE_NAME
+sudo tedge config set c8y.proxy.bind.port 8002 --profile $C8Y_PROFILE_NAME
+sudo tedge connect c8y --profile $C8Y_PROFILE_NAME
 ```
 </UserContext>
 
@@ -146,9 +158,9 @@ export TEDGE_CLOUD_PROFILE=
 sudo tedge config set c8y.url $C8Y_URL
 sudo tedge connect c8y
 
-export TEDGE_CLOUD_PROFILE=second
-sudo tedge config set c8y.url other.cumulocity.com
-sudo tedge config set c8y.bridge.topic_prefix c8y-second
+export TEDGE_CLOUD_PROFILE=$C8Y_PROFILE_NAME
+sudo tedge config set c8y.url $C8Y_PROFILE_URL
+sudo tedge config set c8y.bridge.topic_prefix c8y-$C8Y_PROFILE_NAME
 sudo tedge config set c8y.proxy.bind.port 8002
 sudo tedge connect c8y
 
@@ -164,12 +176,14 @@ If you need to temporarily override a profiled configuration, you can use
 environment variables of the form `TEDGE_C8Y_PROFILES_<NAME>_<CONFIGURATION>`.
 For example:
 
-```sh
-$ TEDGE_C8Y_PROFILES_SECOND_URL=different.example.com tedge config get c8y.url --profile second
+<UserContext>
+```
+$ TEDGE_C8Y_PROFILES_$C8Y_PROFILE_NAME_URL=different.example.com tedge config get c8y.url --profile $C8Y_PROFILE_NAME
 different.example.com
-$ TEDGE_C8Y_PROFILES_SECOND_PROXY_BIND_PORT=1234 tedge config get c8y.proxy.bind.port --profile second
+$ TEDGE_C8Y_PROFILES_$C8Y_PROFILE_NAME_PROXY_BIND_PORT=1234 tedge config get c8y.proxy.bind.port --profile $C8Y_PROFILE_NAME
 1234
 ```
+</UserContext>
 
 If you are configuring %%te%% entirely with environment variables, e.g. in a
 containerised deployment, you probably don't need to make use of cloud profiles
