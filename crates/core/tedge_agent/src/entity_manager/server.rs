@@ -93,7 +93,7 @@ impl EntityStoreServer {
         if let Channel::EntityMetadata = channel {
             self.process_entity_registration(message);
         } else {
-            self.process_entity_data(topic_id, message).await;
+            self.process_entity_data(topic_id).await;
         }
     }
 
@@ -121,7 +121,7 @@ impl EntityStoreServer {
         }
     }
 
-    async fn process_entity_data(&mut self, topic_id: EntityTopicId, message: MqttMessage) {
+    async fn process_entity_data(&mut self, topic_id: EntityTopicId) {
         // if the target entity is unregistered, try to register it first using auto-registration
         if self.entity_store.get(&topic_id).is_none()
             // && self.config.enable_auto_register

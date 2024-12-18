@@ -192,6 +192,7 @@ impl CumulocityConverter {
 #[cfg(test)]
 mod tests {
     use crate::converter::tests::create_c8y_converter;
+    use crate::converter::tests::register_source_entities;
     use serde_json::json;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::MqttMessage;
@@ -466,6 +467,8 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///twin/firmware"),
             r#"{"name":"firmware", "version":"1.0"}"#,
         );
+
+        register_source_entities(&twin_message.topic.name, &mut converter).await;
 
         converter
             .try_register_source_entities(&twin_message)
