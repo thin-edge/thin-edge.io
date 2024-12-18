@@ -71,9 +71,6 @@ const MQTT_ROOT: &str = "te";
 ///     MqttSchema::default(),
 ///     registration_message,
 ///     "service".into(),
-///     |tid, xid| tid.to_string().into(),
-///     |xid| Ok(xid.into()),
-///     5,
 ///     "/tmp",
 ///     true
 /// );
