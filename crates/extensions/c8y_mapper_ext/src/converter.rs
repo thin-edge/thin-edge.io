@@ -328,22 +328,11 @@ impl CumulocityConverter {
         }
     }
 
-    /// Convert an entity registration message based on the context:
-    /// that is the kind of message that triggered this registration(channel)
-    /// The context is relevant here because of the inconsistency in handling the
-    /// auto-registered source entities of a health status message.
-    /// For those health messages, the entity registration message is not mapped and ignored
-    /// as the status message mapping will create the target entity in the cloud
-    /// with the proper initial state derived from the status message itself.
     pub(crate) fn convert_entity_registration_message(
         &mut self,
         message: &EntityRegistrationMessage,
-        channel: &Channel,
     ) -> Vec<MqttMessage> {
-        let c8y_reg_message = match &channel {
-            Channel::EntityMetadata => self.try_convert_entity_registration(message),
-            _ => self.try_convert_auto_registered_entity(message, channel),
-        };
+        let c8y_reg_message = self.try_convert_entity_registration(message);
         self.wrap_errors(c8y_reg_message)
     }
 
@@ -1377,34 +1366,6 @@ impl CumulocityConverter {
         }
     }
 
-    /// Return the MQTT representation of the entity registration message itself
-    /// along with its converted c8y equivalent.
-    pub(crate) fn try_convert_auto_registered_entity(
-        &mut self,
-        registration_message: &EntityRegistrationMessage,
-        channel: &Channel,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut registration_messages = vec![];
-        registration_messages.push(
-            registration_message
-                .clone()
-                .to_mqtt_message(&self.mqtt_schema),
-        );
-        if registration_message.r#type == EntityType::Service && channel.is_health() {
-            // If the auto-registration is done on a health status message,
-            // no need to map it to a C8y service creation message here,
-            // as the status message itself is mapped into a service creation message
-            // in try_convert_data_message called after this auto-registration.
-            // This avoids redundant service status creation/mapping
-            return Ok(registration_messages);
-        }
-
-        let mut c8y_message = self.try_convert_entity_registration(registration_message)?;
-        registration_messages.append(&mut c8y_message);
-
-        Ok(registration_messages)
-    }
-
     async fn try_convert_tedge_and_c8y_topics(
         &mut self,
         message: &MqttMessage,
@@ -1830,10 +1791,8 @@ pub(crate) mod tests {
 
         assert_eq!(entities.len(), 1);
 
-        let messages = converter.convert_entity_registration_message(
-            &entities.get(0).unwrap().reg_message,
-            &Channel::EntityMetadata,
-        );
+        let messages =
+            converter.convert_entity_registration_message(&entities.get(0).unwrap().reg_message);
 
         assert_messages_matching(
             &messages,
