@@ -7,7 +7,6 @@ use tedge_api::entity::InsertOutcome;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::EntityType;
-use tedge_api::mqtt_topics::default_topic_schema;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::PendingEntityData;
@@ -178,6 +177,12 @@ impl EntityCache {
 
                 let merged_entity = EntityMetadata {
                     twin_data: existing_entity.twin_data.clone(),
+                    display_name: entity_metadata
+                        .display_name
+                        .or_else(|| existing_entity.display_name.clone()),
+                    display_type: entity_metadata
+                        .display_type
+                        .or_else(|| existing_entity.display_type.clone()),
                     ..entity_metadata
                 };
 
@@ -303,36 +308,6 @@ impl EntityCache {
 
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entities.cache_early_data_message(message)
-    }
-
-    // TODO: Temporarily placed here. To be removed when the agent handles auto registration
-    pub fn auto_register_entity(
-        &mut self,
-        entity_topic_id: &EntityTopicId,
-    ) -> Result<Vec<EntityRegistrationMessage>, Error> {
-        let auto_entities = default_topic_schema::parse(entity_topic_id);
-        if auto_entities.is_empty() {
-            return Err(Error::NonDefaultTopicScheme(entity_topic_id.clone()));
-        };
-
-        let mut register_messages = vec![];
-        for mut auto_entity in auto_entities {
-            // Skip any already registered entity
-            if auto_entity.r#type != EntityType::MainDevice
-                && self.get(&auto_entity.topic_id).is_none()
-            {
-                if auto_entity.r#type == EntityType::Service {
-                    auto_entity
-                        .other
-                        .insert("type".to_string(), "service".into());
-                }
-
-                register_messages.push(auto_entity.clone());
-                self.register_entity(auto_entity)?;
-            }
-        }
-
-        Ok(register_messages)
     }
 }
 

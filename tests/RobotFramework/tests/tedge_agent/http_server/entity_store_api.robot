@@ -45,10 +45,6 @@ MQTT HTTP interoperability
     ...    {"@topic-id":"device/child02//","@parent":"device/main//","@type":"child-device"}
 
 Entity auto-registration over MQTT
-    # TODO: Remove once auto-registration is removed from the mapper
-    # To avoid both the mapper and the agent auto-registering the same entity
-    Stop Service    tedge-mapper-c8y
-
     Execute Command    tedge mqtt pub te/device/child01/service/collectd/m/ram '{"current": 6 }'
     Should Have MQTT Messages
     ...    te/device/child01//

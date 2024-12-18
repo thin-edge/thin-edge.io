@@ -215,7 +215,7 @@ impl C8yMapperActor {
     /// For each entity its registration message is converted and published to the cloud
     /// and any of the interested message handlers for that type,
     /// followed by repeating the same for its cached data messages.
-    async fn process_registered_entities(
+    pub(crate) async fn process_registered_entities(
         &mut self,
         pending_entities: Vec<PendingEntityData>,
         channel: &Channel,

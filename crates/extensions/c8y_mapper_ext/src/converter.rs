@@ -313,24 +313,14 @@ impl CumulocityConverter {
                 }
                 _ => {
                     // if the target entity is unregistered, try to register it first using auto-registration
-                    if self.entity_cache.get(&source).is_none()
-                        && self.config.enable_auto_register
-                        && source.matches_default_topic_scheme()
-                    {
-                        let auto_registered_entities = self.try_auto_register_entity(&source)?;
-                        Ok(auto_registered_entities
-                            .into_iter()
-                            .map(|reg_msg| reg_msg.into())
-                            .collect())
-                    } else {
+                    if self.entity_cache.get(&source).is_none() {
                         // On receipt of an unregistered entity data message with custom topic scheme OR
                         // one with default topic scheme itself when auto registration disabled,
                         // since it is received before the entity itself is registered,
                         // cache it in the unregistered entity store to be processed after the entity is registered
                         self.entity_cache.cache_early_data_message(message.clone());
-
-                        Ok(vec![])
                     }
+                    Ok(vec![])
                 }
             }
         } else {
@@ -1249,20 +1239,6 @@ impl CumulocityConverter {
         }
     }
 
-    pub(crate) fn try_auto_register_entity(
-        &mut self,
-        source: &EntityTopicId,
-    ) -> Result<Vec<EntityRegistrationMessage>, ConversionError> {
-        if !self.config.enable_auto_register {
-            return Err(ConversionError::AutoRegistrationDisabled(
-                source.to_string(),
-            ));
-        }
-
-        let auto_registered_entities = self.entity_cache.auto_register_entity(source)?;
-        Ok(auto_registered_entities)
-    }
-
     pub(crate) fn append_id_if_not_given(
         &mut self,
         register_message: &mut EntityRegistrationMessage,
@@ -1687,6 +1663,7 @@ pub(crate) mod tests {
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::mqtt_topics::default_topic_schema;
     use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::ChannelFilter;
     use tedge_api::mqtt_topics::EntityFilter;
@@ -1772,10 +1749,7 @@ pub(crate) mod tests {
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        converter
-            .try_register_source_entities(&alarm_message)
-            .await
-            .unwrap();
+        register_source_entities(alarm_topic, &mut converter).await;
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later
         assert!(converter.convert(&alarm_message).await.is_empty());
@@ -1824,107 +1798,16 @@ pub(crate) mod tests {
         assert!(converter.convert(&internal_alarm_message).await.is_empty());
     }
 
-    #[test_case(
-        "m/env",
-        json!({ "temp": 1})
-        ;"measurement"
-    )]
-    #[test_case(
-        "e/click",
-        json!({ "text": "Someone clicked" })
-        ;"event"
-    )]
-    #[test_case(
-        "a/temp",
-        json!({ "text": "Temperature too high" })
-        ;"alarm"
-    )]
-    #[test_case(
-        "twin/custom",
-        json!({ "foo": "bar" })
-        ;"twin"
-    )]
-    #[test_case(
-        "status/health",
-        json!({ "status": "up" })
-        ;"health status"
-    )]
-    #[test_case(
-        "cmd/restart",
-        json!({ })
-        ;"command metadata"
-    )]
-    #[test_case(
-        "cmd/restart/123",
-        json!({ "status": "init" })
-        ;"command"
-    )]
-    #[tokio::test]
-    async fn auto_registration(channel: &str, payload: Value) {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        // Validate auto-registration of child device
-        let topic = format!("te/device/child1///{channel}");
-        let in_message = MqttMessage::new(&Topic::new_unchecked(&topic), payload.to_string());
-
-        let entities = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
-        let messages: Vec<MqttMessage> = entities
-            .into_iter()
-            .map(|entity| entity.reg_message.to_mqtt_message(&converter.mqtt_schema))
-            .collect();
-
-        assert_messages_matching(
-            &messages,
-            [(
-                "te/device/child1//",
-                json!({
-                    "@type":"child-device",
-                    "name":"child1"
-                })
-                .into(),
-            )],
-        );
-
-        // Validate auto-registration of child device and its service
-        let topic = format!("te/device/child2///{channel}");
-        let in_message = MqttMessage::new(&Topic::new_unchecked(&topic), payload.to_string());
-
-        let entities = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
-        let messages: Vec<MqttMessage> = entities
-            .into_iter()
-            .map(|entity| entity.reg_message.to_mqtt_message(&converter.mqtt_schema))
-            .collect();
-
-        assert_messages_matching(
-            &messages,
-            [(
-                "te/device/child2//",
-                json!({
-                    "@type":"child-device",
-                    "name":"child2"
-                })
-                .into(),
-            )],
-        );
-    }
-
     #[tokio::test]
     async fn convert_child_device_registration() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
         let in_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///m/"),
+            &Topic::new_unchecked("te/device/child1//"),
             json!({
-                "temp": 1,
-                "time": "2021-11-16T17:45:40.571760714+01:00"
+                "@type":"child-device",
+                "name":"child1"
             })
             .to_string(),
         );
@@ -1934,29 +1817,18 @@ pub(crate) mod tests {
             .unwrap();
 
         assert_eq!(entities.len(), 1);
+
         let messages = converter.convert_entity_registration_message(
             &entities.get(0).unwrap().reg_message,
-            &Channel::Measurement {
-                measurement_type: "".into(),
-            },
+            &Channel::EntityMetadata,
         );
 
         assert_messages_matching(
             &messages,
-            [
-                (
-                    "te/device/child1//",
-                    json!({
-                        "@type":"child-device",
-                        "name":"child1"
-                    })
-                    .into(),
-                ),
-                (
-                    "c8y/s/us",
-                    "101,test-device:device:child1,child1,thin-edge.io-child".into(),
-                ),
-            ],
+            [(
+                "c8y/s/us",
+                "101,test-device:device:child1,child1,thin-edge.io-child".into(),
+            )],
         );
     }
 
@@ -1973,10 +1845,8 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+
+        register_source_entities(&in_message.topic.name, &mut converter).await;
 
         let messages = converter.convert(&in_message).await;
 
@@ -2129,10 +1999,7 @@ pub(crate) mod tests {
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        let _ = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+        register_source_entities(in_topic, &mut converter).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2160,10 +2027,7 @@ pub(crate) mod tests {
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        let _ = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+        register_source_entities(in_topic, &mut converter).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2225,60 +2089,6 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn auto_registration_succeeds_even_on_bad_input() {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        let topic = Topic::new_unchecked("te/device/child1///m/");
-        // First convert invalid Thin Edge JSON message.
-        let invalid_measurement = MqttMessage::new(&topic, "invalid measurement");
-        let _ = converter
-            .try_register_source_entities(&invalid_measurement)
-            .await
-            .unwrap();
-
-        let messages = converter.convert(&invalid_measurement).await;
-        assert_messages_matching(
-            &messages,
-            [(
-                "te/errors",
-                "Invalid JSON: expected value at line 1 column 1: `invalid measurement\n`".into(),
-            )],
-        );
-
-        // Second convert valid Thin Edge JSON message.
-        let valid_measurement = MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///m/"),
-            json!({
-                "temp": 50.0,
-                "time": "2021-11-16T17:45:40.571760714+01:00"
-            })
-            .to_string(),
-        );
-
-        let messages = converter.convert(&valid_measurement).await;
-        assert_messages_matching(
-            &messages,
-            [(
-                "c8y/measurement/measurements/create",
-                json!({
-                "externalSource": {
-                    "externalId":"test-device:device:child1",
-                    "type":"c8y_Serial"},
-                    "temp":{
-                        "temp":{
-                            "value": 50.0
-                        }
-                    },
-                    "time":"2021-11-16T17:45:40.571760714+01:00",
-                    "type":"ThinEdgeMeasurement"
-                })
-                .into(),
-            )],
-        );
-    }
-
-    #[tokio::test]
     async fn convert_two_measurement_messages_given_different_child_id() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
@@ -2287,11 +2097,7 @@ pub(crate) mod tests {
         // First message from "child1"
         let in_first_message =
             MqttMessage::new(&Topic::new_unchecked("te/device/child1///m/"), in_payload);
-
-        let _ = converter
-            .try_register_source_entities(&in_first_message)
-            .await
-            .unwrap();
+        register_source_entities(&in_first_message.topic.name, &mut converter).await;
 
         let out_first_messages: Vec<_> = converter
             .convert(&in_first_message)
@@ -2308,10 +2114,7 @@ pub(crate) mod tests {
         // Second message from "child2"
         let in_second_message =
             MqttMessage::new(&Topic::new_unchecked("te/device/child2///m/"), in_payload);
-        let _ = converter
-            .try_register_source_entities(&in_second_message)
-            .await
-            .unwrap();
+        register_source_entities(&in_second_message.topic.name, &mut converter).await;
 
         let out_second_messages: Vec<_> = converter
             .convert(&in_second_message)
@@ -2335,10 +2138,7 @@ pub(crate) mod tests {
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        let _ = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+        register_source_entities(in_topic, &mut converter).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2364,10 +2164,7 @@ pub(crate) mod tests {
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        let _ = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+        register_source_entities(in_topic, &mut converter).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2393,10 +2190,7 @@ pub(crate) mod tests {
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        let _ = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+        register_source_entities(in_topic, &mut converter).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2422,10 +2216,7 @@ pub(crate) mod tests {
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        let _ = converter
-            .try_register_source_entities(&in_message)
-            .await
-            .unwrap();
+        register_source_entities(in_topic, &mut converter).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2681,10 +2472,7 @@ pub(crate) mod tests {
             big_measurement_payload,
         );
 
-        converter
-            .try_register_source_entities(&big_measurement_message)
-            .await
-            .unwrap();
+        register_source_entities(measurement_topic, &mut converter).await;
 
         let result = converter.convert(&big_measurement_message).await;
 
@@ -2742,10 +2530,7 @@ pub(crate) mod tests {
         let child = EntityTopicId::default_child_device("childId").unwrap();
         let child_capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &child);
 
-        converter
-            .try_register_source_entities(&child_capability)
-            .await
-            .unwrap();
+        register_source_entities(&child_capability.topic.name, &mut converter).await;
 
         // A request to a child is forwarded to that child using its registered mapping: external id <=> topic identifier
         let device_cmd_channel = mqtt_schema.topics(
@@ -2853,22 +2638,15 @@ pub(crate) mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let measurement_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/main/service/my_measurement_service/m/my_type"),
-            r#"{"temperature": 21.37}"#,
-        );
+        let in_topic = "te/device/main/service/my_measurement_service";
+        register_source_entities(in_topic, &mut converter).await;
 
-        let mut entities = converter
-            .try_register_source_entities(&measurement_message)
-            .await
-            .unwrap();
-        let local_registration_message = entities.remove(0).reg_message;
+        let reg_message =
+            MqttMessage::new(&Topic::new_unchecked(in_topic), r#"{"@type": "service"}"#);
 
         // when converting a registration message the same as the previous one, no additional registration messages should be produced
         let entities = converter
-            .try_register_source_entities(
-                &local_registration_message.to_mqtt_message(&MqttSchema::default()),
-            )
+            .try_register_source_entities(&reg_message)
             .await
             .unwrap();
 
@@ -2889,10 +2667,7 @@ pub(crate) mod tests {
             serde_json::to_string(&json!({"status": "up"})).unwrap(),
         );
 
-        converter
-            .try_register_source_entities(&service_health_message)
-            .await
-            .unwrap();
+        register_source_entities(&service_health_message.topic.name, &mut converter).await;
 
         let output = converter.convert(&service_health_message).await;
         let service_creation_message = output
@@ -3407,5 +3182,18 @@ pub(crate) mod tests {
         }
         let obj = serde_json::Value::Object(map);
         serde_json::to_string(&obj).unwrap()
+    }
+
+    pub(crate) async fn register_source_entities(topic: &str, converter: &mut CumulocityConverter) {
+        let (topic_id, _) = converter.mqtt_schema.entity_channel_of(topic).unwrap();
+        let entities = default_topic_schema::parse(&topic_id);
+
+        for entity in entities {
+            let message = entity.to_mqtt_message(&converter.mqtt_schema);
+            converter
+                .try_register_source_entities(&message)
+                .await
+                .unwrap();
+        }
     }
 }
