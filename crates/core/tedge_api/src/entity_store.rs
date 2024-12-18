@@ -76,7 +76,7 @@ const MQTT_ROOT: &str = "te";
 /// );
 /// ```
 pub struct EntityStore {
-    mqtt_schema: MqttSchema,
+    pub mqtt_schema: MqttSchema,
     main_device: EntityTopicId,
     entities: EntityTree,
     // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.

@@ -379,15 +379,16 @@ impl Agent {
                 clean_start,
             )
             .unwrap();
-            let entity_store_server = EntityStoreServer::new(entity_store);
+            let entity_store_server =
+                EntityStoreServer::new(entity_store, mqtt_schema.clone(), &mut mqtt_actor_builder);
             let mut entity_store_actor_builder =
                 ServerActorBuilder::new(entity_store_server, &ServerConfig::default(), Sequential);
             mqtt_actor_builder.connect_mapped_sink(
                 entity_manager::server::subscriptions(),
                 &entity_store_actor_builder,
                 |message| {
-                    EntityRegistrationMessage::new(&message).map(|reg_message| RequestEnvelope {
-                        request: EntityStoreRequest::Create(reg_message),
+                    Some(RequestEnvelope {
+                        request: EntityStoreRequest::MqttMessage(message),
                         reply_to: Box::new(NullSender),
                     })
                 },
