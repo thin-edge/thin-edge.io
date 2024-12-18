@@ -35,6 +35,7 @@ pub struct EntityStoreServer {
     entity_store: EntityStore,
     mqtt_schema: MqttSchema,
     mqtt_publisher: LoggingSender<MqttMessage>,
+    entity_auto_register: bool,
 }
 
 impl EntityStoreServer {
@@ -42,6 +43,7 @@ impl EntityStoreServer {
         entity_store: EntityStore,
         mqtt_schema: MqttSchema,
         mqtt_actor: &mut impl MessageSink<MqttMessage>,
+        entity_auto_register: bool,
     ) -> Self {
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_actor.get_sender());
 
@@ -49,6 +51,7 @@ impl EntityStoreServer {
             entity_store,
             mqtt_schema,
             mqtt_publisher,
+            entity_auto_register,
         }
     }
 }
@@ -124,13 +127,13 @@ impl EntityStoreServer {
     async fn process_entity_data(&mut self, topic_id: EntityTopicId) {
         // if the target entity is unregistered, try to register it first using auto-registration
         if self.entity_store.get(&topic_id).is_none()
-            // && self.config.enable_auto_register
+            && self.entity_auto_register
             && topic_id.matches_default_topic_scheme()
         {
             match self.entity_store.auto_register_entity(&topic_id) {
                 Ok(entities) => {
                     for entity in entities {
-                        let message = entity.to_mqtt_message(&self.mqtt_schema);
+                        let message = entity.to_mqtt_message(&self.mqtt_schema).with_retain();
                         if let Err(err) = self.mqtt_publisher.send(message).await {
                             error!(
                                 "Failed to publish auto-registration messages for the topic: {topic_id} due to {err}",

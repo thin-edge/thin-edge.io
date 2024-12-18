@@ -94,6 +94,7 @@ pub(crate) struct AgentConfig {
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
+    entity_auto_register: bool,
 }
 
 impl AgentConfig {
@@ -182,6 +183,8 @@ impl AgentConfig {
         )
         .into();
 
+        let entity_auto_register = tedge_config.agent.entity_store.auto_register;
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -206,6 +209,7 @@ impl AgentConfig {
             is_sudo_enabled,
             service: tedge_config.service.clone(),
             capabilities,
+            entity_auto_register,
         })
     }
 }
@@ -379,8 +383,12 @@ impl Agent {
                 clean_start,
             )
             .unwrap();
-            let entity_store_server =
-                EntityStoreServer::new(entity_store, mqtt_schema.clone(), &mut mqtt_actor_builder);
+            let entity_store_server = EntityStoreServer::new(
+                entity_store,
+                mqtt_schema.clone(),
+                &mut mqtt_actor_builder,
+                self.config.entity_auto_register,
+            );
             let mut entity_store_actor_builder =
                 ServerActorBuilder::new(entity_store_server, &ServerConfig::default(), Sequential);
             mqtt_actor_builder.connect_mapped_sink(
