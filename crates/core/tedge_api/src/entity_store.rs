@@ -354,6 +354,25 @@ impl EntityStore {
         self.get(&self.main_device).unwrap().external_id.clone()
     }
 
+    /// Returns the external id of the parent of the given entity.
+    /// Returns None for the main device, that doesn't have any parents.
+    pub fn parent_external_id(
+        &self,
+        entity_tid: &EntityTopicId,
+    ) -> Result<Option<&EntityExternalId>, Error> {
+        let entity = self.try_get(entity_tid)?;
+        let parent_xid = entity.parent.as_ref().map(|tid| {
+            &self
+                .try_get(tid)
+                .expect(
+                    "for every registered entity, its parent is also guaranteed to be registered",
+                )
+                .external_id
+        });
+
+        Ok(parent_xid)
+    }
+
     /// Returns an ordered list of ancestors of the given entity
     /// starting from the immediate parent all the way till the root main device.
     /// The last parent in the list for any entity would always be the main device.
