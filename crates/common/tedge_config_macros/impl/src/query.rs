@@ -13,6 +13,7 @@ use quote::quote;
 use quote::quote_spanned;
 use std::borrow::Cow;
 use std::collections::VecDeque;
+use std::iter::once;
 use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
@@ -574,10 +575,12 @@ fn generate_field_accessor<'a>(
             FieldOrGroup::Field(_) => quote!(#ident),
             FieldOrGroup::Group(_) => quote!(#ident),
             FieldOrGroup::Multi(_) if exclude_parents => {
+                // Interacting with TEdgeConfigReader - parents already included in value
                 let field = id_gen.next_id(ident.span());
                 quote_spanned!(ident.span()=> #ident.#method(#field.as_deref())?)
             }
             FieldOrGroup::Multi(_) => {
+                // Interacting with TEdgeConfigDto - parents need to be supplied with try_get_mut
                 let field = id_gen.next_id(ident.span());
                 #[allow(unstable_name_collisions)]
                 let parents = fields_so_far
@@ -589,6 +592,38 @@ fn generate_field_accessor<'a>(
             }
         }
     })
+}
+
+fn generate_multi_dto_cleanup(fields: &VecDeque<&FieldOrGroup>) -> Vec<syn::Stmt> {
+    let mut id_gen = SequentialIdGenerator::default();
+    let mut all_idents = Vec::new();
+    let mut fields_so_far = Vec::new();
+    let mut result = Vec::new();
+    for field in fields {
+        let ident = field.ident();
+        all_idents.push(ident);
+        match field {
+            FieldOrGroup::Multi(_) => {
+                let field = id_gen.next_id(ident.span());
+                #[allow(unstable_name_collisions)]
+                let parents = all_idents
+                    .iter()
+                    .map(|id| id.to_string())
+                    .intersperse(".".to_owned())
+                    .collect::<String>();
+                result.push(fields_so_far.iter().cloned().chain(once(quote_spanned!(ident.span()=> #ident.remove_if_empty(#field.as_deref())))).collect::<Vec<_>>());
+                fields_so_far.push(
+                    quote_spanned!(ident.span()=> #ident.try_get_mut(#field.as_deref(), #parents)?),
+                );
+            }
+            _ => fields_so_far.push(quote!(#ident)),
+        }
+    }
+    result
+        .into_iter()
+        .rev()
+        .map(|fields| parse_quote!(self.#(#fields).*;))
+        .collect()
 }
 
 fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
@@ -655,6 +690,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         .map(|(path, configuration_key)| {
             let read_segments = generate_field_accessor(path, "try_get", true);
             let write_segments = generate_field_accessor(path, "try_get_mut", false).collect::<Vec<_>>();
+            let cleanup_stmts = generate_multi_dto_cleanup(path);
             let field = path
                 .iter()
                 .filter_map(|thing| thing.field())
@@ -687,7 +723,10 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => self.#(#write_segments).* = None,
+                    WritableKey::#match_variant => {
+                        self.#(#write_segments).* = None;
+                        #(#cleanup_stmts)*
+                    },
                 },
                 parse_quote_spanned! {ty.span()=>
                     WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::append(
@@ -1388,6 +1427,57 @@ mod tests {
             prettyplease::unparse(&parse_quote!(#impl_block)),
             prettyplease::unparse(&expected)
         );
+    }
+
+    #[test]
+    fn impl_try_unset_key_calls_multi_dto_cleanup() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+
+                #[tedge_config(multi)]
+                nested: {
+                    field: bool,
+                }
+            },
+
+            sudo: {
+                enable: bool,
+            },
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let writers = generate_string_writers(&paths);
+        let impl_dto_block = syn::parse2(writers).unwrap();
+        let impl_dto_block = retain_fn(impl_dto_block, "try_unset_key");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub fn try_unset_key(&mut self, key: &WritableKey) -> Result<(), WriteError> {
+                    match key {
+                        WritableKey::C8yUrl(key0) => {
+                            self.c8y.try_get_mut(key0.as_deref(), "c8y")?.url = None;
+                            self.c8y.remove_if_empty(key0.as_deref());
+                        }
+                        WritableKey::C8yNestedField(key0, key1) => {
+                            self.c8y.try_get_mut(key0.as_deref(), "c8y")?.nested.try_get_mut(key1.as_deref(), "c8y.nested")?.field = None;
+                            // The fields should be removed from deepest to shallowest
+                            self.c8y.try_get_mut(key0.as_deref(), "c8y")?.nested.remove_if_empty(key1.as_deref());
+                            self.c8y.remove_if_empty(key0.as_deref());
+                        }
+                        WritableKey::SudoEnable => {
+                            self.sudo.enable = None;
+                        },
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_dto_block)),
+            prettyplease::unparse(&expected)
+        )
     }
 
     fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {
