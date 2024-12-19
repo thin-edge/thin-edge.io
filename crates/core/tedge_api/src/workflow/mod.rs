@@ -32,7 +32,7 @@ pub type WorkflowVersion = String;
 
 const BUILT_IN: &str = "builtin";
 
-pub fn version_is_builtin(version: &WorkflowVersion) -> bool {
+pub fn version_is_builtin(version: &str) -> bool {
     version == BUILT_IN
 }
 
