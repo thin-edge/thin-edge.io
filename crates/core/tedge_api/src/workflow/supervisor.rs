@@ -80,7 +80,7 @@ impl WorkflowSupervisor {
         self.commands = commands;
         self.commands
             .iter()
-            .filter_map(|(t, s)| self.resume_command(t, s))
+            .filter_map(|(t, s)| self.resume_command(t, s.clone()))
             .collect()
     }
 
@@ -136,10 +136,10 @@ impl WorkflowSupervisor {
     ///
     /// Return the current version if any.
     pub fn use_current_version(&mut self, operation: &OperationName) -> Option<WorkflowVersion> {
-        match self.workflows.get_mut(&operation.as_str().into()) {
-            Some(versions) => versions.use_current_version().cloned(),
-            None => None,
-        }
+        self.workflows
+            .get_mut(&operation.as_str().into())?
+            .use_current_version()
+            .cloned()
     }
 
     /// Update the state of the command board on reception of a message sent by a peer over MQTT
@@ -162,9 +162,9 @@ impl WorkflowSupervisor {
         } else if command_state.is_init() {
             // This is a new command request
             if let Some(current_version) = workflow_versions.use_current_version() {
-                let command_state = command_state.set_workflow_version(current_version);
-                self.commands.insert(command_state.clone())?;
-                Ok(Some(command_state))
+                let updated_state = command_state.with_workflow_version(current_version);
+                self.commands.insert(updated_state.clone())?;
+                Ok(Some(updated_state))
             } else {
                 return Err(WorkflowExecutionError::DeprecatedOperation {
                     operation: operation.to_string(),
@@ -192,7 +192,7 @@ impl WorkflowSupervisor {
             });
         };
 
-        let Some(version) = &command_state.workflow_version() else {
+        let Some(version) = command_state.workflow_version() else {
             return Err(WorkflowExecutionError::MissingVersion);
         };
 
@@ -287,21 +287,17 @@ impl WorkflowSupervisor {
     fn resume_command(
         &self,
         timestamp: &Timestamp,
-        command: &GenericCommandState,
+        command: GenericCommandState,
     ) -> Option<GenericCommandState> {
-        let action = match self.get_action(command) {
+        let action = match self.get_action(&command) {
             Ok(action) => action,
             Err(err) => {
-                return Some(
-                    command
-                        .clone()
-                        .fail_with(format!("Fail to resume on start: {err:?}")),
-                );
+                return Some(command.fail_with(format!("Fail to resume on start: {err:?}")));
             }
         };
 
         let epoch = format!("{}.{}", timestamp.unix_timestamp(), timestamp.millisecond());
-        let command = command.clone().update_with_key_value("resumed_at", &epoch);
+        let command = command.with_key_value("resumed_at", &epoch);
         match action {
             OperationAction::AwaitingAgentRestart(handlers) => {
                 Some(command.update(handlers.on_success))
@@ -425,7 +421,7 @@ impl WorkflowVersions {
         self.in_use.contains_key(BUILT_IN)
     }
 
-    fn get(&self, version: &WorkflowVersion) -> Result<&OperationWorkflow, WorkflowExecutionError> {
+    fn get(&self, version: &str) -> Result<&OperationWorkflow, WorkflowExecutionError> {
         self.in_use
             .get(version)
             .ok_or(WorkflowExecutionError::UnknownVersion {

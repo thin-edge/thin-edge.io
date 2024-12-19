@@ -32,7 +32,7 @@ pub type WorkflowVersion = String;
 
 const BUILT_IN: &str = "builtin";
 
-pub fn version_is_builtin(version: &WorkflowVersion) -> bool {
+pub fn version_is_builtin(version: &str) -> bool {
     version == BUILT_IN
 }
 
@@ -342,7 +342,7 @@ impl OperationWorkflow {
         self.states
             .get(&command_state.status)
             .ok_or_else(|| WorkflowExecutionError::UnknownStep {
-                operation: (&self.operation).into(),
+                operation: self.operation.name(),
                 step: command_state.status.clone(),
             })
             .map(|action| action.inject_state(command_state))

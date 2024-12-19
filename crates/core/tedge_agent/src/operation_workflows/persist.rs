@@ -261,11 +261,7 @@ impl WorkflowRepository {
 
     /// Copy the workflow definition file to the persisted state directory,
     /// unless this has already been done.
-    async fn persist_workflow_definition(
-        &mut self,
-        operation: &OperationName,
-        version: &WorkflowVersion,
-    ) {
+    async fn persist_workflow_definition(&mut self, operation: &str, version: &str) {
         if version_is_builtin(version) {
             return;
         }
@@ -279,16 +275,12 @@ impl WorkflowRepository {
             if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
                 error!("Fail to persist a copy of {source} as {target}: {err}");
             } else {
-                self.in_use_copies.insert(version.clone(), 1);
+                self.in_use_copies.insert(version.to_owned(), 1);
             }
         }
     }
 
-    fn workflow_copy_path(
-        &self,
-        operation: &OperationName,
-        version: &WorkflowVersion,
-    ) -> Utf8PathBuf {
+    fn workflow_copy_path(&self, operation: &str, version: &str) -> Utf8PathBuf {
         let filename = format!("{operation}-{version}");
         self.state_dir.join(filename).with_extension("toml")
     }
@@ -305,7 +297,7 @@ impl WorkflowRepository {
         }
     }
 
-    async fn release_in_use_copy(&mut self, operation: &OperationName, version: &WorkflowVersion) {
+    async fn release_in_use_copy(&mut self, operation: &str, version: &str) {
         if version_is_builtin(version) {
             return;
         }
@@ -359,7 +351,7 @@ impl WorkflowRepository {
                     if let Some(current_version) = self.workflows.use_current_version(&operation) {
                         self.persist_workflow_definition(&operation, &current_version)
                             .await;
-                        *command = command.clone().set_workflow_version(&current_version);
+                        command.set_workflow_version(&current_version);
                     }
                 }
             }
@@ -410,14 +402,14 @@ impl WorkflowRepository {
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
+        let operation_name = operation.name();
         if command_state.is_init() {
             // A new command instance must use the latest on-disk version of the operation workflow
-            self.load_latest_version(&operation.to_string()).await;
+            self.load_latest_version(&operation_name).await;
         } else if command_state.is_finished() {
             // Clear the cache if this happens to be the latest instance using that version of the workflow
             if let Some(version) = command_state.workflow_version() {
-                self.release_in_use_copy(&operation.to_string(), &version)
-                    .await;
+                self.release_in_use_copy(&operation_name, version).await;
             }
         }
 
@@ -429,7 +421,7 @@ impl WorkflowRepository {
 
             Some(new_state) if new_state.is_init() => {
                 if let Some(version) = new_state.workflow_version() {
-                    self.persist_workflow_definition(&operation.to_string(), &version)
+                    self.persist_workflow_definition(&operation_name, version)
                         .await;
                 }
                 Ok(Some(new_state))
