@@ -737,12 +737,6 @@ impl<'a> From<&'a str> for OperationType {
     }
 }
 
-impl From<&OperationType> for String {
-    fn from(value: &OperationType) -> Self {
-        format!("{value}")
-    }
-}
-
 impl Display for OperationType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -757,6 +751,12 @@ impl Display for OperationType {
             OperationType::DeviceProfile => write!(f, "device_profile"),
             OperationType::Custom(operation) => write!(f, "{operation}"),
         }
+    }
+}
+
+impl OperationType {
+    pub fn name(&self) -> String {
+        format!("{self}")
     }
 }
 

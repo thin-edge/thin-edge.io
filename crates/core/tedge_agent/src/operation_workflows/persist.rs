@@ -402,7 +402,7 @@ impl WorkflowRepository {
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
-        let operation_name = operation.to_string();
+        let operation_name = operation.name();
         if command_state.is_init() {
             // A new command instance must use the latest on-disk version of the operation workflow
             self.load_latest_version(&operation_name).await;
