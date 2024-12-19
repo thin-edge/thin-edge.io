@@ -192,7 +192,7 @@ impl WorkflowSupervisor {
             });
         };
 
-        let Some(version) = &command_state.workflow_version() else {
+        let Some(version) = command_state.workflow_version() else {
             return Err(WorkflowExecutionError::MissingVersion);
         };
 
@@ -421,7 +421,7 @@ impl WorkflowVersions {
         self.in_use.contains_key(BUILT_IN)
     }
 
-    fn get(&self, version: &WorkflowVersion) -> Result<&OperationWorkflow, WorkflowExecutionError> {
+    fn get(&self, version: &str) -> Result<&OperationWorkflow, WorkflowExecutionError> {
         self.in_use
             .get(version)
             .ok_or(WorkflowExecutionError::UnknownVersion {

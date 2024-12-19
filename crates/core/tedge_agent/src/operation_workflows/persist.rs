@@ -416,7 +416,7 @@ impl WorkflowRepository {
         } else if command_state.is_finished() {
             // Clear the cache if this happens to be the latest instance using that version of the workflow
             if let Some(version) = command_state.workflow_version() {
-                self.release_in_use_copy(&operation.to_string(), &version)
+                self.release_in_use_copy(&operation.to_string(), &version.to_string())
                     .await;
             }
         }
@@ -429,7 +429,7 @@ impl WorkflowRepository {
 
             Some(new_state) if new_state.is_init() => {
                 if let Some(version) = new_state.workflow_version() {
-                    self.persist_workflow_definition(&operation.to_string(), &version)
+                    self.persist_workflow_definition(&operation.to_string(), &version.to_string())
                         .await;
                 }
                 Ok(Some(new_state))

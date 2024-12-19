@@ -216,11 +216,10 @@ impl GenericCommandState {
         self.set_key_value(OP_LOG_PATH_KEY, path.as_ref().as_str())
     }
 
-    pub fn workflow_version(&self) -> Option<String> {
+    pub fn workflow_version(&self) -> Option<&str> {
         self.payload
             .get(OP_WORKFLOW_VERSION_KEY)
             .and_then(|val| val.as_str())
-            .map(|str| str.to_string())
     }
 
     pub fn with_workflow_version(mut self, version: &str) -> Self {
