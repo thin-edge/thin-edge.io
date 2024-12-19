@@ -186,8 +186,18 @@ impl GenericCommandState {
         }
     }
 
-    pub fn update_with_key_value(self, key: &str, val: &str) -> Self {
-        self.update_with_json(json!({ key: val }))
+    pub fn with_key_value(mut self, key: &str, val: &str) -> Self {
+        self.set_key_value(key, val);
+        self
+    }
+
+    fn set_key_value(&mut self, key: &str, val: &str) {
+        if let Some(o) = self.payload.as_object_mut() {
+            o.insert(key.to_string(), val.into());
+        }
+        if key == STATUS {
+            self.status = val.to_string();
+        }
     }
 
     pub fn get_log_path(&self) -> Option<Utf8PathBuf> {
@@ -197,8 +207,13 @@ impl GenericCommandState {
             .map(Utf8PathBuf::from)
     }
 
-    pub fn set_log_path<P: AsRef<Utf8Path>>(self, path: P) -> Self {
-        self.update_with_key_value(OP_LOG_PATH_KEY, path.as_ref().as_str())
+    pub fn with_log_path<P: AsRef<Utf8Path>>(mut self, path: P) -> Self {
+        self.set_log_path(path);
+        self
+    }
+
+    pub fn set_log_path<P: AsRef<Utf8Path>>(&mut self, path: P) {
+        self.set_key_value(OP_LOG_PATH_KEY, path.as_ref().as_str())
     }
 
     pub fn workflow_version(&self) -> Option<String> {
@@ -208,8 +223,13 @@ impl GenericCommandState {
             .map(|str| str.to_string())
     }
 
-    pub fn set_workflow_version(self, version: &str) -> Self {
-        self.update_with_key_value(OP_WORKFLOW_VERSION_KEY, version)
+    pub fn with_workflow_version(mut self, version: &str) -> Self {
+        self.set_workflow_version(version);
+        self
+    }
+
+    pub fn set_workflow_version(&mut self, version: &str) {
+        self.set_key_value(OP_WORKFLOW_VERSION_KEY, version)
     }
 
     /// Update the command state with the outcome of a script
