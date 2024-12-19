@@ -1,5 +1,6 @@
 use c8y_api::smartrest;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
@@ -26,7 +27,8 @@ pub fn is_c8y_bridge_established(
 pub fn convert_health_status_message(
     mqtt_schema: &MqttSchema,
     entity: &EntityMetadata,
-    ancestors_external_ids: &[String],
+    parent_xid: Option<&EntityExternalId>,
+    main_device_xid: &EntityExternalId,
     message: &MqttMessage,
     prefix: &TopicPrefix,
 ) -> Vec<MqttMessage> {
@@ -39,24 +41,20 @@ pub fn convert_health_status_message(
         HealthStatus::try_from_health_status_message(message, mqtt_schema).unwrap();
 
     let display_name = entity
-        .other
-        .get("name")
-        .and_then(|v| v.as_str())
-        .or(entity.topic_id.default_service_name())
+        .display_name
+        .as_deref()
+        .or_else(|| entity.topic_id.default_service_name())
         .unwrap_or(entity.external_id.as_ref());
 
-    let display_type = entity
-        .other
-        .get("type")
-        .and_then(|v| v.as_str())
-        .expect("display type should be inserted for every service in the converter");
+    let display_type = entity.display_type.as_deref().unwrap_or("service");
 
     let Ok(status_message) = smartrest::inventory::service_creation_message(
         entity.external_id.as_ref(),
         display_name,
         display_type,
         &status.to_string(),
-        ancestors_external_ids,
+        parent_xid.map(|v| v.as_ref()),
+        main_device_xid.as_ref(),
         prefix,
     ) else {
         error!("Can't create 102 for service status update");
@@ -78,8 +76,8 @@ pub fn convert_health_status_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_api::entity_store::EntityRegistrationMessage;
-    use tedge_api::entity_store::EntityStore;
+    use crate::converter::CumulocityConverter;
+    use serde_json::Map;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Topic;
     use test_case::test_case;
@@ -174,7 +172,7 @@ mod tests {
         "service-monitoring-mosquitto-bridge-unknown-status"
     )]
     fn translate_health_status_to_c8y_service_monitoring_message(
-        device_name: &str,
+        main_device_id: &str,
         health_topic: &str,
         health_payload: &str,
         c8y_monitor_topic: &str,
@@ -191,43 +189,29 @@ mod tests {
             c8y_monitor_payload.as_bytes(),
         );
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        let main_device_registration =
-            EntityRegistrationMessage::main_device(device_name.to_string());
-        let mut entity_store = EntityStore::with_main_device_and_default_service_type(
-            MqttSchema::default(),
-            main_device_registration,
-            "service".into(),
-            crate::converter::CumulocityConverter::map_to_c8y_external_id,
-            crate::converter::CumulocityConverter::validate_external_id,
-            5,
-            &temp_dir,
-            true,
-        )
-        .unwrap();
+        let external_id =
+            CumulocityConverter::map_to_c8y_external_id(&entity_topic_id, &"test_device".into());
 
-        let entity_registration = EntityRegistrationMessage {
-            topic_id: entity_topic_id.clone(),
-            external_id: None,
+        let parent = entity_topic_id.default_service_parent_identifier();
+        let parent_xid = parent
+            .clone()
+            .map(|tid| CumulocityConverter::map_to_c8y_external_id(&tid, &"test_device".into()));
+
+        let entity = EntityMetadata {
+            topic_id: entity_topic_id,
+            external_id,
             r#type: EntityType::Service,
-            parent: None,
-            other: serde_json::Map::new(),
+            parent,
+            display_name: None,
+            display_type: None,
+            twin_data: Map::new(),
         };
-
-        entity_store
-            .auto_register_entity(&entity_registration.topic_id)
-            .unwrap();
-        entity_store.update(entity_registration).unwrap();
-
-        let entity = entity_store.get(&entity_topic_id).unwrap();
-        let ancestors_external_ids = entity_store
-            .ancestors_external_ids(&entity_topic_id)
-            .unwrap();
 
         let msg = convert_health_status_message(
             &mqtt_schema,
-            entity,
-            &ancestors_external_ids,
+            &entity,
+            parent_xid.as_ref(),
+            &main_device_id.into(),
             &health_message,
             &"c8y".try_into().unwrap(),
         );
