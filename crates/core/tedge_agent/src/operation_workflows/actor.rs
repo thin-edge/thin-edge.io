@@ -159,7 +159,7 @@ impl WorkflowActor {
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
                 if new_state.is_init() {
-                    self.process_command_update(new_state.set_log_path(&log_file.path))
+                    self.process_command_update(new_state.with_log_path(&log_file.path))
                         .await?;
                 }
             }

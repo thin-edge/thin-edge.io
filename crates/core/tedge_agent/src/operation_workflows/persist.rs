@@ -359,7 +359,7 @@ impl WorkflowRepository {
                     if let Some(current_version) = self.workflows.use_current_version(&operation) {
                         self.persist_workflow_definition(&operation, &current_version)
                             .await;
-                        *command = command.clone().set_workflow_version(&current_version);
+                        command.set_workflow_version(&current_version);
                     }
                 }
             }
