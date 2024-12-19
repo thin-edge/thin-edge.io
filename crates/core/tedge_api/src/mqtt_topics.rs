@@ -289,6 +289,7 @@ pub enum EntityTopicError {
 /// # Reference
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(transparent)]
 pub struct EntityTopicId(String);
 
 impl<T: AsRef<str>> PartialEq<T> for EntityTopicId {

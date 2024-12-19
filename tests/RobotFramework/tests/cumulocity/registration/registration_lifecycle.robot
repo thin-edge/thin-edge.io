@@ -255,9 +255,9 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
 Early data messages cached and processed
     ${timestamp}=    Get Unix Timestamp
     ${prefix}=    Get Random Name
-    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
+    Execute Command    sudo tedge config set agent.entity_store.auto_register false
+    Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
 
     ${children}=    Create List    child0    child00    child01    child02    child000    child0000    child00000
     FOR    ${child}    IN    @{children}
@@ -306,6 +306,7 @@ Early data messages cached and processed
     END
 
 Entities persisted and restored
+    Skip    Persistence is not a mapper responsibility anymore
     Execute Command    sudo tedge config set c8y.entity_store.clean_start false
     Restart Service    tedge-mapper-c8y
     Service Health Status Should Be Up    tedge-mapper-c8y

@@ -200,15 +200,24 @@ mod tests {
 
         skip_init_messages(&mut mqtt).await;
 
+        // Register the device upfront
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1//"),
+            r#"{"@type": "child-device"}"#,
+        ))
+        .await
+        .expect("Send failed");
+        mqtt.skip(1).await; // Skip the mapped registration message
+
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/DeviceSerial///cmd/log_upload"),
+            &Topic::new_unchecked("te/device/child1///cmd/log_upload"),
             r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
         ))
         .await
         .expect("Send failed");
 
-        mqtt.skip(4).await; //Skip entity registration, mapping, supported ops and supported log types messages
+        mqtt.skip(2).await; //Skip supported ops and supported log types messages
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
@@ -223,7 +232,7 @@ mod tests {
                     "maximumLines": 1000
                 },
                 "externalSource": {
-                    "externalId": "test-device:device:DeviceSerial",
+                    "externalId": "test-device:device:child1",
                     "type": "c8y_Serial"
                  }
             })
@@ -235,10 +244,10 @@ mod tests {
         assert_received_includes_json(
             &mut mqtt,
             [(
-                "te/device/DeviceSerial///cmd/log_upload/c8y-mapper-123456",
+                "te/device/child1///cmd/log_upload/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device:device:DeviceSerial/log_upload/logfileA-c8y-mapper-123456",
+                    "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device:device:child1/log_upload/logfileA-c8y-mapper-123456",
                     "type": "logfileA",
                     "dateFrom": "2023-11-28T16:33:50+01:00",
                     "dateTo": "2023-11-29T16:33:50+01:00",
@@ -291,6 +300,15 @@ mod tests {
 
         skip_init_messages(&mut mqtt).await;
 
+        // Register the device upfront
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1//"),
+            r#"{"@type": "child-device"}"#,
+        ))
+        .await
+        .expect("Send failed");
+        mqtt.skip(1).await; // Skip the mapped registration message
+
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/log_upload"),
@@ -299,23 +317,9 @@ mod tests {
         .await
         .expect("Send failed");
 
-        // Expect auto-registration message
-        assert_received_includes_json(
-            &mut mqtt,
-            [(
-                "te/device/child1//",
-                json!({"@type":"child-device","@id":"test-device:device:child1"}),
-            )],
-        )
-        .await;
-
         assert_received_contains_str(
             &mut mqtt,
             [
-                (
-                    "c8y/s/us",
-                    "101,test-device:device:child1,child1,thin-edge.io-child",
-                ),
                 (
                     "c8y/s/us/test-device:device:child1",
                     "114,c8y_LogfileRequest",
@@ -418,6 +422,15 @@ mod tests {
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
 
+        // Register the device upfront
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1//"),
+            r#"{"@type": "child-device"}"#,
+        ))
+        .await
+        .expect("Send failed");
+        mqtt.skip(1).await; // Skip the mapped registration message
+
         // Simulate log_upload command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
@@ -434,25 +447,6 @@ mod tests {
         ))
             .await
             .expect("Send failed");
-
-        // Expect auto-registration message
-        assert_received_includes_json(
-            &mut mqtt,
-            [(
-                "te/device/child1//",
-                json!({"@type":"child-device","@id":"test-device:device:child1"}),
-            )],
-        )
-        .await;
-
-        assert_received_contains_str(
-            &mut mqtt,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            )],
-        )
-        .await;
 
         // Expect `501` smartrest message on `c8y/s/us/child1`.
         assert_received_contains_str(
@@ -638,6 +632,15 @@ mod tests {
         let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
 
+        // Register the device upfront
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1//"),
+            r#"{"@type": "child-device"}"#,
+        ))
+        .await
+        .expect("Send failed");
+        mqtt.skip(1).await; // Skip the mapped registration message
+
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
@@ -654,8 +657,6 @@ mod tests {
         ))
             .await
             .expect("Send failed");
-
-        mqtt.skip(2).await; // Skip child device registration messages
 
         // Downloader gets a download request
         let download_request = dl.recv().await.expect("timeout");
