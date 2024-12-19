@@ -346,7 +346,25 @@ impl WorkflowRepository {
         None
     }
 
-    pub fn load_pending_commands(&mut self, commands: CommandBoard) -> Vec<GenericCommandState> {
+    pub async fn load_pending_commands(
+        &mut self,
+        mut commands: CommandBoard,
+    ) -> Vec<GenericCommandState> {
+        // If the resumed commands have been triggered by an agent without workflow version management
+        // then these commands are assigned the current version of the operation workflow.
+        // These currents versions have also to be marked as in use and persisted.
+        for (_, ref mut command) in commands.iter_mut() {
+            if command.workflow_version().is_none() {
+                if let Some(operation) = command.operation() {
+                    if let Some(current_version) = self.workflows.use_current_version(&operation) {
+                        self.persist_workflow_definition(&operation, &current_version)
+                            .await;
+                        *command = command.clone().set_workflow_version(&current_version);
+                    }
+                }
+            }
+        }
+
         self.workflows.load_pending_commands(commands)
     }
 
