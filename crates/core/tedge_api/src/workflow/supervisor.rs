@@ -76,25 +76,7 @@ impl WorkflowSupervisor {
     }
 
     /// Update on start the set of pending commands
-    pub fn load_pending_commands(
-        &mut self,
-        mut commands: CommandBoard,
-    ) -> Vec<GenericCommandState> {
-        // If the resumed commands have been triggered by an agent without workflow version management
-        // then these commands are assigned the current version for the operation.
-        // These currents versions have also to be marked as in use.
-        for (_, ref mut command) in commands.iter_mut() {
-            if command.workflow_version().is_none() {
-                if let Some(versions) = command
-                    .operation()
-                    .and_then(|operation| self.workflows.get_mut(&operation.as_str().into()))
-                {
-                    if let Some(current_version) = versions.use_current_version() {
-                        *command = command.clone().set_workflow_version(current_version);
-                    }
-                }
-            }
-        }
+    pub fn load_pending_commands(&mut self, commands: CommandBoard) -> Vec<GenericCommandState> {
         self.commands = commands;
         self.commands
             .iter()
@@ -147,6 +129,16 @@ impl WorkflowSupervisor {
             payload: "".to_string().into(),
             qos: QoS::AtLeastOnce,
             retain: true,
+        }
+    }
+
+    /// Mark the current version of an operation workflow as being in use.
+    ///
+    /// Return the current version if any.
+    pub fn use_current_version(&mut self, operation: &OperationName) -> Option<WorkflowVersion> {
+        match self.workflows.get_mut(&operation.as_str().into()) {
+            Some(versions) => versions.use_current_version().cloned(),
+            None => None,
         }
     }
 
@@ -399,7 +391,7 @@ impl WorkflowVersions {
         }
     }
 
-    // Mark the current version as being in-use.
+    /// Mark the current version as being in-use.
     fn use_current_version(&mut self) -> Option<&WorkflowVersion> {
         match self.current.as_ref() {
             Some((version, workflow)) => {
@@ -416,7 +408,7 @@ impl WorkflowVersions {
         }
     }
 
-    // Remove the current version from this list of versions, restoring the built-in version if any
+    /// Remove the current version from this list of versions, restoring the built-in version if any
     fn remove(&mut self, version: &WorkflowVersion) {
         if self.current.as_ref().map(|(v, _)| v == version) == Some(true) {
             self.current = None;

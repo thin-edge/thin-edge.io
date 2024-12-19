@@ -513,6 +513,7 @@ impl WorkflowActor {
                 for command in self
                     .workflow_repository
                     .load_pending_commands(pending_commands)
+                    .await
                 {
                     // Make sure the latest state is visible over MQTT
                     self.mqtt_publisher
