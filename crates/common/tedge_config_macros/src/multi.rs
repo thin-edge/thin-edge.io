@@ -160,6 +160,17 @@ impl<T: Default + PartialEq> MultiDto<T> {
     pub fn keys(&self) -> impl Iterator<Item = Option<&str>> {
         once(None).chain(self.profiles.keys().map(|k| k.0.as_str()).map(Some))
     }
+
+    /// Remove the key from the map if it is empty
+    pub fn remove_if_empty(&mut self, key: Option<&str>) {
+        if let Some(k) = key {
+            if let Ok(val) = self.try_get(key, "") {
+                if *val == T::default() {
+                    self.profiles.remove(k);
+                }
+            }
+        }
+    }
 }
 
 impl<T> MultiReader<T> {
@@ -214,6 +225,7 @@ mod tests {
     use super::*;
     use serde::Deserialize;
     use serde_json::json;
+    use tedge_config_macros_macro::define_tedge_config;
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
     struct TEdgeConfigDto {
@@ -445,5 +457,71 @@ mod tests {
                 profiles: HashMap::new(),
             }
         );
+    }
+
+    mod cleanup_on_unset {
+        use super::*;
+        use crate::*;
+
+        define_tedge_config! {
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+                availability: {
+                    interval: String,
+                },
+            }
+        }
+
+        #[test]
+        fn multi_dto_is_cleaned_up_if_default_value() {
+            let mut config: TEdgeConfigDto =
+                toml::from_str("c8y.profiles.test.url = \"example.com\"").unwrap();
+            config
+                .try_unset_key(&WritableKey::C8yUrl(Some("test".into())))
+                .unwrap();
+            assert_eq!(config.c8y.profiles.len(), 0);
+        }
+
+        #[test]
+        fn multi_dto_is_not_cleaned_up_if_not_default_value() {
+            let mut config: TEdgeConfigDto = toml::from_str(
+                "[c8y.profiles.test]\nurl = \"example.com\"\navailability.interval = \"60m\"",
+            )
+            .unwrap();
+            config
+                .try_unset_key(&WritableKey::C8yUrl(Some("test".into())))
+                .unwrap();
+            assert_eq!(config.c8y.profiles.len(), 1);
+        }
+
+        #[derive(Debug, thiserror::Error)]
+        enum ReadError {
+            #[error(transparent)]
+            ConfigNotSet(#[from] ConfigNotSet),
+            #[error(transparent)]
+            Multi(#[from] MultiError),
+        }
+        #[allow(unused)]
+        trait AppendRemoveItem {
+            type Item;
+            fn append(
+                current_value: Option<Self::Item>,
+                new_value: Self::Item,
+            ) -> Option<Self::Item>;
+            fn remove(
+                current_value: Option<Self::Item>,
+                remove_value: Self::Item,
+            ) -> Option<Self::Item>;
+        }
+        impl AppendRemoveItem for String {
+            type Item = Self;
+            fn append(_: Option<Self::Item>, _: Self::Item) -> Option<Self::Item> {
+                unimplemented!()
+            }
+            fn remove(_: Option<Self::Item>, _: Self::Item) -> Option<Self::Item> {
+                unimplemented!()
+            }
+        }
     }
 }
