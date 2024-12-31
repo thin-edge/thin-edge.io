@@ -75,11 +75,11 @@ Create Config Dir
     [Arguments]    ${CONFIG_DIR}    ${DEVICE_ID}
     Execute Command    rm -rf /etc/tedge
     Execute Command    rm -rf "${CONFIG_DIR}" && mkdir -p "${CONFIG_DIR}"
-    Execute Command    tedge --config-dir "${CONFIG_DIR}" init
+    Execute Command    tedge init --config-dir "${CONFIG_DIR}"
 
     # Set some default config so components will startup
-    Execute Command    tedge --config-dir ${CONFIG_DIR} cert create --device-id "${DEVICE_ID}"
-    Execute Command    tedge --config-dir ${CONFIG_DIR} config set c8y.url ${C8Y_CONFIG.host}
+    Execute Command    tedge cert create --device-id "${DEVICE_ID}" --config-dir ${CONFIG_DIR}
+    Execute Command    tedge config set c8y.url ${C8Y_CONFIG.host} --config-dir ${CONFIG_DIR}
 
 Should Not Contain Default Path
     [Documentation]    Check a thin-edge.io executable by running it for a short time (~5s), and
