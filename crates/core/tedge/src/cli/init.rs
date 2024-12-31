@@ -1,6 +1,6 @@
 use crate::command::BuildContext;
 use crate::command::Command;
-use crate::Component;
+use crate::TEdgeOptMulticall;
 use anyhow::bail;
 use anyhow::Context;
 use clap::Subcommand;
@@ -58,7 +58,7 @@ impl TEdgeInitCmd {
         };
 
         let component_subcommands: Vec<String> =
-            Component::augment_subcommands(clap::Command::new("tedge"))
+            TEdgeOptMulticall::augment_subcommands(clap::Command::new("tedge"))
                 .get_subcommands()
                 .map(|c| c.get_name().to_owned())
                 .chain(["tedge-apt-plugin".to_owned()])

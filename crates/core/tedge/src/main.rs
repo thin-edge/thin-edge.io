@@ -18,7 +18,6 @@ use tedge::command::BuildCommand;
 use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
 use tedge::CliOpt;
-use tedge::Component;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
 use tedge_config::system_services::log_init;
@@ -37,32 +36,28 @@ fn main() -> anyhow::Result<()> {
 
     let opt = parse_multicall_if_known(&executable_name);
     match opt {
-        TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
+        TEdgeOptMulticall::TedgeMapper(opt) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir)?;
             block_on_with(
                 tedge_config.run.log_memory_interval.duration(),
                 tedge_mapper::run(opt),
             )
         }
-        TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => {
+        TEdgeOptMulticall::TedgeAgent(opt) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir)?;
             block_on_with(
                 tedge_config.run.log_memory_interval.duration(),
                 tedge_agent::run(opt),
             )
         }
-        TEdgeOptMulticall::Component(Component::C8yFirmwarePlugin(fp_opt)) => {
-            block_on(c8y_firmware_plugin::run(fp_opt))
-        }
-        TEdgeOptMulticall::Component(Component::C8yRemoteAccessPlugin(opt)) => {
+        TEdgeOptMulticall::C8yFirmwarePlugin(fp_opt) => block_on(c8y_firmware_plugin::run(fp_opt)),
+        TEdgeOptMulticall::C8yRemoteAccessPlugin(opt) => {
             block_on(c8y_remote_access_plugin::run(opt)).unwrap();
             Ok(())
         }
-        TEdgeOptMulticall::Component(Component::TedgeWatchdog(opt)) => {
-            block_on(tedge_watchdog::run(opt))
-        }
-        TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => tedge_write::bin::run(opt),
-        TEdgeOptMulticall::Component(Component::TedgeCli(CliOpt { cmd, common })) => {
+        TEdgeOptMulticall::TedgeWatchdog(opt) => block_on(tedge_watchdog::run(opt)),
+        TEdgeOptMulticall::TedgeWrite(opt) => tedge_write::bin::run(opt),
+        TEdgeOptMulticall::TedgeCli(CliOpt { cmd, common }) => {
             let tedge_config_location =
                 tedge_config::TEdgeConfigLocation::from_custom_root(&common.config_dir);
 
@@ -139,7 +134,7 @@ fn parse_multicall_if_known(executable_name: &Option<String>) -> TEdgeOptMultica
             let cmd = CliOpt::command().multicall(false);
             let cmd2 = cmd.clone();
             match CliOpt::from_arg_matches(&cmd.get_matches()) {
-                Ok(t) => TEdgeOptMulticall::Component(Component::TedgeCli(t)),
+                Ok(t) => TEdgeOptMulticall::TedgeCli(t),
                 Err(e) => exit(e.with_cmd(&cmd2)),
             }
         }

@@ -37,12 +37,6 @@ mod upload;
     multicall(true),
 )]
 pub enum TEdgeOptMulticall {
-    #[clap(flatten)]
-    Component(Component),
-}
-
-#[derive(clap::Parser, Debug)]
-pub enum Component {
     #[clap(alias = "cli")]
     TedgeCli(CliOpt),
 
@@ -194,7 +188,6 @@ impl BuildCommand for TEdgeOpt {
 
 #[cfg(test)]
 mod tests {
-    use crate::Component;
     use crate::TEdgeOptMulticall;
     use clap::Parser;
 
@@ -207,7 +200,7 @@ mod tests {
     fn tedge_mapper_accepts_with_argument() {
         assert!(matches!(
             TEdgeOptMulticall::parse_from(["tedge-mapper", "c8y"]),
-            TEdgeOptMulticall::Component(Component::TedgeMapper(_))
+            TEdgeOptMulticall::TedgeMapper(_)
         ));
     }
 
@@ -215,7 +208,7 @@ mod tests {
     fn tedge_agent_runs_with_no_additional_arguments() {
         assert!(matches!(
             TEdgeOptMulticall::parse_from(["tedge-agent"]),
-            TEdgeOptMulticall::Component(Component::TedgeAgent(_))
+            TEdgeOptMulticall::TedgeAgent(_)
         ));
     }
 }
