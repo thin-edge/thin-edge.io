@@ -47,36 +47,36 @@ mod tests {
         let home_dir = tempdir.path().to_str().unwrap();
 
         let mut get_device_id_cmd =
-            tedge_command_with_test_home(["--config-dir", home_dir, "config", "get", "device.id"])?;
+            tedge_command_with_test_home(["config", "get", "device.id", "--config-dir", home_dir])?;
         let mut set_cert_path_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             home_dir,
-            "config",
             "set",
             "device.cert_path",
             &cert_path,
         ])?;
         let mut set_key_path_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             home_dir,
-            "config",
             "set",
             "device.key_path",
             &key_path,
         ])?;
 
         let mut create_cmd = tedge_command_with_test_home([
-            "--config-dir",
-            home_dir,
             "cert",
             "create",
             "--device-id",
             device_id,
+            "--config-dir",
+            home_dir,
         ])?;
         let mut show_cmd =
-            tedge_command_with_test_home(["--config-dir", home_dir, "cert", "show"])?;
+            tedge_command_with_test_home(["cert", "show", "--config-dir", home_dir])?;
         let mut remove_cmd =
-            tedge_command_with_test_home(["--config-dir", home_dir, "cert", "remove"])?;
+            tedge_command_with_test_home(["cert", "remove", "--config-dir", home_dir])?;
 
         // Configure tedge to use specific paths for the private key and the certificate
         set_cert_path_cmd.assert().success();
@@ -143,9 +143,9 @@ mod tests {
 
         // allowed to get read-only key by CLI
         let mut get_device_id_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             "device.id",
         ])?;
@@ -157,9 +157,9 @@ mod tests {
 
         // forbidden to set read-only key by CLI
         let mut set_device_id_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "set",
             "device.id",
             device_id,
@@ -169,9 +169,9 @@ mod tests {
 
         // forbidden to unset read-only key by CLI
         let mut unset_device_id_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "unset",
             "device.id",
         ])?;
@@ -200,9 +200,9 @@ mod tests {
         let test_home_str = temp_dir_path.to_str().unwrap();
 
         let mut get_config_command = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             config_key,
         ])?;
@@ -220,9 +220,9 @@ mod tests {
         }
 
         let mut set_config_command = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "set",
             config_key,
             config_value,
@@ -231,9 +231,9 @@ mod tests {
         set_config_command.assert().success();
 
         let mut get_config_command = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             config_key,
         ])?;
@@ -244,9 +244,9 @@ mod tests {
             .stdout(predicate::str::contains(config_value));
 
         let mut unset_config_command = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "unset",
             config_key,
         ])?;
@@ -254,9 +254,9 @@ mod tests {
         unset_config_command.assert().success();
 
         let mut get_config_command = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             config_key,
         ])?;
@@ -286,9 +286,9 @@ mod tests {
         let key_path = temp_path(&temp_dir, "device-certs/tedge-private-key.pem");
 
         let mut get_device_id_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             "device.id",
         ])?;
@@ -299,9 +299,9 @@ mod tests {
             .stderr(predicate::str::contains("device.id"));
 
         let mut get_cert_path_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             "device.cert_path",
         ])?;
@@ -312,9 +312,9 @@ mod tests {
             .stdout(predicate::str::contains(cert_path));
 
         let mut get_key_path_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             "device.key_path",
         ])?;
@@ -325,9 +325,9 @@ mod tests {
             .stdout(predicate::str::contains(key_path));
 
         let mut get_c8y_url_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             "c8y.url",
         ])?;
@@ -340,9 +340,9 @@ mod tests {
             ));
 
         let mut get_c8y_root_cert_path_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "get",
             "c8y.root_cert_path",
         ])?;
@@ -361,7 +361,7 @@ mod tests {
         let test_home_str = temp_dir.path().to_str().unwrap();
 
         let mut list_cmd =
-            tedge_command_with_test_home(["--config-dir", test_home_str, "config", "list"])
+            tedge_command_with_test_home(["config", "list", "--config-dir", test_home_str])
                 .unwrap();
         let assert = list_cmd.assert().success();
         let output = assert.get_output().clone();
@@ -391,7 +391,7 @@ mod tests {
         let test_home_str = temp_dir_path.to_str().unwrap();
 
         // If file doesn't exist exit code will be 0.
-        tedge_command_with_test_home(["--config-dir", test_home_str, "disconnect", "c8y"])
+        tedge_command_with_test_home(["disconnect", "c8y", "--config-dir", test_home_str])
             .unwrap()
             .assert()
             .success();
@@ -403,7 +403,7 @@ mod tests {
         let test_home_str = temp_dir.path().to_str().unwrap();
 
         let mut list_cmd =
-            tedge_command(["--config-dir", test_home_str, "config", "list", "--all"]).unwrap();
+            tedge_command(["config", "list", "--all", "--config-dir", test_home_str]).unwrap();
 
         let assert = list_cmd.assert().success();
         let output = assert.get_output();
@@ -431,9 +431,9 @@ mod tests {
         let test_home_str = temp_dir.path().to_str().unwrap();
 
         let mut list_cmd = tedge_command_with_test_home([
+            "config",
             "--config-dir",
             test_home_str,
-            "config",
             "list",
             "--doc",
         ])

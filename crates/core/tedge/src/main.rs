@@ -4,7 +4,10 @@
 use anyhow::Context;
 use cap::Cap;
 use clap::error::ErrorFormatter;
+use clap::error::ErrorKind;
 use clap::error::RichFormatter;
+use clap::CommandFactory;
+use clap::FromArgMatches;
 use clap::Parser;
 use std::alloc;
 use std::future::Future;
@@ -14,6 +17,7 @@ use std::time::Duration;
 use tedge::command::BuildCommand;
 use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
+use tedge::CliOpt;
 use tedge::Component;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
@@ -58,7 +62,7 @@ fn main() -> anyhow::Result<()> {
             block_on(tedge_watchdog::run(opt))
         }
         TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => tedge_write::bin::run(opt),
-        TEdgeOptMulticall::Tedge { cmd, common } => {
+        TEdgeOptMulticall::Component(Component::TedgeCli(CliOpt { cmd, common })) => {
             let tedge_config_location =
                 tedge_config::TEdgeConfigLocation::from_custom_root(&common.config_dir);
 
@@ -120,8 +124,8 @@ fn executable_name() -> Option<String> {
     )
 }
 
-fn parse_multicall_if_known<T: Parser>(executable_name: &Option<String>) -> T {
-    let cmd = T::command();
+fn parse_multicall_if_known(executable_name: &Option<String>) -> TEdgeOptMulticall {
+    let cmd = TEdgeOptMulticall::command();
 
     let is_known_subcommand = executable_name
         .as_deref()
@@ -129,11 +133,21 @@ fn parse_multicall_if_known<T: Parser>(executable_name: &Option<String>) -> T {
     let cmd = cmd.multicall(is_known_subcommand);
 
     let cmd2 = cmd.clone();
-    match T::from_arg_matches(&cmd.get_matches()) {
+    match TEdgeOptMulticall::from_arg_matches(&cmd.get_matches()) {
         Ok(t) => t,
-        Err(e) => {
-            eprintln!("{}", RichFormatter::format_error(&e.with_cmd(&cmd2)));
-            std::process::exit(1);
+        Err(e) if e.kind() == ErrorKind::InvalidSubcommand => {
+            let cmd = CliOpt::command().multicall(false);
+            let cmd2 = cmd.clone();
+            match CliOpt::from_arg_matches(&cmd.get_matches()) {
+                Ok(t) => TEdgeOptMulticall::Component(Component::TedgeCli(t)),
+                Err(e) => exit(e.with_cmd(&cmd2)),
+            }
         }
+        Err(e) => exit(e.with_cmd(&cmd2)),
     }
+}
+
+fn exit(error: clap::error::Error) -> ! {
+    eprintln!("{}", RichFormatter::format_error(&error));
+    std::process::exit(1);
 }

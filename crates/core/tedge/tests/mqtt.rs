@@ -36,8 +36,8 @@ mod tests {
         let mut messages = broker.messages_published_on("topic").await;
 
         let mut cmd = Command::cargo_bin("tedge")?;
-        cmd.args(["--config-dir", tmpfile.path().to_str().unwrap()])
-            .args(["mqtt", "pub", "topic", "message"]);
+        cmd.args(["mqtt", "pub", "topic", "message"])
+            .args(["--config-dir", tmpfile.path().to_str().unwrap()]);
 
         if let Some(qos) = qos {
             cmd.args(["--qos", qos]);

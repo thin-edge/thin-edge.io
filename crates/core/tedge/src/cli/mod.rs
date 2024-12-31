@@ -5,6 +5,7 @@ use crate::command::BuildContext;
 use crate::command::Command;
 use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
+use clap::Parser;
 pub use connect::*;
 use tedge_agent::AgentOpt;
 use tedge_config::cli::CommonArgs;
@@ -36,31 +37,44 @@ mod upload;
     multicall(true),
 )]
 pub enum TEdgeOptMulticall {
-    Tedge {
-        #[clap(subcommand)]
-        cmd: TEdgeOpt,
-
-        #[command(flatten)]
-        common: CommonArgs,
-    },
-
     #[clap(flatten)]
     Component(Component),
 }
 
 #[derive(clap::Parser, Debug)]
 pub enum Component {
+    #[clap(alias = "cli")]
+    TedgeCli(CliOpt),
+
+    #[clap(alias = "mapper")]
     TedgeMapper(MapperOpt),
 
+    #[clap(alias = "agent")]
     TedgeAgent(AgentOpt),
 
     C8yFirmwarePlugin(FirmwarePluginOpt),
 
+    #[clap(alias = "watchdog")]
     TedgeWatchdog(WatchdogOpt),
 
     C8yRemoteAccessPlugin(C8yRemoteAccessPluginOpt),
 
+    #[clap(alias = "write")]
     TedgeWrite(TedgeWriteOpt),
+}
+
+#[derive(Debug, Parser)]
+#[clap(
+name = "cli",
+version = clap::crate_version!(),
+about = clap::crate_description!()
+)]
+pub struct CliOpt {
+    #[clap(subcommand)]
+    pub cmd: TEdgeOpt,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
 }
 
 #[derive(clap::Subcommand, Debug)]
