@@ -103,7 +103,7 @@ pub(crate) fn get_connected_c8y_url(
 }
 
 pub(crate) fn decode_jwt_token(token: &str) -> Result<String, ConnectError> {
-    // JWT token format: <header>.<payload>.<signature>. Thus, we want only <paylaod>.
+    // JWT token format: <header>.<payload>.<signature>. Thus, we want only <payload>.
     let payload = token
         .split_terminator('.')
         .nth(1)
