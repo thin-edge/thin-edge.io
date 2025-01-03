@@ -113,6 +113,15 @@ pub enum TEdgeOpt {
     /// Publish a message on a topic and subscribe a topic.
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
+
+    /// Run thin-edge services and plugins
+    Run(ComponentOpt),
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct ComponentOpt {
+    #[clap(subcommand)]
+    pub component: Component,
 }
 
 fn styles() -> clap::builder::Styles {
@@ -174,6 +183,10 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(&context).map(Command::into_boxed),
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
             TEdgeOpt::Reconnect(opt) => opt.build_command(context),
+            TEdgeOpt::Run(_) => {
+                // This method has to be kept in sync with tedge::redirect_if_multicall()
+                panic!("tedge mapper|agent|write commands are launched as multicall")
+            }
         }
     }
 }
