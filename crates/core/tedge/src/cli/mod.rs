@@ -36,6 +36,7 @@ mod upload;
     multicall(true),
 )]
 pub enum TEdgeOptMulticall {
+    /// Command line interface to interact with thin-edge.io
     Tedge {
         #[clap(subcommand)]
         cmd: TEdgeOpt,
@@ -113,6 +114,15 @@ pub enum TEdgeOpt {
     /// Publish a message on a topic and subscribe a topic.
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
+
+    /// Launch a cloud mapper
+    Mapper(MapperOpt),
+
+    /// Run the agent
+    Agent(AgentOpt),
+
+    /// Write standard input to a target file
+    Write(TedgeWriteOpt),
 }
 
 fn styles() -> clap::builder::Styles {
@@ -174,6 +184,10 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(&context).map(Command::into_boxed),
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
             TEdgeOpt::Reconnect(opt) => opt.build_command(context),
+            TEdgeOpt::Mapper(_) | TEdgeOpt::Agent(_) | TEdgeOpt::Write(_) => {
+                // This method has to be kept in sync with tedge::redirect_if_multicall()
+                panic!("tedge mapper|agent|write commands are launched as multicall")
+            }
         }
     }
 }

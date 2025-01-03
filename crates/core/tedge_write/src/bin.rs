@@ -37,6 +37,12 @@ pub struct Args {
     common: CommonArgs,
 }
 
+impl Args {
+    pub fn with_common_args(self, common: CommonArgs) -> Self {
+        Self { common, ..self }
+    }
+}
+
 pub fn run(args: Args) -> anyhow::Result<()> {
     log_init(
         "tedge-write",
