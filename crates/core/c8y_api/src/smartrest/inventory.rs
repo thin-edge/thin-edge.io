@@ -9,7 +9,7 @@
 // smartrest messages are sent. There should be one comprehensive API for
 // generating them.
 
-use crate::smartrest::topic::publish_topic_from_ancestors;
+use crate::smartrest::topic::publish_topic_from_parent;
 use crate::smartrest::topic::C8yTopic;
 use mqtt_channel::MqttMessage;
 use std::time::Duration;
@@ -29,7 +29,8 @@ pub fn child_device_creation_message(
     child_id: &str,
     device_name: Option<&str>,
     device_type: Option<&str>,
-    ancestors: &[String],
+    parent: Option<&str>,
+    main_device_id: &str,
     prefix: &TopicPrefix,
 ) -> Result<MqttMessage, InvalidValueError> {
     if child_id.is_empty() {
@@ -60,7 +61,7 @@ pub fn child_device_creation_message(
     .expect("child_id, device_name, device_type should not increase payload size over the limit");
 
     Ok(MqttMessage::new(
-        &publish_topic_from_ancestors(ancestors, prefix),
+        &publish_topic_from_parent(parent, main_device_id, prefix),
         payload.into_inner(),
     ))
 }
@@ -73,11 +74,12 @@ pub fn service_creation_message(
     service_name: &str,
     service_type: &str,
     service_status: &str,
-    ancestors: &[String],
+    parent: Option<&str>,
+    main_device_id: &str,
     prefix: &TopicPrefix,
 ) -> Result<MqttMessage, InvalidValueError> {
     Ok(MqttMessage::new(
-        &publish_topic_from_ancestors(ancestors, prefix),
+        &publish_topic_from_parent(parent, main_device_id, prefix),
         service_creation_message_payload(service_id, service_name, service_type, service_status)?
             .into_inner(),
     ))
