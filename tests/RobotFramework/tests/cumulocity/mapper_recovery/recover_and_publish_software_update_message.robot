@@ -35,6 +35,7 @@ Mapper recovers and processes output of ongoing software update request
     Device Should Have Installed Software    rolldice
 
 Recovery from corrupt entity store file
+    Skip    Persistence is not a mapper responsibility anymore
     Stop Service    tedge-mapper-c8y
     Execute Command    chown root:root /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
     Start Service    tedge-mapper-c8y

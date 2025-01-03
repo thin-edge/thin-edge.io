@@ -47,8 +47,8 @@ impl CumulocityConverter {
 
         if let JsonValue::Object(map) = inventory_base {
             for (key, value) in map {
-                let main_device_tid = self.entity_store.main_device().clone();
-                let _ = self.entity_store.update_twin_data(EntityTwinMessage::new(
+                let main_device_tid = self.entity_cache.main_device_topic_id().clone();
+                let _ = self.entity_cache.update_twin_data(EntityTwinMessage::new(
                     main_device_tid.clone(),
                     key.clone(),
                     value.clone(),
@@ -98,7 +98,7 @@ impl CumulocityConverter {
             serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
-        let updated = self.entity_store.update_twin_data(EntityTwinMessage::new(
+        let updated = self.entity_cache.update_twin_data(EntityTwinMessage::new(
             source.clone(),
             fragment_key.into(),
             fragment_value.clone(),
@@ -181,7 +181,7 @@ impl CumulocityConverter {
         &self,
         source: &EntityTopicId,
     ) -> Result<Topic, ConversionError> {
-        let entity_external_id = self.entity_store.try_get(source)?.external_id.as_ref();
+        let entity_external_id = self.entity_cache.try_get(source)?.external_id.as_ref();
         Ok(Topic::new_unchecked(&format!(
             "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}",
             prefix = self.config.bridge_config.c8y_prefix,
@@ -192,6 +192,7 @@ impl CumulocityConverter {
 #[cfg(test)]
 mod tests {
     use crate::converter::tests::create_c8y_converter;
+    use crate::converter::tests::register_source_entities;
     use serde_json::json;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::MqttMessage;
@@ -466,6 +467,8 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///twin/firmware"),
             r#"{"name":"firmware", "version":"1.0"}"#,
         );
+
+        register_source_entities(&twin_message.topic.name, &mut converter).await;
 
         converter
             .try_register_source_entities(&twin_message)

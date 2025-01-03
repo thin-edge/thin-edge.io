@@ -5,7 +5,7 @@
 //!
 //! ```
 //! use c8y_mapper_ext::json::from_thin_edge_json;
-//! use tedge_api::entity_store::EntityMetadata;
+//! use tedge_api::entity::EntityMetadata;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
@@ -18,7 +18,7 @@
 use crate::serializer;
 use clock::Clock;
 use clock::WallClock;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity::EntityMetadata;
 use tedge_api::measurement::*;
 use time::OffsetDateTime;
 use time::{self};
