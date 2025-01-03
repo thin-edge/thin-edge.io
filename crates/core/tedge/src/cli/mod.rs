@@ -36,6 +36,7 @@ mod upload;
     multicall(true),
 )]
 pub enum TEdgeOptMulticall {
+    /// Command line interface to interact with thin-edge.io
     Tedge {
         #[clap(subcommand)]
         cmd: TEdgeOpt,
