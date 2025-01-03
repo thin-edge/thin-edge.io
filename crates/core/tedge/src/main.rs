@@ -5,6 +5,8 @@ use anyhow::Context;
 use cap::Cap;
 use clap::error::ErrorFormatter;
 use clap::error::RichFormatter;
+use clap::CommandFactory;
+use clap::FromArgMatches;
 use clap::Parser;
 use std::alloc;
 use std::future::Future;
@@ -15,8 +17,10 @@ use tedge::command::BuildCommand;
 use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
 use tedge::Component;
+use tedge::TEdgeOpt;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
+use tedge_config::cli::CommonArgs;
 use tedge_config::system_services::log_init;
 use tracing::log;
 
@@ -120,8 +124,8 @@ fn executable_name() -> Option<String> {
     )
 }
 
-fn parse_multicall_if_known<T: Parser>(executable_name: &Option<String>) -> T {
-    let cmd = T::command();
+fn parse_multicall_if_known(executable_name: &Option<String>) -> TEdgeOptMulticall {
+    let cmd = TEdgeOptMulticall::command();
 
     let is_known_subcommand = executable_name
         .as_deref()
@@ -129,11 +133,30 @@ fn parse_multicall_if_known<T: Parser>(executable_name: &Option<String>) -> T {
     let cmd = cmd.multicall(is_known_subcommand);
 
     let cmd2 = cmd.clone();
-    match T::from_arg_matches(&cmd.get_matches()) {
+    match TEdgeOptMulticall::from_arg_matches(&cmd.get_matches()) {
+        Ok(TEdgeOptMulticall::Tedge { cmd, common }) => redirect_if_multicall(cmd, common),
         Ok(t) => t,
         Err(e) => {
             eprintln!("{}", RichFormatter::format_error(&e.with_cmd(&cmd2)));
             std::process::exit(1);
         }
+    }
+}
+
+// Transform `tedge mapper|agent|write` commands into multicalls
+//
+// This method has to be kept in sync with TEdgeOpt::build_command
+fn redirect_if_multicall(cmd: TEdgeOpt, common: CommonArgs) -> TEdgeOptMulticall {
+    match cmd {
+        TEdgeOpt::Mapper(opt) => {
+            TEdgeOptMulticall::Component(Component::TedgeMapper(opt.with_common_args(common)))
+        }
+        TEdgeOpt::Agent(opt) => {
+            TEdgeOptMulticall::Component(Component::TedgeAgent(opt.with_common_args(common)))
+        }
+        TEdgeOpt::Write(opt) => {
+            TEdgeOptMulticall::Component(Component::TedgeWrite(opt.with_common_args(common)))
+        }
+        cmd => TEdgeOptMulticall::Tedge { cmd, common },
     }
 }

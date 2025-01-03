@@ -118,6 +118,12 @@ impl fmt::Display for MapperName {
     }
 }
 
+impl MapperOpt {
+    pub fn with_common_args(self, common: CommonArgs) -> Self {
+        Self { common, ..self }
+    }
+}
+
 pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
     let component = lookup_component(mapper_opt.name);

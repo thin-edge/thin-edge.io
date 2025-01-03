@@ -51,6 +51,12 @@ pub struct AgentOpt {
     pub mqtt_topic_root: Option<Arc<str>>,
 }
 
+impl AgentOpt {
+    pub fn with_common_args(self, common: CommonArgs) -> Self {
+        Self { common, ..self }
+    }
+}
+
 pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.common.config_dir.clone());
