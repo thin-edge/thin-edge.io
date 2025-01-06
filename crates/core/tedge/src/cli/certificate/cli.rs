@@ -3,6 +3,8 @@ use crate::cli::common::CloudArg;
 use camino::Utf8PathBuf;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
+use tedge_config::ReadError;
+use tedge_config::TEdgeConfig;
 
 use super::create::CreateCertCmd;
 use super::create_csr::CreateCsrCmd;
@@ -93,11 +95,14 @@ impl BuildCommand for TEdgeCertCli {
                 cloud,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+
                 // Use the current device id if no id is provided
-                let id = match id {
-                    Some(id) => id,
-                    None => config.device.id()?.clone(),
+                let id = if let Some(id) = id {
+                    id
+                } else {
+                    get_device_id_from_config(&config, &cloud)?
                 };
+
                 let cmd = CreateCsrCmd {
                     id,
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
@@ -185,4 +190,18 @@ pub enum UploadCertCli {
         #[clap(long)]
         profile: Option<ProfileName>,
     },
+}
+
+fn get_device_id_from_config(
+    config: &TEdgeConfig,
+    cloud: &Option<Cloud>,
+) -> Result<String, ReadError> {
+    let id = match cloud {
+        None => config.device.id(),
+        Some(Cloud::C8y(profile)) => config.c8y.try_get(profile.as_deref())?.device.id(),
+        Some(Cloud::Azure(profile)) => config.az.try_get(profile.as_deref())?.device.id(),
+        Some(Cloud::Aws(profile)) => config.aws.try_get(profile.as_deref())?.device.id(),
+    }?
+    .to_owned();
+    Ok(id)
 }
