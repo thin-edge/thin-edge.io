@@ -20,33 +20,35 @@ Send device profile operation from Cumulocity IoT
     ...    file=${CURDIR}/tedge-configuration-plugin.toml
 
     ${PROFILE_NAME}=    Set Variable    Test Profile
-    ${PROFILE_PAYLOAD}=    Catenate    SEPARATOR=\n    {
-    ...    "firmware": {
-    ...    "name":"tedge-core",
-    ...    "version":"1.0.0",
-    ...    "url":"https://abc.com/some/firmware/url"
-    ...    },
-    ...    "software":[
+    # robotidy: off
+    ${PROFILE_PAYLOAD}=    Catenate    SEPARATOR=\n
     ...    {
-    ...    "name":"jq",
-    ...    "action":"install",
-    ...    "version":"latest",
-    ...    "url":""
-    ...    },
-    ...    {
-    ...    "name":"tree",
-    ...    "action":"install",
-    ...    "version":"latest",
-    ...    "url":""
-    ...    }
-    ...    ],
-    ...    "configuration":[
-    ...    {
-    ...    "name":"tedge-configuration-plugin",
-    ...    "type":"tedge-configuration-plugin",
-    ...    "url":"${config_url}"
-    ...    }
-    ...    ]
+    ...      "firmware": {
+    ...        "name": "tedge-core",
+    ...        "version": "1.0.0",
+    ...        "url": "https://abc.com/some/firmware/url"
+    ...      },
+    ...      "software": [
+    ...        {
+    ...          "name": "jq",
+    ...          "action": "install",
+    ...          "version": "latest",
+    ...          "url": ""
+    ...        },
+    ...        {
+    ...          "name": "tree",
+    ...          "action": "install",
+    ...          "version": "latest",
+    ...          "url": ""
+    ...        }
+    ...      ],
+    ...      "configuration": [
+    ...        {
+    ...          "name": "tedge-configuration-plugin",
+    ...          "type": "tedge-configuration-plugin",
+    ...          "url": "${config_url}"
+    ...        }
+    ...      ]
     ...    }
 
     ${profile}=    Cumulocity.Create Device Profile    ${PROFILE_NAME}    ${PROFILE_PAYLOAD}
@@ -60,95 +62,96 @@ Send device profile operation locally
 
     Execute Command    curl -X PUT --data-binary "bad toml" "${config_url}"
 
+    # robotidy: off
     ${payload}=    Catenate    SEPARATOR=\n
     ...    {
-    ...    "status": "init",
-    ...    "name": "dev-profile",
-    ...    "version": "v2",
-    ...    "operations": [
-    ...    {
-    ...    "operation": "firmware_update",
-    ...    "@skip": false,
-    ...    "payload": {
-    ...    "name": "tedge-core",
-    ...    "remoteUrl": "https://abc.com/some/firmware/url",
-    ...    "version": "1.0.0"
-    ...    }
-    ...    },
-    ...    {
-    ...    "operation": "software_update",
-    ...    "@skip": false,
-    ...    "payload": {
-    ...    "updateList": [
-    ...    {
-    ...    "type": "apt",
-    ...    "modules": [
-    ...    {
-    ...    "name": "yq",
-    ...    "version": "latest",
-    ...    "action": "install"
-    ...    },
-    ...    {
-    ...    "name": "jo",
-    ...    "version": "latest",
-    ...    "action": "install"
-    ...    }
-    ...    ]
-    ...    }
-    ...    ]
-    ...    }
-    ...    },
-    ...    {
-    ...    "operation": "config_update",
-    ...    "@skip": false,
-    ...    "payload": {
-    ...    "type": "tedge-configuration-plugin",
-    ...    "tedgeUrl": "${config_url}",
-    ...    "remoteUrl": ""
-    ...    }
-    ...    },
-    ...    {
-    ...    "operation": "software_update",
-    ...    "@skip": true,
-    ...    "payload": {
-    ...    "updateList": [
-    ...    {
-    ...    "type": "apt",
-    ...    "modules": [
-    ...    {
-    ...    "name": "htop",
-    ...    "version": "latest",
-    ...    "action": "install"
-    ...    }
-    ...    ]
-    ...    }
-    ...    ]
-    ...    }
-    ...    },
-    ...    {
-    ...    "operation": "restart",
-    ...    "skip": false,
-    ...    "payload": {}
-    ...    },
-    ...    {
-    ...    "operation": "software_update",
-    ...    "@skip": false,
-    ...    "payload": {
-    ...    "updateList": [
-    ...    {
-    ...    "type": "apt",
-    ...    "modules": [
-    ...    {
-    ...    "name": "rolldice",
-    ...    "version": "latest",
-    ...    "action": "install"
-    ...    }
-    ...    ]
-    ...    }
-    ...    ]
-    ...    }
-    ...    }
-    ...    ]
+    ...      "status": "init",
+    ...      "name": "dev-profile",
+    ...      "version": "v2",
+    ...      "operations": [
+    ...        {
+    ...          "operation": "firmware_update",
+    ...          "@skip": false,
+    ...          "payload": {
+    ...            "name": "tedge-core",
+    ...            "remoteUrl": "https://abc.com/some/firmware/url",
+    ...            "version": "1.0.0"
+    ...          }
+    ...        },
+    ...        {
+    ...          "operation": "software_update",
+    ...          "@skip": false,
+    ...          "payload": {
+    ...            "updateList": [
+    ...              {
+    ...                "type": "apt",
+    ...                "modules": [
+    ...                  {
+    ...                    "name": "yq",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  },
+    ...                  {
+    ...                    "name": "jo",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  }
+    ...                ]
+    ...              }
+    ...            ]
+    ...          }
+    ...        },
+    ...        {
+    ...          "operation": "config_update",
+    ...          "@skip": false,
+    ...          "payload": {
+    ...            "type": "tedge-configuration-plugin",
+    ...            "tedgeUrl": "${config_url}",
+    ...            "remoteUrl": ""
+    ...          }
+    ...        },
+    ...        {
+    ...          "operation": "software_update",
+    ...          "@skip": true,
+    ...          "payload": {
+    ...            "updateList": [
+    ...              {
+    ...                "type": "apt",
+    ...                "modules": [
+    ...                  {
+    ...                    "name": "htop",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  }
+    ...                ]
+    ...              }
+    ...            ]
+    ...          }
+    ...        },
+    ...        {
+    ...          "operation": "restart",
+    ...          "skip": false,
+    ...          "payload": {}
+    ...        },
+    ...        {
+    ...          "operation": "software_update",
+    ...          "@skip": false,
+    ...          "payload": {
+    ...            "updateList": [
+    ...              {
+    ...                "type": "apt",
+    ...                "modules": [
+    ...                  {
+    ...                    "name": "rolldice",
+    ...                    "version": "latest",
+    ...                    "action": "install"
+    ...                  }
+    ...                ]
+    ...              }
+    ...            ]
+    ...          }
+    ...        }
+    ...      ]
     ...    }
 
     Execute Command    tedge mqtt pub --retain 'te/device/main///cmd/device_profile/robot-123' '${payload}'
