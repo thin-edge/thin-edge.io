@@ -421,11 +421,6 @@ mod tests {
         mpsc::Receiver<RuntimeEvent>,
         RuntimeActor,
     ) {
-        // TODO: remove logging or add something smarter because logging is useful
-        let _ = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Trace)
-            .try_init();
         let (actions_sender, actions_receiver) = mpsc::channel(16);
         let (events_sender, events_receiver) = mpsc::channel::<RuntimeEvent>(16);
         let ra = RuntimeActor::new(
