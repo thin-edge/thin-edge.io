@@ -1,6 +1,6 @@
 [package]
 name = "tedge-watchdog"
-description = "tedge-watchdog checks the health of all the thin-edge.io components/services."
+description = "tedge-watchdog checks the health of all the thin-edge.io components/services"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }

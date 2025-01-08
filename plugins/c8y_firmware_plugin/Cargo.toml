@@ -1,6 +1,6 @@
 [package]
 name = "c8y-firmware-plugin"
-description = "Thin-edge device firmware management for Cumulocity"
+description = "thin-edge.io device firmware management for Cumulocity"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }

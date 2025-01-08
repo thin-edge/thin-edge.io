@@ -1,6 +1,6 @@
 [package]
 name = "c8y-remote-access-plugin"
-description = "Thin-edge.io plugin for the Cumulocity IoT's Cloud Remote Access feature"
+description = "thin-edge.io plugin for the Cumulocity Cloud Remote Access feature"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
