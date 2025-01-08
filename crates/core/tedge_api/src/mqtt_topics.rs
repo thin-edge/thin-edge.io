@@ -432,8 +432,8 @@ impl EntityTopicId {
 }
 
 pub mod default_topic_schema {
+    use crate::entity::EntityType;
     use crate::entity_store::EntityRegistrationMessage;
-    use crate::entity_store::EntityType;
     use crate::mqtt_topics::EntityTopicId;
     use serde_json::json;
 

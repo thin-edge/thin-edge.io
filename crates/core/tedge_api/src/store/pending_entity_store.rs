@@ -181,8 +181,8 @@ mod tests {
     use serde_json::json;
 
     use super::PendingEntityStore;
+    use crate::entity::EntityType;
     use crate::entity_store::EntityRegistrationMessage;
-    use crate::entity_store::EntityType;
     use crate::mqtt_topics::EntityTopicId;
     use crate::mqtt_topics::MqttSchema;
 

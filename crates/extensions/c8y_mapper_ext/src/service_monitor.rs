@@ -1,7 +1,7 @@
 use c8y_api::smartrest;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
-use tedge_api::entity_store::EntityType;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_api::Status;
@@ -40,16 +40,16 @@ pub fn convert_health_status_message(
     let HealthStatus { status } =
         HealthStatus::try_from_health_status_message(message, mqtt_schema).unwrap();
 
+    let external_id = entity.external_id_unchecked().as_ref();
     let display_name = entity
-        .display_name
-        .as_deref()
+        .display_name()
         .or_else(|| entity.topic_id.default_service_name())
-        .unwrap_or(entity.external_id.as_ref());
+        .unwrap_or(external_id);
 
-    let display_type = entity.display_type.as_deref().unwrap_or("service");
+    let display_type = entity.display_type().unwrap_or("service");
 
     let Ok(status_message) = smartrest::inventory::service_creation_message(
-        entity.external_id.as_ref(),
+        external_id,
         display_name,
         display_type,
         &status.to_string(),
@@ -199,11 +199,10 @@ mod tests {
 
         let entity = EntityMetadata {
             topic_id: entity_topic_id,
-            external_id,
+            external_id: Some(external_id),
             r#type: EntityType::Service,
             parent,
-            display_name: None,
-            display_type: None,
+            other: Map::new(),
             twin_data: Map::new(),
         };
 

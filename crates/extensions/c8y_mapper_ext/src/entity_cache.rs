@@ -3,10 +3,10 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::EntityType;
 use tedge_api::entity::InsertOutcome;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
-use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::PendingEntityData;
@@ -137,19 +137,10 @@ impl EntityCache {
 
         let entity_metadata = EntityMetadata {
             topic_id: entity.topic_id.clone(),
-            external_id: external_id.clone(),
+            external_id: Some(external_id.clone()),
             r#type: entity.r#type,
             parent,
-            display_name: entity
-                .other
-                .get("name")
-                .and_then(|v| v.as_str())
-                .map(|v| v.to_string()),
-            display_type: entity
-                .other
-                .get("type")
-                .and_then(|v| v.as_str())
-                .map(|v| v.to_string()),
+            other: entity.other,
             twin_data: Map::new(),
         };
 
@@ -175,14 +166,11 @@ impl EntityCache {
                 // if there is no change, no entities were affected
                 let existing_entity = occupied.get();
 
+                let mut merged_other = existing_entity.other.clone();
+                merged_other.extend(entity_metadata.other.clone());
                 let merged_entity = EntityMetadata {
                     twin_data: existing_entity.twin_data.clone(),
-                    display_name: entity_metadata
-                        .display_name
-                        .or_else(|| existing_entity.display_name.clone()),
-                    display_type: entity_metadata
-                        .display_type
-                        .or_else(|| existing_entity.display_type.clone()),
+                    other: merged_other,
                     ..entity_metadata
                 };
 
@@ -264,7 +252,8 @@ impl EntityCache {
         &self,
         topic_id: &EntityTopicId,
     ) -> Result<&EntityExternalId, Error> {
-        self.try_get(topic_id).map(|e| &e.external_id)
+        self.try_get(topic_id)
+            .map(|e| e.external_id.as_ref().expect("External id must be set"))
     }
 
     /// Tries to get information about an entity using its `EntityExternalId`,
@@ -295,12 +284,9 @@ impl EntityCache {
     ) -> Result<Option<&EntityExternalId>, Error> {
         let entity = self.try_get(entity_tid)?;
         let parent_xid = entity.parent.as_ref().map(|tid| {
-            &self
-                .try_get(tid)
-                .expect(
-                    "for every registered entity, its parent is also guaranteed to be registered",
-                )
-                .external_id
+            self.try_get_external_id(tid).expect(
+                "For every registered entity, its parent is also guaranteed to be registered",
+            )
         });
 
         Ok(parent_xid)
@@ -318,8 +304,8 @@ mod tests {
     use crate::converter::CumulocityConverter;
     use assert_matches::assert_matches;
     use serde_json::Map;
+    use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
-    use tedge_api::entity_store::EntityType;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
 

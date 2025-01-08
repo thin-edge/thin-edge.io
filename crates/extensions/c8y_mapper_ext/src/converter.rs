@@ -67,8 +67,8 @@ use tedge_api::commands::RestartCommand;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
-use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
@@ -394,7 +394,7 @@ impl CumulocityConverter {
     ) -> Result<Topic, ConversionError> {
         let entity = self.entity_cache.try_get(entity_topic_id)?;
         let topic = C8yTopic::smartrest_response_topic(
-            &entity.external_id,
+            entity.external_id_unchecked(),
             &entity.r#type,
             &self.config.bridge_config.c8y_prefix,
         )
@@ -515,7 +515,7 @@ impl CumulocityConverter {
             let tedge_event = ThinEdgeEvent::try_from(
                 event_type,
                 &entity.r#type,
-                &entity.external_id,
+                entity.external_id_unchecked(),
                 mqtt_payload,
             )
             .map_err(
@@ -554,7 +554,7 @@ impl CumulocityConverter {
                     time: c8y_event.time,
                     text: c8y_event.text,
                     extras: c8y_event.extras,
-                    device_id: entity.external_id.clone().into(),
+                    device_id: entity.external_id_unchecked().clone().into(),
                 };
                 self.http_proxy.send_event(create_event).await?;
                 return Ok(vec![]);
@@ -574,7 +574,7 @@ impl CumulocityConverter {
 
         let mqtt_messages = self.alarm_converter.try_convert_alarm(
             source,
-            &entity.external_id,
+            entity.external_id_unchecked(),
             &entity.r#type,
             input,
             alarm_type,
@@ -1248,7 +1248,7 @@ impl CumulocityConverter {
 
         if register_message.external_id.is_none() {
             if let Some(metadata) = self.entity_cache.get(source) {
-                register_message.external_id = Some(metadata.external_id.clone());
+                register_message.external_id = Some(metadata.external_id_unchecked().clone());
             }
         }
     }
@@ -1332,10 +1332,9 @@ impl CumulocityConverter {
                 self.active_commands.insert(cmd_id.clone());
 
                 let entity = self.entity_cache.try_get(&source)?;
-                let external_id = entity.external_id.clone();
                 let entity = operations::EntityTarget {
                     topic_id: entity.topic_id.clone(),
-                    external_id: external_id.clone(),
+                    external_id: entity.external_id_unchecked().clone(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(&entity.topic_id)?,
                 };
@@ -1487,19 +1486,20 @@ impl CumulocityConverter {
         }
 
         self.supported_operations
-            .add_operation(device.external_id.as_ref(), c8y_operation_name)?;
+            .add_operation(device.external_id_unchecked().as_ref(), c8y_operation_name)?;
 
         let need_cloud_update = match device.r#type {
             // for devices other than the main device, dynamic update of supported operations via file events is
             // disabled, so we have to additionally load new operations from the c8y operations for that device
-            EntityType::ChildDevice => self
-                .supported_operations
-                .load_all(device.external_id.as_ref(), &self.config.bridge_config)?,
+            EntityType::ChildDevice => self.supported_operations.load_all(
+                device.external_id_unchecked().as_ref(),
+                &self.config.bridge_config,
+            )?,
 
             // for main devices new operation files are loaded dynamically as they are created, so only register one
             // operation we need
             EntityType::MainDevice => self.supported_operations.load(
-                device.external_id.as_ref(),
+                device.external_id_unchecked().as_ref(),
                 c8y_operation_name,
                 &self.config.bridge_config,
             )?,
@@ -1510,7 +1510,7 @@ impl CumulocityConverter {
         if need_cloud_update {
             let cloud_update_operations_message =
                 self.supported_operations.create_supported_operations(
-                    device.external_id.as_ref(),
+                    device.external_id_unchecked().as_ref(),
                     &self.config.bridge_config.c8y_prefix,
                 )?;
 

@@ -8,7 +8,7 @@ use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::alarm::ThinEdgeAlarmData;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::entity::EntityExternalId;
-use tedge_api::entity_store::EntityType;
+use tedge_api::entity::EntityType;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareModule;

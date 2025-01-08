@@ -8,13 +8,14 @@
 // TODO: move entity business logic to its own module
 
 use crate::entity::EntityExternalId;
+use crate::entity::EntityMetadata;
+use crate::entity::EntityType;
 use crate::entity::InsertOutcome;
 use crate::entity_store;
 use crate::mqtt_topics::default_topic_schema;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
-use crate::mqtt_topics::TopicIdError;
 use crate::store::message_log::MessageLogReader;
 use crate::store::message_log::MessageLogWriter;
 use crate::store::pending_entity_store::PendingEntityData;
@@ -32,10 +33,7 @@ use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt::Display;
 use std::path::Path;
-use std::str::FromStr;
-use thiserror::Error;
 
 // In the future, root will be read from config
 const MQTT_ROOT: &str = "te";
@@ -650,96 +648,6 @@ impl EntityTree {
             self.entities.remove(topic_id);
             removed_entities.push(topic_id.clone())
         }
-    }
-}
-
-//TODO Move out of entity_store and reuse in entity_cache
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EntityMetadata {
-    #[serde(rename = "@topic-id")]
-    pub topic_id: EntityTopicId,
-    #[serde(rename = "@parent")]
-    pub parent: Option<EntityTopicId>,
-    #[serde(rename = "@type")]
-    pub r#type: EntityType,
-    #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
-    pub external_id: Option<EntityExternalId>,
-
-    // TODO: use a dedicated struct for cloud-specific fields, have `EntityMetadata` be generic over
-    // cloud we're currently connected to
-    #[serde(flatten)]
-    pub other: Map<String, JsonValue>,
-    #[serde(skip)]
-    pub twin_data: Map<String, JsonValue>,
-}
-
-// TODO: Move to entity module
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum EntityType {
-    #[serde(rename = "device")]
-    MainDevice,
-    #[serde(rename = "child-device")]
-    ChildDevice,
-    #[serde(rename = "service")]
-    Service,
-}
-
-impl EntityType {
-    pub fn as_str(&self) -> &str {
-        match self {
-            EntityType::MainDevice => "device",
-            EntityType::ChildDevice => "child-device",
-            EntityType::Service => "service",
-        }
-    }
-}
-
-impl Display for EntityType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Error)]
-#[error("Invalid entity type: {0}")]
-pub struct InvalidEntityType(String);
-
-impl FromStr for EntityType {
-    type Err = InvalidEntityType;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "device" => Ok(EntityType::MainDevice),
-            "child-device" => Ok(EntityType::ChildDevice),
-            "service" => Ok(EntityType::Service),
-            other => Err(InvalidEntityType(other.to_string())),
-        }
-    }
-}
-
-impl EntityMetadata {
-    /// Creates a entity metadata for the main device.
-    pub fn main_device(device_id: String) -> Self {
-        Self {
-            topic_id: EntityTopicId::default_main_device(),
-            external_id: Some(device_id.into()),
-            r#type: EntityType::MainDevice,
-            parent: None,
-            other: Map::new(),
-            twin_data: Map::new(),
-        }
-    }
-
-    /// Creates a entity metadata for a child device.
-    pub fn child_device(child_device_id: String) -> Result<Self, TopicIdError> {
-        Ok(Self {
-            topic_id: EntityTopicId::default_child_device(&child_device_id)?,
-            external_id: Some(child_device_id.into()),
-            r#type: EntityType::ChildDevice,
-            parent: Some(EntityTopicId::default_main_device()),
-            other: Map::new(),
-            twin_data: Map::new(),
-        })
     }
 }
 

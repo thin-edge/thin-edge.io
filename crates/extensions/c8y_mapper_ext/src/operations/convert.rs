@@ -86,7 +86,7 @@ impl CumulocityConverter {
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/config_snapshot/{}-{}",
             &self.config.tedge_http_host,
-            target.external_id.as_ref(),
+            target.external_id_unchecked().as_ref(),
             config_upload_request.config_type.replace('/', ":"),
             cmd_id
         );
@@ -125,7 +125,7 @@ impl CumulocityConverter {
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
             &self.config.tedge_http_host,
-            target.external_id.as_ref(),
+            target.external_id_unchecked().as_ref(),
             log_request.log_file,
             cmd_id
         );
