@@ -57,8 +57,32 @@ fn generate_structs(
                 let ty = field.ty();
                 attrs.push(field.attrs().to_vec());
                 idents.push(field.ident());
-                if field.is_optional() {
+                if let Some((function, field)) = field.reader_function() {
+                    let name = field.lazy_reader_name(&parents);
+                    let parent_ty = field.parent_name(&parents);
+                    tys.push(parse_quote_spanned!(ty.span()=> #name));
+                    let dto_ty: syn::Type = match extract_type_from_result(&field.ty) {
+                        Some((ok, _err)) => parse_quote!(OptionalConfig<#ok>),
+                        None => {
+                            let ty = &field.ty;
+                            parse_quote!(OptionalConfig<#ty>)
+                        }
+                    };
+                    lazy_readers.push((
+                        name,
+                        &field.ty,
+                        function,
+                        parent_ty,
+                        field.ident.clone(),
+                        dto_ty.clone(),
+                    ));
+                    vis.push(parse_quote!());
+                } else if field.is_optional() {
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
+                    vis.push(match field.reader().private {
+                        true => parse_quote!(),
+                        false => parse_quote!(pub),
+                    });
                 } else if let Some(field) = field.read_only() {
                     let name = field.lazy_reader_name(&parents);
                     let parent_ty = field.parent_name(&parents);
@@ -69,15 +93,17 @@ fn generate_structs(
                         &field.readonly.function,
                         parent_ty,
                         field.ident.clone(),
+                        parse_quote!(()),
                     ));
+                    vis.push(parse_quote!());
                 } else {
                     tys.push(ty.to_owned());
+                    vis.push(match field.reader().private {
+                        true => parse_quote!(),
+                        false => parse_quote!(pub),
+                    });
                 }
                 sub_readers.push(None);
-                vis.push(match field.reader().private {
-                    true => parse_quote!(),
-                    false => parse_quote!(pub),
-                });
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
@@ -125,36 +151,37 @@ fn generate_structs(
         }
     }
 
-    let lazy_reader_impls =
-        lazy_readers
-            .iter()
-            .map(|(name, ty, function, parent_ty, id)| -> syn::ItemImpl {
-                if let Some((ok, err)) = extract_type_from_result(ty) {
-                    parse_quote_spanned! {name.span()=>
-                        impl #parent_ty {
-                            pub fn #id(&self) -> Result<&#ok, #err> {
-                                self.#id.0.get_or_try_init(|| #function(self))
-                            }
-                        }
-                    }
-                } else {
-                    parse_quote_spanned! {name.span()=>
-                        impl #parent_ty {
-                            pub fn #id(&self) -> &#ty {
-                                self.#id.0.get_or_init(|| #function(self))
-                            }
+    let lazy_reader_impls = lazy_readers.iter().map(
+        |(name, ty, function, parent_ty, id, _dto_ty)| -> syn::ItemImpl {
+            if let Some((ok, err)) = extract_type_from_result(ty) {
+                parse_quote_spanned! {name.span()=>
+                    impl #parent_ty {
+                        pub fn #id(&self) -> Result<&#ok, #err> {
+                            self.#id.0.get_or_try_init(|| #function(self, &self.#id.1))
                         }
                     }
                 }
-            });
+            } else {
+                parse_quote_spanned! {name.span()=>
+                    impl #parent_ty {
+                        pub fn #id(&self) -> &#ty {
+                            self.#id.0.get_or_init(|| #function(self, &self.#id.1))
+                        }
+                    }
+                }
+            }
+        },
+    );
 
-    let (lr_names, lr_tys): (Vec<_>, Vec<_>) = lazy_readers
+    let (lr_names, lr_tys, lr_dto_tys): (Vec<_>, Vec<_>, Vec<_>) = lazy_readers
         .iter()
-        .map(|(name, ty, _, _, _)| match extract_type_from_result(ty) {
-            Some((ok, _err)) => (name, ok),
-            None => (name, *ty),
-        })
-        .unzip();
+        .map(
+            |(name, ty, _, _, _, dto_ty)| match extract_type_from_result(ty) {
+                Some((ok, _err)) => (name, ok, dto_ty),
+                None => (name, *ty, dto_ty),
+            },
+        )
+        .multiunzip();
 
     let doc_comment_attr =
         (!doc_comment.is_empty()).then(|| quote_spanned!(name.span()=> #[doc = #doc_comment]));
@@ -170,9 +197,9 @@ fn generate_structs(
         }
 
         #(
-            #[derive(::serde::Serialize, Clone, Debug, Default)]
-            #[serde(into = "()")]
-            pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>);
+            #[derive(::serde::Serialize, Clone, Debug)]
+            #[serde(into = "()")] // Just a hack to support serialization, required for doku
+            pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>, #lr_dto_tys);
 
             impl From<#lr_names> for () {
                 fn from(_: #lr_names) {}
@@ -306,8 +333,8 @@ fn reader_value_for_field<'a>(
                 parse_quote!(ReadableKey::#ident(#(#args.map(<_>::to_owned)),*).to_cow_str())
             };
             let read_path = read_field(parents);
-            match &rw_field.default {
-                FieldDefault::None => quote! {
+            let value = match &rw_field.default {
+                FieldDefault::None => quote_spanned! {rw_field.ident.span()=>
                     match &dto.#(#read_path).*.#name {
                         None => OptionalConfig::Empty(#key),
                         Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
@@ -345,15 +372,20 @@ fn reader_value_for_field<'a>(
                         observed_keys,
                     )?;
 
-                    let (default, value) =
-                        if matches!(&rw_field.default, FieldDefault::FromOptionalKey(_)) {
-                            (
-                                quote!(#default.map(|v| v.into())),
-                                quote!(OptionalConfig::Present { value: value.clone(), key: #key }),
-                            )
-                        } else {
-                            (quote!(#default.into()), quote!(value.clone()))
-                        };
+                    let (default, value) = if matches!(
+                        &rw_field.default,
+                        FieldDefault::FromOptionalKey(_)
+                    ) {
+                        (
+                            quote_spanned!(default_key.span()=> #default.map(|v| v.into())),
+                            quote_spanned!(default_key.span()=> OptionalConfig::Present { value: value.clone(), key: #key }),
+                        )
+                    } else {
+                        (
+                            quote_spanned!(default_key.span()=> #default.into()),
+                            quote_spanned!(default_key.span()=> value.clone()),
+                        )
+                    };
 
                     quote_spanned! {name.span()=>
                         match &dto.#(#read_path).*.#name {
@@ -386,12 +418,20 @@ fn reader_value_for_field<'a>(
                         Some(value) => value.clone(),
                     }
                 },
+            };
+            if field.reader_function().is_some() {
+                let name = rw_field.lazy_reader_name(parents);
+                quote_spanned! {rw_field.ident.span()=>
+                    #name(<_>::default(), #value)
+                }
+            } else {
+                value
             }
         }
         ConfigurableField::ReadOnly(field) => {
             let name = field.lazy_reader_name(parents);
-            quote! {
-                #name::default()
+            quote_spanned! {field.ident.span()=>
+                #name(<_>::default(), ())
             }
         }
     })
@@ -589,6 +629,9 @@ fn generate_conversions(
 mod tests {
     use super::*;
     use syn::parse_quote;
+    use syn::Item;
+    use syn::ItemImpl;
+    use syn::ItemStruct;
 
     #[test]
     fn from_optional_key_reuses_multi_fields() {
@@ -722,6 +765,280 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             prettyplease::unparse(&parse_quote!(#r#impl)),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn generate_structs_generates_getter_for_readonly_value() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(readonly(
+                    write_error = "\
+                        The device id is read from the device certificate and cannot be set directly.\n\
+                        To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
+                    function = "device_id",
+                ))]
+                id: String,
+            },
+        );
+        let actual = generate_structs(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            "",
+        )
+        .unwrap();
+        let file: syn::File = syn::parse2(actual).unwrap();
+
+        let expected = parse_quote! {
+            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigReader {
+                pub device: TEdgeConfigReaderDevice,
+            }
+            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigReaderDevice {
+                id: LazyReaderDeviceId,
+            }
+            #[derive(::serde::Serialize, Clone, Debug)]
+            #[serde(into = "()")]
+            pub struct LazyReaderDeviceId(::once_cell::sync::OnceCell<String>, ());
+            impl From<LazyReaderDeviceId> for () {
+                fn from(_: LazyReaderDeviceId) {}
+            }
+            impl TEdgeConfigReaderDevice {
+                pub fn id(&self) -> &String {
+                    self.id.0.get_or_init(|| device_id(self, &self.id.1))
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn generate_structs_generates_getter_for_reader_function_value() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(reader(function = "device_id"))]
+                id: String,
+            },
+        );
+        let actual = generate_structs(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            "",
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual).unwrap();
+        let target: syn::Type = parse_quote!(TEdgeConfigReaderDevice);
+        file.items
+            .retain(|i| matches!(i, Item::Impl(ItemImpl { self_ty, .. }) if **self_ty == target));
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReaderDevice {
+                pub fn id(&self) -> &String {
+                    self.id.0.get_or_init(|| device_id(self, &self.id.1))
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn fields_are_public_only_if_directly_readable() {
+        let input: crate::input::Configuration = parse_quote!(
+            test: {
+                #[tedge_config(reader(function = "device_id"))]
+                read_via_function: String,
+                #[tedge_config(readonly(write_error = "TODO", function="device_id"))]
+                readonly: String,
+                #[tedge_config(default(value = "test"))]
+                with_default: String,
+                optional: String,
+            },
+        );
+        let actual = generate_structs(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            "",
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual).unwrap();
+        file.items.retain(|s| matches!(s, Item::Struct(ItemStruct { ident, ..}) if ident == "TEdgeConfigReaderTest"));
+
+        let expected = parse_quote! {
+            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigReaderTest {
+                read_via_function: LazyReaderTestReadViaFunction,
+                readonly: LazyReaderTestReadonly,
+                pub with_default: String,
+                pub optional: OptionalConfig<String>,
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn default_values_do_stuff() {
+        let input: crate::input::Configuration = parse_quote!(
+            c8y: {
+                #[tedge_config(default(from_optional_key = "c8y.url"))]
+                http: String,
+                url: String,
+            },
+        );
+        let actual = generate_conversions(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+        )
+        .unwrap();
+        let file: syn::File = syn::parse2(actual).unwrap();
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
+                #[automatically_derived]
+                /// Converts the provided [TEdgeConfigDto] into a reader
+                pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                    Self {
+                        c8y: TEdgeConfigReaderC8y::from_dto(dto, location),
+                    }
+                }
+            }
+            impl TEdgeConfigReaderC8y {
+                #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
+                #[automatically_derived]
+                /// Converts the provided [TEdgeConfigDto] into a reader
+                pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                    Self {
+                        http: match &dto.c8y.http {
+                            Some(value) => {
+                                OptionalConfig::Present {
+                                    value: value.clone(),
+                                    key: ReadableKey::C8yHttp.to_cow_str(),
+                                }
+                            }
+                            None => {
+                                match &dto.c8y.url {
+                                    None => OptionalConfig::Empty(ReadableKey::C8yUrl.to_cow_str()),
+                                    Some(value) => {
+                                        OptionalConfig::Present {
+                                            value: value.clone(),
+                                            key: ReadableKey::C8yUrl.to_cow_str(),
+                                        }
+                                    }
+                                }
+                                    .map(|v| v.into())
+                            }
+                        },
+                        url: match &dto.c8y.url {
+                            None => OptionalConfig::Empty(ReadableKey::C8yUrl.to_cow_str()),
+                            Some(value) => {
+                                OptionalConfig::Present {
+                                    value: value.clone(),
+                                    key: ReadableKey::C8yUrl.to_cow_str(),
+                                }
+                            }
+                        },
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn default_values_do_stuff2() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(reader(function = "device_id"))]
+                id: Result<String, ReadError>,
+            },
+            c8y: {
+                device: {
+                    #[tedge_config(default(from_optional_key = "device.id"))]
+                    #[tedge_config(reader(function = "c8y_device_id"))]
+                    id: Result<String, ReadError>,
+                },
+            },
+        );
+        let actual = generate_conversions(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual).unwrap();
+        let target: syn::Type = parse_quote!(TEdgeConfigReaderC8yDevice);
+        file.items
+            .retain(|i| matches!(i, Item::Impl(ItemImpl { self_ty, ..}) if **self_ty == target));
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReaderC8yDevice {
+                #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
+                #[automatically_derived]
+                /// Converts the provided [TEdgeConfigDto] into a reader
+                pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                    Self {
+                        id: LazyReaderC8yDeviceId(
+                            <_>::default(),
+                            match &dto.c8y.device.id {
+                                Some(value) => {
+                                    OptionalConfig::Present {
+                                        value: value.clone(),
+                                        key: ReadableKey::C8yDeviceId.to_cow_str(),
+                                    }
+                                }
+                                None => {
+                                    LazyReaderDeviceId(
+                                            <_>::default(),
+                                            match &dto.device.id {
+                                                None => {
+                                                    OptionalConfig::Empty(ReadableKey::DeviceId.to_cow_str())
+                                                }
+                                                Some(value) => {
+                                                    OptionalConfig::Present {
+                                                        value: value.clone(),
+                                                        key: ReadableKey::DeviceId.to_cow_str(),
+                                                    }
+                                                }
+                                            },
+                                        )
+                                        .map(|v| v.into())
+                                }
+                            },
+                        ),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
             prettyplease::unparse(&expected)
         )
     }
