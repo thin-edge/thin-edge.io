@@ -176,7 +176,7 @@ async fn child_device_registration_mapping() {
     assert_received_contains_str(
         &mut mqtt,
         [(
-            "c8y/s/us/test-device:device:child1/test-device:device:child2",
+            "c8y/s/us/test-device:device:child2",
             "101,child3,child3,thin-edge.io-child",
         )],
     )
@@ -326,7 +326,7 @@ async fn service_registration_mapping() {
     assert_received_contains_str(
         &mut mqtt,
         [(
-            "c8y/s/us/test-device:device:child1/test-device:device:child2",
+            "c8y/s/us/test-device:device:child2",
             "102,test-device:device:child2:service:collectd,systemd,Collectd,up",
         )],
     )

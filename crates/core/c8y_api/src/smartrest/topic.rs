@@ -2,7 +2,7 @@ use crate::json_c8y::C8yAlarm;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityType;
 use tedge_config::TopicPrefix;
 
@@ -19,13 +19,14 @@ pub enum C8yTopic {
 impl C8yTopic {
     /// Return the c8y SmartRest response topic for the given entity
     pub fn smartrest_response_topic(
-        entity: &EntityMetadata,
+        external_id: &EntityExternalId,
+        entity_type: &EntityType,
         prefix: &TopicPrefix,
     ) -> Option<Topic> {
-        match entity.r#type {
+        match entity_type {
             EntityType::MainDevice => Some(C8yTopic::upstream_topic(prefix)),
             EntityType::ChildDevice | EntityType::Service => {
-                Self::ChildSmartRestResponse(entity.external_id.clone().into())
+                Self::ChildSmartRestResponse(external_id.clone().into())
                     .to_topic(prefix)
                     .ok()
             }
@@ -77,28 +78,30 @@ impl From<&C8yAlarm> for C8yTopic {
     }
 }
 
-/// Generates the SmartREST topic to publish to, for a given managed object
-/// from the list of external IDs of itself and all its parents.
-///
-/// The parents are appended in the reverse order,
-/// starting from the main device at the end of the list.
-/// The main device itself is represented by the root topic c8y/s/us,
-/// with the rest of the children appended to it at each topic level.
+/// Generates the SmartREST topic to publish to, from the external ID of its parent.
+/// If the parent is the main device, the topic would be `<prefix>/s/us`.
+/// For all other parent devices, the target topic would be `<prefix>/s/us/<parent-xid>`.
+/// For the main device with no parent, and the topic would be `<prefix>/s/us` in that case as well.
 ///
 /// # Examples
 ///
-/// - `["main"]` -> `c8y/s/us`
-/// - `["child1", "main"]` -> `c8y/s/us/child1`
-/// - `["child2", "child1", "main"]` -> `c8y/s/us/child1/child2`
-pub fn publish_topic_from_ancestors(ancestors: &[impl AsRef<str>], prefix: &TopicPrefix) -> Topic {
-    let mut target_topic = format!("{prefix}/{SMARTREST_PUBLISH_TOPIC}");
-    for ancestor in ancestors.iter().rev().skip(1) {
-        // Skipping the last ancestor as it is the main device represented by the root topic itself
-        target_topic.push('/');
-        target_topic.push_str(ancestor.as_ref());
+/// - `(Some("main"), "main", "c8y")` -> `c8y/s/us`
+/// - `[Some("child1"), "main", "c8y"]` -> `c8y/s/us/child1`
+/// - `[Some("service1"), "main", "c8y"]` -> `c8y/s/us/service1`
+/// - `(None, "main", "c8y")` -> `c8y/s/us`
+pub fn publish_topic_from_parent(
+    parent_xid: Option<&str>,
+    main_device_xid: &str,
+    prefix: &TopicPrefix,
+) -> Topic {
+    if let Some(parent) = parent_xid {
+        if parent != main_device_xid {
+            return C8yTopic::ChildSmartRestResponse(parent.to_string())
+                .to_topic(prefix)
+                .unwrap();
+        }
     }
-
-    Topic::new_unchecked(&target_topic)
+    C8yTopic::upstream_topic(prefix)
 }
 
 #[cfg(test)]
@@ -135,13 +138,12 @@ mod tests {
         )
     }
 
-    #[test_case(& ["main"], "c8y2/s/us")]
-    #[test_case(& ["foo"], "c8y2/s/us")]
-    #[test_case(& ["child1", "main"], "c8y2/s/us/child1")]
-    #[test_case(& ["child3", "child2", "child1", "main"], "c8y2/s/us/child1/child2/child3")]
-    fn topic_from_ancestors(ancestors: &[&str], topic: &str) {
+    #[test_case(None, "main-device", "c8y2/s/us")]
+    #[test_case(Some("child01"), "main-device", "c8y2/s/us/child01")]
+    #[test_case(Some("main-device"), "main-device", "c8y2/s/us")]
+    fn topic_from_parent(parent_xid: Option<&str>, main_device_xid: &str, topic: &str) {
         let nested_child_topic =
-            publish_topic_from_ancestors(ancestors, &"c8y2".try_into().unwrap());
+            publish_topic_from_parent(parent_xid, main_device_xid, &"c8y2".try_into().unwrap());
         assert_eq!(nested_child_topic, Topic::new_unchecked(topic));
     }
 }

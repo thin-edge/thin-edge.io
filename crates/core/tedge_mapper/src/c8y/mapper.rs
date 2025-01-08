@@ -336,7 +336,8 @@ pub fn service_monitor_client_config(
         c8y_mapper_name,
         service_type.as_str(),
         "down",
-        &[],
+        None,
+        main_device_xid.as_ref(),
         prefix,
     )?;
 
