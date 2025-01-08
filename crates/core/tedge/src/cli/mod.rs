@@ -7,6 +7,7 @@ use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
+use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
@@ -36,6 +37,7 @@ mod upload;
     multicall(true),
 )]
 pub enum TEdgeOptMulticall {
+    /// Command line interface to interact with thin-edge.io
     Tedge {
         #[clap(subcommand)]
         cmd: TEdgeOpt,
@@ -50,15 +52,18 @@ pub enum TEdgeOptMulticall {
 
 #[derive(clap::Parser, Debug)]
 pub enum Component {
-    TedgeMapper(MapperOpt),
+    C8yFirmwarePlugin(FirmwarePluginOpt),
+
+    C8yRemoteAccessPlugin(C8yRemoteAccessPluginOpt),
 
     TedgeAgent(AgentOpt),
 
-    C8yFirmwarePlugin(FirmwarePluginOpt),
+    #[clap(alias = "apt")]
+    TedgeAptPlugin(AptCli),
+
+    TedgeMapper(MapperOpt),
 
     TedgeWatchdog(WatchdogOpt),
-
-    C8yRemoteAccessPlugin(C8yRemoteAccessPluginOpt),
 
     TedgeWrite(TedgeWriteOpt),
 }
@@ -113,6 +118,15 @@ pub enum TEdgeOpt {
     /// Publish a message on a topic and subscribe a topic.
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
+
+    /// Run thin-edge services and plugins
+    Run(ComponentOpt),
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct ComponentOpt {
+    #[clap(subcommand)]
+    pub component: Component,
 }
 
 fn styles() -> clap::builder::Styles {
@@ -174,6 +188,10 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(&context).map(Command::into_boxed),
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
             TEdgeOpt::Reconnect(opt) => opt.build_command(context),
+            TEdgeOpt::Run(_) => {
+                // This method has to be kept in sync with tedge::redirect_if_multicall()
+                panic!("tedge mapper|agent|write commands are launched as multicall")
+            }
         }
     }
 }

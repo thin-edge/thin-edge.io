@@ -346,16 +346,7 @@ fn get_config(config_dir: &Path) -> Option<TEdgeConfig> {
     }
 }
 
-pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
-    let mut apt = match cli {
-        Ok(aptcli) => aptcli,
-        Err(err) => {
-            err.print().expect("Failed to print help message");
-            // re-write the clap exit_status from 2 to 1, if parse fails
-            std::process::exit(1)
-        }
-    };
-
+pub fn run_and_exit(mut apt: AptCli) -> ! {
     if let PluginOp::List { name, maintainer } = &mut apt.operation {
         if let Some(config) = get_config(apt.common.config_dir.as_std_path()) {
             if name.is_none() {
