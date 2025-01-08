@@ -189,7 +189,7 @@ define_tedge_config! {
     }
 }
 
-fn device_id(_reader: &TEdgeConfigReaderDevice) -> Result<String, ReadError> {
+fn device_id(_reader: &TEdgeConfigReaderDevice, _: &()) -> Result<String, ReadError> {
     Ok("dummy-device-id".to_owned())
 }
 
