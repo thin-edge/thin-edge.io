@@ -32,11 +32,6 @@ static ALLOCATOR: Cap<alloc::System> = Cap::new(alloc::System, usize::MAX);
 fn main() -> anyhow::Result<()> {
     let executable_name = executable_name();
 
-    if matches!(executable_name.as_deref(), Some("apt" | "tedge-apt-plugin")) {
-        let try_opt = AptCli::try_parse();
-        tedge_apt_plugin::run_and_exit(try_opt);
-    }
-
     let opt = parse_multicall(&executable_name, std::env::args_os());
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
@@ -64,6 +59,9 @@ fn main() -> anyhow::Result<()> {
             block_on(tedge_watchdog::run(opt))
         }
         TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => tedge_write::bin::run(opt),
+        TEdgeOptMulticall::Component(Component::TedgeAptPlugin(opt)) => {
+            tedge_apt_plugin::run_and_exit(opt)
+        }
         TEdgeOptMulticall::Tedge { cmd, common } => {
             let tedge_config_location =
                 tedge_config::TEdgeConfigLocation::from_custom_root(&common.config_dir);
@@ -131,6 +129,18 @@ where
     Args: IntoIterator<Item = Arg>,
     Arg: Into<OsString> + Clone,
 {
+    if matches!(executable_name.as_deref(), Some("apt" | "tedge-apt-plugin")) {
+        // the apt plugin must be treated apart
+        // as we want to exit 1 and not 2 when the command line cannot be parsed
+        match AptCli::try_parse() {
+            Ok(apt) => return TEdgeOptMulticall::Component(Component::TedgeAptPlugin(apt)),
+            Err(e) => {
+                eprintln!("{}", RichFormatter::format_error(&e));
+                std::process::exit(1);
+            }
+        }
+    }
+
     let cmd = TEdgeOptMulticall::command();
 
     let is_known_subcommand = executable_name

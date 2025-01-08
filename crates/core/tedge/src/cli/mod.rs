@@ -7,6 +7,7 @@ use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
+use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
@@ -51,15 +52,18 @@ pub enum TEdgeOptMulticall {
 
 #[derive(clap::Parser, Debug)]
 pub enum Component {
-    TedgeMapper(MapperOpt),
+    C8yFirmwarePlugin(FirmwarePluginOpt),
+
+    C8yRemoteAccessPlugin(C8yRemoteAccessPluginOpt),
 
     TedgeAgent(AgentOpt),
 
-    C8yFirmwarePlugin(FirmwarePluginOpt),
+    #[clap(alias = "apt")]
+    TedgeAptPlugin(AptCli),
+
+    TedgeMapper(MapperOpt),
 
     TedgeWatchdog(WatchdogOpt),
-
-    C8yRemoteAccessPlugin(C8yRemoteAccessPluginOpt),
 
     TedgeWrite(TedgeWriteOpt),
 }
