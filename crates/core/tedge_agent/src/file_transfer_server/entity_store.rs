@@ -9,23 +9,12 @@ use axum::routing::post;
 use axum::Json;
 use axum::Router;
 use hyper::StatusCode;
-use serde::Deserialize;
-use serde::Serialize;
 use std::str::FromStr;
-use tedge_actors::Sender;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
-use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
-use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct EntityDef {
-    topic_id: String,
-}
 
 #[derive(thiserror::Error, Debug)]
 enum Error {
@@ -82,14 +71,11 @@ async fn register_entity(
         .clone()
         .await_response(EntityStoreRequest::Create(entity.clone()))
         .await?;
-    let EntityStoreResponse::Create(result) = response else {
+    let EntityStoreResponse::Create(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
     };
 
-    if !result?.0.is_empty() {
-        let message = entity.to_mqtt_message(&state.mqtt_schema);
-        state.mqtt_publisher.clone().send(message).await?;
-    }
+    res?;
     Ok(StatusCode::OK)
 }
 
@@ -119,7 +105,7 @@ async fn get_entity(
 async fn deregister_entity(
     State(state): State<AgentState>,
     Path(path): Path<String>,
-) -> Result<StatusCode, Error> {
+) -> Result<Json<Vec<EntityTopicId>>, Error> {
     let topic_id = EntityTopicId::from_str(&path)?;
 
     let response = state
@@ -132,17 +118,7 @@ async fn deregister_entity(
         return Err(Error::InvalidEntityStoreResponse);
     };
 
-    for topic_id in deleted {
-        let topic = state
-            .mqtt_schema
-            .topic_for(&topic_id, &Channel::EntityMetadata);
-        let clear_entity_msg = MqttMessage::new(&topic, "")
-            .with_retain()
-            .with_qos(QoS::AtLeastOnce);
-
-        state.mqtt_publisher.clone().send(clear_entity_msg).await?;
-    }
-    Ok(StatusCode::OK)
+    Ok(Json(deleted))
 }
 
 #[cfg(test)]
@@ -157,35 +133,22 @@ mod tests {
     use hyper::Request;
     use hyper::StatusCode;
     use serde_json::Map;
-    use std::time::Duration;
-    use tedge_actors::test_helpers::MessageReceiverExt;
-    use tedge_actors::test_helpers::TimedMessageBox;
     use tedge_actors::Builder;
     use tedge_actors::ClientMessageBox;
-    use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
-    use tedge_actors::MessageSink;
     use tedge_actors::ServerMessageBox;
     use tedge_actors::ServerMessageBoxBuilder;
-    use tedge_actors::SimpleMessageBox;
-    use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
-    use tedge_api::mqtt_topics::MqttSchema;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-    use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
     use tower::Service;
-
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
     #[tokio::test]
     async fn entity_get() {
         let TestHandle {
             mut app,
-            mqtt_box: _,
             mut entity_store_box,
         } = setup();
 
@@ -225,7 +188,6 @@ mod tests {
     async fn get_unknown_entity() {
         let TestHandle {
             mut app,
-            mqtt_box: _,
             mut entity_store_box,
         } = setup();
 
@@ -258,7 +220,6 @@ mod tests {
     async fn entity_put() {
         let TestHandle {
             mut app,
-            mut mqtt_box,
             mut entity_store_box,
         } = setup();
 
@@ -300,17 +261,12 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        let message = mqtt_box.recv().await.unwrap();
-        let received = EntityRegistrationMessage::new(&message).unwrap();
-        assert_eq!(received, entity);
     }
 
     #[tokio::test]
     async fn entity_delete() {
         let TestHandle {
             mut app,
-            mut mqtt_box,
             mut entity_store_box,
         } = setup();
 
@@ -338,16 +294,20 @@ mod tests {
             .expect("request builder");
 
         let response = app.call(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
 
-        assert_received_contains_str(&mut mqtt_box, [("te/device/test-child//", "")]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let deleted: Vec<EntityTopicId> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            deleted,
+            vec![EntityTopicId::default_child_device("test-child").unwrap()]
+        );
     }
 
     #[tokio::test]
     async fn delete_unknown_entity_is_ok() {
         let TestHandle {
             mut app,
-            mqtt_box: _,
             mut entity_store_box,
         } = setup();
 
@@ -378,7 +338,6 @@ mod tests {
 
     struct TestHandle {
         app: Router,
-        mqtt_box: TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
         entity_store_box: ServerMessageBox<EntityStoreRequest, EntityStoreResponse>,
     }
 
@@ -386,23 +345,18 @@ mod tests {
         let ttd: TempTedgeDir = TempTedgeDir::new();
         let file_transfer_dir = ttd.utf8_path_buf();
 
-        let mqtt_box = SimpleMessageBoxBuilder::new("MQTT", 10);
-
         let mut entity_store_box = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
         let entity_store_handle = ClientMessageBox::new(&mut entity_store_box);
 
         let agent_state = AgentState {
             file_transfer_dir,
             entity_store_handle,
-            mqtt_schema: MqttSchema::default(),
-            mqtt_publisher: LoggingSender::new("MQTT".to_string(), mqtt_box.get_sender()),
         };
         // TODO: Add a timeout to this router. Attempts to add a tower_http::timer::TimeoutLayer as a layer failed.
         let app: Router = entity_store_router(agent_state);
 
         TestHandle {
             app,
-            mqtt_box: mqtt_box.build().with_timeout(TEST_TIMEOUT_MS),
             entity_store_box: entity_store_box.build(),
         }
     }
