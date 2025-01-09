@@ -4134,6 +4134,7 @@ version = "1.4.2"
 dependencies = [
  "anyhow",
  "camino",
+ "certificate",
  "clap",
  "clap_complete",
  "doku",

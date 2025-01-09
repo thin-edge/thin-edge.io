@@ -152,9 +152,9 @@ fn generate_structs(
     }
 
     let lazy_reader_impls = lazy_readers.iter().map(
-        |(name, ty, function, parent_ty, id, _dto_ty)| -> syn::ItemImpl {
+        |(_, ty, function, parent_ty, id, _dto_ty)| -> syn::ItemImpl {
             if let Some((ok, err)) = extract_type_from_result(ty) {
-                parse_quote_spanned! {name.span()=>
+                parse_quote_spanned! {function.span()=>
                     impl #parent_ty {
                         pub fn #id(&self) -> Result<&#ok, #err> {
                             self.#id.0.get_or_try_init(|| #function(self, &self.#id.1))
@@ -162,7 +162,7 @@ fn generate_structs(
                     }
                 }
             } else {
-                parse_quote_spanned! {name.span()=>
+                parse_quote_spanned! {function.span()=>
                     impl #parent_ty {
                         pub fn #id(&self) -> &#ty {
                             self.#id.0.get_or_init(|| #function(self, &self.#id.1))
@@ -372,18 +372,20 @@ fn reader_value_for_field<'a>(
                         observed_keys,
                     )?;
 
-                    let (default, value) = if matches!(
-                        &rw_field.default,
-                        FieldDefault::FromOptionalKey(_)
-                    ) {
+                    let (default, value) = if rw_field.reader.function.is_some() {
+                        (
+                            quote_spanned!(default_key.span()=> #default.1.into()),
+                            quote_spanned!(rw_field.ident.span()=> OptionalConfig::Present { value: value.clone(), key: #key }),
+                        )
+                    } else if matches!(&rw_field.default, FieldDefault::FromOptionalKey(_)) {
                         (
                             quote_spanned!(default_key.span()=> #default.map(|v| v.into())),
-                            quote_spanned!(default_key.span()=> OptionalConfig::Present { value: value.clone(), key: #key }),
+                            quote_spanned!(rw_field.ident.span()=> OptionalConfig::Present { value: value.clone(), key: #key }),
                         )
                     } else {
                         (
                             quote_spanned!(default_key.span()=> #default.into()),
-                            quote_spanned!(default_key.span()=> value.clone()),
+                            quote_spanned!(rw_field.ident.span()=> value.clone()),
                         )
                     };
 
@@ -541,7 +543,7 @@ fn generate_conversions(
             FieldOrGroup::Field(field) => {
                 let name = field.ident();
                 let value = reader_value_for_field(field, &parents, root_fields, Vec::new())?;
-                field_conversions.push(quote!(#name: #value));
+                field_conversions.push(quote_spanned!(name.span()=> #name: #value));
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
@@ -561,7 +563,7 @@ fn generate_conversions(
                     })
                     .collect();
                 field_conversions.push(
-                    quote!(#name: #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*)),
+                    quote_spanned!(name.span()=> #name: #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*)),
                 );
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
@@ -597,7 +599,7 @@ fn generate_conversions(
                     .intersperse(".".to_owned())
                     .collect::<String>();
                 let new_arg2 = extra_call_args.last().unwrap().clone();
-                field_conversions.push(quote!(#name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*), #parent_key)));
+                field_conversions.push(quote_spanned!(name.span()=> #name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*), #parent_key)));
                 parents.push(new_arg);
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
@@ -609,7 +611,7 @@ fn generate_conversions(
         }
     }
 
-    Ok(quote! {
+    Ok(quote_spanned! {name.span()=>
         impl #name {
             #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
             #[automatically_derived]

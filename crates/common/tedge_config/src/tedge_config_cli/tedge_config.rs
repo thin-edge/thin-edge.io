@@ -483,8 +483,7 @@ define_tedge_config! {
             /// Identifier of the device within the fleet. It must be globally
             /// unique and is derived from the device certificate.
             #[tedge_config(reader(function = "c8y_device_id"))]
-            // TODO make this work
-            // #[tedge_config(default(from_optional_key = "device.id"))]
+            #[tedge_config(default(from_optional_key = "device.id"))]
             #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
             #[doku(as = "String")]
             id: Result<String, ReadError>,
@@ -1365,14 +1364,20 @@ fn device_id(
     device: &TEdgeConfigReaderDevice,
     dto_value: &OptionalConfig<String>,
 ) -> Result<String, ReadError> {
-    device_id_from_cert(&device.cert_path)
+    match dto_value.or_none() {
+        Some(id) => Ok(id.clone()),
+        None => device_id_from_cert(&device.cert_path)
+    }
 }
 
 fn c8y_device_id(
-    device: &TEdgeConfigReaderC8yDevice,
+    c8y_device: &TEdgeConfigReaderC8yDevice,
     dto_value: &OptionalConfig<String>,
 ) -> Result<String, ReadError> {
-    device_id_from_cert(&device.cert_path)
+    match dto_value.or_none() {
+        Some(id) => Ok(id.clone()),
+        None => device_id_from_cert(&c8y_device.cert_path)
+    }
 }
 
 fn az_device_id(device: &TEdgeConfigReaderAzDevice, _: &()) -> Result<String, ReadError> {
