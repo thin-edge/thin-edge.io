@@ -72,7 +72,7 @@ All the child devices and services can be deregistered using a wildcard topic fi
 combined with a topic exclusion filter for the main device, as follows:
 
 ```sh
-mosquitto_sub -v -t "te/device/+/#" -T "te/device/main/#"
+mosquitto_sub -v -t "te/device/+/#" -T "te/device/main/#" --remove-retained -W 3
 ```
 
 ## Unsupported cases
