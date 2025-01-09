@@ -478,9 +478,7 @@ async fn respond_to(
     let status = res.status();
     let headers = std::mem::take(res.headers_mut());
 
-    let body = if te_header.map_or(false, |h| {
-        h.to_str().unwrap_or_default().contains("chunked")
-    }) {
+    let body = if te_header.is_some_and(|h| h.to_str().unwrap_or_default().contains("chunked")) {
         axum::body::boxed(StreamBody::new(res.bytes_stream()))
     } else {
         axum::body::boxed(Full::new(

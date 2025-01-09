@@ -528,7 +528,7 @@ fn bridge_health_topic(
 
 fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
     message.topic == health_topic
-        && std::str::from_utf8(&message.payload).map_or(false, |msg| msg.contains("\"up\""))
+        && std::str::from_utf8(&message.payload).is_ok_and(|msg| msg.contains("\"up\""))
 }
 
 // Check the connection by using the jwt token retrieval over the mqtt.

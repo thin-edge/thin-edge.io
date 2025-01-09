@@ -145,7 +145,7 @@ where
 
     let is_known_subcommand = executable_name
         .as_deref()
-        .map_or(false, |name| cmd.find_subcommand(name).is_some());
+        .is_some_and(|name| cmd.find_subcommand(name).is_some());
     let cmd = cmd.multicall(is_known_subcommand);
 
     let cmd2 = cmd.clone();
