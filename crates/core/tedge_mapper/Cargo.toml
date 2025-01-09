@@ -1,6 +1,6 @@
 [package]
 name = "tedge-mapper"
-description = "tedge-mapper is the mapper that translates thin-edge.io data model to c8y/az data model."
+description = "tedge-mapper translates thin-edge.io data model to c8y/az/aws data model"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
