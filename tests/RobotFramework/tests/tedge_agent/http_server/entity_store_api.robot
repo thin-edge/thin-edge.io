@@ -15,7 +15,7 @@ ${DEVICE_SN}    ${EMPTY}    # Main device serial number
 *** Test Cases ***
 CRUD apis
     Execute Command
-    ...    curl -X POST http://localhost:8000/tedge/entity-store/v1/entities/device/child01// -H 'Content-Type: application/json' -d '{"@topic-id": "device/child01//", "@type": "child-device"}'
+    ...    curl -X POST http://localhost:8000/tedge/entity-store/v1/entities -H 'Content-Type: application/json' -d '{"@topic-id": "device/child01//", "@type": "child-device"}'
 
     ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal

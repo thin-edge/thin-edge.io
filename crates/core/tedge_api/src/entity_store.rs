@@ -664,6 +664,9 @@ pub enum Error {
     #[error("The main device was already registered at topic {0}")]
     MainDeviceAlreadyRegistered(Box<str>),
 
+    #[error("An entity with topic id: {0} is already registered")]
+    EntityAlreadyRegistered(EntityTopicId),
+
     #[error("The specified entity {0} does not exist in the store")]
     UnknownEntity(String),
 
@@ -945,6 +948,34 @@ mod tests {
 
         assert_eq!(store.main_device(), &EntityTopicId::default_main_device());
         assert!(store.get(&EntityTopicId::default_main_device()).is_some());
+    }
+
+    #[test]
+    fn register_child_device() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+
+        let entity = EntityRegistrationMessage::new(&MqttMessage::new(
+            &Topic::new("te/device/child1//").unwrap(),
+            json!({
+                "@type" : "child-device",
+                "name": "child1",
+                "type": "RPi",
+                "version": "5",
+                "complex": {
+                    "foo" : "bar"
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+        let updated_entities = store.update(entity.clone()).unwrap();
+
+        let pending_entity: PendingEntityData = entity.into();
+        assert_eq!(updated_entities.0.len(), 1);
+        assert_eq!(updated_entities.0, ["device/main//"]);
+        assert_eq!(updated_entities.1.len(), 1);
+        assert_eq!(updated_entities.1, vec![pending_entity]);
     }
 
     #[test]

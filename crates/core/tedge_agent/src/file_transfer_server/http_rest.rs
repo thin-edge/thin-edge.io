@@ -9,9 +9,6 @@ use futures::future::FutureExt;
 use rustls::ServerConfig;
 use std::future::Future;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::LoggingSender;
-use tedge_api::mqtt_topics::MqttSchema;
-use tedge_mqtt_ext::MqttMessage;
 use tokio::io;
 use tokio::net::TcpListener;
 
@@ -19,22 +16,16 @@ use tokio::net::TcpListener;
 pub(crate) struct AgentState {
     pub(crate) file_transfer_dir: Utf8PathBuf,
     pub(crate) entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
-    pub(crate) mqtt_schema: MqttSchema,
-    pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
 impl AgentState {
     pub fn new(
         file_transfer_dir: Utf8PathBuf,
         entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
-        mqtt_schema: MqttSchema,
-        mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
         AgentState {
             file_transfer_dir,
             entity_store_handle,
-            mqtt_schema,
-            mqtt_publisher,
         }
     }
 }

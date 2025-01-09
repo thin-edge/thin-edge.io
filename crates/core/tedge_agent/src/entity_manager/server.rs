@@ -12,6 +12,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_api::EntityStore;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
 
@@ -72,11 +73,11 @@ impl Server for EntityStoreServer {
                 EntityStoreResponse::Get(entity.cloned())
             }
             EntityStoreRequest::Create(entity) => {
-                let res = self.entity_store.update(entity);
+                let res = self.register_entity(entity).await;
                 EntityStoreResponse::Create(res)
             }
             EntityStoreRequest::Delete(topic_id) => {
-                let deleted_entities = self.entity_store.deregister_entity(&topic_id);
+                let deleted_entities = self.deregister_entity(topic_id).await;
                 EntityStoreResponse::Delete(deleted_entities)
             }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
@@ -90,11 +91,11 @@ impl Server for EntityStoreServer {
 impl EntityStoreServer {
     async fn process_mqtt_message(&mut self, message: MqttMessage) {
         if let Ok((topic_id, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
-        if let Channel::EntityMetadata = channel {
-            self.process_entity_registration(message);
-        } else {
-            self.process_entity_data(topic_id).await;
-        }
+            if let Channel::EntityMetadata = channel {
+                self.process_entity_registration(message);
+            } else {
+                self.process_entity_data(topic_id).await;
+            }
         } else {
             error!("Ignoring the message: {message} received on unsupported topic",);
         }
@@ -109,7 +110,7 @@ impl EntityStoreServer {
         match EntityRegistrationMessage::try_from(&message) {
             Ok(entity) => {
                 if let Err(err) = self.entity_store.update(entity.clone()) {
-                            error!(
+                    error!(
                         "Failed to register entity registration message: {entity:?} due to {err}"
                     );
                 }
@@ -143,6 +144,55 @@ impl EntityStoreServer {
                 }
             }
         }
+    }
+
+    async fn register_entity(
+        &mut self,
+        entity: EntityRegistrationMessage,
+    ) -> Result<(Vec<EntityTopicId>, Vec<PendingEntityData>), entity_store::Error> {
+        if self.entity_store.get(&entity.topic_id).is_some() {
+            return Err(entity_store::Error::EntityAlreadyRegistered(
+                entity.topic_id,
+            ));
+        }
+
+        if let Some(parent) = entity.parent.as_ref() {
+            if self.entity_store.get(parent).is_none() {
+                return Err(entity_store::Error::NoParent(
+                    parent.to_string().into_boxed_str(),
+                ));
+            }
+        }
+
+        let (affected, pending) = self.entity_store.update(entity.clone())?;
+
+        if !affected.is_empty() {
+            let message = entity.to_mqtt_message(&self.mqtt_schema);
+            if let Err(err) = self.mqtt_publisher.send(message.clone()).await {
+                error!(
+                    "Failed to publish the entity registration message: {message:?} due to {err}",
+                )
+            }
+        }
+        Ok((affected, pending))
+    }
+
+    async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityTopicId> {
+        let deleted = self.entity_store.deregister_entity(&topic_id);
+        for topic_id in deleted.iter() {
+            let topic = self
+                .mqtt_schema
+                .topic_for(topic_id, &Channel::EntityMetadata);
+            let clear_entity_msg = MqttMessage::new(&topic, "")
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce);
+
+            if let Err(err) = self.mqtt_publisher.send(clear_entity_msg).await {
+                error!("Failed to publish clear message for the topic: {topic_id} due to {err}",)
+            }
+        }
+
+        deleted
     }
 }
 

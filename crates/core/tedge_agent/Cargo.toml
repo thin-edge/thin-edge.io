@@ -52,6 +52,7 @@ tracing = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
+assert-json-diff = { workspace = true }
 axum_tls = { workspace = true, features = ["test-helpers"] }
 bytes = { workspace = true }
 http-body = { workspace = true }

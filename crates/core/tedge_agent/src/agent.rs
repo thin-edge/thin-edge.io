@@ -112,7 +112,6 @@ impl AgentConfig {
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
             .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
-        let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
 
         let mqtt_device_topic_id = cliopts
             .mqtt_device_topic_id
@@ -142,7 +141,6 @@ impl AgentConfig {
             key_path: tedge_config.http.key_path.clone(),
             ca_path: tedge_config.http.ca_path.clone(),
             bind_addr: SocketAddr::from((http_bind_address, http_port)),
-            mqtt_schema,
         };
 
         // Restart config
@@ -409,7 +407,6 @@ impl Agent {
             let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
                 self.config.http_config,
                 &mut entity_store_actor_builder,
-                &mut mqtt_actor_builder,
             )
             .await?;
 
