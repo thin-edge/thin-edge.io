@@ -117,7 +117,7 @@ impl FieldOrGroup {
     pub fn is_called(&self, target: &syn::Ident) -> bool {
         self.ident() == target
             || match self {
-                Self::Field(field) => field.rename().map_or(false, |rename| *target == rename),
+                Self::Field(field) => field.rename().is_some_and(|rename| *target == rename),
                 // Groups don't support renaming at the moment
                 Self::Group(_) => false,
                 Self::Multi(_) => false,

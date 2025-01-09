@@ -647,7 +647,7 @@ impl<Ack: MqttAck, Clock: MonotonicClock> MessageLoopBreaker<Ack, Clock> {
         if self
             .forwarded_messages
             .front()
-            .map_or(false, |(_, sent)| have_same_content(sent, &received))
+            .is_some_and(|(_, sent)| have_same_content(sent, &received))
         {
             self.client.ack(&received).await.unwrap();
             self.forwarded_messages.pop_front();
