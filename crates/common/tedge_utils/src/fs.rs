@@ -48,7 +48,11 @@ pub fn atomically_write_file_sync(
     dest: impl AsRef<Path>,
     mut reader: impl Read,
 ) -> Result<(), AtomFileError> {
-    let dest_dir = parent_dir(dest.as_ref());
+    let dest = dest.as_ref();
+    // resolve path (including symlinks)
+    // if the symlink doesn't exist, (attempt to) create the file it points to
+    let dest = std::fs::read_link(dest).unwrap_or_else(|_| dest.to_path_buf());
+    let dest_dir = parent_dir(&dest);
 
     // removed on drop
     let mut file = tempfile::Builder::new()
@@ -110,7 +114,13 @@ pub async fn atomically_write_file_async(
     dest: impl AsRef<Path>,
     content: &[u8],
 ) -> Result<(), AtomFileError> {
-    let dest_dir = parent_dir(dest.as_ref());
+    let dest = dest.as_ref();
+    // resolve path (including symlinks)
+    // if the symlink doesn't exist, (attempt to) create the file it points to
+    let dest = tokio::fs::read_link(dest)
+        .await
+        .unwrap_or_else(|_| dest.to_path_buf());
+    let dest_dir = parent_dir(&dest);
 
     // removed on drop if not persisted
     let mut file = tempfile::Builder::new()
@@ -192,6 +202,47 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn atomically_write_file_file_async_with_symlink() {
+        let temp_dir = tempdir().unwrap();
+        let link_path = temp_dir.path().join("test-link");
+        let destination_path = temp_dir.path().join("test-orig");
+        let _ = std::fs::write(destination_path.clone(), "dummy contents");
+        let _ = std::os::unix::fs::symlink(destination_path.clone(), link_path.clone());
+
+        let content = "test_data";
+
+        atomically_write_file_async(destination_path.clone(), content.as_bytes())
+            .await
+            .unwrap();
+
+        if let Ok(destination_content) = std::fs::read(destination_path) {
+            assert_eq!(destination_content, content.as_bytes());
+        } else {
+            panic!("failed to read the new file");
+        }
+    }
+
+    #[tokio::test]
+    async fn atomically_write_file_file_async_with_broken_symlink() {
+        let temp_dir = tempdir().unwrap();
+        let link_path = temp_dir.path().join("test-link");
+        let destination_path = temp_dir.path().join("test-orig");
+        let _ = std::os::unix::fs::symlink(destination_path.clone(), link_path.clone());
+
+        let content = "test_data";
+
+        atomically_write_file_async(destination_path.clone(), content.as_bytes())
+            .await
+            .unwrap();
+
+        if let Ok(destination_content) = std::fs::read(destination_path) {
+            assert_eq!(destination_content, content.as_bytes());
+        } else {
+            panic!("failed to read the new file");
+        }
+    }
+
     #[test]
     fn atomically_write_file_file_sync() {
         let temp_dir = tempdir().unwrap();
@@ -202,6 +253,43 @@ mod tests {
         let () = atomically_write_file_sync(&destination_path, content.as_bytes()).unwrap();
 
         if let Ok(destination_content) = std::fs::read(&destination_path) {
+            assert_eq!(destination_content, content.as_bytes());
+        } else {
+            panic!("failed to read the new file");
+        }
+    }
+
+    #[test]
+    fn atomically_write_file_file_sync_with_symlink() {
+        let temp_dir = tempdir().unwrap();
+        let link_path = temp_dir.path().join("test-link");
+        let destination_path = temp_dir.path().join("test-orig");
+        let _ = std::fs::write(destination_path.clone(), "dummy contents");
+        let _ = std::os::unix::fs::symlink(destination_path.clone(), link_path.clone());
+
+        let content = "test_data";
+
+        let () = atomically_write_file_sync(link_path.clone(), content.as_bytes()).unwrap();
+
+        if let Ok(destination_content) = std::fs::read(destination_path) {
+            assert_eq!(destination_content, content.as_bytes());
+        } else {
+            panic!("failed to read the new file");
+        }
+    }
+
+    #[test]
+    fn atomically_write_file_file_sync_with_broken_symlink() {
+        let temp_dir = tempdir().unwrap();
+        let link_path = temp_dir.path().join("test-link");
+        let destination_path = temp_dir.path().join("test-orig");
+        let _ = std::os::unix::fs::symlink(destination_path.clone(), link_path.clone());
+
+        let content = "test_data";
+
+        let () = atomically_write_file_sync(link_path.clone(), content.as_bytes()).unwrap();
+
+        if let Ok(destination_content) = std::fs::read(destination_path) {
             assert_eq!(destination_content, content.as_bytes());
         } else {
             panic!("failed to read the new file");
