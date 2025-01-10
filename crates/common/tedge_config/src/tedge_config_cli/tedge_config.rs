@@ -428,7 +428,7 @@ define_tedge_config! {
     device: {
         /// Identifier of the device within the fleet. It must be globally
         /// unique and is derived from the device certificate.
-        #[tedge_config(reader(function = "device_id"))]
+        #[tedge_config(reader(function = "device_id", private))]
         #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
         #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
         #[doku(as = "String")]
@@ -674,12 +674,8 @@ define_tedge_config! {
         device: {
             /// Identifier of the device within the fleet. It must be globally
             /// unique and is derived from the device certificate.
-            #[tedge_config(readonly(
-                write_error = "\
-                    The device id is read from the device certificate and cannot be set directly.\n\
-                    To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
-                function = "az_device_id",
-            ))]
+            #[tedge_config(reader(function = "az_device_id"))]
+            #[tedge_config(default(from_optional_key = "device.id"))]
             #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
             #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
             #[doku(as = "String")]
@@ -744,12 +740,8 @@ define_tedge_config! {
         device: {
             /// Identifier of the device within the fleet. It must be globally
             /// unique and is derived from the device certificate.
-            #[tedge_config(readonly(
-                write_error = "\
-                    The device id is read from the device certificate and cannot be set directly.\n\
-                    To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
-                function = "aws_device_id",
-            ))]
+            #[tedge_config(reader(function = "aws_device_id"))]
+            #[tedge_config(default(from_optional_key = "device.id"))]
             #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
             #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
             #[doku(as = "String")]
@@ -1357,7 +1349,7 @@ fn device_id(
 ) -> Result<String, ReadError> {
     match dto_value.or_none() {
         Some(id) => Ok(id.clone()),
-        None => device_id_from_cert(&device.cert_path)
+        None => device_id_from_cert(&device.cert_path),
     }
 }
 
@@ -1367,16 +1359,28 @@ fn c8y_device_id(
 ) -> Result<String, ReadError> {
     match dto_value.or_none() {
         Some(id) => Ok(id.clone()),
-        None => device_id_from_cert(&c8y_device.cert_path)
+        None => device_id_from_cert(&c8y_device.cert_path),
     }
 }
 
-fn az_device_id(device: &TEdgeConfigReaderAzDevice, _: &()) -> Result<String, ReadError> {
-    device_id_from_cert(&device.cert_path)
+fn az_device_id(
+    az_device: &TEdgeConfigReaderAzDevice,
+    dto_value: &OptionalConfig<String>,
+) -> Result<String, ReadError> {
+    match dto_value.or_none() {
+        Some(id) => Ok(id.clone()),
+        None => device_id_from_cert(&az_device.cert_path),
+    }
 }
 
-fn aws_device_id(device: &TEdgeConfigReaderAwsDevice, _: &()) -> Result<String, ReadError> {
-    device_id_from_cert(&device.cert_path)
+fn aws_device_id(
+    aws_device: &TEdgeConfigReaderAwsDevice,
+    dto_value: &OptionalConfig<String>,
+) -> Result<String, ReadError> {
+    match dto_value.or_none() {
+        Some(id) => Ok(id.clone()),
+        None => device_id_from_cert(&aws_device.cert_path),
+    }
 }
 
 fn cert_error_into_config_error(key: Cow<'static, str>, err: CertificateError) -> ReadError {
