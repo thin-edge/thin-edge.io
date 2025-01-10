@@ -54,7 +54,6 @@ pub enum Error {
 /// Any entity that is registered before its parents are cached in the `pending_entities` store,
 /// until those parents are registered as well.
 /// Once the parent is registered, the pending child entities are also registered along with it.
-
 pub(crate) struct EntityCache {
     main_device_tid: EntityTopicId,
     main_device_xid: EntityExternalId,

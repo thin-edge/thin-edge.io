@@ -1,3 +1,9 @@
+//! This module defines the axum routes and handlers for the file transfer service REST APIs.
+//! The following endpoints are currently supported:
+//!
+//! - `PUT /tedge/file-transfer/*path`: Upload a new file
+//! - `GET /tedge/file-transfer/*path`: Retrieves an existing file
+//! - `DELETE /tedge/file-transfer/*path`: Deletes a file
 use super::error::FileTransferRequestError as Error;
 use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
