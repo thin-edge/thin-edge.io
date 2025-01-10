@@ -59,8 +59,17 @@ pub fn log_init(
         .with_filter(LevelFilter::INFO)
         .with_filter(filter_fn(|metadata| metadata.target() == "Audit"));
 
+    // Actor traces
+    let trace_appender = tracing_appender::rolling::hourly("/tmp", "tedge.actors.log");
+    let trace_layer = tracing_subscriber::fmt::layer()
+        .with_writer(trace_appender)
+        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+        .with_filter(LevelFilter::DEBUG)
+        .with_filter(filter_fn(|metadata| metadata.target() == "Actors"));
+
     tracing_subscriber::registry()
         .with(audit_layer)
+        .with(trace_layer)
         .with(log_layer)
         .init();
 
