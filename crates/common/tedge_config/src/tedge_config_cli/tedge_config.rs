@@ -1181,6 +1181,15 @@ impl TEdgeConfigReader {
             Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
         })
     }
+
+    pub fn device_id<'a>(&self, cloud: Option<impl Into<Cloud<'a>>>) -> Result<&str, ReadError> {
+        Ok(match cloud.map(<_>::into) {
+            None => self.device.id()?,
+            Some(Cloud::C8y(profile)) => self.c8y.try_get(profile)?.device.id()?,
+            Some(Cloud::Az(profile)) => self.az.try_get(profile)?.device.id()?,
+            Some(Cloud::Aws(profile)) => self.aws.try_get(profile)?.device.id()?,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1389,6 +1398,32 @@ fn aws_device_id(
     match dto_value.or_none() {
         Some(id) => Ok(id.clone()),
         None => device_id_from_cert(&aws_device.cert_path),
+    }
+}
+
+pub fn explicit_device_id(
+    config_location: &TEdgeConfigLocation,
+    cloud: &Option<Cloud>,
+) -> Option<String> {
+    let dto = config_location.load_dto_from_toml_and_env().ok()?;
+
+    match cloud {
+        None => dto.device.id.clone(),
+        Some(Cloud::C8y(profile)) => {
+            let key = profile.map(|name| name.to_string());
+            let c8y_dto = dto.c8y.try_get(key.as_deref(), "c8y").ok()?;
+            c8y_dto.device.id.clone()
+        }
+        Some(Cloud::Az(profile)) => {
+            let key = profile.map(|name| name.to_string());
+            let az_dto = dto.az.try_get(key.as_deref(), "az").ok()?;
+            az_dto.device.id.clone()
+        }
+        Some(Cloud::Aws(profile)) => {
+            let key = profile.map(|name| name.to_string());
+            let aws_dto = dto.aws.try_get(key.as_deref(), "aws").ok()?;
+            aws_dto.device.id.clone()
+        }
     }
 }
 

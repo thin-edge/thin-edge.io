@@ -4,6 +4,7 @@ use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
+use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
 use crate::cli::connect::jwt_token::*;
@@ -20,7 +21,9 @@ use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::JWT_TOKEN;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use certificate::PemCertificate;
 use mqtt_channel::Topic;
 use rumqttc::Event;
 use rumqttc::Incoming;
@@ -50,8 +53,6 @@ use tedge_utils::paths::DraftFile;
 use tracing::warn;
 use which::which;
 use yansi::Paint as _;
-
-use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
@@ -337,6 +338,18 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
     Ok(())
 }
 
+fn validate_device_matches_cert_cn(id: &str, cert: &Utf8Path) -> anyhow::Result<()> {
+    let pem = PemCertificate::from_pem_file(cert)?;
+    let cn = pem.subject_common_name()?;
+    if id == cn {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(format!(
+            "device.id '{id}' mismatches to the device certificate's CN '{cn}'"
+        )))
+    }
+}
+
 fn disallow_matching_url_device_id(
     config: &TEdgeConfig,
     url: fn(Option<String>) -> ReadableKey,
@@ -438,6 +451,8 @@ pub fn bridge_config(
     match cloud {
         MaybeBorrowedCloud::Azure(profile) => {
             let az_config = config.az.try_get(profile.as_deref())?;
+            validate_device_matches_cert_cn(az_config.device.id()?, az_config.device_cert_path())?;
+
             let params = BridgeConfigAzureParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
                     az_config.url.or_config_not_set()?.as_str(),
@@ -458,6 +473,11 @@ pub fn bridge_config(
         }
         MaybeBorrowedCloud::Aws(profile) => {
             let aws_config = config.aws.try_get(profile.as_deref())?;
+            validate_device_matches_cert_cn(
+                aws_config.device.id()?,
+                aws_config.device_cert_path(),
+            )?;
+
             let params = BridgeConfigAwsParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
                     aws_config.url.or_config_not_set()?.as_str(),
@@ -481,7 +501,13 @@ pub fn bridge_config(
 
             let (remote_username, remote_password) =
                 match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
-                    AuthType::Certificate => (None, None),
+                    AuthType::Certificate => {
+                        validate_device_matches_cert_cn(
+                            c8y_config.device.id()?,
+                            c8y_config.device_cert_path(),
+                        )?;
+                        (None, None)
+                    }
                     AuthType::Basic => {
                         let (username, password) =
                             read_c8y_credentials(&c8y_config.credentials_path)?;
@@ -1248,8 +1274,10 @@ mod tests {
     mod validate_config {
         use super::super::validate_config;
         use super::Cloud;
+        use crate::bridge_config;
         use tedge_config::TEdgeConfigLocation;
         use tedge_test_utils::fs::TempTedgeDir;
+        use test_case::test_case;
 
         #[test]
         fn allows_default_config() {
@@ -1348,6 +1376,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
                     .unwrap();
                 dto.try_update_str(
+                    &"c8y.profiles.new.device.id".parse().unwrap(),
+                    "test-device",
+                )
+                .unwrap();
+                dto.try_update_str(
                     &"c8y.profiles.new.device.cert_path".parse().unwrap(),
                     &cert_path.display().to_string(),
                 )
@@ -1389,6 +1422,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 dto.try_update_str(&"c8y.profiles.diff_id.url".parse().unwrap(), "example.com")
                     .unwrap();
+                dto.try_update_str(
+                    &"c8y.profiles.diff_id.device.id".parse().unwrap(),
+                    "test-device-second",
+                )
+                .unwrap();
                 dto.try_update_str(
                     &"c8y.profiles.diff_id.device.cert_path".parse().unwrap(),
                     &cert_path.display().to_string(),
@@ -1550,6 +1588,57 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let config = loc.load().unwrap();
 
             validate_config(&config, &cloud).unwrap();
+        }
+
+        #[test_case(Cloud::c8y(None), "c8y.", "")]
+        #[test_case(Cloud::c8y(Some("foo".parse().unwrap())), "c8y.profiles.foo.", "c8y.profiles.foo.")]
+        #[test_case(Cloud::az(None), "az.", "")]
+        #[test_case(Cloud::az(Some("foo".parse().unwrap())), "az.profiles.foo.", "az.profiles.foo.")]
+        #[test_case(Cloud::aws(None), "aws.", "")]
+        #[test_case(Cloud::aws(Some("foo".parse().unwrap())), "aws.profiles.foo.", "aws.profiles.foo.")]
+        fn rejects_device_id_mismatches_cert_cn(
+            cloud: Cloud,
+            url_prefix: &str,
+            device_prefix: &str,
+        ) {
+            let ttd = TempTedgeDir::new();
+            let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
+            let mut cert_path = ttd.path().to_owned();
+            cert_path.push("test.crt");
+            let mut key_path = ttd.path().to_owned();
+            key_path.push("test.key");
+            std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
+            std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
+            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
+            loc.update_toml(&|dto, _| {
+                dto.try_update_str(
+                    &format!("{url_prefix}url").parse().unwrap(),
+                    "latest.example.com",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &format!("{device_prefix}device.id").parse().unwrap(),
+                    "custom-device",
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &format!("{device_prefix}device.cert_path").parse().unwrap(),
+                    &cert_path.display().to_string(),
+                )
+                .unwrap();
+                dto.try_update_str(
+                    &format!("{device_prefix}device.key_path").parse().unwrap(),
+                    &key_path.display().to_string(),
+                )
+                .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            let config = loc.load().unwrap();
+
+            let err = bridge_config(&config, &cloud).unwrap_err();
+            eprintln!("err={err}");
+            assert!(err.to_string().contains("mismatch"));
         }
     }
 }

@@ -71,6 +71,7 @@ mod tests {
     use crate::CreateCertCmd;
     use assert_matches::assert_matches;
     use std::path::Path;
+    use tedge_config::TEdgeConfigLocation;
     use tempfile::*;
     use x509_parser::der_parser::asn1_rs::FromDer;
     use x509_parser::nom::AsBytes;
@@ -113,6 +114,7 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
         };
 
         // create private key and public cert with standard command
