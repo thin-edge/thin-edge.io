@@ -1,4 +1,5 @@
 use super::error::CertError;
+use crate::cli::common::Cloud;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
@@ -10,6 +11,8 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
+use tedge_config::TEdgeConfigLocation;
+use tedge_config::WritableKey;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
 
@@ -27,6 +30,10 @@ pub struct CreateCertCmd {
     /// The owner of the private key
     pub user: String,
     pub group: String,
+
+    /// The configs required to update the tedge.toml file
+    pub config_location: TEdgeConfigLocation,
+    pub cloud: Option<Cloud>,
 }
 
 impl Command for CreateCertCmd {
@@ -38,6 +45,8 @@ impl Command for CreateCertCmd {
         let config = NewCertificateConfig::default();
         self.create_test_certificate(&config)?;
         eprintln!("Certificate was successfully created");
+        let key = self.set_device_id()?;
+        eprintln!("'{key}' is set to {}", self.id);
         Ok(())
     }
 }
@@ -64,6 +73,30 @@ impl CreateCertCmd {
         )
         .map_err(|err| err.key_context(key_path.clone()))?;
         Ok(())
+    }
+
+    fn set_device_id(&self) -> Result<WritableKey, anyhow::Error> {
+        let profiled_key = match &self.cloud {
+            None => WritableKey::DeviceId,
+            Some(cloud) => {
+                let key = match cloud {
+                    Cloud::C8y(_) => WritableKey::C8yDeviceId(None),
+                    Cloud::Azure(_) => WritableKey::AzDeviceId(None),
+                    Cloud::Aws(_) => WritableKey::AwsDeviceId(None),
+                };
+                let profile = cloud.profile_name().cloned();
+                crate::try_with_profile!(key, profile)
+            }
+        };
+
+        self.config_location
+            .update_toml(&|dto, _reader| {
+                dto.try_update_str(&profiled_key, &self.id)
+                    .map_err(|e| e.into())
+            })
+            .map_err(anyhow::Error::new)?;
+
+        Ok(profiled_key)
     }
 }
 
@@ -170,13 +203,13 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use std::fs;
-    use tempfile::*;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     #[test]
     fn basic_usage() {
-        let dir = tempdir().unwrap();
-        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
-        let key_path = temp_file_path(&dir, "my-device-key.pem");
+        let ttd = TempTedgeDir::new();
+        let cert_path = ttd.utf8_path().join("my-device-cert.pem");
+        let key_path = ttd.utf8_path().join("my-device-key.pem");
         let id = "my-device-id";
 
         let cmd = CreateCertCmd {
@@ -185,6 +218,8 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(ttd.path()),
+            cloud: None,
         };
 
         assert_matches!(
@@ -197,10 +232,9 @@ mod tests {
 
     #[test]
     fn check_certificate_is_not_overwritten() {
-        let dir = tempdir().unwrap();
-
-        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
-        let key_path = temp_file_path(&dir, "my-device-key.pem");
+        let ttd = TempTedgeDir::new();
+        let cert_path = ttd.utf8_path().join("my-device-cert.pem");
+        let key_path = ttd.utf8_path().join("my-device-key.pem");
 
         let cert_content = "some cert content";
         let key_content = "some key content";
@@ -214,6 +248,8 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(ttd.path()),
+            cloud: None,
         };
 
         assert!(cmd
@@ -227,9 +263,9 @@ mod tests {
 
     #[test]
     fn create_certificate_in_non_existent_directory() {
-        let dir = tempdir().unwrap();
-        let key_path = temp_file_path(&dir, "my-device-key.pem");
-        let cert_path = Utf8PathBuf::from("/non/existent/cert/path");
+        let ttd = TempTedgeDir::new();
+        let cert_path = ttd.utf8_path().join("/non/existent/cert/path");
+        let key_path = ttd.utf8_path().join("my-device-key.pem");
 
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
@@ -237,6 +273,8 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(ttd.path()),
+            cloud: None,
         };
 
         let cert_error = cmd
@@ -247,9 +285,9 @@ mod tests {
 
     #[test]
     fn create_key_in_non_existent_directory() {
-        let dir = tempdir().unwrap();
-        let cert_path = temp_file_path(&dir, "my-device-cert.pem");
-        let key_path = Utf8PathBuf::from("/non/existent/key/path");
+        let ttd = TempTedgeDir::new();
+        let cert_path = ttd.utf8_path().join("my-device-cert.pem");
+        let key_path = ttd.utf8_path().join("/non/existent/key/path");
 
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
@@ -257,6 +295,8 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(ttd.path()),
+            cloud: None,
         };
 
         let cert_error = cmd
@@ -265,8 +305,63 @@ mod tests {
         assert_matches!(cert_error, CertError::KeyPathError { .. });
     }
 
-    fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
-        dir.path().join(filename).try_into().unwrap()
+    #[test]
+    fn write_device_id() {
+        let ttd = TempTedgeDir::new();
+        let cert_path = ttd.utf8_path().join("my-device-cert.pem");
+        let key_path = ttd.utf8_path().join("my-device-key.pem");
+        let id = "my-device-id";
+
+        let cmd = CreateCertCmd {
+            id: String::from(id),
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(ttd.path()),
+            cloud: None,
+        };
+
+        let key = cmd.set_device_id().unwrap();
+        assert_eq!(key, WritableKey::DeviceId);
+
+        let toml_path = ttd.utf8_path().join("tedge.toml");
+        let toml = fs::read_to_string(&toml_path)
+            .unwrap()
+            .parse::<toml::Value>()
+            .unwrap();
+        assert_eq!(toml["device"]["id"].as_str(), Some(id));
+    }
+
+    #[test]
+    fn write_device_id_with_cloud_profile() {
+        let ttd = TempTedgeDir::new();
+        let cert_path = ttd.utf8_path().join("my-device-cert@profile.pem");
+        let key_path = ttd.utf8_path().join("my-device-key@profile.pem");
+        let id = "my-device-id";
+
+        let cmd = CreateCertCmd {
+            id: String::from(id),
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+            user: "mosquitto".to_string(),
+            group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(ttd.path()),
+            cloud: Some(Cloud::c8y(Some("second".to_string().try_into().unwrap()))),
+        };
+
+        let key = cmd.set_device_id().unwrap();
+        assert_eq!(key, WritableKey::C8yDeviceId(Some("second".to_string())));
+
+        let toml_path = ttd.utf8_path().join("tedge.toml");
+        let toml = fs::read_to_string(&toml_path)
+            .unwrap()
+            .parse::<toml::Value>()
+            .unwrap();
+        assert_eq!(
+            toml["c8y"]["profiles"]["second"]["device"]["id"].as_str(),
+            Some(id)
+        );
     }
 
     fn parse_pem_file(path: impl AsRef<Path>) -> Result<pem::Pem, String> {
