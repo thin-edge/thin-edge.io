@@ -181,6 +181,7 @@ impl EntityStoreServer {
     }
 }
 
-pub fn subscriptions() -> TopicFilter {
-    vec!["te/+/+/+/+/#"].try_into().unwrap()
+pub fn subscriptions(topic_root: &str) -> TopicFilter {
+    let topic = format!("{}/+/+/+/+/#", topic_root);
+    vec![topic].try_into().unwrap()
 }

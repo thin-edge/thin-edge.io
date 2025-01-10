@@ -393,7 +393,7 @@ impl Agent {
             let mut entity_store_actor_builder =
                 ServerActorBuilder::new(entity_store_server, &ServerConfig::default(), Sequential);
             mqtt_actor_builder.connect_mapped_sink(
-                entity_manager::server::subscriptions(),
+                entity_manager::server::subscriptions(self.config.mqtt_topic_root.as_ref()),
                 &entity_store_actor_builder,
                 |message| {
                     Some(RequestEnvelope {
