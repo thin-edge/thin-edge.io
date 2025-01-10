@@ -55,7 +55,7 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
                 }
                 Some(result) = self.running_request_handlers.next() => {
                     if let Err(err) = result {
-                        log::error!("Fail to run a request to completion: {err}");
+                        tracing::error!(target: "Actors", "Fail to run a request to completion: {err}");
                     }
                 }
                 else => {
@@ -73,7 +73,7 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
         tokio::select! {
             Some(result) = self.running_request_handlers.next() => {
                 if let Err(err) = result {
-                    log::error!("Fail to run a request to completion: {err}");
+                    tracing::error!(target: "Actors", "Fail to run a request to completion: {err}");
                 }
                 ControlFlow::Continue(())
             },

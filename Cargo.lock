@@ -4251,9 +4251,9 @@ version = "1.4.2"
 dependencies = [
  "async-trait",
  "futures",
- "log",
  "thiserror 1.0.61",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
