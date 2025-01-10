@@ -16,7 +16,7 @@ pub struct PendingEntityStore {
     // This orphans map is keyed by the unregistered parent topic id to their children
     orphans: HashMap<EntityTopicId, Vec<EntityTopicId>>,
     entities: HashMap<EntityTopicId, PendingEntityCache>,
-    pub telemetry_cache: RingBuffer<MqttMessage>,
+    telemetry_cache: RingBuffer<MqttMessage>,
 }
 
 /// A cache of all the data messages received before the entity itself is registered.

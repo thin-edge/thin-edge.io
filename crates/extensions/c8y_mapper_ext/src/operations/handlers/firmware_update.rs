@@ -296,7 +296,7 @@ mod tests {
         .await
         .expect("Send failed");
 
-        mqtt.skip(1).await; // Skip entity registration, mapping and installed firmware messages
+        mqtt.skip(1).await; // Skip the installed firmware message
 
         // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(

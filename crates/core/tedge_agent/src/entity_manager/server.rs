@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::info;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::Sender;
@@ -63,7 +64,7 @@ impl Server for EntityStoreServer {
     type Response = EntityStoreResponse;
 
     fn name(&self) -> &str {
-        "ConcurrentWorker"
+        "EntityStoreServer"
     }
 
     async fn handle(&mut self, request: EntityStoreRequest) -> EntityStoreResponse {
@@ -104,21 +105,13 @@ impl EntityStoreServer {
     fn process_entity_registration(&mut self, message: MqttMessage) {
         match EntityRegistrationMessage::try_from(&message) {
             Ok(entity) => match self.entity_store.update(entity.clone()) {
-                Ok((_, pending_entities)) => {
-                    for pending_entity in pending_entities {
-                        if let Err(err) =
-                            self.entity_store.update(pending_entity.reg_message.clone())
-                        {
-                            error!(
-                                "Failed to register pending entity: {:?} for root entity {:?} due to {err}",
-                                &pending_entity.reg_message, &entity
-                            )
-                        }
+                Ok((_, registered_entities)) => {
+                    if registered_entities.is_empty() {
+                        info!("Entity: {entity:?} not registered but cached for later as its parent is not registered yet");
                     }
                 }
                 Err(err) => error!(
-                    "Failed to register entity registration message: {} due to {err}",
-                    &message
+                    "Failed to register entity registration message: {entity:?} due to {err}"
                 ),
             },
             Err(_) => error!("Failed to update entity store with {}", &message),

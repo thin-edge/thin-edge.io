@@ -99,9 +99,7 @@ impl TEdgeInitCmd {
         create_directory(&config.logs.path, &permissions)?;
         create_directory(&config.data.path, &permissions)?;
 
-        let entity_store_file = config_dir
-            .join(".tedge-mapper-c8y")
-            .join("entity_store.jsonl");
+        let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
 
         if entity_store_file.exists() {
             change_user_and_group(entity_store_file.as_std_path(), &self.user, &self.group)?;

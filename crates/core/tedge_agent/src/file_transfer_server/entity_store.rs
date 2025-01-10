@@ -1,3 +1,13 @@
+//! This module defines the axum routes and handlers for the entity store REST APIs.
+//! The following endpoints are currently supported:
+//!
+//! - `POST /v1/entities/*path`: Registers a new entity.
+//! - `GET /v1/entities/*path`: Retrieves an existing entity.
+//! - `DELETE /v1/entities/*path`: Deregisters an existing entity.
+//!
+//! References:
+//!
+//! - https://github.com/thin-edge/thin-edge.io/blob/main/design/decisions/0005-entity-registration-api.md
 use super::http_rest::AgentState;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;

@@ -40,10 +40,25 @@ pub enum Error {
     NonDefaultTopicScheme(EntityTopicId),
 }
 
+/// An in-memory cache of entity metadata with their external ids, indexed by their entity topic ids.
+/// The external id is the unique identifier of the entity twin in the connected cloud instance.
+/// This id is used
+/// Each entity in this cache is a mirror of the same entity in the entity store maintained by the agent,
+/// with the addition of the external id.
+///
+/// Every entity registered in this cache would have an external id which is either specified as the `@id`
+/// when the entity is registered or auto derived from the entity topic id.
+/// The user provided ids are validated using the `external_id_validator_fn` before they are added to the cache.
+/// When an `@id` is not provided, one is generated using the `external_id_mapper_fn`.
+///
+/// Any entity that is registered before its parents are cached in the `pending_entities` store,
+/// until those parents are registered as well.
+/// Once the parent is registered, the pending child entities are also registered along with it.
+
 pub(crate) struct EntityCache {
     main_device_tid: EntityTopicId,
     main_device_xid: EntityExternalId,
-    external_id_mapper: ExternalIdMapperFn,
+    external_id_mapper_fn: ExternalIdMapperFn,
     external_id_validator_fn: ExternalIdValidatorFn,
 
     entities: HashMap<EntityTopicId, EntityMetadata>,
@@ -74,7 +89,7 @@ impl EntityCache {
             entities: HashMap::from([(main_device_tid.clone(), main_device_metadata)]),
             external_id_map: HashMap::from([(main_device_xid, main_device_tid)]),
             pending_entities: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
-            external_id_mapper: Box::new(external_id_mapper_fn),
+            external_id_mapper_fn: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
         }
     }
@@ -119,7 +134,7 @@ impl EntityCache {
         let external_id = if let Some(id) = entity.external_id {
             (self.external_id_validator_fn)(id.as_ref())?
         } else {
-            (self.external_id_mapper)(&entity.topic_id, self.main_device_external_id())
+            (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
         };
 
         let parent = match entity.r#type {

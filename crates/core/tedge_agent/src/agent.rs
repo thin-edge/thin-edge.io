@@ -95,6 +95,7 @@ pub(crate) struct AgentConfig {
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
     entity_auto_register: bool,
+    entity_store_clean_start: bool,
 }
 
 impl AgentConfig {
@@ -182,6 +183,7 @@ impl AgentConfig {
         .into();
 
         let entity_auto_register = tedge_config.agent.entity_store.auto_register;
+        let entity_store_clean_start = tedge_config.agent.entity_store.clean_start;
 
         Ok(Self {
             mqtt_config,
@@ -208,6 +210,7 @@ impl AgentConfig {
             service: tedge_config.service.clone(),
             capabilities,
             entity_auto_register,
+            entity_store_clean_start,
         })
     }
 }
@@ -371,7 +374,7 @@ impl Agent {
 
             let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
             //TODO: Migrate the existing `clean_start` setting which is C8Y specific without breaking backward compatibility.
-            let clean_start = true;
+            let clean_start = self.config.entity_store_clean_start;
             let main_device = EntityRegistrationMessage::main_device(None);
             let entity_store = EntityStore::with_main_device_and_default_service_type(
                 mqtt_schema.clone(),
