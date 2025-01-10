@@ -642,7 +642,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             parent_segments.remove(parent_segments.len() - 1);
             let to_string = quote_spanned!(field.ty().span()=> .to_string());
             let match_variant = configuration_key.match_read_write;
-            if field.read_only().is_some() {
+            if field.read_only().is_some() || field.reader_function().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
                     parse_quote! {
                         ReadableKey::#match_variant => Ok(self.#(#segments).*()?#to_string),
@@ -698,16 +698,21 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 .unwrap();
             let match_variant = configuration_key.match_read_write;
 
-            let ty = field.ty();
+            let ty = if field.reader_function().is_some() {
+                extract_type_from_result(field.ty()).map(|tys| tys.0).unwrap_or(field.ty())
+            } else {
+                field.ty()
+            };
+
             let parse_as = field.from().unwrap_or(field.ty());
             let parse = quote_spanned! {parse_as.span()=> parse::<#parse_as>() };
             let convert_to_field_ty = quote_spanned! {ty.span()=> map(<#ty>::from)};
 
-            let current_value = if field.read_only().is_some() {
+            let current_value = if field.read_only().is_some() || field.reader_function().is_some() {
                 if extract_type_from_result(field.ty()).is_some() {
-                    quote_spanned! {ty.span()=> reader.#(#read_segments).*.try_read(reader).ok()}
+                    quote_spanned! {ty.span()=> reader.#(#read_segments).*().ok().cloned()}
                 } else {
-                    quote_spanned! {ty.span()=> Some(reader.#(#read_segments).*.read(reader))}
+                    quote_spanned! {ty.span()=> Some(reader.#(#read_segments).*())}
                 }
             } else if field.has_guaranteed_default() {
                 quote_spanned! {ty.span()=> Some(reader.#(#read_segments).*.to_owned())}
@@ -1468,6 +1473,47 @@ mod tests {
                         WritableKey::SudoEnable => {
                             self.sudo.enable = None;
                         },
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_dto_block)),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn impl_try_append_calls_method_for_current_value() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                device: {
+                    #[tedge_config(reader(function = "device_id"))]
+                    id: String,
+                },
+            }
+        );
+        let paths = configuration_paths_from(&input.groups);
+        let writers = generate_string_writers(&paths);
+        let impl_dto_block = syn::parse2(writers).unwrap();
+        let impl_dto_block = retain_fn(impl_dto_block, "try_append_str");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+                    match key {
+                        WritableKey::C8yDeviceId(key0) => {
+                            self.c8y.try_get_mut(key0.as_deref(), "c8y")?.device.id = <String as AppendRemoveItem>::append(
+                                Some(reader.c8y.try_get(key0.as_deref())?.device.id()),
+                                value
+                                    .parse::<String>()
+                                    .map(<String>::from)
+                                    .map_err(|e| WriteError::ParseValue(Box::new(e)))?,
+                            );
+                        }
                     };
                     Ok(())
                 }

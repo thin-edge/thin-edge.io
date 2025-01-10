@@ -9,6 +9,7 @@ use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
 use crate::error::combine_errors;
+use crate::error::extract_type_from_result;
 use crate::optional_error::OptionalError;
 use crate::optional_error::SynResultExt;
 use crate::reader::PathItem;
@@ -207,6 +208,40 @@ impl ReadOnlyField {
     }
 }
 
+impl ReadWriteField {
+    pub fn lazy_reader_name(&self, parents: &[PathItem]) -> syn::Ident {
+        format_ident!(
+            "LazyReader{}{}",
+            parents
+                .iter()
+                .filter_map(PathItem::as_static)
+                .map(|p| p.to_string().to_upper_camel_case())
+                .collect::<Vec<_>>()
+                .join(""),
+            self.rename()
+                .map(<_>::to_owned)
+                .unwrap_or_else(|| self.ident.to_string())
+                .to_upper_camel_case()
+        )
+    }
+
+    pub fn parent_name(&self, parents: &[PathItem]) -> syn::Ident {
+        format_ident!(
+            "TEdgeConfigReader{}",
+            parents
+                .iter()
+                .filter_map(PathItem::as_static)
+                .map(|p| p.to_string().to_upper_camel_case())
+                .collect::<Vec<_>>()
+                .join(""),
+        )
+    }
+
+    pub fn rename(&self) -> Option<&str> {
+        Some(self.rename.as_ref()?.as_str())
+    }
+}
+
 #[derive(Debug)]
 pub struct ReadWriteField {
     pub attrs: Vec<syn::Attribute>,
@@ -301,6 +336,21 @@ impl ConfigurableField {
         }
     }
 
+    pub fn reader_function(&self) -> Option<(&syn::Path, &ReadWriteField)> {
+        match self {
+            Self::ReadWrite(
+                field @ ReadWriteField {
+                    reader:
+                        ReaderSettings {
+                            function: Some(f), ..
+                        },
+                    ..
+                },
+            ) => Some((f, field)),
+            _ => None,
+        }
+    }
+
     pub fn deprecated_keys(&self) -> impl Iterator<Item = &str> {
         let keys = match self {
             Self::ReadOnly(field) => &field.deprecated_keys,
@@ -355,6 +405,14 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             value
                 .attrs
                 .push(parse_quote_spanned!(span=> #[serde(rename = #literal)]))
+        }
+
+        if value.reader.function.is_some() && value.from.is_none() {
+            value.from = Some(
+                extract_type_from_result(&value.ty)
+                    .map_or(&value.ty, |tys| tys.0)
+                    .clone(),
+            );
         }
 
         for name in value.deprecated_names {
