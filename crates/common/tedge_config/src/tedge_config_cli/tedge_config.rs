@@ -428,7 +428,7 @@ define_tedge_config! {
     device: {
         /// Identifier of the device within the fleet. It must be globally
         /// unique and is derived from the device certificate.
-        #[tedge_config(reader(function = "device_id", private))]
+        #[tedge_config(reader(function = "device_id"))]
         #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
         #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
         #[doku(as = "String")]
