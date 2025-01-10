@@ -11,7 +11,6 @@ use crate::availability::AvailabilityBuilder;
 use crate::config::BridgeConfig;
 use crate::operations::OperationHandler;
 use crate::Capabilities;
-use assert_json_diff::assert_json_include;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -404,6 +403,15 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
         json!({ "severity": "minor", "text": "Temperature high" }).to_string(),
@@ -411,32 +419,13 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     .await
     .unwrap();
 
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({
-                "@type":"child-device",
-                "@id":"test-device:device:external_sensor",
-                "name": "external_sensor"
-            }),
-        )],
-    )
-    .await;
     // Expect child device creation and converted temperature alarm messages
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-            ),
-            (
-                "c8y/s/us/test-device:device:external_sensor",
-                "303,temperature_high,Temperature high",
-            ),
-        ],
+        [(
+            "c8y/s/us/test-device:device:external_sensor",
+            "303,temperature_high,Temperature high",
+        )],
     )
     .await;
 }
@@ -509,6 +498,15 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/custom_temperature_alarm"
             .try_into()
@@ -527,26 +525,6 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     ))
     .await
     .unwrap();
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
-        )],
-    )
-    .await;
-
-    // Expect child device creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-        )],
-    )
-    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -633,6 +611,15 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/child_custom_msg_pressure_alarm"
             .try_into()
@@ -647,8 +634,6 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     ))
     .await
     .unwrap();
-
-    mqtt.skip(2).await; //Skip child device creation message
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -685,6 +670,15 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/child_msg_to_text_pressure_alarm"
             .try_into()
@@ -698,8 +692,6 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     ))
     .await
     .unwrap();
-
-    mqtt.skip(2).await; //Skip child device creation message
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -781,14 +773,21 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/external_sensor///a/empty_temperature_alarm"),
         "".to_string(),
     ))
     .await
     .unwrap();
-
-    mqtt.skip(2).await; //Skip child device creation message
 
     // Expect converted alarm SmartREST message
     assert_received_contains_str(
@@ -870,6 +869,15 @@ async fn c8y_mapper_child_event() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///e/custom_event"
             .try_into()
@@ -882,26 +890,6 @@ async fn c8y_mapper_child_event() {
     ))
     .await
     .unwrap();
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
-        )],
-    )
-    .await;
-
-    // Expect child device creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
-        )],
-    )
-    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -935,6 +923,22 @@ async fn c8y_mapper_child_service_event() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor/service/service_child"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(2).await; // Skip the mapped registration messages
+
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor/service/service_child/e/custom_event"
             .try_into()
@@ -947,49 +951,6 @@ async fn c8y_mapper_child_service_event() {
     ))
     .await
     .unwrap();
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
-        )],
-    )
-    .await;
-
-    // Expect child device creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "101,test-device:device:external_sensor")],
-    )
-    .await;
-
-    // Expect child device service auto registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor/service/service_child",
-            json!({
-               "@id":"test-device:device:external_sensor:service:service_child",
-               "@parent":"device/external_sensor//",
-               "@type":"service",
-               "name":"service_child",
-               "type":"service"
-            }),
-        )],
-    )
-    .await;
-
-    // Expect child device service creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:external_sensor",
-            "102,test-device:device:external_sensor:service:service_child,service,service_child,up",
-        )],
-    )
-    .await;
 
     // Expect converted event message
     assert_received_includes_json(
@@ -1023,6 +984,15 @@ async fn c8y_mapper_main_service_event() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the service upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/service_main"),
+        r#"{"@type": "service"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration messages
+
     mqtt.send(MqttMessage::new(
         &"te/device/main/service/service_main/e/custom_event"
             .try_into()
@@ -1035,31 +1005,6 @@ async fn c8y_mapper_main_service_event() {
     ))
     .await
     .unwrap();
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/main/service/service_main",
-            json!({
-                "@type":"service",
-                "@parent":"device/main//",
-                "@id":"test-device:device:main:service:service_main",
-                "type":"service"
-            }),
-        )],
-    )
-    .await;
-
-    // Create the service for the main device
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "102,test-device:device:main:service:service_main,service,service_main,up",
-        )],
-    )
-    .await;
 
     // Expect converted event for the main device service
     assert_received_includes_json(
@@ -1093,6 +1038,21 @@ async fn c8y_mapper_child_service_alarm() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device and service upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor/service/service_child"),
+        r#"{"@type": "service"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(2).await; // Skip the mapped registration messages
+
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor/service/service_child/a/custom_alarm"
             .try_into()
@@ -1106,49 +1066,6 @@ async fn c8y_mapper_child_service_alarm() {
     ))
     .await
     .unwrap();
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
-        )],
-    )
-    .await;
-
-    // Expect child device creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "101,test-device:device:external_sensor")],
-    )
-    .await;
-
-    // Expect child device service auto registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/external_sensor/service/service_child",
-            json!({
-               "@id":"test-device:device:external_sensor:service:service_child",
-               "@parent":"device/external_sensor//",
-               "@type":"service",
-               "name":"service_child",
-               "type":"service"
-            }),
-        )],
-    )
-    .await;
-
-    // Expect child device service creation message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:external_sensor",
-            "102,test-device:device:external_sensor:service:service_child,service,service_child,up",
-        )],
-    )
-    .await;
 
     // Expect converted alarm for the main device service
     assert_received_contains_str(
@@ -1174,6 +1091,15 @@ async fn c8y_mapper_main_service_alarm() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the service upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/service_main"),
+        r#"{"@type": "service"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration messages
+
     mqtt.send(MqttMessage::new(
         &"te/device/main/service/service_main/a/custom_alarm"
             .try_into()
@@ -1187,31 +1113,6 @@ async fn c8y_mapper_main_service_alarm() {
     ))
     .await
     .unwrap();
-
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/main/service/service_main",
-            json!({
-                "@type":"service",
-                "@parent":"device/main//",
-                "@id":"test-device:device:main:service:service_main",
-                "type":"service"
-            }),
-        )],
-    )
-    .await;
-
-    // Create the service for the main device
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "102,test-device:device:main:service:service_main,service,service_main,up",
-        )],
-    )
-    .await;
 
     // Expect converted alarm for the main device service
     assert_received_contains_str(
@@ -1361,6 +1262,15 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/tedge-agent"),
+        r#"{"@type": "service"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     // Simulate tedge-agent health status message
     mqtt.send(
         MqttMessage::new(
@@ -1372,8 +1282,8 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     .await
     .expect("Send failed");
 
-    // Skip tedge-agent registration, health status mapping
-    mqtt.skip(2).await;
+    // Skip tedge-agent health status mapping
+    mqtt.skip(1).await;
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
@@ -1444,6 +1354,15 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     // Add a new operation for the child device
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
@@ -1473,29 +1392,13 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     .await
     .expect("Send failed");
 
-    // Expect auto-registration message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "te/device/child1//",
-            json!({"@type":"child-device", "@id": "test-device:device:child1", "name": "child1"}),
-        )],
-    )
-    .await;
-
     // Expect an update list of capabilities with agent capabilities
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            ),
-            (
-                "c8y/s/us/test-device:device:child1",
-                "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
-            ),
-        ],
+        [(
+            "c8y/s/us/test-device:device:child1",
+            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
+        )],
     )
     .await;
 }
@@ -2632,58 +2535,6 @@ async fn mapper_converts_custom_operation_for_child_device() {
     .await;
 }
 
-/// This test aims to verify that when a telemetry message is emitted from an
-/// unknown device or service, the mapper will produce a registration message
-/// for this entity. The registration message shall be published only once, when
-/// an unknown entity first publishes its message. After that the entity shall
-/// be considered registered and no more registration messages for this entity
-/// shall be emitted by the mapper.
-#[tokio::test]
-async fn inventory_registers_unknown_entity_once() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    let measurement_message = MqttMessage::new(
-        &Topic::new("te/device/main/service/my_service/m/measurement").unwrap(),
-        r#"{"foo":25}"#,
-    );
-
-    for _ in 0..5 {
-        mqtt.send(measurement_message.clone()).await.unwrap();
-    }
-
-    let mut messages = vec![];
-    while let Ok(Some(msg)) = mqtt.try_recv().await {
-        messages.push(msg);
-    }
-
-    // we should not emit a registration message for the main device, only the
-    // service
-    let mut dut_register_messages: Vec<_> = messages
-        .iter()
-        .filter(|message| message.topic.name.starts_with("te/device/main/service"))
-        .collect();
-    let service_register_message = dut_register_messages.remove(0);
-
-    let service_register_payload =
-        serde_json::from_slice::<serde_json::Value>(service_register_message.payload_bytes())
-            .expect("Service register message payload must be JSON");
-    assert_json_include!(
-        actual: service_register_payload,
-        expected: json!({"@type": "service", "type": "service"})
-    );
-
-    assert!(
-        !dut_register_messages
-            .into_iter()
-            .any(|message| message == service_register_message),
-        "duplicate registration message"
-    );
-}
-
 #[tokio::test]
 async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
@@ -3270,6 +3121,15 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
 
     skip_init_messages(&mut mqtt).await;
 
+    // Register the device upfront
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        r#"{"@type": "child-device"}"#,
+    ))
+    .await
+    .expect("Send failed");
+    mqtt.skip(1).await; // Skip the mapped registration message
+
     // Simulate config_snapshot cmd metadata message
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
@@ -3277,8 +3137,6 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
     ))
     .await
     .expect("Send failed");
-
-    mqtt.skip(2).await; // Skip the mapped child device registration message
 
     // Validate SmartREST message is published
     assert_received_contains_str(

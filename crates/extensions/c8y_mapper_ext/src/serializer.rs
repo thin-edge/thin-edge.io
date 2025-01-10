@@ -1,7 +1,7 @@
 use json_writer::JsonWriter;
 use json_writer::JsonWriterError;
-use tedge_api::entity_store::EntityMetadata;
-use tedge_api::entity_store::EntityType;
+use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::EntityType;
 use tedge_api::measurement::MeasurementVisitor;
 use time::format_description;
 use time::OffsetDateTime;
@@ -59,7 +59,7 @@ impl C8yJsonSerializer {
         json.write_open_obj();
 
         if entity.r#type == EntityType::ChildDevice || entity.r#type == EntityType::Service {
-            let entity_id = &entity.external_id;
+            let entity_id = entity.external_id_unchecked();
             // In case the measurement is addressed to a child-device or a service, use fragment
             // "externalSource" to tell c8Y identity API to use child-device or for service
             // object referenced by "externalId", instead of root device object
