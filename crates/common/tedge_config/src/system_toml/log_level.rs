@@ -5,6 +5,12 @@ use super::SystemTomlError;
 use crate::cli::LogConfigArgs;
 use std::io::IsTerminal;
 use std::str::FromStr;
+use tracing::metadata::LevelFilter;
+use tracing_appender::rolling::*;
+use tracing_subscriber::filter::filter_fn;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
 
 /// Configures and enables logging taking into account flags, env variables and file config.
 ///
@@ -19,7 +25,8 @@ pub fn log_init(
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
 ) -> Result<(), SystemTomlError> {
-    let subscriber = tracing_subscriber::fmt()
+    // General logging
+    let log_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_ansi(std::io::stderr().is_terminal())
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
@@ -28,22 +35,43 @@ pub fn log_init(
         .log_level
         .or(flags.debug.then_some(tracing::Level::DEBUG));
 
-    if let Some(log_level) = log_level {
-        subscriber.with_max_level(log_level).init();
-        return Ok(());
-    }
-
-    if std::env::var("RUST_LOG").is_ok() {
-        subscriber
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+    let log_layer = if let Some(log_level) = log_level {
+        log_layer
+            .with_filter(LevelFilter::from_level(log_level))
+            .boxed()
+    } else if std::env::var("RUST_LOG").is_ok() {
+        log_layer
             .with_file(true)
             .with_line_number(true)
-            .init();
-        return Ok(());
-    }
+            .with_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .boxed()
+    } else {
+        let log_level = get_log_level(sname, config_dir)?;
+        log_layer
+            .with_filter(LevelFilter::from_level(log_level))
+            .boxed()
+    };
 
-    let log_level = get_log_level(sname, config_dir)?;
-    subscriber.with_max_level(log_level).init();
+    // Audit journal
+    let audit_appender = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix("tedge.audit.log")
+        .max_log_files(7);
+    let audit_layer = audit_appender
+        .build("/var/log/tedge")
+        .ok()
+        .map(|audit_appender| {
+            tracing_subscriber::fmt::layer()
+                .with_writer(audit_appender)
+                .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+                .with_filter(LevelFilter::INFO)
+                .with_filter(filter_fn(|metadata| metadata.target() == "Audit"))
+        });
+
+    tracing_subscriber::registry()
+        .with(audit_layer)
+        .with(log_layer)
+        .init();
 
     Ok(())
 }
