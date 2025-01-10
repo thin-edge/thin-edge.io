@@ -27,6 +27,7 @@ impl Command for AddConfigCommand {
             })
             .await
             .map_err(anyhow::Error::new)?;
+        tracing::info!(target: "Audit", "tedge config add {} {}", &self.key, &self.value);
         Ok(())
     }
 }

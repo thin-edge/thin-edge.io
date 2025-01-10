@@ -65,6 +65,7 @@ impl Actor for WorkflowActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        tracing::info!(target: "Audit", "tedge-agent started");
         self.workflow_repository.load().await;
         self.publish_operation_capabilities().await?;
         self.load_command_board().await?;
@@ -95,11 +96,15 @@ impl Actor for WorkflowActor {
                         )
                         .await
                     {
+                        tracing::info!(target: "Audit", "Updated capability {}",
+                            updated_capability.topic.as_ref(),
+                        );
                         self.mqtt_publisher.send(updated_capability).await?
                     }
                 }
             }
         }
+        tracing::info!(target: "Audit", "tedge-agent stopped");
         Ok(())
     }
 }
@@ -159,6 +164,7 @@ impl WorkflowActor {
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
                 if new_state.is_init() {
+                    tracing::info!(target: "Audit", "Execute {operation} command, log = {}", log_file.path);
                     self.process_command_update(new_state.with_log_path(&log_file.path))
                         .await?;
                 }
@@ -211,6 +217,11 @@ impl WorkflowActor {
 
         match action {
             OperationAction::Clear => {
+                tracing::info!(
+                    target: "Audit",
+                    "{} {operation} command",
+                    if state.is_successful() {"Executed"} else { "Failed"},
+                );
                 if let Some(invoking_command) =
                     self.workflow_repository.invoking_command_state(&state)
                 {
