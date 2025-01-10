@@ -85,6 +85,8 @@ impl BuildCommand for TEdgeCertCli {
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     user: user.to_owned(),
                     group: group.to_owned(),
+                    config_location: context.config_location,
+                    cloud,
                 };
                 cmd.into_boxed()
             }

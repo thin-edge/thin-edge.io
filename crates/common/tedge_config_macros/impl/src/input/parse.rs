@@ -198,6 +198,7 @@ pub struct FieldDtoSettings {
 pub struct ReaderSettings {
     #[darling(default)]
     pub private: bool,
+    pub function: Option<syn::Path>,
     #[darling(default)]
     pub skip: bool,
 }

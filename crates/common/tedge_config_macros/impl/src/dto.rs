@@ -4,6 +4,7 @@ use quote::quote_spanned;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
+use crate::error::extract_type_from_result;
 use crate::input::FieldOrGroup;
 use crate::prefixed_type_name;
 
@@ -21,7 +22,17 @@ pub fn generate(
     for item in items {
         match item {
             FieldOrGroup::Field(field) => {
-                if !field.dto().skip && field.read_only().is_none() {
+                if field.reader_function().is_some() {
+                    let ty = match extract_type_from_result(field.ty()) {
+                        Some((ok, _err)) => ok,
+                        None => field.ty(),
+                    };
+                    idents.push(field.ident());
+                    tys.push(parse_quote_spanned!(ty.span() => Option<#ty>));
+                    sub_dtos.push(None);
+                    preserved_attrs.push(field.attrs().iter().filter(is_preserved).collect());
+                    extra_attrs.push(quote! {});
+                } else if !field.dto().skip && field.read_only().is_none() {
                     idents.push(field.ident());
                     tys.push({
                         let ty = field.ty();
@@ -106,7 +117,11 @@ fn is_preserved(attr: &&syn::Attribute) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use proc_macro2::Span;
     use syn::parse_quote;
+    use syn::Ident;
+    use syn::Item;
+    use syn::ItemStruct;
 
     use super::*;
 
@@ -136,5 +151,136 @@ mod tests {
         assert!(!is_preserved(&&parse_quote!(
             #[unknown_attribute = "some value"]
         )))
+    }
+
+    #[test]
+    fn dto_is_generated() {
+        let input: crate::input::Configuration = parse_quote!(
+            c8y: {
+                url: String,
+            },
+            sudo: {
+                enable: bool,
+            },
+        );
+
+        let generated = generate_test_dto(&input);
+        let expected = parse_quote! {
+            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigDto {
+                #[serde(default)]
+                #[serde(skip_serializing_if = "TEdgeConfigDtoC8y::is_default")]
+                pub c8y: TEdgeConfigDtoC8y,
+                #[serde(default)]
+                #[serde(skip_serializing_if = "TEdgeConfigDtoSudo::is_default")]
+                pub sudo: TEdgeConfigDtoSudo,
+            }
+
+            impl TEdgeConfigDto {
+                #[allow(unused)]
+                fn is_default(&self) -> bool {
+                    self == &Self::default()
+                }
+            }
+
+            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigDtoC8y {
+                pub url: Option<String>,
+            }
+
+            impl TEdgeConfigDtoC8y {
+                #[allow(unused)]
+                fn is_default(&self) -> bool {
+                    self == &Self::default()
+                }
+            }
+
+            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigDtoSudo {
+                pub enable: Option<bool>,
+            }
+
+            impl TEdgeConfigDtoSudo {
+                #[allow(unused)]
+                fn is_default(&self) -> bool {
+                    self == &Self::default()
+                }
+            }
+        };
+
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn ok_type_is_extracted_from_reader_function_if_relevant() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(reader(function = "c8y_device_id"))]
+                id: Result<String, ReadError>,
+            }
+        );
+
+        let mut generated = generate_test_dto(&input);
+        generated
+            .items
+            .retain(only_struct_named("TEdgeConfigDtoDevice"));
+
+        let expected = parse_quote! {
+            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigDtoDevice {
+                pub id: Option<String>,
+            }
+        };
+
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn reader_function_type_is_used_verbatim_in_dto_if_not_result() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(reader(function = "c8y_device_id"))]
+                id: String,
+            }
+        );
+
+        let mut generated = generate_test_dto(&input);
+        generated
+            .items
+            .retain(only_struct_named("TEdgeConfigDtoDevice"));
+
+        let expected = parse_quote! {
+            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigDtoDevice {
+                pub id: Option<String>,
+            }
+        };
+
+        assert_eq(&generated, &expected);
+    }
+
+    fn generate_test_dto(input: &crate::input::Configuration) -> syn::File {
+        let tokens = super::generate(
+            Ident::new("TEdgeConfigDto", Span::call_site()),
+            &input.groups,
+            "",
+        );
+        syn::parse2(tokens).unwrap()
+    }
+
+    fn assert_eq(actual: &syn::File, expected: &syn::File) {
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&actual),
+            prettyplease::unparse(&expected),
+        )
+    }
+
+    fn only_struct_named<'a>(target: &'a str) -> impl Fn(&Item) -> bool + 'a {
+        move |i| matches!(i, Item::Struct(ItemStruct { ident, .. }) if ident == target)
     }
 }
