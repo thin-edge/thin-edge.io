@@ -57,24 +57,25 @@ fn generate_structs(
                 let ty = field.ty();
                 attrs.push(field.attrs().to_vec());
                 idents.push(field.ident());
-                if let Some((function, field)) = field.reader_function() {
-                    let name = field.lazy_reader_name(&parents);
-                    let parent_ty = field.parent_name(&parents);
+                if let Some((function, rw_field)) = field.reader_function() {
+                    let name = rw_field.lazy_reader_name(&parents);
+                    let parent_ty = rw_field.parent_name(&parents);
                     tys.push(parse_quote_spanned!(ty.span()=> #name));
-                    let dto_ty: syn::Type = match extract_type_from_result(&field.ty) {
+                    let dto_ty: syn::Type = match extract_type_from_result(&rw_field.ty) {
                         Some((ok, _err)) => parse_quote!(OptionalConfig<#ok>),
                         None => {
-                            let ty = &field.ty;
+                            let ty = &rw_field.ty;
                             parse_quote!(OptionalConfig<#ty>)
                         }
                     };
                     lazy_readers.push((
                         name,
-                        &field.ty,
+                        &rw_field.ty,
                         function,
                         parent_ty,
-                        field.ident.clone(),
+                        rw_field.ident.clone(),
                         dto_ty.clone(),
+                        visibility(field),
                     ));
                     vis.push(parse_quote!());
                 } else if field.is_optional() {
@@ -83,17 +84,18 @@ fn generate_structs(
                         true => parse_quote!(),
                         false => parse_quote!(pub),
                     });
-                } else if let Some(field) = field.read_only() {
-                    let name = field.lazy_reader_name(&parents);
-                    let parent_ty = field.parent_name(&parents);
-                    tys.push(parse_quote_spanned!(field.ty.span()=> #name));
+                } else if let Some(ro_field) = field.read_only() {
+                    let name = ro_field.lazy_reader_name(&parents);
+                    let parent_ty = ro_field.parent_name(&parents);
+                    tys.push(parse_quote_spanned!(ro_field.ty.span()=> #name));
                     lazy_readers.push((
                         name,
-                        &field.ty,
-                        &field.readonly.function,
+                        &ro_field.ty,
+                        &ro_field.readonly.function,
                         parent_ty,
-                        field.ident.clone(),
+                        ro_field.ident.clone(),
                         parse_quote!(()),
+                        visibility(field),
                     ));
                     vis.push(parse_quote!());
                 } else {
@@ -152,11 +154,11 @@ fn generate_structs(
     }
 
     let lazy_reader_impls = lazy_readers.iter().map(
-        |(_, ty, function, parent_ty, id, _dto_ty)| -> syn::ItemImpl {
+        |(_, ty, function, parent_ty, id, _dto_ty, vis)| -> syn::ItemImpl {
             if let Some((ok, err)) = extract_type_from_result(ty) {
                 parse_quote_spanned! {function.span()=>
                     impl #parent_ty {
-                        pub fn #id(&self) -> Result<&#ok, #err> {
+                        #vis fn #id(&self) -> Result<&#ok, #err> {
                             self.#id.0.get_or_try_init(|| #function(self, &self.#id.1))
                         }
                     }
@@ -164,7 +166,7 @@ fn generate_structs(
             } else {
                 parse_quote_spanned! {function.span()=>
                     impl #parent_ty {
-                        pub fn #id(&self) -> &#ty {
+                        #vis fn #id(&self) -> &#ty {
                             self.#id.0.get_or_init(|| #function(self, &self.#id.1))
                         }
                     }
@@ -176,7 +178,7 @@ fn generate_structs(
     let (lr_names, lr_tys, lr_dto_tys): (Vec<_>, Vec<_>, Vec<_>) = lazy_readers
         .iter()
         .map(
-            |(name, ty, _, _, _, dto_ty)| match extract_type_from_result(ty) {
+            |(name, ty, _, _, _, dto_ty, _)| match extract_type_from_result(ty) {
                 Some((ok, _err)) => (name, ok, dto_ty),
                 None => (name, *ty, dto_ty),
             },
@@ -210,6 +212,14 @@ fn generate_structs(
 
         #(#sub_readers)*
     })
+}
+
+fn visibility(field: &ConfigurableField) -> syn::Visibility {
+    if field.reader().private {
+        parse_quote!()
+    } else {
+        parse_quote!(pub)
+    }
 }
 
 fn find_field<'a>(
@@ -827,7 +837,7 @@ mod tests {
     fn generate_structs_generates_getter_for_reader_function_value() {
         let input: crate::input::Configuration = parse_quote!(
             device: {
-                #[tedge_config(reader(function = "device_id"))]
+                #[tedge_config(reader(function = "device_id", private))]
                 id: String,
             },
         );
@@ -845,7 +855,7 @@ mod tests {
 
         let expected = parse_quote! {
             impl TEdgeConfigReaderDevice {
-                pub fn id(&self) -> &String {
+                fn id(&self) -> &String {
                     self.id.0.get_or_init(|| device_id(self, &self.id.1))
                 }
             }
@@ -1030,7 +1040,8 @@ mod tests {
                                                 }
                                             },
                                         )
-                                        .map(|v| v.into())
+                                        .1
+                                        .into()
                                 }
                             },
                         ),

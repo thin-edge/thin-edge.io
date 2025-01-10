@@ -275,12 +275,12 @@ mod tests {
 
     fn assert_eq(actual: &syn::File, expected: &syn::File) {
         pretty_assertions::assert_eq!(
-            prettyplease::unparse(&actual),
-            prettyplease::unparse(&expected),
+            prettyplease::unparse(actual),
+            prettyplease::unparse(expected),
         )
     }
 
-    fn only_struct_named<'a>(target: &'a str) -> impl Fn(&Item) -> bool + 'a {
+    fn only_struct_named(target: &str) -> impl Fn(&Item) -> bool + '_ {
         move |i| matches!(i, Item::Struct(ItemStruct { ident, .. }) if ident == target)
     }
 }
