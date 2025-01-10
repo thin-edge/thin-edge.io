@@ -68,8 +68,25 @@ pub fn log_init(
                 .with_filter(filter_fn(|metadata| metadata.target() == "Audit"))
         });
 
+    // Actor traces
+    let trace_appender = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix("tedge.actors.log")
+        .max_log_files(2);
+    let trace_layer = trace_appender
+        .build("/var/log/tedge")
+        .ok()
+        .map(|trace_appender| {
+            tracing_subscriber::fmt::layer()
+                .with_writer(trace_appender)
+                .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+                .with_filter(LevelFilter::DEBUG)
+                .with_filter(filter_fn(|metadata| metadata.target() == "Actors"))
+        });
+
     tracing_subscriber::registry()
         .with(audit_layer)
+        .with(trace_layer)
         .with(log_layer)
         .init();
 

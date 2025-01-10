@@ -4526,9 +4526,9 @@ version = "1.4.2"
 dependencies = [
  "async-trait",
  "futures",
- "log",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5292,7 +5292,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3566e8ce28cc0a3fe42519fc80e6b4c943cc4c8cef275620eb8dac2d3d4e06cf"
 dependencies = [
  "crossbeam-channel",
- "thiserror 1.0.61",
+ "thiserror 1.0.69",
  "time",
  "tracing-subscriber",
 ]

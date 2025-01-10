@@ -11,14 +11,14 @@ use crate::RuntimeRequestSink;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use log::debug;
-use log::error;
-use log::info;
 use std::collections::HashMap;
 use std::panic;
 use std::time::Duration;
 use tokio::task::JoinError;
 use tokio::task::JoinHandle;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
 /// Actions sent by actors to the runtime
 #[derive(Debug)]
@@ -95,7 +95,7 @@ impl Runtime {
     ///   and all the running tasks have reach completion (successfully or not).
     pub async fn run_to_completion(self) -> Result<(), RuntimeError> {
         if let Err(err) = Runtime::wait_for_completion(self.bg_task).await {
-            error!("Aborted due to {err}");
+            error!(target: "Actors", "Aborted due to {err}");
             std::process::exit(1)
         }
 
@@ -138,7 +138,7 @@ impl RuntimeHandle {
 
     /// Send an action to the runtime
     async fn send(&mut self, action: RuntimeAction) -> Result<(), ChannelError> {
-        debug!(target: "Runtime", "schedule {:?}", action);
+        debug!(target: "Actors", "schedule {:?}", action);
         self.actions_sender.send(action).await?;
         Ok(())
     }
@@ -175,7 +175,7 @@ impl RuntimeActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        info!(target: "Runtime", "Started");
+        info!(target: "Actors", "Started");
         let mut aborting_error = None;
         let mut actors_count: usize = 0;
         loop {
@@ -186,7 +186,7 @@ impl RuntimeActor {
                             match action {
                                 RuntimeAction::Spawn(actor) => {
                                     let running_name = format!("{}-{}", actor.name(), actors_count);
-                                    info!(target: "Runtime", "Running {running_name}");
+                                    info!(target: "Actors", "Running {running_name}");
                                     self.send_event(RuntimeEvent::Started {
                                         task: running_name.clone(),
                                     })
@@ -196,14 +196,14 @@ impl RuntimeActor {
                                     actors_count += 1;
                                }
                                RuntimeAction::Shutdown => {
-                                    info!(target: "Runtime", "Shutting down");
+                                    info!(target: "Actors", "Shutting down");
                                     shutdown_actors(&mut self.running_actors).await;
                                     break;
                                }
                             }
                         }
                         None => {
-                            info!(target: "Runtime", "Runtime actions channel closed, runtime stopping");
+                            info!(target: "Actors", "Runtime actions channel closed, runtime stopping");
                             shutdown_actors(&mut self.running_actors).await;
                             break;
                         }
@@ -211,7 +211,7 @@ impl RuntimeActor {
                 },
                 Some(finished_actor) = self.futures.next() => {
                     if let Err(error) = self.handle_actor_finishing(finished_actor).await {
-                        info!(target: "Runtime", "Shutting down on error: {error}");
+                        info!(target: "Actors", "Shutting down on error: {error}");
                         aborting_error = Some(error);
                         shutdown_actors(&mut self.running_actors).await;
                         break
@@ -222,12 +222,12 @@ impl RuntimeActor {
 
         tokio::select! {
             _ = tokio::time::sleep(self.cleanup_duration) => {
-                error!(target: "Runtime", "Timeout waiting for all actors to shutdown");
+                error!(target: "Actors", "Timeout waiting for all actors to shutdown");
                 for still_running in self.running_actors.keys() {
-                     error!(target: "Runtime", "Failed to shutdown: {still_running}")
+                     error!(target: "Actors", "Failed to shutdown: {still_running}")
                 }
             }
-            _ = self.wait_for_actors_to_finish() => info!(target: "Runtime", "All actors have finished")
+            _ = self.wait_for_actors_to_finish() => info!(target: "Actors", "All actors have finished")
         }
 
         match aborting_error {
@@ -248,18 +248,18 @@ impl RuntimeActor {
     ) -> Result<(), RuntimeError> {
         match finished_actor {
             Err(e) => {
-                error!(target: "Runtime", "Failed to execute actor: {e}");
+                error!(target: "Actors", "Failed to execute actor: {e}");
                 Err(RuntimeError::JoinError(e))
             }
             Ok(Ok(actor)) => {
                 self.running_actors.remove(&actor);
-                info!(target: "Runtime", "Actor has finished: {actor}");
+                info!(target: "Actors", "Actor has finished: {actor}");
                 self.send_event(RuntimeEvent::Stopped { task: actor }).await;
                 Ok(())
             }
             Ok(Err((actor, error))) => {
                 self.running_actors.remove(&actor);
-                error!(target: "Runtime", "Actor {actor} has finished unsuccessfully: {error:?}");
+                error!(target: "Actors", "Actor {actor} has finished unsuccessfully: {error:?}");
                 self.send_event(RuntimeEvent::Aborted {
                     task: actor.clone(),
                     error: format!("{error}"),
@@ -273,7 +273,7 @@ impl RuntimeActor {
     async fn send_event(&mut self, event: RuntimeEvent) {
         if let Some(events) = &mut self.events {
             if let Err(e) = events.send(event).await {
-                error!(target: "Runtime", "Failed to send RuntimeEvent: {e}");
+                error!(target: "Actors", "Failed to send RuntimeEvent: {e}");
             }
         }
     }
@@ -286,10 +286,10 @@ where
     for (running_as, sender) in a {
         match sender.send(RuntimeRequest::Shutdown).await {
             Ok(()) => {
-                debug!(target: "Runtime", "Successfully sent shutdown request to {running_as}")
+                debug!(target: "Actors", "Successfully sent shutdown request to {running_as}")
             }
             Err(e) => {
-                error!(target: "Runtime", "Failed to send shutdown request to {running_as}: {e:?}")
+                error!(target: "Actors", "Failed to send shutdown request to {running_as}: {e:?}")
             }
         }
     }

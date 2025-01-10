@@ -93,7 +93,6 @@ use crate::RuntimeRequest;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
-use log::debug;
 use std::fmt::Debug;
 
 #[async_trait]
@@ -160,22 +159,22 @@ impl<Input: Debug> LoggingReceiver<Input> {
 }
 
 #[async_trait]
-impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
+impl<Input: Send + Debug + Sync> MessageReceiver<Input> for LoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         let message = self.receiver.try_recv().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        log_message_received(&self.name, &message);
         message
     }
 
     async fn recv(&mut self) -> Option<Input> {
         let message = self.receiver.recv().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        log_message_received(&self.name, &message);
         message
     }
 
     async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
         let message = self.receiver.recv_signal().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        log_message_received(&self.name, &message);
         message
     }
 }
@@ -208,8 +207,14 @@ impl<Output: Message> Sender<Output> for LoggingSender<Output> {
     }
 }
 
-pub fn log_message_sent<I: Debug>(target: &str, message: I) {
-    debug!(target: target, "send {message:?}");
+#[inline]
+pub fn log_message_received<I: Debug>(actor: &str, message: &I) {
+    tracing::debug!(target: "Actors", actor, recv = ?message);
+}
+
+#[inline]
+pub fn log_message_sent<I: Debug>(actor: &str, message: &I) {
+    tracing::debug!(target: "Actors", actor, send = ?message);
 }
 
 /// An unbounded receiver
@@ -251,10 +256,10 @@ impl<Input: Debug> UnboundedLoggingReceiver<Input> {
 }
 
 #[async_trait]
-impl<Input: Send + Debug> MessageReceiver<Input> for UnboundedLoggingReceiver<Input> {
+impl<Input: Send + Debug + Sync> MessageReceiver<Input> for UnboundedLoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         let message = self.next_message().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        log_message_received(&self.name, &message);
         message
     }
 
@@ -263,13 +268,13 @@ impl<Input: Send + Debug> MessageReceiver<Input> for UnboundedLoggingReceiver<In
             Ok(Some(message)) => Some(message),
             _ => None,
         };
-        debug!(target: &self.name, "recv {:?}", message);
+        log_message_received(&self.name, &message);
         message
     }
 
     async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
         let message = self.signal_receiver.next().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        log_message_received(&self.name, &message);
         message
     }
 }
