@@ -1,4 +1,5 @@
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
 use std::borrow::Cow;
