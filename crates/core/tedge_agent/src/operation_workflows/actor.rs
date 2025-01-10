@@ -164,7 +164,7 @@ impl WorkflowActor {
             Ok(Some(new_state)) => {
                 self.persist_command_board().await?;
                 if new_state.is_init() {
-                    tracing::info!(target: "Audit", "Execute {operation} command");
+                    tracing::info!(target: "Audit", "Execute {operation} command, log = {}", log_file.path);
                     self.process_command_update(new_state.with_log_path(&log_file.path))
                         .await?;
                 }
@@ -217,7 +217,11 @@ impl WorkflowActor {
 
         match action {
             OperationAction::Clear => {
-                tracing::info!(target: "Audit", "{} {operation} command", if state.is_successful() {"Executed"} else { "Failed"});
+                tracing::info!(
+                    target: "Audit",
+                    "{} {operation} command",
+                    if state.is_successful() {"Executed"} else { "Failed"},
+                );
                 if let Some(invoking_command) =
                     self.workflow_repository.invoking_command_state(&state)
                 {
