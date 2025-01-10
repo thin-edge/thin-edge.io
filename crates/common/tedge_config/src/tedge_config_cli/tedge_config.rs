@@ -1172,6 +1172,15 @@ impl TEdgeConfigReader {
             Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
         })
     }
+
+    pub fn device_id<'a>(&self, cloud: Option<impl Into<Cloud<'a>>>) -> Result<&str, ReadError> {
+        Ok(match cloud.map(<_>::into) {
+            None => self.device.id()?,
+            Some(Cloud::C8y(profile)) => self.c8y.try_get(profile)?.device.id()?,
+            Some(Cloud::Az(profile)) => self.az.try_get(profile)?.device.id()?,
+            Some(Cloud::Aws(profile)) => self.aws.try_get(profile)?.device.id()?,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

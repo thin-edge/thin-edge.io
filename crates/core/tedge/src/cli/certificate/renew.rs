@@ -59,6 +59,8 @@ mod tests {
     use std::path::Path;
     use std::thread::sleep;
     use std::time::Duration;
+    use tedge_config::TEdgeConfigLocation;
+    use tedge_config::WritableKey;
     use tempfile::*;
 
     #[test]
@@ -73,6 +75,8 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
+            writable_key: WritableKey::DeviceId,
         };
 
         // First create both cert and key

@@ -85,7 +85,7 @@ mod tests {
         // The remove command can be run when there is no certificate
         remove_cmd.assert().success();
 
-        // We start we no certificate, hence no device id
+        // We start with no certificate, hence no device id
         get_device_id_cmd
             .assert()
             .failure()
@@ -121,13 +121,13 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains("Missing file"));
 
-        // The remove command also removed the device id from the config
+        // The remove command does not remove the device id from the config
         get_device_id_cmd
             .assert()
-            .failure()
-            .stderr(predicate::str::contains("device.id"));
+            .success()
+            .stdout(predicate::str::contains(device_id));
 
-        // The a new certificate can then be created.
+        // A new certificate can then be created.
         create_cmd.assert().success();
 
         Ok(())

@@ -113,6 +113,7 @@ pub enum ConfigCmd {
     },
 }
 
+#[macro_export]
 macro_rules! try_with_profile {
     ($key:ident, $profile:ident) => {{
         use anyhow::Context;
