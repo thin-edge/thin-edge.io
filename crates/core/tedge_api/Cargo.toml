@@ -17,7 +17,7 @@ json-writer = { workspace = true }
 log = { workspace = true }
 mqtt_channel = { workspace = true }
 regex = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
 shell-words = { workspace = true }
 tedge_utils = { workspace = true, features = ["timestamp"] }
@@ -30,6 +30,7 @@ time = { workspace = true, features = [
     "serde-well-known",
 ] }
 tokio = { workspace = true, features = ["fs", "process"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

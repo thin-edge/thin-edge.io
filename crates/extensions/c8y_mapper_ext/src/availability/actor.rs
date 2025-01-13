@@ -24,6 +24,8 @@ use tedge_api::Status;
 use tedge_timer_ext::SetTimeout;
 use tracing::debug;
 use tracing::info;
+use tracing::instrument;
+use tracing::trace;
 use tracing::warn;
 
 /// The timer payload. Keep it a struct in case if we need more data inside the payload in the future
@@ -62,6 +64,7 @@ impl Actor for AvailabilityActor {
         "AvailabilityActor"
     }
 
+    #[instrument(skip_all, fields(self.name))]
     async fn run(mut self) -> Result<(), RuntimeError> {
         if !self.config.enable {
             info!("Device availability monitoring feature is disabled. To enable it, run 'tedge config set c8y.availability.enable true'");
@@ -71,6 +74,7 @@ impl Actor for AvailabilityActor {
         self.init().await?;
 
         while let Some(input) = self.message_box.recv().await {
+            trace!(?input);
             match input {
                 AvailabilityInput::EntityRegistrationMessage(message) => {
                     self.process_registration_message(&message).await?;
@@ -122,6 +126,7 @@ impl AvailabilityActor {
         Ok(())
     }
 
+    #[instrument(skip(self), fields(message), level = "trace")]
     async fn process_registration_message(
         &mut self,
         message: &EntityRegistrationMessage,
@@ -203,6 +208,7 @@ impl AvailabilityActor {
     }
 
     /// Set a new timer for heartbeat if the given interval is positive value
+    #[instrument(skip_all, level = "trace")]
     async fn start_heartbeat_timer(&mut self, source: &EntityTopicId) -> Result<(), RuntimeError> {
         if !self.config.interval.is_zero() {
             self.timer_sender
@@ -220,6 +226,7 @@ impl AvailabilityActor {
 
     /// Send SmartREST 117
     /// https://cumulocity.com/docs/smartrest/mqtt-static-templates/#117
+    #[instrument(skip_all, level = "trace")]
     async fn send_smartrest_set_required_availability_for_main_device(
         &mut self,
     ) -> Result<(), RuntimeError> {
@@ -235,6 +242,7 @@ impl AvailabilityActor {
 
     /// Send SmartREST 117
     /// https://cumulocity.com/docs/smartrest/mqtt-static-templates/#117
+    #[instrument(skip_all, level = "trace")]
     async fn send_smartrest_set_required_availability_for_child_device(
         &mut self,
         source: &EntityTopicId,
@@ -256,6 +264,7 @@ impl AvailabilityActor {
         Ok(())
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn process_timer_complete(
         &mut self,
         timer_payload: TimerPayload,

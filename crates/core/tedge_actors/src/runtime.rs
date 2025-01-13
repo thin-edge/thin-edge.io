@@ -11,14 +11,17 @@ use crate::RuntimeRequestSink;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
-use log::debug;
-use log::error;
-use log::info;
 use std::collections::HashMap;
 use std::panic;
 use std::time::Duration;
 use tokio::task::JoinError;
 use tokio::task::JoinHandle;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+
+// TODO: set back to 60
+const ACTORS_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Actions sent by actors to the runtime
 #[derive(Debug)]
@@ -64,8 +67,7 @@ impl Runtime {
 
     fn with_events_sender(events_sender: Option<DynSender<RuntimeEvent>>) -> Runtime {
         let (actions_sender, actions_receiver) = mpsc::channel(16);
-        let runtime_actor =
-            RuntimeActor::new(actions_receiver, events_sender, Duration::from_secs(60));
+        let runtime_actor = RuntimeActor::new(actions_receiver, events_sender, ACTORS_EXIT_TIMEOUT);
 
         let runtime_task = tokio::spawn(runtime_actor.run());
         Runtime {

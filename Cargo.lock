@@ -2387,6 +2387,7 @@ dependencies = [
  "serial_test",
  "thiserror",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 
@@ -3970,6 +3971,7 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "tracing",
+ "tracing-chrome",
 ]
 
 [[package]]
@@ -4019,6 +4021,7 @@ dependencies = [
  "log",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4049,6 +4052,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.8.8",
+ "tracing",
  "walkdir",
 ]
 
