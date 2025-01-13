@@ -188,6 +188,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.8"
 tower = "0.4"
 tracing = { version = "0.1", features = ["attributes", "log"] }
+tracing-chrome = "0.7.2"
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 try-traits = "0.1"
 tungstenite = "0.26.1"

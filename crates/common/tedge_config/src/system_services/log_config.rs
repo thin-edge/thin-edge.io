@@ -1,4 +1,5 @@
 use camino::Utf8Path;
+use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -21,7 +22,7 @@ pub fn log_init(
     sname: &str,
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
-) -> Result<(), SystemServiceError> {
+) -> Result<Option<tracing_chrome::FlushGuard>, SystemServiceError> {
     let print_file_and_line = std::env::var("RUST_LOG").is_ok();
     let file_level = get_log_level(sname, config_dir)?;
 
@@ -37,9 +38,20 @@ pub fn log_init(
         .with_line_number(print_file_and_line)
         .with_filter(filter_layer);
 
-    tracing_subscriber::registry().with(fmt_layer).init();
+    // chrome layer if `--trace-json`
+    let (chrome_layer, guard) = if flags.trace_json {
+        let (chrome_layer, guard) = ChromeLayerBuilder::new().include_args(true).build();
+        (Some(chrome_layer), Some(guard))
+    } else {
+        (None, None)
+    };
 
-    Ok(())
+    tracing_subscriber::registry()
+        .with(chrome_layer)
+        .with(fmt_layer)
+        .init();
+
+    Ok(guard)
 }
 
 fn filter_layer(flags: &LogConfigArgs, file_level: tracing::Level) -> EnvFilter {

@@ -410,6 +410,7 @@ mod tests {
                 log_args: LogConfigArgs {
                     debug: false,
                     log_level: None,
+                    trace_json: false,
                 },
                 config_dir: "".into(),
             },
