@@ -36,4 +36,8 @@ pub struct LogConfigArgs {
     /// Overrides `--debug`
     #[clap(long, global = true)]
     pub log_level: Option<tracing::Level>,
+
+    /// Emit a JSON trace file that can be opened by ui.perfetto.dev
+    #[clap(long, global = true)]
+    pub trace_json: bool,
 }
