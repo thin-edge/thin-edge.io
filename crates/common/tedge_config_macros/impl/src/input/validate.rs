@@ -7,6 +7,10 @@ use quote::format_ident;
 use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
+use syn::Expr;
+use syn::Lit;
+use syn::Meta;
+use syn::MetaNameValue;
 
 use crate::error::combine_errors;
 use crate::optional_error::OptionalError;
@@ -138,6 +142,37 @@ impl FieldOrGroup {
             Self::Group(group) => &group.reader,
             Self::Multi(group) => &group.reader,
         }
+    }
+
+    pub fn doc(&self) -> Option<String> {
+        let attrs = match self {
+            Self::Field(field) => field.attrs(),
+            Self::Group(group) | Self::Multi(group) => &group.attrs,
+        };
+        doc_comments_from(attrs)
+    }
+}
+
+fn doc_comments_from(attrs: &[syn::Attribute]) -> Option<String> {
+    let doc = attrs
+        .iter()
+        .filter(|attr| attr.path() == &parse_quote!(doc))
+        .filter_map(|attr| match attr.meta {
+            Meta::NameValue(MetaNameValue {
+                value:
+                    Expr::Lit(syn::ExprLit {
+                        lit: Lit::Str(ref lit),
+                        ..
+                    }),
+                ..
+            }) => Some(lit.value()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    match doc.as_str() {
+        "" => None,
+        _ => Some(doc),
     }
 }
 

@@ -1,6 +1,8 @@
+use crate::cli::common::profile_completions;
 use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
+use clap_complete::ArgValueCandidates;
 use tedge_config::ProfileName;
 use tedge_config::ReadableKey;
 use tedge_config::WritableKey;
@@ -10,6 +12,7 @@ pub enum ConfigCmd {
     /// Get the value of the provided configuration key
     Get {
         /// Configuration key. Run `tedge config list --doc` for available keys
+        #[arg(add = ArgValueCandidates::new(ReadableKey::completions))]
         key: ReadableKey,
 
         /// The cloud profile you wish to use, if accessing a cloud configuration
@@ -18,12 +21,14 @@ pub enum ConfigCmd {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
     },
 
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key. Run `tedge config list --doc` for available keys
+        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
         key: WritableKey,
 
         /// Configuration value.
@@ -35,12 +40,14 @@ pub enum ConfigCmd {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
     },
 
     /// Unset the provided configuration key
     Unset {
         /// Configuration key. Run `tedge config list --doc` for available keys
+        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
         key: WritableKey,
 
         /// The cloud profile you wish to use, if accessing a cloud configuration
@@ -49,12 +56,14 @@ pub enum ConfigCmd {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
     },
 
     /// Append or set the provided configuration key with the given value
     Add {
         /// Configuration key. Run `tedge config list --doc` for available keys
+        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
         key: WritableKey,
 
         /// Configuration value.
@@ -66,12 +75,14 @@ pub enum ConfigCmd {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
     },
 
     /// Remove value from the provided configuration key
     Remove {
         /// Configuration key. Run `tedge config list --doc` for available keys
+        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
         key: WritableKey,
 
         /// Configuration value.
@@ -83,6 +94,7 @@ pub enum ConfigCmd {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
     },
 

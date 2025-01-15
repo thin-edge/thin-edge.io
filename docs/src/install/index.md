@@ -221,3 +221,45 @@ The packages can be viewed directly from the [Cloudsmith.io](https://cloudsmith.
     </td>
 </tr>
 </table>
+
+## Shell completions
+:::note
+Shell-completions are supported with `tedge` >= 1.5.0
+:::
+
+To make using the CLI easier, `tedge` provides tab-completion support. This can
+be enabled by adding a small configuration to your shell environment:
+
+```sh title="~/.bashrc" tab={"label":"bash"}
+source <(tedge completions bash)
+```
+
+```sh title="~/.zshrc" tab={"label":"zsh"}
+source <(tedge completions zsh)
+```
+
+```sh title="~/.config/fish/config.fish" tab={"label":"fish"}
+tedge completions fish | source
+```
+
+Once you have configured this, reload your shell configuration:
+
+```sh tab={"label":"bash"}
+source ~/.bashrc
+```
+
+```sh tab={"label":"zsh"}
+source ~/.zshrc
+```
+
+```sh tab={"label":"fish"}
+source ~/.config/fish/config.fish
+```
+
+After this, you should be able to tab complete values (where `<TAB>` indicates
+pressing the tab key on your keyboard):
+
+```sh
+$ tedge con<TAB><TAB>
+config  (Configure Thin Edge)  connect  (Connect to cloud provider)
+```

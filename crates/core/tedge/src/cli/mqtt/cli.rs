@@ -4,6 +4,8 @@ use crate::cli::mqtt::MqttError;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
+use clap_complete::ArgValueCandidates;
+use clap_complete::CompletionCandidate;
 use rumqttc::QoS;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
@@ -20,6 +22,7 @@ pub enum TEdgeMqttCli {
         /// QoS level (0, 1, 2)
         #[clap(short, long, default_value = "0")]
         #[arg(value_parser = parse_qos)]
+        #[arg(add = ArgValueCandidates::new(qos_completions))]
         qos: QoS,
         /// Retain flag
         #[clap(short, long = "retain")]
@@ -33,6 +36,7 @@ pub enum TEdgeMqttCli {
         /// QoS level (0, 1, 2)
         #[clap(short, long, default_value = "0")]
         #[arg(value_parser = parse_qos)]
+        #[arg(add = ArgValueCandidates::new(qos_completions))]
         qos: QoS,
         /// Avoid printing the message topics on the console
         #[clap(long = "no-topic")]
@@ -96,6 +100,14 @@ fn parse_qos(src: &str) -> Result<QoS, MqttError> {
         2 => Ok(QoS::ExactlyOnce),
         _ => Err(MqttError::InvalidQoS),
     }
+}
+
+fn qos_completions() -> Vec<CompletionCandidate> {
+    vec![
+        CompletionCandidate::new("0").help(Some("At most once".into())),
+        CompletionCandidate::new("1").help(Some("At least once".into())),
+        CompletionCandidate::new("2").help(Some("Exactly once".into())),
+    ]
 }
 
 #[cfg(test)]

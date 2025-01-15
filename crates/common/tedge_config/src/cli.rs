@@ -2,6 +2,7 @@
 
 use camino::Utf8PathBuf;
 use clap::Args;
+use clap::ValueHint;
 
 /// CLI arguments that should be handled by all thin-edge components.
 #[derive(Args, Debug, PartialEq, Eq, Clone)]
@@ -13,6 +14,7 @@ pub struct CommonArgs {
             hide_env_values = true,
             hide_default_value = true,
             global = true,
+            value_hint = ValueHint::DirPath,
         )]
     pub config_dir: Utf8PathBuf,
 
