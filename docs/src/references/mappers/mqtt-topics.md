@@ -52,7 +52,7 @@ The topics follow the below format
     c8y/error
 
 You can find more information about Cumulocity topics
-[Here](https://tech.forums.softwareag.com/t/cumulocity-iot-tips-and-tricks-mqtt-cheat-sheet/237187)
+[Here](https://cumulocity.com/docs/smartrest/mqtt-static-templates/)
 
 ## Azure MQTT Topics
 

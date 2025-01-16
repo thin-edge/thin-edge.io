@@ -82,7 +82,7 @@ Follow the instructions [here](https://github.com/thin-edge/thin-edge.io_example
 You can test if the project was successfully installed by running the following Apama command:
 
 ```sh
-/opt/softwareag/Apama/bin/apama_env engine_inspect -m
+/opt/cumulocity/Apama/bin/apama_env engine_inspect -m
 ```
 
 ```text title="Example Output"
