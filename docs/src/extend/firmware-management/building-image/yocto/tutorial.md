@@ -67,13 +67,13 @@ The project uses different Yocto layers to build an image which contains:
     cd meta-tedge/kas
     ```
 
-2. Install [just](https://just.systems/man/en/chapter_5.html) which is used to run different tasks provided by the project
+2. Install [just](https://just.systems/man/en/packages.html) which is used to run different tasks provided by the project
 
     ```sh
     curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/bin
     ```
 
-    Check out the [justfile website](https://just.systems/man/en/chapter_5.html) for more installation options.
+    Check out the [justfile website](https://just.systems/man/en/packages.html) for more installation options.
 
 3. Install [kas](https://kas.readthedocs.io/en/latest/) which is used to managed bitbake projects
 
