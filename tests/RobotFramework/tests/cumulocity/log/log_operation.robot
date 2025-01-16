@@ -191,7 +191,7 @@ Publish and Verify Local Command
     Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
 
     IF    "${c8y_fragment}"
-        # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
+        # There should not be any c8y related operation transition messages sent: https://cumulocity.com/docs/smartrest/mqtt-static-templates/#updating-operations
         Should Have MQTT Messages
         ...    c8y/s/us
         ...    message_pattern=^(501|502|503|504|505|506),${c8y_fragment}.*

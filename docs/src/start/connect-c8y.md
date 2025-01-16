@@ -24,7 +24,7 @@ The very first step to enable %%te%% is to connect your device to the cloud.
 * This connection is secure (encrypted over TLS), and the two peers are identified by x509 certificates.
 * Sending data to the cloud will then be as simple as sending data locally.
 
-The focus is here on connecting to [Cumulocity](https://www.cumulocity.com/guides/concepts/introduction/).
+The focus is here on connecting to [Cumulocity](https://cumulocity.com/docs/sector/getting_started/).
 See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
@@ -211,12 +211,12 @@ Check the following items to help you diagnose the root cause of the problem:
 * Check the configured `c8y.url`. Copy/paste the url into a Web Browser to validate that it does open the intended Cumulocity tenant
 * Check your username. The user/email is case-sensitive, so make sure the user matches your configured Cumulocity user
 * Check your password. Use copy/paste to enter your password as this eliminates typos
-* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/guides/users-guide/administration/#to-add-a-user)
+* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/docs/standard-tenant/managing-users/#to-add-a-user)
 
 
 #### 403 - Forbidden
 
-The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/guides/device-integration/mqtt/#device-certificates).
+The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/docs/device-integration/device-certificates/).
 
 Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity. Global roles can be assigned to users via the Cumulocity **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
 
@@ -224,7 +224,7 @@ Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in 
 
 Alternatively, you can explicitly add one of the following permissions to your Cumulocity user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
 
-If you are still having trouble, please check out the official [Cumulocity documentation](https://cumulocity.com/guides/device-integration/mqtt/#upload-your-ca-certificate).
+If you are still having trouble, please check out the official [Cumulocity documentation](https://cumulocity.com/docs/device-integration/device-certificates/#upload-your-ca-certificate).
 
 
 #### Address is unreachable

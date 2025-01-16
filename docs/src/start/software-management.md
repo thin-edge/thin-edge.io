@@ -41,7 +41,7 @@ Managing the software packages installed on the devices from your Cumulocity ten
 * Populate the software repository with all the software packages and versions you plan to install.
 * Trigger software update operations on the devices, to install specific packages from the repository.
 
-Find more information about [managing the device software](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)
+Find more information about [managing the device software](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-software)
 
 ### Adding new software into the software repository of your tenant
 
@@ -99,17 +99,17 @@ Find more information about [managing the device software](https://cumulocity.co
 ### Deleting software or software version
 
 One can remove a software module or a specific version of it from the software repository.
-Find more information about [how to delete the software or the specific software version](https://cumulocity.com/guides/users-guide/device-management/#deleting-softwares-or-software-versions)
+Find more information about [how to delete the software or the specific software version](https://cumulocity.com/docs/device-management-application/managing-device-data/#to-delete-a-software)
 
 ## Managing software on a device
 
-Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
+Find more information about [how to manage the software](https://cumulocity.com/docs/device-management-application/managing-device-data/#to-manage-software-on-a-device) on a device.
 
 From the Cumulocity cloud `Software` tab of a device, software can be
 
-* [installed](https://cumulocity.com/guides/users-guide/device-management/#to-install-software-on-a-device)
-* [updated](https://cumulocity.com/guides/users-guide/device-management/#to-update-software-on-a-device)
-* [removed](https://cumulocity.com/guides/users-guide/device-management/#to-delete-software-from-a-device)
+* [installed](https://cumulocity.com/docs/device-management-application/managing-device-data/#to-install-software-on-a-device)
+* [updated](https://cumulocity.com/docs/device-management-application/managing-device-data/#to-update-software-on-a-device)
+* [removed](https://cumulocity.com/docs/device-management-application/managing-device-data/#to-delete-software-from-a-device)
 
 :::note
 * %%te%% treats install and update same

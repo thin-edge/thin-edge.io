@@ -30,7 +30,7 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 ##  Prerequisite
 
 To follow this guide, you only need the following:
-- A [Cumulocity](https://cumulocity.com/pages/free-trial/) Trial tenant.
+- A [Cumulocity](https://www.cumulocity.com/start-your-journey/free-trial/) Trial tenant.
 
 - A Raspberry Pi (any model is fine) with RaspberryPi OS installed, for other boards and OS'es have a look [here](../references/supported-platforms.md)
 - Updated device
@@ -159,7 +159,7 @@ sudo tedge cert upload c8y --user "$C8Y_USER"
 If the password prompt appears, enter your password.
 
 :::info
-In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/guides/10.7.0/device-sdk/mqtt/#device-certificates).
+In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/docs/device-integration/device-certificates/#registering-devices-using-certificates).
 :::
 
 ### Connect
@@ -371,7 +371,7 @@ sudo tedge reconnect c8y
 
 When a different version of the already installed software needs to be installed, choose in step 4 the installed software from the list and in step 5 the desired version.
 
-Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
+Find more information about [how to manage the software](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-software) on a device.
 
 How to [develop your own plugins](../extend/software-management.md) is described here.
 

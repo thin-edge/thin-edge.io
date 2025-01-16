@@ -4,9 +4,9 @@ tags: [Operate, Cumulocity]
 description: SmartREST 2.0 template registration and usage
 ---
 
-[Custom SmartREST 2.0 Templates](https://cumulocity.com/guides/reference/smartrest-two) can be used to extend the functionality of a device to support more operations than what the [static SmartREST templates](https://cumulocity.com/guides/reference/smartrest-two/#mqtt-static-templates) offer.
+[Custom SmartREST 2.0 Templates](https://cumulocity.com/docs/smartrest/smartrest-introduction/) can be used to extend the functionality of a device to support more operations than what the [static SmartREST templates](https://cumulocity.com/docs/smartrest/mqtt-static-templates/) offer.
 
-%%te%% supports subscription to custom templates as documented [here](https://cumulocity.com/guides/users-guide/device-management/#smartrest-templates).
+%%te%% supports subscription to custom templates as documented [here](https://cumulocity.com/docs/smartrest/smartrest-two/#template-collections).
 
 For every template that the device uses, it must publish all data to `s/uc/<template-name>` topic and subscribe to `s/dc/<template-name>` to receive data from the cloud, based on that template.
 When these templates are configured with %%te%%, subscriptions to all these relevant topics on Cumulocity cloud will be done by %%te%% internally.

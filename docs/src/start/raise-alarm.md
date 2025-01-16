@@ -208,6 +208,6 @@ An example of the translated `cumulocity` alarm message for a `child` device wit
   }
 }
 ```
-Find more information about SmartREST representations for alarms in Cumulocity [here](https://cumulocity.com/guides/10.11.0/reference/smartrest-two/#alarm-templates).
+Find more information about SmartREST representations for alarms in Cumulocity [here](https://cumulocity.com/docs/smartrest/mqtt-static-templates/#alarm-templates).
 
-Find more information about alarms data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
+Find more information about alarms data model in Cumulocity [here](https://cumulocity.com/docs/concepts/domain-model/#events).

@@ -14,7 +14,7 @@ IoT devices often do more than just send data to the cloud. They also do things 
 * reboot on demand
 * install or remove software
 
-These operations are supported by [Cumulocity](https://cumulocity.com/guides/reference/device-management-library) and other cloud providers.
+These operations are supported by [Cumulocity](https://cumulocity.com/docs/device-integration/fragment-library/) and other cloud providers.
 When such an operation is triggered from the cloud, the cloud mapper (e.g: `tedge-mapper-c8y`) processes that request.
 
 The Cumulocity mapper treats the following operations as inbuilt operations and converts those into their equivalent tedge commands:
@@ -44,7 +44,7 @@ an operation with that name is supported by the tedge device on Cumulocity.
 For e.g, an empty file named `c8y_Restart` in this directory represents that
 the tedge device supports Cumulocity device restart operation.
 
-The aggregated list of all the operation files in this directory represents the [Cumulocity supported operations list](https://cumulocity.com/guides/reference/device-management-library/#announcing-capabilities) of that device.
+The aggregated list of all the operation files in this directory represents the [Cumulocity supported operations list](https://cumulocity.com/docs/device-integration/fragment-library/#announcing-capabilities) of that device.
 Whenever a new operation file is added to 
 
 Similarly, an operation file at `/etc/tedge/operations/c8y/<child-device-xid>` indicates that

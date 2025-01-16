@@ -105,4 +105,4 @@ In the Cumulocity UI this will looks something like this:
 
 
 For information on which fragments Cumulocity supports please see the
-[Cumulocity API docs](https://cumulocity.com/guides/reference/device-management-library/).
+[Cumulocity API docs](https://cumulocity.com/docs/device-integration/fragment-library/).
