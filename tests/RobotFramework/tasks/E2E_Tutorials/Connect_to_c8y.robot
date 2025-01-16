@@ -23,10 +23,10 @@ Install thin-edge.io on your device
     Clear previous downloaded files if any
     Install thin-edge.io
 
-Set the URL of your Cumulocity IoT tenant
+Set the URL of your Cumulocity tenant
     ${HOSTNAME}=    Replace String Using Regexp    ${C8Y_CONFIG.host}    ^.*://    ${EMPTY}
     ${HOSTNAME}=    Strip String    ${HOSTNAME}    characters=/
-    Execute Command    sudo tedge config set c8y.url ${HOSTNAME}    # Set the URL of your Cumulocity IoT tenant
+    Execute Command    sudo tedge config set c8y.url ${HOSTNAME}    # Set the URL of your Cumulocity tenant
 
 Create the certificate
     Execute Command    sudo tedge cert create --device-id ${DEVICE_SN}
@@ -42,7 +42,7 @@ Create the certificate
 
 tedge cert upload c8y command
     Execute Command    sudo env C8YPASS\='${C8Y_CONFIG.password}' tedge cert upload c8y --user ${C8Y_CONFIG.username}
-    Sleep    3s    # Wait for cert to be processed/distributed to all cores (in Cumulocity IoT)
+    Sleep    3s    # Wait for cert to be processed/distributed to all cores (in Cumulocity)
 
 Connect the device
     ${output}=    Execute Command    sudo tedge connect c8y    # You can then check the content of that certificate.
@@ -69,7 +69,7 @@ Connect the device
     Should Contain    ${output}    tedge-agent service successfully started and enabled!
 
 Sending your first telemetry data
-    Execute Command    tedge mqtt pub c8y/s/us 211,20    # Set the URL of your Cumulocity IoT tenant
+    Execute Command    tedge mqtt pub c8y/s/us 211,20    # Set the URL of your Cumulocity tenant
 
 Download the measurements report file
     Device Should Exist    ${DEVICE_SN}

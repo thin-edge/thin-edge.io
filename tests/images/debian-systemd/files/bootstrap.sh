@@ -868,7 +868,7 @@ bootstrap_c8y() {
     esac
 
     # Cumulocity URL
-    C8Y_BASEURL=$(prompt_value "Enter the Cumulocity IoT url" "$C8Y_BASEURL")
+    C8Y_BASEURL=$(prompt_value "Enter the Cumulocity url" "$C8Y_BASEURL")
 
     # Normalize url, by stripping url schema
     if [ -n "$C8Y_BASEURL" ]; then
@@ -954,7 +954,7 @@ display_banner_c8y() {
     echo "tedge.version:   $(tedge --version 2>/dev/null | tail -1 | cut -d' ' -f2)"
     echo "device.id:       ${DEVICE_ID}"
     DEVICE_SEARCH="${DEVICE_ID//-/*}"
-    echo "Cumulocity IoT:  https://${C8Y_BASEURL}/apps/devicemanagement/index.html#/assetsearch?filter=*${DEVICE_SEARCH}*"
+    echo "Cumulocity:  https://${C8Y_BASEURL}/apps/devicemanagement/index.html#/assetsearch?filter=*${DEVICE_SEARCH}*"
     echo ""
     echo "----------------------------------------------------------"    
 }

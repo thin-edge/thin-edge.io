@@ -164,7 +164,7 @@ This is a two step process.
 
 ### Step 1: Update the mosquitto.conf
 
-Since the bridge configuration files for Cumulocity IoT, Azure IoT Hub or AWS IoT will be created in a directory given through `--config-dir`,
+Since the bridge configuration files for Cumulocity, Azure IoT Hub or AWS IoT will be created in a directory given through `--config-dir`,
 the path to the bridge configuration files (tedge-mosquitto.conf, c8y/az/aws-bridge.conf) must be found by `mosquitto`.
 So, the below line has to be added to your `mosquitto.conf` file manually.
 
@@ -174,7 +174,7 @@ include_dir /global/path/to/config/dir/tedge/mosquitto-conf
 
 ### Step 2: tedge connect using a custom config directory
 
-Use the below command to connect to `Cumulocity IoT, Azure IoT Hub or AWS IoT` cloud using `--config-dir`
+Use the below command to connect to `Cumulocity, Azure IoT Hub or AWS IoT` cloud using `--config-dir`
 
 ```sh
 sudo tedge --config-dir /global/path/to/config/dir connect c8y/az/aws

@@ -173,14 +173,14 @@ pub enum UploadCertCli {
             hide_default_value = true,
             default_value = ""
         )]
-        /// Provided username should be a Cumulocity IoT user with tenant management permissions.
+        /// Provided username should be a Cumulocity user with tenant management permissions.
         /// You will be prompted for input if the value is not provided or is empty
         username: String,
 
         #[clap(long = "password")]
         #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
         // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
-        /// Cumulocity IoT Password.
+        /// Cumulocity Password.
         /// You will be prompted for input if the value is not provided or is empty
         ///
         /// Notes: `C8YPASS` is deprecated. Please use the `C8Y_PASSWORD` env variable instead

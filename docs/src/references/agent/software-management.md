@@ -150,7 +150,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
 ```
 
 :::info
-The software types are currently not sent to the cloud (e.g. Cumulocity IoT), however this is planned in a future release.
+The software types are currently not sent to the cloud (e.g. Cumulocity), however this is planned in a future release.
 :::
 
 ### init state

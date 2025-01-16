@@ -2,7 +2,7 @@
 title: Cumulocity Proxy
 tags: [ Reference, HTTP, Cumulocity ]
 sidebar_position: 12
-description: Using the Cumulocity IoT Proxy for full access to Cumulocity API
+description: Using the Cumulocity Proxy for full access to Cumulocity API
 ---
 
 The `tedge-mapper` (when running in `c8y` mode) hosts a proxy server to access the Cumulocity HTTP API from the

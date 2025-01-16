@@ -14,8 +14,8 @@ A specific configuration will be required only for cloud endpoints which CA is n
 
 Several `tedge config` settings are used by %%te%% to locate the signing certificate of the cloud endpoint. 
 
-- `c8y.root_cert_path`  The path where Cumulocity IoT root certificate(s) are stored (MQTT)
-- `c8y.proxy.ca_path`  The path where Cumulocity IoT root certificate(s) are stored (HTTP)
+- `c8y.root_cert_path`  The path where Cumulocity root certificate(s) are stored (MQTT)
+- `c8y.proxy.ca_path`  The path where Cumulocity root certificate(s) are stored (HTTP)
 - `aws.root_cert_path`  The path where AWS IoT root certificate(s) are stored (MQTT).
 - `az.root_cert_path`  The path where Azure IoT root certificate(s) are stored (MQTT).
 
@@ -31,7 +31,7 @@ For the most part the store will be filled with certificates from your TLS/SSL p
 but if this is not the case you may need to update your local certificate store.
 
 :::note
-Updating the local certificate store is notably required to connect Cumulocity IoT Edge,
+Updating the local certificate store is notably required to connect Cumulocity Edge,
 as this distribution of Cumulocity uses self-signed certificates to authenticate itself.
 :::
 

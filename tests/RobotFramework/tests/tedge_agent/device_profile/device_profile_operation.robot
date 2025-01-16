@@ -13,7 +13,7 @@ Test Tags           theme:tedge_agent
 
 
 *** Test Cases ***
-Send device profile operation from Cumulocity IoT
+Send device profile operation from Cumulocity
     ${config_url}=    Create Inventory Binary
     ...    tedge-configuration-plugin
     ...    tedge-configuration-plugin

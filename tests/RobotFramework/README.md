@@ -112,7 +112,7 @@ Checkout the [dev container instructions](https://thin-edge.github.io/thin-edge.
 
     **Note**
 
-    It is recommended to use a CA signing certificate for the tests as this avoids having to create self-signed certificates for each test case and uploading it to Cumulocity IoT. Following the [section about generating your own CA signing certificate](#generating-a-ca-signing-certificate-for-the-tests)
+    It is recommended to use a CA signing certificate for the tests as this avoids having to create self-signed certificates for each test case and uploading it to Cumulocity. Following the [section about generating your own CA signing certificate](#generating-a-ca-signing-certificate-for-the-tests)
 
 4. Switch to the new python interpreter (the one with `.venv` in the name)
 
@@ -213,15 +213,15 @@ The following dependencies are requires for the instructions:
         -out ~/tedge-ca.crt
     ```
 
-2. Upload the CA certificate to Cumulocity IoT
+2. Upload the CA certificate to Cumulocity
 
-    You can upload the CA certificate to Cumulocity IoT via the Device Management Application under *Trusted Certificate*, and set the following properties:
+    You can upload the CA certificate to Cumulocity via the Device Management Application under *Trusted Certificate*, and set the following properties:
 
     * Enable the certificate
     * Activate *Auto Registration*
 
 
-    Alternatively, if you are a [go-c8y-cli](https://goc8ycli.netlify.app/) user, then you can use the following command to upload the CA certificate to Cumulocity IoT.
+    Alternatively, if you are a [go-c8y-cli](https://goc8ycli.netlify.app/) user, then you can use the following command to upload the CA certificate to Cumulocity.
 
     ```sh
     c8y devicemanagement certificates create \

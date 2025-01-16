@@ -5,7 +5,7 @@ description: Monitoring the health of services on devices
 ---
 
 The health of a %%te%% service or any other `service` that is running on the %%te%% device
-or on the `child` device can be monitored from the **Cumulocity IoT** by sending the `health-status` message to **Cumulocity IoT**.
+or on the `child` device can be monitored from the **Cumulocity** by sending the `health-status` message to **Cumulocity**.
 
 ## Publish health status
 
@@ -28,7 +28,7 @@ The health status message has to be sent as a *retain* message.
 
 When an empty health status message is sent, e.g. `{}` or `''`, the `status` will be replaced with `unknown`.
 
-## Conversion of the health status message to Cumulocity IoT service monitor message
+## Conversion of the health status message to Cumulocity service monitor message
 
 The `tedge-mapper-c8y` will translate any health status message that is received on `te/+/+/+/+/status/health` topic to
 Cumulocity [Service creation](https://cumulocity.com/docs/smartrest/mqtt-static-templates/#102) SmartREST message and
@@ -52,7 +52,7 @@ tedge mqtt pub te/device/child1/service/service1/status/health '{"status":"up"}'
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us/<device-id>:device:child1
@@ -90,4 +90,4 @@ sudo tedge config unset service.type
 
 More info about the service monitoring can be found in the link below.
 
-[Service monitoring Cumulocity IoT](https://cumulocity.com/docs/device-management-application/viewing-device-details/#services)
+[Service monitoring Cumulocity](https://cumulocity.com/docs/device-management-application/viewing-device-details/#services)

@@ -1,8 +1,8 @@
 ---
-title: Connecting to Cumulocity IoT
+title: Connecting to Cumulocity
 tags: [Getting Started, Cumulocity, Connection]
 sidebar_position: 2
-description: Connect %%te%% to Cumulocity IoT and publish telemetry data
+description: Connect %%te%% to Cumulocity and publish telemetry data
 ---
 
 import UserContext from '@site/src/components/UserContext';
@@ -24,11 +24,11 @@ The very first step to enable %%te%% is to connect your device to the cloud.
 * This connection is secure (encrypted over TLS), and the two peers are identified by x509 certificates.
 * Sending data to the cloud will then be as simple as sending data locally.
 
-The focus is here on connecting to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/).
+The focus is here on connecting to [Cumulocity](https://www.cumulocity.com/guides/concepts/introduction/).
 See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
-Before you try to connect your device to Cumulocity IoT, you need:
+Before you try to connect your device to Cumulocity, you need:
 * The url of the endpoint to connect (e.g. `eu-latest.cumulocity.com`).
 * Your credentials to connect Cumulocity:
     * Your tenant identifier (e.g. `t00000007`), a user name and password.
@@ -45,9 +45,9 @@ You can now use the [`tedge` command](../references/cli/index.md) to:
 
 ## Configure the device
 
-To connect the device to the Cumulocity IoT, one needs to set the URL of your Cumulocity IoT tenant and the root certificate as below.
+To connect the device to the Cumulocity, one needs to set the URL of your Cumulocity tenant and the root certificate as below.
 
-Set the URL of your Cumulocity IoT tenant.
+Set the URL of your Cumulocity tenant.
 
 <UserContext>
 
@@ -63,13 +63,13 @@ Set the path to the root certificate if necessary. The default is `/etc/ssl/cert
 sudo tedge config set c8y.root_cert_path /etc/ssl/certs
 ```
 
-This will set the root certificate path of the Cumulocity IoT.
+This will set the root certificate path of the Cumulocity.
 In most of the Linux flavors, the certificate will be present in `/etc/ssl/certs`.
 If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
 
 ### Custom domain
 
-If you are using the Cumulocity Iot [custom domain feature](https://cumulocity.com/docs/enterprise-tenant/customization/#domain-name), then you need to set two urls instead of one, as the HTTP and MQTT endpoints on custom domains are different because the custom domain only applies to the HTTP endpoint. The MQTT endpoint must point to the underlying Cumulocity IoT instance.
+If you are using the Cumulocity [custom domain feature](https://cumulocity.com/docs/enterprise-tenant/customization/#domain-name), then you need to set two urls instead of one, as the HTTP and MQTT endpoints on custom domains are different because the custom domain only applies to the HTTP endpoint. The MQTT endpoint must point to the underlying Cumulocity instance.
 
 For example, below shows setting the HTTP and MQTT endpoints:
 
@@ -97,7 +97,7 @@ curl -sfL https://$C8Y_URL/tenant/loginOptions | jq -r '.loginOptions[] | select
 
 ## Connecting to Cumulocity server signed with self-signed certificate
 
-If the Cumulocity IoT instance that you're connecting to, is signed with a self-signed certificate(eg: Cumulocity IoT Edge instance),
+If the Cumulocity instance that you're connecting to, is signed with a self-signed certificate(eg: Cumulocity Edge instance),
 then the path to that server certificate must be set as the c8y.root_cert_path as follows:
 
 ```sh
@@ -204,32 +204,32 @@ Caused by:
 
 #### 401 - Unauthorized
 
-The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity IoT url that was set in the `tedge config set c8y.url <url>` command.
+The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity url that was set in the `tedge config set c8y.url <url>` command.
 
 Check the following items to help you diagnose the root cause of the problem:
 
-* Check the configured `c8y.url`. Copy/paste the url into a Web Browser to validate that it does open the intended Cumulocity IoT tenant
-* Check your username. The user/email is case-sensitive, so make sure the user matches your configured Cumulocity IoT user
+* Check the configured `c8y.url`. Copy/paste the url into a Web Browser to validate that it does open the intended Cumulocity tenant
+* Check your username. The user/email is case-sensitive, so make sure the user matches your configured Cumulocity user
 * Check your password. Use copy/paste to enter your password as this eliminates typos
-* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity IoT user via the [Administration Page](https://cumulocity.com/guides/users-guide/administration/#to-add-a-user)
+* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/guides/users-guide/administration/#to-add-a-user)
 
 
 #### 403 - Forbidden
 
-The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity IoT's [Trusted certificates](https://cumulocity.com/guides/device-integration/mqtt/#device-certificates).
+The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/guides/device-integration/mqtt/#device-certificates).
 
-Your Cumulocity IoT user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity IoT. Global roles can be assigned to users via the Cumulocity IoT **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
+Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity. Global roles can be assigned to users via the Cumulocity **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
 
 ![User Global Roles](./c8y-user-globl-roles.png)
 
-Alternatively, you can explicitly add one of the following permissions to your Cumulocity IoT user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity IoT OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
+Alternatively, you can explicitly add one of the following permissions to your Cumulocity user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
 
-If you are still having trouble, please check out the official [Cumulocity IoT documentation](https://cumulocity.com/guides/device-integration/mqtt/#upload-your-ca-certificate).
+If you are still having trouble, please check out the official [Cumulocity documentation](https://cumulocity.com/guides/device-integration/mqtt/#upload-your-ca-certificate).
 
 
 #### Address is unreachable
 
-If you are unable to reach Cumulocity IoT, then it is likely that your device's network is not properly configured. This could be for many different reasons, however the following checks might help you spot where the mistake is:
+If you are unable to reach Cumulocity, then it is likely that your device's network is not properly configured. This could be for many different reasons, however the following checks might help you spot where the mistake is:
 
 * Can you ping a well known DNS server?
 
@@ -362,7 +362,7 @@ Persisting tedge-agent on reboot.
 tedge-agent service successfully started and enabled!
 ```
 
-If the device certificate is trusted by Cumulocity IoT, the %%te%% instance will automatically connect to the cloud once connectivity is restored.
+If the device certificate is trusted by Cumulocity, the %%te%% instance will automatically connect to the cloud once connectivity is restored.
 
 ## Sending your first telemetry data
 

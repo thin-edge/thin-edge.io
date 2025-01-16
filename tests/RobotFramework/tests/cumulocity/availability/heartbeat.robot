@@ -18,7 +18,7 @@ ${HEARTBEAT_INTERVAL}           60
 *** Test Cases ***
 ### Main Device ###
 Heartbeat is sent
-    [Documentation]    Full end-to-end test which will check the Cumulocity IoT behaviour to sending the heartbeat signal
+    [Documentation]    Full end-to-end test which will check the Cumulocity behaviour to sending the heartbeat signal
     ...    The tests therefore relies on the backend availability service which then sets the c8y_Availability fragment
     ...    based on the last received telemetry data.
     Device Should Have Fragment Values

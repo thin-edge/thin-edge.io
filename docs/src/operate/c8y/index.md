@@ -2,7 +2,7 @@
 title: Device Management with Cumulocity
 tags: [Operate, Cloud]
 sidebar_position: 9
-description: Device management with %%te%% and Cumulocity IoT
+description: Device management with %%te%% and Cumulocity
 ---
 
 import DocCardList from '@theme/DocCardList';

@@ -6,7 +6,7 @@ description: Setting up HTTPS for secure local communication
 
 %%te%% provides two services over HTTP:
 - The [File Transfer Service](../../references/file-transfer-service.md) is used by the mappers and the child devices to transfer files locally.
-- The [Cumulocity Proxy](../../references/cumulocity-proxy.md) acts as a local proxy to the Cumulocity IoT REST API.
+- The [Cumulocity Proxy](../../references/cumulocity-proxy.md) acts as a local proxy to the Cumulocity REST API.
 
 Three levels of security are supported:
 
@@ -31,8 +31,8 @@ curl http://localhost:8000/tedge/file-transfer/foo.txt
 
 ### Cumulocity Proxy
 
-When a device is successfully connected to Cumulocity IoT,
-**tedge-mapper** acts as a proxy to the Cumulocity IoT REST API.
+When a device is successfully connected to Cumulocity,
+**tedge-mapper** acts as a proxy to the Cumulocity REST API.
 For instance, the following lists the managed objects related to the device:
 
 ```sh
@@ -40,12 +40,12 @@ curl http://localhost:8001/c8y/inventory/managedObjects
 ```
 
 :::note
-The connection from the Cumulocity Proxy to Cumulocity IoT is always established over HTTPS,
+The connection from the Cumulocity Proxy to Cumulocity is always established over HTTPS,
 whatever the settings for local connections.
 
 The identity of the Cumulocity end-point is authenticated using the
 root certificates configured with `tedge config get c8y.proxy.ca_path` and the device itself
-is authenticated using JWT tokens retrieved from Cumulocity IoT via MQTT.
+is authenticated using JWT tokens retrieved from Cumulocity via MQTT.
 :::
 
 ## Open HTTP services on the local network

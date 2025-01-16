@@ -46,7 +46,7 @@ The image can be easily built by using the following steps
     docker compose exec -it tedge ./bootstrap.sh
     ```
 
-    This will install the latest official thin-edge.io version, and connect your device to Cumulocity IoT (using the credentials provided in the .env file)
+    This will install the latest official thin-edge.io version, and connect your device to Cumulocity (using the credentials provided in the .env file)
 
     **Note**
 

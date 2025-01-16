@@ -6,10 +6,10 @@ description: Managing device profiles on devices
 
 ## Management
 
-%%te%% enables you to manage the firmware, software and configuration for a device in a single operation which makes it suitable for managing a large fleet of devices. The following sections detail how to create and assign a device profile to a device. Using Cumulocity IoT, you can either assign a device profile using a single operation (described on this page), or by using a [bulk operation](https://cumulocity.com/docs/device-management-application/monitoring-and-controlling-devices/#to-add-a-bulk-operation) to assign it to a fleet of devices.
+%%te%% enables you to manage the firmware, software and configuration for a device in a single operation which makes it suitable for managing a large fleet of devices. The following sections detail how to create and assign a device profile to a device. Using Cumulocity, you can either assign a device profile using a single operation (described on this page), or by using a [bulk operation](https://cumulocity.com/docs/device-management-application/monitoring-and-controlling-devices/#to-add-a-bulk-operation) to assign it to a fleet of devices.
 
 :::info
-For more detailed information on the Cumulocity IoT **Device Management** features, please check out the [official documentation](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-device-profiles).
+For more detailed information on the Cumulocity **Device Management** features, please check out the [official documentation](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-device-profiles).
 :::
 
 ### To add a new device profile {#add-to-repo}

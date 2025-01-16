@@ -1,7 +1,7 @@
 ---
 title: Connect
 tags: [Operate, Cloud]
-description: Connecting %%te%% to Cumulocity IoT
+description: Connecting %%te%% to Cumulocity
 ---
 
 import UserContext from '@site/src/components/UserContext';

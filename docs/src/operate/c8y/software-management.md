@@ -9,7 +9,7 @@ description: Managing software on devices
 %%te%% enables you to manage the software installed on your device. The following sections details how to install and remove software packages.
 
 :::info
-For more detailed information on the Cumulocity IoT **Device Management** features, please check out the [official documentation](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-software).
+For more detailed information on the Cumulocity **Device Management** features, please check out the [official documentation](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-software).
 :::
 
 ### To add a new software or software version {#add-to-repo}
@@ -77,7 +77,7 @@ For more detailed information on the Cumulocity IoT **Device Management** featur
 
 ### Updating to the latest %%te%% version {#self-update}
 
-Updating %%te%% from Cumulocity IoT is the same process as installing any other software. You can update all of the %%te%% packages by installing a single package called `tedge-full`.
+Updating %%te%% from Cumulocity is the same process as installing any other software. You can update all of the %%te%% packages by installing a single package called `tedge-full`.
 
 Below shows instructions on how to update %%te%% to the latest version:
 
@@ -114,7 +114,7 @@ If you are upgrading %%te%% from any version prior to `1.0.0` (including `1.0.0-
 
 ### Switching to Advanced Software Management
 
-%%te%% supports both [Legacy Software Management](https://cumulocity.com/docs/device-integration/fragment-library/#legacy-software-management) and [Advanced Software Management](https://cumulocity.com/docs/device-integration/fragment-library/#advanced-software-management) features of Cumulocity IoT.
+%%te%% supports both [Legacy Software Management](https://cumulocity.com/docs/device-integration/fragment-library/#legacy-software-management) and [Advanced Software Management](https://cumulocity.com/docs/device-integration/fragment-library/#advanced-software-management) features of Cumulocity.
 By default, Legacy Software Management is selected.
 To switch to Advanced Software Management, use the `tedge` command to change the following configurations:
 
@@ -169,18 +169,18 @@ sudo tedge config set apt.maintainer '.*(thin-edge.io|other).*'
 
 The following contains frequently asked questions regarding the software management feature.
 
-### Hosting linux packages in Cumulocity IoT
+### Hosting linux packages in Cumulocity
 
 The recommended way to install linux packages such as deb, apk and rpm is to install packages directly from a configure package repository such as public repositories for your Operating System, or using a package service such as Cloudsmith, JFrog, Gemfury, Packagecloud etc. Using a package repository supports the full dependency resolution that users are familiar with when install packages manually, e.g. using `apt-get install mypackage`, and the correct architecture will be automatically selected for your device (e.g arm64/aarch or amd64/x86_64 etc.).
 
-If you choose to host the software packages in Cumulocity IoT or via some other blob store, then the automatic dependency installation and architecture will not function so you have to manage all of this yourself. It might be manageable if you have simple packages with no dependencies and have an architecture agnostic package (e.g. the architecture is set to `all` or `noarch`).
+If you choose to host the software packages in Cumulocity or via some other blob store, then the automatic dependency installation and architecture will not function so you have to manage all of this yourself. It might be manageable if you have simple packages with no dependencies and have an architecture agnostic package (e.g. the architecture is set to `all` or `noarch`).
 
-When hosting the linux packages within Cumulocity IoT then ensure that:
+When hosting the linux packages within Cumulocity then ensure that:
 
 * the package does not have any dependencies
-* the name and version used in the Cumulocity IoT *Software repository* matches the exact information contained in the package's meta data
+* the name and version used in the Cumulocity *Software repository* matches the exact information contained in the package's meta data
 
-    For example, below shows the `apt-cache show jq` information for the `jq` package where the **Package** and **Version** fields should match the **name** and **version** properties in Cumulocity IoT.
+    For example, below shows the `apt-cache show jq` information for the `jq` package where the **Package** and **Version** fields should match the **name** and **version** properties in Cumulocity.
 
     ```
     Package: jq
@@ -189,7 +189,7 @@ When hosting the linux packages within Cumulocity IoT then ensure that:
     ```
 
     If the package name and version does not match, then the package might fail to be installed due to a validation error.
-* the *Device type filter* property is set in the Cumulocity IoT Software repository if the packages is only valid for a specific CPU architecture. The *Device type filter* is used to filter which packages are available for different devices types to ensure you can only install compatible packages on a given device.
+* the *Device type filter* property is set in the Cumulocity Software repository if the packages is only valid for a specific CPU architecture. The *Device type filter* is used to filter which packages are available for different devices types to ensure you can only install compatible packages on a given device.
 
     <p align="center">
         <img width="40%" src={require('./images/software-repo-hosted-binary.png').default} alt="Hosted binary" />

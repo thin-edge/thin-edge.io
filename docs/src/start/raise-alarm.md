@@ -150,10 +150,10 @@ The default value for the `text` fragment will be derived from the `alarm-type` 
 
 If the device is connected to some supported IoT cloud platform, any alarms raised locally on %%te%% will be forwarded to the connected cloud platform as well.
 The mapping of %%te%% alarms data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
-For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the %%te%% alarm JSON data to its equivalent Cumulocity SmartREST representation.
+For example, if the device is connected to Cumulocity cloud platform, the Cumulocity cloud mapper process will translate the %%te%% alarm JSON data to its equivalent Cumulocity SmartREST representation.
 
 :::info
-As of now, alarm data mapping is supported only on Cumulocity IoT cloud platform.
+As of now, alarm data mapping is supported only on Cumulocity cloud platform.
 :::
 
 ### Cumulocity cloud data mapping

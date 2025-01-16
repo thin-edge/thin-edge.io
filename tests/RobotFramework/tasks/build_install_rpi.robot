@@ -52,7 +52,7 @@ Check Architecture    # Checking the architecture in order to download the right
 Set File Name    # Setting the file name for download
     IF    '${ARCH}'=='aarch64'    aarch64    ELSE    armv7
 
-Disconnect from c8y    # Disconnects from Cumulocity IoT if connected
+Disconnect from c8y    # Disconnects from Cumulocity if connected
     Execute Command    sudo tedge disconnect c8y
 
 Uninstall tedge with purge
@@ -149,7 +149,7 @@ Executing Create self-signed certificate
     Should Contain    ${output}    Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 
 Set c8y URL
-    # Set the URL of your Cumulocity IoT tenant
+    # Set the URL of your Cumulocity tenant
     ${rc}=    Execute Command
     ...    sudo tedge config set c8y.url ${url_tedge}
     ...    return_stdout=False

@@ -50,13 +50,13 @@ sudo systemctl start tedge-mapper-collectd
 tedge mqtt sub 'te/device/main///m/+'
 ```
 
-## Are the collectd metrics published to Cumulocity IoT?
+## Are the collectd metrics published to Cumulocity?
 
 ```sh te2mqtt formats=v1
 tedge mqtt sub 'c8y/#'
 ```
 
-If not see how to [connect a device to Cumulocity IoT](../../start/connect-c8y.md).
+If not see how to [connect a device to Cumulocity](../../start/connect-c8y.md).
 
 ## Are the collectd metrics published to Azure IoT?
 

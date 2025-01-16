@@ -31,9 +31,9 @@ The following guide should help you install thin-edge.io as a helm chart.
 
     Alternatively, you can also create device certificates using a CA and openssl. Please consult the openssl documentation on how to do this.
 
-1. Add device certificate to Cumulocity IoT's Trusted Certificates
+1. Add device certificate to Cumulocity's Trusted Certificates
 
-    You can uploaded it to Cumulocity IoT using the Device Management UI, or using the go-c8y-cli tool:
+    You can uploaded it to Cumulocity using the Device Management UI, or using the go-c8y-cli tool:
 
     ```sh
     c8y devicemanagement certificates create --name mydevice001 --file ./device-certs/tedge-certificate.pem --status ENABLED --autoRegistrationEnabled
@@ -57,7 +57,7 @@ The following guide should help you install thin-edge.io as a helm chart.
     helm install tedge-chart ./tedge --set c8y.url=example.eu-latest.cumulocity.com --namespace tedge
     ```
 
-    Change the `c8y.url=` value to the MQTT endpoint of your Cumulocity IoT tenant.
+    Change the `c8y.url=` value to the MQTT endpoint of your Cumulocity tenant.
 
 1. Validate the device created in Cumulocity
 
