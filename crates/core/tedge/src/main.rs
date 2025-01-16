@@ -19,6 +19,7 @@ use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
 use tedge::Component;
 use tedge::ComponentOpt;
+use tedge::TEdgeCli;
 use tedge::TEdgeOpt;
 use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
@@ -30,6 +31,7 @@ use tracing::log;
 static ALLOCATOR: Cap<alloc::System> = Cap::new(alloc::System, usize::MAX);
 
 fn main() -> anyhow::Result<()> {
+    clap_complete::CompleteEnv::with_factory(TEdgeCli::command).complete();
     let executable_name = executable_name();
 
     let opt = parse_multicall(&executable_name, std::env::args_os());
@@ -62,7 +64,7 @@ fn main() -> anyhow::Result<()> {
         TEdgeOptMulticall::Component(Component::TedgeAptPlugin(opt)) => {
             tedge_apt_plugin::run_and_exit(opt)
         }
-        TEdgeOptMulticall::Tedge { cmd, common } => {
+        TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
             let tedge_config_location =
                 tedge_config::TEdgeConfigLocation::from_custom_root(&common.config_dir);
 
@@ -150,7 +152,9 @@ where
 
     let cmd2 = cmd.clone();
     match TEdgeOptMulticall::from_arg_matches(&cmd.get_matches_from(args)) {
-        Ok(TEdgeOptMulticall::Tedge { cmd, common }) => redirect_if_multicall(cmd, common),
+        Ok(TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common })) => {
+            redirect_if_multicall(cmd, common)
+        }
         Ok(t) => t,
         Err(e) => {
             eprintln!("{}", RichFormatter::format_error(&e.with_cmd(&cmd2)));
@@ -165,7 +169,7 @@ where
 fn redirect_if_multicall(cmd: TEdgeOpt, common: CommonArgs) -> TEdgeOptMulticall {
     match cmd {
         TEdgeOpt::Run(ComponentOpt { component }) => TEdgeOptMulticall::Component(component),
-        cmd => TEdgeOptMulticall::Tedge { cmd, common },
+        cmd => TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }),
     }
 }
 

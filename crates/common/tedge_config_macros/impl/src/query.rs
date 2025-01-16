@@ -479,6 +479,10 @@ fn keys_enum(
         .iter()
         .flat_map(|k| k.formatters.clone())
         .unzip();
+    let iter_field: Vec<_> = configuration_key
+        .iter()
+        .map(|k| k.iter_field.clone())
+        .collect();
     let uninhabited_catch_all = configuration_key
         .is_empty()
         .then_some::<syn::Arm>(parse_quote!(_ => unimplemented!("Cope with empty enum")));
@@ -487,6 +491,18 @@ fn keys_enum(
         .iter()
         .flat_map(|k| k.insert_profiles.clone())
         .unzip();
+    let match_shape = configuration_key
+        .iter()
+        .map(|k| &k.match_shape)
+        .collect::<Vec<_>>();
+    let doc_comment = configuration_key
+        .iter()
+        .map(|k| k.doc_comment.as_ref())
+        .collect::<Vec<_>>();
+    let doc_comment = doc_comment.into_iter().map(|c| match c {
+        Some(c) => quote!(Some(#c)),
+        None => quote!(None),
+    });
 
     let max_profile_count = configuration_key.iter().map(|k| k.field_names.len()).max();
 
@@ -549,6 +565,22 @@ fn keys_enum(
             }
 
             #try_with_profile_impl
+
+            const VALUES: &'static [Self] = &[
+                #(Self::#iter_field),*
+            ];
+            fn help(&self) -> Option<&'static str> {
+                match self {
+                    #(
+                        Self::#match_shape => #doc_comment,
+                    )*
+                    #uninhabited_catch_all
+                }
+            }
+
+            pub fn completions() -> Vec<::clap_complete::CompletionCandidate> {
+                Self::VALUES.into_iter().map(|v| ::clap_complete::CompletionCandidate::new(v.to_cow_str().into_owned()).help(v.help().map(|h| h.into()))).collect()
+            }
         }
 
         impl ::std::fmt::Display for #type_name {
@@ -824,6 +856,7 @@ struct ConfigurationKey {
     formatters: Vec<(syn::Pat, syn::Expr)>,
 
     insert_profiles: Vec<(syn::Pat, syn::Expr)>,
+    doc_comment: Option<String>,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -939,6 +972,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             field_names,
             formatters,
             insert_profiles,
+            doc_comment: segments.iter().last().unwrap().doc(),
         }
     } else {
         ConfigurationKey {
@@ -953,6 +987,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                 parse_quote!(::std::borrow::Cow::Borrowed(#key_str)),
             )],
             insert_profiles: vec![],
+            doc_comment: segments.iter().last().unwrap().doc(),
         }
     }
 }

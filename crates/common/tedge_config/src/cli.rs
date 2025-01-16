@@ -2,6 +2,9 @@
 
 use camino::Utf8PathBuf;
 use clap::Args;
+use clap::ValueHint;
+use clap_complete::ArgValueCandidates;
+use clap_complete::CompletionCandidate;
 
 /// CLI arguments that should be handled by all thin-edge components.
 #[derive(Args, Debug, PartialEq, Eq, Clone)]
@@ -13,6 +16,7 @@ pub struct CommonArgs {
             hide_env_values = true,
             hide_default_value = true,
             global = true,
+            value_hint = ValueHint::DirPath,
         )]
     pub config_dir: Utf8PathBuf,
 
@@ -35,5 +39,15 @@ pub struct LogConfigArgs {
     ///
     /// Overrides `--debug`
     #[clap(long, global = true)]
+    #[clap(add(ArgValueCandidates::new(log_level_completions)))]
     pub log_level: Option<tracing::Level>,
+}
+
+fn log_level_completions() -> Vec<CompletionCandidate> {
+    use tracing::Level as L;
+    let options = [L::TRACE, L::DEBUG, L::INFO, L::WARN, L::ERROR];
+    options
+        .into_iter()
+        .map(|level| CompletionCandidate::new(level.to_string().to_lowercase()))
+        .collect()
 }

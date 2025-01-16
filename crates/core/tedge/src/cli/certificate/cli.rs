@@ -1,6 +1,7 @@
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use camino::Utf8PathBuf;
+use clap::ValueHint;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
 use tedge_config::ReadError;
@@ -37,7 +38,7 @@ pub enum TEdgeCertCli {
         id: Option<String>,
 
         /// Path where a Certificate signing request will be stored
-        #[clap(long = "output-path", global = true)]
+        #[clap(long = "output-path", global = true, value_hint = ValueHint::FilePath)]
         output_path: Option<Utf8PathBuf>,
 
         #[clap(subcommand)]

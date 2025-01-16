@@ -1,8 +1,12 @@
 use anyhow::Context;
+use clap_complete::ArgValueCandidates;
+use clap_complete::CompletionCandidate;
 use std::borrow::Cow;
 use std::fmt;
+use tedge_config::get_config_dir;
 use tedge_config::system_services::SystemService;
 use tedge_config::ProfileName;
+use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
 #[clap(rename_all = "snake_case")]
@@ -12,6 +16,7 @@ pub enum CloudArg {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add(ArgValueCandidates::new(profile_completions)))]
         profile: Option<ProfileName>,
     },
     Az {
@@ -19,6 +24,7 @@ pub enum CloudArg {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add(ArgValueCandidates::new(profile_completions)))]
         profile: Option<ProfileName>,
     },
     Aws {
@@ -26,6 +32,7 @@ pub enum CloudArg {
         ///
         /// [env: TEDGE_CLOUD_PROFILE]
         #[clap(long)]
+        #[arg(add(ArgValueCandidates::new(profile_completions)))]
         profile: Option<ProfileName>,
     },
 }
@@ -157,4 +164,27 @@ impl MaybeBorrowedCloud<'_> {
             Self::Aws(profile) | Self::Azure(profile) | Self::C8y(profile) => profile.as_deref(),
         }
     }
+}
+
+/// (Best-effort) tab-completion values for profile names
+///
+/// This will infer the profile names from the various cloud configurations.
+/// It would be significantly more complicated to try and do per-cloud
+/// completions, and would likely provide no real value to anyone.
+///
+/// It will use the configuration directory as set by the
+/// `TEDGE_CONFIGURATION_DIR` environment variable, or `/etc/tedge` if
+/// that is not set
+pub fn profile_completions() -> Vec<CompletionCandidate> {
+    let location = TEdgeConfigLocation::from_custom_root(get_config_dir());
+    let Ok(tc) = location.load() else {
+        return vec![];
+    };
+    tc.c8y
+        .keys_str()
+        .flatten()
+        .map(CompletionCandidate::new)
+        .chain(tc.az.keys_str().flatten().map(CompletionCandidate::new))
+        .chain(tc.aws.keys_str().flatten().map(CompletionCandidate::new))
+        .collect()
 }

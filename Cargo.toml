@@ -89,13 +89,14 @@ base64 = "0.13"
 bytes = "1.4"
 camino = "1.1"
 cap = "0.1"
-clap = { version = "4.4", features = [
+clap = { version = "4.5", features = [
     "cargo",
     "derive",
     "string",
     "env",
     "unstable-styles",
 ] }
+clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
 csv = "1.1"
 darling = "0.20"
 doku = "0.21"

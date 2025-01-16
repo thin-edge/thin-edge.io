@@ -5,6 +5,7 @@ use crate::command::BuildContext;
 use crate::command::Command;
 use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
+use completions::Shell;
 pub use connect::*;
 use tedge_agent::AgentOpt;
 use tedge_apt_plugin::AptCli;
@@ -16,6 +17,7 @@ use tedge_write::bin::Args as TedgeWriteOpt;
 use self::init::TEdgeInitCmd;
 mod certificate;
 mod common;
+mod completions;
 pub mod config;
 mod connect;
 mod disconnect;
@@ -38,16 +40,19 @@ mod upload;
 )]
 pub enum TEdgeOptMulticall {
     /// Command line interface to interact with thin-edge.io
-    Tedge {
-        #[clap(subcommand)]
-        cmd: TEdgeOpt,
-
-        #[command(flatten)]
-        common: CommonArgs,
-    },
+    Tedge(TEdgeCli),
 
     #[clap(flatten)]
     Component(Component),
+}
+
+#[derive(clap::Parser, Debug)]
+pub struct TEdgeCli {
+    #[clap(flatten)]
+    pub common: CommonArgs,
+
+    #[clap(subcommand)]
+    pub cmd: TEdgeOpt,
 }
 
 #[derive(clap::Parser, Debug)]
@@ -68,7 +73,7 @@ pub enum Component {
     TedgeWrite(TedgeWriteOpt),
 }
 
-#[derive(clap::Subcommand, Debug)]
+#[derive(clap::Parser, Debug)]
 #[clap(
     name = clap::crate_name!(),
     version = clap::crate_version!(),
@@ -121,6 +126,10 @@ pub enum TEdgeOpt {
 
     /// Run thin-edge services and plugins
     Run(ComponentOpt),
+
+    Completions {
+        shell: Shell,
+    },
 }
 
 #[derive(Debug, clap::Parser)]
@@ -192,6 +201,7 @@ impl BuildCommand for TEdgeOpt {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
                 panic!("tedge mapper|agent|write commands are launched as multicall")
             }
+            TEdgeOpt::Completions { shell } => shell.build_command(context),
         }
     }
 }

@@ -119,18 +119,21 @@ level in `system.toml`
 
 ### Setting the log level through cli {#configure-log-levels-cli}
 
-The log level can be enabled for a %%te%% service as below
-
-For example for tedge-mapper:
+The log-level can be configured for a %%te%% service using the `--log-level`
+argument. For example for tedge-mapper:
 
 ```sh
-sudo -u tedge -- tedge-mapper --debug c8y
+sudo -u tedge -- tedge-mapper c8y --log-level debug 
 ```
 
+The possible values for `--log-level` are `trace`, `debug`, `info` (the
+default), `warn` and `error`.
+
 :::note
-In a similar way it can be set for all the %%te%% services.
-Only `debug` level can be set through cli. Also, it enables `trace` level.
+In a similar way it can be set for all the %%te%% services and the `tedge` CLI.
 :::
+
+There is also a `--debug` argument, which is shorthand for `--log-level debug`.
 
 ### Setting log level through system.toml {#configure-log-levels-file}
 The log levels can also be configured through the `system.toml` file.
