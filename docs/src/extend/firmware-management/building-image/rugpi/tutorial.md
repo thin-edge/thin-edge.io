@@ -43,7 +43,7 @@ Feel free to clone the project if you want to make your own customizations, howe
 
 ### Pre-requisites
 
-To run the project tasks, you will need to install a command line tool called [just](https://just.systems/man/en/chapter_5.html).
+To run the project tasks, you will need to install a command line tool called [just](https://just.systems/man/en/packages.html).
 
 You can install just using on of the following commands:
 
@@ -59,7 +59,7 @@ cargo install just
 curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/bin
 ```
 
-For other installation possibilities check out the [just documentation](https://just.systems/man/en/chapter_4.html).
+For other installation possibilities check out the [just documentation](https://just.systems/man/en/packages.html).
 
 ### Cloning the project {#clone-project}
 

@@ -27,7 +27,7 @@ and need to be secured, configured and updated at scale.
 The easiest way to get started is either to install the docker based [demo container](https://github.com/thin-edge/tedge-demo-container)
 that showcases %%te%% and all its features or with the [beginner-friendly tutorial](start/getting-started.md)
 that introduces %%te%% and guides you on how to install it on a Raspberry Pi.
-After the installation you can directly connect your device to [Cumulocity](https://www.cumulocity.com/guides/concepts/introduction/),
+After the installation you can directly connect your device to [Cumulocity](https://cumulocity.com/docs/concepts/introduction/),
 and then monitor it from the cloud.
 
 You can also explore the main use-cases using these [tutorials](start/index.md).

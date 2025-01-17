@@ -101,7 +101,7 @@ The Cumulocity JSON mapping of the same event would be as follows:
 Mapped events will be sent to Cumulocity via MQTT if the incoming %%te%% JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
 :::
 
-Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
+Find more information about events data model in Cumulocity [here](https://cumulocity.com/docs/concepts/domain-model/#events).
 
 ## Sending an event for a child/external device to the cloud
 

@@ -5,7 +5,7 @@ sidebar_position: 1
 ---
 
 The Cumulocity mapper, referred to as `c8y-mapper` in the rest of this document,
-maps data in [%%te%% format](../mqtt-api.md) into their equivalent [Cumulocity format](https://cumulocity.com/guides/reference/smartrest-two/#smartrest-two).
+maps data in [%%te%% format](../mqtt-api.md) into their equivalent [Cumulocity format](https://cumulocity.com/docs/smartrest/smartrest-two/).
 
 
 ## Registration
@@ -585,7 +585,7 @@ c8y/s/us/<service-external-id>
 
 ## Twin
 
-The `twin` metadata is mapped to [inventory data](https://cumulocity.com/guides/concepts/domain-model/#inventory) in Cumulocity.
+The `twin` metadata is mapped to [inventory data](https://cumulocity.com/docs/concepts/domain-model/#inventory) in Cumulocity.
 
 #### Twin - Main device
 
