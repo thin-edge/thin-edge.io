@@ -287,9 +287,9 @@ On your %%te%% device, run the following steps:
 
     # Input arguments
     MESSAGE="$1"
-    NAME=$(echo "$COMMAND" | cut -d, -f 3)
-    SSID=$(echo "$COMMAND" | cut -d, -f 4)
-    TYPE=$(echo "$COMMAND" | cut -d, -f 5)
+    NAME=$(echo "$MESSAGE" | cut -d, -f 3)
+    SSID=$(echo "$MESSAGE" | cut -d, -f 4)
+    TYPE=$(echo "$MESSAGE" | cut -d, -f 5)
 
     echo "Processing message: $MESSAGE"
     echo "NAME: $NAME"

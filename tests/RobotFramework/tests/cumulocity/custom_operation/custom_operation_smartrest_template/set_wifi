@@ -1,0 +1,4 @@
+[exec]
+command = "/etc/tedge/operations/set_wifi.sh"
+topic = "c8y/s/dc/custom_devmgmt"
+on_message = "dm101"
