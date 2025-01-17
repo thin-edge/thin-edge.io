@@ -207,7 +207,7 @@ fn get_device_id(
     let config_id = config.device_id(cloud.as_ref()).ok();
     let writable_key = get_writable_key(cloud)?;
     let dto = config_location
-        .load_dto_with_file_and_env()
+        .load_dto_from_toml_and_env()
         .context("failed to read tedge.toml file")?;
 
     match id {
