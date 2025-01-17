@@ -33,10 +33,6 @@ The ssh adapter uses an existing device and uses a SSH connect to run the test s
 
 The general test suit flow is very similar to the above [Docker adapter](#docker-adapter) flow, however the device creation and destroy steps are skipped.
 
-The core thin-edge.io team uses some physical devices setup in a test lab to facilitate testing on real hardware. These devices are not available for public use, however make up part of the automated and exploratory testing.
-
-The list of test hardware devices can be found [here](./TEST_DEVICES.md).
-
 # Setup
 
 ## Pre-requisites
