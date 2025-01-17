@@ -2,8 +2,8 @@ use crate::device_profile_manager::DeviceProfileManagerBuilder;
 use crate::entity_manager;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreServer;
-use crate::file_transfer_server::actor::FileTransferServerBuilder;
-use crate::file_transfer_server::actor::FileTransferServerConfig;
+use crate::http_server::actor::HttpServerBuilder;
+use crate::http_server::actor::HttpServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
 use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
@@ -72,7 +72,7 @@ pub const TEDGE_AGENT: &str = "tedge-agent";
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
     pub mqtt_config: MqttConfig,
-    pub http_config: FileTransferServerConfig,
+    pub http_config: HttpServerConfig,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub operation_config: OperationConfig,
@@ -135,7 +135,7 @@ impl AgentConfig {
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
-        let http_config = FileTransferServerConfig {
+        let http_config = HttpServerConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),
             cert_path: tedge_config.http.cert_path.clone(),
             key_path: tedge_config.http.key_path.clone(),
@@ -404,7 +404,7 @@ impl Agent {
                 },
             );
 
-            let file_transfer_server_builder = FileTransferServerBuilder::try_bind(
+            let file_transfer_server_builder = HttpServerBuilder::try_bind(
                 self.config.http_config,
                 &mut entity_store_actor_builder,
             )

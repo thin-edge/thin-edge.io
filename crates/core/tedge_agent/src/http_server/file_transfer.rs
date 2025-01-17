@@ -4,7 +4,7 @@
 //! - `PUT /tedge/file-transfer/*path`: Upload a new file
 //! - `GET /tedge/file-transfer/*path`: Retrieves an existing file
 //! - `DELETE /tedge/file-transfer/*path`: Deletes a file
-use super::error::FileTransferRequestError as Error;
+use super::error::HttpRequestError as Error;
 use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
 use super::request_files::RequestPath;

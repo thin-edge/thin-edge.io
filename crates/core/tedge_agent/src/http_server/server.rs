@@ -2,7 +2,7 @@ use super::entity_store::entity_store_router;
 use super::file_transfer::file_transfer_router;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
-use crate::file_transfer_server::error::FileTransferError;
+use crate::http_server::error::HttpServerError;
 use axum::Router;
 use camino::Utf8PathBuf;
 use futures::future::FutureExt;
@@ -34,7 +34,7 @@ pub(crate) fn http_server(
     listener: TcpListener,
     rustls_config: Option<ServerConfig>,
     agent_state: AgentState,
-) -> Result<impl Future<Output = io::Result<()>>, FileTransferError> {
+) -> Result<impl Future<Output = io::Result<()>>, HttpServerError> {
     let router = router(agent_state);
 
     let listener = listener.into_std()?;

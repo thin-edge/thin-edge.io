@@ -8,7 +8,7 @@
 //! References:
 //!
 //! - https://github.com/thin-edge/thin-edge.io/blob/main/design/decisions/0005-entity-registration-api.md
-use super::http_rest::AgentState;
+use super::server::AgentState;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
 use axum::extract::Path;
@@ -143,7 +143,7 @@ mod tests {
     use super::AgentState;
     use crate::entity_manager::server::EntityStoreRequest;
     use crate::entity_manager::server::EntityStoreResponse;
-    use crate::file_transfer_server::entity_store::entity_store_router;
+    use crate::http_server::entity_store::entity_store_router;
     use assert_json_diff::assert_json_eq;
     use axum::Router;
     use hyper::Body;

@@ -21,7 +21,7 @@ use tracing::log::warn;
 mod agent;
 mod device_profile_manager;
 mod entity_manager;
-mod file_transfer_server;
+mod http_server;
 mod operation_file_cache;
 mod operation_workflows;
 mod restart_manager;
