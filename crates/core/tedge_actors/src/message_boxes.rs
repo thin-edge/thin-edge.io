@@ -95,6 +95,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use log::debug;
 use std::fmt::Debug;
+use tracing::instrument;
 
 #[async_trait]
 pub trait MessageReceiver<Input> {
@@ -163,13 +164,15 @@ impl<Input: Debug> LoggingReceiver<Input> {
 impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         let message = self.receiver.try_recv().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        debug!("recv {:?}", message);
         message
     }
 
+    #[instrument(name = "LoggingReceiver::recv", skip(self), fields(name = self.name))]
     async fn recv(&mut self) -> Option<Input> {
+        debug!("attempting recv");
         let message = self.receiver.recv().await;
-        debug!(target: &self.name, "recv {:?}", message);
+        debug!("recv");
         message
     }
 
@@ -202,6 +205,7 @@ impl<Output> LoggingSender<Output> {
 
 #[async_trait]
 impl<Output: Message> Sender<Output> for LoggingSender<Output> {
+    #[instrument(name = "LoggingSender::send", skip(self, message), fields(name = self.name))]
     async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
         log_message_sent(&self.name, &message);
         self.sender.send(message).await

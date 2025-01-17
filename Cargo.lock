@@ -2414,6 +2414,7 @@ dependencies = [
  "serial_test",
  "thiserror",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 
@@ -3491,11 +3492,12 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.113"
+version = "1.0.135"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69801b70b1c3dac963ecb03a364ba0ceda9cf60c71cfe475e99864759c8b8a79"
+checksum = "2b0d7ba2887406110130a978386c4e1befb98c674b4fba677954e4db976630d9"
 dependencies = [
  "itoa",
+ "memchr",
  "ryu",
  "serde",
 ]
@@ -4009,6 +4011,7 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "tracing",
+ "tracing-chrome",
 ]
 
 [[package]]
@@ -4058,6 +4061,7 @@ dependencies = [
  "log",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4088,6 +4092,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.8.8",
+ "tracing",
  "walkdir",
 ]
 
@@ -4122,6 +4127,7 @@ dependencies = [
  "thiserror",
  "toml 0.8.8",
  "tracing",
+ "tracing-chrome",
  "tracing-subscriber",
  "url",
  "which",
@@ -4739,6 +4745,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.77",
+]
+
+[[package]]
+name = "tracing-chrome"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf0a738ed5d6450a9fb96e86a23ad808de2b727fd1394585da5cdd6788ffe724"
+dependencies = [
+ "serde_json",
+ "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]

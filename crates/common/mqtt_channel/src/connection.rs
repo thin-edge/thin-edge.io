@@ -8,8 +8,6 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
-use log::error;
-use log::info;
 use rumqttc::AsyncClient;
 use rumqttc::Event;
 use rumqttc::EventLoop;
@@ -18,6 +16,12 @@ use rumqttc::Outgoing;
 use rumqttc::Packet;
 use std::time::Duration;
 use tokio::time::sleep;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::trace;
+use tracing::trace_span;
+use tracing::Instrument;
 
 /// A connection to some MQTT server
 pub struct Connection {
@@ -88,20 +92,26 @@ impl Connection {
 
         let (mqtt_client, event_loop) =
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
-        tokio::spawn(Connection::receiver_loop(
-            mqtt_client.clone(),
-            config.clone(),
-            event_loop,
-            received_sender,
-            error_sender.clone(),
-        ));
-        tokio::spawn(Connection::sender_loop(
-            mqtt_client,
-            published_receiver,
-            error_sender,
-            config.last_will_message.clone(),
-            pub_done_sender,
-        ));
+        tokio::spawn(
+            Connection::receiver_loop(
+                mqtt_client.clone(),
+                config.clone(),
+                event_loop,
+                received_sender,
+                error_sender.clone(),
+            )
+            .instrument(trace_span!("receiver_loop")),
+        );
+        tokio::spawn(
+            Connection::sender_loop(
+                mqtt_client,
+                published_receiver,
+                error_sender,
+                config.last_will_message.clone(),
+                pub_done_sender,
+            )
+            .instrument(trace_span!("sender_loop")),
+        );
 
         Ok(Connection {
             received: received_receiver,
@@ -194,6 +204,7 @@ impl Connection {
         Ok((mqtt_client, event_loop))
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn receiver_loop(
         mqtt_client: AsyncClient,
         config: Config,
@@ -201,8 +212,12 @@ impl Connection {
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(), MqttError> {
+        trace!("starting receiver loop");
         loop {
-            match event_loop.poll().await {
+            trace!("attempting recv");
+            let event = event_loop.poll().await;
+            trace!("recv");
+            match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
                         error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
@@ -266,9 +281,11 @@ impl Connection {
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;
+        trace!("terminating receiver loop");
         Ok(())
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn sender_loop(
         mqtt_client: AsyncClient,
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
@@ -277,6 +294,7 @@ impl Connection {
         done: oneshot::Sender<()>,
     ) {
         loop {
+            trace!("waiting for message");
             match messages_receiver.next().await {
                 None => {
                     // The sender channel has been closed by the client
@@ -284,6 +302,7 @@ impl Connection {
                     break;
                 }
                 Some(message) => {
+                    trace!(msg = ?message, "received message");
                     let payload = Vec::from(message.payload_bytes());
                     if let Err(err) = mqtt_client
                         .publish(message.topic, message.qos, message.retain, payload)
@@ -291,6 +310,7 @@ impl Connection {
                     {
                         let _ = error_sender.send(err.into()).await;
                     }
+                    trace!("passed to rumqttc");
                 }
             }
         }

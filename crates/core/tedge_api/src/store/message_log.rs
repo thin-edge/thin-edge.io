@@ -10,6 +10,7 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+use tracing::instrument;
 
 const LOG_FILE_NAME: &str = "entity_store.jsonl";
 const LOG_FORMAT_VERSION: &str = "1.0";
@@ -106,9 +107,11 @@ impl MessageLogWriter {
 
     /// Append the JSON representation of the given message to the log.
     /// Each message is appended on a new line.
+    #[instrument(skip_all, level = "debug")]
     pub fn append_message(&mut self, message: &MqttMessage) -> Result<(), std::io::Error> {
         let json_line = serde_json::to_string(message)?;
         writeln!(self.writer, "{}", json_line)?;
+        // TODO: flushing when registering every entity slows everything down; if we want to make sure that it reaches the disk we could
         self.writer.flush()?;
         self.writer.get_ref().sync_all()?;
         Ok(())
