@@ -10,7 +10,6 @@ use rumqttc::QoS;
 use rumqttd::Broker;
 use rumqttd::Config;
 use rumqttd::ConnectionSettings;
-use rumqttd::ConsoleSettings;
 use rumqttd::ServerSettings;
 
 static SERVER: Lazy<MqttProcessHandler> = Lazy::new(MqttProcessHandler::new);
@@ -115,7 +114,11 @@ fn spawn_broker() -> u16 {
         }
 
         match broker_thread.join() {
-            Ok(Ok(())) => unreachable!("`broker.start()` does not terminate"),
+            Ok(Ok(())) => {
+                // I don't know why it happened, but I have observed this once while testing
+                // So just log the error and retry starting the broker on a new port
+                eprintln!("MQTT-TEST ERROR: `broker.start()` should not terminate until after `spawn_broker` returns")
+            },
             Ok(Err(err)) => {
                 eprintln!(
                     "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
@@ -184,9 +187,6 @@ fn get_rumqttd_config(port: u16) -> Config {
         connections: connections_settings,
     };
 
-    let mut console_settings = ConsoleSettings::default();
-    console_settings.listen = "localhost:3030".to_string();
-
     let mut servers = HashMap::new();
     servers.insert("1".to_string(), server_config);
 
@@ -194,7 +194,7 @@ fn get_rumqttd_config(port: u16) -> Config {
         id: 0,
         router: router_config,
         cluster: None,
-        console: Some(console_settings),
+        console: None,
         v4: Some(servers),
         ws: None,
         v5: None,
