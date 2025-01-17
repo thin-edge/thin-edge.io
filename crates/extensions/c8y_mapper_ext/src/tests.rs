@@ -2086,27 +2086,37 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
     );
     mqtt.send(input_message).await.expect("Send failed");
 
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,111")]).await;
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,222")]).await;
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,333")]).await;
+    let mut messages = vec![];
+    for _ in 0..6 {
+        messages.push(mqtt.recv().await.unwrap());
+    }
+    let (mut requests, mut responses): (Vec<_>, Vec<_>) = messages
+        .iter()
+        .map(|msg| (msg.topic.name.as_str(), msg.payload.as_str().unwrap()))
+        .partition(|(_topic, payload)| payload.starts_with("504,"));
 
+    // The messages might get processed out of order, we don't care about the ordering of the messages
+    requests.sort();
+    responses.sort();
+
+    assert_eq!(
+        requests,
+        [
+            ("c8y/s/us", "504,111"),
+            ("c8y/s/us", "504,222"),
+            ("c8y/s/us", "504,333"),
+        ]
+    );
     // escapes: we input JSON over MQTT, but emit Smartrest, thus initial: `do something "1"` becomes `"do something
     // ""1""\n"` (outer "" for the Smartrest record field, and then inside double quotes escape a single quote)
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "506,111,\"do something \"\"1\"\"\n\"")],
-    )
-    .await;
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "506,222,\"do something \"\"2\"\"\n\"")],
-    )
-    .await;
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "506,333,\"do something \"\"3\"\"\n\"")],
-    )
-    .await;
+    assert_eq!(
+        responses,
+        [
+            ("c8y/s/us", "506,111,\"do something \"\"1\"\"\n\""),
+            ("c8y/s/us", "506,222,\"do something \"\"2\"\"\n\""),
+            ("c8y/s/us", "506,333,\"do something \"\"3\"\"\n\""),
+        ]
+    );
 }
 
 #[tokio::test]
