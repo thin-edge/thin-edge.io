@@ -78,9 +78,9 @@ Current MSRV is `1.65`.
 ### Cross compilation toolchain (optional)
 
 %%te%% can be compiled for target architecture on non-target device, this is called cross compilation.
-Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called [cargo cross](https://github.com/rust-embedded/cross).
+Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called [cargo cross](https://github.com/cross-rs/cross).
 
-To install [cargo cross](https://github.com/rust-embedded/cross):
+To install [cargo cross](https://github.com/cross-rs/cross):
 
 ```sh
 cargo install cross
@@ -179,7 +179,7 @@ total 2948
 
 ## Cross compiling
 
-To create binaries which can run on different platform than one you are currently on you can use [cargo cross](https://github.com/rust-embedded/cross):
+To create binaries which can run on different platform than one you are currently on you can use [cargo cross](https://github.com/cross-rs/cross):
 
 ```sh
 cross build --target armv7-unknown-linux-gnueabihf

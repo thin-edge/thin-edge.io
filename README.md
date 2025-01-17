@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
-[![Discord Shield](https://discord.com/api/guilds/832211156520796171/widget.png?style=shield)](https://discord.gg/SvqWp6nrsK)
+[![Discord Shield](https://discord.com/api/guilds/832211156520796171/widget.png?style=shield)](https://discord.com/invite/SvqWp6nrsK)
 [![Build and Deploy to Github Pages](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml)
 [![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
 <!--- [![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)  --->
@@ -33,10 +33,10 @@
 ## Jump right in:
 * [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/)
 * [Install thin-edge.io on your device](https://thin-edge.github.io/thin-edge.io/install/)
-* [Getting started with thin-edge.io on a Raspberry Pi](https://thin-edge.github.io/thin-edge.io/start/getting-started)
-* [Connect your device to Cumulocity](https://thin-edge.github.io/thin-edge.io/start/connect-c8y)
-* [Connect your device to Azure](https://thin-edge.github.io/thin-edge.io/start/connect-azure)
-* [Connect your device to AWS](https://thin-edge.github.io/thin-edge.io/start/connect-aws)
+* [Getting started with thin-edge.io on a Raspberry Pi](https://thin-edge.github.io/thin-edge.io/start/getting-started/)
+* [Connect your device to Cumulocity](https://thin-edge.github.io/thin-edge.io/start/connect-c8y/)
+* [Connect your device to Azure](https://thin-edge.github.io/thin-edge.io/start/connect-azure/)
+* [Connect your device to AWS](https://thin-edge.github.io/thin-edge.io/start/connect-aws/)
 * [Find some projects that work together with thin-edge.io](https://github.com/thin-edge/thin-edge.io_examples)
 <br/>
 <br/>
@@ -55,7 +55,7 @@ With thin-edge.io we want to provide re-usable and modular components, which are
 <!-- REFERENCESYSTEMS -->
 
 # Reference Systems
-For an overview of the supported platforms please have a look at the [documentation](https://thin-edge.github.io/thin-edge.io/references/supported-platforms).
+For an overview of the supported platforms please have a look at the [documentation](https://thin-edge.github.io/thin-edge.io/references/supported-platforms/).
 <br/>
 <br/>
 
@@ -85,7 +85,7 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE.txt) for more in
 <!-- CONTACT -->
 # Contact
 
-Discord - [Join the thin-edge.io community now!](https://discord.gg/BXkVCbZk4a)
+Discord - [Join the thin-edge.io community now!](https://discord.com/invite/SvqWp6nrsK)
 
 LinkedIn - [@thin_edge_io](https://www.linkedin.com/company/thin-edge/)
 

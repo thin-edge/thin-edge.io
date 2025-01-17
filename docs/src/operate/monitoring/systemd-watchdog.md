@@ -69,7 +69,7 @@ The health check request for service is published to `te/device/main/service/<se
 the health status response from that service is expected on `te/device/main/service/<service-name>/status/health` topic.
 
 Once the health status response is received from a particular service, the `tedge-watchdog` service will send the
-[systemd notification](https://www.freedesktop.org/software/systemd/man/sd_notify.html#) to systemd on behalf of that
+[systemd notification](https://www.freedesktop.org/software/systemd/man/latest/sd_notify.html) to systemd on behalf of that
 monitored service.
 
 :::note

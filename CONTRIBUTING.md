@@ -36,7 +36,7 @@ When possible, fill out as much detail in the pull request template as is
 reasonable. Most important is to reference the GitHub issue that you are
 addressing with the PR.
 
-**NOTE:** GitHub has [a feature](https://docs.github.com/en/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword)
+**NOTE:** GitHub has [a feature](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)
 that will automatically close issues referenced with a keyword (such as "Fixes")
 by a PR or commit once the PR/commit is merged. Don't use these keywords. We
 don't want issues to be automatically closed. We want our testers to
@@ -242,7 +242,7 @@ it, including a sign-off) is maintained indefinitely and may be redistributed
 consistent with this project or the open source license(s) involved.
 
 In addition to [GitHub's privacy
-statement](https://docs.github.com/en/github/site-policy/github-privacy-statement)
+statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)
 extracting personal data from these projects for any other use than maintaining
 the projects and communication related to it is prohibited, explicitly
 prohibited is extracting email addresses for unsolicited bulk mails.
@@ -254,7 +254,7 @@ delete, or create files or merge a pull request on GitHub. If you enabled email
 address privacy, then the commit author email address cannot be changed and is
 \<username\>@users.noreply.github.com by default.
 
-See [setting your commit email address on GitHub](https://docs.github.com/en/github/setting-up-and-managing-your-github-user-account/setting-your-commit-email-address#setting-your-commit-email-address-on-github).
+See [setting your commit email address on GitHub](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address).
 
 In the upper-right corner of any page, click your profile photo, then click
 **Settings**.
@@ -269,7 +269,7 @@ In the upper-right corner of any page, click your profile photo, then click
 1. You can use the git config command to change the email address you associate
    with your Git commits.
 
-See [setting your commit email address in Git](https://docs.github.com/en/github/setting-up-and-managing-your-github-user-account/setting-your-commit-email-address#setting-your-commit-email-address-in-git).
+See [setting your commit email address in Git](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address).
 
 1. Open Git Bash.
 2. Set an email address in Git. You can use your GitHub-provided no-reply email

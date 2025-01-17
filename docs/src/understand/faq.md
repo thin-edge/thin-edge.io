@@ -60,7 +60,7 @@ We were looking for a widely-used, performant IPC mechanism and we investigated 
 In the end, we decided to use MQTT for the following reasons:
 * The approach is used by other industrial IoT organisations and software,
   for example by [Open Industry 4.0 Alliance](https://openindustry4.com/).
-* Existing components (like [Node-RED](https://nodered.org/) or [collectd](https://collectd.org/) )
+* Existing components (like [Node-RED](https://nodered.org/) or [collectd](https://www.collectd.org/) )
   that support MQTT can be easily integrated. In this case, %%te%% acts as an MQTT proxy:
   existing components connect to the local MQTT bus of %%te%%,
   and %%te%% routes the messages to different clouds in a secure and reliable manner.  

@@ -10,4 +10,4 @@ See [this repository](https://github.com/thin-edge/tedge-docs) to build the docu
 
 ## Writing guidelines
 
-This documentation is written along [the documentation system](https://documentation.divio.com/).
+This documentation is written along [the documentation system](https://docs.divio.com/documentation-system/).
