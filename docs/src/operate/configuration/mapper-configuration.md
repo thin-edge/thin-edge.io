@@ -12,7 +12,7 @@ The `tedge config` command and the keys `c8y.topics`, `az.topics`, and `aws.topi
 
 | Cloud          | tedge config key | Environmental variable | systemctl service |
 |----------------|------------------|------------------------|-------------------|
-| Cumulocity IoT | c8y.topics       | TEDGE_C8Y_TOPICS       | tedge-mapper-c8y  |
+| Cumulocity     | c8y.topics       | TEDGE_C8Y_TOPICS       | tedge-mapper-c8y  |
 | Azure IoT      | az.topics        | TEDGE_AZ_TOPICS        | tedge-mapper-az   |
 | AWS IoT        | aws.topics       | TEDGE_AWS_TOPICS       | tedge-mapper-aws  |
 
@@ -36,7 +36,7 @@ tedge config get c8y.topics
 ## Set the desired new MQTT topics
 
 If you want to change the subscribed MQTT topics, use `tedge config set`.
-For example, if you want the Cumulocity IoT mapper to subscribe only to `te/+/+/+/+/m/+` and `te/+/+/+/+/a/+` topic,
+For example, if you want the Cumulocity mapper to subscribe only to `te/+/+/+/+/m/+` and `te/+/+/+/+/a/+` topic,
 the command to run should be as below.
 
 ```sh
@@ -55,7 +55,7 @@ If an invalid MQTT topic is given, the mapper will ignore it.
 :::
 
 The service must be restarted for the setting to take effect.
-The following command shows how to restart the Cumulocity IoT mapper on a device using systemd as the init system.
+The following command shows how to restart the Cumulocity mapper on a device using systemd as the init system.
 
 ```sh
 sudo systemctl restart tedge-mapper-c8y

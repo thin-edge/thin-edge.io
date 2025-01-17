@@ -6,9 +6,9 @@ description: Restarting a device from the cloud
 
 If your device is running %%te%%, you can restart it from the cloud.
 
-### Cumulocity IoT
+### Cumulocity
 
-1. Go to the *Device Management* application in Cumulocity IoT
+1. Go to the *Device Management* application in Cumulocity
 
 2. Find your device and open up its homepage
 

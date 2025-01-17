@@ -122,11 +122,11 @@ The following example shows how to create a new SmartREST template with a single
 
 In this example, the operation handler on the %%te%% side only prints out the received message on the console, but it can be extended to execute any command that is required for your task.
 
-The operation response defined in the SmartREST template will convert the Cumulocity IoT Operation from json to an MQTT message in a Comma Separated Variables (CSV) format. The MQTT message is then received by %%te%% and a script is called passing the message as the message to it. The script is used to perform the desired actions using the parameters provided in the message.
+The operation response defined in the SmartREST template will convert the Cumulocity Operation from json to an MQTT message in a Comma Separated Variables (CSV) format. The MQTT message is then received by %%te%% and a script is called passing the message as the message to it. The script is used to perform the desired actions using the parameters provided in the message.
 
-The snippets below are used to illustrate the message translation of the Cumulocity IoT operation to the message received by the device.
+The snippets below are used to illustrate the message translation of the Cumulocity operation to the message received by the device.
 
-**Cumulocity IoT Operation**
+**Cumulocity Operation**
 
 ```json
 {
@@ -142,7 +142,7 @@ The snippets below are used to illustrate the message translation of the Cumuloc
 
 **SmartREST (CSV) format received by %%te%%**
 
-The above Cumulocity IoT operation is transformed into CSV (using the formatting/rules defined in the SmartREST template) and sent to the device via MQTT. The example below shows the format of the message as received by the device:
+The above Cumulocity operation is transformed into CSV (using the formatting/rules defined in the SmartREST template) and sent to the device via MQTT. The example below shows the format of the message as received by the device:
 
 ```csv title="topic: c8y/s/dc/custom_devmgmt"
 dm101,<device_external_id>,<set_wifi.name>,<set_wifi.ssid>,<set_wifi.type>
@@ -152,7 +152,7 @@ The following procedure details the step-by-step instructions on how to implemen
 
 ### Step 1: Creating a SmartREST template
 
-1. Open the Cumulocity IoT *Device Management* Application in your web browser
+1. Open the Cumulocity *Device Management* Application in your web browser
 
 2. Navigate to *Device Types &rarr; SmartREST Templates*
 
@@ -212,7 +212,7 @@ Alternatively, you can import a SmartREST template from an existing file. This a
     }
     ```
 
-2. Open the Cumulocity IoT *Device Management* Application
+2. Open the Cumulocity *Device Management* Application
 
 3. Navigate to *Device Types &rarr; SmartREST templates*
 
@@ -247,7 +247,7 @@ On the device, perform the following steps:
 
     The `custom_devmgmt` is the id of the SmartREST template that was created in the previous step.
 
-2. Reconnect to Cumulocity IoT (assuming you have already connected to Cumulocity IoT once)
+2. Reconnect to Cumulocity (assuming you have already connected to Cumulocity once)
 
     ```sh
     tedge reconnect c8y
@@ -310,9 +310,9 @@ On your %%te%% device, run the following steps:
 
 ### Step 4: Sending a custom operation
 
-1. On your local machine, create a custom operation instance in Cumulocity IoT
+1. On your local machine, create a custom operation instance in Cumulocity
 
-    Below shows an example of creating the operation using the [go-c8y-cli)](https://goc8ycli.netlify.app/) cli tool. It assumes you have already activated your go-c8y-cli session which points to your intended Cumulocity IoT tenant.
+    Below shows an example of creating the operation using the [go-c8y-cli)](https://goc8ycli.netlify.app/) cli tool. It assumes you have already activated your go-c8y-cli session which points to your intended Cumulocity tenant.
 
     ```sh
     c8y operations create \
@@ -321,13 +321,13 @@ On your %%te%% device, run the following steps:
         --description "Configure wifi"
     ```
 
-    Where `12345` should be replaced with the Cumulocity IoT device id of your device.
+    Where `12345` should be replaced with the Cumulocity device id of your device.
 
     If you're not familiar with go-c8y-cli, then you can send the Cumulocity REST API request using other tools such as Postman, curl etc., though you will have use the appropriate Authorization Header as defined by the official [Cumulocity API Guide](https://cumulocity.com/api/core/).
 
-    **Cumulocity IoT REST Request**
+    **Cumulocity REST Request**
 
-    The custom operation can be created via the Cumulocity IoT REST API using the following details:
+    The custom operation can be created via the Cumulocity REST API using the following details:
     
     ```
     POST /devicecontrol/operations
@@ -347,7 +347,7 @@ On your %%te%% device, run the following steps:
     }
     ```
 
-2. In the Cumulocity IoT *Device Management* application, check the *Control* page where you should see the "Configure Wifi" operation.
+2. In the Cumulocity *Device Management* application, check the *Control* page where you should see the "Configure Wifi" operation.
 
     ![smartrest-custom-operation-control.png](./images/smartrest-custom-operation-control.png)
 
@@ -393,7 +393,7 @@ When a new operation is received, the above mqtt sub command should print the fo
 ```
 
 If you don't receive a message, then check the following:
-* Check your SmartREST definition in Cumulocity IoT. The definition must be defined per Cumulocity IoT Tenant!
+* Check your SmartREST definition in Cumulocity. The definition must be defined per Cumulocity Tenant!
 * Check that the %%te%% config has been updated to subscribe to the related SmartREST topic. Maybe you forgot to run:
 
     ```

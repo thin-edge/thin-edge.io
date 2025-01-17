@@ -67,7 +67,7 @@ must be added to the list of trusted signing certificate.
 
 This process is cloud dependent.
 See the respective documentation of the cloud you're trying to connect to for details on how to add a new signing certificate:
-- [Cumulocity IoT: Managing trusted certificates](https://cumulocity.com/guides/users-guide/device-management/#managing-trusted-certificates)
+- [Cumulocity: Managing trusted certificates](https://cumulocity.com/guides/users-guide/device-management/#managing-trusted-certificates)
 - [Understand how Azure IoT Edge uses certificates](https://learn.microsoft.com/en-us/azure/iot-edge/iot-edge-certs)
 - [AWS IoT: X.509 client certificates](https://docs.aws.amazon.com/iot/latest/developerguide/x509-client-certs.html)
 

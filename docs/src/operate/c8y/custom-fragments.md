@@ -1,14 +1,14 @@
 ---
 title: Custom Fragments
 tags: [Operate, Cumulocity]
-description: Publishing custom fragments/properties to Cumulocity IoT
+description: Publishing custom fragments/properties to Cumulocity
 ---
 
-%%te%% supports update custom fragments (also known as properties) on the device's digital twin representation in Cumulocity IoT.
+%%te%% supports update custom fragments (also known as properties) on the device's digital twin representation in Cumulocity.
 
 ## Default fragments
 
-By default, the device will send the following information to Cumulocity IoT. The information makes it easy to identify devices which are using %%te%% in your fleet.
+By default, the device will send the following information to Cumulocity. The information makes it easy to identify devices which are using %%te%% in your fleet.
 
 ```json
 {
@@ -53,7 +53,7 @@ tedge mqtt pub te/device/main///twin/os_Version '{
 }'
 ```
 
-The example above will result in the following fragment being added to the device's digital twin (e.g. *Managed Object*) in Cumulocity IoT.
+The example above will result in the following fragment being added to the device's digital twin (e.g. *Managed Object*) in Cumulocity.
 
 ```json5
 {

@@ -42,7 +42,7 @@ te/device/child01//
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us
@@ -80,7 +80,7 @@ te/device/child01//
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us
@@ -118,7 +118,7 @@ te/device/nested_child01//
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us/<main-device-id>:device:child01
@@ -153,7 +153,7 @@ te/device/main/service/nodered
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us
@@ -188,7 +188,7 @@ te/device/child01/service/nodered
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us/<main-device-id>:device:child01
@@ -272,7 +272,7 @@ te/device/main///m/environment
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/measurement/measurements/create
@@ -313,7 +313,7 @@ te/device/main///m/
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/measurement/measurements/create
@@ -354,7 +354,7 @@ te/device/child01///m/
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/measurement/measurements/create
@@ -399,7 +399,7 @@ te/device/main///e/login_event
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us
@@ -437,7 +437,7 @@ te/device/main///e/login_event
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/event/events/create
@@ -484,7 +484,7 @@ te/device/main///a/temperature_high
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us
@@ -523,7 +523,7 @@ te/device/main///a/pressure_alarm
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/alarm/alarms/create
@@ -570,7 +570,7 @@ te/device/main/service/my-service/status/health
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/s/us/<service-external-id>
@@ -612,7 +612,7 @@ te/device/main///twin/device_OS
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/inventory/managedObjects/update/<main-device-id>
@@ -651,7 +651,7 @@ te/device/child01///twin/device_OS
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/inventory/managedObjects/update/<main-device-id>:device:child01
@@ -689,7 +689,7 @@ te/device/main/service/tedge-agent/twin/runtime_stats
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/inventory/managedObjects/update/<main-device-id>:device:main:service:tedge-agent
@@ -728,7 +728,7 @@ te/device/child01/service/tedge-agent/twin/runtime_stats
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedge-agent
@@ -768,7 +768,7 @@ te/device/main///twin/subtype
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/inventory/managedObjects/update/<main-device-id>
@@ -810,7 +810,7 @@ te/device/child01/service/tedge-agent/twin/runtime_stats
 
 <div class="code-indent-right">
 
-**Cumulocity IoT (output)**
+**Cumulocity (output)**
 
 ```text title="Topic"
 c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedge-agent
@@ -983,7 +983,7 @@ are also mapped to their corresponding _supported logs_ and _supported configs_ 
 
 <div class="code-indent-left">
 
-**Cumulocity IoT (input)**
+**Cumulocity (input)**
 
 ```text title="Topic"
 c8y/s/ds
@@ -1019,7 +1019,7 @@ the mapper recognizes and maps only the following `status` values as follows:
 <table style={{width:'100%'}}>
 <tr>
   <th>%%te%% (input)</th>
-  <th>Cumulocity IoT (output)</th>
+  <th>Cumulocity (output)</th>
 </tr>
 
 <tr>
@@ -1114,7 +1114,7 @@ All other `status` values are just ignored.
 
 <div class="code-indent-left">
 
-**Cumulocity IoT (input)**
+**Cumulocity (input)**
 
 ```text title="Topic"
 c8y/s/ds
@@ -1144,7 +1144,7 @@ te/device/child01///cmd/restart
 
 <div class="code-indent-left">
 
-**Cumulocity IoT (input)**
+**Cumulocity (input)**
 
 ```text title="Topic"
 c8y/s/ds
@@ -1202,7 +1202,7 @@ and the local `<tedge-url>` of that binary is included in the mapped request.
 
 <div class="code-indent-left">
 
-**Cumulocity IoT (input)**
+**Cumulocity (input)**
 
 ```text title="Topic"
 c8y/s/ds
@@ -1238,7 +1238,7 @@ Where the `url` is the target URL in the tedge file transfer repository to which
 
 <div class="code-indent-left">
 
-**Cumulocity IoT (input)**
+**Cumulocity (input)**
 
 ```text title="Topic"
 c8y/s/ds
@@ -1275,7 +1275,7 @@ and the local `<tedge-url>` of that binary is included in the mapped request.
 
 <div class="code-indent-left">
 
-**Cumulocity IoT (input)**
+**Cumulocity (input)**
 
 ```text title="Topic"
 c8y/s/ds

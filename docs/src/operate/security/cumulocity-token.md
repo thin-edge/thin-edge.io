@@ -1,22 +1,22 @@
 ---
-title: Cumulocity IoT Token
+title: Cumulocity Token
 tags: [Operate, Security, Cumulocity, JWT]
-description: Requesting a token for manual Cumulocity IoT API requests
+description: Requesting a token for manual Cumulocity API requests
 ---
 
 :::tip
-%%te%% provides an alternative way to access the Cumulocity IoT REST API without having to request a token. The [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md) can be used which handles the authorization as required.
+%%te%% provides an alternative way to access the Cumulocity REST API without having to request a token. The [Cumulocity Proxy Service](../../references/cumulocity-proxy.md) can be used which handles the authorization as required.
 
-It is recommended to use the [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md) where possible.
+It is recommended to use the [Cumulocity Proxy Service](../../references/cumulocity-proxy.md) where possible.
 :::
 
 ## Overview
 
-For instances where you cannot use the [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md), the following instructions detail how to manually request a token, and then how to use the token to make manual REST API calls to the Cumulocity IoT tenant.
+For instances where you cannot use the [Cumulocity Proxy Service](../../references/cumulocity-proxy.md), the following instructions detail how to manually request a token, and then how to use the token to make manual REST API calls to the Cumulocity tenant.
 
 ## Retrieving the token
 
-Follow the below steps in order to retrieve the token from Cumulocity IoT using MQTT.
+Follow the below steps in order to retrieve the token from Cumulocity using MQTT.
 
 1. Subscribe to the token topic
 
@@ -36,12 +36,12 @@ Follow the below steps in order to retrieve the token from Cumulocity IoT using 
     71,${Base64 encoded JWT}
     ```
 
-    Store the token as required (e.g. assign to a variable), and use in REST API request to the Cumulocity IoT tenant.
+    Store the token as required (e.g. assign to a variable), and use in REST API request to the Cumulocity tenant.
 
     :::note
-    Typically tokens are only valid for 1 hour (depending on your Cumulocity IoT settings), so you will need to request a new token before it expires otherwise your API Requests will return an Unauthorized (401) error.
+    Typically tokens are only valid for 1 hour (depending on your Cumulocity settings), so you will need to request a new token before it expires otherwise your API Requests will return an Unauthorized (401) error.
 
-    The expiration timestamp, issuer (Cumulocity IoT URL), and tenant are encoded in the token and can be decoded using the standard [JSON Web Token Standard](https://datatracker.ietf.org/doc/html/rfc7519) which there should be a library in most popular programming languages.
+    The expiration timestamp, issuer (Cumulocity URL), and tenant are encoded in the token and can be decoded using the standard [JSON Web Token Standard](https://datatracker.ietf.org/doc/html/rfc7519) which there should be a library in most popular programming languages.
     :::
 
 ### Alternative: Retrieving the token using mosquitto_rr
@@ -77,33 +77,33 @@ Where:
 * `-e` represents the response topic which will print the message on the console
 
 
-## Using token in REST API calls to Cumulocity IoT
+## Using token in REST API calls to Cumulocity
 
-The retrieved token can be used to make HTTP calls to the [Cumulocity IoT REST API](https://cumulocity.com/api/core/).
+The retrieved token can be used to make HTTP calls to the [Cumulocity REST API](https://cumulocity.com/api/core/).
 
-For simplicity, this example will retrieve the Cumulocity IoT URL via the tedge cli command. If you are using a higher level programming language like python3, then you get the Cumulocity IoT URL by decoding the token, e.g. using [PyJWT](https://pyjwt.readthedocs.io/en/latest/).
+For simplicity, this example will retrieve the Cumulocity URL via the tedge cli command. If you are using a higher level programming language like python3, then you get the Cumulocity URL by decoding the token, e.g. using [PyJWT](https://pyjwt.readthedocs.io/en/latest/).
 
 The following code snippet does the following steps:
 
-1. Get the Cumulocity IoT URL (using `tedge`)
+1. Get the Cumulocity URL (using `tedge`)
 2. Get the token (using `mosquitto_rr`)
 3. Send a request (using `curl`)
 
 ```sh
-# Get the Cumulocity IoT URL
+# Get the Cumulocity URL
 export C8Y_URL="https://$(tedge config get c8y.url)"
 
 # Get the token (using mosquitto_rr cli command)
 export C8Y_TOKEN=$(mosquitto_rr -t c8y/s/uat -e c8y/s/dat -m '' | cut -d, -f2-)
 
-# Send a REST API call to Cumulocity IoT
+# Send a REST API call to Cumulocity
 curl -s -H "Authorization: Bearer $C8Y_TOKEN" \
     -H "Accept: application/json" \
     "$C8Y_URL/user/currentUser"
 ```
 
 :::tip
-The same functionality (as above) can be achieved by using the [Cumulocity IoT Proxy Service](../../references/cumulocity-proxy.md):
+The same functionality (as above) can be achieved by using the [Cumulocity Proxy Service](../../references/cumulocity-proxy.md):
 
 ```sh
 curl -s -H "Accept: application/json" \

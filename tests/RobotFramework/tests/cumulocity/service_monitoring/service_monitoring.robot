@@ -108,7 +108,7 @@ Check health status of tedge-mapper-c8y service on broker restart
     ThinEdgeIO.Restart Service    mosquitto.service
     ThinEdgeIO.Service Should Be Running    mosquitto.service
 
-    Sleep    5s    reason=Wait for any potential status changes to be sent to Cumulocity IoT
+    Sleep    5s    reason=Wait for any potential status changes to be sent to Cumulocity
     Device Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y

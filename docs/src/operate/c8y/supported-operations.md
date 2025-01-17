@@ -14,7 +14,7 @@ IoT devices often do more than just send data to the cloud. They also do things 
 * reboot on demand
 * install or remove software
 
-These operations are supported by [Cumulocity IoT](https://cumulocity.com/guides/reference/device-management-library) and other cloud providers.
+These operations are supported by [Cumulocity](https://cumulocity.com/guides/reference/device-management-library) and other cloud providers.
 When such an operation is triggered from the cloud, the cloud mapper (e.g: `tedge-mapper-c8y`) processes that request.
 
 The Cumulocity mapper treats the following operations as inbuilt operations and converts those into their equivalent tedge commands:

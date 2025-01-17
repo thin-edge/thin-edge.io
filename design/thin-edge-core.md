@@ -147,9 +147,9 @@ but only in combination with the other actors. For instance,
 * The `collectd` actor role is to translate messages received from `collectd`
   into `Measurement` Rust values that can be then consumed by any other actor
   that accepts this type of data, as the `c8y` actor does.
-* Similarly, the `c8y` actor acts as a translator between Cumulocity IoT and the other actors.
-  It consumes `Measurement` Rust values and translates them into `MQTTMessage` for Cumulocity IoT.
-  In the reverse direction, the `c8y` actor consumes `MQTTMessage` from Cumulocity IoT,
+* Similarly, the `c8y` actor acts as a translator between Cumulocity and the other actors.
+  It consumes `Measurement` Rust values and translates them into `MQTTMessage` for Cumulocity.
+  In the reverse direction, the `c8y` actor consumes `MQTTMessage` from Cumulocity,
   and produces `Operations` encoded as Rust values and ready to be consumed by other actors.
 * The `az` actor has a similar role, except that the translations are done for Azure IoT.  
 * Neither the `collectd` actor nor the `c8y` actor have to handle an MQTT connection.

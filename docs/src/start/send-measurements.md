@@ -98,7 +98,7 @@ Given your desired child device ID is `child1`, publish a %%te%% JSON message to
 tedge mqtt pub te/device/child1///m/environment '{"temperature": 25}'
 ```
 
-Then, you will see a child device with the name `child1` is created in your Cumulocity IoT tenant,
+Then, you will see a child device with the name `child1` is created in your Cumulocity tenant,
 and the measurement is recorded in `Measurements` of the `child1` device.
 
 ## Error detection

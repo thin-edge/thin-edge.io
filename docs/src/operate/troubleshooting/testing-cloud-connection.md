@@ -21,7 +21,7 @@ This test is already performed as part of the `tedge connect <cloud>` command.
 The connection test sends a message to the cloud and waits for a response.
 The subsequent sections explain the cloud-specific behaviour.
 
-### For Cumulocity IoT
+### For Cumulocity
 
 The test publishes [a SmartREST 2.0 static template message for device creation `100`](https://cumulocity.com/guides/device-sdk/mqtt/#a-nameinventory-templatesinventory-templates-1xxa) to the topic `c8y/s/us`.
 If the device-twin is already created in your Cumulocity,

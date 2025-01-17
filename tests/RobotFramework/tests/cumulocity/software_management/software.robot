@@ -68,7 +68,7 @@ Software list should only show currently installed software and not candidates
     ...    timeout=120
 
 Manual software_list operation request
-    # Note: There isn't a Cumulocity IoT operation related to getting the software list, so no need to check for operation transitions
+    # Note: There isn't a Cumulocity operation related to getting the software list, so no need to check for operation transitions
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/software_list/local-1111
     ...    payload={"status":"init"}

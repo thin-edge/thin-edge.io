@@ -7,7 +7,7 @@ description: How to configure %%te%%
 
 The settings of all the %%te%% components are grouped in the `/etc/tedge/tedge.toml` file, using [TOML](https://toml.io/).
 These configuration settings are organized in a hierarchy that reflects the component hierarchy.
-For instance, all the settings related to Cumulocity IoT share a `c8y` prefix, such as `c8y.url` for the Cumulocity URL.
+For instance, all the settings related to Cumulocity share a `c8y` prefix, such as `c8y.url` for the Cumulocity URL.
 
 This file can be edited directly and can even be extended to include plugin-specific settings.
 However, it's recommended to use the [`tedge config`](../../references/cli/tedge-config.md) command

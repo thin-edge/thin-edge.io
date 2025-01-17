@@ -28,7 +28,7 @@ The very first step to enable %%te%% is to connect your device to the cloud.
 * Sending data to the cloud will then be as simple as sending data locally.
 
 The focus is here on connecting the device to AWS IoT.
-See this [tutorial](connect-c8y.md), if you want to connect Cumulocity IoT instead.
+See this [tutorial](connect-c8y.md), if you want to connect Cumulocity instead.
 See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 
 Before you try to connect your device to AWS IoT, you need:

@@ -2,7 +2,7 @@
 ---
 name: c8y-remote-access-plugin
 description: |
-  thin-edge.io plugin for the Cumulocity IoT's Cloud Remote Access feature
+  thin-edge.io plugin for the Cumulocity's Cloud Remote Access feature
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

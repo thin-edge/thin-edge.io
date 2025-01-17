@@ -10,7 +10,7 @@ Test Tags           theme:c8y    theme:firmware
 
 
 *** Test Cases ***
-Send firmware update operation from Cumulocity IoT
+Send firmware update operation from Cumulocity
     Should Have MQTT Messages    te/device/main///cmd/firmware_update    message_pattern=^\{\}$
     Cumulocity.Should Contain Supported Operations    c8y_Firmware
 

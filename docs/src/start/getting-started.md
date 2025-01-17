@@ -17,7 +17,7 @@ You can customize the documentation and commands shown on this page by providing
 The user context will be persisted in your web browser's local storage.
 :::
 
-After following this tutorial you will have an overview of the installation and configuration of %%te%%. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity IoT and performing some additional device management tasks.
+After following this tutorial you will have an overview of the installation and configuration of %%te%%. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity and performing some additional device management tasks.
 
 
 ## Introduction
@@ -30,7 +30,7 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 ##  Prerequisite
 
 To follow this guide, you only need the following:
-- A [Cumulocity IoT](https://cumulocity.com/pages/free-trial/) Trial tenant.
+- A [Cumulocity](https://cumulocity.com/pages/free-trial/) Trial tenant.
 
 - A Raspberry Pi (any model is fine) with RaspberryPi OS installed, for other boards and OS'es have a look [here](../references/supported-platforms.md)
 - Updated device
@@ -43,10 +43,10 @@ To follow this guide, you only need the following:
 
 ## Steps
 
-This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity IoT. The last three are optional but needed to get a good overview of the capabilities of %%te%%.
+This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity. The last three are optional but needed to get a good overview of the capabilities of %%te%%.
 
 - [Step 1 Install %%te%%](#step-1-install-thin-edgeio)
-- [Step 2 Configure and Connect to Cumulocity IoT](#step-2-configure-and-connect-to-cumulocity-iot)
+- [Step 2 Configure and Connect to Cumulocity](#step-2-configure-and-connect-to-cumulocity)
 - [Step 3 Sending Device Data](#step-3-sending-device-data)
 - [Step 4 Monitor the device](#step-4-monitor-the-device)
 - [Step 5 Add software management](#step-5-add-software-management)
@@ -116,9 +116,9 @@ Here is an [overview of the commands for the CLI tool](../references/cli/index.m
 
 The CLI will be used to configure the %%te%% installation on the device in the next steps.
 
-## Step 2 Configure and Connect to Cumulocity IoT
+## Step 2 Configure and Connect to Cumulocity
 
-To connect the device to the Cumulocity IoT it needs to be configured.
+To connect the device to the Cumulocity it needs to be configured.
 
 This URL is needed to allow the upload of the certificate to the specific tenant and the registration of the device. It can be configured via:
 
@@ -132,9 +132,9 @@ sudo tedge config set c8y.url "$C8Y_URL"
 
 ### Certificate
 
-%%te%% connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity IoT. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
+%%te%% connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
 
-First, we need to create the device certificate locally (If the device certificate is already uploaded, directly via the UI to Cumulocity IoT this step can be skipped).
+First, we need to create the device certificate locally (If the device certificate is already uploaded, directly via the UI to Cumulocity this step can be skipped).
 
 <UserContext>
 
@@ -146,7 +146,7 @@ sudo tedge cert create --device-id "$DEVICE_ID"
 
 The device id is a unique identifier e.g. the MAC address that identifies the physical device.
 
-The certificate is uploaded to the Cumulocity IoT Tenant via:
+The certificate is uploaded to the Cumulocity Tenant via:
 
 <UserContext>
 
@@ -164,13 +164,13 @@ In a production environment, it is not recommended to use the above self-signed 
 
 ### Connect
 
-We now are ready to connect the device to Cumulocity IoT. This can be achieved via:
+We now are ready to connect the device to Cumulocity. This can be achieved via:
 
 ```sh
 sudo tedge connect c8y
 ```
 
-When the connection is established, the device will be created in Cumulocity IoT. When you go to Device Management &rarr; Devices &rarr; All devices, the device is visible in the list.
+When the connection is established, the device will be created in Cumulocity. When you go to Device Management &rarr; Devices &rarr; All devices, the device is visible in the list.
 
 <p align="center">
     <img
@@ -182,7 +182,7 @@ When the connection is established, the device will be created in Cumulocity IoT
 
 ## Step 3 Sending Device Data
 
-Once your device is configured and connected to Cumulocity IoT, you can start sending measurements, events or alarms. In the standard configuration, you can not connect externally to the mosquito broker and thus the messages have to be sent directly from the device itself.
+Once your device is configured and connected to Cumulocity, you can start sending measurements, events or alarms. In the standard configuration, you can not connect externally to the mosquito broker and thus the messages have to be sent directly from the device itself.
 
 Below shows some examples on how to publish an MQTT message via the command line:
 
@@ -190,11 +190,11 @@ Below shows some examples on how to publish an MQTT message via the command line
 tedge mqtt pub '{{TOPIC}}' '{{PAYLOAD}}'
 ```
 
-%%te%% comes with a tedge-mapper daemon. This process collects the data from the `te/#` topics and translates them to the tedge payloads on the `c8y/#` topics which are mapped directly to Cumulocity IoT. The mapper translates simple JSON to the desired target payload for Cumulocity IoT.
+%%te%% comes with a tedge-mapper daemon. This process collects the data from the `te/#` topics and translates them to the tedge payloads on the `c8y/#` topics which are mapped directly to Cumulocity. The mapper translates simple JSON to the desired target payload for Cumulocity.
 
 ### Sending measurements
 
-Measurements within Cumulocity IoT represent regularly acquired readings and statistics from sensors.
+Measurements within Cumulocity represent regularly acquired readings and statistics from sensors.
 
 A simple single-valued measurement like a temperature measurement can be represented in %%te%% JSON as follows:
 
@@ -216,7 +216,7 @@ tedge mqtt pub te/device/main///m/ '{"temperature": 25}'
 
 ### Sending events
 
-Events are used to pass real-time information, which is not just plain sensor values, through Cumulocity IoT.
+Events are used to pass real-time information, which is not just plain sensor values, through Cumulocity.
 
 A simple event can be represented in %%te%% JSON as follows:
 
@@ -249,7 +249,7 @@ When you go to events (`Device management` &rarr; `your device` &rarr; `events`)
 
 ## Step 4 Monitor the device
 
-With %%te%% device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity IoT.
+With %%te%% device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity.
 
 Device monitoring can be enabled by installing a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
 
@@ -286,7 +286,7 @@ The default collectd settings, `/etc/collectd/collectd.conf`, use conservative i
 
 The `tedge-mapper-collectd` service subscribes to the `collectd/#` topics and translates them to the tedge payloads, then the respective cloud mappers will translate the %%te%% messages to the format dictated by each cloud.
 
-As an example, you can inspect the Cumulocity IoT translated metrics using the following command:
+As an example, you can inspect the Cumulocity translated metrics using the following command:
 
 ```sh te2mqtt formats=v1
 tedge mqtt sub 'c8y/#'
@@ -303,18 +303,18 @@ INFO: Connected
 [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:48.398000001Z","memory":{"percent-used":{"value":4.87004496506279}},"cpu":{"percent-active":{"value":0.254452926208651}}}
 ```
 
-The monitoring data will appear in Cumulocity IoT on the device in the measurement section.
+The monitoring data will appear in Cumulocity on the device in the measurement section.
 ![CollectdMeasurements](./images/CollectdMeasurements.png)
 
 
 ### Edit Collectd
 
-To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity IoT, and [step 6](#change-collectd-configuration) explains how to do it.
+To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity, and [step 6](#change-collectd-configuration) explains how to do it.
 
 
 ## Step 5 Add software management
 
-Software management takes care of allowing installation and management of any type of software from Cumulocity IoT. Since the type is generic, any type of software can be managed. In %%te%% this can be extended with plugins. For every software type, a particular plugin is needed.
+Software management takes care of allowing installation and management of any type of software from Cumulocity. Since the type is generic, any type of software can be managed. In %%te%% this can be extended with plugins. For every software type, a particular plugin is needed.
 
 The following plugins do exist:
 
@@ -337,9 +337,9 @@ The APT plugin (provided by the `tedge-apt-plugin` package) is installed by defa
 sudo tedge reconnect c8y
 ```
 
-### Adding new software into the software repository in Cumulocity IoT
+### Adding new software into the software repository in Cumulocity
 
-1. Go to Cumulocity IoT
+1. Go to Cumulocity
 
 2. Go to `Management` &rarr; `Software repository` (left in the menu) and click `Add software` at the right of the top menu bar.
 
@@ -351,7 +351,7 @@ sudo tedge reconnect c8y
     ![Add new software](./images/AddSoftware.png)
 
     If you would like to use other sources (eg. a file uploaded to your cloud or an external source), provide the full URL to the file.
-    If you would like to upload your binaries, select `Upload a binary` option and upload the file to Cumulocity IoT software repository.
+    If you would like to upload your binaries, select `Upload a binary` option and upload the file to Cumulocity software repository.
 
 
 5. Press `Add Software` button.
@@ -359,7 +359,7 @@ sudo tedge reconnect c8y
 
 ### Installing software on a device
 
-1. Go to Cumulocity IoT
+1. Go to Cumulocity
 2. Click `All devices` in the Devices menu, select the desired device from the device list and open its Software tab.
 
     The Software tab shows a list of all available software installed on the device. If a given software has a type, it will be displayed next to its name. It is possible to search for a particular software by its name or filter the list by software type.
@@ -377,7 +377,7 @@ How to [develop your own plugins](../extend/software-management.md) is described
 
 ## Step 6 Manage configuration files
 
-With %%te%% it is possible to manage config files on a device by using the Cumulocity IoT configuration management feature as a part of Device Management.
+With %%te%% it is possible to manage config files on a device by using the Cumulocity configuration management feature as a part of Device Management.
 
 This functionality is directly installed with the initial script. However, it is needed to configure its configuration file to add the entries for the configuration files which need to be managed.
 
@@ -397,10 +397,10 @@ Where:
 * `path` is the full path to the configuration file.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
 
-Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find tedge-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
+Then navigate to  Cumulocity Device Management and the desired device. Open its Configuration tab. You can find tedge-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
 
 
-### Change configuration files via Cumulocity IoT.
+### Change configuration files via Cumulocity.
 
 If there is a need to change one or more configuration files, there is more than one option to follow:
 
@@ -426,9 +426,9 @@ In this tutorial the last option is explained, there are some steps to be taken:
 
 ![Change Configuration](./images/ChangeConfiguration.png)
 
-### Change collectd configuration file via Cumulocity IoT {#change-collectd-configuration}
+### Change collectd configuration file via Cumulocity {#change-collectd-configuration}
 
-To change the collectd metrics of the device, which are displayed in Cumulocity IoT, the next steps are needed. These are similar to the steps in the previous paragraphs.
+To change the collectd metrics of the device, which are displayed in Cumulocity, the next steps are needed. These are similar to the steps in the previous paragraphs.
 
 
 1. Add a new entry to the `files` section of the plugin's configuration file
@@ -453,7 +453,7 @@ To change the collectd metrics of the device, which are displayed in Cumulocity 
 
 ## Step 7 Manage Log Files
 
-With %%te%% it is possible to request log files from a device by using the Cumulocity IoT log request feature as a part of Device Management.
+With %%te%% it is possible to request log files from a device by using the Cumulocity log request feature as a part of Device Management.
 
 This functionality is also installed by default but some configuration is needed to indicate which log files the plugin should manage.
 
@@ -473,7 +473,7 @@ files = [
 ]
 ```
 
-To see the content of the log files in Cumulocity IoT, take the following steps:
+To see the content of the log files in Cumulocity, take the following steps:
 
 1. Go to device management and select the right device.
 
