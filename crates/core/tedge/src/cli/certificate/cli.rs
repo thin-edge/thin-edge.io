@@ -21,7 +21,7 @@ use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
 use crate::error::TEdgeError;
-use crate::error::TEdgeError::UnmatchedDeviceId;
+use crate::error::TEdgeError::MismatchedDeviceId;
 use crate::ConfigError;
 
 #[derive(clap::Subcommand, Debug)]
@@ -218,7 +218,7 @@ fn get_device_id(
         Some(input_id) if config_id.is_none() => Ok(input_id),
         Some(input_id) if input_id == config_id.unwrap() => Ok(input_id),
         Some(input_id) => match cloud.as_ref().map(<_>::into) {
-            None => Err(UnmatchedDeviceId {
+            None => Err(MismatchedDeviceId {
                 input_id,
                 config_id: config_id.unwrap().into(),
                 writable_key,
@@ -227,7 +227,7 @@ fn get_device_id(
                 let key = profile.map(|name| name.to_string());
                 let c8y_dto = dto.c8y.try_get(key.as_deref(), "c8y")?;
                 if c8y_dto.device.id.is_some() {
-                    Err(UnmatchedDeviceId {
+                    Err(MismatchedDeviceId {
                         input_id,
                         config_id: config_id.unwrap().into(),
                         writable_key,
@@ -240,7 +240,7 @@ fn get_device_id(
                 let key = profile.map(|name| name.to_string());
                 let az_dto = dto.az.try_get(key.as_deref(), "az")?;
                 if az_dto.device.id.is_some() {
-                    Err(UnmatchedDeviceId {
+                    Err(MismatchedDeviceId {
                         input_id,
                         config_id: config_id.unwrap().into(),
                         writable_key,
@@ -253,7 +253,7 @@ fn get_device_id(
                 let key = profile.map(|name| name.to_string());
                 let aws_dto = dto.c8y.try_get(key.as_deref(), "aws")?;
                 if aws_dto.device.id.is_some() {
-                    Err(UnmatchedDeviceId {
+                    Err(MismatchedDeviceId {
                         input_id,
                         config_id: config_id.unwrap().into(),
                         writable_key,

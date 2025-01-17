@@ -50,7 +50,7 @@ pub enum TEdgeError {
         r#"The given device ID '{input_id}' doesn't match the one in the config '{config_id}'.
     Run `tedge config unset {writable_key}` first to unset the device ID."#
     )]
-    UnmatchedDeviceId {
+    MismatchedDeviceId {
         input_id: String,
         config_id: String,
         writable_key: WritableKey,
