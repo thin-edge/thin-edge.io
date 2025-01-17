@@ -1,5 +1,8 @@
-use crate::file_transfer_server::error::FileTransferError;
-use crate::file_transfer_server::http_rest::http_file_transfer_server;
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreResponse;
+use crate::http_server::error::HttpServerError;
+use crate::http_server::server::http_server;
+use crate::http_server::server::AgentState;
 use anyhow::Context;
 use async_trait::async_trait;
 use axum_tls::config::load_ssl_config;
@@ -13,25 +16,28 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Service;
 use tedge_config::OptionalConfig;
 use tokio::net::TcpListener;
 use tracing::log::info;
 
-pub struct FileTransferServerActor {
+pub struct HttpServerActor {
     file_transfer_dir: Utf8PathBuf,
     rustls_config: Option<ServerConfig>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
+    entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
 }
 
 #[derive(Debug, Clone)]
 // In the tests, CertKeyPath is replaced with a String, and CaPath is replaced with a RootCertStore
 // hence they need to be separate types
-pub(crate) struct FileTransferServerConfig<CertKeyPath = Utf8PathBuf, CaPath = Utf8PathBuf> {
+pub(crate) struct HttpServerConfig<CertKeyPath = Utf8PathBuf, CaPath = Utf8PathBuf> {
     pub file_transfer_dir: Utf8PathBuf,
     pub cert_path: OptionalConfig<CertKeyPath>,
     pub key_path: OptionalConfig<CertKeyPath>,
@@ -41,19 +47,20 @@ pub(crate) struct FileTransferServerConfig<CertKeyPath = Utf8PathBuf, CaPath = U
 
 /// HTTP file transfer server is stand-alone.
 #[async_trait]
-impl Actor for FileTransferServerActor {
+impl Actor for HttpServerActor {
     fn name(&self) -> &str {
-        "HttpFileTransferServer"
+        "HttpServer"
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let server =
-            http_file_transfer_server(self.listener, self.file_transfer_dir, self.rustls_config)?;
+        let agent_state = AgentState::new(self.file_transfer_dir, self.entity_store_handle);
+
+        let server = http_server(self.listener, self.rustls_config, agent_state)?;
 
         tokio::select! {
             result = server => {
                 info!("Done");
-                return Ok(result.map_err(FileTransferError::FromIo)?);
+                return Ok(result.map_err(HttpServerError::FromIo)?);
             }
             Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
                 info!("Shutdown");
@@ -63,22 +70,25 @@ impl Actor for FileTransferServerActor {
     }
 }
 
-pub struct FileTransferServerBuilder {
+pub struct HttpServerBuilder {
     file_transfer_dir: Utf8PathBuf,
     rustls_config: Option<ServerConfig>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
+    entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
 }
 
-impl FileTransferServerBuilder {
+impl HttpServerBuilder {
     pub(crate) async fn try_bind(
-        config: FileTransferServerConfig<impl PemReader, impl TrustStoreLoader>,
+        config: HttpServerConfig<impl PemReader, impl TrustStoreLoader>,
+        entity_store_service: &mut impl Service<EntityStoreRequest, EntityStoreResponse>,
     ) -> Result<Self, anyhow::Error> {
         let listener = TcpListener::bind(config.bind_addr)
             .await
             .with_context(|| format!("Binding file-transfer server to {}", config.bind_addr))?;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let entity_store_handle = ClientMessageBox::new(entity_store_service);
 
         Ok(Self {
             rustls_config: load_ssl_config(
@@ -91,25 +101,27 @@ impl FileTransferServerBuilder {
             signal_sender,
             signal_receiver,
             listener,
+            entity_store_handle,
         })
     }
 }
 
-impl RuntimeRequestSink for FileTransferServerBuilder {
+impl RuntimeRequestSink for HttpServerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
     }
 }
 
-impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
+impl Builder<HttpServerActor> for HttpServerBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<FileTransferServerActor, Self::Error> {
-        Ok(FileTransferServerActor {
+    fn try_build(self) -> Result<HttpServerActor, Self::Error> {
+        Ok(HttpServerActor {
             file_transfer_dir: self.file_transfer_dir,
             rustls_config: self.rustls_config,
             signal_receiver: self.signal_receiver,
             listener: self.listener,
+            entity_store_handle: self.entity_store_handle,
         })
     }
 }
@@ -125,6 +137,7 @@ mod tests {
     use reqwest::Certificate;
     use reqwest::Identity;
     use rustls::RootCertStore;
+    use tedge_actors::ServerMessageBoxBuilder;
     use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
@@ -157,8 +170,11 @@ mod tests {
     async fn check_server_does_not_panic_when_port_is_in_use() -> anyhow::Result<()> {
         let ttd = TempTedgeDir::new();
         let (_listener, port_in_use) = create_listener().await?;
+        let mut entity_store_service = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
 
-        let binding_res = FileTransferServerBuilder::try_bind(http_config(&ttd, port_in_use)).await;
+        let binding_res =
+            HttpServerBuilder::try_bind(http_config(&ttd, port_in_use), &mut entity_store_service)
+                .await;
 
         ensure!(
             binding_res.is_err(),
@@ -228,7 +244,9 @@ mod tests {
             let temp_dir = TempTedgeDir::new();
             let config = http_config(&temp_dir, 0);
             let (tx, rx) = mpsc::channel(1);
-            let port = Self::spawn(config, tx).await?;
+            let mut entity_store_service = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
+
+            let port = Self::spawn(config, tx, &mut entity_store_service).await?;
 
             Ok(TestFileTransferService {
                 port,
@@ -268,7 +286,9 @@ mod tests {
             let temp_dir = TempTedgeDir::new();
             let config = https_config(&temp_dir, &server_cert, trusted_root)?;
             let (tx, rx) = mpsc::channel(1);
-            let port = Self::spawn(config, tx).await?;
+            let mut entity_store_service = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
+
+            let port = Self::spawn(config, tx, &mut entity_store_service).await?;
 
             Ok(TestFileTransferService {
                 port,
@@ -319,7 +339,7 @@ mod tests {
         }
     }
 
-    type TestConfig = FileTransferServerConfig<InjectedValue<String>, InjectedValue<RootCertStore>>;
+    type TestConfig = HttpServerConfig<InjectedValue<String>, InjectedValue<RootCertStore>>;
 
     impl<Cert> TestFileTransferService<Cert> {
         fn temp_path_for(&self, file: &str) -> Utf8PathBuf {
@@ -329,8 +349,9 @@ mod tests {
         async fn spawn(
             config: TestConfig,
             mut error_tx: Sender<RuntimeError>,
+            entity_store_service: &mut impl Service<EntityStoreRequest, EntityStoreResponse>,
         ) -> anyhow::Result<u16> {
-            let builder = FileTransferServerBuilder::try_bind(config).await?;
+            let builder = HttpServerBuilder::try_bind(config, entity_store_service).await?;
             let port = builder.listener.local_addr()?.port();
             let actor = builder.build();
 

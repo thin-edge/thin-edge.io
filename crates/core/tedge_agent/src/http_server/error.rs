@@ -6,7 +6,7 @@ use tedge_actors::RuntimeError;
 use super::request_files::RequestPath;
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum FileTransferError {
+pub(crate) enum HttpServerError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
@@ -24,7 +24,7 @@ pub(crate) enum FileTransferError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum FileTransferRequestError {
+pub enum HttpRequestError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
@@ -56,15 +56,15 @@ pub enum FileTransferRequestError {
     PathRejection(#[from] PathRejection),
 }
 
-impl From<FileTransferError> for RuntimeError {
-    fn from(error: FileTransferError) -> Self {
+impl From<HttpServerError> for RuntimeError {
+    fn from(error: HttpServerError) -> Self {
         RuntimeError::ActorError(Box::new(error))
     }
 }
 
-impl IntoResponse for FileTransferRequestError {
+impl IntoResponse for HttpRequestError {
     fn into_response(self) -> axum::response::Response {
-        use FileTransferRequestError as E;
+        use HttpRequestError as E;
         let error_message = self.to_string();
         match self {
             E::PathRejection(err) => {

@@ -8,7 +8,7 @@ use axum::http::request::Parts;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 
-use super::error::FileTransferRequestError;
+use super::error::HttpRequestError;
 
 #[derive(Clone)]
 pub(super) struct FileTransferDir(Arc<Utf8Path>);
@@ -54,7 +54,7 @@ impl fmt::Debug for RequestPath {
 
 #[async_trait::async_trait]
 impl FromRequestParts<FileTransferDir> for FileTransferPath {
-    type Rejection = FileTransferRequestError;
+    type Rejection = HttpRequestError;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -73,7 +73,7 @@ impl FromRequestParts<FileTransferDir> for FileTransferPath {
 fn local_path_for_file(
     request_path: RequestPath,
     file_transfer_dir: &Utf8Path,
-) -> Result<FileTransferPath, FileTransferRequestError> {
+) -> Result<FileTransferPath, HttpRequestError> {
     let full_path = file_transfer_dir.join(&request_path);
 
     let clean_path = clean_utf8_path(&full_path);
@@ -84,7 +84,7 @@ fn local_path_for_file(
             request: request_path,
         })
     } else {
-        Err(FileTransferRequestError::InvalidPath { path: request_path })
+        Err(HttpRequestError::InvalidPath { path: request_path })
     }
 }
 

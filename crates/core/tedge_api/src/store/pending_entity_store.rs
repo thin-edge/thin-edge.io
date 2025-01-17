@@ -11,12 +11,12 @@ use std::collections::HashMap;
 /// its registration message itself is received.
 /// It also stores all the child device registration messages received before
 /// their parents themselves are registered, including their data.
-pub(crate) struct PendingEntityStore {
+pub struct PendingEntityStore {
     mqtt_schema: MqttSchema,
     // This orphans map is keyed by the unregistered parent topic id to their children
     orphans: HashMap<EntityTopicId, Vec<EntityTopicId>>,
     entities: HashMap<EntityTopicId, PendingEntityCache>,
-    pub telemetry_cache: RingBuffer<MqttMessage>,
+    telemetry_cache: RingBuffer<MqttMessage>,
 }
 
 /// A cache of all the data messages received before the entity itself is registered.
@@ -181,8 +181,8 @@ mod tests {
     use serde_json::json;
 
     use super::PendingEntityStore;
+    use crate::entity::EntityType;
     use crate::entity_store::EntityRegistrationMessage;
-    use crate::entity_store::EntityType;
     use crate::mqtt_topics::EntityTopicId;
     use crate::mqtt_topics::MqttSchema;
 

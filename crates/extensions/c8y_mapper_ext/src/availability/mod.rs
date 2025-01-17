@@ -3,7 +3,7 @@ pub use builder::AvailabilityBuilder;
 use c8y_api::smartrest::inventory::C8ySmartRestSetInterval117;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
-use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;

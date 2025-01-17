@@ -1,4 +1,13 @@
-use crate::file_transfer_server::error::FileTransferError;
+//! This module defines the axum routes and handlers for the file transfer service REST APIs.
+//! The following endpoints are currently supported:
+//!
+//! - `PUT /tedge/file-transfer/*path`: Upload a new file
+//! - `GET /tedge/file-transfer/*path`: Retrieves an existing file
+//! - `DELETE /tedge/file-transfer/*path`: Deletes a file
+use super::error::HttpRequestError as Error;
+use super::request_files::FileTransferDir;
+use super::request_files::FileTransferPath;
+use super::request_files::RequestPath;
 use anyhow::anyhow;
 use anyhow::Context;
 use axum::body::StreamBody;
@@ -6,12 +15,9 @@ use axum::routing::get;
 use axum::Router;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use futures::future::FutureExt;
 use hyper::Body;
 use hyper::Request;
 use hyper::StatusCode;
-use rustls::ServerConfig;
-use std::future::Future;
 use std::io::ErrorKind;
 use tedge_actors::futures::StreamExt;
 use tedge_utils::paths::create_directories;
@@ -20,13 +26,16 @@ use tokio::io;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
-use tokio::net::TcpListener;
 use tokio_util::io::ReaderStream;
 
-use super::error::FileTransferRequestError as Error;
-use super::request_files::FileTransferDir;
-use super::request_files::FileTransferPath;
-use super::request_files::RequestPath;
+pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
+    Router::new()
+        .route(
+            "/tedge/file-transfer/*path",
+            get(download_file).put(upload_file).delete(delete_file),
+        )
+        .with_state(FileTransferDir::new(file_transfer_dir))
+}
 
 async fn upload_file(
     path: FileTransferPath,
@@ -131,34 +140,6 @@ async fn stream_request_body_to_path(
             .with_context(|| format!("writing to {path:?}"))?;
     }
     Ok(())
-}
-
-pub(crate) fn http_file_transfer_server(
-    listener: TcpListener,
-    file_transfer_dir: Utf8PathBuf,
-    rustls_config: Option<ServerConfig>,
-) -> Result<impl Future<Output = io::Result<()>>, FileTransferError> {
-    let router = http_file_transfer_router(file_transfer_dir);
-    let listener = listener.into_std()?;
-
-    let server = if let Some(rustls_config) = rustls_config {
-        axum_tls::start_tls_server(listener, rustls_config, router).boxed()
-    } else {
-        axum_server::from_tcp(listener)
-            .serve(router.into_make_service())
-            .boxed()
-    };
-
-    Ok(server)
-}
-
-fn http_file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
-    Router::new()
-        .route(
-            "/tedge/file-transfer/*path",
-            get(download_file).put(upload_file).delete(delete_file),
-        )
-        .with_state(FileTransferDir::new(file_transfer_dir))
 }
 
 #[cfg(test)]
@@ -397,7 +378,7 @@ mod tests {
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
         let ftd = DataDir::from(ttd.utf8_path_buf()).file_transfer_dir();
-        let router = http_file_transfer_router(ftd);
+        let router = file_transfer_router(ftd);
         (ttd, router)
     }
 

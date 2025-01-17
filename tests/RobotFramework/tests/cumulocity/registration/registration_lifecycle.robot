@@ -255,9 +255,9 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
 Early data messages cached and processed
     ${timestamp}=    Get Unix Timestamp
     ${prefix}=    Get Random Name
-    Execute Command    sudo tedge config set c8y.entity_store.auto_register false
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
+    Execute Command    sudo tedge config set agent.entity_store.auto_register false
+    Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
 
     ${children}=    Create List    child0    child00    child01    child02    child000    child0000    child00000
     FOR    ${child}    IN    @{children}
@@ -306,9 +306,9 @@ Early data messages cached and processed
     END
 
 Entities persisted and restored
-    Execute Command    sudo tedge config set c8y.entity_store.clean_start false
-    Restart Service    tedge-mapper-c8y
-    Service Health Status Should Be Up    tedge-mapper-c8y
+    Execute Command    sudo tedge config set agent.entity_store.clean_start false
+    Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
 
     ${prefix}=    Get Random Name
 
@@ -345,16 +345,16 @@ Entities persisted and restored
     External Identity Should Exist    ${prefix}plc1-metrics
     External Identity Should Exist    ${prefix}plc2-metrics
 
-    Execute Command    cat /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
-    ${original_last_modified_time}=    Execute Command    date -r /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
+    Execute Command    cat /etc/tedge/.agent/entity_store.jsonl
+    ${original_last_modified_time}=    Execute Command    date -r /etc/tedge/.agent/entity_store.jsonl
 
     FOR    ${counter}    IN RANGE    0    3
         ${timestamp}=    Get Unix Timestamp
-        Restart Service    tedge-mapper-c8y
-        Service Health Status Should Be Up    tedge-mapper-c8y
+        Restart Service    tedge-agent
+        Service Health Status Should Be Up    tedge-agent
 
         # Assert that the file contents did not change on restart
-        ${last_modified_time}=    Execute Command    date -r /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl
+        ${last_modified_time}=    Execute Command    date -r /etc/tedge/.agent/entity_store.jsonl
         Should Be Equal    ${last_modified_time}    ${original_last_modified_time}
 
         # Assert that the restored entities are not converted again

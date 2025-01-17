@@ -291,7 +291,7 @@ mod tests {
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::commands::ConfigSnapshotCmd;
     use tedge_api::commands::ConfigSnapshotCmdPayload;
-    use tedge_api::entity_store::EntityExternalId;
+    use tedge_api::entity::EntityExternalId;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::CommandStatus;
