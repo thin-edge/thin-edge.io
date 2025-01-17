@@ -251,7 +251,7 @@ When you go to events (`Device management` &rarr; `your device` &rarr; `events`)
 
 With %%te%% device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity.
 
-Device monitoring can be enabled by installing a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
+Device monitoring can be enabled by installing a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://www.collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
 
 ```sh tab={"label":"Debian/Ubuntu"}
 sudo apt-get install tedge-collectd-setup

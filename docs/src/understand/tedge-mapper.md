@@ -123,7 +123,7 @@ The Azure IoT Hub Mapper processes a message in the following ways.
 
 1. Validates if it is a correct %%te%% JSON message or not.
 2. Validates the incoming message size is below 255 KB.
-[The size of all device-to-cloud messages must be up to 256 KB](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-d2c-guidance).
+[The size of all device-to-cloud messages must be up to 256 KB](https://learn.microsoft.com/en-us/azure/iot-hub/iot-hub-devguide-d2c-guidance).
 The mapper keeps 1 KB as a buffer for the strings added by Azure.
 3. (default) Adds a current timestamp if a timestamp is not included in an incoming message. To stop this behavior, please refer to the following instruction.
 

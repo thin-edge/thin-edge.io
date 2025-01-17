@@ -10,7 +10,7 @@ description: List of supported platforms, CPU architectures and resource usage
 In addition to a Linux based Operation system, the following requirements must also be fulfilled:
 
 * At least ~40MB of RAM on the gateway device, ~8MB on a child device (see [notes](#memory-usage))
-* [mosquitto](https://github.com/eclipse/mosquitto) MQTT Broker (see [notes](#recommended-mosquitto-version))
+* [mosquitto](https://github.com/eclipse-mosquitto/mosquitto) MQTT Broker (see [notes](#recommended-mosquitto-version))
 
 :::tip
 If you are looking for new hardware it is highly recommended to choose a CPU which has at least 2 cores, as it provides a much more responsive experience and should provide enough processing headroom for future requirements.

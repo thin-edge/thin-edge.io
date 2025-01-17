@@ -12,7 +12,7 @@ Using these metrics, you can monitor the health of devices
 and can proactively initiate actions in case the device seems to malfunction.
 Additionally, the metrics can be used to help the customer troubleshoot when problems with the device are reported.
 
-%%te%% uses the open source component [collectd](https://collectd.org/) to collect the metrics from the device.
+%%te%% uses the open source component [collectd](https://www.collectd.org/) to collect the metrics from the device.
 %%te%% translates the `collectd` metrics from their native format to the [%%te%% JSON](../understand/thin-edge-json.md) format
 and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
@@ -20,7 +20,7 @@ and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
 ## Install
 
-Device monitoring is not enabled by default, however it can be enabled using a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
+Device monitoring is not enabled by default, however it can be enabled using a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://www.collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
 
 ```sh tab={"label":"Debian/Ubuntu"}
 sudo apt-get install tedge-collectd-setup
@@ -50,13 +50,13 @@ You can further customize the default collectd configuration by editing the foll
 /etc/collectd/collectd.conf
 ```
 
-Details about collectd plugins and their configuration can be viewed directly from the [collectd documentation](https://collectd.org/documentation/manpages/collectd.conf.html).
+Details about collectd plugins and their configuration can be viewed directly from the [collectd documentation](https://www.collectd.org/documentation/manpages/collectd.conf.html).
 
 However keep in mind the following points when editing the file:
 
 1. __MQTT must be enabled__.
    * %%te%% expects the `collectd` metrics to be published on the local MQTT bus.
-     Hence, you must enable the [MQTT write plugin of collectd](https://collectd.org/documentation/manpages/collectd.conf.html#plugin-mqtt).
+     Hence, you must enable the [MQTT write plugin of collectd](https://www.collectd.org/documentation/manpages/collectd.conf.html).
    * The MQTT plugin is available on most distribution of `collectd`, but this is not the case on MacOS using homebrew.
      If you are missing the MQTT plugin, please recompile `collectd` to include the MQTT plugin.
      See [https://github.com/collectd/collectd](https://github.com/collectd/collectd) for details.

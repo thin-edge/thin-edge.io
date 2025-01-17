@@ -29,7 +29,7 @@ See this [tutorial](connect-c8y.md), if you want to connect Cumulocity instead.
 See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
 Before you try to connect your device to Azure IoT, you need:
-* Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
+* Create a Azure **IoT Hub** in Azure portal as described [here](https://learn.microsoft.com/en-us/azure/iot-hub/create-hub).
 * [Install %%te%% on your device](../install/index.md).
 
 You can now use [`tedge` command](../references/cli/index.md) to:
@@ -103,7 +103,7 @@ Here provide the configuration parameters that are required to create the device
 Upon successfully saved the configuration a new device has been created on the IoT Hub.
 The new device can be seen on the IoT Hub portal by navigating to **Explores** &rarr; **IoT Devices**.
 
-More info about registering a device can be found [here](https://docs.microsoft.com/en-us/azure/iot-edge/how-to-authenticate-downstream-device?view=iotedge-2018-06)
+More info about registering a device can be found [here](https://learn.microsoft.com/en-us/azure/iot-edge/how-to-authenticate-downstream-device?view=iotedge-2018-06)
 
 ## Configure the device {#configure}
 
@@ -224,9 +224,9 @@ Alternatively, post your own custom messages on `az/messages/events/#` topic:
 tedge mqtt pub az/messages/events/ '{"text": "My message"}'
 ```
 
-To view the messages that were sent from the device to the cloud, follow this [document](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).
+To view the messages that were sent from the device to the cloud, follow this [document](https://learn.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).
 
-More info about sending telemetry to Azure can be found [here](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-dotnet)
+More info about sending telemetry to Azure can be found [here](https://learn.microsoft.com/en-us/azure/iot/tutorial-send-telemetry-iot-hub)
 
 ## Next Steps
 
