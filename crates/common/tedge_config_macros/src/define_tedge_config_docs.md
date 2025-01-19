@@ -935,10 +935,18 @@ define_tedge_config! {
     ))]
     #[doku(as = "String")]
     id: Result<String, ReadError>,
+
+    #[tedge_config(reader(function = "try_read_device_id_with_dto"))]
+    #[doku(as = "String")]
+    dto_backed_id: Result<String, ReadError>,
   }
 }
 
-fn try_read_device_id(_reader: &TEdgeConfigReaderDevice) -> Result<String, ReadError> {
+fn try_read_device_id(_reader: &TEdgeConfigReaderDevice, _: &()) -> Result<String, ReadError> {
+    unimplemented!()
+}
+
+fn try_read_device_id_with_dto(_reader: &TEdgeConfigReaderDevice, _dto_value: &OptionalConfig<String>) -> Result<String, ReadError> {
     unimplemented!()
 }
 ```

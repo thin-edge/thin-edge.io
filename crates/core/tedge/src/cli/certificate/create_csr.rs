@@ -4,10 +4,13 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
+use crate::set_device_id;
 use camino::Utf8PathBuf;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
 use certificate::NewCertificateConfig;
+use tedge_config::TEdgeConfigLocation;
+use tedge_config::WritableKey;
 
 /// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
@@ -23,6 +26,10 @@ pub struct CreateCsrCmd {
     /// The owner of the private key
     pub user: String,
     pub group: String,
+
+    /// The configs required to update the tedge.toml file
+    pub config_location: TEdgeConfigLocation,
+    pub writable_key: WritableKey,
 }
 
 impl Command for CreateCsrCmd {
@@ -34,6 +41,8 @@ impl Command for CreateCsrCmd {
         let config = NewCertificateConfig::default();
         self.create_certificate_signing_request(&config)?;
         eprintln!("Certificate Signing Request was successfully created.");
+        set_device_id(&self.config_location, &self.writable_key, &self.id)?;
+        eprintln!("'{}' is set to {}", self.writable_key, self.id);
         Ok(())
     }
 }
@@ -71,6 +80,7 @@ mod tests {
     use crate::CreateCertCmd;
     use assert_matches::assert_matches;
     use std::path::Path;
+    use tedge_config::TEdgeConfigLocation;
     use tempfile::*;
     use x509_parser::der_parser::asn1_rs::FromDer;
     use x509_parser::nom::AsBytes;
@@ -88,6 +98,8 @@ mod tests {
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
+            writable_key: WritableKey::DeviceId,
         };
 
         assert_matches!(
@@ -113,6 +125,8 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
+            writable_key: WritableKey::DeviceId,
         };
 
         // create private key and public cert with standard command
@@ -132,6 +146,8 @@ mod tests {
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
+            writable_key: WritableKey::DeviceId,
         };
 
         // create csr using existing private key and device_id from public cert

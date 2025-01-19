@@ -3,10 +3,6 @@
 //! This is designed to take a [proc_macro2::TokenStream] and turn it into
 //! something useful with the aid of [syn].
 
-// FIXME: if let can be simplified with `.unwrap_or_default()`
-//        for all `#[darling(default)]`
-#![allow(clippy::manual_unwrap_or_default)]
-
 use darling::util::SpannedValue;
 use darling::FromAttributes;
 use darling::FromField;
@@ -198,6 +194,7 @@ pub struct FieldDtoSettings {
 pub struct ReaderSettings {
     #[darling(default)]
     pub private: bool,
+    pub function: Option<syn::Path>,
     #[darling(default)]
     pub skip: bool,
 }

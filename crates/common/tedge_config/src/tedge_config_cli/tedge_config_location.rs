@@ -102,6 +102,10 @@ impl TEdgeConfigLocation {
         Ok(TEdgeConfig::from_dto(&dto, self))
     }
 
+    pub fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
+        self.load_dto::<FileAndEnvironment>(self.toml_path())
+    }
+
     fn load_dto<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
