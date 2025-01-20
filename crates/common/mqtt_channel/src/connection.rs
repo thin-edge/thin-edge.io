@@ -265,7 +265,7 @@ impl Connection {
                     break;
                 }
 
-                Ok(Event::Incoming(Incoming::PubAck(_))) => {
+                Ok(Event::Incoming(Incoming::PubAck(_))) | Ok(Event::Incoming(Incoming::PubComp(_))) => {
                     // Mark one message as consumed
                     awaiting_acks.next().await;
                 }
