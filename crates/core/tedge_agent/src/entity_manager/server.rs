@@ -27,7 +27,7 @@ pub enum EntityStoreRequest {
 #[derive(Debug)]
 pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
-    Create(Result<(Vec<EntityTopicId>, Vec<PendingEntityData>), entity_store::Error>),
+    Create(Result<Vec<PendingEntityData>, entity_store::Error>),
     Delete(Vec<EntityTopicId>),
     Ok,
 }
@@ -149,7 +149,7 @@ impl EntityStoreServer {
     async fn register_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<(Vec<EntityTopicId>, Vec<PendingEntityData>), entity_store::Error> {
+    ) -> Result<Vec<PendingEntityData>, entity_store::Error> {
         if self.entity_store.get(&entity.topic_id).is_some() {
             return Err(entity_store::Error::EntityAlreadyRegistered(
                 entity.topic_id,
@@ -174,7 +174,7 @@ impl EntityStoreServer {
                 )
             }
         }
-        Ok((affected, pending))
+        Ok(pending)
     }
 
     async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityTopicId> {
