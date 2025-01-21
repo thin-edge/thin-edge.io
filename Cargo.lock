@@ -4169,6 +4169,7 @@ dependencies = [
  "log",
  "path-clean",
  "plugin_sm",
+ "proptest",
  "rcgen",
  "reqwest",
  "rustls 0.23.22",
