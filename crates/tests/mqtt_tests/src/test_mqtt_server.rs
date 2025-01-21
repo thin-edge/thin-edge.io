@@ -118,7 +118,7 @@ fn spawn_broker() -> u16 {
                 // I don't know why it happened, but I have observed this once while testing
                 // So just log the error and retry starting the broker on a new port
                 eprintln!("MQTT-TEST ERROR: `broker.start()` should not terminate until after `spawn_broker` returns")
-            },
+            }
             Ok(Err(err)) => {
                 eprintln!(
                     "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
