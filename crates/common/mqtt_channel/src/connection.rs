@@ -16,6 +16,9 @@ use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
+use rumqttc::PubAck;
+use rumqttc::PubComp;
+use std::collections::HashSet;
 use std::task::Poll;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -209,11 +212,16 @@ impl Connection {
     ) -> Result<(), MqttError> {
         let awaiting_acks = awaiting_acks.peekable();
         futures::pin_mut!(awaiting_acks);
+        let mut outstanding_msgs = HashSet::new();
+        let mut disconnected = false;
         loop {
             if let Poll::Ready(None) = futures::poll!(awaiting_acks.as_mut().peek()) {
-                // If the channel is dropped, the sender loop has stopped
+                // If the channel is empty, the sender loop has stopped
                 // and we've received an ack for every message published
-                mqtt_client.disconnect().await.unwrap();
+                if !disconnected && outstanding_msgs.is_empty() {
+                    mqtt_client.disconnect().await.unwrap();
+                    disconnected = true;
+                }
             }
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
@@ -265,9 +273,15 @@ impl Connection {
                     break;
                 }
 
-                Ok(Event::Incoming(Incoming::PubAck(_))) | Ok(Event::Incoming(Incoming::PubComp(_))) => {
+                Ok(Event::Incoming(Incoming::PubAck(PubAck{ pkid}))) | Ok(Event::Incoming(Incoming::PubComp(PubComp { pkid }))) => {
                     // Mark one message as consumed
-                    awaiting_acks.next().await;
+                    outstanding_msgs.remove(&pkid);
+                }
+
+                Ok(Event::Outgoing(Outgoing::Publish(p))) => {
+                    if outstanding_msgs.insert(p) {
+                        awaiting_acks.next().await.unwrap();
+                    }
                 }
 
                 Err(err) => {
@@ -323,6 +337,7 @@ impl Connection {
             let _ = mqtt_client
                 .publish(last_will.topic, last_will.qos, last_will.retain, payload)
                 .await;
+            awaiting_acks.send(()).await.unwrap();
         }
     }
 
