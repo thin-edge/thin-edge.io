@@ -21,6 +21,11 @@ RUN apt-get -y update \
     # json tools (for tests)
     jq \
     jo \
+    # shells
+    bash \
+    bash-completion \
+    zsh \
+    fish \
     # mosquitto (default version used by Debian, see below for more details)
     mosquitto \
     mosquitto-clients
@@ -69,6 +74,15 @@ COPY files/secure-listener.conf .
 COPY files/http-server/nginx.conf /etc/nginx/nginx.conf
 COPY files/http-server/*.sh /usr/bin/
 RUN systemctl disable nginx
+
+# Enable tab completions (note: fish does not require any changes)
+RUN echo '[ -f /etc/bash_completion ] && source /etc/bash_completion' >> ~/.bashrc \
+    && echo 'autoload -U compinit; compinit' >> ~/.zshrc \
+    # zsh styling to make the completion menu easier to read and use
+    && echo "zstyle ':completion:*' menu select" >> ~/.zshrc \
+    && echo '# bind shift+tab to reverse menu complete' >> ~/.zshrc \
+    && echo "zmodload zsh/complist" >> ~/.zshrc \
+    && echo "bindkey -M menuselect '^[[Z' reverse-menu-complete" >> ~/.zshrc
 
 # Reference: https://developers.redhat.com/blog/2019/04/24/how-to-run-systemd-in-a-container#enter_podman
 # STOPSIGNAL SIGRTMIN+3 (=37)
