@@ -218,7 +218,10 @@ impl Connection {
             if let Poll::Ready(None) = futures::poll!(awaiting_acks.as_mut().peek()) {
                 // If the channel is empty, the sender loop has stopped
                 // and we've received an ack for every message published
-                if !disconnected && outstanding_msgs.is_empty() {
+                if !disconnected
+                    && outstanding_msgs.is_empty()
+                    && event_loop.state.events.is_empty()
+                {
                     mqtt_client.disconnect().await.unwrap();
                     disconnected = true;
                 }
@@ -273,14 +276,15 @@ impl Connection {
                     break;
                 }
 
-                Ok(Event::Incoming(Incoming::PubAck(PubAck{ pkid}))) | Ok(Event::Incoming(Incoming::PubComp(PubComp { pkid }))) => {
+                Ok(Event::Incoming(Incoming::PubAck(PubAck { pkid })))
+                | Ok(Event::Incoming(Incoming::PubComp(PubComp { pkid }))) => {
                     // Mark one message as consumed
                     outstanding_msgs.remove(&pkid);
                 }
 
                 Ok(Event::Outgoing(Outgoing::Publish(p))) => {
                     if outstanding_msgs.insert(p) {
-                        awaiting_acks.next().await.unwrap();
+                        // awaiting_acks.next().await.unwrap();
                     }
                 }
 
@@ -307,7 +311,7 @@ impl Connection {
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         last_will: Option<MqttMessage>,
-        mut awaiting_acks: mpsc::UnboundedSender<()>,
+        _awaiting_acks: mpsc::UnboundedSender<()>,
     ) {
         loop {
             match messages_receiver.next().await {
@@ -323,8 +327,6 @@ impl Connection {
                         .await
                     {
                         let _ = error_sender.send(err.into()).await;
-                    } else {
-                        awaiting_acks.send(()).await.unwrap();
                     }
                 }
             }
@@ -337,7 +339,6 @@ impl Connection {
             let _ = mqtt_client
                 .publish(last_will.topic, last_will.qos, last_will.retain, payload)
                 .await;
-            awaiting_acks.send(()).await.unwrap();
         }
     }
 
