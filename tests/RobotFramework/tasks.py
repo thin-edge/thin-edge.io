@@ -270,7 +270,7 @@ def use_local(c, arch="", package_type="deb"):
     },
 )
 def build(
-    c, name="debian-systemd", cache=True, local=False, binary=None, build_options=""
+    c, name="debian-systemd", cache=True, local=True, binary=None, build_options=""
 ):
     """Build the container integration test image
 
@@ -284,6 +284,9 @@ def build(
 
         invoke clean build
         # Build the test container image but remove any existing files
+
+        invoke build --no-local
+        # Build the test container image without copying the debian packages installed locally
 
         invoke build --local
         # Build the test container image using the locally build version (auto detecting your host's architecture)
