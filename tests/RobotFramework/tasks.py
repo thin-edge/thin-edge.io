@@ -16,6 +16,24 @@ from invoke import task
 from dotenv import load_dotenv
 
 
+def using_buildx(c: any, binary: str) -> bool:
+    """Detect if docker buildx is being used
+
+    Args:
+        c (Any):
+        binary (str): container cli binary, e.g. docker or podman
+
+    Returns:
+        bool: True if buildx is being used
+    """
+    output = c.run(
+        f"{binary} build --help",
+        echo=False,
+        hide=True,
+    )
+    return "--load" in output.stdout
+
+
 class ColourFormatter(logging.Formatter):
     grey = "\x1b[38;20m"
     yellow = "\x1b[33;20m"
@@ -311,6 +329,10 @@ def build(
 
     if build_options:
         options += f" {build_options}"
+
+    # Add required buildx option (if buildx is detected)
+    if using_buildx(c, binary):
+        options += " --load"
 
     context = "../images/debian-systemd"
     c.run(
