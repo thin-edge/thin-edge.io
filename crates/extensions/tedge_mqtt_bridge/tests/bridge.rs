@@ -512,8 +512,8 @@ impl Proxy {
                         let (mut read_conn, mut write_conn) = conn.split();
 
                         tokio::select! {
-                            res = tokio::io::copy(&mut read_socket, &mut write_conn) => { res.unwrap(); },
-                            res = tokio::io::copy(&mut read_conn, &mut write_socket) => { res.unwrap(); },
+                            _ = tokio::io::copy(&mut read_socket, &mut write_conn) => (),
+                            _ = tokio::io::copy(&mut read_conn, &mut write_socket) => (),
                             _ = stop.changed() => info!("shutting down proxy"),
                         };
 
@@ -697,9 +697,6 @@ fn get_rumqttd_config(port: u16) -> Config {
         connections: connections_settings,
     };
 
-    let mut console_settings = ConsoleSettings::default();
-    console_settings.listen = format!("localhost:{}", port + 6);
-
     let mut servers = HashMap::new();
     servers.insert("1".to_string(), server_config);
 
@@ -707,7 +704,7 @@ fn get_rumqttd_config(port: u16) -> Config {
         id: 0,
         router: router_config,
         cluster: None,
-        console: Some(console_settings),
+        console: None,
         v4: Some(servers),
         ws: None,
         v5: None,
