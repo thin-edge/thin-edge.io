@@ -41,13 +41,16 @@ impl PendingEntityCache {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-
-pub struct PendingEntityData {
+/// Registration data for an entity that has been fully registered
+///
+/// Possibly with a list of MQTT messages
+/// that have been delayed till this registration.
+pub struct RegisteredEntityData {
     pub reg_message: EntityRegistrationMessage,
     pub data_messages: Vec<MqttMessage>,
 }
 
-impl From<EntityRegistrationMessage> for PendingEntityData {
+impl From<EntityRegistrationMessage> for RegisteredEntityData {
     fn from(reg_message: EntityRegistrationMessage) -> Self {
         Self {
             reg_message,
@@ -69,14 +72,14 @@ impl PendingEntityStore {
     pub fn take_cached_entity_data(
         &mut self,
         reg_message: EntityRegistrationMessage,
-    ) -> PendingEntityData {
+    ) -> RegisteredEntityData {
         let mut pending_messages = vec![];
         if let Some(pending_entity) = self.entities.remove(&reg_message.topic_id) {
             pending_messages.extend(pending_entity.metadata);
             pending_messages.extend(self.take_cached_telemetry_data(&reg_message.topic_id));
         }
 
-        PendingEntityData {
+        RegisteredEntityData {
             reg_message,
             data_messages: pending_messages,
         }
@@ -86,12 +89,12 @@ impl PendingEntityStore {
     pub fn take_cached_child_entities_data(
         &mut self,
         entity_tid: &EntityTopicId,
-    ) -> Vec<PendingEntityData> {
+    ) -> Vec<RegisteredEntityData> {
         let mut children = vec![];
         if let Some(direct_children) = self.orphans.remove(entity_tid) {
             for child in direct_children {
                 let pending_entity_cache = self.entities.remove(&child).unwrap();
-                let pending_entity_data = self.pending_data_from_cache(pending_entity_cache);
+                let pending_entity_data = self.registered_data_from_cache(pending_entity_cache);
                 children.push(pending_entity_data);
                 children.append(&mut self.take_cached_child_entities_data(&child));
             }
@@ -99,13 +102,16 @@ impl PendingEntityStore {
         children
     }
 
-    fn pending_data_from_cache(&mut self, pending_cache: PendingEntityCache) -> PendingEntityData {
+    fn registered_data_from_cache(
+        &mut self,
+        pending_cache: PendingEntityCache,
+    ) -> RegisteredEntityData {
         let reg_message = pending_cache.reg_message.unwrap();
         let mut pending_messages = vec![];
         pending_messages.extend(pending_cache.metadata);
         pending_messages.extend(self.take_cached_telemetry_data(&reg_message.topic_id));
 
-        PendingEntityData {
+        RegisteredEntityData {
             reg_message,
             data_messages: pending_messages,
         }

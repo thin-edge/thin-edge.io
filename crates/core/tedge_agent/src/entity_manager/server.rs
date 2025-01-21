@@ -9,7 +9,7 @@ use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_api::EntityStore;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
@@ -27,7 +27,7 @@ pub enum EntityStoreRequest {
 #[derive(Debug)]
 pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
-    Create(Result<Vec<PendingEntityData>, entity_store::Error>),
+    Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
     Delete(Vec<EntityTopicId>),
     Ok,
 }
@@ -149,7 +149,7 @@ impl EntityStoreServer {
     async fn register_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<Vec<PendingEntityData>, entity_store::Error> {
+    ) -> Result<Vec<RegisteredEntityData>, entity_store::Error> {
         if self.entity_store.get(&entity.topic_id).is_some() {
             return Err(entity_store::Error::EntityAlreadyRegistered(
                 entity.topic_id,

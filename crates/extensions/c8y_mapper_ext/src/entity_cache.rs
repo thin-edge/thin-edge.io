@@ -9,8 +9,8 @@ use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::pending_entity_store::PendingEntityData;
 use tedge_api::pending_entity_store::PendingEntityStore;
+use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_mqtt_ext::MqttMessage;
 use thiserror::Error;
 use tracing::debug;
@@ -114,7 +114,7 @@ impl EntityCache {
     pub(crate) fn register_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<Vec<PendingEntityData>, Error> {
+    ) -> Result<Vec<RegisteredEntityData>, Error> {
         let parent = entity.parent.as_ref().unwrap_or(&self.main_device_tid);
         if self.entities.contains_key(parent) {
             let outcome = self.register_single_entity(entity.clone())?;

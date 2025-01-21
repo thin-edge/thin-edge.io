@@ -76,7 +76,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_api::script::ShellScript;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
@@ -295,7 +295,7 @@ impl CumulocityConverter {
     pub async fn try_register_source_entities(
         &mut self,
         message: &MqttMessage,
-    ) -> Result<Vec<PendingEntityData>, ConversionError> {
+    ) -> Result<Vec<RegisteredEntityData>, ConversionError> {
         if let Ok((source, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
             match channel {
                 Channel::EntityMetadata => {
@@ -1233,7 +1233,7 @@ impl CumulocityConverter {
     pub(crate) async fn try_register_entity_with_pending_children(
         &mut self,
         register_message: EntityRegistrationMessage,
-    ) -> Result<Vec<PendingEntityData>, ConversionError> {
+    ) -> Result<Vec<RegisteredEntityData>, ConversionError> {
         match self.entity_cache.register_entity(register_message.clone()) {
             Err(e) => {
                 error!("Entity registration failed: {e}");
@@ -1645,7 +1645,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
-    use tedge_api::pending_entity_store::PendingEntityData;
+    use tedge_api::pending_entity_store::RegisteredEntityData;
     use tedge_api::script::ShellScript;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_config::AutoLogUpload;
@@ -2801,7 +2801,7 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        let messages = pending_entities_into_mqtt_messages(entities);
+        let messages = registered_entities_into_mqtt_messages(entities);
 
         // Assert that the registration message, the twin updates and the cached measurement messages are converted
         assert_messages_matching(
@@ -2898,7 +2898,7 @@ pub(crate) mod tests {
             .try_register_source_entities(&reg_message)
             .await
             .unwrap();
-        let messages = pending_entities_into_mqtt_messages(entities);
+        let messages = registered_entities_into_mqtt_messages(entities);
         assert_messages_matching(
             &messages,
             [
@@ -3036,7 +3036,9 @@ pub(crate) mod tests {
             )]);
     }
 
-    fn pending_entities_into_mqtt_messages(entities: Vec<PendingEntityData>) -> Vec<MqttMessage> {
+    fn registered_entities_into_mqtt_messages(
+        entities: Vec<RegisteredEntityData>,
+    ) -> Vec<MqttMessage> {
         let mut messages = vec![];
         for entity in entities {
             messages.push(entity.reg_message.to_mqtt_message(&MqttSchema::default()));

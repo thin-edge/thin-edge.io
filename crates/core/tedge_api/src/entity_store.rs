@@ -18,8 +18,8 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::store::message_log::MessageLogReader;
 use crate::store::message_log::MessageLogWriter;
-use crate::store::pending_entity_store::PendingEntityData;
 use crate::store::pending_entity_store::PendingEntityStore;
+use crate::store::pending_entity_store::RegisteredEntityData;
 use log::debug;
 use log::error;
 use log::info;
@@ -292,7 +292,7 @@ impl EntityStore {
     pub fn update(
         &mut self,
         message: EntityRegistrationMessage,
-    ) -> Result<(Vec<EntityTopicId>, Vec<PendingEntityData>), Error> {
+    ) -> Result<(Vec<EntityTopicId>, Vec<RegisteredEntityData>), Error> {
         match self.register_and_persist_entity(message.clone()) {
             Ok(affected_entities) => {
                 if affected_entities.is_empty() {
@@ -971,7 +971,7 @@ mod tests {
         .unwrap();
         let updated_entities = store.update(entity.clone()).unwrap();
 
-        let pending_entity: PendingEntityData = entity.into();
+        let pending_entity: RegisteredEntityData = entity.into();
         assert_eq!(updated_entities.0.len(), 1);
         assert_eq!(updated_entities.0, ["device/main//"]);
         assert_eq!(updated_entities.1.len(), 1);

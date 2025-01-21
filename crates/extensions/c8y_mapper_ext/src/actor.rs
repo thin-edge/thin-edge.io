@@ -28,7 +28,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
-use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -216,7 +216,7 @@ impl C8yMapperActor {
     /// followed by repeating the same for its cached data messages.
     pub(crate) async fn process_registered_entities(
         &mut self,
-        pending_entities: Vec<PendingEntityData>,
+        pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
             self.process_registration_message(pending_entity.reg_message)
