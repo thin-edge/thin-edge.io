@@ -1012,8 +1012,10 @@ fn enable_software_management(
     if bridge_config.use_agent {
         if which("tedge-agent").is_ok() {
             let spinner = Spinner::start("Enabling tedge-agent");
+            // Restart the agent in case it is already running
+            // and so it picks up the latest settings (e.g. updated mqtt port)
             let _ = spinner
-                .finish(service_manager.start_and_enable_service(SystemService::TEdgeSMAgent));
+                .finish(service_manager.restart_and_enable_service(SystemService::TEdgeSMAgent));
         } else {
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
