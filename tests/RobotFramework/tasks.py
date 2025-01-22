@@ -301,6 +301,9 @@ def build(
         # Use locally built x86_64 images then build container image
 
     """
+    # Temporary logic used to enable transitioning the build-workflow.yaml
+    if is_ci() and (os.getenv("BUILD_DISABLE_CI_DETECTION") != "1"):
+        local = False
 
     if local:
         clean(c)
