@@ -16,7 +16,7 @@ async fn new_entity_store() {
 
 proptest! {
     #[test]
-    fn it_works_for_any_registration_order(registrations in model::walk(3)) {
+    fn it_works_for_any_registration_order(registrations in model::walk(6)) {
         tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -25,9 +25,9 @@ proptest! {
             let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
             let mut state = model::State::new();
 
-            for step in registrations {
-                let expected_updates = state.apply(step.clone());
-                let actual_updates = match entity_store.handle(step.into()).await {
+            for (protocol,action) in registrations {
+                let expected_updates = state.apply(protocol, action.clone());
+                let actual_updates = match entity_store.handle((protocol,action).into()).await {
                     EntityStoreResponse::Create(Ok(registered_entities)) => {
                         registered_entities
                             .iter()
@@ -115,6 +115,14 @@ mod model {
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::mqtt_topics::MqttSchema;
+
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    #[allow(clippy::upper_case_acronyms)]
+    pub enum Protocol {
+        HTTP,
+        MQTT,
+    }
 
     #[derive(Debug, Clone)]
     pub enum Action {
@@ -206,22 +214,41 @@ mod model {
         }
     }
 
+    impl From<Action> for EntityRegistrationMessage {
+        fn from(action: Action) -> Self {
+            EntityRegistrationMessage {
+                topic_id: action.topic_id(),
+                external_id: None,
+                r#type: action.target_type(),
+                parent: action.parent_topic_id(),
+                other: action.properties(),
+            }
+        }
+    }
+
     impl From<Action> for EntityStoreRequest {
         fn from(action: Action) -> Self {
             match &action {
                 Action::AddDevice { .. } | Action::AddService { .. } => {
-                    let registration = EntityRegistrationMessage {
-                        topic_id: action.topic_id(),
-                        external_id: None,
-                        r#type: action.target_type(),
-                        parent: action.parent_topic_id(),
-                        other: action.properties(),
-                    };
+                    let registration = EntityRegistrationMessage::from(action);
                     EntityStoreRequest::Create(registration)
                 }
 
                 Action::RemDevice { .. } | Action::RemService { .. } => {
                     EntityStoreRequest::Delete(action.topic_id())
+                }
+            }
+        }
+    }
+
+    impl From<(Protocol, Action)> for EntityStoreRequest {
+        fn from((protocol, action): (Protocol, Action)) -> Self {
+            match protocol {
+                Protocol::HTTP => EntityStoreRequest::from(action),
+                Protocol::MQTT => {
+                    let registration = EntityRegistrationMessage::from(action);
+                    let message = registration.to_mqtt_message(&MqttSchema::default());
+                    EntityStoreRequest::MqttMessage(message)
                 }
             }
         }
@@ -240,35 +267,60 @@ mod model {
                 entities: HashMap::default(),
                 registered: HashSet::default(),
             };
-            state.apply(Action::AddDevice {
-                topic: "".to_string(),
-                props: vec![],
-            });
+            state.apply(
+                Protocol::HTTP,
+                Action::AddDevice {
+                    topic: "".to_string(),
+                    props: vec![],
+                },
+            );
             state
         }
 
-        pub fn apply(&mut self, action: Action) -> HashSet<EntityTopicId> {
+        pub fn apply(&mut self, protocol: Protocol, action: Action) -> HashSet<EntityTopicId> {
             let topic = action.topic_id();
 
             match action {
                 Action::AddDevice { .. } | Action::AddService { .. } => {
+                    let parent = action.parent_topic_id();
+
+                    if let Some(parent) = parent.as_ref() {
+                        if protocol == Protocol::HTTP && !self.registered.contains(parent) {
+                            // Under HTTP, registering a child before its parent is an error
+                            return HashSet::new();
+                        }
+                    }
+
                     if self.entities.contains_key(&topic) {
                         HashSet::new()
                     } else {
                         let entity_type = action.target_type();
-                        let parent = action.parent_topic_id();
                         self.entities.insert(
                             topic.clone(),
                             (entity_type, parent.clone(), action.properties()),
                         );
-                        self.register(topic, parent)
+
+                        let new_entities = self.register(topic, parent);
+                        if protocol == Protocol::HTTP {
+                            new_entities
+                        } else {
+                            // Under MQTT, no response is sent back
+                            HashSet::new()
+                        }
                     }
                 }
 
                 Action::RemDevice { .. } | Action::RemService { .. } => {
                     if self.entities.contains_key(&topic) {
                         self.entities.remove(&topic);
-                        self.deregister(topic)
+
+                        let old_entities = self.deregister(topic);
+                        if protocol == Protocol::HTTP {
+                            old_entities
+                        } else {
+                            // Under MQTT, no response is sent back
+                            HashSet::new()
+                        }
                     } else {
                         HashSet::new()
                     }
@@ -358,6 +410,16 @@ mod model {
     }
 
     prop_compose! {
+        pub fn random_protocol()(protocol in "[hm]") -> Protocol {
+            if protocol == "h" {
+                Protocol::HTTP
+            } else {
+                Protocol::MQTT
+            }
+        }
+    }
+
+    prop_compose! {
         pub fn random_name()(id in "[abc]{1,3}") -> String {
             id.to_string()
         }
@@ -376,43 +438,56 @@ mod model {
     }
 
     prop_compose! {
-        pub fn random_prop()(key in random_key(), value in random_value()) -> (String,String) {
+        pub fn random_prop()(
+            key in random_key(),
+            value in random_value()
+        ) -> (String,String) {
             (key, value)
         }
     }
 
     prop_compose! {
-        pub fn random_props(max_length: usize)
-            (vec in prop::collection::vec(random_prop(), 0..max_length)) -> Vec<(String,String)>
-          {
+        pub fn random_props(max_length: usize)(
+            vec in prop::collection::vec(random_prop(),
+            0..max_length)
+        ) -> Vec<(String,String)>
+        {
             vec
-          }
+        }
     }
 
     prop_compose! {
-        pub fn pick_random_or_new(names: Vec<String>)(id in 0..(names.len()+1), name in random_name()) -> String {
+        pub fn pick_random_or_new(names: Vec<String>)(
+            id in 0..(names.len()+1),
+            name in random_name()
+        ) -> String {
             names.get(id).map(|n| n.to_owned()).unwrap_or(name)
         }
     }
 
     prop_compose! {
-        pub fn random_action_on(topic: String)(action in 1..5, props in random_props(2)) -> Action {
+        pub fn random_action_on(topic: String)(
+            protocol in random_protocol(),
+            action in 1..5,
+            props in random_props(2)
+        ) -> (Protocol,Action) {
             let topic = topic.to_owned();
-            match action {
+            let action = match action {
                 1 => Action::AddDevice{ topic, props },
                 2 => Action::AddService{ topic, props },
                 3 => Action::RemService{ topic },
                 _ => Action::RemDevice{ topic },
-            }
+            };
+            (protocol, action)
         }
     }
 
-    pub fn random_action() -> impl Strategy<Value = Action> {
+    pub fn random_action() -> impl Strategy<Value = (Protocol, Action)> {
         random_name().prop_flat_map(random_action_on)
     }
 
-    fn step(actions: Vec<Action>) -> impl Strategy<Value = Vec<Action>> {
-        let nodes = actions.iter().map(|a| a.target().to_owned()).collect();
+    fn step(actions: Vec<(Protocol, Action)>) -> impl Strategy<Value = Vec<(Protocol, Action)>> {
+        let nodes = actions.iter().map(|(_, a)| a.target().to_owned()).collect();
         pick_random_or_new(nodes)
             .prop_flat_map(random_action_on)
             .prop_flat_map(move |action| {
@@ -422,7 +497,7 @@ mod model {
             })
     }
 
-    pub fn walk(max_length: u32) -> impl Strategy<Value = Vec<Action>> {
+    pub fn walk(max_length: u32) -> impl Strategy<Value = Vec<(Protocol, Action)>> {
         if max_length == 0 {
             Just(vec![]).boxed()
         } else if max_length == 1 {
