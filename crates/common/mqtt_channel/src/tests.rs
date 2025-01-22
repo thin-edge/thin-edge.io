@@ -214,9 +214,8 @@ async fn receiving_messages_while_not_connected() -> Result<(), anyhow::Error> {
         .with_session_name(session_name)
         .with_subscriptions(topic.try_into()?);
     {
-        let _con = Connection::new(&mqtt_config).await?;
-
-        // A connection is disconnected on drop
+        let con = Connection::new(&mqtt_config).await?;
+        con.close().await;
     }
 
     // Any messages published on that topic while down ...
@@ -444,27 +443,29 @@ async fn ensure_that_all_messages_are_sent_before_disconnect() -> Result<(), any
 
     // An mqtt process publishing messages
     // must ensure the messages have been sent before process exit.
-            let mqtt_config = Config::default().with_port(broker.port);
+    let mqtt_config = Config::default().with_port(broker.port);
 
-            let topic = Topic::new_unchecked(topic);
-            let mut con = Connection::new(&mqtt_config).await.expect("a connection");
+    let topic = Topic::new_unchecked(topic);
+    let mut con = Connection::new(&mqtt_config).await.expect("a connection");
 
-            con.published
-                .send(MqttMessage::new(&topic, "datum 1"))
-                .await
-                .expect("message sent");
-            con.published
-                .send(MqttMessage::new(&topic, "datum 2"))
-                .await
-                .expect("message sent");
-            con.published
-                .send(MqttMessage::new(&topic, "datum 3"))
-                .await
-                .expect("message sent");
+    con.published
+        .send(MqttMessage::new(&topic, "datum 1"))
+        .await
+        .expect("message sent");
+    con.published
+        .send(MqttMessage::new(&topic, "datum 2"))
+        .await
+        .expect("message sent");
+    con.published
+        .send(MqttMessage::new(&topic, "datum 3"))
+        .await
+        .expect("message sent");
 
-            // Wait for all the messages to be actually sent
-            // before the runtime is shutdown dropping the mqtt sender loop.
-            tokio::time::timeout(Duration::from_secs(5),con.close()).await.expect("MQTT channel should close");
+    // Wait for all the messages to be actually sent
+    // before the runtime is shutdown dropping the mqtt sender loop.
+    tokio::time::timeout(Duration::from_secs(5), con.close())
+        .await
+        .expect("MQTT channel should close");
 
     mqtt_tests::assert_received(
         &mut messages,
