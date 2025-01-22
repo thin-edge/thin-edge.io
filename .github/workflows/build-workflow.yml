@@ -201,7 +201,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: packages-${{ matrix.job.target }}
-          path: tests/images/debian-systemd/files/packages/
+          path: target/${{ matrix.job.target }}/packages/
 
       - name: create .env file
         working-directory: tests/RobotFramework
@@ -230,7 +230,7 @@ jobs:
         working-directory: tests/RobotFramework
         run: |
           source .venv/bin/activate
-          invoke build
+          invoke build --arch "${{ matrix.job.target }}"
 
       - name: Run tests
         working-directory: tests/RobotFramework
