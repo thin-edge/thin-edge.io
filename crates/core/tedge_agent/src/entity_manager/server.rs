@@ -164,9 +164,9 @@ impl EntityStoreServer {
             }
         }
 
-        let (affected, pending) = self.entity_store.update(entity.clone())?;
+        let registered = self.entity_store.update(entity.clone())?;
 
-        if !affected.is_empty() {
+        if !registered.is_empty() {
             let message = entity.to_mqtt_message(&self.mqtt_schema);
             if let Err(err) = self.mqtt_publisher.send(message.clone()).await {
                 error!(
@@ -174,7 +174,7 @@ impl EntityStoreServer {
                 )
             }
         }
-        Ok(pending)
+        Ok(registered)
     }
 
     async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityTopicId> {
