@@ -1,4 +1,5 @@
 use super::error::CertError;
+use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
@@ -41,7 +42,11 @@ impl Command for CreateCertCmd {
     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
         self.create_test_certificate(&config)?;
-        eprintln!("Certificate was successfully created");
+        eprintln!("Certificate was successfully created\n");
+        let show_cert_cmd = ShowCertCmd {
+            cert_path: self.cert_path.clone(),
+        };
+        show_cert_cmd.execute()?;
         Ok(())
     }
 }
