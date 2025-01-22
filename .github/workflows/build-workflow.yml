@@ -228,8 +228,6 @@ jobs:
 
       - name: Build images
         working-directory: tests/RobotFramework
-        env:
-          BUILD_DISABLE_CI_DETECTION: 1
         run: |
           source .venv/bin/activate
           invoke build --arch "${{ matrix.job.target }}"
