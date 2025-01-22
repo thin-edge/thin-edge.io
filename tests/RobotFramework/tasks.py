@@ -270,12 +270,15 @@ def use_local(c, arch="", package_type="deb"):
     },
 )
 def build(
-    c, name="debian-systemd", cache=True, local=True, binary=None, build_options=""
+    c, name="debian-systemd", cache=True, local=True, binary=None, arch="", build_options=""
 ):
     """Build the container integration test image
 
     Docker is used by default, unless if the DOCKER_HOST variable is pointing to podman
     and podman is installed.
+
+    Note: The arch argument is only used if local is set to True. The arch value can
+    either by the architecture or the target, e.g. aarch64 or x86_64-unknown-linux-musl
 
     Examples:
 
@@ -301,7 +304,7 @@ def build(
 
     if local:
         clean(c)
-        use_local(c)
+        use_local(c, arch=arch)
 
     # Support podman, and automatically switch if the DOCKER_HOST is set
     binary = binary or "docker"
