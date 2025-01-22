@@ -54,6 +54,7 @@ impl IntoResponse for Error {
             Error::InvalidEntityTopicId(_) => StatusCode::BAD_REQUEST,
             Error::EntityStoreError(err) => match err {
                 entity_store::Error::EntityAlreadyRegistered(_) => StatusCode::CONFLICT,
+                entity_store::Error::UnknownEntity(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             },
             Error::EntityNotFound(_) => StatusCode::NOT_FOUND,
@@ -68,7 +69,7 @@ impl IntoResponse for Error {
 
 pub(crate) fn entity_store_router(state: AgentState) -> Router {
     Router::new()
-        .route("/v1/entities", post(register_entity))
+        .route("/v1/entities", post(register_entity).get(list_entities))
         .route(
             "/v1/entities/*path",
             get(get_entity).delete(deregister_entity),
@@ -138,6 +139,22 @@ async fn deregister_entity(
     Ok(Json(deleted))
 }
 
+async fn list_entities(
+    State(state): State<AgentState>,
+) -> Result<Json<Vec<EntityMetadata>>, Error> {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::List(None))
+        .await?;
+
+    let EntityStoreResponse::List(entities) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    Ok(Json(entities?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::AgentState;
@@ -153,6 +170,7 @@ mod tests {
     use serde_json::json;
     use serde_json::Map;
     use serde_json::Value;
+    use std::collections::HashSet;
     use tedge_actors::Builder;
     use tedge_actors::ClientMessageBox;
     use tedge_actors::MessageReceiver;
@@ -445,6 +463,81 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn entity_list() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::List(_) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::List(Ok(vec![
+                            EntityMetadata::main_device("main".to_string()),
+                            EntityMetadata::child_device("child0".to_string()).unwrap(),
+                            EntityMetadata::child_device("child1".to_string()).unwrap(),
+                        ])))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let entities: Vec<EntityMetadata> = serde_json::from_slice(&body).unwrap();
+
+        let entity_set = entities
+            .iter()
+            .map(|e| e.topic_id.as_str())
+            .collect::<HashSet<_>>();
+        assert!(entity_set.contains("device/main//"));
+        assert!(entity_set.contains("device/child0//"));
+        assert!(entity_set.contains("device/child1//"));
+    }
+
+    #[tokio::test]
+    async fn entity_list_unknown_entity() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::List(_) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::List(Err(
+                            entity_store::Error::UnknownEntity("unknown".to_string()),
+                        )))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     struct TestHandle {
