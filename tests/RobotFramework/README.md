@@ -158,16 +158,15 @@ Checkout the [dev container instructions](https://thin-edge.github.io/thin-edge.
 
 6. Build the container image used by the default `docker` test adapter
 
-    The following command will use the debian packages built using the latest packages from the main branch (provided by Cloudsmith.io)
-
     ```sh
-    invoke clean build
+    just release
+    invoke build
     ```
 
-    Or you can use the locally built debian packages (assuming you have already built them)
+    Or you can use the latest packages from the main branch (provided by Cloudsmith.io)
 
     ```sh
-    invoke build --local
+    invoke clean build --no-local
     ```
 
 7. Run the tests
@@ -243,7 +242,7 @@ The following dependencies are requires for the instructions:
 
 For very specific cases where you want to deploy externally built packages (e.g. stuff you downloaded from the GitHub release page), you can manually copy the debian packages into the special folder which is included when building the test container image.
 
-If you are looking to use packages that you locally built, then just use `invoke build --local` instead (it is much easier).
+The default test container image will use the locally built packages (e.g. created by using `just release`). If you want to build the test image using the packages which are published to Cloudsmith.io, then use `invoke build --no-local`.
 
 1. Open the terminal and navigate to the RobotFramework folder
 
