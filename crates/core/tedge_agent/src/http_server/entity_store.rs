@@ -252,10 +252,7 @@ mod tests {
                         && entity.r#type == EntityType::ChildDevice
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::Create(Ok((
-                                vec![EntityTopicId::default_main_device()],
-                                vec![],
-                            ))))
+                            .send(EntityStoreResponse::Create(Ok(vec![])))
                             .await
                             .unwrap();
                     }
