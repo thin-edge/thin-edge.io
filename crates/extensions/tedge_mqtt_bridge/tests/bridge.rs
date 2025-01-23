@@ -11,7 +11,6 @@ use rumqttc::QoS;
 use rumqttd::Broker;
 use rumqttd::Config;
 use rumqttd::ConnectionSettings;
-use rumqttd::ConsoleSettings;
 use rumqttd::ServerSettings;
 use std::collections::HashMap;
 use std::str::from_utf8;

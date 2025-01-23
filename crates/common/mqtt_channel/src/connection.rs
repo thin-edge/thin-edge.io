@@ -6,6 +6,7 @@ use crate::PubChannel;
 use crate::SubChannel;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
+use futures::poll;
 use futures::SinkExt;
 use futures::StreamExt;
 use log::error;
@@ -19,6 +20,7 @@ use rumqttc::Packet;
 use rumqttc::PubAck;
 use rumqttc::PubComp;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -92,14 +94,14 @@ impl Connection {
 
         let (mqtt_client, event_loop) =
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
-        let (awaiting_acks_sender, awaiting_acks_receiver) = mpsc::unbounded();
+        let (guard, guard2) = ConnectionGuard::new_pair();
         tokio::spawn(Connection::receiver_loop(
             mqtt_client.clone(),
             config.clone(),
             event_loop,
             received_sender,
             error_sender.clone(),
-            awaiting_acks_receiver,
+            guard,
             pub_done_sender,
         ));
         tokio::spawn(Connection::sender_loop(
@@ -107,7 +109,7 @@ impl Connection {
             published_receiver,
             error_sender,
             config.last_will_message.clone(),
-            awaiting_acks_sender,
+            guard2,
         ));
 
         Ok(Connection {
@@ -207,26 +209,47 @@ impl Connection {
         mut event_loop: EventLoop,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
-        awaiting_acks: mpsc::UnboundedReceiver<()>,
+        guard: ConnectionGuard,
         done: oneshot::Sender<()>,
     ) -> Result<(), MqttError> {
-        let awaiting_acks = awaiting_acks.peekable();
-        futures::pin_mut!(awaiting_acks);
         let mut outstanding_msgs = HashSet::new();
         let mut disconnected = false;
+
+        enum PollEvent {
+            Event(Result<Event, rumqttc::ConnectionError>),
+            RequestDisconnect,
+        }
+
+        async fn next_event(
+            ev: &mut EventLoop,
+            guard: &ConnectionGuard,
+            disconnected: bool,
+        ) -> PollEvent {
+            let poll_ev = ev.poll();
+            tokio::pin!(poll_ev);
+            loop {
+                if let Poll::Ready(r) = poll!(&mut poll_ev) {
+                    break PollEvent::Event(r);
+                } else if !disconnected && guard.other_half_dropped() {
+                    break PollEvent::RequestDisconnect;
+                }
+                tokio::task::yield_now().await;
+            }
+        }
+
         loop {
-            if let Poll::Ready(None) = futures::poll!(awaiting_acks.as_mut().peek()) {
-                // If the channel is empty, the sender loop has stopped
-                // and we've received an ack for every message published
-                if !disconnected
-                    && outstanding_msgs.is_empty()
-                    && event_loop.state.events.is_empty()
+            let event = match next_event(&mut event_loop, &guard, disconnected).await {
+                PollEvent::RequestDisconnect
+                    if outstanding_msgs.is_empty() && event_loop.state.events.is_empty() =>
                 {
                     mqtt_client.disconnect().await.unwrap();
                     disconnected = true;
+                    continue;
                 }
-            }
-            match event_loop.poll().await {
+                PollEvent::RequestDisconnect => event_loop.poll().await,
+                PollEvent::Event(e) => e,
+            };
+            match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
                         error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
@@ -311,24 +334,15 @@ impl Connection {
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         last_will: Option<MqttMessage>,
-        _awaiting_acks: mpsc::UnboundedSender<()>,
+        _guard: ConnectionGuard,
     ) {
-        loop {
-            match messages_receiver.next().await {
-                None => {
-                    // The sender channel has been closed by the client
-                    // No more messages will be published by the client
-                    break;
-                }
-                Some(message) => {
-                    let payload = Vec::from(message.payload_bytes());
-                    if let Err(err) = mqtt_client
-                        .publish(message.topic, message.qos, message.retain, payload)
-                        .await
-                    {
-                        let _ = error_sender.send(err.into()).await;
-                    }
-                }
+        while let Some(message) = messages_receiver.next().await {
+            let payload = Vec::from(message.payload_bytes());
+            if let Err(err) = mqtt_client
+                .publish(message.topic, message.qos, message.retain, payload)
+                .await
+            {
+                let _ = error_sender.send(err.into()).await;
             }
         }
 
@@ -354,5 +368,18 @@ impl Connection {
             .subscribe_many(subscriptions)
             .await
             .map_err(MqttError::ClientError)
+    }
+}
+
+struct ConnectionGuard(Arc<()>);
+
+impl ConnectionGuard {
+    fn new_pair() -> (Self, Self) {
+        let count = Arc::new(());
+        (Self(count.clone()), Self(count))
+    }
+
+    fn other_half_dropped(&self) -> bool {
+        Arc::strong_count(&self.0) == 1
     }
 }
