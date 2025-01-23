@@ -5,6 +5,8 @@ use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
+use tracing::debug;
+use tracing::instrument;
 
 /// A sender of messages of type `M`
 ///
@@ -75,13 +77,24 @@ impl<M: Message, N: Message + Into<M>> CloneSender<N> for DynSender<M> {
 #[async_trait]
 impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
-        Ok(SinkExt::send(&mut self, message.into()).await?)
+        let message = message.into();
+        if let Err(err) = self.try_send(message) {
+            if err.is_full() {
+                debug!("Sender is full");
+            }
+            let message = err.into_inner();
+            SinkExt::send(&mut self, message).await?;
+            debug!("Blocked send completed");
+        }
+
+        Ok(())
     }
 }
 
 /// An `mpsc::UnboundedSender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
 #[async_trait]
 impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::UnboundedSender<M> {
+    #[instrument(name = "mpsc::UnboundedSender::send", skip_all)]
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
         Ok(SinkExt::send(&mut self, message.into()).await?)
     }

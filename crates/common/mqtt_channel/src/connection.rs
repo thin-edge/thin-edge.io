@@ -8,8 +8,6 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
-use log::error;
-use log::info;
 use rumqttc::AsyncClient;
 use rumqttc::Event;
 use rumqttc::EventLoop;
@@ -21,6 +19,10 @@ use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::trace;
 
 /// A connection to some MQTT server
 pub struct Connection {
@@ -123,6 +125,7 @@ impl Connection {
         let _ = self.pub_done.await;
     }
 
+    #[instrument(level = "trace", skip(message_sender, error_sender))]
     async fn open(
         config: &Config,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
@@ -201,6 +204,7 @@ impl Connection {
         Ok((mqtt_client, event_loop))
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn receiver_loop(
         mqtt_client: AsyncClient,
         config: Config,
@@ -306,9 +310,11 @@ impl Connection {
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;
         let _ = done.send(());
+        trace!("terminating receiver loop");
         Ok(())
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn sender_loop(
         mqtt_client: AsyncClient,
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
@@ -316,7 +322,9 @@ impl Connection {
         last_will: Option<MqttMessage>,
         _disconnect_permit: OwnedSemaphorePermit,
     ) {
+        trace!("waiting for message");
         while let Some(message) = messages_receiver.next().await {
+            trace!(msg = ?message, "received message");
             let payload = Vec::from(message.payload_bytes());
             if let Err(err) = mqtt_client
                 .publish(message.topic, message.qos, message.retain, payload)

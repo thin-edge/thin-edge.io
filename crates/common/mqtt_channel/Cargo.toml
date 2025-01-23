@@ -18,6 +18,7 @@ rumqttc = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "rt-multi-thread"] }
+tracing = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]

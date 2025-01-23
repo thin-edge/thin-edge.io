@@ -13,6 +13,7 @@ use futures::channel::oneshot;
 use futures::StreamExt;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
+use tracing::instrument;
 
 /// A message box for a request-response server
 pub type ServerMessageBox<Request, Response> = LoggingReceiver<RequestEnvelope<Request, Response>>;
@@ -146,6 +147,7 @@ impl<Request, Response> Clone for RequestSender<Request, Response> {
 
 #[async_trait]
 impl<Request: Message, Response: Message> Sender<Request> for RequestSender<Request, Response> {
+    #[instrument(name = "RequestSender::send", skip_all)]
     async fn send(&mut self, request: Request) -> Result<(), ChannelError> {
         let reply_to = self.reply_to.sender();
         self.sender
