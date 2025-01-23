@@ -125,7 +125,7 @@ impl PendingEntityStore {
         for message in telemetry_cache.into_iter() {
             match self.mqtt_schema.entity_channel_of(&message.topic) {
                 Ok((tid, _)) => {
-                    if &tid == entity_tid {
+                    if tid == entity_tid {
                         messages.push(message);
                     } else {
                         self.telemetry_cache.push(message)

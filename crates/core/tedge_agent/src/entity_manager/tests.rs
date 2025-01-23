@@ -15,8 +15,9 @@ async fn new_entity_store() {
 }
 
 proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
     #[test]
-    fn it_works_for_any_registration_order(registrations in model::walk(6)) {
+    fn it_works_for_any_registration_order(registrations in model::walk(10)) {
         tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -38,6 +39,21 @@ proptest! {
                     _ => HashSet::new(),
                 };
                 assert_eq!(actual_updates, expected_updates);
+            }
+
+            let mut registered_topics : Vec<_> = entity_store.entity_topic_ids().collect();
+            registered_topics.sort_by(|a,b| a.as_ref().cmp(b.as_ref()));
+
+            let mut expected_topics : Vec<_> = state.entity_topic_ids().collect();
+            expected_topics.sort_by(|a,b| a.as_ref().cmp(b.as_ref()));
+
+            assert_eq!(registered_topics, expected_topics);
+
+            for topic in registered_topics {
+                let registered = entity_store.get(topic).unwrap();
+                let (entity_type, parent, _) = state.get(topic).unwrap();
+                assert_eq!(&registered.r#type, entity_type);
+                assert_eq!(registered.parent.as_ref(), parent.as_ref());
             }
         })
     }
@@ -275,6 +291,23 @@ mod model {
                 },
             );
             state
+        }
+
+        pub fn entity_topic_ids(&self) -> impl Iterator<Item = &EntityTopicId> {
+            self.entities
+                .keys()
+                .filter(|topic| self.is_registered(topic))
+        }
+
+        pub fn get(
+            &self,
+            topic: &EntityTopicId,
+        ) -> Option<&(EntityType, Option<EntityTopicId>, PropMap)> {
+            self.entities.get(topic)
+        }
+
+        pub fn is_registered(&self, topic: &EntityTopicId) -> bool {
+            self.registered.contains(topic)
         }
 
         pub fn apply(&mut self, protocol: Protocol, action: Action) -> HashSet<EntityTopicId> {

@@ -57,6 +57,16 @@ impl EntityStoreServer {
             entity_auto_register,
         }
     }
+
+    #[cfg(test)]
+    pub fn entity_topic_ids(&self) -> impl Iterator<Item = &EntityTopicId> {
+        self.entity_store.entity_topic_ids()
+    }
+
+    #[cfg(test)]
+    pub fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
+        self.entity_store.get(entity_topic_id)
+    }
 }
 
 #[async_trait]
