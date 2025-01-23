@@ -12,6 +12,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
 use tedge_actors::Server;
+use tracing::instrument;
 
 #[derive(Clone)]
 pub struct HttpService {
@@ -40,6 +41,7 @@ impl Server for HttpService {
         "HTTP"
     }
 
+    #[instrument(name = "HttpService::handle", level = "trace", skip(self))]
     async fn handle(&mut self, request: Self::Request) -> Self::Response {
         Ok(HttpResponse {
             endpoint: request.uri().path().to_owned(),

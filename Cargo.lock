@@ -2544,6 +2544,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.61",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 
@@ -4282,6 +4283,7 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "tracing",
+ "tracing-chrome",
 ]
 
 [[package]]
@@ -4331,6 +4333,7 @@ dependencies = [
  "log",
  "thiserror 1.0.61",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4361,6 +4364,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.8.8",
+ "tracing",
  "walkdir",
 ]
 
@@ -4542,6 +4546,7 @@ dependencies = [
  "tedge_actors",
  "thiserror 1.0.61",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

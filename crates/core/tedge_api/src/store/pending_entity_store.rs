@@ -3,9 +3,10 @@ use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::store::ring_buffer::RingBuffer;
-use log::error;
 use mqtt_channel::MqttMessage;
 use std::collections::HashMap;
+use tracing::error;
+use tracing::instrument;
 
 /// A store for all the entities for which data messages are received before
 /// its registration message itself is received.
@@ -69,6 +70,7 @@ impl PendingEntityStore {
         }
     }
 
+    #[instrument(skip_all, level = "debug")]
     pub fn take_cached_entity_data(
         &mut self,
         reg_message: EntityRegistrationMessage,
@@ -88,6 +90,7 @@ impl PendingEntityStore {
     /// Recursively removes from the pending entity cache the children of a freshly registered device.
     ///
     /// Returns the list of devices which registration is no more pending.
+    #[instrument(skip_all, level = "debug")]
     pub fn take_cached_child_entities_data(
         &mut self,
         entity_tid: &EntityTopicId,
