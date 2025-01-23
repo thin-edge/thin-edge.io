@@ -8,8 +8,6 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
-use log::error;
-use log::info;
 use rumqttc::AsyncClient;
 use rumqttc::Event;
 use rumqttc::EventLoop;
@@ -18,6 +16,10 @@ use rumqttc::Outgoing;
 use rumqttc::Packet;
 use std::time::Duration;
 use tokio::time::sleep;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::trace;
 
 /// A connection to some MQTT server
 pub struct Connection {
@@ -116,6 +118,7 @@ impl Connection {
         let _ = self.pub_done.await;
     }
 
+    #[instrument(level = "trace", skip(message_sender, error_sender))]
     async fn open(
         config: &Config,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
@@ -194,6 +197,7 @@ impl Connection {
         Ok((mqtt_client, event_loop))
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn receiver_loop(
         mqtt_client: AsyncClient,
         config: Config,
@@ -201,8 +205,12 @@ impl Connection {
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(), MqttError> {
+        trace!("starting receiver loop");
         loop {
-            match event_loop.poll().await {
+            trace!("attempting recv");
+            let event = event_loop.poll().await;
+            trace!("recv");
+            match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
                         error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
@@ -266,9 +274,11 @@ impl Connection {
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;
+        trace!("terminating receiver loop");
         Ok(())
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn sender_loop(
         mqtt_client: AsyncClient,
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
@@ -277,6 +287,7 @@ impl Connection {
         done: oneshot::Sender<()>,
     ) {
         loop {
+            trace!("waiting for message");
             match messages_receiver.next().await {
                 None => {
                     // The sender channel has been closed by the client
@@ -284,6 +295,7 @@ impl Connection {
                     break;
                 }
                 Some(message) => {
+                    trace!(msg = ?message, "received message");
                     let payload = Vec::from(message.payload_bytes());
                     if let Err(err) = mqtt_client
                         .publish(message.topic, message.qos, message.retain, payload)
@@ -291,6 +303,7 @@ impl Connection {
                     {
                         let _ = error_sender.send(err.into()).await;
                     }
+                    trace!("passed to rumqttc");
                 }
             }
         }

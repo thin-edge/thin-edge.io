@@ -1,4 +1,3 @@
-use crate::actor::PublishMessage;
 use crate::availability::actor::AvailabilityActor;
 use crate::availability::AvailabilityConfig;
 use crate::availability::AvailabilityInput;
@@ -22,6 +21,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::HealthStatus;
 use tedge_mqtt_ext::MqttMessage;
+use tracing::trace_span;
 
 pub struct AvailabilityBuilder {
     config: AvailabilityConfig,
@@ -32,7 +32,8 @@ pub struct AvailabilityBuilder {
 impl AvailabilityBuilder {
     pub fn new(
         config: AvailabilityConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, Vec<ChannelFilter>> + MessageSink<PublishMessage>),
+        mqtt_in: &mut impl MessageSource<MqttMessage, Vec<ChannelFilter>>,
+        mqtt_out: &mut impl MessageSink<MqttMessage>,
         timer: &mut impl Service<TimerStart, TimerComplete>,
     ) -> Self {
         let mut box_builder: SimpleMessageBoxBuilder<AvailabilityInput, AvailabilityOutput> =
@@ -40,11 +41,11 @@ impl AvailabilityBuilder {
 
         box_builder.connect_mapped_source(
             Self::channels(),
-            mqtt,
+            mqtt_in,
             Self::mqtt_message_parser(config.clone()),
         );
 
-        mqtt.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
+        mqtt_out.connect_mapped_source(NoConfig, &mut box_builder, Self::mqtt_message_builder());
 
         let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
 
@@ -84,12 +85,16 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<PublishMessage> {
-        move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                Some(PublishMessage(value.into()))
+    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
+        move |res| {
+            let span = trace_span!("mqtt_message_builder");
+            let _guard = span.enter();
+            match res {
+                AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
+                    Some(MqttMessage::from(value))
+                }
+                AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(MqttMessage::from(value)),
             }
-            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(PublishMessage(value.into())),
         }
     }
 }
