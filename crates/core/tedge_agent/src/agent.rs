@@ -1,6 +1,9 @@
 use crate::device_profile_manager::DeviceProfileManagerBuilder;
-use crate::file_transfer_server::actor::FileTransferServerBuilder;
-use crate::file_transfer_server::actor::FileTransferServerConfig;
+use crate::entity_manager;
+use crate::entity_manager::server::EntityStoreRequest;
+use crate::entity_manager::server::EntityStoreServer;
+use crate::http_server::actor::HttpServerBuilder;
+use crate::http_server::actor::HttpServerConfig;
 use crate::operation_file_cache::FileCacheActorBuilder;
 use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
@@ -9,6 +12,7 @@ use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_default_state_dir;
+use crate::state_repository::state::agent_state_dir;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use crate::Capabilities;
@@ -29,13 +33,19 @@ use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::NullSender;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::Runtime;
+use tedge_actors::Sequential;
 use tedge_actors::ServerActorBuilder;
+use tedge_actors::ServerConfig;
+use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
+use tedge_api::EntityStore;
 use tedge_config::TEdgeConfigReaderService;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
@@ -62,7 +72,7 @@ pub const TEDGE_AGENT: &str = "tedge-agent";
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
     pub mqtt_config: MqttConfig,
-    pub http_config: FileTransferServerConfig,
+    pub http_config: HttpServerConfig,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub operation_config: OperationConfig,
@@ -73,6 +83,7 @@ pub(crate) struct AgentConfig {
     pub log_dir: Utf8PathBuf,
     pub agent_log_dir: Utf8PathBuf,
     pub data_dir: DataDir,
+    pub state_dir: Utf8PathBuf,
     pub operations_dir: Utf8PathBuf,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
@@ -83,6 +94,8 @@ pub(crate) struct AgentConfig {
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
+    entity_auto_register: bool,
+    entity_store_clean_start: bool,
 }
 
 impl AgentConfig {
@@ -94,6 +107,7 @@ impl AgentConfig {
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
+        let state_dir = tedge_config.agent.state.path.clone();
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -121,7 +135,7 @@ impl AgentConfig {
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
-        let http_config = FileTransferServerConfig {
+        let http_config = HttpServerConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),
             cert_path: tedge_config.http.cert_path.clone(),
             key_path: tedge_config.http.key_path.clone(),
@@ -168,6 +182,9 @@ impl AgentConfig {
         )
         .into();
 
+        let entity_auto_register = tedge_config.agent.entity_store.auto_register;
+        let entity_store_clean_start = tedge_config.agent.entity_store.clean_start;
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -182,6 +199,7 @@ impl AgentConfig {
             log_dir,
             agent_log_dir,
             operations_dir,
+            state_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
             tedge_http_host,
@@ -191,6 +209,8 @@ impl AgentConfig {
             is_sudo_enabled,
             service: tedge_config.service.clone(),
             capabilities,
+            entity_auto_register,
+            entity_store_clean_start,
         })
     }
 }
@@ -352,9 +372,43 @@ impl Agent {
             let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
             runtime.spawn(tedge_to_te_converter).await?;
 
-            let file_transfer_server_builder =
-                FileTransferServerBuilder::try_bind(self.config.http_config).await?;
-            runtime.spawn(file_transfer_server_builder).await?;
+            let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
+            let clean_start = self.config.entity_store_clean_start;
+            let telemetry_cache_size = 0; // Agent need not cache any data messages, the mapper would
+
+            let main_device = EntityRegistrationMessage::main_device(None);
+            let entity_store = EntityStore::with_main_device_and_default_service_type(
+                mqtt_schema.clone(),
+                main_device,
+                self.config.service.ty.clone(),
+                telemetry_cache_size,
+                state_dir,
+                clean_start,
+            )?;
+            let entity_store_server = EntityStoreServer::new(
+                entity_store,
+                mqtt_schema.clone(),
+                &mut mqtt_actor_builder,
+                self.config.entity_auto_register,
+            );
+            let mut entity_store_actor_builder =
+                ServerActorBuilder::new(entity_store_server, &ServerConfig::default(), Sequential);
+            mqtt_actor_builder.connect_mapped_sink(
+                entity_manager::server::subscriptions(self.config.mqtt_topic_root.as_ref()),
+                &entity_store_actor_builder,
+                |message| {
+                    Some(RequestEnvelope {
+                        request: EntityStoreRequest::MqttMessage(message),
+                        reply_to: Box::new(NullSender),
+                    })
+                },
+            );
+
+            let file_transfer_server_builder = HttpServerBuilder::try_bind(
+                self.config.http_config,
+                &mut entity_store_actor_builder,
+            )
+            .await?;
 
             let operation_file_cache_builder = FileCacheActorBuilder::new(
                 mqtt_schema,
@@ -363,6 +417,9 @@ impl Agent {
                 &mut downloader_actor_builder,
                 &mut mqtt_actor_builder,
             );
+
+            runtime.spawn(file_transfer_server_builder).await?;
+            runtime.spawn(entity_store_actor_builder).await?;
             runtime.spawn(operation_file_cache_builder).await?;
         } else {
             info!("Running as a child device, tedge_to_te_converter and File Transfer Service disabled");

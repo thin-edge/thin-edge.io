@@ -5,8 +5,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::alarm::ThinEdgeAlarmDeserializerError;
+use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::EntityStore;
 use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -36,9 +37,10 @@ impl AlarmConverter {
     pub(crate) fn try_convert_alarm(
         &mut self,
         source: &EntityTopicId,
+        external_id: &EntityExternalId,
+        entity_type: &EntityType,
         input_message: &MqttMessage,
         alarm_type: &str,
-        entity_store: &EntityStore,
         c8y_prefix: &TopicPrefix,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut output_messages: Vec<MqttMessage> = Vec::new();
@@ -61,7 +63,7 @@ impl AlarmConverter {
                 })?;
 
                 let tedge_alarm = ThinEdgeAlarm::try_from(alarm_type, source, mqtt_payload)?;
-                let c8y_alarm = C8yAlarm::try_from(&tedge_alarm, entity_store)?;
+                let c8y_alarm = C8yAlarm::from(&tedge_alarm, external_id, entity_type);
 
                 // If the message doesn't contain any fields other than `text`, `severity` and `time`, convert to SmartREST
                 match c8y_alarm {

@@ -289,6 +289,7 @@ pub enum EntityTopicError {
 /// # Reference
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(transparent)]
 pub struct EntityTopicId(String);
 
 impl<T: AsRef<str>> PartialEq<T> for EntityTopicId {
@@ -431,8 +432,8 @@ impl EntityTopicId {
 }
 
 pub mod default_topic_schema {
+    use crate::entity::EntityType;
     use crate::entity_store::EntityRegistrationMessage;
-    use crate::entity_store::EntityType;
     use crate::mqtt_topics::EntityTopicId;
     use serde_json::json;
 

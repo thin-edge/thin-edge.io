@@ -2,8 +2,8 @@ use crate::json_c8y::C8yAlarm;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
-use tedge_api::entity_store::EntityExternalId;
-use tedge_api::entity_store::EntityType;
+use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_config::TopicPrefix;
 
 const SMARTREST_PUBLISH_TOPIC: &str = "s/us";

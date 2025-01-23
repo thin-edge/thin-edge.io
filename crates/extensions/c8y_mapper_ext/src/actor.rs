@@ -28,7 +28,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
-use tedge_api::pending_entity_store::PendingEntityData;
+use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -190,8 +190,7 @@ impl C8yMapperActor {
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
             match self.converter.try_register_source_entities(&message).await {
                 Ok(pending_entities) => {
-                    self.process_registered_entities(pending_entities, &channel)
-                        .await?;
+                    self.process_registered_entities(pending_entities).await?;
                 }
                 Err(err) => {
                     self.mqtt_publisher
@@ -215,13 +214,12 @@ impl C8yMapperActor {
     /// For each entity its registration message is converted and published to the cloud
     /// and any of the interested message handlers for that type,
     /// followed by repeating the same for its cached data messages.
-    async fn process_registered_entities(
+    pub(crate) async fn process_registered_entities(
         &mut self,
-        pending_entities: Vec<PendingEntityData>,
-        channel: &Channel,
+        pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
-            self.process_registration_message(pending_entity.reg_message, channel)
+            self.process_registration_message(pending_entity.reg_message)
                 .await?;
 
             // Convert and publish cached data messages
@@ -236,13 +234,10 @@ impl C8yMapperActor {
     async fn process_registration_message(
         &mut self,
         mut message: EntityRegistrationMessage,
-        channel: &Channel,
     ) -> Result<(), RuntimeError> {
         self.converter.append_id_if_not_given(&mut message);
         // Convert and publish the registration message
-        let reg_messages = self
-            .converter
-            .convert_entity_registration_message(&message, channel);
+        let reg_messages = self.converter.convert_entity_registration_message(&message);
         self.publish_messages(reg_messages).await?;
 
         // Send the registration message to all subscribed handlers

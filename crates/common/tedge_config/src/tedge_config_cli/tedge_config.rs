@@ -1010,6 +1010,18 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = true))]
             log_upload: bool,
         },
+
+        entity_store: {
+            /// Enable auto registration feature
+            #[tedge_config(example = "true", default(value = true), deprecated_key = "c8y.entity_store.auto_register")]
+            auto_register: bool,
+
+            /// On a clean start, the whole state of the device, services and child-devices is resent to the cloud
+            #[tedge_config(example = "true", default(value = true), deprecated_key = "c8y.entity_store.clean_start")]
+            clean_start: bool,
+        },
+
+
     },
 
     software: {

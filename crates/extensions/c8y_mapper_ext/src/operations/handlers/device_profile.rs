@@ -141,6 +141,15 @@ mod tests {
 
         skip_init_messages(&mut mqtt).await;
 
+        // Register the device upfront
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1//"),
+            r#"{"@type": "child-device"}"#,
+        ))
+        .await
+        .expect("Send failed");
+        mqtt.skip(1).await; // Skip the mapped registration message
+
         // Simulate device_profile cmd metadata message
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/device_profile"),
@@ -149,28 +158,12 @@ mod tests {
         .await
         .expect("Send failed");
 
-        // Expect auto-registration message
-        assert_received_includes_json(
-            &mut mqtt,
-            [(
-                "te/device/child1//",
-                json!({"@type":"child-device","@id":"test-device:device:child1"}),
-            )],
-        )
-        .await;
-
         assert_received_contains_str(
             &mut mqtt,
-            [
-                (
-                    "c8y/s/us",
-                    "101,test-device:device:child1,child1,thin-edge.io-child",
-                ),
-                (
-                    "c8y/s/us/test-device:device:child1",
-                    "114,c8y_DeviceProfile",
-                ),
-            ],
+            [(
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_DeviceProfile",
+            )],
         )
         .await;
 

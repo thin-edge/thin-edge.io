@@ -37,7 +37,7 @@ use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
-use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;

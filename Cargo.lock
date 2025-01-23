@@ -3909,6 +3909,7 @@ name = "tedge-agent"
 version = "1.4.2"
 dependencies = [
  "anyhow",
+ "assert-json-diff",
  "async-trait",
  "axum",
  "axum-server",
