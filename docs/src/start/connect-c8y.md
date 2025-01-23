@@ -214,7 +214,7 @@ Check the following items to help you diagnose the root cause of the problem:
 * Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/docs/standard-tenant/managing-users/#to-add-a-user)
 
 
-#### 403 - Forbidden {#common-errors-401}
+#### 403 - Forbidden {#common-errors-403}
 
 The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/docs/device-integration/device-certificates/).
 
