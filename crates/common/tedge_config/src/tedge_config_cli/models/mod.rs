@@ -9,6 +9,7 @@ pub mod ipaddress;
 pub mod port;
 pub mod seconds;
 pub mod templates_set;
+pub mod topic_prefix;
 
 use doku::Document;
 use serde::Deserialize;
@@ -32,6 +33,7 @@ pub use self::port::*;
 pub use self::seconds::*;
 pub use self::templates_set::*;
 pub use tedge_utils::timestamp;
+pub use topic_prefix::TopicPrefix;
 
 #[derive(
     Debug, Display, Clone, Copy, Eq, PartialEq, doku::Document, serde::Serialize, serde::Deserialize,
