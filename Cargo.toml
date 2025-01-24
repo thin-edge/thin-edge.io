@@ -154,11 +154,26 @@ regex = "1.4"
 reqwest = { version = "0.11", default-features = false }
 rpassword = "5.0"
 rstest = "0.16.0"
-rumqttc = "0.23"
+rumqttc = "0.24"
 rumqttd = "0.19"
+
+# two versions of rustls are used because of different crate requirements:
+# - rumqttc@0.24 wants rustls-0.22
+# - no version of axum-server supports rustls-0.22
+# so we need to keep 2 versions and `certificate` crate needs to expose 2 variants of its public
+# items: one in rustls-0.21 and another in rustls-0.22;
+
+# rustls for other crates
 rustls = "0.21.11"
 rustls-native-certs = "0.6.3"
 rustls-pemfile = "1.0.1"
+
+# but we also need rustls@0.22 and its related crates for compatibility with rumqttc 0.24
+rustls-native-certs_022 = { version = "0.7.3", package = "rustls-native-certs" }
+rustls-pemfile_022 = { version = "2.2.0", package = "rustls-pemfile" }
+rustls_022 = { version = "0.22.4", package = "rustls" }
+
+
 serde = "1.0"
 serde_ignored = "0.1"
 serde_json = "1.0"

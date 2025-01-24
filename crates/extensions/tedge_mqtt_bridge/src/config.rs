@@ -2,6 +2,7 @@ use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
+use certificate::rustls022 as certificate;
 use rumqttc::valid_filter;
 use rumqttc::valid_topic;
 use rumqttc::MqttOptions;

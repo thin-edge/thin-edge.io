@@ -4,7 +4,7 @@ mod health;
 mod topics;
 
 use async_trait::async_trait;
-use certificate::parse_root_certificate::create_tls_config;
+use certificate::rustls022::parse_root_certificate::create_tls_config;
 use futures::SinkExt;
 use futures::StreamExt;
 pub use rumqttc;

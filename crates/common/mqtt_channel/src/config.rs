@@ -1,17 +1,17 @@
 use crate::MqttMessage;
 use crate::TopicFilter;
-use certificate::parse_root_certificate;
-use certificate::CertificateError;
 use log::debug;
 use rumqttc::tokio_rustls::rustls;
-use rumqttc::tokio_rustls::rustls::Certificate;
+use rumqttc::tokio_rustls::rustls::pki_types::CertificateDer;
+use rumqttc::tokio_rustls::rustls::pki_types::PrivateKeyDer;
 use rumqttc::LastWill;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
-use zeroize::Zeroizing;
+
+use certificate::rustls022::parse_root_certificate;
+use certificate::CertificateError;
 
 pub const MAX_PACKET_SIZE: usize = 268435455;
 
@@ -109,8 +109,8 @@ impl Default for AuthenticationConfig {
 
 #[derive(Clone)]
 struct ClientAuthConfig {
-    cert_chain: Vec<Certificate>,
-    key: Zeroizing<PrivateKey>,
+    cert_chain: Vec<CertificateDer<'static>>,
+    key: PrivateKey,
 }
 
 impl Debug for ClientAuthConfig {
@@ -121,14 +121,19 @@ impl Debug for ClientAuthConfig {
     }
 }
 
-#[derive(Debug, Clone)]
-struct PrivateKey(rustls::PrivateKey);
+// marcel: from rustls_pki_types README:
+// > rustls intentionally does not implement Clone on private key types in order to minimize the
+// > exposure of private key data in memory.
+// We could also do the same and remove the Clone impl however I expect this would require some re-architecting
+// TODO: remove Clone impl
 
-impl zeroize::Zeroize for PrivateKey {
-    fn zeroize(&mut self) {
-        self.0 .0.zeroize()
-    }
-}
+// marcel: also rustls_pki_types new `PrivateKeyDer` as opposed to previous `rustls@0.21::PrivateKey` is immutable, so
+// we can't zeroize it, so during rustls 0.22 upgrade zeroization was removed, but we could think later about
+// reintroducing it
+
+//TODO(important): reintroduce Zeroize
+#[derive(Debug, Clone)]
+struct PrivateKey(Arc<PrivateKeyDer<'static>>);
 
 #[derive(Clone)]
 pub struct InitMessageFn {
@@ -307,7 +312,7 @@ impl Config {
 
         let client_auth_config = ClientAuthConfig {
             cert_chain,
-            key: Zeroizing::new(PrivateKey(key)),
+            key: PrivateKey(Arc::new(key)),
         };
 
         let authentication_config = self.broker.authentication.get_or_insert(Default::default());
@@ -339,13 +344,12 @@ impl Config {
 
         if let Some(authentication_config) = &broker_config.authentication {
             let tls_config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
                 .with_root_certificates(authentication_config.cert_store.clone());
 
             let tls_config = match authentication_config.client_auth.clone() {
                 Some(client_auth_config) => tls_config.with_client_auth_cert(
                     client_auth_config.cert_chain,
-                    client_auth_config.key.deref().0.clone(),
+                    client_auth_config.key.0.clone_key(),
                 )?,
                 None => tls_config.with_no_client_auth(),
             };

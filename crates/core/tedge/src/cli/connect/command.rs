@@ -585,7 +585,7 @@ fn check_device_status_c8y(
 
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
+    let (client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     connection
         .eventloop
         .network_options
@@ -705,7 +705,7 @@ fn check_device_status_azure(
 
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
+    let (client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
 
     if tedge_config.mqtt.bridge.built_in {
@@ -810,7 +810,7 @@ fn check_device_status_aws(
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
+    let (client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
 
     if tedge_config.mqtt.bridge.built_in {

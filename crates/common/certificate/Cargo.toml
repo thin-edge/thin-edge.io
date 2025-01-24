@@ -18,9 +18,16 @@ anyhow = { workspace = true }
 camino = { workspace = true }
 rcgen = { workspace = true }
 reqwest = { workspace = true, optional = true }
+
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
 rustls-pemfile = { workspace = true }
+
+rustls-native-certs_022 = { workspace = true }
+rustls-pemfile_022 = { workspace = true }
+rustls_022 = { workspace = true }
+
+
 sha-1 = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

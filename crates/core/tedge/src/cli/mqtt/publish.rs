@@ -3,7 +3,7 @@ use crate::command::Command;
 use crate::error;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
-use certificate::parse_root_certificate;
+use certificate::rustls022::parse_root_certificate;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
 use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Event;
@@ -71,9 +71,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
             eprintln!("Warning: Connecting on port 8883 for secure MQTT with no CA certificates");
         }
 
-        let tls_config = ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store);
+        let tls_config = ClientConfig::builder().with_root_certificates(root_store);
 
         let tls_config = if let Some(client_auth) = cmd.client_auth_config.as_ref() {
             let client_cert = parse_root_certificate::read_cert_chain(&client_auth.cert_file)?;
@@ -88,7 +86,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
 
     let payload = cmd.message.as_bytes();
 
-    let (mut client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
+    let (client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
     super::disconnect_if_interrupted(client.clone());
     let mut published = false;
     let mut acknowledged = false;
