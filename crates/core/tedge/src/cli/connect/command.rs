@@ -375,21 +375,19 @@ fn disallow_matching_url_device_id(
                 .map(|&(k, _)| format!("{}", url(k.clone()).yellow().bold()))
                 .collect::<Vec<_>>()
                 .join(", ");
-            // TODO re-enable this logic once multiple device IDs are properly supported
-            // let device_id_keys: String = matches
-            //     .iter()
-            //     .map(|(_, key)| format!("{}", key.yellow().bold()))
-            //     .collect::<Vec<_>>()
-            //     .join(", ");
-            //             bail!(
-            //                 "You have matching URLs and device IDs for different profiles.
+            let device_id_keys: String = matches
+                .iter()
+                .map(|(_, key)| format!("{}", key.yellow().bold()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!(
+                "You have matching URLs and device IDs for different profiles.
 
-            // {url_keys} are set to the same value, but so are {device_id_keys}.
+{url_keys} are set to the same value, but so are {device_id_keys}.
 
-            // Each cloud profile requires either a unique URL or unique device ID, \
-            // so it corresponds to a unique device in the associated cloud."
-            //             );
-            bail!("The configurations: {url_keys} should be set to different values before connecting, but are currently set to the same value");
+Each cloud profile requires either a unique URL or unique device ID, \
+so it corresponds to a unique device in the associated cloud."
+            );
         }
     }
     Ok(())
@@ -1322,8 +1320,7 @@ mod tests {
             let config = loc.load().unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
-            // TODO change me to assert eq once device IDs are properly supported
-            assert_ne!(err.to_string(), "You have matching URLs and device IDs for different profiles.
+            assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 

@@ -30,21 +30,13 @@ impl Command for ListConfigCommand {
     }
 }
 
-fn should_hide(key: &str) -> bool {
-    (key.starts_with("c8y") || key.starts_with("az") || key.starts_with("aws"))
-        && key.contains(".device.")
-}
-
 fn print_config_list(
     config: &TEdgeConfig,
     all: bool,
     filter: Option<&str>,
 ) -> Result<(), anyhow::Error> {
     let mut keys_without_values = Vec::new();
-    for config_key in config
-        .readable_keys()
-        .filter(|key| !should_hide(&key.to_cow_str()))
-    {
+    for config_key in config.readable_keys() {
         if !key_matches_filter(&config_key.to_cow_str(), filter) {
             continue;
         }
@@ -75,9 +67,6 @@ fn print_config_doc(filter: Option<&str>) {
         .unwrap_or_default();
 
     for (key, ty) in READABLE_KEYS.iter() {
-        if should_hide(key) {
-            continue;
-        }
         if !key_matches_filter(key, filter) {
             continue;
         }
