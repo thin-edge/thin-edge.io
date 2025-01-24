@@ -6,7 +6,7 @@ use crate::PubChannel;
 use crate::SubChannel;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
-use futures::poll;
+use futures::future::Either;
 use futures::SinkExt;
 use futures::StreamExt;
 use log::error;
@@ -17,12 +17,10 @@ use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
-use rumqttc::PubAck;
-use rumqttc::PubComp;
-use std::collections::HashSet;
 use std::sync::Arc;
-use std::task::Poll;
 use std::time::Duration;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
 /// A connection to some MQTT server
@@ -94,22 +92,23 @@ impl Connection {
 
         let (mqtt_client, event_loop) =
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
-        let (guard, guard2) = ConnectionGuard::new_pair();
+        let permits = Arc::new(Semaphore::new(1));
+        let permit = permits.clone().acquire_owned().await.unwrap();
         tokio::spawn(Connection::receiver_loop(
             mqtt_client.clone(),
             config.clone(),
             event_loop,
             received_sender,
             error_sender.clone(),
-            guard,
             pub_done_sender,
+            permits,
         ));
         tokio::spawn(Connection::sender_loop(
             mqtt_client,
             published_receiver,
             error_sender,
             config.last_will_message.clone(),
-            guard2,
+            permit,
         ));
 
         Ok(Connection {
@@ -209,46 +208,36 @@ impl Connection {
         mut event_loop: EventLoop,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
-        guard: ConnectionGuard,
         done: oneshot::Sender<()>,
+        permits: Arc<Semaphore>,
     ) -> Result<(), MqttError> {
-        let mut outstanding_msgs = HashSet::new();
-        let mut disconnected = false;
-
-        enum PollEvent {
-            Event(Result<Event, rumqttc::ConnectionError>),
-            RequestDisconnect,
-        }
-
-        async fn next_event(
-            ev: &mut EventLoop,
-            guard: &ConnectionGuard,
-            disconnected: bool,
-        ) -> PollEvent {
-            let poll_ev = ev.poll();
-            tokio::pin!(poll_ev);
-            loop {
-                if let Poll::Ready(r) = poll!(&mut poll_ev) {
-                    break PollEvent::Event(r);
-                } else if !disconnected && guard.other_half_dropped() {
-                    break PollEvent::RequestDisconnect;
-                }
-                tokio::task::yield_now().await;
-            }
-        }
+        let mut triggered_disconnect = false;
+        let mut disconnect_permit = None;
 
         loop {
-            let event = match next_event(&mut event_loop, &guard, disconnected).await {
-                PollEvent::RequestDisconnect
-                    if outstanding_msgs.is_empty() && event_loop.state.events.is_empty() =>
-                {
-                    mqtt_client.disconnect().await.unwrap();
-                    disconnected = true;
+            let remaining_events_empty = event_loop.state.inflight() == 0;
+            if disconnect_permit.is_some() && !triggered_disconnect && remaining_events_empty {
+                let client = mqtt_client.clone();
+                tokio::spawn(async move { client.disconnect().await });
+                // tokio::fs::write("/tmp/thing.txt",format!("{:#?}", &events.event_loop.state)).await.unwrap();
+                triggered_disconnect = true;
+            }
+            let next_event = event_loop.poll();
+            let next_permit = permits.clone().acquire_owned();
+            tokio::pin!(next_event);
+            tokio::pin!(next_permit);
+            let event = futures::future::select(next_event.as_mut(), next_permit.as_mut()).await;
+            let event = match event {
+                Either::Left((event, _)) => {
+                    disconnect_permit.take();
+                    event
+                }
+                Either::Right((permit, _)) => {
+                    disconnect_permit = Some(permit.unwrap());
                     continue;
                 }
-                PollEvent::RequestDisconnect => event_loop.poll().await,
-                PollEvent::Event(e) => e,
             };
+
             match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
@@ -299,18 +288,6 @@ impl Connection {
                     break;
                 }
 
-                Ok(Event::Incoming(Incoming::PubAck(PubAck { pkid })))
-                | Ok(Event::Incoming(Incoming::PubComp(PubComp { pkid }))) => {
-                    // Mark one message as consumed
-                    outstanding_msgs.remove(&pkid);
-                }
-
-                Ok(Event::Outgoing(Outgoing::Publish(p))) => {
-                    if outstanding_msgs.insert(p) {
-                        // awaiting_acks.next().await.unwrap();
-                    }
-                }
-
                 Err(err) => {
                     error!("MQTT connection error: {err}");
 
@@ -334,7 +311,7 @@ impl Connection {
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         last_will: Option<MqttMessage>,
-        _guard: ConnectionGuard,
+        _guard: OwnedSemaphorePermit,
     ) {
         while let Some(message) = messages_receiver.next().await {
             let payload = Vec::from(message.payload_bytes());
@@ -368,18 +345,5 @@ impl Connection {
             .subscribe_many(subscriptions)
             .await
             .map_err(MqttError::ClientError)
-    }
-}
-
-struct ConnectionGuard(Arc<()>);
-
-impl ConnectionGuard {
-    fn new_pair() -> (Self, Self) {
-        let count = Arc::new(());
-        (Self(count.clone()), Self(count))
-    }
-
-    fn other_half_dropped(&self) -> bool {
-        Arc::strong_count(&self.0) == 1
     }
 }
