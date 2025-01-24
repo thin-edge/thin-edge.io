@@ -24,7 +24,6 @@ zeroize = { workspace = true }
 anyhow = { workspace = true }
 mqtt_tests = { workspace = true }
 serde_json = { workspace = true }
-serial_test = { workspace = true }
 
 [lints]
 workspace = true

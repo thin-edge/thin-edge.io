@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::net::TcpListener;
 use std::time::Duration;
 
+use backoff::backoff::Backoff;
+use backoff::exponential::ExponentialBackoff;
+use backoff::SystemClock;
 use futures::channel::mpsc::UnboundedReceiver;
 use once_cell::sync::Lazy;
 use rumqttc::Event;
@@ -24,8 +27,14 @@ pub struct MqttProcessHandler {
 
 impl MqttProcessHandler {
     pub fn new() -> MqttProcessHandler {
-        let port = spawn_broker();
-        MqttProcessHandler { port }
+        let mut backoff = ExponentialBackoff::<SystemClock>::default();
+        loop {
+            if let Ok(port) = std::panic::catch_unwind(spawn_broker) {
+                break MqttProcessHandler { port };
+            } else {
+                std::thread::sleep(backoff.next_backoff().unwrap());
+            }
+        }
     }
 
     pub async fn publish(&self, topic: &str, payload: &str) -> Result<(), anyhow::Error> {
@@ -144,7 +153,6 @@ fn spawn_broker() -> u16 {
 
         loop {
             let msg = connection.recv();
-            eprintln!("{msg:#?}");
             if let Ok(Ok(Event::Incoming(Incoming::Publish(publish)))) = msg {
                 let payload = match std::str::from_utf8(publish.payload.as_ref()) {
                     Ok(payload) => format!("{:.110}", payload),
@@ -165,7 +173,7 @@ fn get_rumqttd_config(port: u16) -> Config {
     let router_config = rumqttd::RouterConfig {
         max_segment_size: 10240,
         max_segment_count: 10,
-        max_connections: 10,
+        max_connections: 1000,
         initialized_filters: None,
         ..Default::default()
     };
