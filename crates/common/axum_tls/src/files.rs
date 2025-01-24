@@ -114,6 +114,7 @@ mod tests {
     use assert_matches::assert_matches;
     use axum::routing::get;
     use axum::Router;
+    use camino::Utf8PathBuf;
     use std::io::Cursor;
 
     mod read_trust_store {
@@ -199,27 +200,28 @@ mod tests {
         }
 
         fn copy_test_file_to(test_file: &str, path: impl AsRef<Path>) -> io::Result<u64> {
-            std::fs::copy(format!("./test_data/{test_file}"), path)
+            let dir = env!("CARGO_MANIFEST_DIR");
+            std::fs::copy(format!("{dir}/test_data/{test_file}"), path)
         }
     }
 
     #[test]
     fn load_pkey_fails_when_given_x509_certificate() {
+        let dir = env!("CARGO_MANIFEST_DIR");
+        let path = Utf8PathBuf::from(format!("{dir}/test_data/ec.crt"));
         assert_eq!(
-            load_pkey(Utf8Path::new("./test_data/ec.crt"))
-                .unwrap_err()
-                .to_string(),
-            "expected private key in \"./test_data/ec.crt\", found an X509 certificate"
+            load_pkey(&path).unwrap_err().to_string(),
+            format!("expected private key in {path:?}, found an X509 certificate")
         );
     }
 
     #[test]
     fn load_pkey_fails_when_given_certificate_revocation_list() {
+        let dir = env!("CARGO_MANIFEST_DIR");
+        let path = Utf8PathBuf::from(format!("{dir}/test_data/demo.crl"));
         assert_eq!(
-            load_pkey(Utf8Path::new("./test_data/demo.crl"))
-                .unwrap_err()
-                .to_string(),
-            "expected private key in \"./test_data/demo.crl\", found a CRL"
+            load_pkey(&path).unwrap_err().to_string(),
+            format!("expected private key in {path:?}, found a CRL")
         );
     }
 
@@ -288,7 +290,8 @@ mod tests {
         }
 
         fn test_data(file_name: &str) -> String {
-            std::fs::read_to_string(format!("./test_data/{file_name}"))
+            let dir = env!("CARGO_MANIFEST_DIR");
+            std::fs::read_to_string(format!("{dir}/test_data/{file_name}"))
                 .with_context(|| format!("opening file {file_name} from test_data"))
                 .unwrap()
         }

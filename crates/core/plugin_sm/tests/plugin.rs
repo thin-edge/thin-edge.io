@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-
     use certificate::CloudRootCerts;
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::sm_path;
@@ -9,7 +8,6 @@ mod tests {
     use std::io::Write;
     use std::path::Path;
     use std::path::PathBuf;
-    use std::str::FromStr;
     use tedge_api::SoftwareError;
     use tedge_api::SoftwareModule;
     use tedge_config::SudoCommandBuilder;
@@ -194,13 +192,9 @@ mod tests {
     }
 
     fn get_dummy_plugin_path() -> PathBuf {
-        // Return a path to a dummy plugin in target directory.
-        let package_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-
         // To get the plugin binary path we need to find the `target` directory which is 3 levels above the `Cargo.toml` file of the package
         // CARGO_MANIFEST_DIR == ./thin-edge.io/crates/core/plugin_sm
-        let dummy_plugin_path = PathBuf::from_str(package_dir.as_str())
-            .unwrap()
+        let dummy_plugin_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent() //./thin-edge.io/crates/core/
             .unwrap()
             .parent() // ./thin-edge.io/crates/
