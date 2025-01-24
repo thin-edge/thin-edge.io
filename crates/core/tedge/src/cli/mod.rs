@@ -21,6 +21,7 @@ mod completions;
 pub mod config;
 mod connect;
 mod disconnect;
+mod http;
 mod init;
 pub mod log;
 mod mqtt;
@@ -124,6 +125,10 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
 
+    /// Send HTTP requests to local thin-edge HTTP servers
+    #[clap(subcommand)]
+    Http(http::TEdgeHttpCli),
+
     /// Run thin-edge services and plugins
     Run(ComponentOpt),
 
@@ -196,6 +201,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Disconnect(opt) => opt.build_command(context),
             TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(&context).map(Command::into_boxed),
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
+            TEdgeOpt::Http(opt) => opt.build_command(context),
             TEdgeOpt::Reconnect(opt) => opt.build_command(context),
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
