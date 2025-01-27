@@ -6,7 +6,6 @@ use crate::PubChannel;
 use crate::SubChannel;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
-use futures::future::Either;
 use futures::SinkExt;
 use futures::StreamExt;
 use log::error;
@@ -227,15 +226,15 @@ impl Connection {
                 triggered_disconnect = true;
             }
 
-            let next_event = event_loop.poll();
-            let next_permit = permits.clone().acquire_owned();
-            tokio::pin!(next_event);
-            tokio::pin!(next_permit);
+            let event = tokio::select! {
+                // If there is an event, we need to process that first
+                // Otherwise we risk shutting down early
+                // e.g. a `Publish` request from the sender is not "inflight"
+                // but will immediately be returned by `event_loop.poll()`
+                biased;
 
-            let event = futures::future::select(next_event.as_mut(), next_permit.as_mut()).await;
-            let event = match event {
-                Either::Left((event, _)) => event,
-                Either::Right((permit, _)) => {
+                event = event_loop.poll() => event,
+                permit = permits.clone().acquire_owned() => {
                     // The `sender_loop` has now concluded
                     disconnect_permit = Some(permit.unwrap());
                     continue;
