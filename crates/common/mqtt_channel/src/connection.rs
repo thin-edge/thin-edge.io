@@ -215,24 +215,28 @@ impl Connection {
         let mut disconnect_permit = None;
 
         loop {
+            // Check if we are ready to disconnect. Due to ownership of the
+            // event loop, this needs to be done before we call
+            // `event_loop.poll()`
             let remaining_events_empty = event_loop.state.inflight() == 0;
             if disconnect_permit.is_some() && !triggered_disconnect && remaining_events_empty {
+                // `sender_loop` is not running and we have no remaining
+                // publishes to process
                 let client = mqtt_client.clone();
                 tokio::spawn(async move { client.disconnect().await });
-                // tokio::fs::write("/tmp/thing.txt",format!("{:#?}", &events.event_loop.state)).await.unwrap();
                 triggered_disconnect = true;
             }
+
             let next_event = event_loop.poll();
             let next_permit = permits.clone().acquire_owned();
             tokio::pin!(next_event);
             tokio::pin!(next_permit);
+
             let event = futures::future::select(next_event.as_mut(), next_permit.as_mut()).await;
             let event = match event {
-                Either::Left((event, _)) => {
-                    disconnect_permit.take();
-                    event
-                }
+                Either::Left((event, _)) => event,
                 Either::Right((permit, _)) => {
+                    // The `sender_loop` has now concluded
                     disconnect_permit = Some(permit.unwrap());
                     continue;
                 }
@@ -311,7 +315,7 @@ impl Connection {
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         last_will: Option<MqttMessage>,
-        _guard: OwnedSemaphorePermit,
+        _disconnect_permit: OwnedSemaphorePermit,
     ) {
         while let Some(message) = messages_receiver.next().await {
             let payload = Vec::from(message.payload_bytes());
@@ -331,6 +335,9 @@ impl Connection {
                 .publish(last_will.topic, last_will.qos, last_will.retain, payload)
                 .await;
         }
+
+        // At this point, `_disconnect_permit` is dropped
+        // This allows `receiver_loop` acquire a permit and commence the shutdown process
     }
 
     pub(crate) async fn do_pause() {
