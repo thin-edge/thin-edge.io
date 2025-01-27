@@ -16,7 +16,10 @@ use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
 /// A connection to some MQTT server
@@ -88,19 +91,23 @@ impl Connection {
 
         let (mqtt_client, event_loop) =
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
+        let permits = Arc::new(Semaphore::new(1));
+        let permit = permits.clone().acquire_owned().await.unwrap();
         tokio::spawn(Connection::receiver_loop(
             mqtt_client.clone(),
             config.clone(),
             event_loop,
             received_sender,
             error_sender.clone(),
+            pub_done_sender,
+            permits,
         ));
         tokio::spawn(Connection::sender_loop(
             mqtt_client,
             published_receiver,
             error_sender,
             config.last_will_message.clone(),
-            pub_done_sender,
+            permit,
         ));
 
         Ok(Connection {
@@ -200,9 +207,41 @@ impl Connection {
         mut event_loop: EventLoop,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
+        done: oneshot::Sender<()>,
+        permits: Arc<Semaphore>,
     ) -> Result<(), MqttError> {
+        let mut triggered_disconnect = false;
+        let mut disconnect_permit = None;
+
         loop {
-            match event_loop.poll().await {
+            // Check if we are ready to disconnect. Due to ownership of the
+            // event loop, this needs to be done before we call
+            // `event_loop.poll()`
+            let remaining_events_empty = event_loop.state.inflight() == 0;
+            if disconnect_permit.is_some() && !triggered_disconnect && remaining_events_empty {
+                // `sender_loop` is not running and we have no remaining
+                // publishes to process
+                let client = mqtt_client.clone();
+                tokio::spawn(async move { client.disconnect().await });
+                triggered_disconnect = true;
+            }
+
+            let event = tokio::select! {
+                // If there is an event, we need to process that first
+                // Otherwise we risk shutting down early
+                // e.g. a `Publish` request from the sender is not "inflight"
+                // but will immediately be returned by `event_loop.poll()`
+                biased;
+
+                event = event_loop.poll() => event,
+                permit = permits.clone().acquire_owned() => {
+                    // The `sender_loop` has now concluded
+                    disconnect_permit = Some(permit.unwrap());
+                    continue;
+                }
+            };
+
+            match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
                         error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
@@ -266,6 +305,7 @@ impl Connection {
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;
+        let _ = done.send(());
         Ok(())
     }
 
@@ -274,24 +314,15 @@ impl Connection {
         mut messages_receiver: mpsc::UnboundedReceiver<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         last_will: Option<MqttMessage>,
-        done: oneshot::Sender<()>,
+        _disconnect_permit: OwnedSemaphorePermit,
     ) {
-        loop {
-            match messages_receiver.next().await {
-                None => {
-                    // The sender channel has been closed by the client
-                    // No more messages will be published by the client
-                    break;
-                }
-                Some(message) => {
-                    let payload = Vec::from(message.payload_bytes());
-                    if let Err(err) = mqtt_client
-                        .publish(message.topic, message.qos, message.retain, payload)
-                        .await
-                    {
-                        let _ = error_sender.send(err.into()).await;
-                    }
-                }
+        while let Some(message) = messages_receiver.next().await {
+            let payload = Vec::from(message.payload_bytes());
+            if let Err(err) = mqtt_client
+                .publish(message.topic, message.qos, message.retain, payload)
+                .await
+            {
+                let _ = error_sender.send(err.into()).await;
             }
         }
 
@@ -303,8 +334,9 @@ impl Connection {
                 .publish(last_will.topic, last_will.qos, last_will.retain, payload)
                 .await;
         }
-        let _ = mqtt_client.disconnect().await;
-        let _ = done.send(());
+
+        // At this point, `_disconnect_permit` is dropped
+        // This allows `receiver_loop` acquire a permit and commence the shutdown process
     }
 
     pub(crate) async fn do_pause() {

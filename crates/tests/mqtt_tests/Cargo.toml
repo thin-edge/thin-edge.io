@@ -10,12 +10,15 @@ repository = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+backoff = { workspace = true }
 fastrand = { workspace = true }
 futures = { workspace = true }
 once_cell = { workspace = true }
 rumqttc = { workspace = true }
 rumqttd = { workspace = true }
-tokio = { workspace = true, default_features = false, features = [] }
+tokio = { workspace = true, default_features = false, features = [
+    "rt-multi-thread",
+] }
 
 [lints]
 workspace = true

@@ -189,7 +189,7 @@ impl TestCon {
         self.client.publish(topic, qos, retain, payload).await?;
 
         loop {
-            if let Event::Incoming(Packet::PubAck(_)) = self.eventloop.poll().await? {
+            if let Ok(Event::Incoming(Packet::PubAck(_))) = self.eventloop.poll().await {
                 return Ok(());
             }
         }

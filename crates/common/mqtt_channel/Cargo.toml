@@ -17,14 +17,13 @@ log = { workspace = true }
 rumqttc = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, features = ["rt", "time", "rt-multi-thread"] }
 zeroize = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 mqtt_tests = { workspace = true }
 serde_json = { workspace = true }
-serial_test = { workspace = true }
 
 [lints]
 workspace = true
