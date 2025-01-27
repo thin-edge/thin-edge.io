@@ -39,20 +39,19 @@ impl CommandPayload for DeviceProfileCmdPayload {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceProfileOperation {
-    operation: OperationType,
-    skip: bool,
     #[serde(flatten)]
-    payload: OperationPayload,
+    pub operation: OperationPayload,
+    pub skip: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "operation", content = "payload")]
 pub enum OperationPayload {
-    #[serde(rename = "payload")]
+    #[serde(rename = "firmware_update")]
     Firmware(FirmwarePayload),
-    #[serde(rename = "payload")]
+    #[serde(rename = "software_update")]
     Software(SoftwarePayload),
-    #[serde(rename = "payload")]
+    #[serde(rename = "config_update")]
     Config(ConfigPayload),
 }
 
@@ -64,6 +63,8 @@ pub struct FirmwarePayload {
     pub remote_url: Option<String>,
 }
 
+impl Jsonify for FirmwarePayload {}
+
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwarePayload {
@@ -73,17 +74,18 @@ pub struct SoftwarePayload {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigPayload {
+    pub name: String,
     #[serde(rename = "type")]
     pub config_type: String,
     pub remote_url: Option<String>,
+    pub server_url: Option<String>,
 }
 
 impl DeviceProfileCmdPayload {
     pub fn add_firmware(&mut self, firmware: FirmwarePayload) {
         let firmware_operation = DeviceProfileOperation {
-            operation: OperationType::FirmwareUpdate,
+            operation: OperationPayload::Firmware(firmware),
             skip: false,
-            payload: OperationPayload::Firmware(firmware),
         };
 
         self.operations.push(firmware_operation);
@@ -91,9 +93,8 @@ impl DeviceProfileCmdPayload {
 
     pub fn add_software(&mut self, software: SoftwarePayload) {
         let software_operation = DeviceProfileOperation {
-            operation: OperationType::SoftwareUpdate,
+            operation: OperationPayload::Software(software),
             skip: false,
-            payload: OperationPayload::Software(software),
         };
 
         self.operations.push(software_operation);
@@ -101,9 +102,8 @@ impl DeviceProfileCmdPayload {
 
     pub fn add_config(&mut self, config: ConfigPayload) {
         let config_operation = DeviceProfileOperation {
-            operation: OperationType::ConfigUpdate,
+            operation: OperationPayload::Config(config),
             skip: false,
-            payload: OperationPayload::Config(config),
         };
 
         self.operations.push(config_operation);
