@@ -174,6 +174,30 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         csr_path: Utf8PathBuf,
 
+        cryptoki: {
+            /// Use a Hardware Security Module for authenticating the MQTT connection with the cloud.
+            ///
+            /// When set to true, `key_path` option is ignored as PKCS#11 module is used for signing.
+            #[tedge_config(default(value = false))]
+            #[tedge_config(example = "true", example = "false")]
+            enable: bool,
+
+            /// A path to the PKCS#11 module used for interaction with the HSM.
+            #[tedge_config(example = "/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")]
+            #[doku(as = "PathBuf")]
+            module_path: Utf8PathBuf,
+
+            /// Pin value for logging into the HSM.
+            #[tedge_config(example = "123456", default(value = "123456"))]
+            pin: Arc<str>,
+
+            /// A serial number of a Personal Identity Verification (PIV) device to be used.
+            ///
+            /// Necessary if two or more modules are connected.
+            #[tedge_config(example = "123456789")]
+            serial: Arc<str>,
+        },
+
         /// The default device type
         #[tedge_config(example = "thin-edge.io", default(value = "thin-edge.io"))]
         #[tedge_config(rename = "type")]
