@@ -174,6 +174,11 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         csr_path: Utf8PathBuf,
 
+        /// Use a certificate/key from a Personal Identity Verification (PIV) device of a given serial number. Overrides
+        /// `key_path`/`cert_path`/`csr_path` options.
+        #[tedge_config(example = "123456789")]
+        use_piv_serial: Arc<str>,
+
         /// The default device type
         #[tedge_config(example = "thin-edge.io", default(value = "thin-edge.io"))]
         #[tedge_config(rename = "type")]

@@ -9,8 +9,12 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::CertificateError;
+
+mod pkcs11;
+use pkcs11::Pkcs11Resolver;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -26,6 +30,21 @@ pub fn create_tls_config(
         .with_client_auth_cert(cert_chain, pvt_key)?)
 }
 
+pub fn create_tls_config_piv(
+    root_certificates: impl AsRef<Path>,
+    piv_serial: Arc<str>,
+) -> Result<ClientConfig, CertificateError> {
+    let root_cert_store = new_root_store(root_certificates.as_ref())?;
+
+    let resolver = Pkcs11Resolver::from_piv_serial(&piv_serial).expect("failed to create resolver");
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(root_cert_store)
+        .with_client_cert_resolver(resolver);
+
+    Ok(config)
+}
+
 pub fn client_config_for_ca_certificates<P>(
     root_certificates: impl IntoIterator<Item = P>,
 ) -> Result<ClientConfig, std::io::Error>
@@ -39,7 +58,7 @@ where
 
     let (mut valid_count, mut invalid_count) = (0, 0);
     for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-        match roots.add(CertificateDer::from_slice(&cert.0)) {
+        match roots.add(cert) {
             Ok(_) => valid_count += 1,
             Err(err) => {
                 tracing::debug!("certificate parsing failed: {:?}", err);

@@ -273,6 +273,7 @@ impl ConnectCommand {
     }
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, Fancy<ConnectError>> {
         let spinner = Spinner::start("Verifying device is connected to cloud");
+        dbg!("'ere m8");
         let res = match &self.cloud {
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()),
             Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()),
@@ -584,6 +585,16 @@ fn check_device_status_c8y(
 
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
+    if let Ok(piv_serial) = tedge_config.device.use_piv_serial.or_config_not_set() {
+        let tls_config = certificate::parse_root_certificate::create_tls_config_piv(
+            &c8y_config.root_cert_path,
+            piv_serial.clone(),
+        )?;
+        dbg!("weeee");
+        dbg!(&tls_config);
+        mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
+    }
+
     let (client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     connection
         .eventloop
@@ -893,6 +904,7 @@ fn check_device_status_aws(
     }
 }
 
+// TODO: too many args
 fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
@@ -917,6 +929,9 @@ fn new_bridge(
 
     bridge_config.validate(use_basic_auth)?;
 
+    // TODO: put in general auth config struct
+    let use_piv_serial = tedge_config.device.use_piv_serial.or_none().cloned();
+
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
             println!("Offline mode. Skipping device creation in Cumulocity cloud.")
@@ -926,6 +941,7 @@ fn new_bridge(
                 use_basic_auth,
                 bridge_config,
                 device_type,
+                use_piv_serial,
             );
             spinner.finish(res)?;
         }

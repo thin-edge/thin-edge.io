@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::ConnectError;
 use crate::bridge::BridgeConfig;
 use crate::cli::connect::CONNECTION_TIMEOUT;
@@ -26,6 +28,8 @@ pub fn create_device_with_direct_connection(
     use_basic_auth: bool,
     bridge_config: &BridgeConfig,
     device_type: &str,
+    // TODO: put into general authentication struct
+    use_piv_serial: Option<Arc<str>>,
 ) -> anyhow::Result<()> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
@@ -51,6 +55,11 @@ pub fn create_device_with_direct_connection(
                 .expect("password must be set to use basic auth"),
         );
         create_tls_config_without_client_cert(&bridge_config.bridge_root_cert_path)?
+    } else if let Some(use_piv_serial) = use_piv_serial {
+        dbg!(certificate::parse_root_certificate::create_tls_config_piv(
+            &bridge_config.bridge_root_cert_path,
+            use_piv_serial,
+        )?)
     } else {
         create_tls_config(
             &bridge_config.bridge_root_cert_path,
@@ -58,6 +67,7 @@ pub fn create_device_with_direct_connection(
             &bridge_config.bridge_certfile,
         )?
     };
+    dbg!(&tls_config);
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);
