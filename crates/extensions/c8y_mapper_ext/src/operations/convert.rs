@@ -17,6 +17,7 @@ use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::commands::FirmwareUpdateCmdPayload;
 use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmdPayload;
+use tedge_api::device_profile::ConfigPayload;
 use tedge_api::device_profile::DeviceProfileCmdPayload;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::Channel;
@@ -288,6 +289,7 @@ impl CumulocityConverter {
             status: CommandStatus::Init,
             tedge_url: None,
             remote_url,
+            server_url: config_download_request.url.clone(),
             config_type: config_download_request.config_type.clone(),
             path: None,
             log_path: None,
@@ -368,11 +370,21 @@ impl CumulocityConverter {
             request.add_software(software.try_into()?);
         }
 
-        for mut config in device_profile_request.configuration {
-            if let Ok(cumulocity_url) = self.http_proxy.local_proxy_url(&config.url) {
-                config.url = cumulocity_url.into();
-            }
-            request.add_config(config.into());
+        for config in device_profile_request.configuration {
+            let remote_url = if let Ok(c8y_url) = self.http_proxy.local_proxy_url(&config.url) {
+                c8y_url.to_string()
+            } else {
+                config.url.clone()
+            };
+
+            let config = ConfigPayload {
+                name: config.name,
+                config_type: config.config_type,
+                remote_url: Some(remote_url),
+                server_url: Some(config.url),
+            };
+
+            request.add_config(config);
         }
 
         // Command messages must be retained

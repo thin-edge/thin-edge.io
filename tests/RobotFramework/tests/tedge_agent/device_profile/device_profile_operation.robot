@@ -55,7 +55,15 @@ Send device profile operation from Cumulocity
     ${operation}=    Cumulocity.Install Device Profile    ${profile["id"]}
     ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
     Cumulocity.Should Have Device Profile Installed    ${profile["id"]}
+
+    Cumulocity.Device Should Have Firmware    tedge-core    1.0.0
+
     Device Should Have Installed Software    {"name": "jq"}    {"name": "tree"}
+
+    ${mo}=    Managed Object Should Have Fragments   c8y_Configuration_tedge-configuration-plugin
+    Should Be Equal    ${mo["c8y_Configuration_tedge-configuration-plugin"]["name"]}    tedge-configuration-plugin
+    Should Be Equal    ${mo["c8y_Configuration_tedge-configuration-plugin"]["type"]}    tedge-configuration-plugin
+    Should Be Equal    ${mo["c8y_Configuration_tedge-configuration-plugin"]["url"]}    ${config_url}
 
 Send device profile operation locally
     ${config_url}=    Set Variable    http://localhost:8000/tedge/file-transfer/main/config_update/robot-123
@@ -107,7 +115,8 @@ Send device profile operation locally
     ...          "payload": {
     ...            "type": "tedge-configuration-plugin",
     ...            "tedgeUrl": "${config_url}",
-    ...            "remoteUrl": ""
+    ...            "remoteUrl": "",
+    ...            "serverUrl": ""
     ...          }
     ...        },
     ...        {
