@@ -51,6 +51,7 @@ impl TEdgeComponent for AwsMapper {
                 8883,
             );
             cloud_config.set_clean_session(false);
+            cloud_config.set_keep_alive(aws_config.bridge.keepalive_interval.duration());
             use_key_and_cert(&mut cloud_config, aws_config)?;
 
             let bridge_name = format!("tedge-mapper-bridge-{prefix}");

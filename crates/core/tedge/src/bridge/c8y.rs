@@ -3,6 +3,7 @@ use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
 use std::process::Command;
+use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -32,6 +33,7 @@ pub struct BridgeConfigC8yParams {
     pub topic_prefix: TopicPrefix,
     pub profile_name: Option<ProfileName>,
     pub mqtt_schema: MqttSchema,
+    pub keepalive_interval: Duration,
 }
 
 impl From<BridgeConfigC8yParams> for BridgeConfig {
@@ -52,6 +54,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             topic_prefix,
             profile_name,
             mqtt_schema,
+            keepalive_interval,
         } = params;
 
         let mut topics: Vec<String> = vec![
@@ -190,6 +193,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             connection_check_attempts: 1,
             auth_method: Some(auth_method),
             mosquitto_version,
+            keepalive_interval,
         }
     }
 }
@@ -249,6 +253,7 @@ mod tests {
             topic_prefix: "c8y".try_into().unwrap(),
             profile_name: None,
             mqtt_schema: MqttSchema::with_root("te".into()),
+            keepalive_interval: Duration::from_secs(60),
         };
 
         let bridge = BridgeConfig::from(params);
@@ -319,6 +324,7 @@ mod tests {
             connection_check_attempts: 1,
             auth_method: Some(AuthMethod::Certificate),
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         };
 
         assert_eq!(bridge, expected);
@@ -344,6 +350,7 @@ mod tests {
             topic_prefix: "c8y".try_into().unwrap(),
             profile_name: Some("profile".parse().unwrap()),
             mqtt_schema: MqttSchema::with_root("te".into()),
+            keepalive_interval: Duration::from_secs(60),
         };
 
         let bridge = BridgeConfig::from(params);
@@ -421,6 +428,7 @@ mod tests {
             connection_check_attempts: 1,
             auth_method: Some(AuthMethod::Basic),
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         };
 
         assert_eq!(bridge, expected);

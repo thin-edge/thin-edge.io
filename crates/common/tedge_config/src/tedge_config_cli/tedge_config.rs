@@ -353,6 +353,10 @@ define_tedge_config! {
             /// forwarded to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
             topic_prefix: TopicPrefix,
+
+            /// The amount of time after which the bridge should send a ping if no other traffic has occured
+            #[tedge_config(example = "60s", default(from_str = "60s"))]
+            keepalive_interval: SecondsOrHumanTime,
         },
 
         entity_store: {
@@ -458,6 +462,10 @@ define_tedge_config! {
             /// forwarded to Azure on the `$iothub/twin/GET/#` topic
             #[tedge_config(example = "az", default(function = "az_topic_prefix"))]
             topic_prefix: TopicPrefix,
+
+            /// The amount of time after which the bridge should send a ping if no other traffic has occured
+            #[tedge_config(example = "60s", default(from_str = "60s"))]
+            keepalive_interval: SecondsOrHumanTime,
         },
 
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
@@ -528,6 +536,11 @@ define_tedge_config! {
             /// forwarded to AWS on the `$aws/things/shadow/#` topic
             #[tedge_config(example = "aws", default(function = "aws_topic_prefix"))]
             topic_prefix: TopicPrefix,
+
+
+            /// The amount of time after which the bridge should send a ping if no other traffic has occured
+            #[tedge_config(example = "60s", default(from_str = "60s"))]
+            keepalive_interval: SecondsOrHumanTime,
         },
 
         /// Set of MQTT topics the AWS IoT mapper should subscribe to

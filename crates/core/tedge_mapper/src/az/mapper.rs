@@ -59,6 +59,7 @@ impl TEdgeComponent for AzureMapper {
                 ),
                 "",
             );
+            cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration());
             use_key_and_cert(&mut cloud_config, az_config)?;
 
             let built_in_bridge_name = format!("tedge-mapper-bridge-{prefix}");
