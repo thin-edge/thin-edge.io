@@ -67,6 +67,7 @@ const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 pub struct MqttBridgeActorBuilder {}
 
 impl MqttBridgeActorBuilder {
+    // XXX(marcel): this function loads certs, which can fail, so it should probably be fallible
     pub async fn new(
         tedge_config: &TEdgeConfig,
         service_name: &str,

@@ -15,7 +15,10 @@ reqwest = ["dep:reqwest"]
 
 [dependencies]
 anyhow = { workspace = true }
+asn1-rs = { workspace = true }
+base64 = "0.22"
 camino = { workspace = true }
+cryptoki = { workspace = true }
 rcgen = { workspace = true }
 reqwest = { workspace = true, optional = true, features = [
     "rustls-tls-native-roots",
@@ -32,7 +35,6 @@ zeroize = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-base64 = { workspace = true }
 tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 
