@@ -26,6 +26,7 @@ use tokio::io;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::io::BufWriter;
 use tokio_util::io::ReaderStream;
 
 pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
@@ -128,17 +129,23 @@ async fn stream_request_body_to_path(
     path: &Utf8Path,
     body_stream: &mut Body,
 ) -> anyhow::Result<()> {
-    let mut buffer = File::create(path)
-        .await
-        .with_context(|| format!("creating {path:?}"))?;
+    let mut buffer = BufWriter::new(
+        File::create(path)
+            .await
+            .with_context(|| format!("creating {path:?}"))?,
+    );
     while let Some(data) = body_stream.next().await {
         let data =
             data.with_context(|| format!("reading body of uploaded file (destined for {path:?})"))?;
-        let _bytes_written = buffer
-            .write(&data)
+        buffer
+            .write_all(&data)
             .await
             .with_context(|| format!("writing to {path:?}"))?;
     }
+    buffer
+        .flush()
+        .await
+        .with_context(|| format!("writing to {path:?}"))?;
     Ok(())
 }
 
