@@ -31,6 +31,12 @@ Register and Use SmartREST 1.0. Templates
     [Arguments]    ${use_builtin_bridge}
     Custom Setup    use_builtin_bridge=${use_builtin_bridge}
 
+    # device.id should be set by tedge config and confirm the test doesn't use certificate
+    Execute Command    tedge config set device.id ${DEVICE_SN}
+    Execute Command    tedge cert remove
+    File Should Not Exist    /etc/tedge/device-certs/tedge-certificate.pem
+    File Should Not Exist    /etc/tedge/device-certs/tedge-private-key.pem
+
     ${TEMPLATE_XID}=    Get Random Name    prefix=TST_Template
     Set Test Variable    $TEMPLATE_XID
     Execute Command    tedge config set c8y.smartrest1.templates "${TEMPLATE_XID}"

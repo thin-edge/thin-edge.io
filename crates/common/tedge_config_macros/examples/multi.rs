@@ -111,14 +111,14 @@ fn main() {
         keys,
         [
             "c8y.http",
-            "c8y.smartrest.use_operation_id",
-            "c8y.url",
             "c8y.profiles.cloud.http",
             "c8y.profiles.cloud.smartrest.use_operation_id",
             "c8y.profiles.cloud.url",
             "c8y.profiles.edge.http",
             "c8y.profiles.edge.smartrest.use_operation_id",
-            "c8y.profiles.edge.url"
+            "c8y.profiles.edge.url",
+            "c8y.smartrest.use_operation_id",
+            "c8y.url",
         ]
     );
 }

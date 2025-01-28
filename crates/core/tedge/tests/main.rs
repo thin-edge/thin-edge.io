@@ -85,7 +85,7 @@ mod tests {
         // The remove command can be run when there is no certificate
         remove_cmd.assert().success();
 
-        // We start we no certificate, hence no device id
+        // We start with no certificate, hence no device id
         get_device_id_cmd
             .assert()
             .failure()
@@ -127,56 +127,8 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains("device.id"));
 
-        // The a new certificate can then be created.
+        // A new certificate can then be created.
         create_cmd.assert().success();
-
-        Ok(())
-    }
-
-    #[test]
-    fn run_config_set_get_unset_read_only_key() -> Result<(), Box<dyn std::error::Error>> {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let temp_dir_path = temp_dir.path();
-        let test_home_str = temp_dir_path.to_str().unwrap();
-
-        let device_id = "test";
-
-        // allowed to get read-only key by CLI
-        let mut get_device_id_cmd = tedge_command_with_test_home([
-            "--config-dir",
-            test_home_str,
-            "config",
-            "get",
-            "device.id",
-        ])?;
-
-        get_device_id_cmd
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains("device.id"));
-
-        // forbidden to set read-only key by CLI
-        let mut set_device_id_cmd = tedge_command_with_test_home([
-            "--config-dir",
-            test_home_str,
-            "config",
-            "set",
-            "device.id",
-            device_id,
-        ])?;
-
-        set_device_id_cmd.assert().failure();
-
-        // forbidden to unset read-only key by CLI
-        let mut unset_device_id_cmd = tedge_command_with_test_home([
-            "--config-dir",
-            test_home_str,
-            "config",
-            "unset",
-            "device.id",
-        ])?;
-
-        unset_device_id_cmd.assert().failure();
 
         Ok(())
     }

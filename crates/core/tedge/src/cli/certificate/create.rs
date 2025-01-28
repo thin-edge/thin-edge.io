@@ -1,4 +1,5 @@
 use super::error::CertError;
+use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
@@ -10,6 +11,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
+use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
 
@@ -27,6 +29,9 @@ pub struct CreateCertCmd {
     /// The owner of the private key
     pub user: String,
     pub group: String,
+
+    /// The tedge.toml file location, required to access to TEdgeConfigDto
+    pub config_location: TEdgeConfigLocation,
 }
 
 impl Command for CreateCertCmd {
@@ -37,7 +42,11 @@ impl Command for CreateCertCmd {
     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
         self.create_test_certificate(&config)?;
-        eprintln!("Certificate was successfully created");
+        eprintln!("Certificate was successfully created\n");
+        let show_cert_cmd = ShowCertCmd {
+            cert_path: self.cert_path.clone(),
+        };
+        show_cert_cmd.execute()?;
         Ok(())
     }
 }
@@ -185,6 +194,7 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
         };
 
         assert_matches!(
@@ -214,6 +224,7 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
         };
 
         assert!(cmd
@@ -237,6 +248,7 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
         };
 
         let cert_error = cmd
@@ -257,6 +269,7 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            config_location: TEdgeConfigLocation::from_custom_root(dir.path()),
         };
 
         let cert_error = cmd
