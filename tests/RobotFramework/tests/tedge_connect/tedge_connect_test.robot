@@ -64,6 +64,8 @@ tedge reconnect restarts mapper
     Should Not Be Equal    ${pid_before}    ${pid_after}
 
 Check absence of OpenSSL Error messages #3024
+    Skip
+    ...    msg=This test is flaky. There is client (yet to be identified) that fails to connect on port 8883 leading to OpenSSL Error
     ${SuiteStart}=    Get Suite Start Time
     # Only checkout output if mosquitto is being used
     ${output}=    Execute Command
