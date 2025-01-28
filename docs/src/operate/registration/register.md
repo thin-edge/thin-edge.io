@@ -86,6 +86,61 @@ GET /v1/entities/{topic-id}
 curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01
 ```
 
+## Query Entities
+
+### Query All Entities
+
+List all entities registered with thin-edge starting from the `main` device.
+
+**Endpoint**
+
+```
+GET /v1/entities
+```
+
+**Responses**
+
+* 200: OK
+  ```json
+  [
+      {
+          "@topic-id": "device/main//",
+          "@type": "device"
+      },
+      {
+          "@topic-id": "device/main/service/tedge-agent",
+          "@type": "service",
+          "@parent": "device/main//"
+      },
+      {
+          "@topic-id": "device/child0//",
+          "@type": "child-device",
+          "@parent": "device/main//"
+      },
+      {
+          "@topic-id": "device/child1//",
+          "@type": "child-device",
+          "@parent": "device/main//"
+      },
+      {
+          "@topic-id": "device/child00//",
+          "@type": "child-device",
+          "@parent": "device/child0//"
+      },
+      {
+          "@topic-id": "device/child01//",
+          "@type": "child-device",
+          "@parent": "device/child0//"
+      }
+  ]
+  ```
+
+**Example**
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities
+```
+
 ## Delete entity
 
 Deleting an entity results in the deletion of its immediate and nested child entities as well, to avoid leaving orphans behind.
