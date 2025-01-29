@@ -1,6 +1,7 @@
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 use certificate::parse_root_certificate::create_tls_config;
+use certificate::parse_root_certificate::create_tls_config_piv;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::valid_filter;
 use rumqttc::valid_topic;
@@ -19,6 +20,12 @@ pub fn use_key_and_cert(
         cloud_config.device_key_path(),
         cloud_config.device_cert_path(),
     )?;
+    config.set_transport(Transport::tls_with_config(tls_config.into()));
+    Ok(())
+}
+
+pub fn use_piv(config: &mut MqttOptions, cloud_config: &dyn CloudConfig) -> anyhow::Result<()> {
+    let tls_config = create_tls_config_piv(cloud_config.root_cert_path(), "1234".into())?;
     config.set_transport(Transport::tls_with_config(tls_config.into()));
     Ok(())
 }

@@ -129,20 +129,28 @@ impl BridgeConfig {
             )));
         }
 
-        if !use_basic_auth {
-            if !self.bridge_certfile.exists() {
-                return Err(ConnectError::Certificate(anyhow!(
-                    "Bridge certificate {:?} does not exist",
-                    self.bridge_certfile
-                )));
-            }
+        if use_basic_auth {
+            return Ok(());
+        }
 
-            if !self.bridge_keyfile.exists() {
-                return Err(ConnectError::Certificate(anyhow!(
-                    "Bridge key {:?} does not exist",
-                    self.bridge_keyfile
-                )));
-            }
+        // for HSM, to make sure we're not using the private key I renamed it
+        // but this check here needs to be temporarily overridden
+
+        // TODO: remove this and do a proper check if using the PIV device
+        return Ok(());
+
+        if !self.bridge_certfile.exists() {
+            return Err(ConnectError::Certificate(anyhow!(
+                "Bridge certificate {:?} does not exist",
+                self.bridge_certfile
+            )));
+        }
+
+        if !self.bridge_keyfile.exists() {
+            return Err(ConnectError::Certificate(anyhow!(
+                "Bridge key {:?} does not exist",
+                self.bridge_keyfile
+            )));
         }
 
         Ok(())

@@ -56,10 +56,10 @@ pub fn create_device_with_direct_connection(
         );
         create_tls_config_without_client_cert(&bridge_config.bridge_root_cert_path)?
     } else if let Some(use_piv_serial) = use_piv_serial {
-        dbg!(certificate::parse_root_certificate::create_tls_config_piv(
+        certificate::parse_root_certificate::create_tls_config_piv(
             &bridge_config.bridge_root_cert_path,
             use_piv_serial,
-        )?)
+        )?
     } else {
         create_tls_config(
             &bridge_config.bridge_root_cert_path,
@@ -67,7 +67,6 @@ pub fn create_device_with_direct_connection(
             &bridge_config.bridge_certfile,
         )?
     };
-    dbg!(&tls_config);
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);

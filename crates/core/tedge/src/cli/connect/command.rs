@@ -273,7 +273,6 @@ impl ConnectCommand {
     }
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, Fancy<ConnectError>> {
         let spinner = Spinner::start("Verifying device is connected to cloud");
-        dbg!("'ere m8");
         let res = match &self.cloud {
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()),
             Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()),
@@ -590,8 +589,6 @@ fn check_device_status_c8y(
             &c8y_config.root_cert_path,
             piv_serial.clone(),
         )?;
-        dbg!("weeee");
-        dbg!(&tls_config);
         mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
 

@@ -84,7 +84,19 @@ impl MqttBridgeActorBuilder {
                 ca_dir: Some(ca_dir),
                 client: Some(client),
                 ..
-            } => Some(create_tls_config(ca_dir, &client.key_file, &client.cert_file).unwrap()),
+            } => {
+                if let Some(piv_serial) = tedge_config.device.use_piv_serial.or_none() {
+                    Some(
+                        certificate::parse_root_certificate::create_tls_config_piv(
+                            ca_dir,
+                            piv_serial.clone(),
+                        )
+                        .unwrap(),
+                    )
+                } else {
+                    Some(create_tls_config(ca_dir, &client.key_file, &client.cert_file).unwrap())
+                }
+            }
             MqttAuthConfig {
                 ca_file: Some(ca_file),
                 client: Some(client),

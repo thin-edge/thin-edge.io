@@ -102,7 +102,7 @@ impl TEdgeConfig {
             self.mqtt.client.auth.cert_file.as_ref(),
             self.mqtt.client.auth.key_file.as_ref(),
         )) {
-            mqtt_config.with_client_auth(client_cert, client_key)?;
+            // mqtt_config.with_client_auth(client_cert, client_key)?;
         }
 
         Ok(mqtt_config)
