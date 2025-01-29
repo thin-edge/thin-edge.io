@@ -215,6 +215,7 @@ impl TEdgeComponent for CumulocityMapper {
                 message: format!("{last_will_message_bridge}\n{last_will_message_mapper}").into(),
                 retain: false,
             });
+            cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
 
             runtime
                 .spawn(

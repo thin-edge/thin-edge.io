@@ -1,8 +1,8 @@
-use core::fmt;
-use std::borrow::Cow;
-
 use anyhow::anyhow;
 use camino::Utf8PathBuf;
+use core::fmt;
+use std::borrow::Cow;
+use std::time::Duration;
 use tedge_config::auth_method::AuthMethod;
 use tedge_config::HostPort;
 use tedge_config::TEdgeConfigLocation;
@@ -43,6 +43,7 @@ pub struct BridgeConfig {
     pub connection_check_attempts: i32,
     pub auth_method: Option<AuthMethod>,
     pub mosquitto_version: Option<String>,
+    pub keepalive_interval: Duration,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -105,6 +106,11 @@ impl BridgeConfig {
             writer,
             "bridge_attempt_unsubscribe {}",
             self.bridge_attempt_unsubscribe
+        )?;
+        writeln!(
+            writer,
+            "keepalive_interval {}",
+            self.keepalive_interval.as_secs()
         )?;
 
         writeln!(writer, "\n### Topics",)?;
@@ -212,6 +218,7 @@ mod test {
             connection_check_attempts: 1,
             auth_method: None,
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -239,6 +246,7 @@ notifications false
 notifications_local_only false
 notification_topic test_topic
 bridge_attempt_unsubscribe false
+keepalive_interval 60
 
 ### Topics
 "#,
@@ -282,6 +290,7 @@ bridge_attempt_unsubscribe false
             connection_check_attempts: 1,
             auth_method: None,
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -308,6 +317,7 @@ notifications false
 notifications_local_only false
 notification_topic test_topic
 bridge_attempt_unsubscribe false
+keepalive_interval 60
 
 ### Topics
 "#,
@@ -354,6 +364,7 @@ bridge_attempt_unsubscribe false
             connection_check_attempts: 1,
             auth_method: None,
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         };
 
         let mut buffer = Vec::new();
@@ -383,6 +394,7 @@ bridge_attempt_unsubscribe false
         expected.insert("notifications_local_only false");
         expected.insert("notification_topic test_topic");
         expected.insert("bridge_attempt_unsubscribe false");
+        expected.insert("keepalive_interval 60");
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
         expected.insert("topic messages/devicebound/# in 1 az/ devices/alpha/");
@@ -426,6 +438,7 @@ bridge_attempt_unsubscribe false
             connection_check_attempts: 1,
             auth_method: None,
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         };
 
         let mut buffer = Vec::new();
@@ -454,6 +467,7 @@ bridge_attempt_unsubscribe false
         expected.insert("notifications_local_only false");
         expected.insert("notification_topic test_topic");
         expected.insert("bridge_attempt_unsubscribe false");
+        expected.insert("keepalive_interval 60");
         expected.insert(r#"topic inventory/managedObjects/update/# out 2 c8y/ """#);
         expected.insert(r#"topic measurement/measurements/create out 2 c8y/ """#);
         assert_eq!(config_set, expected);
@@ -545,6 +559,7 @@ bridge_attempt_unsubscribe false
             connection_check_attempts: 1,
             auth_method: None,
             mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(60),
         }
     }
 }

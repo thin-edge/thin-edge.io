@@ -2,6 +2,7 @@ use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
+use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -22,6 +23,7 @@ pub struct BridgeConfigAwsParams {
     pub topic_prefix: TopicPrefix,
     pub profile_name: Option<ProfileName>,
     pub mqtt_schema: MqttSchema,
+    pub keepalive_interval: Duration,
 }
 
 impl From<BridgeConfigAwsParams> for BridgeConfig {
@@ -37,6 +39,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             topic_prefix,
             profile_name,
             mqtt_schema,
+            keepalive_interval,
         } = params;
 
         let user_name = remote_clientid.to_string();
@@ -107,6 +110,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             connection_check_attempts: 5,
             auth_method: None,
             mosquitto_version: None,
+            keepalive_interval,
         }
     }
 }
@@ -124,6 +128,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         topic_prefix: "aws".try_into().unwrap(),
         profile_name: None,
         mqtt_schema: MqttSchema::with_root("te".into()),
+        keepalive_interval: Duration::from_secs(60),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -162,6 +167,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         connection_check_attempts: 5,
         auth_method: None,
         mosquitto_version: None,
+        keepalive_interval: Duration::from_secs(60),
     };
 
     assert_eq!(bridge, expected);
@@ -182,6 +188,7 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         topic_prefix: "aws-custom".try_into().unwrap(),
         profile_name: Some("profile".parse().unwrap()),
         mqtt_schema: MqttSchema::with_root("te".into()),
+        keepalive_interval: Duration::from_secs(60),
     };
 
     let bridge = BridgeConfig::from(params);
@@ -222,6 +229,7 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         connection_check_attempts: 5,
         auth_method: None,
         mosquitto_version: None,
+        keepalive_interval: Duration::from_secs(60),
     };
 
     assert_eq!(bridge, expected);

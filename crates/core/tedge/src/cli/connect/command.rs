@@ -465,6 +465,7 @@ pub fn bridge_config(
                 topic_prefix: az_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
+                keepalive_interval: az_config.bridge.keepalive_interval.duration(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -490,6 +491,7 @@ pub fn bridge_config(
                 topic_prefix: aws_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
+                keepalive_interval: aws_config.bridge.keepalive_interval.duration(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -529,6 +531,7 @@ pub fn bridge_config(
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
+                keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
             };
 
             Ok(BridgeConfig::from(params))
