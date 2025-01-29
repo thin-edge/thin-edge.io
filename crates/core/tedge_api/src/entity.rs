@@ -61,7 +61,7 @@ impl From<&EntityExternalId> for String {
 pub struct EntityMetadata {
     #[serde(rename = "@topic-id")]
     pub topic_id: EntityTopicId,
-    #[serde(rename = "@parent")]
+    #[serde(rename = "@parent", skip_serializing_if = "Option::is_none")]
     pub parent: Option<EntityTopicId>,
     #[serde(rename = "@type")]
     pub r#type: EntityType,

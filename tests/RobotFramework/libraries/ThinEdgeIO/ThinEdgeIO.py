@@ -962,6 +962,135 @@ class ThinEdgeIO(DeviceLibrary):
                 ex,
             )
 
+    @keyword("Register Entity")
+    def register_entity(
+            self,
+            topic_id: str,
+            type: str,
+            parent: str = "device/main//",
+            device_name: str = None 
+    ) -> Dict[str, Any]:
+        """
+        Register the provided entity in the entity store
+
+        Args:
+            topic_id (str, optional): Topic ID of the new entity
+            type (str, optional): Type of the new entity
+            parent (str, optional): Topic ID of the parent
+            device_name (str, optional): Device name to fetch the entity list from
+
+        Returns:
+            Dict[str, Any]: Registered entity topic ID
+
+        *Example:*
+        | ${entities}= | Register Entity | device/child0// | child-device |
+        | ${entities}= | Register Entity | device/child0/service/service0 | service | device/child0// |
+        | ${entities}= | Register Entity | device/child0/service/service0 | service | device/child0// | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+
+        payload = {
+            "@topic-id": topic_id,
+            "@type": type,
+            "@parent": parent
+        }
+        json_payload = json.dumps(payload)
+        
+        command = (
+            "curl -X POST http://localhost:8000/tedge/entity-store/v1/entities "
+            "-H 'Content-Type: application/json' "
+            f"-d '{json_payload}'"
+        )
+        output = device.execute_command(command)
+        json_output = json.loads(output.stdout)
+        return json_output
+
+    @keyword("List Entities")
+    def list_entities(
+            self, device_name: str = None 
+    ) -> List[Dict[str, Any]]:
+        """
+        Get entity list from the device using the entity store query REST API
+
+        Args:
+            device_name (str, optional): Device name to fetch the entity list from
+
+        Returns:
+            List[Dict[str, Any]]: List of entities
+
+        *Example:*
+        | ${entities}= | List Entities |
+        | ${entities}= | List Entities | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+
+        output = device.execute_command("curl -f http://localhost:8000/tedge/entity-store/v1/entities")
+        entities = json.loads(output.stdout)
+        return entities
+
+
+    @keyword("Should Contain Entity")
+    def assert_contains_entity(
+            self,
+            item: Union[str, Dict[str, Any]],
+            entities: List[Dict[str, Any]] = None,
+            device_name: str = None,
+            **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Assert if the entity store contains the given entity
+
+        Args:
+            entity (str or Dict[str, Any]]): Entity to look for
+            entities (List[Dict[str, Any]], optional): List of entities to search in. Defaults to None.
+            device_name (str, optional): Device name to fetch the entity list from
+
+        Returns:
+            List[Dict[str, Any]]: List of entities matching the given entity definition
+
+        *Example:*
+        | ${entities}= | Should Contain Entity | item=${entity_json} |
+        | ${entities}= | Should Contain Entity | item=${entity_json} | entities=${entity_list_json} |
+        | ${entities}= | Should Contain Entity | item=${entity_json} | entities=${entity_list_json} | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+
+        if not entities:
+            entities = self.list_entities()
+
+        if isinstance(item, str):
+            item = json.loads(item)
+
+        matches = entities
+        if item:
+            matches = [entity for entity in entities if entity == item]
+
+        assert matches
+
+        return matches
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
@@ -977,3 +1106,4 @@ def mqtt_topic_match(matcher, topic) -> bool:
         return True
     except StopIteration:
         return False
+

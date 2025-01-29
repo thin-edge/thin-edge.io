@@ -21,6 +21,7 @@ pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
     Delete(EntityTopicId),
+    List(Option<EntityTopicId>),
     MqttMessage(MqttMessage),
 }
 
@@ -29,6 +30,7 @@ pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
     Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
     Delete(Vec<EntityTopicId>),
+    List(Result<Vec<EntityMetadata>, entity_store::Error>),
     Ok,
 }
 
@@ -79,6 +81,12 @@ impl Server for EntityStoreServer {
             EntityStoreRequest::Delete(topic_id) => {
                 let deleted_entities = self.deregister_entity(topic_id).await;
                 EntityStoreResponse::Delete(deleted_entities)
+            }
+            EntityStoreRequest::List(topic_id) => {
+                let entities = self.entity_store.list_entity_tree(topic_id.as_ref());
+                EntityStoreResponse::List(
+                    entities.map(|entities| entities.into_iter().cloned().collect()),
+                )
             }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
                 self.process_mqtt_message(mqtt_message).await;

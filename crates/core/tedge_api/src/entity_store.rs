@@ -33,6 +33,7 @@ use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::path::Path;
 
 // In the future, root will be read from config
@@ -514,6 +515,14 @@ impl EntityStore {
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entity_store.cache_early_data_message(message)
     }
+
+    pub fn list_entity_tree<'a>(
+        &'a self,
+        root: Option<&'a EntityTopicId>,
+    ) -> Result<Vec<&'a EntityMetadata>, entity_store::Error> {
+        self.entities
+            .list_entity_tree(root.unwrap_or_else(|| self.main_device()))
+    }
 }
 
 /// In-memory representation of the entity tree
@@ -648,6 +657,26 @@ impl EntityTree {
 
             self.entities.remove(topic_id);
             removed_entities.push(topic_id.clone())
+        }
+    }
+
+    pub fn list_entity_tree<'a>(
+        &'a self,
+        root: &'a EntityTopicId,
+    ) -> Result<Vec<&'a EntityMetadata>, Error> {
+        if let Some(metadata) = self.entities.get(root).map(|node| node.metadata()) {
+            let mut topic_ids = VecDeque::from(vec![root]);
+            let mut entities = vec![metadata];
+
+            while let Some(topic_id) = topic_ids.pop_front() {
+                let (child_topics, children): (Vec<_>, Vec<_>) =
+                    self.children(topic_id).into_iter().unzip();
+                topic_ids.extend(child_topics);
+                entities.extend(children);
+            }
+            Ok(entities)
+        } else {
+            Err(Error::UnknownEntity(root.to_string()))
         }
     }
 }
@@ -1018,6 +1047,124 @@ mod tests {
         let children = store.child_devices(&EntityTopicId::default_main_device());
         assert!(children.iter().any(|&e| e == "device/child1//"));
         assert!(children.iter().any(|&e| e == "device/child2//"));
+    }
+
+    #[test]
+    fn list_entity_tree() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+
+        // Build the entity tree:
+        //
+        // main
+        // |-- child0
+        // |   |-- child00
+        // |   |   |-- child000
+        // |-- child1
+        // |-- child2
+        // |   |-- child20
+        // |   |-- child21
+        // |   |   |-- child210
+        // |   |   |   |-- child2100
+        // |   |   |-- child211
+        // |   |-- child22
+        build_entity_tree(
+            &mut store,
+            vec![
+                ("device/child0//", "child-device", None),
+                ("device/child1//", "child-device", None),
+                ("device/child2//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                ("device/child20//", "child-device", Some("device/child2//")),
+                ("device/child21//", "child-device", Some("device/child2//")),
+                ("device/child22//", "child-device", Some("device/child2//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                (
+                    "device/child210//",
+                    "child-device",
+                    Some("device/child21//"),
+                ),
+                (
+                    "device/child211//",
+                    "child-device",
+                    Some("device/child21//"),
+                ),
+                (
+                    "device/child2100//",
+                    "child-device",
+                    Some("device/child210//"),
+                ),
+            ],
+        );
+
+        // List entity tree from root
+        let entities = store
+            .list_entity_tree(None)
+            .unwrap()
+            .iter()
+            .map(|e| e.topic_id.as_str())
+            .collect::<HashSet<_>>();
+        let expected_entities = [
+            "device/main//",
+            "device/child0//",
+            "device/child1//",
+            "device/child2//",
+            "device/child00//",
+            "device/child20//",
+            "device/child21//",
+            "device/child22//",
+            "device/child000//",
+            "device/child210//",
+            "device/child211//",
+            "device/child2100//",
+        ]
+        .into_iter()
+        .collect::<HashSet<_>>();
+        assert_eq!(entities, expected_entities);
+
+        // List entity tree from child2
+        let child_root = EntityTopicId::from_str("device/child2//").unwrap();
+        let entities = store
+            .list_entity_tree(Some(&child_root))
+            .unwrap()
+            .iter()
+            .map(|e| e.topic_id.as_str())
+            .collect::<HashSet<_>>();
+        let expected_entities = [
+            "device/child2//",
+            "device/child20//",
+            "device/child21//",
+            "device/child22//",
+            "device/child210//",
+            "device/child211//",
+            "device/child2100//",
+        ]
+        .into_iter()
+        .collect::<HashSet<_>>();
+        assert_eq!(entities, expected_entities);
+    }
+
+    // Each item in the vector represents (topic_id, type, parent)
+    fn build_entity_tree(store: &mut EntityStore, entity_tree: Vec<(&str, &str, Option<&str>)>) {
+        for entity in entity_tree {
+            let topic_id = EntityTopicId::from_str(entity.0).unwrap();
+            let r#type = EntityType::from_str(entity.1).unwrap();
+            let parent = entity.2.map(|p| EntityTopicId::from_str(p).unwrap());
+
+            store
+                .update(EntityRegistrationMessage {
+                    topic_id,
+                    r#type,
+                    external_id: None,
+                    parent,
+                    other: Map::new(),
+                })
+                .unwrap();
+        }
     }
 
     #[test]
