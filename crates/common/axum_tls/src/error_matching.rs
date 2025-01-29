@@ -14,7 +14,8 @@ pub fn assert_error_matches(err: reqwest::Error, alert_description: rustls::Aler
 
 pub fn rustls_error_from_reqwest(err: &reqwest::Error) -> Option<&rustls::Error> {
     err.source()?
-        .downcast_ref::<hyper::Error>()?
+        .downcast_ref::<hyper_util::client::legacy::Error>()?
+        .source()?
         .source()?
         .downcast_ref::<std::io::Error>()?
         .get_ref()?

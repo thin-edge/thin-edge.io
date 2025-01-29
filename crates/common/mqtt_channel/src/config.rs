@@ -4,7 +4,7 @@ use certificate::parse_root_certificate;
 use certificate::CertificateError;
 use log::debug;
 use rumqttc::tokio_rustls::rustls;
-use rumqttc::tokio_rustls::rustls::Certificate;
+use rumqttc::tokio_rustls::rustls::pki_types::CertificateDer;
 use rumqttc::LastWill;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -109,8 +109,8 @@ impl Default for AuthenticationConfig {
 
 #[derive(Clone)]
 struct ClientAuthConfig {
-    cert_chain: Vec<Certificate>,
-    key: Zeroizing<PrivateKey>,
+    cert_chain: Vec<CertificateDer<'static>>,
+    key: Arc<Zeroizing<PrivateKey>>,
 }
 
 impl Debug for ClientAuthConfig {
@@ -121,12 +121,12 @@ impl Debug for ClientAuthConfig {
     }
 }
 
-#[derive(Debug, Clone)]
-struct PrivateKey(rustls::PrivateKey);
+#[derive(Debug)]
+struct PrivateKey(rustls::pki_types::PrivateKeyDer<'static>);
 
 impl zeroize::Zeroize for PrivateKey {
     fn zeroize(&mut self) {
-        self.0 .0.zeroize()
+        // FIXME I can't be implemented with rustls 0.23 due to immutability
     }
 }
 
@@ -307,7 +307,7 @@ impl Config {
 
         let client_auth_config = ClientAuthConfig {
             cert_chain,
-            key: Zeroizing::new(PrivateKey(key)),
+            key: Arc::new(Zeroizing::new(PrivateKey(key))),
         };
 
         let authentication_config = self.broker.authentication.get_or_insert(Default::default());
@@ -339,13 +339,12 @@ impl Config {
 
         if let Some(authentication_config) = &broker_config.authentication {
             let tls_config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
                 .with_root_certificates(authentication_config.cert_store.clone());
 
             let tls_config = match authentication_config.client_auth.clone() {
                 Some(client_auth_config) => tls_config.with_client_auth_cert(
                     client_auth_config.cert_chain,
-                    client_auth_config.key.deref().0.clone(),
+                    client_auth_config.key.deref().0.clone_key(),
                 )?,
                 None => tls_config.with_no_client_auth(),
             };

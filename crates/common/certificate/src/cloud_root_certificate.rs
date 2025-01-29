@@ -82,9 +82,9 @@ pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certifi
         };
 
         let ders = rustls_pemfile::certs(&mut pem_file)
-            .with_context(|| format!("reading {path}"))?
-            .into_iter()
-            .map(|der| Certificate::from_der(&der).unwrap());
+            .map(|res| Ok(Certificate::from_der(&res?)?))
+            .collect::<anyhow::Result<Vec<_>>>()
+            .with_context(|| format!("reading {path}"))?;
         certs.extend(ders)
     }
 

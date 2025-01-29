@@ -2,15 +2,14 @@ use crate::config::PemReader;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
-use rustls::server::AllowAnyAuthenticatedClient;
-use rustls::Certificate;
-use rustls::PrivateKey;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::PrivateKeyDer;
+use rustls::server::WebPkiClientVerifier;
 use rustls::RootCertStore;
 use rustls::ServerConfig;
 use rustls_pemfile::Item;
 use std::fs::File;
 use std::io;
-use std::sync::Arc;
 
 /// Read a directory into a [RootCertStore]
 pub fn read_trust_store(ca_dir: &Utf8Path) -> anyhow::Result<RootCertStore> {
@@ -32,54 +31,47 @@ pub fn read_trust_store(ca_dir: &Utf8Path) -> anyhow::Result<RootCertStore> {
         let Ok(mut pem_file) = File::open(&path).map(std::io::BufReader::new) else {
             continue;
         };
-        if let Some(value) = rustls_pemfile::certs(&mut pem_file)
-            .with_context(|| format!("reading {path}"))?
-            .into_iter()
-            .next()
-        {
-            ders.push(value);
-        };
+
+        ders.extend(rustls_pemfile::certs(&mut pem_file).filter_map(Result::ok));
     }
-    roots.add_parsable_certificates(&ders);
+    roots.add_parsable_certificates(ders);
 
     Ok(roots)
 }
 
 /// Load the SSL configuration for rustls
 pub fn ssl_config(
-    certificate_chain: Vec<Vec<u8>>,
-    key_der: Vec<u8>,
+    server_cert_chain: Vec<CertificateDer<'static>>,
+    server_key: PrivateKeyDer<'static>,
     root_certs: Option<RootCertStore>,
 ) -> anyhow::Result<ServerConfig> {
     // Trusted CA for client certificates
-    let config = ServerConfig::builder().with_safe_defaults();
+    let config = ServerConfig::builder();
 
     let config = if let Some(root_certs) = root_certs {
-        config.with_client_cert_verifier(Arc::new(AllowAnyAuthenticatedClient::new(root_certs)))
+        config.with_client_cert_verifier(WebPkiClientVerifier::builder(root_certs.into()).build()?)
     } else {
         config.with_no_client_auth()
     };
 
-    let server_cert = certificate_chain.into_iter().map(Certificate).collect();
-    let server_key = PrivateKey(key_der);
-
     config
-        .with_single_cert(server_cert, server_key)
+        .with_single_cert(server_cert_chain, server_key)
         .context("invalid key or certificate")
 }
 
 /// Load the server certificate
-pub fn load_cert(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<Vec<u8>>> {
+pub fn load_cert(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<CertificateDer<'static>>> {
     let file = path
         .open()
         .with_context(|| format!("cannot open certificate file: {path:?}"))?;
     let mut reader = std::io::BufReader::new(file);
     rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
         .with_context(|| format!("parsing PEM-encoded certificate from {path:?}"))
 }
 
 /// Load the server private key
-pub fn load_pkey(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<u8>> {
+pub fn load_pkey(path: &(impl PemReader + ?Sized)) -> anyhow::Result<PrivateKeyDer<'static>> {
     let key_file = path
         .open()
         .with_context(|| format!("cannot open certificate file: {path:?}"))?;
@@ -90,14 +82,16 @@ pub fn load_pkey(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<u8>> {
 pub fn pkey_from_pem(
     reader: &mut dyn io::BufRead,
     filename: &(impl PemReader + ?Sized),
-) -> anyhow::Result<Vec<u8>> {
+) -> anyhow::Result<PrivateKeyDer<'static>> {
     rustls_pemfile::read_one(reader)
         .with_context(|| format!("reading PEM-encoded private key from {filename:?}"))?
         .ok_or(anyhow!(
             "expected private key in {filename:?}, but found no PEM-encoded data"
         ))
         .and_then(|item| match item {
-            Item::ECKey(key) | Item::PKCS8Key(key) | Item::RSAKey(key) => Ok(key),
+            Item::Sec1Key(key) => Ok(PrivateKeyDer::Sec1(key)),
+            Item::Pkcs8Key(key) => Ok(PrivateKeyDer::Pkcs8(key)),
+            Item::Pkcs1Key(key) => Ok(PrivateKeyDer::Pkcs1(key)),
             Item::Crl(_) => Err(anyhow!("expected private key in {filename:?}, found a CRL")),
             Item::X509Certificate(_) => Err(anyhow!(
                 "expected private key in {filename:?}, found an X509 certificate"
@@ -226,60 +220,71 @@ mod tests {
     }
 
     mod server_accepts {
+        use rustls::crypto::CryptoProvider;
+
         use super::*;
+
+        fn init_crypto() {
+            let _ = CryptoProvider::install_default(rustls::crypto::ring::default_provider());
+        }
 
         #[tokio::test]
         async fn alg_ed25519_pkcs8() {
+            init_crypto();
             let key = test_data("ed25519.key");
             let cert = test_data("ed25519.crt");
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::PKCS8Key(_));
+            assert_matches!(parse_key_to_item(&key), Item::Pkcs8Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_ec() {
+            init_crypto();
             let key = test_data("ec.key");
             let cert = test_data("ec.crt");
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::ECKey(_));
+            assert_matches!(parse_key_to_item(&key), Item::Sec1Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_ec_pkcs8() {
+            init_crypto();
             let key = test_data("ec.pkcs8.key");
             let cert = test_data("ec.crt");
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::PKCS8Key(_));
+            assert_matches!(parse_key_to_item(&key), Item::Pkcs8Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_rsa_pkcs8() {
+            init_crypto();
             let key = test_data("rsa.pkcs8.key");
             let cert = test_data("rsa.crt");
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::PKCS8Key(_));
+            assert_matches!(parse_key_to_item(&key), Item::Pkcs8Key(_));
             assert_server_works_with(config, cert).await;
         }
 
         #[tokio::test]
         async fn alg_rsa_pkcs1() {
+            init_crypto();
             let key = test_data("rsa.pkcs1.key");
             let cert = test_data("rsa.crt");
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::RSAKey(_));
+            assert_matches!(parse_key_to_item(&key), Item::Pkcs1Key(_));
             assert_server_works_with(config, cert).await;
         }
 
@@ -300,10 +305,12 @@ mod tests {
             key: &str,
             cert: &str,
         ) -> anyhow::Result<(ServerConfig, reqwest::tls::Certificate)> {
-            let chain = rustls_pemfile::certs(&mut Cursor::new(cert)).context("reading certs")?;
+            let chain = rustls_pemfile::certs(&mut Cursor::new(cert))
+                .collect::<Result<Vec<_>, _>>()
+                .context("reading certs")?;
             let key_der = parse_key_to_der(key)?;
             let cert = reqwest::tls::Certificate::from_der(
-                chain.first().expect("chain should contain certificate"),
+                &*chain.first().expect("chain should contain certificate"),
             )
             .context("converting certificate to reqwest::tls::Certificate")?;
             let config = ssl_config(chain, key_der, None)?;
@@ -311,7 +318,7 @@ mod tests {
             Ok((config, cert))
         }
 
-        fn parse_key_to_der(pem: &str) -> anyhow::Result<Vec<u8>> {
+        fn parse_key_to_der(pem: &str) -> anyhow::Result<PrivateKeyDer<'static>> {
             pkey_from_pem(
                 &mut Cursor::new(pem),
                 Utf8Path::new("just-in-memory-not-a-file.pem"),

@@ -5,6 +5,8 @@ use crate::ssl_config;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::PrivateKeyDer;
 use rustls::RootCertStore;
 use std::fmt::Debug;
 use std::fs::File;
@@ -100,7 +102,7 @@ pub fn load_ssl_config(
     }
 }
 
-type CertKeyPair = (Vec<Vec<u8>>, Vec<u8>);
+type CertKeyPair = (Vec<CertificateDer<'static>>, PrivateKeyDer<'static>);
 
 fn load_certificate_and_key(
     cert_path: &OptionalConfig<impl PemReader>,

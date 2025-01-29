@@ -265,6 +265,9 @@ pub enum CertificateError {
 
     #[error(transparent)]
     CertParse(#[from] rustls::Error),
+
+    #[error(transparent)]
+    CertParse2(#[from] rustls::pki_types::pem::Error),
 }
 
 pub struct NewCertificateConfig {
