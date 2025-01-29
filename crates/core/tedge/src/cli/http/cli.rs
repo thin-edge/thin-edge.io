@@ -26,8 +26,31 @@ pub enum TEdgeHttpCli {
         profile: Option<ProfileName>,
     },
 
+    /// PUT content to thin-edge local HTTP servers
+    Put {
+        /// Target URI
+        uri: String,
+
+        /// Content to post
+        content: String,
+
+        /// Optional c8y cloud profile
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+
     /// GET content from thin-edge local HTTP servers
     Get {
+        /// Source URI
+        uri: String,
+
+        /// Optional c8y cloud profile
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+
+    /// DELETE resource from thin-edge local HTTP servers
+    Delete {
         /// Source URI
         uri: String,
 
@@ -66,7 +89,12 @@ impl BuildCommand for TEdgeHttpCli {
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .body(content),
+            TEdgeHttpCli::Put { content, .. } => client
+                .put(url)
+                .header("Content-Type", "application/json")
+                .body(content),
             TEdgeHttpCli::Get { .. } => client.get(url).header("Accept", "application/json"),
+            TEdgeHttpCli::Delete { .. } => client.delete(url),
         };
 
         Ok(HttpCommand {
@@ -80,22 +108,28 @@ impl BuildCommand for TEdgeHttpCli {
 impl TEdgeHttpCli {
     fn uri(&self) -> &str {
         match self {
-            TEdgeHttpCli::Post { uri, .. } | TEdgeHttpCli::Get { uri, .. } => uri.as_ref(),
+            TEdgeHttpCli::Post { uri, .. }
+            | TEdgeHttpCli::Put { uri, .. }
+            | TEdgeHttpCli::Get { uri, .. }
+            | TEdgeHttpCli::Delete { uri, .. } => uri.as_ref(),
         }
     }
 
     fn verb(&self) -> &str {
         match self {
             TEdgeHttpCli::Post { .. } => "POST",
+            TEdgeHttpCli::Put { .. } => "PUT",
             TEdgeHttpCli::Get { .. } => "GET",
+            TEdgeHttpCli::Delete { .. } => "DELETE",
         }
     }
 
     fn c8y_profile(&self) -> Option<&ProfileName> {
         match self {
-            TEdgeHttpCli::Post { profile, .. } | TEdgeHttpCli::Get { profile, .. } => {
-                profile.as_ref()
-            }
+            TEdgeHttpCli::Post { profile, .. }
+            | TEdgeHttpCli::Put { profile, .. }
+            | TEdgeHttpCli::Get { profile, .. }
+            | TEdgeHttpCli::Delete { profile, .. } => profile.as_ref(),
         }
     }
 }
