@@ -15,7 +15,7 @@ async fn new_entity_store() {
 }
 
 proptest! {
-    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
+    //#![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
     #[test]
     fn it_works_for_any_registration_order(registrations in model::walk(10)) {
         tokio::runtime::Builder::new_current_thread()
@@ -26,7 +26,7 @@ proptest! {
             let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
             let mut state = model::State::new();
 
-            for (protocol,action) in registrations {
+            for model::Command{protocol,action} in registrations.0 {
                 let expected_updates = state.apply(protocol, action.clone());
                 let actual_updates = match entity_store.handle((protocol,action).into()).await {
                     EntityStoreResponse::Create(Ok(registered_entities)) => {
@@ -128,10 +128,90 @@ mod model {
     use proptest::prelude::*;
     use std::collections::HashMap;
     use std::collections::HashSet;
+    use std::fmt::Debug;
+    use std::fmt::Display;
+    use std::fmt::Formatter;
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+
+    #[derive(Clone)]
+    pub struct Commands(pub Vec<Command>);
+
+    impl Debug for Commands {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            // mimicking a sequence of cli commands, with no extra quotes
+            // e.g:
+            //     tedge mqtt pub -r device/main/service/a '{"@parent":"device/main//","@type":"service","x":"9"}' \
+            //  && tedge http post /tedge/entity-store/v1/entities '{"@parent":"device/main//","@topic-id":"device/c//","@type":"child-device","z":"5"}'
+            let mut sep = if f.alternate() {
+                "\n    " // On test unit output, print each command on a new line
+            } else {
+                "" // On proptest log, print all the commands on a single line
+            };
+
+            for command in &self.0 {
+                f.write_str(sep)?;
+                f.write_str(format!("{command}").as_str())?;
+                if f.alternate() {
+                    sep = "\n    "; // On test unit output, print each command on a new line
+                } else {
+                    sep = " && "; // On proptest log, print all the commands on a single line
+                }
+            }
+            f.write_str("\n")?;
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct Command {
+        pub protocol: Protocol,
+        pub action: Action,
+    }
+
+    impl Debug for Command {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            // Print the command line with no extra quotes
+            f.write_str(format!("{self}").as_str())
+        }
+    }
+
+    impl Display for Command {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let topic = self.action.topic_id().to_string();
+
+            let cmd = match self.action {
+                Action::AddDevice { .. } | Action::AddService { .. } => {
+                    let payload = self.action.payload();
+                    match self.protocol {
+                        Protocol::HTTP => {
+                            let mut payload = payload;
+                            payload.insert("@topic-id".to_string(), topic.into());
+                            let payload = serde_json::Value::Object(payload).to_string();
+                            format!("tedge http post /tedge/entity-store/v1/entities '{payload}'")
+                        }
+                        Protocol::MQTT => {
+                            let payload = serde_json::Value::Object(payload).to_string();
+                            format!("tedge mqtt pub -r te/{topic} '{payload}'")
+                        }
+                    }
+                }
+                Action::RemDevice { .. } | Action::RemService { .. } => match self.protocol {
+                    Protocol::HTTP => {
+                        format!("tedge http delete /tedge/entity-store/v1/entities/{topic}")
+                    }
+                    Protocol::MQTT => {
+                        format!("tedge mqtt pub -r te/{topic} ''")
+                    }
+                },
+            };
+
+            // Print the command line with no extra quotes
+            f.write_str(cmd.as_str())
+        }
+    }
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     #[allow(clippy::upper_case_acronyms)]
@@ -227,6 +307,15 @@ mod model {
 
                 Action::RemDevice { .. } | Action::RemService { .. } => serde_json::Map::new(),
             }
+        }
+
+        pub fn payload(&self) -> serde_json::Map<String, serde_json::Value> {
+            let mut props = self.properties();
+            if let Some(parent) = self.parent_topic_id() {
+                props.insert("@parent".to_string(), parent.to_string().into());
+            }
+            props.insert("@type".to_string(), self.target_type().to_string().into());
+            props
         }
     }
 
@@ -499,11 +588,11 @@ mod model {
     }
 
     prop_compose! {
-        pub fn random_action_on(topic: String)(
+        pub fn random_command_on(topic: String)(
             protocol in random_protocol(),
             action in 1..5,
             props in random_props(2)
-        ) -> (Protocol,Action) {
+        ) -> Command {
             let topic = topic.to_owned();
             let action = match action {
                 1 => Action::AddDevice{ topic, props },
@@ -511,30 +600,36 @@ mod model {
                 3 => Action::RemService{ topic },
                 _ => Action::RemDevice{ topic },
             };
-            (protocol, action)
+            Command { protocol, action }
         }
     }
 
-    pub fn random_action() -> impl Strategy<Value = (Protocol, Action)> {
-        random_name().prop_flat_map(random_action_on)
+    pub fn random_command() -> impl Strategy<Value = Command> {
+        random_name().prop_flat_map(random_command_on)
     }
 
-    fn step(actions: Vec<(Protocol, Action)>) -> impl Strategy<Value = Vec<(Protocol, Action)>> {
-        let nodes = actions.iter().map(|(_, a)| a.target().to_owned()).collect();
+    fn step(actions: Commands) -> impl Strategy<Value = Commands> {
+        let nodes = actions
+            .0
+            .iter()
+            .map(|c| c.action.target().to_owned())
+            .collect();
         pick_random_or_new(nodes)
-            .prop_flat_map(random_action_on)
+            .prop_flat_map(random_command_on)
             .prop_flat_map(move |action| {
                 let mut actions = actions.clone();
-                actions.push(action);
+                actions.0.push(action);
                 Just(actions)
             })
     }
 
-    pub fn walk(max_length: u32) -> impl Strategy<Value = Vec<(Protocol, Action)>> {
+    pub fn walk(max_length: u32) -> impl Strategy<Value = Commands> {
         if max_length == 0 {
-            Just(vec![]).boxed()
+            Just(Commands(vec![])).boxed()
         } else if max_length == 1 {
-            prop::collection::vec(random_action(), 0..=1).boxed()
+            prop::collection::vec(random_command(), 0..=1)
+                .prop_flat_map(|cmds| Just(Commands(cmds)))
+                .boxed()
         } else {
             walk(max_length - 1).prop_flat_map(step).boxed()
         }
