@@ -2,16 +2,20 @@ use crate::HttpRequest;
 use crate::HttpResponse;
 use crate::HttpResult;
 use async_trait::async_trait;
-use hyper::client::Client;
-use hyper::client::HttpConnector;
+use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt as _;
+use hyper::body::Bytes;
 use hyper_rustls::HttpsConnector;
 use hyper_rustls::HttpsConnectorBuilder;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
 use tedge_actors::Server;
 
 #[derive(Clone)]
 pub struct HttpService {
-    client: Client<HttpsConnector<HttpConnector>, hyper::body::Body>,
+    client: Client<HttpsConnector<HttpConnector>, BoxBody<Bytes, hyper::Error>>,
 }
 
 impl HttpService {
@@ -22,7 +26,7 @@ impl HttpService {
             .enable_http1()
             .enable_http2()
             .build();
-        let client = Client::builder().build(https);
+        let client = Client::builder(TokioExecutor::new()).build(https);
         HttpService { client }
     }
 }
@@ -40,7 +44,7 @@ impl Server for HttpService {
         Ok(HttpResponse {
             endpoint: request.uri().path().to_owned(),
             method: request.method().to_owned(),
-            response: self.client.request(request).await?,
+            response: self.client.request(request).await?.map(|b| b.boxed()),
         })
     }
 }

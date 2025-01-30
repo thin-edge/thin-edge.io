@@ -604,7 +604,7 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
     loop {
         let response = timeout(DEFAULT_TIMEOUT, event_loop.poll())
             .await
-            .context("timed-out waiting for received message")?;
+            .context(|| "timed-out waiting for received message")?;
 
         match response {
             // Incoming messages
@@ -644,7 +644,9 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
             Ok(Event::Outgoing(Outgoing::Unsubscribe(v))) => {
                 info!("outgoing Unsubscribe: pkid={v}")
             }
-            Ok(Event::Outgoing(Outgoing::PubAck(v))) => info!("Outgoing::PubAck: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::PubAck(v))) => {
+                info!("Outgoing::PubAck: pkid={v}")
+            }
             Ok(Event::Outgoing(Outgoing::PubRec(v))) => info!("Outgoing::PubRec: pkid={v}"),
             Ok(Event::Outgoing(Outgoing::PubRel(v))) => info!("Outgoing::PubRel: pkid={v}"),
             Ok(Event::Outgoing(Outgoing::PubComp(v))) => info!("Outgoing::PubComp: pkid={v}"),

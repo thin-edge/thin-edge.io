@@ -220,17 +220,10 @@ mod tests {
     }
 
     mod server_accepts {
-        use rustls::crypto::CryptoProvider;
-
         use super::*;
-
-        fn init_crypto() {
-            let _ = CryptoProvider::install_default(rustls::crypto::ring::default_provider());
-        }
 
         #[tokio::test]
         async fn alg_ed25519_pkcs8() {
-            init_crypto();
             let key = test_data("ed25519.key");
             let cert = test_data("ed25519.crt");
 
@@ -242,7 +235,6 @@ mod tests {
 
         #[tokio::test]
         async fn alg_ec() {
-            init_crypto();
             let key = test_data("ec.key");
             let cert = test_data("ec.crt");
 
@@ -254,7 +246,6 @@ mod tests {
 
         #[tokio::test]
         async fn alg_ec_pkcs8() {
-            init_crypto();
             let key = test_data("ec.pkcs8.key");
             let cert = test_data("ec.crt");
 
@@ -266,7 +257,6 @@ mod tests {
 
         #[tokio::test]
         async fn alg_rsa_pkcs8() {
-            init_crypto();
             let key = test_data("rsa.pkcs8.key");
             let cert = test_data("rsa.crt");
 
@@ -278,7 +268,6 @@ mod tests {
 
         #[tokio::test]
         async fn alg_rsa_pkcs1() {
-            init_crypto();
             let key = test_data("rsa.pkcs1.key");
             let cert = test_data("rsa.crt");
 
@@ -310,7 +299,7 @@ mod tests {
                 .context("reading certs")?;
             let key_der = parse_key_to_der(key)?;
             let cert = reqwest::tls::Certificate::from_der(
-                &*chain.first().expect("chain should contain certificate"),
+                chain.first().expect("chain should contain certificate"),
             )
             .context("converting certificate to reqwest::tls::Certificate")?;
             let config = ssl_config(chain, key_der, None)?;

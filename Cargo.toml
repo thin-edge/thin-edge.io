@@ -78,12 +78,13 @@ assert_matches = "1.5"
 async-compat = "0.2.1"
 async-log = "2.0"
 async-trait = "0.1"
-async-tungstenite = { version = "0.23", features = [
+async-tungstenite = { version = "0.28", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
 axum = "0.8.1"
-axum-server = { version = "0.5.1", features = ["tls-rustls"] }
+axum-extra = "0.10.0"
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 bytes = "1.4"
@@ -111,19 +112,20 @@ futures-timer = "3.0"
 futures-util = "0.3.25"
 glob = "0.3"
 heck = "0.4.1"
-http = "0.2"
-http-body = "0.4"
+http = "1.2"
+http-body = "1.0.0"
+http-body-util = "0.1.2"
 httparse = "1.9.3"
 humantime = "2.1.0"
-hyper = { version = "0.14", default-features = false }
-hyper-util = { version = "0.1" }
+hyper = { version = "1.5", default-features = false }
 hyper-rustls = { version = "0.27.5", default-features = false, features = [
-    "tokio-runtime",
+    "native-tokio",
     "tls12",
     "rustls-native-certs",
     "http1",
     "http2",
 ] }
+hyper-util = { version = "0.1" }
 itertools = "0.13"
 lazy_static = "1.4"
 log = "0.4"
@@ -155,9 +157,9 @@ regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
 rpassword = "5.0"
 rstest = "0.16.0"
-rumqttc = { git = "https://github.com/bytebeamio/rumqtt", ref = "49c3b5f81360299c316b052778905a7420bea579" }
+rumqttc = { git = "https://github.com/bytebeamio/rumqtt", rev = "49c3b5f81360299c316b052778905a7420bea579" }
 rumqttd = "0.19"
-rustls = "0.23"
+rustls = { version = "0.23", default-features = false }
 rustls-native-certs = "0.6.3"
 rustls-pemfile = "2.2"
 serde = "1.0"
@@ -178,20 +180,20 @@ thiserror = "1.0"
 time = "0.3"
 tokio = { version = "1.37", default-features = false }
 tokio-rustls = "0.26.1"
-tokio-tungstenite = { version = "0.20.0" }
+tokio-tungstenite = { version = "0.26.1" }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.8"
 tower = "0.4"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 try-traits = "0.1"
-tungstenite = "0.20"
+tungstenite = "0.26.1"
 url = "2.3"
 uzers = "0.11"
 walkdir = "2"
 which = "4.2"
 whoami = "1.5.0"
-ws_stream_tungstenite = "0.11"
+ws_stream_tungstenite = "0.14"
 x509-parser = "0.16"
 yansi = "1.0.1"
 zeroize = "1.5"

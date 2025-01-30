@@ -21,8 +21,11 @@ axum-server = { workspace = true }
 camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
+hyper-util = { workspace = true, features = [
+    "client",
+    "client-legacy",
+], optional = true }
 pin-project = { workspace = true }
-hyper-util = { workspace = true, features = ["client", "client-legacy"], optional = true }
 reqwest = { workspace = true, features = [
     "rustls-tls-native-roots",
 ], optional = true }

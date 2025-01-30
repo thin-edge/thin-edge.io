@@ -182,7 +182,6 @@ pub fn read_cert_chain(
     })?;
     let mut cert_reader = BufReader::new(f);
     certs(&mut cert_reader)
-        .map(|der_chain| Ok(CertificateDer::from(der_chain?)))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| CertificateError::CertificateParseFailed {
             path: cert_file.as_ref().to_path_buf(),

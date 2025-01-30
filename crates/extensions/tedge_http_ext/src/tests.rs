@@ -21,7 +21,6 @@ async fn get_over_https() {
 
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
     let config = ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(RootCertStore::empty())
         .with_no_client_auth();
     let mut builder = HttpActor::new(config).builder();

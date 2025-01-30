@@ -25,7 +25,7 @@ pub(crate) fn get_connected_c8y_url(
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
+    let (client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     connection
         .eventloop
         .network_options

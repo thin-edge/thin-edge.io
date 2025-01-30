@@ -87,9 +87,9 @@ where
             } else {
                 let (stream, service) = acceptor.accept(stream, service).await?;
                 let server_conn = stream.get_ref().1;
-                let cert = (|| {
-                    X509Certificate::from_der(&server_conn.peer_certificates()?.first()?).ok()
-                })();
+                let cert =
+                    (|| X509Certificate::from_der(server_conn.peer_certificates()?.first()?).ok())(
+                    );
                 let certificate_info = TlsData {
                     common_name: common_name(cert.as_ref()).map(Arc::from),
                     is_secure: true,
@@ -117,7 +117,6 @@ mod tests {
     use reqwest::Certificate;
     use reqwest::Client;
     use reqwest::Identity;
-    use rustls::crypto::CryptoProvider;
     use rustls::pki_types::pem::PemObject as _;
     use rustls::pki_types::CertificateDer;
     use rustls::pki_types::PrivateKeyDer;
@@ -173,9 +172,12 @@ mod tests {
 
     #[tokio::test]
     async fn acceptor_rejects_untrusted_client_certificates() {
-        let permitted_certificate = rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
+        let permitted_certificate =
+            rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
         let mut roots = RootCertStore::empty();
-        roots.add(permitted_certificate.serialize_der().unwrap().into()).unwrap();
+        roots
+            .add(permitted_certificate.serialize_der().unwrap().into())
+            .unwrap();
         let server = Server::with_trusted_roots(roots);
         let client = Client::builder()
             .add_root_certificate(server.certificate.clone())
@@ -257,7 +259,6 @@ mod tests {
         }
 
         fn start(trusted_roots: Option<RootCertStore>) -> Self {
-            let _ = CryptoProvider::install_default(rustls::crypto::ring::default_provider());
             let mut port = 3000;
             let listener = loop {
                 if let Ok(listener) = TcpListener::bind::<SocketAddr>(([127, 0, 0, 1], port).into())
