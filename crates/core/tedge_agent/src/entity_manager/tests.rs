@@ -10,7 +10,7 @@ async fn new_entity_store() {
 
     assert_eq!(
         entity::get(&mut entity_store, "device/main//").await,
-        Some(EntityMetadata::main_device("device-under-test".to_string()))
+        Some(EntityMetadata::main_device())
     )
 }
 

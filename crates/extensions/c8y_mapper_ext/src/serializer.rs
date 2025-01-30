@@ -229,8 +229,7 @@ mod tests {
     fn serialize_single_value_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
@@ -258,8 +257,7 @@ mod tests {
     fn serialize_single_value_message_with_custom_type() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "test_type");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
@@ -287,8 +285,7 @@ mod tests {
     fn invalid_to_have_type_as_measurement() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
@@ -304,8 +301,7 @@ mod tests {
     fn invalid_to_have_externalsource_as_measurement() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
@@ -324,8 +320,7 @@ mod tests {
     fn serialize_multi_value_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
 
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
@@ -378,8 +373,7 @@ mod tests {
     fn type_inside_a_group_is_not_valid() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
@@ -397,8 +391,7 @@ mod tests {
     fn serialize_empty_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let serializer = C8yJsonSerializer::new(timestamp, &entity, "");
 
         let expected_output =
@@ -418,8 +411,7 @@ mod tests {
     fn serialize_timestamp_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
 
@@ -442,8 +434,7 @@ mod tests {
     fn serialize_timestamp_within_group() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_start_group("location")?;
 
@@ -462,8 +453,7 @@ mod tests {
     fn serialize_unexpected_end_of_group() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
@@ -484,8 +474,7 @@ mod tests {
     fn serialize_unexpected_start_of_group() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_start_group("location")?;
         serializer.visit_measurement("alti", 2100.4)?;
@@ -507,8 +496,7 @@ mod tests {
     fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity =
-            CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device("foo".to_string()));
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device());
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_start_group("location")?;
         serializer.visit_measurement("alti", 2100.4)?;

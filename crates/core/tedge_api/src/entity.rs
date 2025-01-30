@@ -78,10 +78,10 @@ pub struct EntityMetadata {
 
 impl EntityMetadata {
     /// Creates a entity metadata for the main device.
-    pub fn main_device(device_id: String) -> Self {
+    pub fn main_device() -> Self {
         Self {
             topic_id: EntityTopicId::default_main_device(),
-            external_id: Some(device_id.clone().into()),
+            external_id: None,
             r#type: EntityType::MainDevice,
             parent: None,
             other: Map::new(),

@@ -479,7 +479,7 @@ mod tests {
                 if let EntityStoreRequest::List(_) = req.request {
                     req.reply_to
                         .send(EntityStoreResponse::List(Ok(vec![
-                            EntityMetadata::main_device("main".to_string()),
+                            EntityMetadata::main_device(),
                             EntityMetadata::child_device("child0".to_string()).unwrap(),
                             EntityMetadata::child_device("child1".to_string()).unwrap(),
                         ])))

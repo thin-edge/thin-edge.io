@@ -95,10 +95,8 @@ impl EntityCache {
         SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
         SF: 'static + Send + Sync,
     {
-        let main_device_metadata = CloudEntityMetadata::new(
-            main_device_xid.clone(),
-            EntityMetadata::main_device(main_device_xid.clone().into()),
-        );
+        let main_device_metadata =
+            CloudEntityMetadata::new(main_device_xid.clone(), EntityMetadata::main_device());
 
         Self {
             main_device_xid: main_device_xid.clone(),
