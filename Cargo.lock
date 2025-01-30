@@ -2291,8 +2291,7 @@ checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
 [[package]]
 name = "libloading"
 version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
+source = "git+https://github.com/Bravo555/rust_libloading.git?branch=v0.7.4#12922084558bc82482edd7e9339394bbc9afcee3"
 dependencies = [
  "cfg-if",
  "winapi",
