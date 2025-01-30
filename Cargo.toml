@@ -84,7 +84,7 @@ async-tungstenite = { version = "0.28", features = [
 ] }
 axum = "0.8.1"
 axum-extra = "0.10.0"
-axum-server = { version = "0.7.1", features = ["tls-rustls"] }
+axum-server = { version = "0.7.1", features = ["tls-rustls-no-provider"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 bytes = "1.4"
@@ -157,9 +157,9 @@ regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
 rpassword = "5.0"
 rstest = "0.16.0"
-rumqttc = { git = "https://github.com/bytebeamio/rumqtt", rev = "49c3b5f81360299c316b052778905a7420bea579" }
+rumqttc = { git = "https://github.com/jarhodes314/rumqtt", rev = "8c489faf6af910956c97b55587ff3ecb2ac4e96f" }
 rumqttd = "0.19"
-rustls = { version = "0.23", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 rustls-native-certs = "0.6.3"
 rustls-pemfile = "2.2"
 serde = "1.0"
@@ -179,7 +179,7 @@ test-case = "3.2"
 thiserror = "1.0"
 time = "0.3"
 tokio = { version = "1.37", default-features = false }
-tokio-rustls = "0.26.1"
+tokio-rustls = { version = "0.26.1", default-features = false }
 tokio-tungstenite = { version = "0.26.1" }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.8"
