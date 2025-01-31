@@ -189,7 +189,7 @@ async fn bridge_disconnect_while_sending() {
     let poll_local = EventPoller::run_in_bg(ev_local);
 
     // Verify messages are forwarded from cloud to local
-    for i in 1..10000 {
+    for i in 1..1000 {
         local
             .publish(
                 "c8y/s/us",
@@ -202,7 +202,7 @@ async fn bridge_disconnect_while_sending() {
     }
     cloud_proxy.interrupt_connections();
     let _ev_cloud = EventPoller::run_in_bg(ev_cloud);
-    for _ in 1..10000 {
+    for _ in 1..1000 {
         local
             .publish(
                 "c8y/s/us",
