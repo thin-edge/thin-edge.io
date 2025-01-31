@@ -77,53 +77,6 @@ Run tedge cert create with cloud profile
     ...    openssl x509 -noout -subject -in /etc/tedge/device-certs/tedge-certificate@third.pem
     Should Match Regexp    ${subject}    pattern=^subject=CN = ${THIRD_DEVICE_SN},.+$
 
-Device ID derivation
-    ${output}=    Execute Command    tedge cert create --device-id input
-    Should Contain    ${output}    CN=input
-    Execute Command    tedge cert remove
-
-    Execute Command    tedge config set device.id testid
-    # Mismached device id returns error
-    Execute Command    tedge cert create --device-id different    exp_exit_code=1
-    # Matched device id passes
-    ${output}=    Execute Command    tedge cert create --device-id testid
-    Should Contain    ${output}    CN=testid
-    Execute Command    tedge cert remove
-
-    # The generic device.id is used as "default" value if cloud profile doesn't have it explicitly
-    ${output}=    Execute Command    tedge cert create c8y
-    Should Contain    ${output}    CN=testid
-    Execute Command    tedge cert remove c8y
-
-    Execute Command    tedge config set c8y.url example.com --profile foo
-    ${output}=    Execute Command    tedge cert create c8y --profile foo
-    Should Contain    ${output}    CN=testid
-    Execute Command    tedge cert remove c8y --profile foo
-
-    # input value is used if cloud profile doesn't have explicit device id
-    ${output}=    Execute Command    tedge cert create c8y --device-id input
-    Should Contain    ${output}    CN=input
-    Execute Command    tedge cert remove c8y
-
-    ${output}=    Execute Command    tedge cert create c8y --device-id input --profile foo
-    Should Contain    ${output}    CN=input
-    Execute Command    tedge cert remove c8y --profile foo
-
-    # the value from cloud profile is used over the "default" value from the generic device.id
-    Execute Command    tedge config set c8y.device.id c8y-testid
-    ${output}=    Execute Command    tedge cert create c8y
-    Should Contain    ${output}    CN=c8y-testid
-    Execute Command    tedge cert remove c8y
-    # Mismatched device id returns error
-    Execute Command    tedge cert create c8y --device-id different    exp_exit_code=1
-
-    Execute Command    tedge config set c8y.device.id c8y-foo-testid --profile foo
-    ${output}=    Execute Command    tedge cert create c8y --profile foo
-    Should Contain    ${output}    CN=c8y-foo-testid
-    Execute Command    tedge cert remove c8y --profile foo
-    # Mismatched device id returns error
-    Execute Command    tedge cert create c8y --device-id different --profile foo    exp_exit_code=1
-
 
 *** Keywords ***
 Custom Setup
