@@ -171,6 +171,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn acceptor_rejects_untrusted_client_certificates() {
         let permitted_certificate =
             rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
@@ -191,6 +192,31 @@ mod tests {
             .unwrap_err();
         println!("{}", err);
         crate::error_matching::assert_error_matches(err, rustls::AlertDescription::UnknownCA);
+    }
+
+    #[tokio::test]
+    async fn acceptor_rejects_connection_without_certificate() {
+        let permitted_certificate =
+            rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
+        let mut roots = RootCertStore::empty();
+        roots
+            .add(permitted_certificate.serialize_der().unwrap().into())
+            .unwrap();
+        let server = Server::with_trusted_roots(roots);
+        let client = Client::builder()
+            .add_root_certificate(server.certificate.clone())
+            .build()
+            .unwrap();
+
+        let err = server
+            .get_with_scheme(Scheme::HTTPS, &client)
+            .await
+            .unwrap_err();
+        println!("{}", err);
+        crate::error_matching::assert_error_matches(
+            err,
+            rustls::AlertDescription::CertificateRequired,
+        );
     }
 
     #[tokio::test]

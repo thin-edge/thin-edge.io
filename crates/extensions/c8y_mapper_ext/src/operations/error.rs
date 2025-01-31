@@ -11,13 +11,7 @@ pub(crate) struct OperationError(anyhow::Error);
 
 impl Display for OperationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)?;
-
-        if let Some(source) = self.0.source() {
-            write!(f, ": {}", source)?;
-        }
-
-        Ok(())
+        write!(f, "{:#}", self.0)
     }
 }
 

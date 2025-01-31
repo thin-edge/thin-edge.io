@@ -604,7 +604,7 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
     loop {
         let response = timeout(DEFAULT_TIMEOUT, event_loop.poll())
             .await
-            .context(|| "timed-out waiting for received message")?;
+            .context("timed-out waiting for received message")?;
 
         match response {
             // Incoming messages
