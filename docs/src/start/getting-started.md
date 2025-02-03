@@ -146,6 +146,8 @@ sudo tedge cert create --device-id "$DEVICE_ID"
 
 The device id is a unique identifier e.g. the MAC address that identifies the physical device.
 
+Before you can upload the device's certificate to Cumulocity, your Cumulocity user must have the **Tenant Manager** Global Role assigned to it. For details on how to do this, see the [docs](connect-c8y.md#common-errors-403).
+
 The certificate is uploaded to the Cumulocity Tenant via:
 
 <UserContext>

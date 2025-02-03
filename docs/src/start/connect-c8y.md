@@ -190,7 +190,7 @@ sudo tedge cert upload c8y --user "$C8Y_USER"
 
 Below shows some common errors that can be experienced when trying to upload the device certificate.
 
-#### InvalidCertificate(NotValidForName)
+#### InvalidCertificate(NotValidForName) {#common-errors-invalid-certificate}
 
 If you receive the following error, then you are most likely using the [custom domain feature](https://cumulocity.com/docs/enterprise-tenant/customization/#domain-name), and should see the [custom domain instructions](#custom-domain) to configure the correct HTTP and MQTT endpoints.
 
@@ -202,7 +202,7 @@ Caused by:
     Connection check failed
 ```
 
-#### 401 - Unauthorized
+#### 401 - Unauthorized {#common-errors-401}
 
 The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity url that was set in the `tedge config set c8y.url <url>` command.
 
@@ -214,7 +214,7 @@ Check the following items to help you diagnose the root cause of the problem:
 * Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/docs/standard-tenant/managing-users/#to-add-a-user)
 
 
-#### 403 - Forbidden
+#### 403 - Forbidden {#common-errors-403}
 
 The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/docs/device-integration/device-certificates/).
 
@@ -227,7 +227,7 @@ Alternatively, you can explicitly add one of the following permissions to your C
 If you are still having trouble, please check out the official [Cumulocity documentation](https://cumulocity.com/docs/device-integration/device-certificates/#upload-your-ca-certificate).
 
 
-#### Address is unreachable
+#### Address is unreachable {#common-errors-unreachable}
 
 If you are unable to reach Cumulocity, then it is likely that your device's network is not properly configured. This could be for many different reasons, however the following checks might help you spot where the mistake is:
 
