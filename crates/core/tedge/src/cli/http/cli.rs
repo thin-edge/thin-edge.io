@@ -1,3 +1,4 @@
+use crate::cli::http::command::HttpAction;
 use crate::cli::http::command::HttpCommand;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
@@ -5,9 +6,12 @@ use crate::command::Command;
 use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::Error;
+use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
+use clap::Args;
 use reqwest::blocking;
 use reqwest::Identity;
+use std::fs::File;
 use tedge_config::OptionalConfig;
 use tedge_config::ProfileName;
 
@@ -18,8 +22,9 @@ pub enum TEdgeHttpCli {
         /// Target URI
         uri: String,
 
-        /// Content to post
-        content: String,
+        /// Content to send
+        #[command(flatten)]
+        content: Content,
 
         /// Optional c8y cloud profile
         #[clap(long)]
@@ -31,8 +36,9 @@ pub enum TEdgeHttpCli {
         /// Target URI
         uri: String,
 
-        /// Content to post
-        content: String,
+        /// Content to send
+        #[command(flatten)]
+        content: Content,
 
         /// Optional c8y cloud profile
         #[clap(long)]
@@ -60,6 +66,40 @@ pub enum TEdgeHttpCli {
     },
 }
 
+#[derive(Args, Clone, Debug)]
+#[group(required = true, multiple = false)]
+pub struct Content {
+    /// Content to send
+    #[arg(name = "content")]
+    arg2: Option<String>,
+
+    /// Content to send
+    #[arg(long)]
+    data: Option<String>,
+
+    /// File which content is sent
+    #[arg(long)]
+    file: Option<Utf8PathBuf>,
+}
+
+impl TryFrom<Content> for blocking::Body {
+    type Error = std::io::Error;
+
+    fn try_from(content: Content) -> Result<Self, Self::Error> {
+        let body: blocking::Body = if let Some(data) = content.arg2 {
+            data.into()
+        } else if let Some(data) = content.data {
+            data.into()
+        } else if let Some(file) = content.file {
+            File::open(file)?.into()
+        } else {
+            "".into()
+        };
+
+        Ok(body)
+    }
+}
+
 impl BuildCommand for TEdgeHttpCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
         let config = context.load_config()?;
@@ -79,27 +119,20 @@ impl BuildCommand for TEdgeHttpCli {
         };
 
         let url = format!("{protocol}://{host}:{port}{uri}");
-        let verb_url = format!("{} {url}", self.verb());
         let identity = config.http.client.auth.identity()?;
         let client = http_client(config.cloud_root_certs(), identity.as_ref())?;
 
-        let request = match self {
-            TEdgeHttpCli::Post { content, .. } => client
-                .post(url)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
-                .body(content),
-            TEdgeHttpCli::Put { content, .. } => client
-                .put(url)
-                .header("Content-Type", "application/json")
-                .body(content),
-            TEdgeHttpCli::Get { .. } => client.get(url).header("Accept", "application/json"),
-            TEdgeHttpCli::Delete { .. } => client.delete(url),
+        let action = match self {
+            TEdgeHttpCli::Post { content, .. } => HttpAction::Post(content),
+            TEdgeHttpCli::Put { content, .. } => HttpAction::Put(content),
+            TEdgeHttpCli::Get { .. } => HttpAction::Get,
+            TEdgeHttpCli::Delete { .. } => HttpAction::Delete,
         };
 
         Ok(HttpCommand {
-            url: verb_url,
-            request,
+            client,
+            url,
+            action,
         }
         .into_boxed())
     }
@@ -112,15 +145,6 @@ impl TEdgeHttpCli {
             | TEdgeHttpCli::Put { uri, .. }
             | TEdgeHttpCli::Get { uri, .. }
             | TEdgeHttpCli::Delete { uri, .. } => uri.as_ref(),
-        }
-    }
-
-    fn verb(&self) -> &str {
-        match self {
-            TEdgeHttpCli::Post { .. } => "POST",
-            TEdgeHttpCli::Put { .. } => "PUT",
-            TEdgeHttpCli::Get { .. } => "GET",
-            TEdgeHttpCli::Delete { .. } => "DELETE",
         }
     }
 
