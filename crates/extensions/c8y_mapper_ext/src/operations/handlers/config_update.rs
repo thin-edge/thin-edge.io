@@ -1,4 +1,5 @@
 use anyhow::Context;
+use c8y_api::smartrest::inventory::set_c8y_config_fragment;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigUpdateCmd;
@@ -47,6 +48,15 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
+                let config_fragment = MqttMessage::new(
+                    sm_topic,
+                    set_c8y_config_fragment(
+                        &command.payload.config_type,
+                        &command.payload.server_url,
+                        None, // Config update payload is not provided with name field
+                    ),
+                );
+
                 let smartrest_operation_status = self.get_smartrest_successful_status_payload(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
                     cmd_id,
@@ -54,7 +64,7 @@ impl OperationContext {
                 let c8y_notification = MqttMessage::new(sm_topic, smartrest_operation_status);
 
                 Ok(OperationOutcome::Finished {
-                    messages: vec![c8y_notification],
+                    messages: vec![config_fragment, c8y_notification],
                 })
             }
             CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
@@ -196,6 +206,7 @@ mod tests {
             "status": "executing",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
         })
                 .to_string(),
@@ -213,6 +224,7 @@ mod tests {
             "status": "failed",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -258,6 +270,7 @@ mod tests {
             "status": "executing",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
         })
                 .to_string(),
@@ -279,6 +292,7 @@ mod tests {
             "status": "failed",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -318,6 +332,7 @@ mod tests {
             "status": "executing",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
         })
                 .to_string(),
@@ -335,6 +350,7 @@ mod tests {
             "status": "failed",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -364,12 +380,20 @@ mod tests {
             "status": "successful",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "path/type/A",
         })
                 .to_string(),
         ))
             .await
             .expect("Send failed");
+
+        // Expect `120` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(
+            &mut mqtt,
+            [("c8y/s/us", "120,path/type/A,http://www.my.url")],
+        )
+        .await;
 
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_DownloadConfigFile")]).await;
@@ -401,12 +425,20 @@ mod tests {
             "status": "successful",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "typeA",
         })
                 .to_string(),
         ))
             .await
             .expect("Send failed");
+
+        // Expect `120` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(
+            &mut mqtt,
+            [("c8y/s/us/child1", "120,typeA,http://www.my.url")],
+        )
+        .await;
 
         // Expect `503` smartrest message on child topic.
         assert_received_contains_str(
@@ -436,12 +468,20 @@ mod tests {
             "status": "successful",
             "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
+            "serverUrl": "http://www.my.url",
             "type": "path/type/A",
         })
                 .to_string(),
         ))
             .await
             .expect("Send failed");
+
+        // Expect `120` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(
+            &mut mqtt,
+            [("c8y/s/us", "120,path/type/A,http://www.my.url")],
+        )
+        .await;
 
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234")]).await;
