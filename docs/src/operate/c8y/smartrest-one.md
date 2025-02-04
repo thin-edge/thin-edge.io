@@ -32,7 +32,7 @@ password = "abcd1234"
 If needed, you can specify a custom location for the credentials file using the `tedge config` CLI tool:
 
 ```sh
-sudo tedge config set c8y.credentials_path </custom/path/to/credentials.toml>
+sudo tedge config set c8y.credentials_path /custom/path/to/credentials.toml
 ```
 
 ## Configuring the device ID
