@@ -26,6 +26,16 @@ pub enum TEdgeHttpCli {
         #[command(flatten)]
         content: Content,
 
+        /// MIME type of the content
+        #[clap(long, default_value = "application/json")]
+        #[arg(value_parser = parse_mime_type)]
+        content_type: String,
+
+        /// MIME type of the expected content
+        #[clap(long, default_value = "application/json")]
+        #[arg(value_parser = parse_mime_type)]
+        accept_type: String,
+
         /// Optional c8y cloud profile
         #[clap(long)]
         profile: Option<ProfileName>,
@@ -40,6 +50,11 @@ pub enum TEdgeHttpCli {
         #[command(flatten)]
         content: Content,
 
+        /// MIME type of the content
+        #[clap(long, default_value = "application/json")]
+        #[arg(value_parser = parse_mime_type)]
+        content_type: String,
+
         /// Optional c8y cloud profile
         #[clap(long)]
         profile: Option<ProfileName>,
@@ -49,6 +64,11 @@ pub enum TEdgeHttpCli {
     Get {
         /// Source URI
         uri: String,
+
+        /// MIME type of the expected content
+        #[clap(long, default_value = "application/json")]
+        #[arg(value_parser = parse_mime_type)]
+        accept_type: String,
 
         /// Optional c8y cloud profile
         #[clap(long)]
@@ -80,6 +100,10 @@ pub struct Content {
     /// File which content is sent
     #[arg(long)]
     file: Option<Utf8PathBuf>,
+}
+
+fn parse_mime_type(input: &str) -> Result<String, Error> {
+    Ok(input.parse::<mime_guess::mime::Mime>()?.to_string())
 }
 
 impl TryFrom<Content> for blocking::Body {
@@ -121,13 +145,7 @@ impl BuildCommand for TEdgeHttpCli {
         let url = format!("{protocol}://{host}:{port}{uri}");
         let identity = config.http.client.auth.identity()?;
         let client = http_client(config.cloud_root_certs(), identity.as_ref())?;
-
-        let action = match self {
-            TEdgeHttpCli::Post { content, .. } => HttpAction::Post(content),
-            TEdgeHttpCli::Put { content, .. } => HttpAction::Put(content),
-            TEdgeHttpCli::Get { .. } => HttpAction::Get,
-            TEdgeHttpCli::Delete { .. } => HttpAction::Delete,
-        };
+        let action = self.into();
 
         Ok(HttpCommand {
             client,
@@ -135,6 +153,33 @@ impl BuildCommand for TEdgeHttpCli {
             action,
         }
         .into_boxed())
+    }
+}
+
+impl From<TEdgeHttpCli> for HttpAction {
+    fn from(value: TEdgeHttpCli) -> Self {
+        match value {
+            TEdgeHttpCli::Post {
+                content,
+                content_type,
+                accept_type,
+                ..
+            } => HttpAction::Post {
+                content,
+                content_type,
+                accept_type,
+            },
+            TEdgeHttpCli::Put {
+                content,
+                content_type,
+                ..
+            } => HttpAction::Put {
+                content,
+                content_type,
+            },
+            TEdgeHttpCli::Get { accept_type, .. } => HttpAction::Get { accept_type },
+            TEdgeHttpCli::Delete { .. } => HttpAction::Delete,
+        }
     }
 }
 

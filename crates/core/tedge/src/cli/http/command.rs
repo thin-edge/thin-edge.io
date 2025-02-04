@@ -16,18 +16,27 @@ pub struct HttpCommand {
 }
 
 pub enum HttpAction {
-    Post(Content),
-    Put(Content),
-    Get,
+    Post {
+        content: Content,
+        content_type: String,
+        accept_type: String,
+    },
+    Put {
+        content: Content,
+        content_type: String,
+    },
+    Get {
+        accept_type: String,
+    },
     Delete,
 }
 
 impl Command for HttpCommand {
     fn description(&self) -> String {
         let verb = match self.action {
-            HttpAction::Post(_) => "POST",
-            HttpAction::Put(_) => "PUT",
-            HttpAction::Get => "GET",
+            HttpAction::Post { .. } => "POST",
+            HttpAction::Put { .. } => "PUT",
+            HttpAction::Get { .. } => "GET",
             HttpAction::Delete => "DELETE",
         };
         format!("{verb} {}", self.url)
@@ -45,16 +54,23 @@ impl HttpCommand {
         let client = &self.client;
         let url = &self.url;
         let request = match &self.action {
-            HttpAction::Post(content) => client
+            HttpAction::Post {
+                content,
+                content_type,
+                accept_type,
+            } => client
                 .post(url)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
+                .header("Accept", accept_type)
+                .header("Content-Type", content_type)
                 .body(blocking::Body::try_from(content.clone())?),
-            HttpAction::Put(content) => client
+            HttpAction::Put {
+                content,
+                content_type,
+            } => client
                 .put(url)
-                .header("Content-Type", "application/json")
+                .header("Content-Type", content_type)
                 .body(blocking::Body::try_from(content.clone())?),
-            HttpAction::Get => client.get(url).header("Accept", "application/json"),
+            HttpAction::Get { accept_type } => client.get(url).header("Accept", accept_type),
             HttpAction::Delete => client.delete(url),
         };
 
