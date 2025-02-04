@@ -98,7 +98,7 @@ second mapper using:
 
 <UserContext>
 ```
-sudo tedge connect --profile $C8Y_PROFILE_NAME
+sudo tedge connect c8y --profile $C8Y_PROFILE_NAME
 ```
 </UserContext>
 
