@@ -1,4 +1,8 @@
 use crate::entity_manager::server::EntityStoreResponse;
+use crate::entity_manager::tests::model::Action;
+use crate::entity_manager::tests::model::Command;
+use crate::entity_manager::tests::model::Commands;
+use crate::entity_manager::tests::model::Protocol::MQTT;
 use proptest::proptest;
 use std::collections::HashSet;
 use tedge_actors::Server;
@@ -14,6 +18,20 @@ async fn new_entity_store() {
     )
 }
 
+#[tokio::test]
+async fn removing_an_unknown_child_using_mqtt() {
+    let registrations = vec![
+        // tedge mqtt pub -r te/device/a// ''
+        Command {
+            protocol: MQTT,
+            action: Action::RemDevice {
+                topic: "a".to_string(),
+            },
+        },
+    ];
+    check_registrations(Commands(registrations)).await
+}
+
 proptest! {
     //#![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
     #[test]
@@ -22,40 +40,40 @@ proptest! {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(async {
-            let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
-            let mut state = model::State::new();
+        .block_on(check_registrations(registrations))
+    }
+}
 
-            for model::Command{protocol,action} in registrations.0 {
-                let expected_updates = state.apply(protocol, action.clone());
-                let actual_updates = match entity_store.handle((protocol,action).into()).await {
-                    EntityStoreResponse::Create(Ok(registered_entities)) => {
-                        registered_entities
-                            .iter()
-                            .map(|registered_entity| registered_entity.reg_message.topic_id.clone())
-                            .collect()
-                    },
-                    EntityStoreResponse::Delete(actual_updates) => HashSet::from_iter(actual_updates),
-                    _ => HashSet::new(),
-                };
-                assert_eq!(actual_updates, expected_updates);
-            }
+async fn check_registrations(registrations: Commands) {
+    let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
+    let mut state = model::State::new();
 
-            let mut registered_topics : Vec<_> = entity_store.entity_topic_ids().collect();
-            registered_topics.sort_by(|a,b| a.as_ref().cmp(b.as_ref()));
+    for Command { protocol, action } in registrations.0 {
+        let expected_updates = state.apply(protocol, action.clone());
+        let actual_updates = match entity_store.handle((protocol, action).into()).await {
+            EntityStoreResponse::Create(Ok(registered_entities)) => registered_entities
+                .iter()
+                .map(|registered_entity| registered_entity.reg_message.topic_id.clone())
+                .collect(),
+            EntityStoreResponse::Delete(actual_updates) => HashSet::from_iter(actual_updates),
+            _ => HashSet::new(),
+        };
+        assert_eq!(actual_updates, expected_updates);
+    }
 
-            let mut expected_topics : Vec<_> = state.entity_topic_ids().collect();
-            expected_topics.sort_by(|a,b| a.as_ref().cmp(b.as_ref()));
+    let mut registered_topics: Vec<_> = entity_store.entity_topic_ids().collect();
+    registered_topics.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
-            assert_eq!(registered_topics, expected_topics);
+    let mut expected_topics: Vec<_> = state.entity_topic_ids().collect();
+    expected_topics.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
-            for topic in registered_topics {
-                let registered = entity_store.get(topic).unwrap();
-                let (entity_type, parent, _) = state.get(topic).unwrap();
-                assert_eq!(&registered.r#type, entity_type);
-                assert_eq!(registered.parent.as_ref(), parent.as_ref());
-            }
-        })
+    assert_eq!(registered_topics, expected_topics);
+
+    for topic in registered_topics {
+        let registered = entity_store.get(topic).unwrap();
+        let (entity_type, parent, _) = state.get(topic).unwrap();
+        assert_eq!(&registered.r#type, entity_type);
+        assert_eq!(registered.parent.as_ref(), parent.as_ref());
     }
 }
 
