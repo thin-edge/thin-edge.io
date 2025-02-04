@@ -17,7 +17,7 @@ This guide is intended for users who must use the SmartREST 1.0 for specific rea
 To use SmartREST 1.0, the authentication mode must be set to `basic` using the `tedge config` CLI tool:
 
 ```sh
-sudo tedge config set c8y.auth_mode basic
+sudo tedge config set c8y.auth_method basic
 ```
 
 Next, provide credentials (username/password) in a credential file formatted as follows.
