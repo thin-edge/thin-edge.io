@@ -23,7 +23,7 @@ sudo tedge config set c8y.auth_method basic
 Next, provide credentials (username/password) in a credential file formatted as follows.
 The default location of the credentials file is `/etc/tedge/credentials.toml`:
 
-```toml
+```toml title="file: /etc/tedge/credentials.toml"
 [c8y]
 username = "t5678/octocat"
 password = "abcd1234"
