@@ -147,7 +147,7 @@ fn spawn_broker() -> u16 {
         let mut mqttoptions = rumqttc::MqttOptions::new("rumqtt-sync", "127.0.0.1", port);
         mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-        let (mut client, mut connection) = rumqttc::Client::new(mqttoptions, 10);
+        let (client, mut connection) = rumqttc::Client::new(mqttoptions, 10);
 
         client.subscribe("#", QoS::ExactlyOnce).unwrap();
 

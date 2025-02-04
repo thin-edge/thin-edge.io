@@ -52,7 +52,6 @@ impl fmt::Debug for RequestPath {
     }
 }
 
-#[async_trait::async_trait]
 impl FromRequestParts<FileTransferDir> for FileTransferPath {
     type Rejection = HttpRequestError;
 

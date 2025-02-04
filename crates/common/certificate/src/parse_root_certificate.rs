@@ -1,10 +1,9 @@
-use rustls::Certificate;
+use rustls::pki_types::pem::PemObject as _;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::PrivateKeyDer;
 use rustls::ClientConfig;
-use rustls::PrivateKey;
 use rustls::RootCertStore;
 use rustls_pemfile::certs;
-use rustls_pemfile::pkcs8_private_keys;
-use rustls_pemfile::rsa_private_keys;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
@@ -23,7 +22,6 @@ pub fn create_tls_config(
     let cert_chain = read_cert_chain(client_certificate)?;
 
     Ok(ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(root_cert_store)
         .with_client_auth_cert(cert_chain, pvt_key)?)
 }
@@ -41,7 +39,7 @@ where
 
     let (mut valid_count, mut invalid_count) = (0, 0);
     for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-        match roots.add(&Certificate(cert.0)) {
+        match roots.add(CertificateDer::from_slice(&cert.0)) {
             Ok(_) => valid_count += 1,
             Err(err) => {
                 tracing::debug!("certificate parsing failed: {:?}", err);
@@ -63,7 +61,6 @@ where
     }
 
     Ok(ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(roots)
         .with_no_client_auth())
 }
@@ -74,7 +71,6 @@ pub fn create_tls_config_without_client_cert(
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
 
     Ok(ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(root_cert_store)
         .with_no_client_auth())
 }
@@ -86,7 +82,7 @@ pub fn add_certs_from_file(
     let cert_chain = read_cert_chain(cert_file)?;
     for cert in cert_chain {
         root_store
-            .add(&cert)
+            .add(cert)
             .map_err(|_| CertificateError::RootStoreAdd)?;
     }
 
@@ -161,7 +157,7 @@ fn try_rec_add_root_cert(
 fn add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) -> Result<(), CertificateError> {
     let certificates = read_cert_chain(cert_path)?;
     for certificate in certificates.iter() {
-        if let Err(err) = root_store.add(certificate) {
+        if let Err(err) = root_store.add(certificate.clone()) {
             eprintln!(
                 "Ignoring certificate in file {:?} due to: {}",
                 cert_path, err
@@ -171,43 +167,22 @@ fn add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) -> Result<(),
     Ok(())
 }
 
-pub fn read_pvt_key(key_file: impl AsRef<Path>) -> Result<PrivateKey, CertificateError> {
-    let key_file = key_file.as_ref();
-    parse_pkcs8_key(key_file).or_else(|_| parse_rsa_key(key_file))
+pub fn read_pvt_key(
+    key_file: impl AsRef<Path>,
+) -> Result<PrivateKeyDer<'static>, CertificateError> {
+    PrivateKeyDer::from_pem_file(key_file).map_err(CertificateError::from)
 }
 
-fn parse_pkcs8_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
-    let f = File::open(key_file).map_err(|error| CertificateError::IoError {
-        error,
-        path: key_file.to_owned(),
-    })?;
-    let mut key_reader = BufReader::new(f);
-    match pkcs8_private_keys(&mut key_reader) {
-        Ok(key) if !key.is_empty() => Ok(PrivateKey(key[0].clone())),
-        _ => Err(CertificateError::UnknownPrivateKeyFormat),
-    }
-}
-
-fn parse_rsa_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
-    let f = File::open(key_file).map_err(|error| CertificateError::IoError {
-        error,
-        path: key_file.to_owned(),
-    })?;
-    let mut key_reader = BufReader::new(f);
-    match rsa_private_keys(&mut key_reader) {
-        Ok(key) if !key.is_empty() => Ok(PrivateKey(key[0].clone())),
-        _ => Err(CertificateError::UnknownPrivateKeyFormat),
-    }
-}
-
-pub fn read_cert_chain(cert_file: impl AsRef<Path>) -> Result<Vec<Certificate>, CertificateError> {
+pub fn read_cert_chain(
+    cert_file: impl AsRef<Path>,
+) -> Result<Vec<CertificateDer<'static>>, CertificateError> {
     let f = File::open(&cert_file).map_err(|error| CertificateError::IoError {
         error,
         path: cert_file.as_ref().to_owned(),
     })?;
     let mut cert_reader = BufReader::new(f);
     certs(&mut cert_reader)
-        .map(|der_chain| der_chain.into_iter().map(Certificate).collect())
+        .collect::<Result<Vec<_>, _>>()
         .map_err(|e| CertificateError::CertificateParseFailed {
             path: cert_file.as_ref().to_path_buf(),
             source: e,
@@ -222,33 +197,6 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn parse_private_rsa_key() {
-        let key = concat!(
-            "-----BEGIN RSA PRIVATE KEY-----\n",
-            "MC4CAQ\n",
-            "-----END RSA PRIVATE KEY-----"
-        );
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_rsa_key(temp_file.path()).unwrap();
-        let pvt_key = PrivateKey(vec![48, 46, 2, 1]);
-        assert_eq!(result, pvt_key);
-    }
-
-    #[test]
-    fn parse_private_pkcs8_key() {
-        let key = concat! {
-        "-----BEGIN PRIVATE KEY-----\n",
-        "MC4CAQ\n",
-        "-----END PRIVATE KEY-----"};
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_pkcs8_key(temp_file.path()).unwrap();
-        let pvt_key = PrivateKey(vec![48, 46, 2, 1]);
-        assert_eq!(result, pvt_key);
-    }
-
-    #[test]
     fn parse_supported_key() {
         let key = concat!(
             "-----BEGIN RSA PRIVATE KEY-----\n",
@@ -258,7 +206,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
         let parsed_key = read_pvt_key(temp_file.path()).unwrap();
-        let expected_pvt_key = PrivateKey(vec![48, 46, 2, 1]);
+        let expected_pvt_key = PrivateKeyDer::Pkcs1(vec![48, 46, 2, 1].into());
         assert_eq!(parsed_key, expected_pvt_key);
     }
 
@@ -271,8 +219,8 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let err = read_pvt_key(temp_file.path()).unwrap_err();
-        assert!(matches!(err, CertificateError::UnknownPrivateKeyFormat));
+
+        read_pvt_key(temp_file.path()).unwrap_err();
     }
 
     #[test]

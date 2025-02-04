@@ -71,7 +71,7 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
     Router::new()
         .route("/v1/entities", post(register_entity).get(list_entities))
         .route(
-            "/v1/entities/*path",
+            "/v1/entities/{*path}",
             get(get_entity).delete(deregister_entity),
         )
         .with_state(state)
@@ -162,8 +162,9 @@ mod tests {
     use crate::entity_manager::server::EntityStoreResponse;
     use crate::http_server::entity_store::entity_store_router;
     use assert_json_diff::assert_json_eq;
+    use axum::body::Body;
     use axum::Router;
-    use hyper::Body;
+    use http_body_util::BodyExt as _;
     use hyper::Method;
     use hyper::Request;
     use hyper::StatusCode;
@@ -217,7 +218,7 @@ mod tests {
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         let entity: EntityMetadata = serde_json::from_slice(&body).unwrap();
         assert_eq!(entity.topic_id.as_str(), topic_id);
         assert_eq!(entity.r#type, EntityType::ChildDevice);
@@ -297,7 +298,7 @@ mod tests {
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
 
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         let entity: Value = serde_json::from_slice(&body).unwrap();
         assert_json_eq!(entity, json!( {"@topic-id": "device/test-child//"}));
     }
@@ -425,7 +426,7 @@ mod tests {
         let response = app.call(req).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         let deleted: Vec<EntityTopicId> = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             deleted,
@@ -497,7 +498,7 @@ mod tests {
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         let entities: Vec<EntityMetadata> = serde_json::from_slice(&body).unwrap();
 
         let entity_set = entities

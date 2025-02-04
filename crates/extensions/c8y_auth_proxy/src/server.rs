@@ -1,8 +1,6 @@
 use crate::tokens::*;
 use anyhow::Context;
-use axum::body::Body;
-use axum::body::Full;
-use axum::body::StreamBody;
+use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::WebSocket;
 use axum::extract::FromRef;
 use axum::extract::Path;
@@ -23,6 +21,9 @@ use futures::Sink;
 use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
+use http_body::Frame;
+use http_body_util::Full;
+use http_body_util::StreamBody;
 use hyper::header::AUTHORIZATION;
 use hyper::header::HOST;
 use hyper::HeaderMap;
@@ -93,7 +94,7 @@ impl IntoResponse for ProxyError {
     }
 }
 
-fn create_app(state: AppData) -> Router<(), hyper::Body> {
+fn create_app(state: AppData) -> Router<()> {
     let handle = get(respond_to)
         .post(respond_to)
         .put(respond_to)
@@ -103,12 +104,12 @@ fn create_app(state: AppData) -> Router<(), hyper::Body> {
     Router::new()
         .route("/c8y", handle.clone())
         .route("/c8y/", handle.clone())
-        .route("/c8y/*path", handle)
+        .route("/c8y/{*path}", handle)
         .with_state(AppState::from(state))
 }
 
 fn try_bind_insecure(
-    app: Router<(), hyper::Body>,
+    app: Router<()>,
     address: IpAddr,
     port: u16,
 ) -> anyhow::Result<impl Future<Output = io::Result<()>>> {
@@ -119,7 +120,7 @@ fn try_bind_insecure(
 }
 
 fn try_bind_with_tls(
-    app: Router<(), hyper::Body>,
+    app: Router<()>,
     address: IpAddr,
     port: u16,
     server_config: rustls::ServerConfig,
@@ -195,13 +196,13 @@ fn axum_to_tungstenite(message: axum::extract::ws::Message) -> tungstenite::Mess
     use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame as OutCf;
     use tokio_tungstenite::tungstenite::Message as Out;
     match message {
-        In::Text(t) => Out::Text(t),
+        In::Text(t) => Out::Text(t.as_str().into()),
         In::Binary(t) => Out::Binary(t),
         In::Ping(t) => Out::Ping(t),
         In::Pong(t) => Out::Pong(t),
         In::Close(Some(InCf { code, reason })) => Out::Close(Some(OutCf {
             code: code.into(),
-            reason,
+            reason: reason.as_str().into(),
         })),
         In::Close(None) => Out::Close(None),
     }
@@ -213,13 +214,13 @@ fn tungstenite_to_axum(message: tungstenite::Message) -> axum::extract::ws::Mess
     use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame as InCf;
     use tokio_tungstenite::tungstenite::Message as In;
     match message {
-        In::Text(t) => Out::Text(t),
+        In::Text(t) => Out::Text(t.as_str().into()),
         In::Binary(t) => Out::Binary(t),
         In::Ping(t) => Out::Ping(t),
         In::Pong(t) => Out::Pong(t),
         In::Close(Some(InCf { code, reason })) => Out::Close(Some(OutCf {
             code: code.into(),
-            reason,
+            reason: reason.as_str().into(),
         })),
         In::Close(None) => Out::Close(None),
         In::Frame(_) => unreachable!("This function is only called when reading a message"),
@@ -389,6 +390,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[axum::debug_handler(state = AppState)]
 async fn respond_to(
     State(host): State<TargetHost>,
     State(client): State<reqwest::Client>,
@@ -397,7 +399,7 @@ async fn respond_to(
     uri: hyper::Uri,
     method: Method,
     mut headers: HeaderMap<HeaderValue>,
-    ws: Option<WebSocketUpgrade>,
+    ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
     small_body: crate::body::PossiblySmallBody,
 ) -> Result<Response, ProxyError> {
     let path = match &path {
@@ -428,7 +430,7 @@ async fn respond_to(
         .await
         .with_context(|| "failed to retrieve JWT token")?;
 
-    if let Some(ws) = ws {
+    if let Ok(ws) = ws {
         let path = path.to_owned();
         return Ok(ws.on_upgrade(|socket| proxy_ws(socket, host, retrieve_token, headers, path)));
     }
@@ -459,7 +461,7 @@ async fn respond_to(
         .body(body)
         .send()
     };
-    let mut res = send_request(body, &token)
+    let mut res = send_request(reqwest::Body::wrap(body), &token)
         .await
         .with_context(|| format!("making proxied request to {destination}"))?;
 
@@ -469,7 +471,7 @@ async fn respond_to(
             .await
             .with_context(|| "failed to retrieve JWT token")?;
         if let Some(body) = body_clone {
-            res = send_request(Body::from(body), &token)
+            res = send_request(body.into(), &token)
                 .await
                 .with_context(|| format!("making proxied request to {destination}"))?;
         }
@@ -479,9 +481,11 @@ async fn respond_to(
     let headers = std::mem::take(res.headers_mut());
 
     let body = if te_header.is_some_and(|h| h.to_str().unwrap_or_default().contains("chunked")) {
-        axum::body::boxed(StreamBody::new(res.bytes_stream()))
+        axum::body::Body::new(StreamBody::new(
+            res.bytes_stream().map(|b| b.map(Frame::data)),
+        ))
     } else {
-        axum::body::boxed(Full::new(
+        axum::body::Body::new(Full::new(
             res.bytes().await.context("reading proxy response bytes")?,
         ))
     };
@@ -491,25 +495,29 @@ async fn respond_to(
 
 #[cfg(test)]
 mod tests {
-    use axum::async_trait;
     use axum::body::Bytes;
-    use axum::headers::authorization::Bearer;
-    use axum::headers::Authorization;
     use axum::http::Request;
     use axum::middleware::Next;
-    use axum::TypedHeader;
+    use axum_extra::headers::authorization::Bearer;
+    use axum_extra::headers::Authorization;
+    use axum_extra::TypedHeader;
     use camino::Utf8PathBuf;
     use futures::channel::mpsc;
     use futures::future::ready;
     use futures::stream::once;
     use futures::Stream;
-    use hyper::server::conn::AddrIncoming;
-    use rustls::client::ServerCertVerified;
+    use rustls::client::danger::HandshakeSignatureValid;
+    use rustls::client::danger::ServerCertVerified;
+    use rustls::pki_types::pem::PemObject as _;
+    use rustls::pki_types::CertificateDer;
+    use rustls::pki_types::PrivateKeyDer;
+    use rustls::pki_types::ServerName;
+    use rustls::pki_types::UnixTime;
     use std::borrow::Cow;
+    use std::future::IntoFuture;
     use std::net::Ipv4Addr;
     use std::net::SocketAddr;
     use std::time::Duration;
-    use std::time::SystemTime;
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpStream;
@@ -558,7 +566,7 @@ mod tests {
 
     async fn drop_connection(_ws: WebSocket) {}
 
-    async fn close_connection(ws: WebSocket) {
+    async fn close_connection(mut ws: WebSocket) {
         ws.close().await.unwrap()
     }
 
@@ -641,13 +649,13 @@ mod tests {
 
     #[tokio::test]
     async fn forwards_websockets() {
-        let (server, port) = axum_server();
+        let (listener, port) = axum_server().await;
         let (test_app, _) = websocket_app(receive_all_messages);
-        tokio::spawn(server.serve(test_app.into_make_service()));
+        tokio::spawn(axum::serve(listener, test_app.into_make_service()).into_future());
         let proxy_port = start_server_port(port, vec!["unused token"]);
 
         let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
-        ws.send(Message::Ping("test".as_bytes().to_vec()))
+        ws.send(Message::Ping("test".as_bytes().into()))
             .await
             .expect("Error sending to websocket");
 
@@ -656,15 +664,15 @@ mod tests {
                 .await
                 .unwrap()
                 .expect("Error receiving from websocket"),
-            Message::Pong("test".as_bytes().to_vec())
+            Message::Pong("test".as_bytes().into())
         );
     }
 
     #[tokio::test]
     async fn closes_remote_connection_when_local_client_disconnects_unexpectedly() {
-        let (server, port) = axum_server();
+        let (listener, port) = axum_server().await;
         let (test_app, connection_closed) = websocket_app(receive_all_messages);
-        tokio::spawn(server.serve(test_app.into_make_service()));
+        tokio::spawn(axum::serve(listener, test_app.into_make_service()).into_future());
         let proxy_port = start_server_port(port, vec!["unused token"]);
 
         let (ws, _) = connect_to_websocket_port(proxy_port).await;
@@ -675,9 +683,9 @@ mod tests {
 
     #[tokio::test]
     async fn closes_remote_connection_when_local_client_disconnects_gracefully() {
-        let (server, port) = axum_server();
+        let (listener, port) = axum_server().await;
         let (test_app, connection_closed) = websocket_app(receive_all_messages);
-        tokio::spawn(server.serve(test_app.into_make_service()));
+        tokio::spawn(axum::serve(listener, test_app.into_make_service()).into_future());
         let proxy_port = start_server_port(port, vec!["unused token"]);
         let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
         ws.close(None).await.unwrap();
@@ -687,9 +695,9 @@ mod tests {
 
     #[tokio::test]
     async fn closes_local_connection_when_remote_client_disconnects_gracefully() {
-        let (server, port) = axum_server();
+        let (listener, port) = axum_server().await;
         let (test_app, connection_closed) = websocket_app(close_connection);
-        tokio::spawn(server.serve(test_app.into_make_service()));
+        tokio::spawn(axum::serve(listener, test_app.into_make_service()).into_future());
         let proxy_port = start_server_port(port, vec!["unused token"]);
         let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
 
@@ -714,8 +722,8 @@ mod tests {
     #[tokio::test]
     async fn closes_local_connection_when_remote_client_disconnects_forcefully() {
         let (test_app, _connection_closed) = websocket_app(drop_connection);
-        let (server, port) = axum_server();
-        tokio::spawn(server.serve(test_app.into_make_service()));
+        let (listener, port) = axum_server().await;
+        tokio::spawn(axum::serve(listener, test_app.into_make_service()).into_future());
         let proxy_port = start_server_port(port, vec!["unused token"]);
         let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
 
@@ -744,11 +752,11 @@ mod tests {
             .layer(axum::middleware::from_fn(auth(|token| {
                 token == "correct token"
             })));
-        let (server, port) = axum_server();
-        tokio::spawn(server.serve(test_app.into_make_service()));
+        let (listener, port) = axum_server().await;
+        tokio::spawn(axum::serve(listener, test_app.into_make_service()).into_future());
         let proxy_port = start_server_port(port, vec!["outdated token", "correct token"]);
         let (mut ws, _) = connect_to_websocket_port(proxy_port).await;
-        ws.send(Message::Ping("test".as_bytes().to_vec()))
+        ws.send(Message::Ping("test".as_bytes().into()))
             .await
             .expect("Error sending to websocket");
         assert_eq!(
@@ -756,14 +764,14 @@ mod tests {
                 .await
                 .unwrap()
                 .expect("Error receiving from websocket"),
-            Message::Pong("test".as_bytes().to_vec())
+            Message::Pong("test".as_bytes().into())
         );
     }
 
-    fn axum_server() -> (hyper::server::Builder<AddrIncoming>, u16) {
+    async fn axum_server() -> (tokio::net::TcpListener, u16) {
         for port in 3200..3300 {
             let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
-            if let Ok(server) = axum::Server::try_bind(&addr) {
+            if let Ok(server) = tokio::net::TcpListener::bind(&addr).await {
                 return (server, port);
             }
         }
@@ -771,12 +779,12 @@ mod tests {
     }
 
     #[allow(clippy::type_complexity)]
-    fn auth<'a, B: Send + 'a>(
+    fn auth<'a>(
         token_is_valid: fn(&str) -> bool,
     ) -> impl Fn(
         TypedHeader<Authorization<Bearer>>,
-        Request<B>,
-        Next<B>,
+        Request<axum::body::Body>,
+        Next,
     ) -> BoxFuture<'a, Result<Response, StatusCode>>
            + Clone {
         move |TypedHeader(auth), request, next| {
@@ -798,23 +806,60 @@ mod tests {
         Response<Option<Vec<u8>>>,
     ) {
         use rustls::*;
+        #[derive(Debug)]
         struct CertificateIgnorer;
-        impl client::ServerCertVerifier for CertificateIgnorer {
+        impl client::danger::ServerCertVerifier for CertificateIgnorer {
             fn verify_server_cert(
                 &self,
-                _end_entity: &Certificate,
-                _intermediates: &[Certificate],
-                _server_name: &ServerName,
-                _scts: &mut dyn Iterator<Item = &[u8]>,
+                _end_entity: &CertificateDer<'_>,
+                _intermediates: &[CertificateDer<'_>],
+                _server_name: &ServerName<'_>,
                 _ocsp_response: &[u8],
-                _now: SystemTime,
+                _now: UnixTime,
             ) -> Result<ServerCertVerified, Error> {
                 Ok(ServerCertVerified::assertion())
+            }
+
+            fn verify_tls12_signature(
+                &self,
+                _message: &[u8],
+                _cert: &rustls::pki_types::CertificateDer<'_>,
+                _dss: &rustls::DigitallySignedStruct,
+            ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+            {
+                Ok(HandshakeSignatureValid::assertion())
+            }
+
+            fn verify_tls13_signature(
+                &self,
+                _message: &[u8],
+                _cert: &rustls::pki_types::CertificateDer<'_>,
+                _dss: &rustls::DigitallySignedStruct,
+            ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+            {
+                Ok(HandshakeSignatureValid::assertion())
+            }
+
+            fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+                vec![
+                    rustls::SignatureScheme::RSA_PKCS1_SHA1,
+                    rustls::SignatureScheme::ECDSA_SHA1_Legacy,
+                    rustls::SignatureScheme::RSA_PKCS1_SHA256,
+                    rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+                    rustls::SignatureScheme::RSA_PKCS1_SHA384,
+                    rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+                    rustls::SignatureScheme::RSA_PKCS1_SHA512,
+                    rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+                    rustls::SignatureScheme::RSA_PSS_SHA256,
+                    rustls::SignatureScheme::RSA_PSS_SHA384,
+                    rustls::SignatureScheme::RSA_PSS_SHA512,
+                    rustls::SignatureScheme::ED25519,
+                    rustls::SignatureScheme::ED448,
+                ]
             }
         }
 
         let mut config = ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(Arc::new(RootCertStore::empty()))
             .with_no_client_auth();
         config
@@ -1125,8 +1170,9 @@ mod tests {
                 .as_ref()
                 .map(|dir| axum_tls::read_trust_store(dir).unwrap());
             let config = axum_tls::ssl_config(
-                vec![certificate.serialize_der().unwrap()],
-                certificate.serialize_private_key_der(),
+                vec![certificate.serialize_der().unwrap().into()],
+                PrivateKeyDer::from_pem_slice(certificate.serialize_private_key_pem().as_bytes())
+                    .unwrap(),
                 trust_store,
             )
             .unwrap();
@@ -1150,7 +1196,7 @@ mod tests {
         cached: Option<Arc<str>>,
     }
 
-    #[async_trait]
+    #[async_trait::async_trait]
     impl TokenManager for IterJwtRetriever {
         async fn refresh(&mut self) -> Result<Arc<str>, anyhow::Error> {
             let jwt: Arc<str> = format!("Bearer {}", self.tokens.next().unwrap()).into();

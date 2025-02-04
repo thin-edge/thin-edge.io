@@ -283,13 +283,13 @@ impl Uploader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::extract::BodyStream;
     use axum::http::StatusCode;
     use axum::routing::put;
     use axum::Router;
     use backoff::ExponentialBackoffBuilder;
     use futures::future::pending;
     use futures::stream::StreamExt;
+    use std::future::IntoFuture as _;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
     use std::sync::Arc;
@@ -450,7 +450,7 @@ mod tests {
 
         let app = Router::new().route(
             "/target.txt",
-            put(|mut body: BodyStream| async move {
+            put(|body: axum::body::Body| async move {
                 let res = async {
                     if is_first_attempt.fetch_and(false, Ordering::SeqCst) {
                         Ok(StatusCode::INTERNAL_SERVER_ERROR)
@@ -460,7 +460,8 @@ mod tests {
                                 .await
                                 .context("creating file")?,
                         );
-                        while let Some(chunk) = body.next().await {
+                        let mut body_stream = body.into_data_stream();
+                        while let Some(chunk) = body_stream.next().await {
                             file.write_all(&chunk.context("receiving chunk")?)
                                 .await
                                 .context("writing chunk")?;
@@ -484,11 +485,7 @@ mod tests {
             }),
         );
 
-        let server_task = tokio::spawn(
-            axum::Server::from_tcp(listener.into_std().unwrap())
-                .unwrap()
-                .serve(app.into_make_service()),
-        );
+        let server_task = tokio::spawn(axum::serve(listener, app).into_future());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
 

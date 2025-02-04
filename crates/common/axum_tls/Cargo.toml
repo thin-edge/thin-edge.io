@@ -10,7 +10,7 @@ repository = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-error-matching = ["dep:reqwest"]
+error-matching = ["dep:reqwest", "dep:hyper-util"]
 test-helpers = ["dep:assert_matches", "error-matching"]
 
 [dependencies]
@@ -21,6 +21,10 @@ axum-server = { workspace = true }
 camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
+hyper-util = { workspace = true, features = [
+    "client",
+    "client-legacy",
+], optional = true }
 pin-project = { workspace = true }
 reqwest = { workspace = true, features = [
     "rustls-tls-native-roots",
@@ -37,6 +41,7 @@ yansi = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+hyper-util = { workspace = true, features = ["client", "client-legacy"] }
 rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 tempfile = { workspace = true }

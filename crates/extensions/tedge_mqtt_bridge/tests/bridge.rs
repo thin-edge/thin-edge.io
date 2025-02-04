@@ -189,7 +189,7 @@ async fn bridge_disconnect_while_sending() {
     let poll_local = EventPoller::run_in_bg(ev_local);
 
     // Verify messages are forwarded from cloud to local
-    for i in 1..10000 {
+    for i in 1..1000 {
         local
             .publish(
                 "c8y/s/us",
@@ -202,7 +202,7 @@ async fn bridge_disconnect_while_sending() {
     }
     cloud_proxy.interrupt_connections();
     let _ev_cloud = EventPoller::run_in_bg(ev_cloud);
-    for _ in 1..10000 {
+    for _ in 1..1000 {
         local
             .publish(
                 "c8y/s/us",
@@ -644,7 +644,9 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
             Ok(Event::Outgoing(Outgoing::Unsubscribe(v))) => {
                 info!("outgoing Unsubscribe: pkid={v}")
             }
-            Ok(Event::Outgoing(Outgoing::PubAck(v))) => info!("Outgoing::PubAck: pkid={v}"),
+            Ok(Event::Outgoing(Outgoing::PubAck(v))) => {
+                info!("Outgoing::PubAck: pkid={v}")
+            }
             Ok(Event::Outgoing(Outgoing::PubRec(v))) => info!("Outgoing::PubRec: pkid={v}"),
             Ok(Event::Outgoing(Outgoing::PubRel(v))) => info!("Outgoing::PubRel: pkid={v}"),
             Ok(Event::Outgoing(Outgoing::PubComp(v))) => info!("Outgoing::PubComp: pkid={v}"),

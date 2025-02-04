@@ -10,12 +10,13 @@ use super::request_files::FileTransferPath;
 use super::request_files::RequestPath;
 use anyhow::anyhow;
 use anyhow::Context;
-use axum::body::StreamBody;
+use axum::body::Body;
 use axum::routing::get;
 use axum::Router;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use hyper::Body;
+use http_body::Frame;
+use http_body_util::StreamBody;
 use hyper::Request;
 use hyper::StatusCode;
 use std::io::ErrorKind;
@@ -32,16 +33,14 @@ use tokio_util::io::ReaderStream;
 pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
     Router::new()
         .route(
-            "/tedge/file-transfer/*path",
+            "/tedge/file-transfer/{*path}",
             get(download_file).put(upload_file).delete(delete_file),
         )
         .with_state(FileTransferDir::new(file_transfer_dir))
 }
 
-async fn upload_file(
-    path: FileTransferPath,
-    mut request: Request<Body>,
-) -> Result<StatusCode, Error> {
+#[axum::debug_handler(state = FileTransferDir)]
+async fn upload_file(path: FileTransferPath, request: Request<Body>) -> Result<StatusCode, Error> {
     fn internal_error(source: impl Into<anyhow::Error>, path: RequestPath) -> Error {
         Error::Upload {
             source: source.into(),
@@ -54,7 +53,7 @@ async fn upload_file(
             return Err(internal_error(err, path.request));
         }
 
-        match stream_request_body_to_path(&path.full, request.body_mut()).await {
+        match stream_request_body_to_path(&path.full, request.into_body()).await {
             Ok(()) => Ok(StatusCode::CREATED),
             Err(err) if source_err_is_is_a_directory(&err, &path.full) => {
                 Err(Error::CannotUploadDirectory { path: path.request })
@@ -76,9 +75,8 @@ fn source_err_is_is_a_directory(error: &anyhow::Error, path: &Utf8Path) -> bool 
         .unwrap_or(false)
 }
 
-async fn download_file(
-    path: FileTransferPath,
-) -> Result<StreamBody<ReaderStream<BufReader<File>>>, Error> {
+#[axum::debug_handler(state = FileTransferDir)]
+async fn download_file(path: FileTransferPath) -> Result<Body, Error> {
     let reader: Result<_, io::Error> = async {
         let mut buf_reader = BufReader::new(File::open(&path.full).await?);
         // Filling the buffer will ensure the file can actually be read from,
@@ -90,7 +88,9 @@ async fn download_file(
     .await;
 
     match reader {
-        Ok(reader) => Ok(StreamBody::new(ReaderStream::new(reader))),
+        Ok(reader) => Ok(Body::new(StreamBody::new(
+            ReaderStream::new(reader).map(|r| r.map(Frame::data)),
+        ))),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound || err_is_is_a_directory(&e, &path.full) {
                 Err(Error::FileNotFound(path.request))
@@ -125,15 +125,13 @@ async fn delete_file(path: FileTransferPath) -> Result<StatusCode, Error> {
     }
 }
 
-async fn stream_request_body_to_path(
-    path: &Utf8Path,
-    body_stream: &mut Body,
-) -> anyhow::Result<()> {
+async fn stream_request_body_to_path(path: &Utf8Path, body: Body) -> anyhow::Result<()> {
     let mut buffer = BufWriter::new(
         File::create(path)
             .await
             .with_context(|| format!("creating {path:?}"))?,
     );
+    let mut body_stream = body.into_data_stream();
     while let Some(data) = body_stream.next().await {
         let data =
             data.with_context(|| format!("reading body of uploaded file (destined for {path:?})"))?;
@@ -153,8 +151,7 @@ async fn stream_request_body_to_path(
 mod tests {
     use super::*;
     use axum::response::Response;
-    use bytes::Bytes;
-    use http_body::combinators::UnsyncBoxBody;
+    use http_body_util::BodyExt as _;
     use hyper::Method;
     use hyper::StatusCode;
     use tedge_api::path::DataDir;
@@ -188,7 +185,7 @@ mod tests {
         upload_file(&mut app, path, "some content").await;
         let response = download_file(&mut app, path).await;
 
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
 
         assert_eq!(std::str::from_utf8(&body).unwrap(), "some content");
     }
@@ -203,7 +200,7 @@ mod tests {
         let response = download_file(&mut app, path).await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(
             std::str::from_utf8(&body).unwrap(),
             "File not found: \"some/dir/file\""
@@ -350,7 +347,7 @@ mod tests {
         app: &mut Router,
         path: &str,
         body: impl Into<Body>,
-    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+    ) -> Response<axum::body::Body> {
         let req = Request::builder()
             .method(method)
             .uri(format!("/tedge/file-transfer/{path}"))
@@ -364,21 +361,15 @@ mod tests {
         app: &mut Router,
         path: &str,
         contents: &str,
-    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+    ) -> Response<axum::body::Body> {
         request_with(Method::PUT, app, path, contents.to_owned()).await
     }
 
-    async fn delete_file(
-        app: &mut Router,
-        path: &str,
-    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+    async fn delete_file(app: &mut Router, path: &str) -> Response<axum::body::Body> {
         request_with(Method::DELETE, app, path, Body::empty()).await
     }
 
-    async fn download_file(
-        app: &mut Router,
-        path: &str,
-    ) -> Response<UnsyncBoxBody<Bytes, axum::Error>> {
+    async fn download_file(app: &mut Router, path: &str) -> Response<axum::body::Body> {
         request_with(Method::GET, app, path, Body::empty()).await
     }
 

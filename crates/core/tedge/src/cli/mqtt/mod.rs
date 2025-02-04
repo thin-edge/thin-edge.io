@@ -22,7 +22,7 @@ fn disconnect_if_interrupted(client: Client) -> Arc<AtomicBool> {
         unsafe {
             let _ = signal_hook::low_level::register(*signal, move || {
                 interrupted.store(true, Ordering::Relaxed);
-                let mut client = interrupter.lock().unwrap();
+                let client = interrupter.lock().unwrap();
                 let _ = client.disconnect();
             });
         }

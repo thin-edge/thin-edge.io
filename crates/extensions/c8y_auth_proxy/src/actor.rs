@@ -1,4 +1,4 @@
-use axum::async_trait;
+use async_trait::async_trait;
 use c8y_api::http_proxy::C8yAuthRetriever;
 use camino::Utf8PathBuf;
 use futures::channel::mpsc;

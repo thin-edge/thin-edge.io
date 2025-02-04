@@ -397,7 +397,7 @@ mod tests {
 
         let root_certs = if let Some(trusted_root) = trusted_root_cert {
             let mut store = RootCertStore::empty();
-            store.add_parsable_certificates(&[trusted_root.serialize_der().unwrap()]);
+            store.add_parsable_certificates([trusted_root.serialize_der().unwrap().into()]);
             Some(store)
         } else {
             None

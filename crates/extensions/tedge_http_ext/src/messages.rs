@@ -1,8 +1,15 @@
+use std::convert::Infallible;
+
 use async_trait::async_trait;
 use http::header::HeaderName;
 use http::header::HeaderValue;
 use http::HeaderMap;
 use http::Method;
+use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt;
+use http_body_util::Empty;
+use http_body_util::Full;
+use hyper::body::Bytes;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
@@ -26,13 +33,17 @@ pub enum HttpError {
 
     #[error(transparent)]
     HyperError(#[from] hyper::Error),
+
+    #[error(transparent)]
+    HyperUtilError(#[from] hyper_util::client::legacy::Error),
 }
 
-pub type HttpRequest = http::Request<hyper::Body>;
+type Body = BoxBody<Bytes, hyper::Error>;
+pub type HttpRequest = http::Request<Body>;
 
 #[derive(Debug)]
 pub struct HttpResponse {
-    pub response: http::Response<hyper::Body>,
+    pub response: http::Response<Body>,
     pub endpoint: String,
     pub method: Method,
 }
@@ -50,7 +61,11 @@ pub type HttpBytes = hyper::body::Bytes;
 /// An Http Request builder
 pub struct HttpRequestBuilder {
     inner: http::request::Builder,
-    body: Result<hyper::Body, HttpError>,
+    body: Result<Body, HttpError>,
+}
+
+fn infallible<T>(i: Infallible) -> T {
+    match i {}
 }
 
 impl HttpRequestBuilder {
@@ -68,7 +83,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::get(uri),
-            body: Ok(hyper::Body::empty()),
+            body: Ok(Empty::new().map_err(infallible).boxed()),
         }
     }
 
@@ -80,7 +95,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::post(uri),
-            body: Ok(hyper::Body::empty()),
+            body: Ok(Empty::new().map_err(infallible).boxed()),
         }
     }
 
@@ -92,7 +107,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::put(uri),
-            body: Ok(hyper::Body::empty()),
+            body: Ok(Empty::new().map_err(infallible).boxed()),
         }
     }
 
@@ -122,13 +137,13 @@ impl HttpRequestBuilder {
     /// Send a JSON body
     pub fn json<T: serde::Serialize + ?Sized>(self, json: &T) -> Self {
         let body = serde_json::to_vec(json)
-            .map(|bytes| bytes.into())
+            .map(|bytes| Full::new(Bytes::from(bytes)).map_err(infallible).boxed())
             .map_err(|err| err.into());
         HttpRequestBuilder { body, ..self }
     }
 
     /// Send a  body
-    pub fn body(self, content: impl Into<hyper::Body>) -> Self {
+    pub fn body(self, content: impl Into<Body>) -> Self {
         let body = Ok(content.into());
         HttpRequestBuilder { body, ..self }
     }
@@ -165,7 +180,7 @@ impl HttpResponseExt for HttpResponse {
     }
 
     async fn bytes(self) -> Result<HttpBytes, HttpError> {
-        Ok(hyper::body::to_bytes(self.response.into_body()).await?)
+        Ok(self.response.into_body().collect().await?.to_bytes())
     }
 
     async fn text(self) -> Result<String, HttpError> {

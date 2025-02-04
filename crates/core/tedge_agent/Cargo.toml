@@ -20,6 +20,8 @@ certificate = { workspace = true, features = ["reqwest"] }
 clap = { workspace = true }
 flockfile = { workspace = true }
 futures = { workspace = true }
+http-body = { workspace = true }
+http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
 lazy_static = { workspace = true }
 log = { workspace = true }

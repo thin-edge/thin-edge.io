@@ -27,7 +27,10 @@ tokio = { workspace = true, features = ["fs"] }
 url = { workspace = true }
 
 [dev-dependencies]
+axum = { workspace = true }
+axum_tls = { workspace = true }
 mockito = { workspace = true }
+rcgen = { workspace = true }
 regex = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

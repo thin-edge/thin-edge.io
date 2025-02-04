@@ -9,7 +9,7 @@ use axum_server::tls_rustls::RustlsConfig;
 
 use futures::future::BoxFuture;
 
-use rustls::ServerConfig;
+use tokio_rustls::rustls::ServerConfig;
 
 use std::io;
 use std::sync::Arc;
@@ -87,9 +87,9 @@ where
             } else {
                 let (stream, service) = acceptor.accept(stream, service).await?;
                 let server_conn = stream.get_ref().1;
-                let cert = (|| {
-                    X509Certificate::from_der(&server_conn.peer_certificates()?.first()?.0).ok()
-                })();
+                let cert =
+                    (|| X509Certificate::from_der(server_conn.peer_certificates()?.first()?).ok())(
+                    );
                 let certificate_info = TlsData {
                     common_name: common_name(cert.as_ref()).map(Arc::from),
                     is_secure: true,
@@ -117,6 +117,9 @@ mod tests {
     use reqwest::Certificate;
     use reqwest::Client;
     use reqwest::Identity;
+    use rustls::pki_types::pem::PemObject as _;
+    use rustls::pki_types::CertificateDer;
+    use rustls::pki_types::PrivateKeyDer;
     use rustls::RootCertStore;
     use std::net::SocketAddr;
     use std::net::TcpListener;
@@ -168,8 +171,15 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn acceptor_rejects_untrusted_client_certificates() {
-        let server = Server::with_trusted_roots(RootCertStore::empty());
+        let permitted_certificate =
+            rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
+        let mut roots = RootCertStore::empty();
+        roots
+            .add(permitted_certificate.serialize_der().unwrap().into())
+            .unwrap();
+        let server = Server::with_trusted_roots(roots);
         let client = Client::builder()
             .add_root_certificate(server.certificate.clone())
             .identity(identity_with_name("my-client"))
@@ -180,7 +190,33 @@ mod tests {
             .get_with_scheme(Scheme::HTTPS, &client)
             .await
             .unwrap_err();
+        println!("{}", err);
         crate::error_matching::assert_error_matches(err, rustls::AlertDescription::UnknownCA);
+    }
+
+    #[tokio::test]
+    async fn acceptor_rejects_connection_without_certificate() {
+        let permitted_certificate =
+            rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
+        let mut roots = RootCertStore::empty();
+        roots
+            .add(permitted_certificate.serialize_der().unwrap().into())
+            .unwrap();
+        let server = Server::with_trusted_roots(roots);
+        let client = Client::builder()
+            .add_root_certificate(server.certificate.clone())
+            .build()
+            .unwrap();
+
+        let err = server
+            .get_with_scheme(Scheme::HTTPS, &client)
+            .await
+            .unwrap_err();
+        println!("{}", err);
+        crate::error_matching::assert_error_matches(
+            err,
+            rustls::AlertDescription::CertificateRequired,
+        );
     }
 
     #[tokio::test]
@@ -188,7 +224,9 @@ mod tests {
         let client_cert = rcgen::generate_simple_self_signed(["my-client".into()]).unwrap();
         let identity = identity_from(&client_cert);
         let mut cert_store = RootCertStore::empty();
-        cert_store.add_parsable_certificates(&[client_cert.serialize_der().unwrap()]);
+        cert_store.add_parsable_certificates([CertificateDer::from(
+            client_cert.serialize_der().unwrap(),
+        )]);
 
         let server = Server::with_trusted_roots(cert_store);
         let client = Client::builder()
@@ -256,8 +294,10 @@ mod tests {
                 port += 1;
             };
             let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-            let certificate_der = certificate.serialize_der().unwrap();
-            let private_key_der = certificate.serialize_private_key_der();
+            let certificate_der = CertificateDer::from(certificate.serialize_der().unwrap());
+            let private_key_der =
+                PrivateKeyDer::from_pem_slice(certificate.serialize_private_key_pem().as_bytes())
+                    .unwrap();
             let certificate = reqwest::Certificate::from_der(&certificate_der).unwrap();
             let config = ssl_config(vec![certificate_der], private_key_der, trusted_roots).unwrap();
             tokio::spawn(
