@@ -17,13 +17,13 @@ This guide is intended for users who must use the SmartREST 1.0 for specific rea
 To use SmartREST 1.0, the authentication mode must be set to `basic` using the `tedge config` CLI tool:
 
 ```sh
-sudo tedge config set c8y.auth_mode basic
+sudo tedge config set c8y.auth_method basic
 ```
 
 Next, provide credentials (username/password) in a credential file formatted as follows.
 The default location of the credentials file is `/etc/tedge/credentials.toml`:
 
-```toml
+```toml title="file: /etc/tedge/credentials.toml"
 [c8y]
 username = "t5678/octocat"
 password = "abcd1234"
@@ -32,7 +32,7 @@ password = "abcd1234"
 If needed, you can specify a custom location for the credentials file using the `tedge config` CLI tool:
 
 ```sh
-sudo tedge config set c8y.credentials_path </custom/path/to/credentials.toml>
+sudo tedge config set c8y.credentials_path /custom/path/to/credentials.toml
 ```
 
 ## Configuring the device ID
