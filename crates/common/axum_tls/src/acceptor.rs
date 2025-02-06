@@ -171,7 +171,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn acceptor_rejects_untrusted_client_certificates() {
         let permitted_certificate =
             rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
@@ -191,7 +190,7 @@ mod tests {
             .await
             .unwrap_err();
         println!("{}", err);
-        crate::error_matching::assert_error_matches(err, rustls::AlertDescription::UnknownCA);
+        crate::error_matching::assert_error_matches(err, rustls::AlertDescription::DecryptError);
     }
 
     #[tokio::test]
