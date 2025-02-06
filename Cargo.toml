@@ -155,6 +155,7 @@ rand = "0.8"
 rcgen = { version = "0.12", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
+ron = "0.8"
 rpassword = "5.0"
 rstest = "0.16.0"
 rumqttc = { git = "https://github.com/jarhodes314/rumqtt", rev = "8c489faf6af910956c97b55587ff3ecb2ac4e96f" }

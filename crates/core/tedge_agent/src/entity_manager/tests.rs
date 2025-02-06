@@ -196,11 +196,15 @@ mod model {
 
             for command in &self.0 {
                 f.write_str(sep)?;
-                f.write_str(format!("{command}").as_str())?;
                 if f.alternate() {
-                    sep = "\n    "; // On test unit output, print each command on a new line
+                    // On test unit output, print each command on a new line (using Rust notation)
+                    sep = "\n    ";
+                    f.write_str(format!("// {command}{sep}").as_str())?;
+                    f.write_str(&ron::to_string(&command).unwrap())?;
                 } else {
-                    sep = " && "; // On proptest log, print all the commands on a single line
+                    // On proptest log, print all the commands on a single line (using shell commands)
+                    sep = " && ";
+                    f.write_str(format!("{command}").as_str())?;
                 }
             }
             f.write_str("\n")?;
@@ -208,7 +212,7 @@ mod model {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, serde::Serialize)]
     pub struct Command {
         pub protocol: Protocol,
         pub action: Action,
@@ -256,14 +260,14 @@ mod model {
         }
     }
 
-    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, serde::Serialize)]
     #[allow(clippy::upper_case_acronyms)]
     pub enum Protocol {
         HTTP,
         MQTT,
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, serde::Serialize)]
     pub enum Action {
         AddDevice {
             topic: String,

@@ -60,6 +60,7 @@ bytes = { workspace = true }
 http-body = { workspace = true }
 proptest = { workspace = true }
 rcgen = { workspace = true }
+ron = { workspace = true }
 rustls-pemfile = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
