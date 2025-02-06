@@ -2,6 +2,7 @@ use crate::entity_manager::server::EntityStoreResponse;
 use crate::entity_manager::tests::model::Action;
 use crate::entity_manager::tests::model::Command;
 use crate::entity_manager::tests::model::Commands;
+use crate::entity_manager::tests::model::Protocol::HTTP;
 use crate::entity_manager::tests::model::Protocol::MQTT;
 use proptest::proptest;
 use std::collections::HashSet;
@@ -21,6 +22,28 @@ async fn new_entity_store() {
 #[tokio::test]
 async fn removing_an_unknown_child_using_mqtt() {
     let registrations = vec![
+        // tedge mqtt pub -r te/device/a// ''
+        Command {
+            protocol: MQTT,
+            action: Action::RemDevice {
+                topic: "a".to_string(),
+            },
+        },
+    ];
+    check_registrations(Commands(registrations)).await
+}
+
+#[tokio::test]
+async fn removing_a_child_using_mqtt() {
+    let registrations = vec![
+        // tedge http post /tedge/entity-store/v1/entities '{"@parent":"device/main//","@topic-id":"device/a//","@type":"child-device"}'
+        Command {
+            protocol: HTTP,
+            action: Action::AddDevice {
+                topic: "a".to_string(),
+                props: vec![],
+            },
+        },
         // tedge mqtt pub -r te/device/a// ''
         Command {
             protocol: MQTT,
@@ -151,8 +174,10 @@ mod model {
     use std::fmt::Formatter;
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
+    use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_mqtt_ext::MqttMessage;
 
     #[derive(Clone)]
     pub struct Commands(pub Vec<Command>);
@@ -364,15 +389,27 @@ mod model {
         }
     }
 
+    impl From<Action> for MqttMessage {
+        fn from(action: Action) -> Self {
+            let schema = MqttSchema::default();
+            match &action {
+                Action::AddDevice { .. } | Action::AddService { .. } => {
+                    EntityRegistrationMessage::from(action).to_mqtt_message(&schema)
+                }
+
+                Action::RemDevice { .. } | Action::RemService { .. } => {
+                    let topic = schema.topic_for(&action.topic_id(), &Channel::EntityMetadata);
+                    MqttMessage::new(&topic, "")
+                }
+            }
+        }
+    }
+
     impl From<(Protocol, Action)> for EntityStoreRequest {
         fn from((protocol, action): (Protocol, Action)) -> Self {
             match protocol {
                 Protocol::HTTP => EntityStoreRequest::from(action),
-                Protocol::MQTT => {
-                    let registration = EntityRegistrationMessage::from(action);
-                    let message = registration.to_mqtt_message(&MqttSchema::default());
-                    EntityStoreRequest::MqttMessage(message)
-                }
+                Protocol::MQTT => EntityStoreRequest::MqttMessage(MqttMessage::from(action)),
             }
         }
     }
@@ -451,10 +488,11 @@ mod model {
                 }
 
                 Action::RemDevice { .. } | Action::RemService { .. } => {
-                    if self.entities.contains_key(&topic) {
+                    if self.registered.contains(&topic) {
                         self.entities.remove(&topic);
+                        self.registered.remove(&topic);
 
-                        let old_entities = self.deregister(topic);
+                        let old_entities = self.cascade_deregistration(HashSet::from([topic]));
                         if protocol == Protocol::HTTP {
                             old_entities
                         } else {
@@ -480,16 +518,6 @@ mod model {
                 self.registered.insert(new_entity.clone());
                 let new_entities = HashSet::from([new_entity]);
                 self.cascade_registration(new_entities)
-            } else {
-                HashSet::new()
-            }
-        }
-
-        fn deregister(&mut self, old_entity: EntityTopicId) -> HashSet<EntityTopicId> {
-            if self.registered.contains(&old_entity) {
-                self.registered.remove(&old_entity);
-                let old_entity = HashSet::from([old_entity]);
-                self.cascade_deregistration(old_entity)
             } else {
                 HashSet::new()
             }
