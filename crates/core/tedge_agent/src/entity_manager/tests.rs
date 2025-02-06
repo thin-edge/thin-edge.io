@@ -1,5 +1,7 @@
 use crate::entity_manager::server::EntityStoreResponse;
 use crate::entity_manager::tests::model::Action;
+use crate::entity_manager::tests::model::Action::AddDevice;
+use crate::entity_manager::tests::model::Action::AddService;
 use crate::entity_manager::tests::model::Command;
 use crate::entity_manager::tests::model::Commands;
 use crate::entity_manager::tests::model::Protocol::HTTP;
@@ -97,6 +99,62 @@ async fn check_registrations(registrations: Commands) {
         let (entity_type, parent, _) = state.get(topic).unwrap();
         assert_eq!(&registered.r#type, entity_type);
         assert_eq!(registered.parent.as_ref(), parent.as_ref());
+    }
+}
+
+proptest! {
+    #[test]
+    fn it_works_from_user_pov(registrations in model::walk(10)) {
+        tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(check_registrations_from_user_pov(registrations))
+    }
+}
+
+async fn check_registrations_from_user_pov(registrations: Commands) {
+    let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
+
+    // Trigger all operations over HTTP to avoid pending entities (which are not visible to the user)
+    for action in registrations.0.into_iter().map(|c| c.action) {
+        let parent_id = action.parent_topic_id();
+        let topic_id = action.topic_id();
+        let entity_type = action.target_type();
+
+        match &action {
+            AddDevice { .. } | AddService { .. } => {
+                let previous = entity_store.get(&topic_id).cloned();
+                if previous.is_none()
+                    && (parent_id.is_none()
+                        || entity_store.get(parent_id.as_ref().unwrap()).is_some())
+                {
+                    // If not registered and with a parent that is registered
+                    // then the new entity should be registered
+                    assert!(matches!(
+                        entity_store.handle((HTTP, action).into()).await,
+                        EntityStoreResponse::Create(Ok(_))
+                    ));
+                    let registered = entity_store.get(&topic_id).unwrap();
+                    assert_eq!(registered.parent, parent_id);
+                    assert_eq!(registered.r#type, entity_type);
+                } else {
+                    // If already registered and with a parent that is not registered
+                    // then the registration should be rejected
+                    // and the previous entity be unchanged, if any
+                    assert!(matches!(
+                        entity_store.handle((HTTP, action).into()).await,
+                        EntityStoreResponse::Create(Err(_))
+                    ));
+                    assert_eq!(previous.as_ref(), entity_store.get(&topic_id));
+                }
+            }
+
+            Action::RemDevice { .. } | Action::RemService { .. } => {
+                entity_store.handle((HTTP, action).into()).await;
+                assert!(entity_store.get(&topic_id).is_none());
+            }
+        }
     }
 }
 
