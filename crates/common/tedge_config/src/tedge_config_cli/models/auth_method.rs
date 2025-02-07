@@ -34,6 +34,7 @@ impl FromStr for AuthMethod {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum AuthType {
     Certificate,
     Basic,

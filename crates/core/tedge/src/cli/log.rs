@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use camino::Utf8Path;
 use tedge_config::auth_method::AuthMethod;
+use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::SystemServiceError;
 use tedge_config::system_services::SystemServiceManager;
 use tedge_config::MultiError;
@@ -251,6 +252,7 @@ pub struct ConfigLogger<'a> {
     service_manager: &'a dyn SystemServiceManager,
     mosquitto_version: Option<&'a str>,
     cloud: &'a MaybeBorrowedCloud<'a>,
+    credentials_path: Option<&'a Utf8Path>,
 }
 
 impl<'a> ConfigLogger<'a> {
@@ -260,6 +262,7 @@ impl<'a> ConfigLogger<'a> {
         config: &'a BridgeConfig,
         service_manager: &'a dyn SystemServiceManager,
         cloud: &'a MaybeBorrowedCloud<'a>,
+        credentials_path: Option<&'a Utf8Path>,
     ) {
         println!(
             "{}",
@@ -269,7 +272,8 @@ impl<'a> ConfigLogger<'a> {
                 cloud_host: config.address.to_string(),
                 cert_path: &config.bridge_certfile,
                 bridge_location: config.bridge_location,
-                auth_method: None,
+                auth_method: config.auth_method,
+                credentials_path,
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
                 cloud,
@@ -302,16 +306,25 @@ impl fmt::Display for ConfigLogger<'_> {
             self.log_single_entry(f, "cloud profile", &"<none>")?;
         }
         self.log_single_entry(f, "cloud host", &self.cloud_host)?;
-        self.log_single_entry(f, "certificate file", &self.cert_path)?;
+        let mut auth_type = AuthType::Certificate;
+        if let Some(auth_method) = self.auth_method {
+            self.log_single_entry(f, "auth method", &auth_method)?;
+            if let Some(path) = self.credentials_path {
+                auth_type = auth_method.to_type(path);
+                if AuthType::Basic == auth_type {
+                    self.log_single_entry(f, "credentials path", &path)?
+                }
+            }
+        }
+        if AuthType::Certificate == auth_type {
+            self.log_single_entry(f, "certificate file", &self.cert_path)?;
+        }
         self.log_single_entry(f, "bridge", &self.bridge_location)?;
         self.log_single_entry(f, "service manager", &self.service_manager.name())?;
         if let Some(mosquitto_version) = self.mosquitto_version {
             self.log_single_entry(f, "mosquitto version", &mosquitto_version)?;
         }
 
-        if let Some(auth_method) = self.auth_method {
-            self.log_single_entry(f, "authentication mode", &auth_method)?;
-        }
         Ok(())
     }
 }
