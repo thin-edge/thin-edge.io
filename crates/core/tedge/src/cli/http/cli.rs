@@ -18,6 +18,18 @@ use tedge_config::ProfileName;
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeHttpCli {
     /// POST content to thin-edge local HTTP servers
+    ///
+    /// Examples:
+    ///   # Create a new Cumulocity Managed Object via the proxy service
+    ///   tedge http post /c8y/inventory/managedObjects '{"name":"test"}' --accept-type application/json
+    ///
+    ///   # Create a new child device
+    ///   tedge http post /tedge/entity-store/v1/entities '{
+    ///       "@topic-id": "device/a//",
+    ///       "@type": "child-device",
+    ///       "@parent": "device/main//"
+    ///   }'
+    #[clap(verbatim_doc_comment)]
     Post {
         /// Target URI
         uri: String,
@@ -42,6 +54,14 @@ pub enum TEdgeHttpCli {
     },
 
     /// PUT content to thin-edge local HTTP servers
+    ///
+    /// Examples:
+    ///   # Upload file to the file transfer service
+    ///   tedge http put /tedge/file-transfer/target.txt --file source.txt
+    ///
+    ///   # Update a Cumulocity Managed Object. Note: Assuming tedge is the owner of the managed object
+    ///   tedge http put /c8y/inventory/managedObjects/2343978440 '{"name":"item A"}' --accept-type application/json
+    #[clap(verbatim_doc_comment)]
     Put {
         /// Target URI
         uri: String,
@@ -66,6 +86,14 @@ pub enum TEdgeHttpCli {
     },
 
     /// GET content from thin-edge local HTTP servers
+    ///
+    /// Examples:
+    ///   # Download file from the file transfer service
+    ///   tedge http get /tedge/file-transfer/target.txt
+    ///
+    ///   # Download file from Cumulocity's binary api
+    ///   tedge http get /c8y/inventory/binaries/104332 > my_file.bin
+    #[clap(verbatim_doc_comment)]
     Get {
         /// Source URI
         uri: String,
@@ -81,6 +109,14 @@ pub enum TEdgeHttpCli {
     },
 
     /// DELETE resource from thin-edge local HTTP servers
+    ///
+    /// Examples:
+    ///   # Delete a file from the file transfer service
+    ///   tedge http delete /tedge/file-transfer/target.txt
+    ///
+    ///   # Delete a Cumulocity managed object. Note: Assuming tedge is the owner of the managed object
+    ///   tedge http delete /c8y/inventory/managedObjects/2343978440
+    #[clap(verbatim_doc_comment)]
     Delete {
         /// Source URI
         uri: String,
