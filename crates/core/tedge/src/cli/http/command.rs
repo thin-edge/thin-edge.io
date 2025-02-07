@@ -79,11 +79,8 @@ impl HttpCommand {
 
     fn send(request: blocking::RequestBuilder) -> Result<(), Error> {
         let http_result = request.send()?;
-        let http_response = http_result.error_for_status()?;
-        let bytes = http_response.bytes()?.to_vec();
-        let content = String::from_utf8(bytes)?;
-
-        println!("{content}");
+        let mut http_response = http_result.error_for_status()?;
+        http_response.copy_to(&mut std::io::stdout())?;
         Ok(())
     }
 }
