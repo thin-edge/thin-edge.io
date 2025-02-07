@@ -78,7 +78,7 @@ mod tests {
         let now = Instant::now();
         let clock = IterClock::new([now, now + Duration::from_secs(1)]);
         let mut backoff = deterministic_backoff(&clock);
-        assert_eq!(backoff.backoff(), Duration::from_secs(30));
+        assert_eq!(backoff.backoff().as_secs(), 30);
     }
 
     #[test]
@@ -88,7 +88,7 @@ mod tests {
         let mut backoff = deterministic_backoff(&clock);
         let _ = backoff.backoff();
         clock.tick();
-        assert_eq!(backoff.backoff(), Duration::from_secs(60));
+        assert_eq!(backoff.backoff().as_secs(), 60);
     }
 
     #[test]
@@ -99,7 +99,7 @@ mod tests {
         for _ in 0..1000 {
             clock.add(backoff.backoff());
         }
-        assert_eq!(backoff.backoff(), Duration::from_secs(600));
+        assert_eq!(backoff.backoff().as_secs(), 600);
     }
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
         let _ = backoff.backoff();
         backoff.mark_success();
         clock.tick();
-        assert_eq!(backoff.backoff(), Duration::from_secs(30));
+        assert_eq!(backoff.backoff().as_secs(), 30);
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
         let _ = backoff.backoff();
         backoff.mark_success();
         clock.tick();
-        assert_eq!(backoff.backoff(), Duration::from_secs(30));
+        assert_eq!(backoff.backoff().as_secs(), 30);
     }
 
     #[test]

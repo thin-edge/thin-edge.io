@@ -1130,6 +1130,17 @@ fn default_mqtt_port() -> NonZeroU16 {
     NonZeroU16::try_from(1883).unwrap()
 }
 
+impl TEdgeConfigReaderMqttBridgeReconnectPolicy {
+    /// Designed for injecting into tests without requiring a full [TEdgeConfig]
+    pub fn test_value() -> Self {
+        Self {
+            initial_interval: "0".parse().unwrap(),
+            maximum_interval: "10m".parse().unwrap(),
+            reset_window: "15m".parse().unwrap(),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ReadError {
     #[error(transparent)]

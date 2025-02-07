@@ -60,7 +60,6 @@ async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig
 
 const HEALTH: &str = "te/device/main/#";
 
-// TODO acknowledgement with lost connection bridge, check we acknowledge the correct message
 #[tokio::test]
 async fn bridge_many_messages() {
     std::env::set_var("RUST_LOG", "rumqttd=debug,tedge_mqtt_bridge=info");

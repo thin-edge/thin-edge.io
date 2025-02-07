@@ -1,16 +1,15 @@
 use crate::overall_status;
 use crate::BridgeAsyncClient;
 use crate::BridgeMessageSender;
+use crate::MqttClient;
 use crate::Status;
-use futures::channel::mpsc;
-use futures::SinkExt;
-use futures::StreamExt;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Publish;
 use rumqttc::QoS;
 use std::collections::HashMap;
+use tokio::sync::mpsc;
 use tracing::error;
 use tracing::log::info;
 
@@ -25,9 +24,9 @@ pub struct BridgeHealthMonitor {
 }
 
 impl BridgeHealthMonitor {
-    pub(crate) fn new(
+    pub(crate) fn new<Client: MqttClient + 'static>(
         topic: String,
-        bridge_half: &BridgeAsyncClient,
+        bridge_half: &BridgeAsyncClient<Client>,
     ) -> (mpsc::Sender<(&'static str, Status)>, Self) {
         let (tx, rx_status) = mpsc::channel(10);
         (
@@ -44,7 +43,7 @@ impl BridgeHealthMonitor {
         let mut statuses = HashMap::from([("local", None), ("cloud", None)]);
         let mut last_status = None;
         loop {
-            let (name, status) = self.rx_status.next().await.unwrap();
+            let (name, status) = self.rx_status.recv().await.unwrap();
             *statuses.entry(name).or_insert(Some(status)) = Some(status);
 
             let status = statuses.values().fold(Some(Status::Up), overall_status);
@@ -57,9 +56,7 @@ impl BridgeHealthMonitor {
 
                 // Publish the health message over MQTT, but with no duplicate for the companion
                 // as this message doesn't have to be acknowledged
-                self.companion_bridge_half
-                    .internal_publish(health_msg)
-                    .await;
+                self.companion_bridge_half.internal_publish(health_msg);
             }
         }
     }
