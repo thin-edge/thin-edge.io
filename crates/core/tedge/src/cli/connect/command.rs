@@ -21,6 +21,7 @@ use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::JWT_TOKEN;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use mqtt_channel::Topic;
 use rumqttc::Event;
@@ -91,6 +92,7 @@ impl ConnectCommand {
         let config = &self.config;
         let bridge_config = bridge_config(config, &self.cloud)?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
+        let credentials_path = credentials_path_for(config, &self.cloud)?;
 
         validate_config(config, &self.cloud)?;
 
@@ -100,6 +102,7 @@ impl ConnectCommand {
                 &bridge_config,
                 &*self.service_manager,
                 &self.cloud,
+                credentials_path,
             );
             // If the bridge is part of the mapper, the bridge config file won't exist
             // TODO tidy me up once mosquitto is no longer required for bridge
@@ -134,7 +137,13 @@ impl ConnectCommand {
             false => format!("Connecting to {} with config", self.cloud),
             true => "Reconnecting with config".into(),
         };
-        ConfigLogger::log(title, &bridge_config, &*self.service_manager, &self.cloud);
+        ConfigLogger::log(
+            title,
+            &bridge_config,
+            &*self.service_manager,
+            &self.cloud,
+            credentials_path,
+        );
 
         let device_type = &config.device.ty;
 
@@ -199,6 +208,18 @@ impl ConnectCommand {
         }
 
         Ok(())
+    }
+}
+
+fn credentials_path_for<'a>(
+    config: &'a TEdgeConfig,
+    cloud: &Cloud,
+) -> Result<Option<&'a Utf8Path>, MultiError> {
+    if let Cloud::C8y(profile) = cloud {
+        let c8y_config = config.c8y.try_get(profile.as_deref())?;
+        Ok(Some(&c8y_config.credentials_path))
+    } else {
+        Ok(None)
     }
 }
 
