@@ -27,14 +27,14 @@ pub enum TEdgeHttpCli {
         content: Content,
 
         /// MIME type of the content
-        #[clap(long, default_value = "application/json")]
+        #[clap(long)]
         #[arg(value_parser = parse_mime_type)]
-        content_type: String,
+        content_type: Option<String>,
 
         /// MIME type of the expected content
-        #[clap(long, default_value = "application/json")]
+        #[clap(long)]
         #[arg(value_parser = parse_mime_type)]
-        accept_type: String,
+        accept_type: Option<String>,
 
         /// Optional c8y cloud profile
         #[clap(long)]
@@ -51,9 +51,14 @@ pub enum TEdgeHttpCli {
         content: Content,
 
         /// MIME type of the content
-        #[clap(long, default_value = "application/json")]
+        #[clap(long)]
         #[arg(value_parser = parse_mime_type)]
-        content_type: String,
+        content_type: Option<String>,
+
+        /// MIME type of the expected content
+        #[clap(long)]
+        #[arg(value_parser = parse_mime_type)]
+        accept_type: Option<String>,
 
         /// Optional c8y cloud profile
         #[clap(long)]
@@ -66,9 +71,9 @@ pub enum TEdgeHttpCli {
         uri: String,
 
         /// MIME type of the expected content
-        #[clap(long, default_value = "application/json")]
+        #[clap(long)]
         #[arg(value_parser = parse_mime_type)]
-        accept_type: String,
+        accept_type: Option<String>,
 
         /// Optional c8y cloud profile
         #[clap(long)]
@@ -172,10 +177,12 @@ impl From<TEdgeHttpCli> for HttpAction {
             TEdgeHttpCli::Put {
                 content,
                 content_type,
+                accept_type,
                 ..
             } => HttpAction::Put {
                 content,
                 content_type,
+                accept_type,
             },
             TEdgeHttpCli::Get { accept_type, .. } => HttpAction::Get { accept_type },
             TEdgeHttpCli::Delete { .. } => HttpAction::Delete,
@@ -218,4 +225,27 @@ fn http_client(
         builder
     };
     Ok(builder.build()?)
+}
+
+impl Content {
+    pub fn length(&self) -> Option<usize> {
+        if let Some(content) = &self.arg2 {
+            Some(content.len())
+        } else if let Some(data) = &self.data {
+            Some(data.len())
+        } else if let Some(file) = &self.file {
+            Some(std::fs::metadata(file).ok()?.len().try_into().ok()?)
+        } else {
+            None
+        }
+    }
+
+    pub fn mime_type(&self) -> Option<String> {
+        let file = self.file.as_ref()?;
+        Some(
+            mime_guess::from_path(file)
+                .first_or_octet_stream()
+                .to_string(),
+        )
+    }
 }
