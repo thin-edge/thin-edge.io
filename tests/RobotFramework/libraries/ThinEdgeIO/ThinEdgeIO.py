@@ -1015,12 +1015,19 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("List Entities")
     def list_entities(
-            self, device_name: str = None 
+            self,
+            root: str = None,
+            parent: str = None,
+            type: str = None,
+            device_name: str = None
     ) -> List[Dict[str, Any]]:
         """
         Get entity list from the device using the entity store query REST API
 
         Args:
+            root (str, optional): Topic id of the entity to start the search from
+            parent (str, optional): Topic id of the entity that is the parent of the entities to list
+            type (str, optional): Entity type: device, child-device or service
             device_name (str, optional): Device name to fetch the entity list from
 
         Returns:
@@ -1028,6 +1035,11 @@ class ThinEdgeIO(DeviceLibrary):
 
         *Example:*
         | ${entities}= | List Entities |
+        | ${entities}= | List Entities | root=device/child01// |
+        | ${entities}= | List Entities | parent=device/main// |
+        | ${entities}= | List Entities | type=child-device |
+        | ${entities}= | List Entities | root=device/main// | type=service |
+        | ${entities}= | List Entities | parent=device/main// | type=child-device |
         | ${entities}= | List Entities | device_name=${PARENT_SN} |
         """
         device = self.current
@@ -1040,7 +1052,20 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to query the entity store as the device: '{device_name}' has not been setup"
             )
 
-        output = device.execute_command("curl -f http://localhost:8000/tedge/entity-store/v1/entities")
+        url = "http://localhost:8000/tedge/entity-store/v1/entities"
+        params = {}
+        if root:
+            params["root"] = root
+        if parent:
+            params["parent"] = parent
+        if type:
+            params["type"] = type
+
+        if params:
+            query_string = "&".join(f"{key}={value}" for key, value in params.items())
+            url += f"?{query_string}"
+
+        output = device.execute_command(f"curl -f '{url}'")
         entities = json.loads(output.stdout)
         return entities
 
