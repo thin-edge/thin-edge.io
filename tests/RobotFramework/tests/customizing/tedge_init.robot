@@ -71,6 +71,9 @@ Tedge init and check if default values are restored
 *** Keywords ***
 Custom Setup
     Setup
+    Stop Service    tedge-agent
+    Stop Service    c8y-firmware-plugin
+    Stop Service    tedge-mapper-c8y
     Execute Command    sudo rm -rf /etc/tedge
     Execute Command    sudo rm -rf /var/tedge
     Execute Command    sudo rm -rf /var/log/tedge
