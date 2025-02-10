@@ -1,6 +1,7 @@
 use crate::cli::http::cli::Content;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use anyhow::anyhow;
 use anyhow::Error;
 use hyper::http::HeaderValue;
 use reqwest::blocking;
@@ -74,10 +75,27 @@ impl HttpCommand {
     }
 
     fn send(request: blocking::RequestBuilder) -> Result<(), Error> {
-        let http_result = request.send()?;
-        let mut http_response = http_result.error_for_status()?;
-        http_response.copy_to(&mut std::io::stdout())?;
-        Ok(())
+        let mut http_result = request.send()?;
+        let status = http_result.status();
+        if status.is_success() {
+            http_result.copy_to(&mut std::io::stdout())?;
+            Ok(())
+        } else {
+            let kind = if status.is_client_error() {
+                "HTTP client error"
+            } else if status.is_server_error() {
+                "HTTP server error"
+            } else {
+                "HTTP error"
+            };
+            let error = format!(
+                "{kind}: {} {}\n{}",
+                status.as_u16(),
+                status.canonical_reason().unwrap_or(""),
+                http_result.text().unwrap_or("".to_string())
+            );
+            Err(anyhow!(error))?
+        }
     }
 }
 

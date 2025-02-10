@@ -43,6 +43,13 @@ Accessing file-transfer from a child device
     Execute Command    tedge http delete /tedge/file-transfer/target
     Execute Command    tedge http get /tedge/file-transfer/target    exp_exit_code=1
 
+Displaying server errors
+    ${error_msg}=    Execute Command
+    ...    tedge http post /tedge/entity-store/v1/entities '{"@topic-id": "device/a//", "@type": "child-device", "@parent": "device/unknown//"}' 2>&1
+    ...    exp_exit_code=1
+    Should Contain    ${error_msg}    400 Bad Request
+    Should Contain    ${error_msg}    Specified parent "device/unknown//" does not exist in the store
+
 
 *** Keywords ***
 Setup Child Device
