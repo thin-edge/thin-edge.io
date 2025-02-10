@@ -45,3 +45,16 @@ The proxy server currently forwards this response directly to the client, as wel
 Cumulocity.
 If there is an error connecting to Cumulocity to make the request, a plain text response with the status
 code `502 Bad Gateway` will be returned.
+
+## Using tedge http
+
+[`tedge http`](../references/cli/tedge-http.md) can be used to access Cumulocity from any child devices,
+provided [proper configuration](../references/cli/tedge-http.md#configuration).
+
+For example, you can access the current tenant information
+from the machine running `tedge-mapper` as well as any child device:
+
+```sh title="Interacting with Cumulocity"
+   tedge http get /c8y/tenant/currentTenant
+```
+

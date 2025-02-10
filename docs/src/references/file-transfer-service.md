@@ -44,3 +44,15 @@ Once HTTPS is enabled for the file-transfer service, certificate-based authentic
 The directory containing the certificates that the agent will trust can be configured using `http.ca_path`,
 and the mapper as well as the child device agents can be configured to use a trusted certificate using the
 `http.client.auth.cert_file` and `http.client.auth.key_file` settings.
+
+## Using tedge http
+
+[`tedge http`](../references/cli/tedge-http.md) can be used to access the file transfer service from any child devices,
+provided [proper configuration](../references/cli/tedge-http.md#configuration).
+
+
+|Type| Command                                                                               |
+|----|---------------------------------------------------------------------------------------|
+|Upload| `tedge http put tedge/file-transfer/{path}/{to}/{resource} --file /{path}/{to}/{file}` |
+|Download| `tedge http get /tedge/file-transfer/{path}/{to}/{resource} >/{path}/{to}/{file}`     |
+|Delete| `tedge http delete /tedge/file-transfer/{path}/{to}/{resource}`                       |

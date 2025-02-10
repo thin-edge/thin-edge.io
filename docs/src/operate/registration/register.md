@@ -1,9 +1,8 @@
 ---
-title: 🚧 Entity management REST APIs
+title: Entity management REST APIs
 tags: [Child-Device, Registration]
 sidebar_position: 1
 description: Register child devices and services with %%te%%
-draft: true
 ---
 
 # REST APIs for Entity Management
