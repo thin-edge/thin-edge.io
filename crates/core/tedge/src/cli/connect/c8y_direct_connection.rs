@@ -59,6 +59,7 @@ pub fn create_device_with_direct_connection(
     } else if let Some(cryptoki_config) = cryptoki_config {
         certificate::parse_root_certificate::create_tls_config_cryptoki(
             &bridge_config.bridge_root_cert_path,
+            &bridge_config.bridge_certfile,
             cryptoki_config,
         )?
     } else {

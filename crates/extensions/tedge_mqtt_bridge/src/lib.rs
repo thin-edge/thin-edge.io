@@ -93,6 +93,7 @@ impl MqttBridgeActorBuilder {
                     Some(
                         certificate::parse_root_certificate::create_tls_config_cryptoki(
                             ca_dir,
+                            client.cert_file,
                             cryptoki_opts.try_into().unwrap(),
                         )
                         .unwrap(),

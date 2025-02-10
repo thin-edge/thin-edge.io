@@ -31,7 +31,12 @@ pub fn use_cryptoki(
     cloud_config: &dyn CloudConfig,
     cryptoki_config: CryptokiConfig,
 ) -> anyhow::Result<()> {
-    let tls_config = create_tls_config_cryptoki(cloud_config.root_cert_path(), cryptoki_config)?;
+    let tls_config = create_tls_config_cryptoki(
+        cloud_config.root_cert_path(),
+        cloud_config.device_cert_path(),
+        cryptoki_config,
+    )?;
+
     config.set_transport(Transport::tls_with_config(tls_config.into()));
     Ok(())
 }

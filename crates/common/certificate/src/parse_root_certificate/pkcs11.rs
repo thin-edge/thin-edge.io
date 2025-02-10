@@ -1,40 +1,120 @@
 //! Example of how to configure rumqttd to connect to a server using TLS and authentication.
 //! Source https://github.com/leonardodepaula/Cryptoki-TLS
 //! https://github.com/rustls/rustls-cng/blob/dev/src/signer.rs
+
 use asn1_rs::ToDer;
 use base64::Engine;
+use cryptoki::context::CInitializeArgs;
+use cryptoki::context::Pkcs11;
+use cryptoki::mechanism::rsa::PkcsMgfType;
+use cryptoki::mechanism::rsa::PkcsPssParams;
+use cryptoki::mechanism::Mechanism;
+use cryptoki::mechanism::MechanismType;
+use cryptoki::object::Attribute;
+use cryptoki::object::AttributeType;
+use cryptoki::object::CertificateType;
+use cryptoki::object::KeyType;
+use cryptoki::object::ObjectClass;
+use cryptoki::session::Session;
+use cryptoki::session::UserType;
+use cryptoki::types::AuthPin;
+use rustls::client::ResolvesClientCert;
+use rustls::pki_types::CertificateDer;
+use rustls::sign::CertifiedKey;
+use rustls::sign::Signer;
+use rustls::sign::SigningKey;
+use rustls::Error as RusTLSError;
+use rustls::SignatureAlgorithm;
+use rustls::SignatureScheme;
 
-use rustls::{crypto, ClientConfig};
-
-// Only used when loading certs from file
-use rustls::pki_types::pem::PemObject;
-
-use cryptoki::{
-    context::{CInitializeArgs, Pkcs11},
-    mechanism::{
-        rsa::{PkcsMgfType, PkcsPssParams},
-        Mechanism, MechanismType,
-    },
-    object::{Attribute, AttributeType, CertificateType, KeyType, ObjectClass},
-    session::{Session, UserType},
-    types::AuthPin,
-};
-use rustls::{
-    client::ResolvesClientCert,
-    pki_types::CertificateDer,
-    sign::{CertifiedKey, Signer, SigningKey},
-    Error as RusTLSError, SignatureAlgorithm, SignatureScheme,
-};
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, trace, warn};
-use x509_parser::prelude::{FromDer, X509Certificate};
+use std::sync::Arc;
+use std::sync::Mutex;
+use tracing::debug;
+use tracing::error;
+use tracing::warn;
 
 use super::CryptokiConfig;
 
-const PCKS11_MODULE_PATH: &str = "/usr/lib/x86_64-linux-gnu/libykcs11.so";
-const PKCS11_PIN: &str = "123456";
-const PKCS11_TOKENLABEL: &str = "YubiKey PIV #30590875";
+#[derive(Debug)]
+pub enum Pkcs11SigningKey {
+    Rsa(RSASigningKey),
+    Ecdsa(ECSigningKey),
+}
+
+impl Pkcs11SigningKey {
+    pub fn from_cryptoki_config(
+        cryptoki_config: CryptokiConfig,
+    ) -> anyhow::Result<Pkcs11SigningKey> {
+        let CryptokiConfig {
+            module_path,
+            pin,
+            // TODO(marcel): select moduly by serial if multiple are connected
+            serial,
+        } = cryptoki_config;
+
+        // Alternative module: /opt/homebrew/lib/pkcs11/opensc-pkcs11.so
+        // let pkcs11module = std::env::var("PKCS11_MODULE");
+        // let pkcs11module = pkcs11module.as_deref().unwrap_or(PCKS11_MODULE_PATH);
+
+        debug!(%module_path, "Loading PKCS#11 module");
+        let pkcs11client = Pkcs11::new(module_path)?;
+        pkcs11client.initialize(CInitializeArgs::OsThreads)?;
+
+        debug!(%pin, "Attempting to login to PKCS#11 module");
+        let slot = pkcs11client.get_slots_with_token()?.remove(0);
+        let session = pkcs11client.open_ro_session(slot)?;
+        session.login(UserType::User, Some(&AuthPin::new(pin.deref().into())))?;
+
+        // Debug
+        let search = vec![
+            Attribute::Class(ObjectClass::CERTIFICATE),
+            Attribute::CertificateType(CertificateType::X_509),
+        ];
+        for handle in session.find_objects(&search)? {
+            // each cert: get the "value" which will be the raw certificate data
+            for value in session.get_attributes(handle, &[AttributeType::SerialNumber])? {
+                if let Attribute::Value(value) = value {
+                    match String::from_utf8(value) {
+                        Ok(path) => println!("Certificate value: {:?}", path),
+                        Err(e) => println!("Invalid UTF-8 sequence: {}", e),
+                    };
+                }
+            }
+        }
+
+        let pkcs11 = PKCS11 {
+            session: Arc::new(Mutex::new(session)),
+        };
+        let key_type = get_key_type(pkcs11.clone());
+        debug!("Key Type: {:?}", key_type.to_string());
+        let key = match key_type {
+            KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
+            KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
+            _ => {
+                panic!("Unsupported key type. Only EC and RSA keys are supported");
+            }
+        };
+
+        Ok(key)
+    }
+}
+
+impl SigningKey for Pkcs11SigningKey {
+    fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
+        match self {
+            Self::Ecdsa(e) => e.choose_scheme(offered),
+            Self::Rsa(r) => r.choose_scheme(offered),
+        }
+    }
+
+    fn algorithm(&self) -> SignatureAlgorithm {
+        match self {
+            Self::Ecdsa(e) => e.algorithm(),
+            Self::Rsa(r) => r.algorithm(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct PKCS11 {
@@ -170,48 +250,10 @@ impl Signer for PkcsSigner {
     }
 }
 
-// #[derive(Debug)]
-// struct MySigningKey {
-//     pkcs11: PKCS11,
-// }
-
-// impl MySigningKey {
-//     fn supported_schemes(&self) -> &[SignatureScheme] {
-//         &[
-//             SignatureScheme::RSA_PSS_SHA256,
-//             SignatureScheme::RSA_PKCS1_SHA256,
-//             SignatureScheme::ECDSA_NISTP256_SHA256,
-//             SignatureScheme::ECDSA_NISTP384_SHA384,
-//             SignatureScheme::ECDSA_NISTP521_SHA512,
-//         ]
-//     }
-// }
-
-// impl SigningKey for MySigningKey {
-//     fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
-//         let supported = self.supported_schemes();
-//         for scheme in offered {
-//             if supported.contains(scheme) {
-//                 println!("Matching scheme: {:?}", scheme.as_str());
-//                 return Some(Box::new(MySigner {
-//                     pkcs11: self.pkcs11.clone(),
-//                     scheme: *scheme,
-//                 }));
-//             }
-//         }
-//         None
-//     }
-
-//     fn algorithm(&self) -> SignatureAlgorithm {
-//         SignatureAlgorithm::ECDSA
-//         // SignatureAlgorithm::RSA
-//     }
-// }
-
 #[derive(Debug)]
 pub struct Pkcs11Resolver {
-    chain: Vec<CertificateDer<'static>>,
-    signing_key: Arc<dyn SigningKey>,
+    pub chain: Vec<CertificateDer<'static>>,
+    pub signing_key: Arc<dyn SigningKey>,
 }
 
 impl ResolvesClientCert for Pkcs11Resolver {
@@ -229,161 +271,6 @@ impl ResolvesClientCert for Pkcs11Resolver {
 
     fn has_certs(&self) -> bool {
         true
-    }
-}
-
-fn get_certificate_der(
-    pkcs11: PKCS11,
-) -> anyhow::Result<Vec<CertificateDer<'static>>, anyhow::Error> {
-    let session = pkcs11.session.lock().unwrap();
-    let search_template = vec![
-        Attribute::Class(ObjectClass::CERTIFICATE),
-        Attribute::CertificateType(CertificateType::X_509),
-    ];
-    let handle = session.find_objects(&search_template)?.remove(0);
-    let value = session
-        .get_attributes(handle, &[AttributeType::Value])?
-        .remove(0);
-
-    // Print out info about the certificate
-    match value {
-        Attribute::Value(cert) => {
-            println!("Certificate: {:?}", CertificateDer::from_slice(&cert));
-
-            let res = X509Certificate::from_der(&cert);
-            match res {
-                Ok((_rem, cert)) => {
-                    println!(
-                        "Public Key: {:?}",
-                        cert.public_key().algorithm.algorithm.to_string()
-                    );
-                    println!("Subject: {:?}", cert.subject().to_string());
-                    println!("Issuer: {:?}", cert.issuer().to_string());
-                    println!("Serial: {:?}", cert.raw_serial_as_string().replace(":", ""));
-                }
-                _ => panic!("x509 parsing failed: {:?}", res),
-            }
-
-            let certificate_der = CertificateDer::from_slice(&cert).into_owned();
-            Ok(vec![certificate_der])
-        }
-        _ => {
-            anyhow::bail!("Couldn't find X509 certificate.")
-        }
-    }
-}
-
-impl Pkcs11Resolver {
-    pub fn from_cryptoki_config(cryptoki_config: CryptokiConfig) -> anyhow::Result<Arc<Self>> {
-        let CryptokiConfig {
-            module_path,
-            pin,
-            serial,
-        } = cryptoki_config;
-
-        // Alternative module: /opt/homebrew/lib/pkcs11/opensc-pkcs11.so
-        // let pkcs11module = std::env::var("PKCS11_MODULE");
-        // let pkcs11module = pkcs11module.as_deref().unwrap_or(PCKS11_MODULE_PATH);
-
-        debug!(%module_path, "Loading PKCS#11 module");
-        let pkcs11client = Pkcs11::new(module_path)?;
-        pkcs11client.initialize(CInitializeArgs::OsThreads)?;
-
-        debug!(%pin, "Attempting to login to PKCS#11 module");
-        let slot = pkcs11client.get_slots_with_token()?.remove(0);
-        let session = pkcs11client.open_ro_session(slot)?;
-        session.login(UserType::User, Some(&AuthPin::new(pin.deref().into())))?;
-
-        // Debug
-        let search = vec![
-            Attribute::Class(ObjectClass::CERTIFICATE),
-            Attribute::CertificateType(CertificateType::X_509),
-        ];
-        for handle in session.find_objects(&search)? {
-            // each cert: get the "value" which will be the raw certificate data
-            for value in session.get_attributes(handle, &[AttributeType::SerialNumber])? {
-                if let Attribute::Value(value) = value {
-                    match String::from_utf8(value) {
-                        Ok(path) => println!("Certificate value: {:?}", path),
-                        Err(e) => println!("Invalid UTF-8 sequence: {}", e),
-                    };
-                }
-            }
-        }
-
-        let pkcs11 = PKCS11 {
-            session: Arc::new(Mutex::new(session)),
-        };
-        let chain = get_certificate_der(pkcs11.clone())?;
-        // let my_signing_key = Arc::new(MySigningKey { pkcs11 });
-
-        let key_type = get_key_type(pkcs11.clone());
-        debug!("Key Type: {:?}", key_type.to_string());
-        let resolver = match key_type {
-            KeyType::EC => Arc::new(Pkcs11Resolver {
-                chain,
-                signing_key: Arc::new(ECSigningKey { pkcs11 }),
-            }),
-            KeyType::RSA => Arc::new(Pkcs11Resolver {
-                chain,
-                signing_key: Arc::new(RSASigningKey { pkcs11 }),
-            }),
-            _ => {
-                panic!("Unsupported key type. Only EC and RSA keys are supported");
-            }
-        };
-
-        let mut root_cert_store = rustls::RootCertStore::empty();
-        root_cert_store.add_parsable_certificates(
-            rustls_native_certs::load_native_certs().expect("could not load platform certs"),
-        );
-
-        // Alternative: Create client using file based certs (without using HSM)
-        // let client_cert = rumqttc::tokio_rustls::rustls::pki_types::CertificateDer::from_pem_file("/opt/homebrew/etc/tedge/device-certs/tedge-certificate.pem")?;
-        // let client_key = rumqttc::tokio_rustls::rustls::pki_types::PrivateKeyDer::from_pem_file("/opt/homebrew/etc/tedge/device-certs/tedge-private-key.pem")?;
-        // let client_config = ClientConfig::builder()
-        //     .with_root_certificates(root_cert_store)
-        //     .with_client_auth_cert(chain, client_key)?;
-
-        // Create client using custom client cert resolver
-        // let resolver = Arc::new(Pkcs11Resolver {
-        //     chain,
-        //     signing_key: my_signing_key,
-        // });
-
-        // let mqtt_client_id = std::env::var("DEVICE_ID");
-        // let mqtt_client_id = mqtt_client_id.as_deref().unwrap_or("rmi_macos01");
-
-        // let c8y_domain = std::env::var("C8Y_DOMAIN");
-        // let c8y_domain = c8y_domain
-        //     .as_deref()
-        //     .unwrap_or("thin-edge-io.eu-latest.cumulocity.com");
-
-        // let mut mqttoptions = MqttOptions::new(mqtt_client_id, c8y_domain, 8883);
-        // mqttoptions.set_keep_alive(std::time::Duration::from_secs(60));
-
-        // mqttoptions.set_transport(rumqttc::Transport::tls_with_config(client_config.into()));
-
-        // let (_client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-
-        // _client.subscribe("s/ds", rumqttc::QoS::AtLeastOnce).await?;
-        // _client
-        //     .publish("s/us", rumqttc::QoS::AtLeastOnce, false, "500")
-        //     .await?;
-
-        // loop {
-        //     match eventloop.poll().await {
-        //         Ok(v) => {
-        //             println!("Event = {v:?}");
-        //         }
-        //         Err(e) => {
-        //             println!("Error = {e:?}");
-        //             break;
-        //         }
-        //     }
-        // }
-
-        Ok(resolver)
     }
 }
 

@@ -588,6 +588,7 @@ fn check_device_status_c8y(
     if let Ok(cryptoki_config) = tedge_config.device.cryptoki.config() {
         let tls_config = certificate::parse_root_certificate::create_tls_config_cryptoki(
             &c8y_config.root_cert_path,
+            c8y_config.device_cert_path(),
             cryptoki_config,
         )?;
         mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));

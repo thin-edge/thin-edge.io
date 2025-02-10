@@ -4,7 +4,7 @@ use anyhow::bail;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
 
-use crate::{TEdgeConfig, TEdgeConfigReaderDeviceCryptoki};
+use crate::TEdgeConfigReaderDeviceCryptoki;
 
 pub enum CryptokiOpts {
     Disabled,
