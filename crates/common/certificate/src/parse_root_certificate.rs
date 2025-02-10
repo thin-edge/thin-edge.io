@@ -1,3 +1,4 @@
+use camino::Utf8PathBuf;
 use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
@@ -30,19 +31,26 @@ pub fn create_tls_config(
         .with_client_auth_cert(cert_chain, pvt_key)?)
 }
 
-pub fn create_tls_config_piv(
+pub fn create_tls_config_cryptoki(
     root_certificates: impl AsRef<Path>,
-    piv_serial: Arc<str>,
+    cryptoki_config: CryptokiConfig,
 ) -> Result<ClientConfig, CertificateError> {
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
 
-    let resolver = Pkcs11Resolver::from_piv_serial(&piv_serial).expect("failed to create resolver");
+    let resolver =
+        Pkcs11Resolver::from_cryptoki_config(cryptoki_config).expect("failed to create resolver");
 
     let config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_client_cert_resolver(resolver);
 
     Ok(config)
+}
+
+pub struct CryptokiConfig {
+    pub module_path: Utf8PathBuf,
+    pub pin: Arc<str>,
+    pub serial: Option<Arc<str>>,
 }
 
 pub fn client_config_for_ca_certificates<P>(

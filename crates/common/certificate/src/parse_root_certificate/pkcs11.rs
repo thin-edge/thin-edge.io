@@ -4,7 +4,7 @@
 use asn1_rs::ToDer;
 use base64::Engine;
 
-use rustls::ClientConfig;
+use rustls::{crypto, ClientConfig};
 
 // Only used when loading certs from file
 use rustls::pki_types::pem::PemObject;
@@ -25,9 +25,12 @@ use rustls::{
     sign::{CertifiedKey, Signer, SigningKey},
     Error as RusTLSError, SignatureAlgorithm, SignatureScheme,
 };
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 use x509_parser::prelude::{FromDer, X509Certificate};
+
+use super::CryptokiConfig;
 
 const PCKS11_MODULE_PATH: &str = "/usr/lib/x86_64-linux-gnu/libykcs11.so";
 const PKCS11_PIN: &str = "123456";
@@ -162,7 +165,7 @@ impl Signer for PkcsSigner {
     }
 
     fn scheme(&self) -> SignatureScheme {
-        info!("Using Signature scheme: {:?}", self.scheme.as_str());
+        debug!("Using Signature scheme: {:?}", self.scheme.as_str());
         self.scheme
     }
 }
@@ -271,16 +274,25 @@ fn get_certificate_der(
 }
 
 impl Pkcs11Resolver {
-    pub fn from_piv_serial(piv_serial: &str) -> anyhow::Result<Arc<Self>> {
+    pub fn from_cryptoki_config(cryptoki_config: CryptokiConfig) -> anyhow::Result<Arc<Self>> {
+        let CryptokiConfig {
+            module_path,
+            pin,
+            serial,
+        } = cryptoki_config;
+
         // Alternative module: /opt/homebrew/lib/pkcs11/opensc-pkcs11.so
-        let pkcs11module = std::env::var("PKCS11_MODULE");
-        let pkcs11module = pkcs11module.as_deref().unwrap_or(PCKS11_MODULE_PATH);
-        let pkcs11client = Pkcs11::new(pkcs11module)?;
+        // let pkcs11module = std::env::var("PKCS11_MODULE");
+        // let pkcs11module = pkcs11module.as_deref().unwrap_or(PCKS11_MODULE_PATH);
+
+        debug!(%module_path, "Loading PKCS#11 module");
+        let pkcs11client = Pkcs11::new(module_path)?;
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
+        debug!(%pin, "Attempting to login to PKCS#11 module");
         let slot = pkcs11client.get_slots_with_token()?.remove(0);
         let session = pkcs11client.open_ro_session(slot)?;
-        session.login(UserType::User, Some(&AuthPin::new("123456".into())))?;
+        session.login(UserType::User, Some(&AuthPin::new(pin.deref().into())))?;
 
         // Debug
         let search = vec![
@@ -306,7 +318,7 @@ impl Pkcs11Resolver {
         // let my_signing_key = Arc::new(MySigningKey { pkcs11 });
 
         let key_type = get_key_type(pkcs11.clone());
-        info!("Key Type: {:?}", key_type.to_string());
+        debug!("Key Type: {:?}", key_type.to_string());
         let resolver = match key_type {
             KeyType::EC => Arc::new(Pkcs11Resolver {
                 chain,

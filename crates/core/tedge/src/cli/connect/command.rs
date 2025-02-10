@@ -44,6 +44,7 @@ use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
+use tedge_config::tedge_config_cli::cryptoki_opts::CryptokiOpts;
 use tedge_config::TEdgeConfig;
 use tedge_config::*;
 use tedge_utils::paths::create_directories;
@@ -584,10 +585,10 @@ fn check_device_status_c8y(
 
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    if let Ok(piv_serial) = tedge_config.device.use_piv_serial.or_config_not_set() {
-        let tls_config = certificate::parse_root_certificate::create_tls_config_piv(
+    if let Ok(cryptoki_config) = tedge_config.device.cryptoki.config() {
+        let tls_config = certificate::parse_root_certificate::create_tls_config_cryptoki(
             &c8y_config.root_cert_path,
-            piv_serial.clone(),
+            cryptoki_config,
         )?;
         mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
@@ -927,7 +928,7 @@ fn new_bridge(
     bridge_config.validate(use_basic_auth)?;
 
     // TODO: put in general auth config struct
-    let use_piv_serial = tedge_config.device.use_piv_serial.or_none().cloned();
+    let cryptoki_config = tedge_config.device.cryptoki.config().ok();
 
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
@@ -938,7 +939,7 @@ fn new_bridge(
                 use_basic_auth,
                 bridge_config,
                 device_type,
-                use_piv_serial,
+                cryptoki_config,
             );
             spinner.finish(res)?;
         }

@@ -1,14 +1,16 @@
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 use certificate::parse_root_certificate::create_tls_config;
-use certificate::parse_root_certificate::create_tls_config_piv;
+use certificate::parse_root_certificate::create_tls_config_cryptoki;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
+use certificate::parse_root_certificate::CryptokiConfig;
 use rumqttc::valid_filter;
 use rumqttc::valid_topic;
 use rumqttc::MqttOptions;
 use rumqttc::Transport;
 use std::borrow::Cow;
 use std::path::Path;
+use std::sync::Arc;
 use tedge_config::CloudConfig;
 
 pub fn use_key_and_cert(
@@ -24,8 +26,12 @@ pub fn use_key_and_cert(
     Ok(())
 }
 
-pub fn use_piv(config: &mut MqttOptions, cloud_config: &dyn CloudConfig) -> anyhow::Result<()> {
-    let tls_config = create_tls_config_piv(cloud_config.root_cert_path(), "1234".into())?;
+pub fn use_cryptoki(
+    config: &mut MqttOptions,
+    cloud_config: &dyn CloudConfig,
+    cryptoki_config: CryptokiConfig,
+) -> anyhow::Result<()> {
+    let tls_config = create_tls_config_cryptoki(cloud_config.root_cert_path(), cryptoki_config)?;
     config.set_transport(Transport::tls_with_config(tls_config.into()));
     Ok(())
 }

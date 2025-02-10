@@ -14,6 +14,7 @@ use mqtt_channel::Config;
 use std::borrow::Cow;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::tedge_config_cli::cryptoki_opts::CryptokiOpts;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -21,8 +22,8 @@ use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
 use tedge_mqtt_bridge::use_credentials;
+use tedge_mqtt_bridge::use_cryptoki;
 use tedge_mqtt_bridge::use_key_and_cert;
-use tedge_mqtt_bridge::use_piv;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::QoS;
@@ -154,8 +155,8 @@ impl TEdgeComponent for CumulocityMapper {
             cloud_config.set_clean_session(true);
 
             if use_certificate {
-                if let Some(piv_serial) = tedge_config.device.use_piv_serial.or_none() {
-                    use_piv(&mut cloud_config, c8y_config)?;
+                if let Ok(cryptoki_config) = tedge_config.device.cryptoki.config() {
+                    use_cryptoki(&mut cloud_config, c8y_config, cryptoki_config)?;
                 } else {
                     use_key_and_cert(&mut cloud_config, c8y_config)?;
                 }

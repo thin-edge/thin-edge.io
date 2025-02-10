@@ -39,6 +39,7 @@ use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_config::tedge_config_cli::cryptoki_opts::CryptokiOpts;
 use tracing::debug;
 use tracing::info;
 
@@ -85,11 +86,14 @@ impl MqttBridgeActorBuilder {
                 client: Some(client),
                 ..
             } => {
-                if let Some(piv_serial) = tedge_config.device.use_piv_serial.or_none() {
+                // XXX(marcel): this function loads certs, which can fail, so it should probably be fallible
+                // TODO(marcel): all the tls setup could be extracted to a common place
+                let cryptoki_opts = tedge_config.device.cryptoki.opts().unwrap();
+                if let CryptokiOpts::Enabled { .. } = cryptoki_opts {
                     Some(
-                        certificate::parse_root_certificate::create_tls_config_piv(
+                        certificate::parse_root_certificate::create_tls_config_cryptoki(
                             ca_dir,
-                            piv_serial.clone(),
+                            cryptoki_opts.try_into().unwrap(),
                         )
                         .unwrap(),
                     )
