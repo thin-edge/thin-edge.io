@@ -521,17 +521,52 @@ impl EntityStore {
         self.pending_entity_store.cache_early_data_message(message)
     }
 
-    pub fn list_entity_tree<'a>(
-        &'a self,
-        root: Option<&'a EntityTopicId>,
-    ) -> Result<Vec<&'a EntityMetadata>, entity_store::Error> {
-        self.entities
-            .list_entity_tree(root.unwrap_or_else(|| self.main_device()))
+    pub fn list_entity_tree(&self, filters: ListFilters) -> Vec<&EntityMetadata> {
+        self.entities.list_entity_tree(filters)
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ListFilters {
+    pub root: Option<EntityTopicId>,
+    pub parent: Option<EntityTopicId>,
+    pub r#type: Option<EntityType>,
+}
+
+impl ListFilters {
+    pub fn root(mut self, value: EntityTopicId) -> Self {
+        self.root = Some(value);
+        self
+    }
+
+    pub fn parent(mut self, value: EntityTopicId) -> Self {
+        self.parent = Some(value);
+        self
+    }
+
+    pub fn r#type(mut self, value: EntityType) -> Self {
+        self.r#type = Some(value);
+        self
+    }
+
+    fn matches(&self, metadata: &EntityMetadata) -> bool {
+        if let Some(entity_type) = self.r#type.as_ref() {
+            if &metadata.r#type != entity_type {
+                return false;
+            }
+        }
+        if let Some(parent) = self.parent.as_ref() {
+            if metadata.parent.as_ref() != Some(parent) {
+                return false;
+            }
+        }
+        true
     }
 }
 
 /// In-memory representation of the entity tree
 struct EntityTree {
+    main_device: EntityTopicId,
     entities: HashMap<EntityTopicId, EntityNode>,
 }
 
@@ -561,7 +596,8 @@ impl EntityTree {
     /// Create the tree of entities for the main device, given its name, topic id and metadata
     pub fn new(topic_id: EntityTopicId, metadata: EntityMetadata) -> Self {
         EntityTree {
-            entities: HashMap::from([(topic_id.clone(), EntityNode::new(metadata))]),
+            main_device: topic_id.clone(),
+            entities: HashMap::from([(topic_id, EntityNode::new(metadata))]),
         }
     }
 
@@ -670,23 +706,41 @@ impl EntityTree {
         }
     }
 
-    pub fn list_entity_tree<'a>(
-        &'a self,
-        root: &'a EntityTopicId,
-    ) -> Result<Vec<&'a EntityMetadata>, Error> {
-        if let Some(metadata) = self.entities.get(root).map(|node| node.metadata()) {
-            let mut topic_ids = VecDeque::from(vec![root]);
-            let mut entities = vec![metadata];
+    pub fn list_entity_tree(&self, filters: ListFilters) -> Vec<&EntityMetadata> {
+        let start_root = filters
+            .root
+            .as_ref()
+            .or(filters.parent.as_ref())
+            .unwrap_or(&self.main_device);
+        if self.entities.contains_key(start_root) {
+            let mut topic_ids = VecDeque::from(vec![start_root]);
+            let mut entities = vec![];
 
             while let Some(topic_id) = topic_ids.pop_front() {
-                let (child_topics, children): (Vec<_>, Vec<_>) =
+                let metadata = self
+                    .entities
+                    .get(topic_id)
+                    .map(|node| node.metadata())
+                    .unwrap();
+                if filters.matches(metadata) {
+                    entities.push(metadata);
+                }
+
+                let (child_topics, _): (Vec<_>, Vec<_>) =
                     self.children(topic_id).into_iter().unzip();
-                topic_ids.extend(child_topics);
-                entities.extend(children);
+
+                // If the `parent` filter is used, no need to search beyond the direct children of that parent
+                if filters
+                    .parent
+                    .as_ref()
+                    .map_or(true, |parent| parent == topic_id)
+                {
+                    topic_ids.extend(child_topics);
+                }
             }
-            Ok(entities)
+            entities
         } else {
-            Err(Error::UnknownEntity(root.to_string()))
+            vec![]
         }
     }
 }
@@ -951,8 +1005,10 @@ mod tests {
     use assert_matches::assert_matches;
     use mqtt_channel::Topic;
     use serde_json::json;
+    use std::collections::BTreeSet;
     use std::str::FromStr;
     use tempfile::TempDir;
+    use test_case::test_case;
 
     #[test]
     fn parse_entity_registration_message() {
@@ -1059,39 +1115,219 @@ mod tests {
         assert!(children.iter().any(|&e| e == "device/child2//"));
     }
 
-    #[test]
-    fn list_entity_tree() {
+    #[test_case(
+        ListFilters::default(),
+        BTreeSet::from([
+            "device/main//",
+            "device/main/service/service0",
+            "device/main/service/service1",
+            "device/child0//",
+            "device/child00//",
+            "device/child000//",
+            "device/child1//",
+            "device/child1/service/service10",
+            "device/child2//",
+            "device/child2/service/service20",
+            "device/child2/service/service21",
+            "device/child20//",
+            "device/child21//",
+            "device/child21/service/service210",
+            "device/child210//",
+            "device/child211//",
+            "device/child2100//",
+            "device/child22//",
+        ]);
+        "all_entities"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .root("device/child2//".parse().unwrap()), 
+        BTreeSet::from([
+            "device/child2//",
+            "device/child2/service/service20",
+            "device/child2/service/service21",
+            "device/child20//",
+            "device/child21//",
+            "device/child21/service/service210",
+            "device/child210//",
+            "device/child211//",
+            "device/child2100//",
+            "device/child22//",
+        ]);
+        "child_root"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .parent("device/child2//".parse().unwrap()), 
+        BTreeSet::from([
+            "device/child2/service/service20",
+            "device/child2/service/service21",
+            "device/child20//",
+            "device/child21//",
+            "device/child22//",
+        ]);
+        "children_of_parent"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .r#type(EntityType::ChildDevice), 
+        BTreeSet::from([
+            "device/child0//",
+            "device/child1//",
+            "device/child2//",
+            "device/child00//",
+            "device/child20//",
+            "device/child21//",
+            "device/child22//",
+            "device/child000//",
+            "device/child210//",
+            "device/child211//",
+            "device/child2100//",
+        ]);
+        "child_devices_only"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .r#type(EntityType::Service), 
+        BTreeSet::from([
+            "device/main/service/service0",
+            "device/main/service/service1",
+            "device/child1/service/service10",
+            "device/child2/service/service20",
+            "device/child2/service/service21",
+            "device/child21/service/service210",
+        ]);
+        "services_only"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .root("device/child2//".parse().unwrap())
+            .r#type(EntityType::ChildDevice), 
+        BTreeSet::from([
+            "device/child2//",
+            "device/child20//",
+            "device/child21//",
+            "device/child22//",
+            "device/child210//",
+            "device/child211//",
+            "device/child2100//",
+        ]);
+        "child_device_tree_of_child_root"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .parent("device/child2//".parse().unwrap())
+            .r#type(EntityType::ChildDevice), 
+        BTreeSet::from([
+            "device/child20//",
+            "device/child21//",
+            "device/child22//",
+        ]);
+        "child_devices_of_child_parent"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .parent("device/child2/service/service20".parse().unwrap()), 
+        BTreeSet::new();
+        "children_of_service_is_empty"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .parent("device/child2100//".parse().unwrap()), 
+        BTreeSet::new();
+        "children_of_leaf_child_is_empty"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .root("device/child2100//".parse().unwrap()), 
+        BTreeSet::from([
+            "device/child2100//",
+        ]);
+        "entity_tree_from_leaf_child"
+    )]
+    #[test_case(
+        ListFilters::default()
+            .root("device/child2/service/service20".parse().unwrap()), 
+        BTreeSet::from([
+            "device/child2/service/service20",
+        ]);
+        "entity_tree_from_service"
+    )]
+    fn list_entity_tree(filters: ListFilters, expected: BTreeSet<&str>) {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
 
-        // Build the entity tree:
-        //
-        // main
-        // |-- child0
-        // |   |-- child00
-        // |   |   |-- child000
-        // |-- child1
-        // |-- child2
-        // |   |-- child20
-        // |   |-- child21
-        // |   |   |-- child210
-        // |   |   |   |-- child2100
-        // |   |   |-- child211
-        // |   |-- child22
+        build_test_entity_tree(&mut store);
+
+        // List entity tree from root
+        let entities = list_entity_tree_topics(&mut store, filters);
+        assert_eq!(entities, expected);
+    }
+
+    fn list_entity_tree_topics(store: &mut EntityStore, filters: ListFilters) -> BTreeSet<&str> {
+        store
+            .list_entity_tree(filters)
+            .iter()
+            .map(|e| e.topic_id.as_str())
+            .collect()
+    }
+
+    /// Build the test entity tree:
+    ///
+    /// main
+    /// |-- service0
+    /// |-- service1
+    /// |-- child0
+    /// |   |-- child00
+    /// |   |   |-- child000
+    /// |-- child1
+    /// |   |-- service10
+    /// |-- child2
+    /// |   |-- service20
+    /// |   |-- service21
+    /// |   |-- child20
+    /// |   |-- child21
+    /// |   |   |-- service210
+    /// |   |   |-- child210
+    /// |   |   |   |-- child2100
+    /// |   |   |-- child211
+    /// |   |-- child22
+    fn build_test_entity_tree(store: &mut EntityStore) {
         build_entity_tree(
-            &mut store,
+            store,
             vec![
+                ("device/main/service/service0", "service", None),
+                ("device/main/service/service1", "service", None),
                 ("device/child0//", "child-device", None),
-                ("device/child1//", "child-device", None),
-                ("device/child2//", "child-device", None),
                 ("device/child00//", "child-device", Some("device/child0//")),
-                ("device/child20//", "child-device", Some("device/child2//")),
-                ("device/child21//", "child-device", Some("device/child2//")),
-                ("device/child22//", "child-device", Some("device/child2//")),
                 (
                     "device/child000//",
                     "child-device",
                     Some("device/child00//"),
+                ),
+                ("device/child1//", "child-device", None),
+                (
+                    "device/child1/service/service10",
+                    "service",
+                    Some("device/child1//"),
+                ),
+                ("device/child2//", "child-device", None),
+                (
+                    "device/child2/service/service20",
+                    "service",
+                    Some("device/child2//"),
+                ),
+                (
+                    "device/child2/service/service21",
+                    "service",
+                    Some("device/child2//"),
+                ),
+                ("device/child20//", "child-device", Some("device/child2//")),
+                ("device/child21//", "child-device", Some("device/child2//")),
+                (
+                    "device/child21/service/service210",
+                    "service",
+                    Some("device/child21//"),
                 ),
                 (
                     "device/child210//",
@@ -1108,54 +1344,9 @@ mod tests {
                     "child-device",
                     Some("device/child210//"),
                 ),
+                ("device/child22//", "child-device", Some("device/child2//")),
             ],
         );
-
-        // List entity tree from root
-        let entities = store
-            .list_entity_tree(None)
-            .unwrap()
-            .iter()
-            .map(|e| e.topic_id.as_str())
-            .collect::<HashSet<_>>();
-        let expected_entities = [
-            "device/main//",
-            "device/child0//",
-            "device/child1//",
-            "device/child2//",
-            "device/child00//",
-            "device/child20//",
-            "device/child21//",
-            "device/child22//",
-            "device/child000//",
-            "device/child210//",
-            "device/child211//",
-            "device/child2100//",
-        ]
-        .into_iter()
-        .collect::<HashSet<_>>();
-        assert_eq!(entities, expected_entities);
-
-        // List entity tree from child2
-        let child_root = EntityTopicId::from_str("device/child2//").unwrap();
-        let entities = store
-            .list_entity_tree(Some(&child_root))
-            .unwrap()
-            .iter()
-            .map(|e| e.topic_id.as_str())
-            .collect::<HashSet<_>>();
-        let expected_entities = [
-            "device/child2//",
-            "device/child20//",
-            "device/child21//",
-            "device/child22//",
-            "device/child210//",
-            "device/child211//",
-            "device/child2100//",
-        ]
-        .into_iter()
-        .collect::<HashSet<_>>();
-        assert_eq!(entities, expected_entities);
     }
 
     // Each item in the vector represents (topic_id, type, parent)

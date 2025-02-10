@@ -85,17 +85,27 @@ GET /v1/entities/{topic-id}
 curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01
 ```
 
-## Query Entities
-
-### Query All Entities
-
-List all entities registered with thin-edge starting from the `main` device.
+## Query entities
 
 **Endpoint**
 
 ```
 GET /v1/entities
 ```
+
+**Query parameters**
+
+| Parameter | Description                                                            | Examples                            |
+|-----------|------------------------------------------------------------------------|-------------------------------------|
+| `root`    | Entity tree starting from the given `root` node (including it) | `device/child2//`                   |
+| `parent`  | Direct child entities of the given `parent` entity (excluding it)             | `device/main//`                     |
+| `type`    | Entities of the given entity `type`                          | `main`, `child-device` or `service` |
+
+The following restrictions apply:
+* Multiple values can not be specified for the same parameter.
+* The same parameter can not be repeated multiple times.
+* The `root` and `parent` parameters can not be used together.
+
 
 **Responses**
 
@@ -107,7 +117,7 @@ GET /v1/entities
           "@type": "device"
       },
       {
-          "@topic-id": "device/main/service/tedge-agent",
+          "@topic-id": "device/main/service/service0",
           "@type": "service",
           "@parent": "device/main//"
       },
@@ -115,29 +125,310 @@ GET /v1/entities
           "@topic-id": "device/child0//",
           "@type": "child-device",
           "@parent": "device/main//"
-      },
-      {
-          "@topic-id": "device/child1//",
-          "@type": "child-device",
-          "@parent": "device/main//"
-      },
-      {
-          "@topic-id": "device/child00//",
-          "@type": "child-device",
-          "@parent": "device/child0//"
-      },
-      {
-          "@topic-id": "device/child01//",
-          "@type": "child-device",
-          "@parent": "device/child0//"
       }
+      ...
   ]
   ```
+* 404: Not Found
+  ```
+  Entity not found with topic id: device/unknown/topic/id
+  ```
 
-**Example**
+**Examples**
+
+To demonstrate different query examples, the following entity tree is assumed as the base:
+
+```
+main
+|-- service0
+|-- service1
+|-- child0
+|   |-- child00
+|   |   |-- child000
+|-- child1
+|   |-- service10
+|-- child2
+|   |-- service20
+|   |-- child20
+|   |   |-- child200
+|   |-- child21
+|   |   |-- service210
+|   |   |-- child210
+|   |-- child22
+```
+
+### Query all entities
+
+List all entities registered with thin-edge starting from the `main` device at the root.
+
+**Request**
 
 ```shell
 curl http://localhost:8000/tedge/entity-store/v1/entities
+```
+
+**Response**
+
+```json
+[
+    {
+        "@topic-id": "device/main//",
+        "@type": "device"
+    },
+    {
+        "@topic-id": "device/main/service/service0",
+        "@type": "service",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/main/service/service1",
+        "@type": "service",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child0//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child1//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child2//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child00//",
+        "@type": "child-device",
+        "@parent": "device/child0//"
+    },
+    {
+        "@topic-id": "device/child1/service/service10",
+        "@type": "service",
+        "@parent": "device/child1//"
+    },
+    {
+        "@topic-id": "device/child2/service/service20",
+        "@type": "service",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child20//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child21//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child22//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child200//",
+        "@type": "child-device",
+        "@parent": "device/child20//"
+    },
+    {
+        "@topic-id": "device/child21/service/service210",
+        "@type": "service",
+        "@parent": "device/child21//"
+    },
+    {
+        "@topic-id": "device/child210//",
+        "@type": "child-device",
+        "@parent": "device/child21//"
+    }
+]
+```
+
+### Query from a root
+
+Query the entity tree from a given root node.
+
+**Request**
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities?root=device/child2//
+```
+
+**Response**
+
+```json
+[
+    {
+        "@topic-id": "device/child2//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child2/service/service20",
+        "@type": "service",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child20//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child21//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child22//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child200//",
+        "@type": "child-device",
+        "@parent": "device/child20//"
+    },
+    {
+        "@topic-id": "device/child21/service/service210",
+        "@type": "service",
+        "@parent": "device/child21//"
+    },
+    {
+        "@topic-id": "device/child210//",
+        "@type": "child-device",
+        "@parent": "device/child21//"
+    }
+]
+```
+
+### Query by parent
+
+Query only the immediate child entities of a `parent`, excluding any nested entities.
+
+**Request**
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities?parent=device/child2//
+```
+
+**Response**
+
+```json
+[
+    {
+        "@topic-id": "device/child2/service/service20",
+        "@type": "service",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child20//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child21//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child22//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    }
+]
+```
+
+### Query by type
+
+Query all entities of type: `child-device`
+
+**Request**
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities?type=child-device
+```
+
+**Response**
+
+```json
+[
+    {
+        "@topic-id": "device/child0//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child1//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child2//",
+        "@type": "child-device",
+        "@parent": "device/main//"
+    },
+    {
+        "@topic-id": "device/child00//",
+        "@type": "child-device",
+        "@parent": "device/child0//"
+    },
+    {
+        "@topic-id": "device/child20//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child21//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child22//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child200//",
+        "@type": "child-device",
+        "@parent": "device/child20//"
+    },
+    {
+        "@topic-id": "device/child210//",
+        "@type": "child-device",
+        "@parent": "device/child21//"
+    }
+]
+```
+
+### Query with multiple parameters
+
+Query all child services of the parent: `device/child2//`.
+
+**Request**
+
+```shell
+curl 'http://localhost:8000/tedge/entity-store/v1/entities?parent=device/child2//&type=service'
+```
+
+**Response**
+
+```json
+[
+    {
+        "@topic-id": "device/child2/service/service20",
+        "@type": "service",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child21/service/service210",
+        "@type": "service",
+        "@parent": "device/child21//"
+    }
+]
 ```
 
 ## Delete entity
