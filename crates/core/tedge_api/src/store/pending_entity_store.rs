@@ -85,7 +85,9 @@ impl PendingEntityStore {
         }
     }
 
-    /// Returns all the children and their children recursively for a given parent
+    /// Recursively removes from the pending entity cache the children of a freshly registered device.
+    ///
+    /// Returns the list of devices which registration is no more pending.
     pub fn take_cached_child_entities_data(
         &mut self,
         entity_tid: &EntityTopicId,
@@ -93,10 +95,11 @@ impl PendingEntityStore {
         let mut children = vec![];
         if let Some(direct_children) = self.orphans.remove(entity_tid) {
             for child in direct_children {
-                let pending_entity_cache = self.entities.remove(&child).unwrap();
-                let pending_entity_data = self.registered_data_from_cache(pending_entity_cache);
-                children.push(pending_entity_data);
-                children.append(&mut self.take_cached_child_entities_data(&child));
+                if let Some(pending_entity_cache) = self.entities.remove(&child) {
+                    let pending_entity_data = self.registered_data_from_cache(pending_entity_cache);
+                    children.push(pending_entity_data);
+                    children.append(&mut self.take_cached_child_entities_data(&child));
+                }
             }
         }
         children
@@ -125,7 +128,7 @@ impl PendingEntityStore {
         for message in telemetry_cache.into_iter() {
             match self.mqtt_schema.entity_channel_of(&message.topic) {
                 Ok((tid, _)) => {
-                    if &tid == entity_tid {
+                    if tid == entity_tid {
                         messages.push(message);
                     } else {
                         self.telemetry_cache.push(message)

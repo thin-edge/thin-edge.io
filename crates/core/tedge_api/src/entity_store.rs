@@ -229,6 +229,11 @@ impl EntityStore {
         }
     }
 
+    /// Iterates over the entity topic ids
+    pub fn entity_topic_ids(&self) -> impl Iterator<Item = &EntityTopicId> {
+        self.entities.entity_topic_ids()
+    }
+
     /// Returns information about an entity under a given MQTT entity topic identifier.
     pub fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
         self.entities.get(entity_topic_id)
@@ -562,6 +567,11 @@ impl EntityTree {
 
     pub fn contains_key(&self, topic_id: &EntityTopicId) -> bool {
         self.entities.contains_key(topic_id)
+    }
+
+    /// Iterate over the entity topic ids
+    pub fn entity_topic_ids(&self) -> impl Iterator<Item = &EntityTopicId> {
+        self.entities.keys()
     }
 
     /// Returns information about an entity under a given MQTT entity topic identifier.

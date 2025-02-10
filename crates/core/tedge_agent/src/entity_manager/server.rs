@@ -57,6 +57,16 @@ impl EntityStoreServer {
             entity_auto_register,
         }
     }
+
+    #[cfg(test)]
+    pub fn entity_topic_ids(&self) -> impl Iterator<Item = &EntityTopicId> {
+        self.entity_store.entity_topic_ids()
+    }
+
+    #[cfg(test)]
+    pub fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
+        self.entity_store.get(entity_topic_id)
+    }
 }
 
 #[async_trait]
@@ -100,7 +110,7 @@ impl EntityStoreServer {
     async fn process_mqtt_message(&mut self, message: MqttMessage) {
         if let Ok((topic_id, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
             if let Channel::EntityMetadata = channel {
-                self.process_entity_registration(message);
+                self.process_entity_registration(topic_id, message).await;
             } else {
                 self.process_entity_data(topic_id).await;
             }
@@ -109,9 +119,9 @@ impl EntityStoreServer {
         }
     }
 
-    fn process_entity_registration(&mut self, message: MqttMessage) {
+    async fn process_entity_registration(&mut self, topic_id: EntityTopicId, message: MqttMessage) {
         if message.payload().is_empty() {
-            // Nothing to do on entity clear messages
+            let _ = self.deregister_entity(topic_id).await;
             return;
         }
 
