@@ -136,7 +136,7 @@ impl Display for EntityType {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq, Clone)]
 #[error("Invalid entity type: {0}")]
 pub struct InvalidEntityType(String);
 

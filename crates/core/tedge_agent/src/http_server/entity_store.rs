@@ -12,6 +12,7 @@ use super::server::AgentState;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
 use axum::extract::Path;
+use axum::extract::Query;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -20,13 +21,71 @@ use axum::routing::post;
 use axum::Json;
 use axum::Router;
 use hyper::StatusCode;
+use serde::Deserialize;
 use serde_json::json;
 use std::str::FromStr;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::InvalidEntityType;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ListParams {
+    #[serde(default)]
+    root: Option<String>,
+    #[serde(default)]
+    parent: Option<String>,
+    #[serde(default)]
+    r#type: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
+pub enum InputValidationError {
+    #[error(transparent)]
+    InvalidEntityType(#[from] InvalidEntityType),
+    #[error(transparent)]
+    InvalidEntityTopic(#[from] TopicIdError),
+    #[error("The provided parameters: {0} and {1} are mutually exclusive. Use either one.")]
+    IncompatibleParams(String, String),
+}
+
+impl TryFrom<ListParams> for ListFilters {
+    type Error = InputValidationError;
+
+    fn try_from(params: ListParams) -> Result<Self, Self::Error> {
+        let root = params
+            .root
+            .filter(|v| !v.is_empty())
+            .map(|val| val.parse())
+            .transpose()?;
+        let parent = params
+            .parent
+            .filter(|v| !v.is_empty())
+            .map(|val| val.parse())
+            .transpose()?;
+        let r#type = params
+            .r#type
+            .filter(|v| !v.is_empty())
+            .map(|val| val.parse())
+            .transpose()?;
+
+        if root.is_some() && parent.is_some() {
+            return Err(InputValidationError::IncompatibleParams(
+                "root".to_string(),
+                "parent".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            root,
+            parent,
+            r#type,
+        })
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 enum Error {
@@ -46,6 +105,9 @@ enum Error {
 
     #[error("Received unexpected response from entity store")]
     InvalidEntityStoreResponse,
+
+    #[error(transparent)]
+    InvalidInput(#[from] InputValidationError),
 }
 
 impl IntoResponse for Error {
@@ -60,6 +122,7 @@ impl IntoResponse for Error {
             Error::EntityNotFound(_) => StatusCode::NOT_FOUND,
             Error::ChannelError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::InvalidEntityStoreResponse => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
         };
         let error_message = self.to_string();
 
@@ -141,18 +204,20 @@ async fn deregister_entity(
 
 async fn list_entities(
     State(state): State<AgentState>,
+    Query(params): Query<ListParams>,
 ) -> Result<Json<Vec<EntityMetadata>>, Error> {
+    let filters = params.try_into()?;
     let response = state
         .entity_store_handle
         .clone()
-        .await_response(EntityStoreRequest::List(None))
+        .await_response(EntityStoreRequest::List(filters))
         .await?;
 
     let EntityStoreResponse::List(entities) = response else {
         return Err(Error::InvalidEntityStoreResponse);
     };
 
-    Ok(Json(entities?))
+    Ok(Json(entities))
 }
 
 #[cfg(test)]
@@ -478,11 +543,11 @@ mod tests {
             if let Some(mut req) = entity_store_box.recv().await {
                 if let EntityStoreRequest::List(_) = req.request {
                     req.reply_to
-                        .send(EntityStoreResponse::List(Ok(vec![
+                        .send(EntityStoreResponse::List(vec![
                             EntityMetadata::main_device(),
                             EntityMetadata::child_device("child0".to_string()).unwrap(),
                             EntityMetadata::child_device("child1".to_string()).unwrap(),
-                        ])))
+                        ]))
                         .await
                         .unwrap();
                 }
@@ -522,9 +587,7 @@ mod tests {
             if let Some(mut req) = entity_store_box.recv().await {
                 if let EntityStoreRequest::List(_) = req.request {
                     req.reply_to
-                        .send(EntityStoreResponse::List(Err(
-                            entity_store::Error::UnknownEntity("unknown".to_string()),
-                        )))
+                        .send(EntityStoreResponse::List(vec![]))
                         .await
                         .unwrap();
                 }
@@ -538,7 +601,127 @@ mod tests {
             .expect("request builder");
 
         let response = app.call(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entities: Vec<EntityMetadata> = serde_json::from_slice(&body).unwrap();
+        assert!(entities.is_empty());
+    }
+
+    #[tokio::test]
+    async fn entity_list_query_parameters() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::List(_) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::List(vec![
+                            EntityMetadata::child_device("child00".to_string()).unwrap(),
+                            EntityMetadata::child_device("child01".to_string()).unwrap(),
+                        ]))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities?parent=device/child0//&type=child-device")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entities: Vec<EntityMetadata> = serde_json::from_slice(&body).unwrap();
+
+        let entity_set = entities
+            .iter()
+            .map(|e| e.topic_id.as_str())
+            .collect::<HashSet<_>>();
+        assert!(entity_set.contains("device/child00//"));
+        assert!(entity_set.contains("device/child01//"));
+    }
+
+    #[tokio::test]
+    async fn entity_list_empty_query_param() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            while let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::List(_) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::List(vec![]))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        for param in ["root=", "parent=", "type="].into_iter() {
+            let uri = format!("/v1/entities?{}", param);
+            let req = Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .body(Body::empty())
+                .expect("request builder");
+
+            let response = app.call(req).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities?root=&parent=&type=")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn entity_list_bad_query_param() {
+        let TestHandle {
+            mut app,
+            entity_store_box: _, // Not used
+        } = setup();
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities?parent=an/invalid/topic/id/")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn entity_list_bad_query_parameter_combination() {
+        let TestHandle {
+            mut app,
+            entity_store_box: _, // Not used
+        } = setup();
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities?root=device/some/topic/id&parent=device/another/topic/id")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     struct TestHandle {

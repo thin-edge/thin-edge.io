@@ -6,6 +6,7 @@ use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -21,7 +22,7 @@ pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
     Delete(EntityTopicId),
-    List(Option<EntityTopicId>),
+    List(ListFilters),
     MqttMessage(MqttMessage),
 }
 
@@ -30,7 +31,7 @@ pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
     Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
     Delete(Vec<EntityTopicId>),
-    List(Result<Vec<EntityMetadata>, entity_store::Error>),
+    List(Vec<EntityMetadata>),
     Ok,
 }
 
@@ -92,11 +93,9 @@ impl Server for EntityStoreServer {
                 let deleted_entities = self.deregister_entity(topic_id).await;
                 EntityStoreResponse::Delete(deleted_entities)
             }
-            EntityStoreRequest::List(topic_id) => {
-                let entities = self.entity_store.list_entity_tree(topic_id.as_ref());
-                EntityStoreResponse::List(
-                    entities.map(|entities| entities.into_iter().cloned().collect()),
-                )
+            EntityStoreRequest::List(filters) => {
+                let entities = self.entity_store.list_entity_tree(filters);
+                EntityStoreResponse::List(entities.into_iter().cloned().collect())
             }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
                 self.process_mqtt_message(mqtt_message).await;
