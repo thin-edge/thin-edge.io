@@ -126,7 +126,7 @@ impl IntoResponse for Error {
         };
         let error_message = self.to_string();
 
-        (status_code, error_message).into_response()
+        (status_code, Json(json!({ "error": error_message }))).into_response()
     }
 }
 
@@ -319,6 +319,13 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!( {"error":"Entity not found with topic id: device/test-child//"})
+        );
     }
 
     #[tokio::test]
@@ -410,6 +417,13 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!( {"error":"An entity with topic id: device/test-child// is already registered"})
+        );
     }
 
     #[tokio::test]
@@ -456,6 +470,13 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!( {"error":"Specified parent \"test-child\" does not exist in the store"})
+        );
     }
 
     #[tokio::test]
@@ -705,6 +726,13 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!( {"error":"An entity topic identifier has at most 4 segments"})
+        );
     }
 
     #[tokio::test]
@@ -722,6 +750,13 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!( {"error":"The provided parameters: root and parent are mutually exclusive. Use either one."})
+        );
     }
 
     struct TestHandle {
