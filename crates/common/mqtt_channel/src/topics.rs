@@ -6,11 +6,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::convert::TryInto;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 /// An MQTT topic
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Topic {
     pub name: String,
+}
+
+impl Display for Topic {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        Display::fmt(&self.name, f)
+    }
 }
 
 impl Topic {

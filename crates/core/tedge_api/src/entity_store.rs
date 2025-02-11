@@ -442,7 +442,7 @@ impl EntityStore {
     }
 
     /// Recursively deregister an entity, its child devices and services
-    pub fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityTopicId> {
+    pub fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
         let mut removed_entities = vec![];
         self.entities.remove(topic_id, &mut removed_entities);
         removed_entities
@@ -454,7 +454,7 @@ impl EntityStore {
     pub fn deregister_and_persist_entity(
         &mut self,
         topic_id: &EntityTopicId,
-    ) -> Result<Vec<EntityTopicId>, Error> {
+    ) -> Result<Vec<EntityMetadata>, Error> {
         let removed_entities = self.deregister_entity(topic_id);
 
         if !removed_entities.is_empty() {
@@ -690,19 +690,14 @@ impl EntityTree {
 
     /// Recursively remove an entity, its child devices and services
     ///
-    /// Populate the given vector with the topic identifiers of the removed entities
-    fn remove(&mut self, topic_id: &EntityTopicId, removed_entities: &mut Vec<EntityTopicId>) {
-        if let Some(children) = self
-            .entities
-            .get(topic_id)
-            .map(|node| node.children.clone())
-        {
+    /// Populate the given vector with the metadata of the removed entities
+    fn remove(&mut self, topic_id: &EntityTopicId, removed_entities: &mut Vec<EntityMetadata>) {
+        if let Some(node) = self.entities.remove(topic_id) {
+            removed_entities.push(node.metadata);
+            let children = node.children;
             children
                 .iter()
                 .for_each(|sub_topic| self.remove(sub_topic, removed_entities));
-
-            self.entities.remove(topic_id);
-            removed_entities.push(topic_id.clone())
         }
     }
 
@@ -1887,7 +1882,11 @@ mod tests {
         register_child(&mut store, "device/003//", "device/00D//");
         register_child(&mut store, "device/003//", "device/00E//");
 
-        let mut removed = store.deregister_entity(&entity("device/002//"));
+        let mut removed = store
+            .deregister_entity(&entity("device/002//"))
+            .into_iter()
+            .map(|v| v.topic_id)
+            .collect::<Vec<_>>();
         removed.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
         assert_eq!(

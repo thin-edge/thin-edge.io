@@ -80,7 +80,10 @@ async fn check_registrations(registrations: Commands) {
                 .iter()
                 .map(|registered_entity| registered_entity.reg_message.topic_id.clone())
                 .collect(),
-            EntityStoreResponse::Delete(actual_updates) => HashSet::from_iter(actual_updates),
+            EntityStoreResponse::Delete(actual_updates) => actual_updates
+                .into_iter()
+                .map(|meta| meta.topic_id)
+                .collect(),
             _ => HashSet::new(),
         };
         assert_eq!(actual_updates, expected_updates);

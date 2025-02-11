@@ -442,15 +442,32 @@ The deleted entities are cleared from the MQTT broker as well.
 DELETE /v1/entities/{topic-id}
 ```
 
-**Responses**
-
-* 200: OK
-  ```json
-  ["device/child01//"]
-  ```
-
 **Example**
 
 ```shell
-curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01
+curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child21
 ```
+
+**Responses**
+
+* 200: OK, when entities are deleted
+  ```json
+  [
+    {
+        "@topic-id": "device/child21//",
+        "@type": "child-device",
+        "@parent": "device/child2//"
+    },
+    {
+        "@topic-id": "device/child21/service/service210",
+        "@type": "service",
+        "@parent": "device/child21//"
+    },
+    {
+        "@topic-id": "device/child210//",
+        "@type": "child-device",
+        "@parent": "device/child21//"
+    }
+  ]
+  ```
+

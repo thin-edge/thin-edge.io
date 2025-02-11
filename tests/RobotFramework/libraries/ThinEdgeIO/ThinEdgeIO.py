@@ -1013,6 +1013,43 @@ class ThinEdgeIO(DeviceLibrary):
         json_output = json.loads(output.stdout)
         return json_output
 
+    @keyword("Deregister Entity")
+    def deregister_entity(
+            self,
+            topic_id: str,
+            device_name: str = None 
+    ) -> Dict[str, Any]:
+        """
+        Delete the given entity and its child tree from the entity store
+
+        Args:
+            topic_id (str, optional): Topic ID of the entity to be deleted
+            device_name (str, optional): Device name to perform this action from
+
+        Returns:
+            Dict[str, Any]: Registered entity topic ID
+
+        *Example:*
+        | ${entities}= | Delete Entity | device/child0// |
+        | ${entities}= | Delete Entity | device/child0/service/service0 | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+        
+        command = (
+            f"curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/{topic_id}"
+        )
+        output = device.execute_command(command)
+        json_output = json.loads(output.stdout)
+        return json_output
+
     @keyword("List Entities")
     def list_entities(
             self,
@@ -1116,6 +1153,47 @@ class ThinEdgeIO(DeviceLibrary):
         assert matches
 
         return matches
+
+    @keyword("Should Not Contain Entity")
+    def assert_does_not_contain_entity(
+            self,
+            topic_id: str,
+            entities: List[Dict[str, Any]] = None,
+            device_name: str = None,
+            **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Assert that the entity store does not contains the given entity
+
+        Args:
+            topic_id (str, optional): Topic ID of the entity
+            entities (List[Dict[str, Any]], optional): List of entities to search in. Defaults to None.
+            device_name (str, optional): Device name to fetch the entity list from
+
+        Returns:
+            List[Dict[str, Any]]: List of entities matching the given entity definition
+
+        *Example:*
+        | ${entities}= | Should Not Contain Entity | topic_id=device/child123// |
+        | ${entities}= | Should Not Contain Entity | topic_id=device/child123// | entities=${entity_list_json} |
+        | ${entities}= | Should Not Contain Entity | topic_id=device/child123// | entities=${entity_list_json} | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+
+        if not entities:
+            entities = self.list_entities()
+        
+        assert all(entity["@topic-id"] != topic_id for entity in entities)
+        
+        return entities
+
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
