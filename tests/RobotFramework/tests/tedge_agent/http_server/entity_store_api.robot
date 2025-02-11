@@ -65,6 +65,7 @@ Entity auto-registration over MQTT
 Delete entity tree
     Register Entity    device/child0//    child-device    device/main//
     Register Entity    device/child1//    child-device    device/main//
+    Register Entity    device/child2//    child-device    device/main//
     Register Entity    device/child0/service/service0    service    device/child0//
     Register Entity    device/child00//    child-device    device/child0//
     Register Entity    device/child000//    child-device    device/child00//
@@ -86,22 +87,23 @@ Delete entity tree
     ...    {"@topic-id":"device/child000//","@parent":"device/child00//","@type":"child-device"}
     ...    ${deleted}
 
-    # Assert the remaining entities
     ${entities}=    List Entities
     Should Not Contain Entity
     ...    "device/child0//"
     ...    ${entities}
-
     Should Not Contain Entity
     ...    "device/child00//"
     ...    ${entities}
-
     Should Not Contain Entity
     ...    "device/child000//"
     ...    ${entities}
 
+    # Assert the remaining entities
     Should Contain Entity
     ...    {"@topic-id":"device/child1//","@parent":"device/main//","@type":"child-device"}
+    ...    ${entities}
+    Should Contain Entity
+    ...    {"@topic-id":"device/child2//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
 
 

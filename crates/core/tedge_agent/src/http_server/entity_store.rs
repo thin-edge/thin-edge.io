@@ -186,7 +186,7 @@ async fn get_entity(
 async fn deregister_entity(
     State(state): State<AgentState>,
     Path(path): Path<String>,
-) -> Result<Json<Vec<EntityMetadata>>, Error> {
+) -> Result<Response, Error> {
     let topic_id = EntityTopicId::from_str(&path)?;
 
     let response = state
@@ -199,7 +199,11 @@ async fn deregister_entity(
         return Err(Error::InvalidEntityStoreResponse);
     };
 
-    Ok(Json(deleted))
+    if deleted.is_empty() {
+        return Ok(StatusCode::NO_CONTENT.into_response());
+    }
+
+    Ok((StatusCode::OK, Json(deleted)).into_response())
 }
 
 async fn list_entities(
@@ -521,7 +525,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_unknown_entity_is_ok() {
+    async fn delete_unknown_entity_returns_no_content() {
         let TestHandle {
             mut app,
             mut entity_store_box,
@@ -549,7 +553,7 @@ mod tests {
             .expect("request builder");
 
         let response = app.call(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]

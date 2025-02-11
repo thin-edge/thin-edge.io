@@ -470,4 +470,4 @@ curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child
     }
   ]
   ```
-
+* 204: No Content, when nothing is deleted
