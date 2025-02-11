@@ -377,10 +377,9 @@ impl Agent {
             let telemetry_cache_size = 0; // Agent need not cache any data messages, the mapper would
 
             let main_device = EntityRegistrationMessage::main_device(None);
-            let entity_store = EntityStore::with_main_device_and_default_service_type(
+            let entity_store = EntityStore::with_main_device(
                 mqtt_schema.clone(),
                 main_device,
-                self.config.service.ty.clone(),
                 telemetry_cache_size,
                 state_dir,
                 clean_start,

@@ -197,15 +197,13 @@ mod entity {
     ) -> (EntityStoreServer, SimpleMessageBox<MqttMessage, NoMessage>) {
         let mqtt_schema = MqttSchema::default();
         let main_device = EntityRegistrationMessage::main_device(Some(device_id.to_string()));
-        let default_service_type = "default_service_type".to_string();
         let telemetry_cache_size = 0;
         let log_dir = TempDir::new().unwrap();
         let clean_start = true;
         let entity_auto_register = true;
-        let entity_store = EntityStore::with_main_device_and_default_service_type(
+        let entity_store = EntityStore::with_main_device(
             mqtt_schema.clone(),
             main_device,
-            default_service_type,
             telemetry_cache_size,
             log_dir,
             clean_start,
