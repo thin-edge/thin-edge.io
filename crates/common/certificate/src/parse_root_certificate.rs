@@ -170,7 +170,16 @@ fn add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) -> Result<(),
 pub fn read_pvt_key(
     key_file: impl AsRef<Path>,
 ) -> Result<PrivateKeyDer<'static>, CertificateError> {
-    PrivateKeyDer::from_pem_file(key_file).map_err(CertificateError::from)
+    PrivateKeyDer::from_pem_file(&key_file).map_err(|err| {
+        if let rustls::pki_types::pem::Error::Io(io) = err {
+            CertificateError::IoError {
+                path: key_file.as_ref().to_path_buf(),
+                error: io,
+            }
+        } else {
+            CertificateError::CertParse2(err)
+        }
+    })
 }
 
 pub fn read_cert_chain(
