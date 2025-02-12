@@ -4,6 +4,7 @@ use crate::error;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
+use mqtt_channel::Topic;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
 use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Event;
@@ -22,7 +23,7 @@ use super::MAX_PACKET_SIZE;
 pub struct MqttPublishCommand {
     pub host: String,
     pub port: u16,
-    pub topic: String,
+    pub topic: Topic,
     pub message: String,
     pub qos: rumqttc::QoS,
     pub client_id: String,
@@ -36,7 +37,9 @@ impl Command for MqttPublishCommand {
     fn description(&self) -> String {
         format!(
             "publish the message \"{}\" on the topic \"{}\" with QoS \"{:?}\".",
-            self.message, self.topic, self.qos
+            self.message,
+            self.topic.as_ref(),
+            self.qos
         )
     }
 
@@ -92,7 +95,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     let mut acknowledged = false;
     let mut any_error = None;
 
-    client.publish(&cmd.topic, cmd.qos, cmd.retain, payload)?;
+    client.publish(&cmd.topic.name, cmd.qos, cmd.retain, payload)?;
 
     for event in connection.iter() {
         match event {

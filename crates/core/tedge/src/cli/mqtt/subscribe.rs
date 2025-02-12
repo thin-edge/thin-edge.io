@@ -2,6 +2,7 @@ use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
+use mqtt_channel::TopicFilter;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
 use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Client;
@@ -21,7 +22,7 @@ use crate::error;
 pub struct MqttSubscribeCommand {
     pub host: String,
     pub port: u16,
-    pub topic: String,
+    pub topic: SimpleTopicFilter,
     pub qos: QoS,
     pub hide_topic: bool,
     pub client_id: String,
@@ -30,11 +31,15 @@ pub struct MqttSubscribeCommand {
     pub client_auth_config: Option<MqttAuthClientConfig>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SimpleTopicFilter(String);
+
 impl Command for MqttSubscribeCommand {
     fn description(&self) -> String {
         format!(
-            "subscribe the topic \"{}\" with QoS \"{:?}\".",
-            self.topic, self.qos
+            "subscribe to the topic \"{:?}\" with QoS \"{:?}\".",
+            self.topic.pattern(),
+            self.qos
         )
     }
 
@@ -113,7 +118,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
             }
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
                 eprintln!("INFO: Connected");
-                client.subscribe(cmd.topic.as_str(), cmd.qos).unwrap();
+                client.subscribe(cmd.topic.pattern(), cmd.qos).unwrap();
             }
             Err(err) => {
                 if interrupted.load(Ordering::Relaxed) {
@@ -127,4 +132,17 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
     }
 
     Ok(())
+}
+
+// Using TopicFilter for `tedge sub` would lead to complicate code for nothing
+// because a TopicFilter is a set of patterns while `tedge sub` uses a single pattern.
+impl SimpleTopicFilter {
+    pub fn new(pattern: &str) -> Result<SimpleTopicFilter, mqtt_channel::MqttError> {
+        let _ = TopicFilter::new(pattern)?;
+        Ok(SimpleTopicFilter(pattern.to_string()))
+    }
+
+    pub fn pattern(&self) -> &str {
+        self.0.as_str()
+    }
 }

@@ -396,6 +396,20 @@ Send events to a registered service
     Execute Command    tedge mqtt pub te/device/main/service/app6/e/event_002 '{"text": "test event"}'
     Device Should Have Event/s    expected_text=test event    type=event_002    minimum=1    maximum=1
 
+# Error cases
+
+Reject invalid topics
+    ${error_msg}=    Execute Command
+    ...    tedge mqtt pub '#' '{"some":"data"}' 2>&1
+    ...    exp_exit_code=!0
+    Should Contain    ${error_msg}    Invalid topic name: "#"
+
+Reject invalid topic filters
+    ${error_msg}=    Execute Command
+    ...    tedge mqtt sub '# ' 2>&1
+    ...    exp_exit_code=!0
+    Should Contain    ${error_msg}    Invalid topic filter: "# "
+
 
 *** Keywords ***
 Custom Setup
