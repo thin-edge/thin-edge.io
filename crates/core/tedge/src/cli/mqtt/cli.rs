@@ -1,11 +1,13 @@
 use crate::cli::mqtt::publish::MqttPublishCommand;
 use crate::cli::mqtt::subscribe::MqttSubscribeCommand;
+use crate::cli::mqtt::subscribe::SimpleTopicFilter;
 use crate::cli::mqtt::MqttError;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
 use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
+use mqtt_channel::Topic;
 use rumqttc::QoS;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
@@ -16,7 +18,8 @@ pub enum TEdgeMqttCli {
     /// Publish a MQTT message on a topic.
     Pub {
         /// Topic to publish
-        topic: String,
+        #[arg(value_parser = Topic::new)]
+        topic: Topic,
         /// Message to publish
         message: String,
         /// QoS level (0, 1, 2)
@@ -32,7 +35,8 @@ pub enum TEdgeMqttCli {
     /// Subscribe a MQTT topic.
     Sub {
         /// Topic to subscribe to
-        topic: String,
+        #[arg(value_parser = SimpleTopicFilter::new)]
+        topic: SimpleTopicFilter,
         /// QoS level (0, 1, 2)
         #[clap(short, long, default_value = "0")]
         #[arg(value_parser = parse_qos)]
