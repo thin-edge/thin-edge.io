@@ -44,7 +44,6 @@ use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_config::auth_method::AuthType;
 use tedge_config::system_services::*;
-use tedge_config::tedge_config_cli::cryptoki_opts::CryptokiOpts;
 use tedge_config::TEdgeConfig;
 use tedge_config::*;
 use tedge_utils::paths::create_directories;

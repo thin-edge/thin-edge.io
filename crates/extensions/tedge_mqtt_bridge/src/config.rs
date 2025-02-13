@@ -10,7 +10,6 @@ use rumqttc::MqttOptions;
 use rumqttc::Transport;
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::Arc;
 use tedge_config::CloudConfig;
 
 pub fn use_key_and_cert(

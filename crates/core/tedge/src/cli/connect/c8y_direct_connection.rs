@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::ConnectError;
 use crate::bridge::BridgeConfig;
 use crate::cli::connect::CONNECTION_TIMEOUT;
