@@ -395,7 +395,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-123' '{
 ```
 
 The Cumulocity mapper, having subscribed to all software_update commands,
-monitors this command instance and notifies Cumulocity of its progress upto completion.  
+monitors this command instance and notifies Cumulocity of its progress up to completion.  
 Finally, the Cumulocity mapper clear the command topic:
 
 ```sh te2mqtt formats=v1

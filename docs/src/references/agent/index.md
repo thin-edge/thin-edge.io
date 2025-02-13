@@ -55,7 +55,7 @@ graph LR
 ```
 
 - MQTT is used to *declare* which operations are supported by each device,
-  to *trigger* commands and to *monitor* their progress upto completion.
+  to *trigger* commands and to *monitor* their progress up to completion.
 - HTTP is used to *transfer* files between devices independently of their file systems.
 
 <DocCardList />

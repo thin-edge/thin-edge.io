@@ -1,6 +1,6 @@
 [package]
 name = "tedge_file_system_ext"
-description = "thin-edge extension adding file system events notitification"
+description = "thin-edge extension adding file system events notification"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }

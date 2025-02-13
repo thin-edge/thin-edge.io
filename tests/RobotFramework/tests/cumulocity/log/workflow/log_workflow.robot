@@ -47,7 +47,7 @@ Setup LogFiles
     ThinEdgeIO.Transfer To Device    ${CURDIR}/log_upload.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/log_upload.sh    /usr/bin/log_upload.sh
 
-    ThinEdgeio.Restart Service    tedge-agent
+    ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 

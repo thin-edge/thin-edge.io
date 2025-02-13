@@ -33,7 +33,7 @@ Create and publish the tedge agent supported operations on mapper restart
     ...    te/device/main/service/tedge-mapper-c8y/status/health
     ...    message_contains=up
     ...    date_from=${timestamp}
-    # After receiving the health status `up` from tege-agent, the mapper creates supported operations and will publish to c8y
+    # After receiving the health status `up` from tedge-agent, the mapper creates supported operations and will publish to c8y
     Should Have MQTT Messages    te/device/main/service/tedge-agent/status/health    message_contains=up
 
     # Check if the `c8y_SoftwareUpdate` and `c8y_Restart` ops files exists in `/etc/tedge/operations/c8y` directory

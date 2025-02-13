@@ -75,7 +75,7 @@ impl AzureConverter {
         Ok(messages)
     }
 
-    // Todo: The device-id,telemetry kind (Meausrement/event/alarm) and telemetry type from the te topic has to be
+    // Todo: The device-id,telemetry kind (Measurement/event/alarm) and telemetry type from the te topic has to be
     // used to push the telemetry messages on to specific azure topic.
     // For now all the messages will be sent over az/messages/events/ topic as this is the default mqtt topic for
     // sending the telemetry on to the azure iot hub.

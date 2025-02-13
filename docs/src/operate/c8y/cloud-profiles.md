@@ -70,7 +70,7 @@ sudo tedge config set c8y.bridge.topic_prefix c8y-$C8Y_PROFILE_NAME --profile $C
 
 Setting `c8y.bridge.topic_prefix` will change the MQTT topics that the
 Cumulocity bridge publishes to/listens to in mosquitto. The default value is
-`c8y`, so the mappper publishes measurements to `c8y/s/us`, and this is
+`c8y`, so the mapper publishes measurements to `c8y/s/us`, and this is
 forwarded to Cumulocity on the `s/us` topic. In the example above, we set the
 topic prefix to `c8y-second`, so the equivalent local topic would
 `c8y-second/s/us`. It is recommended, but not required, to include `c8y` in the

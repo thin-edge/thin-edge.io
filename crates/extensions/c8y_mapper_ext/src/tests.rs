@@ -1232,7 +1232,7 @@ async fn mapper_handles_multiple_modules_in_update_list_sm_requests() {
 
 #[tokio::test]
 async fn mapper_publishes_supported_operations() {
-    // The test assures tede-mapper reads/parses the operations from operations directory and
+    // The test assures tedge-mapper reads/parses the operations from operations directory and
     // correctly publishes the supported operations message on `c8y/s/us`
     // and verifies the supported operations that are published by the tedge-mapper.
     let ttd = TempTedgeDir::new();
@@ -1523,7 +1523,7 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
             "version": "1.20140107-1"
         }
     });
-    create_inventroy_json_file_with_content(&ttd, &custom_fragment_content.to_string());
+    create_inventory_json_file_with_content(&ttd, &custom_fragment_content.to_string());
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
@@ -1577,7 +1577,7 @@ async fn forbidden_keys_in_inventory_fragments_file_ignored() {
             "version": "1.20140107-1"
         }
     });
-    create_inventroy_json_file_with_content(&ttd, &custom_fragment_content.to_string());
+    create_inventory_json_file_with_content(&ttd, &custom_fragment_content.to_string());
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
@@ -3280,7 +3280,7 @@ fn create_custom_cmd(custom_cmd: &Path, content: &str) {
     with_exec_permission(custom_cmd, content);
 }
 
-fn create_inventroy_json_file_with_content(ttd: &TempTedgeDir, content: &str) {
+fn create_inventory_json_file_with_content(ttd: &TempTedgeDir, content: &str) {
     let file = ttd.dir("device").file("inventory.json");
     file.with_raw_content(content);
 }

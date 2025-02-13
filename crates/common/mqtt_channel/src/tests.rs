@@ -524,7 +524,7 @@ async fn test_retain_message_delivery() -> Result<(), anyhow::Error> {
     let topic = uniquify!("retained/topic");
     let mqtt_config = mqtt_config.with_subscriptions(topic.try_into()?);
 
-    // A client that subsribes to a topic.
+    // A client that subscribes to a topic.
     let mut first_subscriber = Connection::new(&mqtt_config).await?;
 
     //Raise retained alarm message

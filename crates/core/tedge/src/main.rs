@@ -163,7 +163,7 @@ where
     }
 }
 
-// Transform `tedge mapper|agent|write` commands into multicalls
+// Transform `tedge mapper|agent|write` commands into multicall commands
 //
 // This method has to be kept in sync with TEdgeOpt::build_command
 fn redirect_if_multicall(cmd: TEdgeOpt, common: CommonArgs) -> TEdgeOptMulticall {

@@ -162,7 +162,7 @@ get_debian_arch() {
 generate_device_id() {
     #
     # Generate a device id
-    # Either use a raond device, or the device's hostname
+    # Either use a random device, or the device's hostname
     #
     if [ "$USE_RANDOM_ID" = "1" ]; then
         if [ -n "$DEVICE_ID" ]; then
@@ -371,7 +371,7 @@ if [ -z "$REPO_CHANNEL" ]; then
     if [ -z "$VERSION" ]; then
         REPO_CHANNEL="release"
     else
-        # Check if the user is requestion an official version or not
+        # Check if the user has requested an official version or not
         if echo "$VERSION" | grep --silent "^[0-9]\+.[0-9]\+.[0-9]\+$"; then
             REPO_CHANNEL="release"
         else

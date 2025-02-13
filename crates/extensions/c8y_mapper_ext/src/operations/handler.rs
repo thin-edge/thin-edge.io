@@ -587,7 +587,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn shouldnt_process_duplicate_messages() {
+    async fn should_not_process_duplicate_messages() {
         let TestHandle {
             operation_handler: mut sut,
             mqtt,
@@ -641,7 +641,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn shouldnt_process_invalid_status_transitions() {
+    async fn should_not_process_invalid_status_transitions() {
         let TestHandle {
             operation_handler: mut sut,
             ttd: _ttd,

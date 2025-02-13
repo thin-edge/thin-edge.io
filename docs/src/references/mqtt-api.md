@@ -115,11 +115,11 @@ graph TD
   main --> child01
   
   subgraph main["main device (running thin-edge.io)"]
-    nodedred01["node_red service"]
+    nodered01["node_red service"]
   end
 
   subgraph child01["child01 (child device)"]
-    nodedred02["node_red service"]
+    nodered02["node_red service"]
   end
 
 ```

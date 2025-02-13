@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# change the owenership of the below directories/files to `tedge` user,
+# change the ownership of the below directories/files to `tedge` user,
 # as there is only `tedge` user exists.
 
 if [ -d "/etc/tedge/operations/c8y" ]; then

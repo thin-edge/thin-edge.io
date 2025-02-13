@@ -161,7 +161,7 @@ fi
 # shellcheck disable=SC1091
 source ./ci/package_list.sh
 
-# Note: cargo-zigbuild supports specifiying the specific gnu libc version to use
+# Note: cargo-zigbuild supports specifying the specific gnu libc version to use
 # but Rust doesn't, so the target needs to be normalized to match the target without
 # the gnu libc version information
 ZIG_TARGET="$ARCH"

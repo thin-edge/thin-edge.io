@@ -71,7 +71,7 @@ impl CollectdMessage {
             .map_err(|err| CollectdError::InvalidMeasurementPayload(topic.into(), err))?;
 
         let num_measurements = collectd_payload.metric_values.len();
-        let mut collectd_mssages: Vec<CollectdMessage> = Vec::with_capacity(num_measurements);
+        let mut collectd_messages: Vec<CollectdMessage> = Vec::with_capacity(num_measurements);
 
         for (i, value) in collectd_payload.metric_values.iter().enumerate() {
             let mut metric_key = collectd_topic.metric_key.to_string();
@@ -79,14 +79,14 @@ impl CollectdMessage {
             if num_measurements > 1 {
                 metric_key = format!("{}_val{}", metric_key, i + 1);
             }
-            collectd_mssages.push(CollectdMessage {
+            collectd_messages.push(CollectdMessage {
                 metric_group_key: collectd_topic.metric_group_key.to_string(),
                 metric_key,
                 timestamp: collectd_payload.timestamp(),
                 metric_value: *value,
             });
         }
-        Ok(collectd_mssages)
+        Ok(collectd_messages)
     }
 }
 

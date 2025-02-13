@@ -342,7 +342,7 @@ define_tedge_config! {
             #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
             topic_prefix: TopicPrefix,
 
-            /// The amount of time after which the bridge should send a ping if no other traffic has occured
+            /// The amount of time after which the bridge should send a ping if no other traffic has occurred
             #[tedge_config(example = "60s", default(from_str = "60s"))]
             keepalive_interval: SecondsOrHumanTime,
         },
@@ -446,7 +446,7 @@ define_tedge_config! {
             #[tedge_config(example = "az", default(function = "az_topic_prefix"))]
             topic_prefix: TopicPrefix,
 
-            /// The amount of time after which the bridge should send a ping if no other traffic has occured
+            /// The amount of time after which the bridge should send a ping if no other traffic has occurred
             #[tedge_config(example = "60s", default(from_str = "60s"))]
             keepalive_interval: SecondsOrHumanTime,
         },
@@ -516,7 +516,7 @@ define_tedge_config! {
             topic_prefix: TopicPrefix,
 
 
-            /// The amount of time after which the bridge should send a ping if no other traffic has occured
+            /// The amount of time after which the bridge should send a ping if no other traffic has occurred
             #[tedge_config(example = "60s", default(from_str = "60s"))]
             keepalive_interval: SecondsOrHumanTime,
         },

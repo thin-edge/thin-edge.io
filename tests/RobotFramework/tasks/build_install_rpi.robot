@@ -93,7 +93,7 @@ Install Mosquitto
     ${rc}=    Execute Command    sudo apt-get --assume-yes install mosquitto    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
-Install Libmosquitto1
+Install libmosquitto1
     ${rc}=    Execute Command
     ...    sudo apt-get --assume-yes install libmosquitto1
     ...    return_stdout=False

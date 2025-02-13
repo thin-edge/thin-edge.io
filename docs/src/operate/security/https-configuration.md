@@ -127,7 +127,7 @@ curl http://rpi4-dca632efb150:8001/c8y/inventory/managedObjects
 ```
 
 :::note
-The firewall of the box running the Cumumocity mapper has also to be configured
+The firewall of the box running the Cumulocity mapper has also to be configured
 to accept incoming requests on the port used by the Cumulocity HTTP Proxy (`8001` per default)
 :::
 
@@ -383,7 +383,7 @@ A single `tedge config` setting enables client authentication (once HTTPS is alr
   when checking incoming client certificates for the Cumulocity Proxy.
 
 Assuming the signing certificate used for the child device has been properly added to `/etc/ssl/certs`,
-one simply has to set `c8y.proxy.ca_pathh` and to restart the **tedge-mapper** to enforce client authentication:
+one simply has to set `c8y.proxy.ca_path` and to restart the **tedge-mapper** to enforce client authentication:
 
 ```sh title="on the box running tedge-mapper"
 sudo tedge config set c8y.proxy.ca_path /etc/ssl/certs

@@ -146,7 +146,7 @@ Or to say it differently, use auto-registration only in simple deployments where
 
 ### Disk based caches for telemetry messages
 
-To avoid any risk of OOMEs due to the in-memory caching of the telemetry messages,
+To avoid any risk of Out of memory (OOM) events due to the in-memory caching of the telemetry messages,
 a disk based persistent message queue (e.g: an append-only-log), per entity,
 is used to cache those "early" telemetry messages.
 An append-only-log is proposed as the disk persistent queue, for better performance while processing

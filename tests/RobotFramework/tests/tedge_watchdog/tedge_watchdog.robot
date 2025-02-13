@@ -27,7 +27,7 @@ ${SERVICE_NAME}     tedge-agent
 
 *** Test Cases ***
 # NOTE: This test succeeds, but not for the reason we expect - instead of simply not sending a notification, upon
-# reciving a status:down message tedge-watchdog exits for unknown reason, so it can't send the notification and the
+# receiving a status:down message tedge-watchdog exits for unknown reason, so it can't send the notification and the
 # monitored service is restarted by systemd, along with tedge-watchdog itself.
 # This is a result of a specific configuration of these services' unit files, that we're not checking or validating
 # anywhere, so we need to define this behaviour more precisely by providing additional tests.

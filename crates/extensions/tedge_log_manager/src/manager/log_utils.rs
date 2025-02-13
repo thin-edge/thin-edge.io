@@ -355,7 +355,7 @@ mod tests {
     ///
     /// file_d is the newest file, so its logs are read first. then file_b.
     ///
-    /// Because only 7 lines are requested (and each file has 5 lines), the expedted
+    /// Because only 7 lines are requested (and each file has 5 lines), the expected
     /// result is:
     ///
     /// - all logs from file_d (5)

@@ -631,7 +631,7 @@ If the value can be specified as a literal (e.g. for `bool`, primitive numeric
 types (`u16`, `i32`, etc.), and strings), you can use the `value` specifier for
 a default value.
 
-The implematation calls `.into()` on the provided value, so any field with a
+The implementation calls `.into()` on the provided value, so any field with a
 type that implements `From<T>`, where `T` is the type of the literal, can be
 filled using this method. As shown above, numeric literals may have to specify
 their type [using a
@@ -691,7 +691,7 @@ assert_eq!(reader.mqtt.bind.address, Ipv4Addr::LOCALHOST);
 ```
 
 Instead of providing a value as a literal, you can a reference a `const` value
-using the `variable` specifier. Like `value`, the generated implematation calls
+using the `variable` specifier. Like `value`, the generated implementation calls
 `.into()` on the constant.
 
 ### <a name="from-key"></a> Fallback keys/derived keys `#[tedge_config(default(from_key = "..."))]`

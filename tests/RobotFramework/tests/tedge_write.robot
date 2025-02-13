@@ -7,7 +7,7 @@ Documentation
 ...                 tedge-write must:
 ...                 - write to files `tedge` have no permissions to (privilege elevation happens)
 ...                 - preserve permissions for existing files and apply new permissions for files created
-...                 - handle permissions correcly on non-standard umasks
+...                 - handle permissions correctly on non-standard umasks
 ...                 - not leave temporary files
 ...
 ...                 Tests for tedge-write need to be done in RobotFramework because we need to run as a `tedge`
@@ -75,7 +75,7 @@ Creates a destination file if it doesn't exist
 
     ${dest_filename}=    Create a temporary file    dry_run=${True}
     # `tedge-write` is prepended with `umask ${umask}` because new umask only applies to the current
-    # process, and `Execute Command` starts a new shell process everytime
+    # process, and `Execute Command` starts a new shell process every time
     Execute Command as user    tedge
     ...    umask ${umask} && echo abc | sudo tedge-write ${dest_filename}    strip=True
 
