@@ -17,7 +17,6 @@ test-helpers = []
 [dependencies]
 async-trait = { workspace = true }
 futures = { workspace = true }
-log = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default_features = false, features = [
     "sync",
@@ -25,9 +24,9 @@ tokio = { workspace = true, default_features = false, features = [
     "macros",
     "time",
 ] }
+tracing = { workspace = true }
 
 [dev-dependencies]
-env_logger = { workspace = true } # TODO: remove me
 tokio = { workspace = true, default_features = false, features = [
     "rt-multi-thread",
 ] }
