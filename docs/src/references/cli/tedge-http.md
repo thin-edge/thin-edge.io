@@ -8,9 +8,9 @@ sidebar_position: 6
 
 A `tedge` sub command to interact with the HTTP services hosted on the device by the Cumulocity mapper and the agent:
 
-- the [Cumulocity Proxy](/references/cumulocity-proxy/)
-- the [File Transfer Service](/references/file-transfer-service/)
-- the [Entity Store Service](/operate/registration/register/).
+- the [Cumulocity Proxy](../../cumulocity-proxy/)
+- the [File Transfer Service](../../file-transfer-service/)
+- the [Entity Store Service](../../../operate/registration/register/).
 
 This command uses `tedge config` to get the appropriate host, port and credentials to reach these local HTTP services.
 So the same command can be used unchanged from the main device or a child device, with TLS or mTLS enabled or not.
@@ -41,19 +41,19 @@ Options:
 
 The requests are forwarded to the appropriate service depending on the URL prefix.
 
-- URIs prefixed by `/c8y/` are forwarded to the [Cumulocity Proxy](/references/cumulocity-proxy/)
+- URIs prefixed by `/c8y/` are forwarded to the [Cumulocity Proxy](../../cumulocity-proxy/)
 
    ```sh title="Interacting with Cumulocity"
    tedge http get /c8y/inventory/managedObjects
    ```
 
-- URIs starting with `/tedge/file-transfer/` are directed to the [File Transfer Service](/references/file-transfer-service)
+- URIs starting with `/tedge/file-transfer/` are directed to the [File Transfer Service](../../file-transfer-service)
 
    ```sh title="Transferring files to/from the main device"
    tedge http put /tedge/file-transfer/target.txt --file source.txt
    ```
   
-- URIs starting with `/tedge/entity-store` are directed to the [Entity Store Service](/operate/registration/register)
+- URIs starting with `/tedge/entity-store` are directed to the [Entity Store Service](../../../operate/registration/register)
 
    ```sh title="Listing all entities"
    tedge http get /tedge/entity-store/v1/entities
@@ -70,7 +70,7 @@ have to be properly configured on the main device as well as the child devices.
 
 The following `tedge config` settings control the access granted to child devices
 on the HTTP services provided by the main agent
-([file transfer](/references/file-transfer-service) and entity registration).
+([file transfer](../../file-transfer-service) and entity registration).
 This can be done along three security levels.
 
 ```sh title="Listening HTTP requests"
@@ -95,7 +95,7 @@ This can be done along three security levels.
 ### On the host running the cumulocity mapper
 
 The following `tedge config` settings control the access granted to child devices
-on the HTTP services provided by the Cumulocity mapper ([Cumulocity proxy](/references/cumulocity-proxy/)).
+on the HTTP services provided by the Cumulocity mapper ([Cumulocity proxy](../../cumulocity-proxy/)).
 This can be done along three security levels.
 
 ```sh title="Listening HTTP requests"
