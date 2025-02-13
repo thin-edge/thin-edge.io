@@ -108,12 +108,12 @@ mod tests {
     fn invalid_log_level() -> anyhow::Result<()> {
         let toml_conf = r#"
         [log]
-        tedge_mapper = "infoo"
+        tedge_mapper = "other"
     "#;
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
         let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
         assert_eq!(
-            "Invalid log level: \"infoo\", supported levels are info, warn, error and debug",
+            "Invalid log level: \"other\", supported levels are info, warn, error and debug",
             res.to_string()
         );
         Ok(())
@@ -140,7 +140,7 @@ mod tests {
     fn log_level_not_configured_for_the_service() -> anyhow::Result<()> {
         let toml_conf = r#"
         [log]
-        some_mapper = "infoo"
+        some_mapper = "other"
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;

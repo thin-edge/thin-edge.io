@@ -44,7 +44,7 @@ Any updates to an existing entity must have been done using dedicated entity upd
 
 ## Exclusions
 
-* Bulk updation or deletion of entities.
+* Bulk updates or deletion of entities.
   The same can be achieved with a query followed by performing individual update or delete on the result set.
 * Pagination of entity query results as the query results are typically small.
   Even for a fleet of 1000s of devices, the results won't exceed a few 100 KBs.

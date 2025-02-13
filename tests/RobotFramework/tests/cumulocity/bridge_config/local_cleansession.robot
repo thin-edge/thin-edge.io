@@ -39,11 +39,11 @@ Configure and Verify local_cleansession setting
 
     Execute Command    tedge reconnect c8y
     Execute Command    grep "^cleansession true" /etc/tedge/mosquitto-conf/c8y-bridge.conf
-    ${local_cleansesion}=    Execute Command
+    ${local_cleansession}=    Execute Command
     ...    grep "^local_cleansession " /etc/tedge/mosquitto-conf/c8y-bridge.conf
     ...    ignore_exit_code=${True}
     ...    strip=${True}
-    Should Be Equal    ${local_cleansesion}    ${expected_value}
+    Should Be Equal    ${local_cleansession}    ${expected_value}
 
     # mosquitto should be running (to validate the configuration)
     Service Should Be Running    mosquitto

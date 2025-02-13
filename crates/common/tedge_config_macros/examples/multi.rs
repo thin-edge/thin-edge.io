@@ -97,8 +97,8 @@ fn main() {
         "Unknown key: 'c8y.profiles.cloud.not_a_real_key'"
     );
     assert_eq!(
-        "c8y.urll".parse::<ReadableKey>().unwrap_err().to_string(),
-        "Unknown key: 'c8y.urll'"
+        "c8y.url1".parse::<ReadableKey>().unwrap_err().to_string(),
+        "Unknown key: 'c8y.url1'"
     );
 
     let mut keys = c8y_reader

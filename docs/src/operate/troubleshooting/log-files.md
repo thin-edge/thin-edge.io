@@ -90,7 +90,7 @@ tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins
 Run `tedge-agent --debug` to log more debug messages
 :::
 
-## Thirdparty component logs {#thirdparty}
+## Third-party component logs {#thirdparty}
 %%te%% uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.
 The logs that are created by these components can be accessed on a %%te%% device as below.
 

@@ -30,9 +30,9 @@ Get Put Delete
 File transfer using tedge cli
     Setup    skip_bootstrap=False
 
-    Execute Command    tedge http put /tedge/file-transfer/file_b "content to be transfered"
+    Execute Command    tedge http put /tedge/file-transfer/file_b "content to be transferred"
     ${content}=    Execute Command    tedge http get /tedge/file-transfer/file_b
-    Should Be Equal    ${content}    content to be transfered
+    Should Be Equal    ${content}    content to be transferred
     Execute Command    tedge http delete /tedge/file-transfer/file_b
     Execute Command    tedge http get /tedge/file-transfer/file_b    exp_exit_code=1
 

@@ -17,7 +17,7 @@ Connection test
 
 Support publishing QoS 0 messages to c8y topic #2960
     [Documentation]    Verify the publishing of multiple QoS 0 message directly to the cloud connection
-    ...    Note 1: Since QoS 0 aren't guarenteed to be delivered, use a non-strict assertion on the exact event count in the cloud.
+    ...    Note 1: Since QoS 0 aren't guaranteed to be delivered, use a non-strict assertion on the exact event count in the cloud.
     ...    During testing the test would reliably fail if the expected count is less than 10 messages.
     ...    Note 2: The bridge will automatically change the QoS from 0 when translating messages from te/# to c8y/#,
     ...    we can't use the te/# topics in the test.

@@ -307,7 +307,7 @@ pub fn get_advanced_software_list_payloads(
 
 /// A supported operation of the thin-edge device, used in status updates via SmartREST
 ///
-/// This has two implementations, `&str` for custom operations, and [CumolocitySupportedOperations]
+/// This has two implementations, `&str` for custom operations, and [CumulocitySupportedOperations]
 /// for statically supported operations.
 pub trait C8yOperation {
     fn name(&self) -> &str;

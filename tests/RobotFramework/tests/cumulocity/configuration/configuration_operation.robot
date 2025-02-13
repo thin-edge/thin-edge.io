@@ -319,7 +319,7 @@ Set Configuration from Device with tedge-write at another location
     ...    Check if config_update still works if `tedge-write` binary is present at another location. For that we need
     ...    to make sure that other location is in $PATH and that this new $PATH is inherited by tedge-agent, so for the
     ...    purposes of the test we change $PATH at the tedge-agent systemd service level. We also add a sudoers entry
-    ...    with new path of tedge-write so sudo correcly elevates permissions.
+    ...    with new path of tedge-write so sudo correctly elevates permissions.
     [Arguments]    ${test_desc}
     ...    ${device}
     ...    ${external_id}
