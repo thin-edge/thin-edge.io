@@ -46,15 +46,19 @@ fi
 # End automatically added section
 # Automatically added by thin-edge.io
 if [ "$1" = "remove" ]; then
-	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
 		deb-systemd-helper mask tedge-agent.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		systemctl mask tedge-agent.service >/dev/null || true
 	fi
 fi
 
 if [ "$1" = "purge" ]; then
-	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
 		deb-systemd-helper purge tedge-agent.service >/dev/null || true
 		deb-systemd-helper unmask tedge-agent.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		systemctl unmask tedge-agent.service >/dev/null || true
 	fi
 fi
 # End automatically added section

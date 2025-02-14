@@ -10,18 +10,25 @@ rm -f /var/lib/dpkg/info/tedge_agent.prerm
 
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if deb-systemd-helper debian-installed tedge-agent.service; then
-		# This will only remove masks created by d-s-h on package removal.
-		deb-systemd-helper unmask tedge-agent.service >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		if deb-systemd-helper debian-installed tedge-agent.service; then
+			# This will only remove masks created by d-s-h on package removal.
+			deb-systemd-helper unmask tedge-agent.service >/dev/null || true
 
-		if deb-systemd-helper --quiet was-enabled tedge-agent.service; then
-			# Create new symlinks, if any.
-			deb-systemd-helper enable tedge-agent.service >/dev/null || true
+			if deb-systemd-helper --quiet was-enabled tedge-agent.service; then
+				# Create new symlinks, if any.
+				deb-systemd-helper enable tedge-agent.service >/dev/null || true
+			fi
 		fi
-	fi
 
-	# Update the statefile to add new symlinks (if any), which need to be cleaned
-	# up on purge. Also remove old symlinks.
-	deb-systemd-helper update-state tedge-agent.service >/dev/null || true
+		# Update the statefile to add new symlinks (if any), which need to be cleaned
+		# up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state tedge-agent.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-agent.service >/dev/null || true
+		systemctl enable tedge-agent.service >/dev/null || true
+	fi
 fi
 # End automatically added section
