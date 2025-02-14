@@ -1,4 +1,3 @@
-use serde_json::Map;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
@@ -170,8 +169,8 @@ impl EntityCache {
             external_id: Some(external_id.clone()),
             r#type: entity.r#type,
             parent,
-            other: entity.other,
-            twin_data: Map::new(),
+            other: entity.other.clone(),
+            twin_data: entity.other,
         };
 
         let outcome = self.insert(entity.topic_id.clone(), external_id, entity_metadata);

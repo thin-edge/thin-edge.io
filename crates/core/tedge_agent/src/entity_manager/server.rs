@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde_json::Value;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::Sender;
@@ -129,13 +130,12 @@ impl EntityStoreServer {
                 Ok(registered) => {
                     for entity in registered {
                         for (fragment_key, fragment_value) in entity.reg_message.other {
-                            let twin_channel = Channel::EntityTwinData { fragment_key };
-                            let topic = self
-                                .mqtt_schema
-                                .topic_for(&entity.reg_message.topic_id, &twin_channel);
-                            let message =
-                                MqttMessage::new(&topic, fragment_value.to_string()).with_retain();
-                            self.publish_message(message).await;
+                            self.publish_twin_data(
+                                &entity.reg_message.topic_id,
+                                fragment_key,
+                                fragment_value,
+                            )
+                            .await;
                         }
                     }
                 }
@@ -159,11 +159,7 @@ impl EntityStoreServer {
                 Ok(entities) => {
                     for entity in entities {
                         let message = entity.to_mqtt_message(&self.mqtt_schema).with_retain();
-                        if let Err(err) = self.mqtt_publisher.send(message).await {
-                            error!(
-                                "Failed to publish auto-registration messages for the topic: {topic_id} due to {err}",
-                            )
-                        }
+                        self.publish_message(message).await;
                     }
                 }
                 Err(err) => {
@@ -174,6 +170,18 @@ impl EntityStoreServer {
                 }
             }
         }
+    }
+
+    async fn publish_twin_data(
+        &mut self,
+        topic_id: &EntityTopicId,
+        fragment_key: String,
+        fragment_value: Value,
+    ) {
+        let twin_channel = Channel::EntityTwinData { fragment_key };
+        let topic = self.mqtt_schema.topic_for(topic_id, &twin_channel);
+        let message = MqttMessage::new(&topic, fragment_value.to_string()).with_retain();
+        self.publish_message(message).await;
     }
 
     async fn publish_message(&mut self, message: MqttMessage) {
@@ -205,11 +213,7 @@ impl EntityStoreServer {
 
         if !registered.is_empty() {
             let message = entity.to_mqtt_message(&self.mqtt_schema);
-            if let Err(err) = self.mqtt_publisher.send(message.clone()).await {
-                error!(
-                    "Failed to publish the entity registration message: {message:?} due to {err}",
-                )
-            }
+            self.publish_message(message).await;
         }
         Ok(registered)
     }
@@ -224,9 +228,7 @@ impl EntityStoreServer {
                 .with_retain()
                 .with_qos(QoS::AtLeastOnce);
 
-            if let Err(err) = self.mqtt_publisher.send(clear_entity_msg).await {
-                error!("Failed to publish clear message for the topic: {topic} due to {err}",)
-            }
+            self.publish_message(clear_entity_msg).await;
         }
 
         deleted

@@ -148,13 +148,13 @@ Child devices support sending inventory data via tedge topic with type
 
 Child devices supports sending inventory data via tedge topic to root fragments
     Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/subtype" '"LinuxDeviceA"'
-    Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/type" '"ShouldBeIgnored"'
-    Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/name" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/type" '"NewType"'
+    Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/name" '"NewName"'
     Cumulocity.Set Device    ${CHILD_SN}
     ${mo}=    Device Should Have Fragments    subtype
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
-    Should Be Equal    ${mo["type"]}    thin-edge.io-child
-    Should Be Equal    ${mo["name"]}    ${CHILD_SN}
+    Should Be Equal    ${mo["type"]}    NewType
+    Should Be Equal    ${mo["name"]}    NewName
 
     # Validate clearing of fragments
     Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/subtype" ''
@@ -164,8 +164,8 @@ Child devices supports sending inventory data via tedge topic to root fragments
     Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/type" ''
     Execute Command    tedge mqtt pub --retain "te/device/${CHILD_SN}///twin/name" ''
     ${mo}=    Device Should Have Fragments    type
-    Should Be Equal    ${mo["type"]}    thin-edge.io-child
-    Should Be Equal    ${mo["name"]}    ${CHILD_SN}
+    Should Be Equal    ${mo["type"]}    NewType
+    Should Be Equal    ${mo["name"]}    NewName
 
 Child device supports sending custom child device measurements directly to c8y
     Execute Command
@@ -232,8 +232,8 @@ Nested child devices support sending inventory data via tedge topic
     Execute Command
     ...    tedge mqtt pub --retain "te/device/${nested_child}///twin/device_OS" '{"family":"Debian","version":11}'
     Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/subtype" '"LinuxDeviceB"'
-    Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/type" '"ShouldBeIgnored"'
-    Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/name" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/type" '"NewType"'
+    Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/name" '"NewName"'
 
     Cumulocity.Set Device    ${nested_child}
     ${mo}=    Device Should Have Fragments    device_OS
@@ -241,8 +241,8 @@ Nested child devices support sending inventory data via tedge topic
     Should Be Equal As Integers    ${mo["device_OS"]["version"]}    11
     ${mo}=    Device Should Have Fragments    subtype
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceB
-    Should Be Equal    ${mo["type"]}    thin-edge.io-child
-    Should Be Equal    ${mo["name"]}    ${nested_child}
+    Should Be Equal    ${mo["type"]}    NewType
+    Should Be Equal    ${mo["name"]}    NewName
 
     # Validate clearing of fragments
     Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/device_OS" ''
@@ -254,8 +254,8 @@ Nested child devices support sending inventory data via tedge topic
     Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/type" ''
     Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/name" ''
     ${mo}=    Device Should Have Fragments    type
-    Should Be Equal    ${mo["type"]}    thin-edge.io-child
-    Should Be Equal    ${mo["name"]}    ${nested_child}
+    Should Be Equal    ${mo["type"]}    NewType
+    Should Be Equal    ${mo["name"]}    NewName
 
 #
 # Services

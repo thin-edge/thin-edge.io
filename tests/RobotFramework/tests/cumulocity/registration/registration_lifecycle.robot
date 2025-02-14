@@ -56,12 +56,13 @@ Register child device with defaults via MQTT
 Register child device with custom name and type via MQTT
     Execute Command
     ...    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
+
     Should Have MQTT Messages
     ...    te/device/${CHILD_SN}///twin/name
-    ...    message_contains=true
+    ...    message_contains=${CHILD_SN}
     Should Have MQTT Messages
     ...    te/device/${CHILD_SN}///twin/type
-    ...    message_contains=5
+    ...    message_contains=linux-device-Aböut
     Check Child Device
     ...    parent_sn=${DEVICE_SN}
     ...    child_sn=${CHILD_XID}
@@ -70,7 +71,11 @@ Register child device with custom name and type via MQTT
 
 Register child device with initial twin data
     Execute Command
-    ...    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type": "child-device", "@id":"${CHILD_SN}", "maintenance_mode": true, "maintenance_window": 5}'
+    ...    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type": "child-device", "@id":"${CHILD_SN}", "name":"${CHILD_SN}", "maintenance_mode": true, "maintenance_window": 5}'
+
+    Should Have MQTT Messages
+    ...    te/device/${CHILD_SN}///twin/name
+    ...    message_contains=${CHILD_SN}
     Should Have MQTT Messages
     ...    te/device/${CHILD_SN}///twin/maintenance_mode
     ...    message_contains=true
@@ -79,8 +84,7 @@ Register child device with initial twin data
     ...    message_contains=5
 
     Device Should Exist    ${CHILD_SN}
-    Device Should Have Fragments    maintenance_mode
-    Device Should Have Fragments    maintenance_window
+    Device Should Have Fragment Values    name\="${CHILD_SN}"    maintenance_mode\=true    maintenance_window\=5
 
 Register child device with custom id via MQTT
     Execute Command
