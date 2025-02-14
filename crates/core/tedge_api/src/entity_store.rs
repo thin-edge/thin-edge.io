@@ -66,10 +66,9 @@ const MQTT_ROOT: &str = "te";
 /// );
 /// let registration_message = EntityRegistrationMessage::try_from(&mqtt_message).unwrap();
 ///
-/// let mut entity_store = EntityStore::with_main_device_and_default_service_type(
+/// let mut entity_store = EntityStore::with_main_device(
 ///     MqttSchema::default(),
 ///     registration_message,
-///     "service".into(),
 ///     0,
 ///     "/tmp",
 ///     true
@@ -79,8 +78,6 @@ pub struct EntityStore {
     pub mqtt_schema: MqttSchema,
     main_device: EntityTopicId,
     entities: EntityTree,
-    // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.
-    default_service_type: String,
     pending_entity_store: PendingEntityStore,
     // The persistent message log to persist entity registrations and twin data messages
     message_log: MessageLogWriter,
@@ -88,10 +85,9 @@ pub struct EntityStore {
 
 impl EntityStore {
     #[allow(clippy::too_many_arguments)]
-    pub fn with_main_device_and_default_service_type<P>(
+    pub fn with_main_device<P>(
         mqtt_schema: MqttSchema,
         main_device: EntityRegistrationMessage,
-        default_service_type: String,
         telemetry_cache_size: usize,
         log_dir: P,
         clean_start: bool,
@@ -132,7 +128,6 @@ impl EntityStore {
             mqtt_schema: mqtt_schema.clone(),
             main_device: main_device.topic_id.clone(),
             entities: EntityTree::new(main_device.topic_id, metadata),
-            default_service_type,
             pending_entity_store: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
             message_log,
         };
@@ -363,20 +358,12 @@ impl EntityStore {
             affected_entities.push(parent.clone());
         }
 
-        let mut other = message.other;
-
-        if message.r#type == EntityType::Service {
-            other
-                .entry("type".to_string())
-                .or_insert(JsonValue::String(self.default_service_type.clone()));
-        }
-
         let entity_metadata = EntityMetadata {
             topic_id: topic_id.clone(),
             r#type: message.r#type,
             external_id: message.external_id,
             parent,
-            other,
+            other: message.other,
             twin_data: Map::new(),
         };
 
@@ -422,17 +409,11 @@ impl EntityStore {
         };
 
         let mut register_messages = vec![];
-        for mut auto_entity in auto_entities {
+        for auto_entity in auto_entities {
             // Skip any already registered entity
             if auto_entity.r#type != EntityType::MainDevice
                 && self.get(&auto_entity.topic_id).is_none()
             {
-                if auto_entity.r#type == EntityType::Service {
-                    auto_entity
-                        .other
-                        .insert("type".to_string(), self.default_service_type.clone().into());
-                }
-
                 register_messages.push(auto_entity.clone());
                 self.update(auto_entity)?;
             }
@@ -1433,7 +1414,7 @@ mod tests {
                     r#type: EntityType::Service,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
-                    other: json!({ "name": "service1",  "type": "service" })
+                    other: json!({ "name": "service1" })
                         .as_object()
                         .unwrap()
                         .to_owned(),
@@ -1520,7 +1501,7 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: None,
-            other: json!({"type": "service"}).as_object().unwrap().to_owned(),
+            other: Map::new(),
             twin_data: Map::new(),
         };
         // Assert service registered under main device with custom topic scheme
@@ -1624,7 +1605,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         // Create an entity store with main device having an explicit `name` fragment
         let topic_id = EntityTopicId::default_main_device();
-        let mut store = EntityStore::with_main_device_and_default_service_type(
+        let mut store = EntityStore::with_main_device(
             MqttSchema::default(),
             EntityRegistrationMessage {
                 topic_id: topic_id.clone(),
@@ -1636,7 +1617,6 @@ mod tests {
                     .unwrap()
                     .to_owned(),
             },
-            "service".into(),
             0,
             &temp_dir,
             true,
@@ -1917,7 +1897,7 @@ mod tests {
     }
 
     fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {
-        EntityStore::with_main_device_and_default_service_type(
+        EntityStore::with_main_device(
             MqttSchema::default(),
             EntityRegistrationMessage {
                 topic_id: EntityTopicId::default_main_device(),
@@ -1926,7 +1906,6 @@ mod tests {
                 parent: None,
                 other: Map::new(),
             },
-            "service".into(),
             0,
             temp_dir,
             clean_start,

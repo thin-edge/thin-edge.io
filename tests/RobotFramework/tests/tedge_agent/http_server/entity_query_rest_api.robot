@@ -18,10 +18,10 @@ Query all entities
 
     Should Contain Entity    {"@topic-id": "device/main//", "@type": "device"}    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/main/service/service0","@parent":"device/main//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/main/service/service0","@parent":"device/main//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/main/service/service1","@parent":"device/main//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/main/service/service1","@parent":"device/main//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child0//","@parent":"device/main//","@type":"child-device"}
@@ -36,16 +36,16 @@ Query all entities
     ...    {"@topic-id":"device/child1//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child1/service/service10","@parent":"device/child1//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child1/service/service10","@parent":"device/child1//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child2//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child20//","@parent":"device/child2//","@type":"child-device"}
@@ -54,13 +54,13 @@ Query all entities
     ...    {"@topic-id":"device/child21//","@parent":"device/child2//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child21/service/service210","@parent":"device/child21//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child21/service/service210","@parent":"device/child21//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child210//","@parent":"device/child21//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child210/service/service2100","@parent":"device/child210//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child210/service/service2100","@parent":"device/child210//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child2100//","@parent":"device/child210//","@type":"child-device"}
@@ -78,10 +78,10 @@ Query from child root
     ...    {"@topic-id":"device/child2//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child20//","@parent":"device/child2//","@type":"child-device"}
@@ -90,13 +90,13 @@ Query from child root
     ...    {"@topic-id":"device/child21//","@parent":"device/child2//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child21/service/service210","@parent":"device/child21//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child21/service/service210","@parent":"device/child21//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child210//","@parent":"device/child21//","@type":"child-device"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child210/service/service2100","@parent":"device/child210//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child210/service/service2100","@parent":"device/child210//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child2100//","@parent":"device/child210//","@type":"child-device"}
@@ -111,10 +111,10 @@ Query by parent
     Length Should Be    ${entities}    5
 
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child20//","@parent":"device/child2//","@type":"child-device"}
@@ -165,25 +165,25 @@ Query all services
     ${entities}=    List Entities    type=service
 
     Should Contain Entity
-    ...    {"@topic-id":"device/main/service/service0","@parent":"device/main//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/main/service/service0","@parent":"device/main//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/main/service/service1","@parent":"device/main//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/main/service/service1","@parent":"device/main//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child1/service/service10","@parent":"device/child1//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child1/service/service10","@parent":"device/child1//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service20","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child2/service/service21","@parent":"device/child2//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child21/service/service210","@parent":"device/child21//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child21/service/service210","@parent":"device/child21//","@type":"service"}
     ...    ${entities}
     Should Contain Entity
-    ...    {"@topic-id":"device/child210/service/service2100","@parent":"device/child210//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child210/service/service2100","@parent":"device/child210//","@type":"service"}
     ...    ${entities}
 
 Query with parent and type

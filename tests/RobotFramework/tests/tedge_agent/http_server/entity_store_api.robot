@@ -60,7 +60,7 @@ Entity auto-registration over MQTT
     ...    message_contains={"@parent":"device/main//","@type":"child-device","name":"auto_child"}
     Should Have MQTT Messages
     ...    te/device/auto_child/service/collectd
-    ...    message_contains={"@parent":"device/auto_child//","@type":"service","name":"collectd","type":"service"}
+    ...    message_contains={"@parent":"device/auto_child//","@type":"service","name":"collectd"}
 
 Delete entity tree
     Register Entity    device/child0//    child-device    device/main//
@@ -81,7 +81,7 @@ Delete entity tree
     ...    {"@topic-id":"device/child00//","@parent":"device/child0//","@type":"child-device"}
     ...    ${deleted}
     Should Contain Entity
-    ...    {"@topic-id":"device/child0/service/service0","@parent":"device/child0//","@type":"service","type":"service"}
+    ...    {"@topic-id":"device/child0/service/service0","@parent":"device/child0//","@type":"service"}
     ...    ${deleted}
     Should Contain Entity
     ...    {"@topic-id":"device/child000//","@parent":"device/child00//","@type":"child-device"}
