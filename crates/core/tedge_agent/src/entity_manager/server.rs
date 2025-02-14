@@ -125,13 +125,26 @@ impl EntityStoreServer {
         }
 
         match EntityRegistrationMessage::try_from(&message) {
-            Ok(entity) => {
-                if let Err(err) = self.entity_store.update(entity.clone()) {
+            Ok(entity) => match self.entity_store.update(entity.clone()) {
+                Ok(registered) => {
+                    for entity in registered {
+                        for (fragment_key, fragment_value) in entity.reg_message.other {
+                            let twin_channel = Channel::EntityTwinData { fragment_key };
+                            let topic = self
+                                .mqtt_schema
+                                .topic_for(&entity.reg_message.topic_id, &twin_channel);
+                            let message =
+                                MqttMessage::new(&topic, fragment_value.to_string()).with_retain();
+                            self.publish_message(message).await;
+                        }
+                    }
+                }
+                Err(err) => {
                     error!(
                         "Failed to register entity registration message: {entity:?} due to {err}"
                     );
                 }
-            }
+            },
             Err(()) => error!("Failed to parse {message} as an entity registration message"),
         }
     }
@@ -160,6 +173,13 @@ impl EntityStoreServer {
                     );
                 }
             }
+        }
+    }
+
+    async fn publish_message(&mut self, message: MqttMessage) {
+        let topic = message.topic.clone();
+        if let Err(err) = self.mqtt_publisher.send(message).await {
+            error!("Failed to publish the message on topic: {topic:?} due to {err}");
         }
     }
 
