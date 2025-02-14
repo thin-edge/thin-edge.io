@@ -1,3 +1,7 @@
 if [ -d /run/systemd/system ]; then
-	deb-systemd-invoke stop #UNITFILES# >/dev/null || true
+	if command -v deb-systemd-invoke >/dev/null 2>&1; then
+		deb-systemd-invoke stop #UNITFILES# >/dev/null || true
+	else
+		systemctl stop #UNITFILES# >/dev/null || true
+	fi
 fi

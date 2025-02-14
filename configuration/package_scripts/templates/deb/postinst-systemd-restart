@@ -6,6 +6,10 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action #UNITFILES# >/dev/null || true
+		if command -v deb-systemd-invoke >/dev/null 2>&1; then
+			deb-systemd-invoke $_dh_action #UNITFILES# >/dev/null || true
+		else
+			systemctl $_dh_action #UNITFILES# >/dev/null || true
+		fi
 	fi
 fi
