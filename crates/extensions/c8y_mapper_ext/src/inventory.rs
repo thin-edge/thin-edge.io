@@ -81,23 +81,26 @@ impl CumulocityConverter {
         &mut self,
         source: &EntityTopicId,
         message: &MqttMessage,
-        mut fragment_key: &str,
+        fragment_key: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if fragment_key == "name" || fragment_key == "type" {
-            warn!("Updating the entity `name` and `type` fields via the twin/ topic channel is not supported");
-            return Ok(vec![]);
-        }
-
-        if fragment_key == "firmware" {
-            fragment_key = "c8y_Firmware";
-        }
-
         let fragment_value = if message.payload_bytes().is_empty() {
             JsonValue::Null
         } else {
             serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
+        self.try_convert_twin_fragment(source, fragment_key, &fragment_value)
+    }
+
+    pub(crate) fn try_convert_twin_fragment(
+        &mut self,
+        source: &EntityTopicId,
+        mut fragment_key: &str,
+        fragment_value: &JsonValue,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if fragment_key == "firmware" {
+            fragment_key = "c8y_Firmware";
+        }
         let updated = self.entity_cache.update_twin_data(EntityTwinMessage::new(
             source.clone(),
             fragment_key.into(),
@@ -307,24 +310,6 @@ mod tests {
                 })
                 .into(),
             )],
-        );
-    }
-
-    #[tokio::test]
-    async fn forbidden_fragment_keys() {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        let twin_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///twin/name"),
-            r#"New Name"#,
-        );
-        let inventory_messages = converter.convert(&twin_message).await;
-        println!("{:?}", inventory_messages);
-        assert!(
-            inventory_messages.is_empty(),
-            "Expected no converted messages, but received {:?}",
-            &inventory_messages
         );
     }
 
