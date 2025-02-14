@@ -30,7 +30,7 @@ pub enum EntityStoreRequest {
 pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
     Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
-    Delete(Vec<EntityTopicId>),
+    Delete(Vec<EntityMetadata>),
     List(Vec<EntityMetadata>),
     Ok,
 }
@@ -194,18 +194,18 @@ impl EntityStoreServer {
         Ok(registered)
     }
 
-    async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityTopicId> {
+    async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(&topic_id);
-        for topic_id in deleted.iter() {
+        for entity in deleted.iter() {
             let topic = self
                 .mqtt_schema
-                .topic_for(topic_id, &Channel::EntityMetadata);
+                .topic_for(&entity.topic_id, &Channel::EntityMetadata);
             let clear_entity_msg = MqttMessage::new(&topic, "")
                 .with_retain()
                 .with_qos(QoS::AtLeastOnce);
 
             if let Err(err) = self.mqtt_publisher.send(clear_entity_msg).await {
-                error!("Failed to publish clear message for the topic: {topic_id} due to {err}",)
+                error!("Failed to publish clear message for the topic: {topic} due to {err}",)
             }
         }
 

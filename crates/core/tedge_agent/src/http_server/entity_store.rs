@@ -186,7 +186,7 @@ async fn get_entity(
 async fn deregister_entity(
     State(state): State<AgentState>,
     Path(path): Path<String>,
-) -> Result<Json<Vec<EntityTopicId>>, Error> {
+) -> Result<Response, Error> {
     let topic_id = EntityTopicId::from_str(&path)?;
 
     let response = state
@@ -199,7 +199,11 @@ async fn deregister_entity(
         return Err(Error::InvalidEntityStoreResponse);
     };
 
-    Ok(Json(deleted))
+    if deleted.is_empty() {
+        return Ok(StatusCode::NO_CONTENT.into_response());
+    }
+
+    Ok((StatusCode::OK, Json(deleted)).into_response())
 }
 
 async fn list_entities(
@@ -490,11 +494,11 @@ mod tests {
         tokio::spawn(async move {
             if let Some(mut req) = entity_store_box.recv().await {
                 if let EntityStoreRequest::Delete(topic_id) = req.request {
-                    let target_topic_id =
-                        EntityTopicId::default_child_device("test-child").unwrap();
-                    if topic_id == target_topic_id {
+                    let target_entity =
+                        EntityMetadata::child_device("test-child".to_string()).unwrap();
+                    if topic_id == target_entity.topic_id {
                         req.reply_to
-                            .send(EntityStoreResponse::Delete(vec![target_topic_id]))
+                            .send(EntityStoreResponse::Delete(vec![target_entity]))
                             .await
                             .unwrap();
                     }
@@ -513,15 +517,15 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        let deleted: Vec<EntityTopicId> = serde_json::from_slice(&body).unwrap();
+        let deleted: Vec<EntityMetadata> = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             deleted,
-            vec![EntityTopicId::default_child_device("test-child").unwrap()]
+            vec![EntityMetadata::child_device("test-child".to_string()).unwrap()]
         );
     }
 
     #[tokio::test]
-    async fn delete_unknown_entity_is_ok() {
+    async fn delete_unknown_entity_returns_no_content() {
         let TestHandle {
             mut app,
             mut entity_store_box,
@@ -549,7 +553,7 @@ mod tests {
             .expect("request builder");
 
         let response = app.call(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]
