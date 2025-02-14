@@ -4568,6 +4568,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
+ "bytes",
  "certificate",
  "env_logger",
  "futures",
