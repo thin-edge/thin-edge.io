@@ -1,7 +1,10 @@
-//! Example of how to configure rumqttd to connect to a server using TLS and authentication.
-//! Source https://github.com/leonardodepaula/Cryptoki-TLS
-//! https://github.com/rustls/rustls-cng/blob/dev/src/signer.rs
+//! rustls connector for PKCS#11 devices.
+//!
+//! Reference:
+//! - thin-edge: docs/src/references/hsm-support.md
+//! - PKCS#11: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html
 
+use anyhow::Context;
 use asn1_rs::ToDer;
 use base64::Engine;
 use cryptoki::context::CInitializeArgs;
@@ -12,9 +15,7 @@ use cryptoki::mechanism::Mechanism;
 use cryptoki::mechanism::MechanismType;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
-use cryptoki::object::CertificateType;
 use cryptoki::object::KeyType;
-use cryptoki::object::ObjectClass;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
 use cryptoki::types::AuthPin;
@@ -23,9 +24,9 @@ use rustls::pki_types::CertificateDer;
 use rustls::sign::CertifiedKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
-use rustls::Error as RusTLSError;
 use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
+use tracing::trace;
 
 use std::ops::Deref;
 use std::sync::Arc;
@@ -49,43 +50,35 @@ impl Pkcs11SigningKey {
         let CryptokiConfig {
             module_path,
             pin,
-            // TODO(marcel): select moduly by serial if multiple are connected
-            serial,
+            // TODO(marcel): select modules by serial if multiple are connected
+            serial: _,
         } = cryptoki_config;
-
-        // Alternative module: /opt/homebrew/lib/pkcs11/opensc-pkcs11.so
-        // let pkcs11module = std::env::var("PKCS11_MODULE");
-        // let pkcs11module = pkcs11module.as_deref().unwrap_or(PCKS11_MODULE_PATH);
 
         debug!(%module_path, "Loading PKCS#11 module");
         let pkcs11client = Pkcs11::new(module_path)?;
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
+        // Select first available slot. If it's not the one we want, the token
+        // used in p11-kit-server should be adjusted.
+        let slot = pkcs11client
+            .get_slots_with_token()?
+            .into_iter()
+            .next()
+            .context("Didn't find a slot to use. The device may be disconnected.")?;
+        let slot_info = pkcs11client.get_slot_info(slot)?;
+        let token_info = pkcs11client.get_token_info(slot)?;
+        debug!(?slot_info, ?token_info, "Selected slot");
+
         debug!(%pin, "Attempting to login to PKCS#11 module");
-        let slot = pkcs11client.get_slots_with_token()?.remove(0);
         let session = pkcs11client.open_ro_session(slot)?;
         session.login(UserType::User, Some(&AuthPin::new(pin.deref().into())))?;
-
-        // Debug
-        let search = vec![
-            Attribute::Class(ObjectClass::CERTIFICATE),
-            Attribute::CertificateType(CertificateType::X_509),
-        ];
-        for handle in session.find_objects(&search)? {
-            // each cert: get the "value" which will be the raw certificate data
-            for value in session.get_attributes(handle, &[AttributeType::SerialNumber])? {
-                if let Attribute::Value(value) = value {
-                    match String::from_utf8(value) {
-                        Ok(path) => println!("Certificate value: {:?}", path),
-                        Err(e) => println!("Invalid UTF-8 sequence: {}", e),
-                    };
-                }
-            }
-        }
+        let session_info = session.get_session_info()?;
+        debug!(?session_info, "Opened a readonly session");
 
         let pkcs11 = PKCS11 {
             session: Arc::new(Mutex::new(session)),
         };
+
         let key_type = get_key_type(pkcs11.clone());
         debug!("Key Type: {:?}", key_type.to_string());
         let key = match key_type {
@@ -128,8 +121,8 @@ struct PkcsSigner {
 }
 
 impl PkcsSigner {
-    fn get_mechanism(&self) -> anyhow::Result<Mechanism, RusTLSError> {
-        debug!("Getting mechanism from chosen scheme: {:?}", self.scheme);
+    fn get_mechanism(&self) -> Result<Mechanism, rustls::Error> {
+        trace!("Getting mechanism from chosen scheme: {:?}", self.scheme);
         match self.scheme {
             SignatureScheme::ED25519 => Ok(Mechanism::Eddsa),
             SignatureScheme::ECDSA_NISTP256_SHA256 => Ok(Mechanism::EcdsaSha256),
@@ -163,7 +156,7 @@ impl PkcsSigner {
                 };
                 Ok(Mechanism::Sha512RsaPkcsPss(params))
             }
-            _ => Err(RusTLSError::General(
+            _ => Err(rustls::Error::General(
                 "Unsupported signature scheme".to_owned(),
             )),
         }
@@ -171,7 +164,7 @@ impl PkcsSigner {
 }
 
 impl Signer for PkcsSigner {
-    fn sign(&self, message: &[u8]) -> anyhow::Result<Vec<u8>, RusTLSError> {
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
         let session = self.pkcs11.session.lock().unwrap();
 
         let key_template = vec![
@@ -182,12 +175,13 @@ impl Signer for PkcsSigner {
 
         let key = session
             .find_objects(&key_template)
-            .unwrap()
+            .map_err(|_| rustls::Error::General("pkcs11: Failed to find objects".to_owned()))?
             .into_iter()
-            .nth(0)
-            .unwrap();
+            .next()
+            .ok_or_else(|| rustls::Error::General("pkcs11: No signing key found".to_owned()))?;
+        debug!(?key, "selected key to sign");
 
-        let mechanism = self.get_mechanism().unwrap();
+        let mechanism = self.get_mechanism()?;
 
         let (mechanism, digest_mechanism) = match mechanism {
             Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
@@ -198,45 +192,39 @@ impl Signer for PkcsSigner {
             Mechanism::Sha384RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha384)),
             Mechanism::Sha512RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha512)),
             _ => {
-                warn!("Warning: Unsupported mechanism, trying it out anyway. value={mechanism:?}");
+                warn!(?mechanism, "Unsupported mechanism, trying it out anyway.");
                 (Mechanism::Ecdsa, Some(Mechanism::Sha256))
             }
         };
 
-        debug!(
-            "Input message ({:?}): {:?}",
-            mechanism,
-            String::from_utf8_lossy(message)
-        );
-
         let direct_sign = digest_mechanism.is_none();
-        debug!("Direct sign: {direct_sign:?}");
 
-        let signature_raw = if direct_sign {
-            debug!(
-                "Signing message (len={:?}):\n{:?}",
-                message.len(),
-                base64::prelude::BASE64_STANDARD_NO_PAD.encode(message)
-            );
+        trace!(input_message = %String::from_utf8_lossy(message), len=message.len(), ?mechanism, direct_sign);
 
-            match session.sign(&mechanism, key, message) {
-                Ok(result) => result,
-                Err(err) => {
-                    error!("Failed to sign: {err:?}");
-                    "".into()
-                }
-            }
+        let digest;
+        let to_sign = if direct_sign {
+            message
         } else {
-            let digest = session.digest(&digest_mechanism.unwrap(), message).unwrap();
-            session.sign(&mechanism, key, &digest).unwrap()
+            digest = session
+                .digest(&digest_mechanism.unwrap(), message)
+                .map_err(|err| {
+                    rustls::Error::General(format!("pkcs11: Failed to digest message: {:?}", err))
+                })?;
+            &digest
         };
 
+        let signature_raw = session.sign(&mechanism, key, to_sign).map_err(|err| {
+            rustls::Error::General(format!("pkcs11: Failed to sign message: {:?}", err))
+        })?;
+
         // Split raw signature into r and s values (assuming 32 bytes each)
-        debug!("Signature (raw) len={:?}", signature_raw.len());
-        let r_bytes = signature_raw[0..32].to_vec();
-        let s_bytes = signature_raw[32..].to_vec();
-        let signature_asn1 = format_asn1_ecdsa_signature(&r_bytes, &s_bytes).unwrap();
-        debug!(
+        trace!("Signature (raw) len={:?}", signature_raw.len());
+        let r_bytes = &signature_raw[0..32];
+        let s_bytes = &signature_raw[32..];
+        let signature_asn1 = format_asn1_ecdsa_signature(r_bytes, s_bytes).map_err(|err| {
+            rustls::Error::General(format!("pkcs11: Failed to format signature: {:?}", err))
+        })?;
+        trace!(
             "Encoded ASN.1 Signature: len={:?} {:?}",
             signature_asn1.len(),
             signature_asn1
@@ -371,23 +359,29 @@ fn get_key_type(pkcs11: PKCS11) -> KeyType {
         .next()
         .unwrap();
 
-    let info = session.get_attributes(key, &[AttributeType::KeyType]);
+    let info = session
+        .get_attributes(
+            key,
+            &[
+                AttributeType::KeyType,
+                AttributeType::Token,
+                AttributeType::Private,
+                AttributeType::Sign,
+            ],
+        )
+        .unwrap();
+
+    dbg!(&info);
+
     let mut key_type = KeyType::EC;
-    match info {
-        Ok(value) => {
-            for v in &value[0..value.len() - 1] {
-                match v {
-                    Attribute::KeyType(raw_value) => {
-                        key_type = *raw_value;
-                    }
-                    _ => {
-                        warn!("Could not read attribute value: {:?}", v);
-                    }
-                }
-            }
-        }
-        Err(err) => warn!("Could not read value: {err:?}"),
+    let Attribute::KeyType(returned_key_type) = info
+        .iter()
+        .find(|a| a.attribute_type() == AttributeType::KeyType)
+        .unwrap()
+    else {
+        return key_type;
     };
+    key_type = *returned_key_type;
 
     key_type
 }
@@ -402,7 +396,7 @@ fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>
 
     let seq = asn1_rs::Sequence::new(writer.into());
     let b = seq.to_der_vec().unwrap();
-    println!("Encoded ASN.1 Der: {:?}", BASE64_STANDARD_NO_PAD.encode(&b));
+    trace!("Encoded ASN.1 Der: {:?}", BASE64_STANDARD_NO_PAD.encode(&b));
     Ok(b)
 }
 

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use pkcs11::Pkcs11SigningKey;
 use rustls::pki_types::pem::PemObject as _;
@@ -39,7 +40,8 @@ pub fn create_tls_config_cryptoki(
 ) -> Result<ClientConfig, CertificateError> {
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
-    let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config).unwrap();
+    let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
+        .context("failed to create a TLS signer using PKCS#11 device")?;
 
     let resolver = Arc::new(Pkcs11Resolver {
         chain: cert_chain,
