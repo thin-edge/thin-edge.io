@@ -17,6 +17,7 @@ use tedge_config::TopicPrefix;
 
 use super::message_ids::CHILD_DEVICE_CREATION;
 use super::message_ids::SERVICE_CREATION;
+use super::message_ids::SET_CURRENTLY_INSTALLED_CONFIGURATION;
 use super::message_ids::SET_DEVICE_PROFILE_THAT_IS_BEING_APPLIED;
 use super::message_ids::SET_REQUIRED_AVAILABILITY;
 use super::payload::SmartrestPayload;
@@ -132,6 +133,20 @@ pub fn service_creation_message_payload(
     );
 
     Ok(payload)
+}
+
+pub fn set_c8y_config_fragment(
+    config_type: &str,
+    remote_url: &str,
+    name: Option<&str>,
+) -> SmartrestPayload {
+    SmartrestPayload::serialize((
+        SET_CURRENTLY_INSTALLED_CONFIGURATION,
+        config_type,
+        remote_url,
+        name,
+    ))
+    .expect("shouldn't put payload over size limit")
 }
 
 /// Create a SmartREST message to set a response interval for c8y_RequiredAvailability.

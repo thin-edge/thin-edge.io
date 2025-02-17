@@ -9,6 +9,7 @@ on_success = "executing"
 operation = "config_update"
 input.remoteUrl = "${.payload.remoteUrl}"
 input.tedgeUrl = "${.payload.tedgeUrl}"
+input.serverUrl = "${.payload.serverUrl}"
 input.type = "${.payload.type}"
 on_exec = "awaiting_update"
 

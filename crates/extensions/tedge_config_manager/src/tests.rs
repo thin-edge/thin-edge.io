@@ -346,6 +346,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
             "status": "init",
             "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234",
             "remoteUrl": "http://www.remote.url",
+            "serverUrl": "http://www.remote.url",
             "type": "type_two"
         }"#;
 
@@ -358,7 +359,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
         executing_message,
             Some(MqttMessage::new(
                 &config_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","type":"type_two"}"#
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two"}"#
             ).with_retain())
         );
 
@@ -392,7 +393,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
             ).with_retain())
         );
 
@@ -579,6 +580,7 @@ async fn config_manager_processes_concurrently() -> Result<(), anyhow::Error> {
             "status": "executing",
             "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/config_update/type_two-1234",
             "remoteUrl": "http://www.remote.url",
+            "serverUrl": "http://www.remote.url",
             "type": "type_two"
         }"#;
 
