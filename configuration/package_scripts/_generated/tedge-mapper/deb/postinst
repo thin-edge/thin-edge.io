@@ -3,120 +3,169 @@ set -e
 
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if deb-systemd-helper debian-installed tedge-mapper-aws.service; then
-		# This will only remove masks created by d-s-h on package removal.
-		deb-systemd-helper unmask tedge-mapper-aws.service >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		if deb-systemd-helper debian-installed tedge-mapper-aws.service; then
+			# This will only remove masks created by d-s-h on package removal.
+			deb-systemd-helper unmask tedge-mapper-aws.service >/dev/null || true
 
-		if deb-systemd-helper --quiet was-enabled tedge-mapper-aws.service; then
-			# Create new symlinks, if any.
-			deb-systemd-helper enable tedge-mapper-aws.service >/dev/null || true
+			if deb-systemd-helper --quiet was-enabled tedge-mapper-aws.service; then
+				# Create new symlinks, if any.
+				deb-systemd-helper enable tedge-mapper-aws.service >/dev/null || true
+			fi
 		fi
-	fi
 
-	# Update the statefile to add new symlinks (if any), which need to be cleaned
-	# up on purge. Also remove old symlinks.
-	deb-systemd-helper update-state tedge-mapper-aws.service >/dev/null || true
+		# Update the statefile to add new symlinks (if any), which need to be cleaned
+		# up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state tedge-mapper-aws.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-aws.service >/dev/null || true
+		systemctl enable tedge-mapper-aws.service >/dev/null || true
+	fi
 fi
 # End automatically added section
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if deb-systemd-helper debian-installed tedge-mapper-az.service; then
-		# This will only remove masks created by d-s-h on package removal.
-		deb-systemd-helper unmask tedge-mapper-az.service >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		if deb-systemd-helper debian-installed tedge-mapper-az.service; then
+			# This will only remove masks created by d-s-h on package removal.
+			deb-systemd-helper unmask tedge-mapper-az.service >/dev/null || true
 
-		if deb-systemd-helper --quiet was-enabled tedge-mapper-az.service; then
-			# Create new symlinks, if any.
-			deb-systemd-helper enable tedge-mapper-az.service >/dev/null || true
+			if deb-systemd-helper --quiet was-enabled tedge-mapper-az.service; then
+				# Create new symlinks, if any.
+				deb-systemd-helper enable tedge-mapper-az.service >/dev/null || true
+			fi
 		fi
-	fi
 
-	# Update the statefile to add new symlinks (if any), which need to be cleaned
-	# up on purge. Also remove old symlinks.
-	deb-systemd-helper update-state tedge-mapper-az.service >/dev/null || true
+		# Update the statefile to add new symlinks (if any), which need to be cleaned
+		# up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state tedge-mapper-az.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-az.service >/dev/null || true
+		systemctl enable tedge-mapper-az.service >/dev/null || true
+	fi
 fi
 # End automatically added section
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if deb-systemd-helper debian-installed tedge-mapper-c8y.service; then
-		# This will only remove masks created by d-s-h on package removal.
-		deb-systemd-helper unmask tedge-mapper-c8y.service >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		if deb-systemd-helper debian-installed tedge-mapper-c8y.service; then
+			# This will only remove masks created by d-s-h on package removal.
+			deb-systemd-helper unmask tedge-mapper-c8y.service >/dev/null || true
 
-		if deb-systemd-helper --quiet was-enabled tedge-mapper-c8y.service; then
-			# Create new symlinks, if any.
-			deb-systemd-helper enable tedge-mapper-c8y.service >/dev/null || true
+			if deb-systemd-helper --quiet was-enabled tedge-mapper-c8y.service; then
+				# Create new symlinks, if any.
+				deb-systemd-helper enable tedge-mapper-c8y.service >/dev/null || true
+			fi
 		fi
-	fi
 
-	# Update the statefile to add new symlinks (if any), which need to be cleaned
-	# up on purge. Also remove old symlinks.
-	deb-systemd-helper update-state tedge-mapper-c8y.service >/dev/null || true
+		# Update the statefile to add new symlinks (if any), which need to be cleaned
+		# up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state tedge-mapper-c8y.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-c8y.service >/dev/null || true
+		systemctl enable tedge-mapper-c8y.service >/dev/null || true
+	fi
 fi
 # End automatically added section
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if deb-systemd-helper debian-installed tedge-mapper-collectd.service; then
-		# This will only remove masks created by d-s-h on package removal.
-		deb-systemd-helper unmask tedge-mapper-collectd.service >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		if deb-systemd-helper debian-installed tedge-mapper-collectd.service; then
+			# This will only remove masks created by d-s-h on package removal.
+			deb-systemd-helper unmask tedge-mapper-collectd.service >/dev/null || true
 
-		if deb-systemd-helper --quiet was-enabled tedge-mapper-collectd.service; then
-			# Create new symlinks, if any.
-			deb-systemd-helper enable tedge-mapper-collectd.service >/dev/null || true
+			if deb-systemd-helper --quiet was-enabled tedge-mapper-collectd.service; then
+				# Create new symlinks, if any.
+				deb-systemd-helper enable tedge-mapper-collectd.service >/dev/null || true
+			fi
 		fi
-	fi
 
-	# Update the statefile to add new symlinks (if any), which need to be cleaned
-	# up on purge. Also remove old symlinks.
-	deb-systemd-helper update-state tedge-mapper-collectd.service >/dev/null || true
-fi
-# End automatically added section
-# Automatically added by thin-edge.io
-if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask tedge-mapper-aws.target >/dev/null || true
-
-	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled tedge-mapper-aws.target; then
-		# Enables the unit on first installation, creates new
-		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable tedge-mapper-aws.target >/dev/null || true
-	else
-		# Update the statefile to add new symlinks (if any), which need to be
-		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state tedge-mapper-aws.target >/dev/null || true
+		# Update the statefile to add new symlinks (if any), which need to be cleaned
+		# up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state tedge-mapper-collectd.service >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-collectd.service >/dev/null || true
+		systemctl enable tedge-mapper-collectd.service >/dev/null || true
 	fi
 fi
 # End automatically added section
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask tedge-mapper-az.target >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-aws.target >/dev/null || true
 
-	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled tedge-mapper-az.target; then
-		# Enables the unit on first installation, creates new
-		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable tedge-mapper-az.target >/dev/null || true
-	else
-		# Update the statefile to add new symlinks (if any), which need to be
-		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state tedge-mapper-az.target >/dev/null || true
+		# was-enabled defaults to true, so new installations run enable.
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-aws.target; then
+			# Enables the unit on first installation, creates new
+			# symlinks on upgrades if the unit file has changed.
+			deb-systemd-helper enable tedge-mapper-aws.target >/dev/null || true
+		else
+			# Update the statefile to add new symlinks (if any), which need to be
+			# cleaned up on purge. Also remove old symlinks.
+			deb-systemd-helper update-state tedge-mapper-aws.target >/dev/null || true
+		fi
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-aws.target >/dev/null || true
+		systemctl enable tedge-mapper-aws.target >/dev/null || true
 	fi
 fi
 # End automatically added section
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask tedge-mapper-c8y.target >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-az.target >/dev/null || true
 
-	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled tedge-mapper-c8y.target; then
-		# Enables the unit on first installation, creates new
-		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable tedge-mapper-c8y.target >/dev/null || true
-	else
-		# Update the statefile to add new symlinks (if any), which need to be
-		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state tedge-mapper-c8y.target >/dev/null || true
+		# was-enabled defaults to true, so new installations run enable.
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-az.target; then
+			# Enables the unit on first installation, creates new
+			# symlinks on upgrades if the unit file has changed.
+			deb-systemd-helper enable tedge-mapper-az.target >/dev/null || true
+		else
+			# Update the statefile to add new symlinks (if any), which need to be
+			# cleaned up on purge. Also remove old symlinks.
+			deb-systemd-helper update-state tedge-mapper-az.target >/dev/null || true
+		fi
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-az.target >/dev/null || true
+		systemctl enable tedge-mapper-az.target >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by thin-edge.io
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-c8y.target >/dev/null || true
+
+		# was-enabled defaults to true, so new installations run enable.
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-c8y.target; then
+			# Enables the unit on first installation, creates new
+			# symlinks on upgrades if the unit file has changed.
+			deb-systemd-helper enable tedge-mapper-c8y.target >/dev/null || true
+		else
+			# Update the statefile to add new symlinks (if any), which need to be
+			# cleaned up on purge. Also remove old symlinks.
+			deb-systemd-helper update-state tedge-mapper-c8y.target >/dev/null || true
+		fi
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-mapper-c8y.target >/dev/null || true
+		systemctl enable tedge-mapper-c8y.target >/dev/null || true
 	fi
 fi
 # End automatically added section
@@ -129,7 +178,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		if command -v deb-systemd-invoke >/dev/null 2>&1; then
+			deb-systemd-invoke $_dh_action tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		else
+			systemctl $_dh_action tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		fi
 	fi
 fi
 # End automatically added section
@@ -138,7 +191,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
-			deb-systemd-invoke try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+			if command -v deb-systemd-invoke >/dev/null 2>&1; then
+				deb-systemd-invoke try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+			else
+				systemctl try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+			fi
 		fi
 	fi
 fi

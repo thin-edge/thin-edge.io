@@ -1,12 +1,16 @@
 if [ "$1" = "remove" ]; then
-	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
 		deb-systemd-helper mask #UNITFILES# >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		systemctl mask #UNITFILES# >/dev/null || true
 	fi
 fi
 
 if [ "$1" = "purge" ]; then
-	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
 		deb-systemd-helper purge #UNITFILES# >/dev/null || true
 		deb-systemd-helper unmask #UNITFILES# >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		systemctl unmask #UNITFILES# >/dev/null || true
 	fi
 fi

@@ -2,7 +2,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
-			deb-systemd-invoke #RESTART_ACTION# #UNITFILES# >/dev/null || true
+			if command -v deb-systemd-invoke >/dev/null 2>&1; then
+				deb-systemd-invoke #RESTART_ACTION# #UNITFILES# >/dev/null || true
+			else
+				systemctl #RESTART_ACTION# #UNITFILES# >/dev/null || true
+			fi
 		fi
 	fi
 fi

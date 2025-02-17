@@ -2,18 +2,25 @@
 set -e
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask tedge-watchdog.service >/dev/null || true
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-watchdog.service >/dev/null || true
 
-	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled tedge-watchdog.service; then
-		# Enables the unit on first installation, creates new
-		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable tedge-watchdog.service >/dev/null || true
-	else
-		# Update the statefile to add new symlinks (if any), which need to be
-		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state tedge-watchdog.service >/dev/null || true
+		# was-enabled defaults to true, so new installations run enable.
+		if deb-systemd-helper --quiet was-enabled tedge-watchdog.service; then
+			# Enables the unit on first installation, creates new
+			# symlinks on upgrades if the unit file has changed.
+			deb-systemd-helper enable tedge-watchdog.service >/dev/null || true
+		else
+			# Update the statefile to add new symlinks (if any), which need to be
+			# cleaned up on purge. Also remove old symlinks.
+			deb-systemd-helper update-state tedge-watchdog.service >/dev/null || true
+		fi
+	elif command -v systemctl >/dev/null 2>&1; then
+		# Use systemctl commands when deb-systemd-helper is not available
+		# Note: Yocto can have apt installed, but does not have the debian helper scripts
+		systemctl unmask tedge-watchdog.service >/dev/null || true
+		systemctl enable tedge-watchdog.service >/dev/null || true
 	fi
 fi
 # End automatically added section
@@ -26,7 +33,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action tedge-watchdog.service >/dev/null || true
+		if command -v deb-systemd-invoke >/dev/null 2>&1; then
+			deb-systemd-invoke $_dh_action tedge-watchdog.service >/dev/null || true
+		else
+			systemctl $_dh_action tedge-watchdog.service >/dev/null || true
+		fi
 	fi
 fi
 # End automatically added section

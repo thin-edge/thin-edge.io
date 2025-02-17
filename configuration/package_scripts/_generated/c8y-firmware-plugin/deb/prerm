@@ -2,6 +2,10 @@
 set -e
 # Automatically added by thin-edge.io
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
-	deb-systemd-invoke stop c8y-firmware-plugin.service >/dev/null || true
+	if command -v deb-systemd-invoke >/dev/null 2>&1; then
+		deb-systemd-invoke stop c8y-firmware-plugin.service >/dev/null || true
+	else
+		systemctl stop c8y-firmware-plugin.service >/dev/null || true
+	fi
 fi
 # End automatically added section
