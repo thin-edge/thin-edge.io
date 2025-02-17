@@ -403,8 +403,12 @@ impl CumulocityConverter {
                 // Skip the name and type fields as they are already included in the registration message
                 continue;
             }
-            let twin_messages =
-                self.try_convert_twin_fragment(entity_topic_id, fragment_key, fragment_value)?;
+            let twin_messages = self.try_convert_twin_fragment(
+                entity_topic_id,
+                &input.r#type,
+                fragment_key,
+                fragment_value,
+            )?;
             messages.extend(twin_messages);
         }
 
@@ -1296,9 +1300,10 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
+        let entity_type = self.entity_cache.try_get(&source)?.metadata.r#type.clone();
         match &channel {
             Channel::EntityTwinData { fragment_key } => {
-                self.try_convert_entity_twin_data(&source, message, fragment_key)
+                self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
             }
 
             Channel::Measurement { measurement_type } => {

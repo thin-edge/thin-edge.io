@@ -8,6 +8,7 @@ use serde_json::Value as JsonValue;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -80,6 +81,7 @@ impl CumulocityConverter {
     pub(crate) fn try_convert_entity_twin_data(
         &mut self,
         source: &EntityTopicId,
+        entity_type: &EntityType,
         message: &MqttMessage,
         fragment_key: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
@@ -89,18 +91,27 @@ impl CumulocityConverter {
             serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
-        self.try_convert_twin_fragment(source, fragment_key, &fragment_value)
+        self.try_convert_twin_fragment(source, entity_type, fragment_key, &fragment_value)
     }
 
     pub(crate) fn try_convert_twin_fragment(
         &mut self,
         source: &EntityTopicId,
+        entity_type: &EntityType,
         mut fragment_key: &str,
         fragment_value: &JsonValue,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if fragment_key == "firmware" {
             fragment_key = "c8y_Firmware";
         }
+
+        // All services in C8Y must have a fixed `type` fragment called `c8y_Service`.
+        // The service specific type fragment is called `serviceType` and hence
+        // we need to map the entity `type` into `serviceType` for services.
+        if entity_type == &EntityType::Service && fragment_key == "type" {
+            fragment_key = "serviceType";
+        }
+
         let updated = self.entity_cache.update_twin_data(EntityTwinMessage::new(
             source.clone(),
             fragment_key.into(),
