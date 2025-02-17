@@ -915,8 +915,6 @@ fn new_bridge(
     let use_basic_auth =
         bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
 
-    bridge_config.validate(use_basic_auth)?;
-
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
             println!("Offline mode. Skipping device creation in Cumulocity cloud.")
