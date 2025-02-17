@@ -33,3 +33,22 @@ fi
 # Initialize the tedge
 tedge init
 tedge refresh-bridges
+
+# Create completion scripts
+# Note: Generate completion scripts during post installation
+# to ensure the tedge binary is already installed at its intended location
+# as the generated completion scripts will use the full binary path at
+# the time of calling the `tedge completions` command
+if [ -d /usr/share/zsh/vendor-completions ]; then
+    echo "Adding zsh completion script" >&2
+    tedge completions zsh > /usr/share/zsh/vendor-completions/_tedge ||:
+fi
+
+if [ -d /usr/share/bash-completion/completions ]; then
+    echo "Adding bash completion script" >&2
+    tedge completions bash > /usr/share/bash-completion/completions/tedge ||:
+fi
+
+if [ -d /usr/share/fish/completions ]; then
+    tedge completions fish > /usr/share/fish/completions/tedge.fish ||:
+fi
