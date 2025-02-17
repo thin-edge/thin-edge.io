@@ -1,6 +1,7 @@
 use crate::overall_status;
 use crate::BridgeAsyncClient;
 use crate::BridgeMessageSender;
+use crate::MqttClient;
 use crate::Status;
 use futures::channel::mpsc;
 use futures::SinkExt;
@@ -25,9 +26,9 @@ pub struct BridgeHealthMonitor {
 }
 
 impl BridgeHealthMonitor {
-    pub(crate) fn new(
+    pub(crate) fn new<Client: MqttClient + 'static>(
         topic: String,
-        bridge_half: &BridgeAsyncClient,
+        bridge_half: &BridgeAsyncClient<Client>,
     ) -> (mpsc::Sender<(&'static str, Status)>, Self) {
         let (tx, rx_status) = mpsc::channel(10);
         (

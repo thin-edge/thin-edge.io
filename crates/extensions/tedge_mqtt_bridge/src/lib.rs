@@ -125,8 +125,6 @@ impl MqttBridgeActorBuilder {
         cloud_config.set_inflight(in_flight * 5);
         let (local_client, local_event_loop) = AsyncClient::new(local_config, in_flight.into());
         let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, in_flight.into());
-        let local_client = Box::new(local_client);
-        let cloud_client = Box::new(cloud_client);
 
         let local_topics: Vec<_> = rules
             .local_subscriptions()
@@ -137,18 +135,15 @@ impl MqttBridgeActorBuilder {
             .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
             .collect();
 
-        let [cloud_target, local_target] = bidirectional_channel(
-            cloud_client.clone_dyn(),
-            local_client.clone_dyn(),
-            in_flight.into(),
-        );
+        let [cloud_target, local_target] =
+            bidirectional_channel(cloud_client.clone(), local_client.clone(), in_flight.into());
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
             rules.converters_and_bidirectional_topic_filters();
         let (tx_status, monitor) =
             BridgeHealthMonitor::new(health_topic.name.clone(), &local_target);
         tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
-            Box::new(local_event_loop),
+            local_event_loop,
             local_client,
             cloud_target,
             convert_local,
@@ -159,7 +154,7 @@ impl MqttBridgeActorBuilder {
             reconnect_policy.clone(),
         ));
         tokio::spawn(half_bridge(
-            Box::new(cloud_event_loop),
+            cloud_event_loop,
             cloud_client,
             local_target,
             convert_cloud,
@@ -178,11 +173,11 @@ impl MqttBridgeActorBuilder {
     }
 }
 
-fn bidirectional_channel(
-    cloud_client: Box<dyn MqttClient>,
-    local_client: Box<dyn MqttClient>,
+fn bidirectional_channel<Client: MqttClient + 'static>(
+    cloud_client: Client,
+    local_client: Client,
     buffer: usize,
-) -> [BridgeAsyncClient; 2] {
+) -> [BridgeAsyncClient<Client>; 2] {
     let (tx_first, rx_first) = mpsc::channel(buffer);
     let (tx_second, rx_second) = mpsc::channel(buffer);
     [
@@ -216,9 +211,9 @@ enum BridgeMessage {
 /// So when a message is received and published by this half,
 /// the companion will await for that message to be acknowledged by the target
 /// before acknowledging to the source.
-struct BridgeAsyncClient {
+struct BridgeAsyncClient<Client: MqttClient> {
     /// MQTT target for the messages
-    target: Box<dyn MqttClient>,
+    target: Client,
 
     /// Receives messages from the companion half bridge
     rx: mpsc::Receiver<Option<(String, Publish)>>,
@@ -233,7 +228,7 @@ struct BridgeAsyncClient {
     acknowledged: Arc<AtomicUsize>,
 }
 
-impl BridgeAsyncClient {
+impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
     pub fn recv(&mut self) -> futures::stream::Next<mpsc::Receiver<Option<(String, Publish)>>> {
         self.rx.next()
     }
@@ -243,7 +238,7 @@ impl BridgeAsyncClient {
     }
 
     fn new(
-        target: Box<dyn MqttClient>,
+        target: Client,
         tx: mpsc::Sender<Option<(String, Publish)>>,
         rx: mpsc::Receiver<Option<(String, Publish)>>,
     ) -> Self {
@@ -280,7 +275,7 @@ impl BridgeAsyncClient {
         mut tx: mpsc::Sender<Option<(String, Publish)>>,
         mut unbounded_rx: mpsc::UnboundedReceiver<BridgeMessage>,
     ) {
-        let target = self.target.clone_dyn();
+        let target = self.target.clone();
         let published = self.published.clone();
         let acknowledged = self.acknowledged.clone();
         tokio::spawn(async move {
@@ -448,10 +443,10 @@ impl BridgeMessageSender {
 /// connection is created, the last-will message is set to send the `0` payload when the connection
 /// is dropped.
 #[allow(clippy::too_many_arguments)]
-async fn half_bridge(
-    mut recv_event_loop: Box<dyn MqttEvents>,
-    recv_client: Box<dyn MqttClient>,
-    mut target: BridgeAsyncClient,
+async fn half_bridge<Client: MqttClient + 'static, Events: MqttEvents>(
+    mut recv_event_loop: Events,
+    recv_client: Client,
+    mut target: BridgeAsyncClient<Client>,
     transformer: TopicConverter,
     bidirectional_topic_filters: Vec<Cow<'static, str>>,
     tx_health: mpsc::Sender<(&'static str, Status)>,
@@ -467,7 +462,8 @@ async fn half_bridge(
     );
     let mut forward_pkid_to_received_msg = HashMap::new();
     let mut bridge_health = BridgeHealth::new(name, tx_health);
-    let mut loop_breaker = MessageLoopBreaker::new(&*recv_client, bidirectional_topic_filters);
+    let mut loop_breaker =
+        MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
 
     let mut received = 0; // Count of messages received by this half-bridge
     let mut published = 0; // Count of messages published (by the companion)
@@ -501,7 +497,7 @@ async fn half_bridge(
         match notification {
             Event::Incoming(Incoming::ConnAck(_)) => {
                 info!("Bridge {name} connection subscribing to {topics:?}");
-                let recv_client = recv_client.clone_dyn();
+                let recv_client = recv_client.clone();
                 let topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
                 // this point have filled our cloud event loop with outgoing messages
@@ -586,9 +582,8 @@ impl MqttEvents for EventLoop {
     }
 }
 #[async_trait::async_trait]
-trait MqttClient: MqttAck + Send + Sync {
+trait MqttClient: MqttAck + Clone + Send + Sync {
     async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError>;
-    fn clone_dyn(&self) -> Box<dyn MqttClient>;
     async fn publish(
         &self,
         topic: String,
@@ -602,9 +597,6 @@ trait MqttClient: MqttAck + Send + Sync {
 impl MqttClient for AsyncClient {
     async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError> {
         AsyncClient::subscribe_many(self, topics).await
-    }
-    fn clone_dyn(&self) -> Box<dyn MqttClient> {
-        Box::new(Clone::clone(self))
     }
     async fn publish(
         &self,
@@ -640,10 +632,10 @@ fn overall_status(lhs: Option<Status>, rhs: &Option<Status>) -> Option<Status> {
 }
 
 /// A tool to remove duplicate messages and avoid infinite loops
-struct MessageLoopBreaker<'a, Ack: ?Sized, Clock> {
+struct MessageLoopBreaker<Ack, Clock> {
     forwarded_messages: VecDeque<(Instant, Publish)>,
     bidirectional_topics: Vec<Cow<'static, str>>,
-    client: &'a Ack,
+    client: Ack,
     clock: Clock,
 }
 
@@ -679,8 +671,8 @@ trait MonotonicClock {
 
 impl MonotonicClock for SystemClock {}
 
-impl<'a, Ack: MqttAck + ?Sized> MessageLoopBreaker<'a, Ack, SystemClock> {
-    fn new(recv_client: &'a Ack, bidirectional_topics: Vec<Cow<'static, str>>) -> Self {
+impl<Ack: MqttAck> MessageLoopBreaker<Ack, SystemClock> {
+    fn new(recv_client: Ack, bidirectional_topics: Vec<Cow<'static, str>>) -> Self {
         Self {
             forwarded_messages: <_>::default(),
             bidirectional_topics,
@@ -690,7 +682,7 @@ impl<'a, Ack: MqttAck + ?Sized> MessageLoopBreaker<'a, Ack, SystemClock> {
     }
 }
 
-impl<Ack: MqttAck + ?Sized, Clock: MonotonicClock> MessageLoopBreaker<'_, Ack, Clock> {
+impl<Ack: MqttAck, Clock: MonotonicClock> MessageLoopBreaker<Ack, Clock> {
     async fn ensure_not_looped(&mut self, received: Publish) -> Option<Publish> {
         self.clean_old_messages();
         if self
@@ -783,7 +775,7 @@ mod tests {
         #[tokio::test]
         async fn ignores_non_bidirectional_topics() {
             let client = MockMqttAck::new();
-            let mut sut = MessageLoopBreaker::new(&client, vec![]);
+            let mut sut = MessageLoopBreaker::new(client, vec![]);
             let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
 
             sut.forward_on_topic("test", &example_pub);
@@ -797,7 +789,7 @@ mod tests {
         async fn skips_forwarded_messages() {
             let mut client = MockMqttAck::new();
             let _ = client.expect_ack().return_once(|_| Ok(()));
-            let mut sut = MessageLoopBreaker::new(&client, vec!["test".into()]);
+            let mut sut = MessageLoopBreaker::new(client, vec!["test".into()]);
             let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
 
             sut.forward_on_topic("test", &example_pub);
@@ -808,7 +800,7 @@ mod tests {
         async fn allows_duplicate_messages_after_decloning() {
             let mut client = MockMqttAck::new();
             let _ack = client.expect_ack().return_once(|_| Ok(()));
-            let mut sut = MessageLoopBreaker::new(&client, vec!["test".into()]);
+            let mut sut = MessageLoopBreaker::new(client, vec!["test".into()]);
             let example_pub = Publish::new("test", QoS::AtMostOnce, "test");
 
             sut.forward_on_topic("test", &example_pub);
@@ -823,7 +815,7 @@ mod tests {
         async fn deduplicates_topics_that_start_with_a_dollar_sign() {
             let mut client = MockMqttAck::new();
             let _ack = client.expect_ack().return_once(|_| Ok(()));
-            let mut sut = MessageLoopBreaker::new(&client, vec!["$aws/test".into()]);
+            let mut sut = MessageLoopBreaker::new(client, vec!["$aws/test".into()]);
             let example_pub = Publish::new("$aws/test", QoS::AtMostOnce, "test");
 
             sut.forward_on_topic("$aws/test", &example_pub);
@@ -832,12 +824,11 @@ mod tests {
 
         #[tokio::test]
         async fn cleans_up_stale_messages() {
-            let client = MockMqttAck::new();
             let mut clock = MockMonotonicClock::new();
             let now = Instant::now();
             let _now = clock.expect_now().times(1).return_once(move || now);
             let mut sut = MessageLoopBreaker {
-                client: &client,
+                client: MockMqttAck::new(),
                 bidirectional_topics: vec!["test".into()],
                 forwarded_messages: <_>::default(),
                 clock,
@@ -1001,6 +992,8 @@ mod tests {
         use std::time::Duration;
         use std::time::Instant;
 
+        use anyhow::anyhow;
+        use anyhow::bail;
         use bytes::Bytes;
         use futures::channel::mpsc;
         use futures::future::pending;
@@ -1009,14 +1002,18 @@ mod tests {
         use rumqttc::ConnectionError;
         use rumqttc::Event;
         use rumqttc::Incoming;
+        use rumqttc::Outgoing;
         use rumqttc::QoS;
         use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
 
         use crate::half_bridge;
         use crate::topics::TopicConverter;
+        use crate::BridgeAsyncClient;
+        use crate::BridgeRule;
         use crate::MqttAck;
         use crate::MqttClient;
         use crate::MqttEvents;
+
         macro_rules! inc {
             (connack) => {
                 Event::Incoming(Incoming::ConnAck(ConnAck {
@@ -1024,40 +1021,184 @@ mod tests {
                     code: ConnectReturnCode::Success,
                 }))
             };
+            (publish($msg:ident)) => {
+                Event::Incoming(Incoming::Publish($msg.clone()))
+            };
+            (puback($pkid:literal)) => {
+                Event::Incoming(Incoming::PubAck(PubAck { pkid: $pkid }))
+            };
+        }
+
+        macro_rules! out {
+            (publish($pkid:literal)) => {
+                Event::Outgoing(Outgoing::Publish($pkid))
+            };
         }
 
         #[tokio::test]
-        async fn suscribes_after_conn_ack() {
-            let received_events = [inc!(connack)];
+        async fn subscribes_after_conn_ack() {
+            let events = [inc!(connack)];
 
-            let events = EventEmitter {
-                events: Arc::new(Mutex::new(received_events.into())),
-            };
-            let client = ActionLogger::default();
-            let (tx, _rx) = mpsc::channel(10);
-            let (_tx, rx) = mpsc::channel(10);
-            let (tx_health, _rx_health) = mpsc::channel(10);
-            let target = crate::BridgeAsyncClient::new(client.clone_dyn(), tx, rx);
             let subscription_topics = vec![SubscribeFilter::new(
                 "subscription".into(),
                 QoS::AtLeastOnce,
             )];
-            tokio::spawn(half_bridge(
-                Box::new(events.clone()),
-                client.clone_dyn(),
-                target,
-                TopicConverter(vec![]),
-                vec![],
-                tx_health,
-                "test-half-bridge",
-                subscription_topics.clone(),
-                TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
-            ));
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .with_subscription_topics(subscription_topics.clone())
+                .process_all_events()
+                .await;
 
             assert_eq!(
-                client.next_action().await,
+                bridge.local_client.next_action().unwrap(),
                 Action::SubscribeMany(subscription_topics)
             )
+        }
+
+        #[tokio::test]
+        async fn acknowledges_messages_that_arent_forwarded() {
+            let msg = Publish::new("non-forwarded-topic", QoS::AtLeastOnce, "payload");
+            let events = [inc!(publish(msg))];
+
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .process_all_events()
+                .await;
+
+            assert_eq!(bridge.local_client.next_action().unwrap(), Action::Ack(msg))
+        }
+
+        #[tokio::test]
+        async fn forwards_published_messages() {
+            let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+            let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+            let events = [inc!(publish(incoming_msg))];
+
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.cloud_client.next_action().unwrap(),
+                Action::Publish(outgoing_msg)
+            )
+        }
+
+        #[tokio::test]
+        async fn forwards_message_acknowledgements() {
+            let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+            let local_events = [inc!(publish(incoming_msg))];
+            let cloud_events = [out!(publish(1)), inc!(puback(1))];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(incoming_msg)
+            )
+        }
+
+        #[derive(Default)]
+        struct Bridge {
+            local_events: EventEmitter,
+            cloud_events: EventEmitter,
+            subscription_topics: Vec<SubscribeFilter>,
+            local_topic_converter: TopicConverter,
+            cloud_topic_converter: TopicConverter,
+        }
+
+        struct CompletedBridge {
+            local_client: ActionLogger,
+            cloud_client: ActionLogger,
+        }
+
+        macro_rules! bridge_rule {
+            ($base:literal -$remove:literal +$add:literal) => {
+                BridgeRule::try_new($base.into(), $remove.into(), $add.into()).unwrap()
+            };
+        }
+
+        impl Bridge {
+            fn with_subscription_topics(self, topics: Vec<SubscribeFilter>) -> Self {
+                Self {
+                    subscription_topics: topics,
+                    ..self
+                }
+            }
+
+            fn with_c8y_topics(self) -> Self {
+                let local_rules = vec![bridge_rule!("s/us" - "c8y/" + "")];
+                let cloud_topic_converter =
+                    TopicConverter(vec![bridge_rule!("s/ds" - "" + "c8y/")]);
+                Self {
+                    local_topic_converter: TopicConverter(local_rules),
+                    cloud_topic_converter,
+                    ..self
+                }
+            }
+
+            fn with_local_events<const N: usize>(self, events: [Event; N]) -> Self {
+                Self {
+                    local_events: EventEmitter::from(events),
+                    ..self
+                }
+            }
+
+            fn with_cloud_events<const N: usize>(self, events: [Event; N]) -> Self {
+                Self {
+                    cloud_events: EventEmitter::from(events),
+                    ..self
+                }
+            }
+
+            /// Spawn both bridge halves and wait for them to process all queued events
+            async fn process_all_events(self) -> CompletedBridge {
+                let local_client = ActionLogger::default();
+                let cloud_client = ActionLogger::default();
+                let (tx0, rx0) = mpsc::channel(10);
+                let (tx1, rx1) = mpsc::channel(10);
+
+                let (tx_health, _rx_health) = mpsc::channel(10);
+
+                tokio::spawn(half_bridge(
+                    self.local_events.clone(),
+                    local_client.clone(),
+                    BridgeAsyncClient::new(cloud_client.clone(), tx0, rx1),
+                    self.local_topic_converter,
+                    vec![],
+                    tx_health.clone(),
+                    "test-half-bridge",
+                    self.subscription_topics.clone(),
+                    TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+                ));
+                tokio::spawn(half_bridge(
+                    self.cloud_events.clone(),
+                    cloud_client.clone(),
+                    BridgeAsyncClient::new(local_client.clone(), tx1, rx0),
+                    self.cloud_topic_converter,
+                    vec![],
+                    tx_health,
+                    "test-half-bridge",
+                    self.subscription_topics,
+                    TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+                ));
+
+                std::mem::forget(_rx_health);
+
+                self.local_events.all_processed().await.unwrap();
+                self.cloud_events.all_processed().await.unwrap();
+                CompletedBridge {
+                    local_client,
+                    cloud_client,
+                }
+            }
         }
 
         #[derive(Default, Debug, Clone)]
@@ -1068,6 +1209,27 @@ mod tests {
         impl EventEmitter {
             fn next_event(&self) -> Option<Event> {
                 self.events.lock().unwrap().pop_front()
+            }
+
+            async fn all_processed(&self) -> anyhow::Result<()> {
+                let timeout = Duration::from_secs(5);
+                let start = Instant::now();
+                while !self.events.lock().unwrap().is_empty() {
+                    if start.elapsed() > timeout {
+                        bail!("Timed out waiting for event emitter to be fully consumed. Unconsumed events were {:?}", self.events.lock().unwrap())
+                    }
+
+                    tokio::task::yield_now().await;
+                }
+                Ok(())
+            }
+        }
+
+        impl<I: Into<VecDeque<Event>>> From<I> for EventEmitter {
+            fn from(value: I) -> Self {
+                Self {
+                    events: Arc::new(Mutex::new(value.into())),
+                }
             }
         }
 
@@ -1098,20 +1260,10 @@ mod tests {
             fn log(&self, action: Action) {
                 self.log.lock().unwrap().push_back(action);
             }
-            async fn next_action(&self) -> Action {
-                let started = Instant::now();
-                loop {
-                    if started.elapsed() > Duration::from_secs(5) {
-                        panic!("Timed-out waiting for message");
-                    }
-                    let next_message = self.log.lock().unwrap().pop_front();
-                    match next_message {
-                        None => {
-                            tokio::task::yield_now().await;
-                        }
-                        Some(action) => break action,
-                    }
-                }
+
+            fn next_action(&self) -> anyhow::Result<Action> {
+                let next_message = self.log.lock().unwrap().pop_front();
+                next_message.ok_or(anyhow!("Expected client to be interacted with. Did you forget to call `bridge.<type>_events.all_consumed().await`?"))
             }
         }
 
@@ -1130,10 +1282,6 @@ mod tests {
             ) -> Result<(), ClientError> {
                 self.log(Action::SubscribeMany(topics));
                 Ok(())
-            }
-
-            fn clone_dyn(&self) -> Box<dyn MqttClient> {
-                Box::new(self.to_owned())
             }
 
             async fn publish(
