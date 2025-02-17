@@ -12,7 +12,7 @@ Test Tags           theme:c8y    theme:operation    theme:custom
 *** Test Cases ***
 Custom operation successful
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_Success    /etc/tedge/operations/c8y/c8y_Command
-    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    Should Contain Supported Operations    c8y_Command
     ${operation}=    Cumulocity.Create Operation
     ...    description=do something
     ...    fragments={"c8y_Command":{"text":"sleep 5"}}
@@ -20,7 +20,7 @@ Custom operation successful
 
 Custom operation fails
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_Fails    /etc/tedge/operations/c8y/c8y_Command
-    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    Should Contain Supported Operations    c8y_Command
     ${operation}=    Cumulocity.Create Operation
     ...    description=do something
     ...    fragments={"c8y_Command":{"text":"sleep 20"}}
