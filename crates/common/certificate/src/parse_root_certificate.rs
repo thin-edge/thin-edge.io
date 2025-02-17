@@ -33,6 +33,10 @@ pub fn create_tls_config(
         .with_client_auth_cert(cert_chain, pvt_key)?)
 }
 
+/// Create a TLS ClientConfig that uses a PKCS#11 device for client authentication.
+///
+/// This TLS configuration should be used for communication between a device (or bridge) and a cloud
+/// remote MQTT broker, not local MQTT broker.
 pub fn create_tls_config_cryptoki(
     root_certificates: impl AsRef<Path>,
     client_certificate: impl AsRef<Path>,
@@ -55,6 +59,7 @@ pub fn create_tls_config_cryptoki(
     Ok(config)
 }
 
+#[derive(Debug, Clone)]
 pub struct CryptokiConfig {
     pub module_path: Utf8PathBuf,
     pub pin: Arc<str>,

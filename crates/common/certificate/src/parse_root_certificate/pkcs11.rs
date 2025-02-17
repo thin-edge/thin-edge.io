@@ -55,6 +55,7 @@ impl Pkcs11SigningKey {
         } = cryptoki_config;
 
         debug!(%module_path, "Loading PKCS#11 module");
+        // can fail with Pkcs11(GeneralError, GetFunctionList) if P11_KIT_SERVER_ADDRESS is wrong
         let pkcs11client = Pkcs11::new(module_path)?;
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
@@ -79,8 +80,8 @@ impl Pkcs11SigningKey {
             session: Arc::new(Mutex::new(session)),
         };
 
-        let key_type = get_key_type(pkcs11.clone());
-        debug!("Key Type: {:?}", key_type.to_string());
+        let key_type = get_key_type(pkcs11.clone()).context("Failed to read key")?;
+        trace!("Key Type: {:?}", key_type.to_string());
         let key = match key_type {
             KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
             KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
@@ -233,7 +234,7 @@ impl Signer for PkcsSigner {
     }
 
     fn scheme(&self) -> SignatureScheme {
-        debug!("Using Signature scheme: {:?}", self.scheme.as_str());
+        trace!("Using Signature scheme: {:?}", self.scheme.as_str());
         self.scheme
     }
 }
@@ -279,11 +280,11 @@ impl ECSigningKey {
 
 impl SigningKey for ECSigningKey {
     fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
-        debug!("Offered signature schemes. offered={:?}", offered);
+        trace!("Offered signature schemes. offered={:?}", offered);
         let supported = self.supported_schemes();
         for scheme in offered {
             if supported.contains(scheme) {
-                debug!("Matching scheme: {:?}", scheme.as_str());
+                trace!("Matching scheme: {:?}", scheme.as_str());
                 return Some(Box::new(PkcsSigner {
                     pkcs11: self.pkcs11.clone(),
                     scheme: *scheme,
@@ -343,7 +344,7 @@ impl SigningKey for RSASigningKey {
     }
 }
 
-fn get_key_type(pkcs11: PKCS11) -> KeyType {
+fn get_key_type(pkcs11: PKCS11) -> anyhow::Result<KeyType> {
     let session = pkcs11.session.lock().unwrap();
 
     let key_template = vec![
@@ -352,12 +353,13 @@ fn get_key_type(pkcs11: PKCS11) -> KeyType {
         Attribute::Sign(true),
     ];
 
+    trace!(?key_template, "Finding a key");
     let key = session
         .find_objects(&key_template)
-        .unwrap()
+        .context("Failed to find object")?
         .into_iter()
         .next()
-        .unwrap();
+        .context("Failed to find a key")?;
 
     let info = session
         .get_attributes(
@@ -369,9 +371,7 @@ fn get_key_type(pkcs11: PKCS11) -> KeyType {
                 AttributeType::Sign,
             ],
         )
-        .unwrap();
-
-    dbg!(&info);
+        .context("failed to get key attributes")?;
 
     let mut key_type = KeyType::EC;
     let Attribute::KeyType(returned_key_type) = info
@@ -379,11 +379,11 @@ fn get_key_type(pkcs11: PKCS11) -> KeyType {
         .find(|a| a.attribute_type() == AttributeType::KeyType)
         .unwrap()
     else {
-        return key_type;
+        return Ok(key_type);
     };
     key_type = *returned_key_type;
 
-    key_type
+    Ok(key_type)
 }
 
 fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
