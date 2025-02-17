@@ -5,6 +5,7 @@ use anyhow::bail;
 use anyhow::Context as _;
 use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
+use certificate::parse_root_certificate::CryptokiConfig;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
 use rumqttc::tokio_rustls::rustls::Error;
@@ -26,6 +27,8 @@ pub fn create_device_with_direct_connection(
     use_basic_auth: bool,
     bridge_config: &BridgeConfig,
     device_type: &str,
+    // TODO: put into general authentication struct
+    cryptoki_config: Option<CryptokiConfig>,
 ) -> anyhow::Result<()> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
@@ -51,6 +54,12 @@ pub fn create_device_with_direct_connection(
                 .expect("password must be set to use basic auth"),
         );
         create_tls_config_without_client_cert(&bridge_config.bridge_root_cert_path)?
+    } else if let Some(cryptoki_config) = cryptoki_config {
+        certificate::parse_root_certificate::create_tls_config_cryptoki(
+            &bridge_config.bridge_root_cert_path,
+            &bridge_config.bridge_certfile,
+            cryptoki_config,
+        )?
     } else {
         create_tls_config(
             &bridge_config.bridge_root_cert_path,
