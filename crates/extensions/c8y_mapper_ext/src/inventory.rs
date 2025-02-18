@@ -101,6 +101,11 @@ impl CumulocityConverter {
         mut fragment_key: &str,
         fragment_value: &JsonValue,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if fragment_key == "name" || fragment_key == "type" {
+            warn!("Clearing the entity `name` and `type` fragments is not supported by Cumulocity");
+            return Ok(vec![]);
+        }
+
         if fragment_key == "firmware" {
             fragment_key = "c8y_Firmware";
         }
@@ -248,7 +253,7 @@ mod tests {
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
         let twin_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///twin/foo"),
+            &Topic::new_unchecked("te/device/main///twin/name"),
             r#""bar""#, // String values must be quoted to be valid JSON string values
         );
         let inventory_messages = converter.convert(&twin_message).await;
@@ -258,7 +263,7 @@ mod tests {
             [(
                 "c8y/inventory/managedObjects/update/test-device",
                 json!({
-                    "foo": "bar"
+                    "name": "bar"
                 })
                 .into(),
             )],
@@ -347,6 +352,22 @@ mod tests {
                 json!({ "foo": null }).into(),
             )],
         );
+    }
+
+    #[tokio::test]
+    async fn clear_forbidden_fragments() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let twin_message =
+            MqttMessage::new(&Topic::new_unchecked("te/device/main///twin/name"), "");
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(&inventory_messages, []);
+
+        let twin_message =
+            MqttMessage::new(&Topic::new_unchecked("te/device/main///twin/type"), "");
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(&inventory_messages, []);
     }
 
     #[tokio::test]
