@@ -254,8 +254,8 @@ Nested child devices support sending inventory data via tedge topic
     Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/type" ''
     Execute Command    tedge mqtt pub --retain "te/device/${nested_child}///twin/name" ''
     ${mo}=    Device Should Have Fragments    type
-    Should Be Equal    ${mo["type"]}    thin-edge.io-child
-    Should Be Equal    ${mo["name"]}    ${nested_child}
+    Should Be Equal    ${mo["type"]}    NewType
+    Should Be Equal    ${mo["name"]}    NewName
 
 #
 # Services

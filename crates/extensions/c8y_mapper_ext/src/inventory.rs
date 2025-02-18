@@ -580,4 +580,37 @@ mod tests {
             )],
         );
     }
+
+    #[tokio::test]
+    async fn convert_service_type() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let reg_message = &MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/service01"),
+            r#"{"@type": "service", "@id": "service01"}"#,
+        );
+        let _ = converter
+            .try_register_source_entities(reg_message)
+            .await
+            .unwrap();
+
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/service01/twin/type"),
+            r#""systemd""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        // Assert that the `type` fragment is mapped to `serviceType`
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/service01",
+                json!({
+                    "serviceType": "systemd"
+                })
+                .into(),
+            )],
+        );
+    }
 }
