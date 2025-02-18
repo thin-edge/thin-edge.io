@@ -69,6 +69,7 @@ use tedge_api::commands::SoftwareListCommand;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
@@ -400,7 +401,13 @@ impl CumulocityConverter {
 
         for (fragment_key, fragment_value) in input.other.iter() {
             if fragment_key == "name" || fragment_key == "type" {
-                // Skip the name and type fields as they are already included in the registration message
+                // Skip converting the name and type fields as they are already included in the registration message
+                // Just update the entity cache with these keys
+                self.entity_cache.update_twin_data(EntityTwinMessage::new(
+                    entity_topic_id.clone(),
+                    fragment_key.clone(),
+                    fragment_value.clone(),
+                ))?;
                 continue;
             }
             let twin_messages = self.try_convert_twin_fragment(

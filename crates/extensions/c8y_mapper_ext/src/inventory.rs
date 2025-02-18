@@ -271,6 +271,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn duplicate_twin_name_and_type_updates_ignored_after_registration() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        // Register a child with a name and type upfront
+        let reg_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01//"),
+            r#"{"@type": "child-device", "name": "child01", "type": "Rpi"}"#,
+        );
+        let _ = converter.try_register_source_entities(&reg_message).await;
+
+        // Re-send the same name as a twin update
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///twin/name"),
+            r#""child01""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+        dbg!(&inventory_messages);
+        assert_messages_matching(&inventory_messages, []);
+
+        // Re-send the same type as a twin update
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///twin/type"),
+            r#""Rpi""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(&inventory_messages, []);
+    }
+
+    #[tokio::test]
     async fn unquoted_string_value_invalid() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
