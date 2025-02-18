@@ -35,6 +35,9 @@ macro_rules! inc {
     (puback($pkid:literal)) => {
         Ok(Event::Incoming(Incoming::PubAck(PubAck { pkid: $pkid })))
     };
+    (network_error) => {
+        Err(ConnectionError::NetworkTimeout)
+    };
 }
 
 #[macro_export]

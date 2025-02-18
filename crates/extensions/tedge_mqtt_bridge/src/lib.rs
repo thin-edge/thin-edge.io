@@ -1124,6 +1124,40 @@ mod tests {
             );
         }
 
+        #[tokio::test]
+        async fn acknowledges_messages_successfully_following_disconnection() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                out!(publish(1)),
+                // Abruptly disconnect client
+                inc!(network_error),
+                // Republish message after disconnect
+                out!(publish(1)),
+                inc!(puback(1)),
+                // Then check we successfully acknowledge a future message with the same pkid
+                out!(publish(1)),
+                inc!(puback(1)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(first_msg)
+            );
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(second_msg)
+            );
+        }
+
         struct Bridge<LoEv, ClEv, LoCl = ActionLogger> {
             local_events: LoEv,
             cloud_events: ClEv,
