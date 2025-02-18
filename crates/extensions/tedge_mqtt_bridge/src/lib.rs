@@ -1158,6 +1158,38 @@ mod tests {
             );
         }
 
+        #[tokio::test]
+        async fn ignores_duplicate_acknowledgement_for_same_message() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                out!(publish(1)),
+                inc!(puback(1)),
+                // Simulate the cloud sending a second acknowledgement;s
+                inc!(puback(1)),
+                // Then publish the second message
+                out!(publish(2)),
+                inc!(puback(2)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(first_msg)
+            );
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(second_msg)
+            );
+        }
+
         struct Bridge<LoEv, ClEv, LoCl = ActionLogger> {
             local_events: LoEv,
             cloud_events: ClEv,
