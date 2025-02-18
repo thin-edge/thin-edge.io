@@ -95,7 +95,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && rustup component add rls rust-analysis rust-src rustfmt clippy \
     && rustup toolchain install nightly \
     && rustup component add rustfmt --toolchain nightly \
-    && cargo install taplo-cli cargo-nextest
+    # Use cargo-bininstall to improve multi-arch builds
+    && curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
+    && cargo-binstall cargo-nextest --secure \
+    && cargo-binstall taplo-cli --secure
 
 # Persist bash history
 USER root
