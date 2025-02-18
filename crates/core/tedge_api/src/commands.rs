@@ -877,6 +877,7 @@ pub struct ConfigUpdateCmdPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tedge_url: Option<String>,
     pub remote_url: String,
+    pub server_url: String,
     #[serde(rename = "type")]
     pub config_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]

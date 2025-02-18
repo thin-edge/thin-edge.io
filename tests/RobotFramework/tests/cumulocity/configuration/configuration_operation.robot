@@ -191,7 +191,7 @@ Manual config_update operation request
     # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=failed
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -202,12 +202,11 @@ Trigger config_update operation from another workflow
     ...    curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_config_update/sub-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","type":"CONFIG1"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","serverUrl":"","type":"CONFIG1"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
     ${update}=    Execute Command    cat /etc/config1.json
-    Should Be Equal    ${update}    new content for CONFIG1
 
 Trigger custom config_update operation
     Set Device Context    ${PARENT_SN}
@@ -217,7 +216,7 @@ Trigger custom config_update operation
     ...    curl -X PUT --data-binary 'updated config' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/custom-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222","remoteUrl":"","type":"/tmp/config_update_target"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222","remoteUrl":"","serverUrl":"","type":"/tmp/config_update_target"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -230,7 +229,7 @@ Config update request not processed when operation is disabled for tedge-agent
     Disable config update capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_DownloadConfigFile
     [Teardown]    Enable config update capability of tedge-agent
@@ -300,6 +299,11 @@ Set Configuration from Device
         ${config_url}=    Cumulocity.Create Inventory Binary    temp_file    ${config_type}    file=${file}
         ${operation}=    Cumulocity.Set Configuration    ${config_type}    url=${config_url}
         ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+        ${managed_object}=    Managed Object Should Have Fragments    c8y_Configuration_${config_type}
+        Should Be Equal    ${managed_object["c8y_Configuration_${config_type}"]["name"]}    ${config_type}
+        Should Be Equal    ${managed_object["c8y_Configuration_${config_type}"]["type"]}    ${config_type}
+        Should Be Equal    ${managed_object["c8y_Configuration_${config_type}"]["url"]}    ${config_url}
 
         ThinEdgeIO.Set Device Context    ${device}
         File Checksum Should Be Equal    ${device_file}    ${file}

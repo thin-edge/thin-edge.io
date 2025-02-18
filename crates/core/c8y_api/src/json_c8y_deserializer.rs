@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use tedge_api::commands::SoftwareModuleAction;
 use tedge_api::commands::SoftwareModuleItem;
 use tedge_api::commands::SoftwareRequestResponseSoftwareList;
-use tedge_api::device_profile::ConfigPayload;
 use tedge_api::device_profile::FirmwarePayload;
 use tedge_api::device_profile::SoftwarePayload;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -440,6 +439,7 @@ pub struct C8yUploadConfigFile {
 /// use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 ///
 /// // Example input from c8y
+/// // Note: Name property is available only when JSON object is created from the device profile payload
 /// // Note: Legacy config download operations will not have the type property
 /// let data = r#"
 /// {
@@ -453,18 +453,11 @@ pub struct C8yUploadConfigFile {
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yDownloadConfigFile {
+    #[serde(default = "Default::default")]
+    pub name: String,
     #[serde(rename = "type", default = "default_config_type")]
     pub config_type: String,
     pub url: String,
-}
-
-impl From<C8yDownloadConfigFile> for ConfigPayload {
-    fn from(value: C8yDownloadConfigFile) -> Self {
-        ConfigPayload {
-            config_type: value.config_type,
-            remote_url: Some(value.url),
-        }
-    }
 }
 
 /// Representation of c8y_Firmware JSON object
@@ -593,6 +586,7 @@ mod tests {
     use crate::json_c8y_deserializer::C8ySoftwareUpdateModule;
     use assert_json_diff::assert_json_eq;
     use serde_json::json;
+    use tedge_api::device_profile::ConfigPayload;
     use tedge_api::device_profile::DeviceProfileCmdPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::CommandStatus;
@@ -1012,7 +1006,12 @@ mod tests {
                 .expect("failed to extract software info"),
         );
         for config in req.configuration {
-            thin_edge_json.add_config(config.into());
+            thin_edge_json.add_config(ConfigPayload {
+                name: config.name,
+                config_type: config.config_type,
+                remote_url: Some(config.url.clone()),
+                server_url: Some(config.url),
+            });
         }
         let expected_thin_edge_json = json!({
             "status": "init",
@@ -1054,8 +1053,10 @@ mod tests {
                 "operation": "config_update",
                 "skip": false,
                 "payload": {
+                    "name": "collectd-v2",
                     "type": "collectd.conf",
-                    "remoteUrl": "http://www.example.url/inventory/binaries/88395"
+                    "remoteUrl": "http://www.example.url/inventory/binaries/88395",
+                    "serverUrl": "http://www.example.url/inventory/binaries/88395"
                 }
                 }
             ]
