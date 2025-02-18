@@ -1190,6 +1190,43 @@ mod tests {
             );
         }
 
+        #[tokio::test]
+        async fn health_success_is_not_published_before_client_connected() {
+            let mut bridge = Bridge::default().process_all_events().await;
+            // There should not be a health message
+            assert_eq!(bridge.next_health_message(), None);
+        }
+
+        #[tokio::test]
+        async fn health_success_is_published_on_connack() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(connack), inc!(suback)])
+                .process_all_events()
+                .await;
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+            // Nothing else should be published
+            assert_eq!(bridge.next_health_message(), None)
+        }
+
+        #[tokio::test]
+        async fn health_status_is_updated_on_error() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(connack), inc!(network_error)])
+                .process_all_events()
+                .await;
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
+        }
+
+        #[tokio::test]
+        async fn health_errors_if_initial_connection_fails() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(network_error)])
+                .process_all_events()
+                .await;
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
+        }
+
         struct Bridge<LoEv, ClEv, LoCl = ActionLogger> {
             local_events: LoEv,
             cloud_events: ClEv,
@@ -1204,6 +1241,7 @@ mod tests {
             cloud_client: ActionLogger,
             local_task: Option<JoinHandle<()>>,
             cloud_task: Option<JoinHandle<()>>,
+            rx_health: mpsc::Receiver<(&'static str, Status)>,
         }
 
         macro_rules! bridge_rule {
@@ -1280,7 +1318,7 @@ mod tests {
                 let (tx0, rx0) = mpsc::channel(10);
                 let (tx1, rx1) = mpsc::channel(10);
 
-                let (tx_health, _rx_health) = mpsc::channel(10);
+                let (tx_health, rx_health) = mpsc::channel(10);
 
                 let local_task = tokio::spawn(half_bridge(
                     self.local_events.clone(),
@@ -1289,7 +1327,7 @@ mod tests {
                     self.local_topic_converter,
                     vec![],
                     tx_health.clone(),
-                    "test-half-bridge",
+                    "local",
                     self.subscription_topics.clone(),
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                 ));
@@ -1300,12 +1338,10 @@ mod tests {
                     self.cloud_topic_converter,
                     vec![],
                     tx_health,
-                    "test-half-bridge",
+                    "cloud",
                     self.subscription_topics,
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                 ));
-
-                std::mem::forget(_rx_health);
 
                 self.local_events.all_processed().await.unwrap();
                 self.cloud_events.all_processed().await.unwrap();
@@ -1314,6 +1350,7 @@ mod tests {
                     cloud_client,
                     local_task: Some(local_task),
                     cloud_task: Some(cloud_task),
+                    rx_health,
                 }
             }
         }
@@ -1350,6 +1387,10 @@ mod tests {
                 if self.cloud_task.as_ref().map(|b| b.is_finished()) == Some(true) {
                     self.cloud_task.take().unwrap().await.unwrap();
                 }
+            }
+
+            pub fn next_health_message(&mut self) -> Option<(&'static str, Status)> {
+                Some(self.rx_health.try_next().ok()?.unwrap())
             }
         }
     }

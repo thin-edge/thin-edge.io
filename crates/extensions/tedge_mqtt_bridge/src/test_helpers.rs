@@ -29,6 +29,12 @@ macro_rules! inc {
             code: ConnectReturnCode::Success,
         })))
     };
+    (suback) => {
+        Ok(Event::Incoming(Incoming::SubAck(SubAck {
+            pkid: 1,
+            return_codes: vec![SubscribeReasonCode::Success(QoS::AtLeastOnce)],
+        })))
+    };
     (publish($msg:ident)) => {
         Ok(Event::Incoming(Incoming::Publish($msg.clone())))
     };
