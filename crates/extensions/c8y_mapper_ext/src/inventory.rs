@@ -101,8 +101,10 @@ impl CumulocityConverter {
         fragment_key: &str,
         fragment_value: &JsonValue,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if fragment_value.is_null() && (fragment_key == "name" || fragment_key == "type") {
-            warn!("Clearing the entity `name` and `type` fragments is not supported by Cumulocity");
+        if (fragment_key == "name" || fragment_key == "type")
+            && (fragment_value.is_null() || fragment_value.as_str().map_or(false, str::is_empty))
+        {
+            warn!("Clearing the entity `name` and `type` fragments is not supported");
             return Ok(vec![]);
         }
 
@@ -227,6 +229,7 @@ mod tests {
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
+    use test_case::test_case;
 
     #[tokio::test]
     async fn convert_entity_twin_data_json_object() {
@@ -432,18 +435,19 @@ mod tests {
         );
     }
 
+    #[test_case("name", ""; "null name")]
+    #[test_case("name", r#""""#; "empty name")]
+    #[test_case("type", ""; "null type")]
+    #[test_case("type", r#""""#; "empty type")]
     #[tokio::test]
-    async fn clear_forbidden_fragments() {
+    async fn clear_forbidden_fragments(fragment_key: &str, fragment_value: &str) {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let twin_message =
-            MqttMessage::new(&Topic::new_unchecked("te/device/main///twin/name"), "");
-        let inventory_messages = converter.convert(&twin_message).await;
-        assert_messages_matching(&inventory_messages, []);
-
-        let twin_message =
-            MqttMessage::new(&Topic::new_unchecked("te/device/main///twin/type"), "");
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked(&format!("te/device/main///twin/{fragment_key}")),
+            fragment_value,
+        );
         let inventory_messages = converter.convert(&twin_message).await;
         assert_messages_matching(&inventory_messages, []);
     }
