@@ -1256,7 +1256,7 @@ mod tests {
         where
             Client: MqttClient + MqttAck + 'static + Clone,
         {
-            fn with_local_events<const N: usize>(self, events: [Event; N]) -> Self {
+            fn with_local_events<const N: usize>(self, events: [EventRes; N]) -> Self {
                 Self {
                     local_events: FixedEventStream::from(events),
                     ..self
@@ -1268,7 +1268,7 @@ mod tests {
         where
             Client: MqttClient + MqttAck + 'static + Clone,
         {
-            fn with_cloud_events<const N: usize>(self, events: [Event; N]) -> Self {
+            fn with_cloud_events<const N: usize>(self, events: [EventRes; N]) -> Self {
                 Self {
                     cloud_events: FixedEventStream::from(events),
                     ..self

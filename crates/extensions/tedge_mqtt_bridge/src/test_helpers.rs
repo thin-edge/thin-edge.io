@@ -24,30 +24,30 @@ use crate::MqttEvents;
 #[macro_export]
 macro_rules! inc {
     (connack) => {
-        Event::Incoming(Incoming::ConnAck(ConnAck {
+        Ok(Event::Incoming(Incoming::ConnAck(ConnAck {
             session_present: true,
             code: ConnectReturnCode::Success,
-        }))
+        })))
     };
     (publish($msg:ident)) => {
-        Event::Incoming(Incoming::Publish($msg.clone()))
+        Ok(Event::Incoming(Incoming::Publish($msg.clone())))
     };
     (puback($pkid:literal)) => {
-        Event::Incoming(Incoming::PubAck(PubAck { pkid: $pkid }))
+        Ok(Event::Incoming(Incoming::PubAck(PubAck { pkid: $pkid })))
     };
 }
 
 #[macro_export]
 macro_rules! out {
     (publish($pkid:literal)) => {
-        Event::Outgoing(Outgoing::Publish($pkid))
+        Ok(Event::Outgoing(Outgoing::Publish($pkid)))
     };
 }
 
 #[derive(Default, Debug, Clone)]
 /// A fixed stream of events
 pub struct FixedEventStream {
-    events: Arc<Mutex<VecDeque<Event>>>,
+    events: Arc<Mutex<VecDeque<EventRes>>>,
 }
 
 pub struct EventsPolled;
@@ -129,7 +129,7 @@ impl MqttAck for PanickingClient {
 impl MqttEvents for UnblockingEventStream {
     async fn poll(&mut self) -> Result<Event, ConnectionError> {
         if let Some(event) = self.events.next_event() {
-            Ok(event)
+            event
         } else {
             if let Some(tx) = self.tx.lock().await.take() {
                 tx.send(EventsPolled).ok().unwrap();
@@ -161,7 +161,7 @@ impl MqttClient for BlockingSubscribeClient {
 }
 
 impl FixedEventStream {
-    fn next_event(&self) -> Option<Event> {
+    fn next_event(&self) -> Option<EventRes> {
         self.events.lock().unwrap().pop_front()
     }
 }
@@ -182,7 +182,9 @@ impl AllProcessed for FixedEventStream {
     }
 }
 
-impl<I: Into<VecDeque<Event>>> From<I> for FixedEventStream {
+pub type EventRes = Result<Event, rumqttc::ConnectionError>;
+
+impl<I: Into<VecDeque<EventRes>>> From<I> for FixedEventStream {
     fn from(value: I) -> Self {
         Self {
             events: Arc::new(Mutex::new(value.into())),
@@ -194,7 +196,7 @@ impl<I: Into<VecDeque<Event>>> From<I> for FixedEventStream {
 impl MqttEvents for FixedEventStream {
     async fn poll(&mut self) -> Result<Event, ConnectionError> {
         if let Some(event) = self.next_event() {
-            Ok(event)
+            event
         } else {
             pending().await
         }
