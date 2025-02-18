@@ -1,6 +1,8 @@
 mod backoff;
 mod config;
 mod health;
+#[cfg(test)]
+mod test_helpers;
 mod topics;
 
 use async_trait::async_trait;
@@ -443,10 +445,10 @@ impl BridgeMessageSender {
 /// connection is created, the last-will message is set to send the `0` payload when the connection
 /// is dropped.
 #[allow(clippy::too_many_arguments)]
-async fn half_bridge<Client: MqttClient + 'static, Events: MqttEvents>(
-    mut recv_event_loop: Events,
-    recv_client: Client,
-    mut target: BridgeAsyncClient<Client>,
+async fn half_bridge(
+    mut recv_event_loop: impl MqttEvents,
+    recv_client: impl MqttClient + 'static,
+    mut target: BridgeAsyncClient<impl MqttClient + 'static>,
     transformer: TopicConverter,
     bidirectional_topic_filters: Vec<Cow<'static, str>>,
     tx_health: mpsc::Sender<(&'static str, Status)>,
@@ -986,54 +988,19 @@ mod tests {
     }
 
     mod bridge {
-        use std::collections::VecDeque;
+
         use std::sync::Arc;
-        use std::sync::Mutex;
         use std::time::Duration;
         use std::time::Instant;
 
-        use anyhow::anyhow;
-        use anyhow::bail;
-        use bytes::Bytes;
+        use crate::test_helpers::*;
+        use crate::*;
         use futures::channel::mpsc;
-        use futures::future::pending;
+        use futures::channel::oneshot;
         use rumqttc::mqttbytes::v4::*;
-        use rumqttc::ClientError;
-        use rumqttc::ConnectionError;
         use rumqttc::Event;
-        use rumqttc::Incoming;
-        use rumqttc::Outgoing;
         use rumqttc::QoS;
         use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
-
-        use crate::half_bridge;
-        use crate::topics::TopicConverter;
-        use crate::BridgeAsyncClient;
-        use crate::BridgeRule;
-        use crate::MqttAck;
-        use crate::MqttClient;
-        use crate::MqttEvents;
-
-        macro_rules! inc {
-            (connack) => {
-                Event::Incoming(Incoming::ConnAck(ConnAck {
-                    session_present: true,
-                    code: ConnectReturnCode::Success,
-                }))
-            };
-            (publish($msg:ident)) => {
-                Event::Incoming(Incoming::Publish($msg.clone()))
-            };
-            (puback($pkid:literal)) => {
-                Event::Incoming(Incoming::PubAck(PubAck { pkid: $pkid }))
-            };
-        }
-
-        macro_rules! out {
-            (publish($pkid:literal)) => {
-                Event::Outgoing(Outgoing::Publish($pkid))
-            };
-        }
 
         #[tokio::test]
         async fn subscribes_after_conn_ack() {
@@ -1105,10 +1072,51 @@ mod tests {
             )
         }
 
+        #[tokio::test]
+        async fn subscribe_does_not_block() {
+            use tokio::sync::Mutex;
+            let (tx, rx) = oneshot::channel();
+            let event_loop = UnblockingEventStream {
+                events: FixedEventStream::from([inc!(connack)]),
+                tx: Arc::new(Mutex::new(Some(tx))),
+            };
+            let client = BlockingSubscribeClient {
+                rx: Arc::new(Mutex::new(Some(rx))),
+            };
+            let (tx, rx) = mpsc::channel(10);
+            let target = BridgeAsyncClient::new(PanickingClient, tx, rx);
+            let (tx_health, _rx) = mpsc::channel(10);
+            let mut bridge = Some(tokio::spawn(half_bridge(
+                event_loop,
+                client.clone(),
+                target,
+                <_>::default(),
+                <_>::default(),
+                tx_health,
+                "local",
+                vec![],
+                TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+            )));
+            let started = Instant::now();
+            while tokio::time::timeout(Duration::from_secs(5), client.rx.lock())
+                .await
+                .unwrap()
+                .is_some()
+            {
+                if started.elapsed() > Duration::from_secs(5) {
+                    panic!("Timed out")
+                }
+                if bridge.as_ref().map(|b| b.is_finished()) == Some(true) {
+                    bridge.take().unwrap().await.unwrap();
+                }
+                tokio::task::yield_now().await;
+            }
+        }
+
         #[derive(Default)]
         struct Bridge {
-            local_events: EventEmitter,
-            cloud_events: EventEmitter,
+            local_events: FixedEventStream,
+            cloud_events: FixedEventStream,
             subscription_topics: Vec<SubscribeFilter>,
             local_topic_converter: TopicConverter,
             cloud_topic_converter: TopicConverter,
@@ -1146,14 +1154,14 @@ mod tests {
 
             fn with_local_events<const N: usize>(self, events: [Event; N]) -> Self {
                 Self {
-                    local_events: EventEmitter::from(events),
+                    local_events: FixedEventStream::from(events),
                     ..self
                 }
             }
 
             fn with_cloud_events<const N: usize>(self, events: [Event; N]) -> Self {
                 Self {
-                    cloud_events: EventEmitter::from(events),
+                    cloud_events: FixedEventStream::from(events),
                     ..self
                 }
             }
@@ -1198,103 +1206,6 @@ mod tests {
                     local_client,
                     cloud_client,
                 }
-            }
-        }
-
-        #[derive(Default, Debug, Clone)]
-        struct EventEmitter {
-            events: Arc<Mutex<VecDeque<Event>>>,
-        }
-
-        impl EventEmitter {
-            fn next_event(&self) -> Option<Event> {
-                self.events.lock().unwrap().pop_front()
-            }
-
-            async fn all_processed(&self) -> anyhow::Result<()> {
-                let timeout = Duration::from_secs(5);
-                let start = Instant::now();
-                while !self.events.lock().unwrap().is_empty() {
-                    if start.elapsed() > timeout {
-                        bail!("Timed out waiting for event emitter to be fully consumed. Unconsumed events were {:?}", self.events.lock().unwrap())
-                    }
-
-                    tokio::task::yield_now().await;
-                }
-                Ok(())
-            }
-        }
-
-        impl<I: Into<VecDeque<Event>>> From<I> for EventEmitter {
-            fn from(value: I) -> Self {
-                Self {
-                    events: Arc::new(Mutex::new(value.into())),
-                }
-            }
-        }
-
-        #[async_trait::async_trait]
-        impl MqttEvents for EventEmitter {
-            async fn poll(&mut self) -> Result<Event, ConnectionError> {
-                if let Some(event) = self.next_event() {
-                    Ok(event)
-                } else {
-                    pending().await
-                }
-            }
-        }
-
-        #[derive(Debug, PartialEq, Eq)]
-        enum Action {
-            SubscribeMany(Vec<SubscribeFilter>),
-            Ack(Publish),
-            Publish(Publish),
-        }
-
-        #[derive(Default, Debug, Clone)]
-        struct ActionLogger {
-            log: Arc<Mutex<VecDeque<Action>>>,
-        }
-
-        impl ActionLogger {
-            fn log(&self, action: Action) {
-                self.log.lock().unwrap().push_back(action);
-            }
-
-            fn next_action(&self) -> anyhow::Result<Action> {
-                let next_message = self.log.lock().unwrap().pop_front();
-                next_message.ok_or(anyhow!("Expected client to be interacted with. Did you forget to call `bridge.<type>_events.all_consumed().await`?"))
-            }
-        }
-
-        #[async_trait::async_trait]
-        impl MqttAck for ActionLogger {
-            async fn ack(&self, publish: &Publish) -> Result<(), rumqttc::ClientError> {
-                self.log(Action::Ack(publish.clone()));
-                Ok(())
-            }
-        }
-        #[async_trait::async_trait]
-        impl MqttClient for ActionLogger {
-            async fn subscribe_many(
-                &self,
-                topics: Vec<SubscribeFilter>,
-            ) -> Result<(), ClientError> {
-                self.log(Action::SubscribeMany(topics));
-                Ok(())
-            }
-
-            async fn publish(
-                &self,
-                topic: String,
-                qos: QoS,
-                retain: bool,
-                payload: Bytes,
-            ) -> Result<(), ClientError> {
-                let mut publish = Publish::new(topic, qos, payload);
-                publish.retain = retain;
-                self.log(Action::Publish(publish));
-                Ok(())
             }
         }
     }
