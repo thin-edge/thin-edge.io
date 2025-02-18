@@ -63,7 +63,7 @@ pub struct BlockingSubscribeClient {
 impl BlockingSubscribeClient {
     pub fn new(rx: oneshot::Receiver<EventsPolled>) -> Self {
         Self {
-                rx: Arc::new(TokioMutex::new(Some(rx))),
+            rx: Arc::new(TokioMutex::new(Some(rx))),
         }
     }
 }

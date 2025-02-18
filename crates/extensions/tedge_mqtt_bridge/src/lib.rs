@@ -994,12 +994,12 @@ mod tests {
         use crate::test_helpers::*;
         use crate::*;
         use futures::channel::mpsc;
-        use tokio::task::JoinHandle;
         use futures::channel::oneshot;
         use rumqttc::mqttbytes::v4::*;
         use rumqttc::Event;
         use rumqttc::QoS;
         use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
+        use tokio::task::JoinHandle;
 
         #[tokio::test]
         async fn subscribes_after_conn_ack() {
@@ -1076,7 +1076,11 @@ mod tests {
             let (tx, rx) = oneshot::channel();
             let local_events = UnblockingEventStream::new([inc!(connack)], tx);
             let client = BlockingSubscribeClient::new(rx);
-            let mut bridge = Bridge::default().with_local_custom_events(local_events).with_local_client(client).process_all_events().await;
+            let mut bridge = Bridge::default()
+                .with_local_custom_events(local_events)
+                .with_local_client(client)
+                .process_all_events()
+                .await;
             let started = Instant::now();
             while tokio::time::timeout(Duration::from_secs(5), bridge.local_client.rx.lock())
                 .await
@@ -1089,6 +1093,35 @@ mod tests {
                 bridge.assert_not_panicked().await;
                 tokio::task::yield_now().await;
             }
+        }
+
+        #[tokio::test]
+        async fn acknowledges_correct_messages_when_puback_out_of_order() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                out!(publish(1)),
+                out!(publish(2)),
+                inc!(puback(2)),
+                inc!(puback(1)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(second_msg)
+            );
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(first_msg)
+            );
         }
 
         struct Bridge<LoEv, ClEv, LoCl = ActionLogger> {
@@ -1161,7 +1194,10 @@ mod tests {
                 }
             }
 
-            fn with_local_custom_events<NewLoEv>(self, events: NewLoEv) -> Bridge<NewLoEv, ClEv, Client> {
+            fn with_local_custom_events<NewLoEv>(
+                self,
+                events: NewLoEv,
+            ) -> Bridge<NewLoEv, ClEv, Client> {
                 Bridge {
                     local_events: events,
                     cloud_events: self.cloud_events,
