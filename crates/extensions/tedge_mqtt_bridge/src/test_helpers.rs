@@ -60,6 +60,14 @@ pub struct BlockingSubscribeClient {
     pub rx: Arc<TokioMutex<Option<oneshot::Receiver<EventsPolled>>>>,
 }
 
+impl BlockingSubscribeClient {
+    pub fn new(rx: oneshot::Receiver<EventsPolled>) -> Self {
+        Self {
+                rx: Arc::new(TokioMutex::new(Some(rx))),
+        }
+    }
+}
+
 #[derive(Clone)]
 /// Designed to be used with [BlockingSubscribeClient]
 pub struct UnblockingEventStream {
@@ -67,9 +75,37 @@ pub struct UnblockingEventStream {
     pub tx: Arc<TokioMutex<Option<oneshot::Sender<EventsPolled>>>>,
 }
 
+impl UnblockingEventStream {
+    pub fn new(events: impl Into<FixedEventStream>, tx: oneshot::Sender<EventsPolled>) -> Self {
+        Self {
+            events: events.into(),
+            tx: Arc::new(TokioMutex::new(Some(tx))),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AllProcessed for UnblockingEventStream {
+    async fn all_processed(&self) -> anyhow::Result<()> {
+        self.events.all_processed().await
+    }
+}
+
 #[derive(Clone)]
 /// A client that panics on every operation
 pub struct PanickingClient;
+
+#[async_trait::async_trait]
+impl AllProcessed for PanickingClient {
+    async fn all_processed(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+pub trait AllProcessed {
+    async fn all_processed(&self) -> anyhow::Result<()>;
+}
 
 #[async_trait::async_trait]
 impl MqttClient for PanickingClient {
@@ -128,8 +164,11 @@ impl FixedEventStream {
     fn next_event(&self) -> Option<Event> {
         self.events.lock().unwrap().pop_front()
     }
+}
 
-    pub async fn all_processed(&self) -> anyhow::Result<()> {
+#[async_trait::async_trait]
+impl AllProcessed for FixedEventStream {
+    async fn all_processed(&self) -> anyhow::Result<()> {
         let timeout = Duration::from_secs(5);
         let start = Instant::now();
         while !self.events.lock().unwrap().is_empty() {
@@ -181,7 +220,7 @@ impl ActionLogger {
 
     pub fn next_action(&self) -> anyhow::Result<Action> {
         let next_message = self.log.lock().unwrap().pop_front();
-        next_message.ok_or(anyhow!("Expected client to be interacted with. Did you forget to call `bridge.<type>_events.all_consumed().await`?"))
+        next_message.ok_or(anyhow!("Expected client to be interacted with. Did you forget to call `bridge.<type>_client.all_processed().await`?"))
     }
 }
 

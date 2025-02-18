@@ -988,14 +988,13 @@ mod tests {
     }
 
     mod bridge {
-
-        use std::sync::Arc;
         use std::time::Duration;
         use std::time::Instant;
 
         use crate::test_helpers::*;
         use crate::*;
         use futures::channel::mpsc;
+        use tokio::task::JoinHandle;
         use futures::channel::oneshot;
         use rumqttc::mqttbytes::v4::*;
         use rumqttc::Event;
@@ -1074,57 +1073,38 @@ mod tests {
 
         #[tokio::test]
         async fn subscribe_does_not_block() {
-            use tokio::sync::Mutex;
             let (tx, rx) = oneshot::channel();
-            let event_loop = UnblockingEventStream {
-                events: FixedEventStream::from([inc!(connack)]),
-                tx: Arc::new(Mutex::new(Some(tx))),
-            };
-            let client = BlockingSubscribeClient {
-                rx: Arc::new(Mutex::new(Some(rx))),
-            };
-            let (tx, rx) = mpsc::channel(10);
-            let target = BridgeAsyncClient::new(PanickingClient, tx, rx);
-            let (tx_health, _rx) = mpsc::channel(10);
-            let mut bridge = Some(tokio::spawn(half_bridge(
-                event_loop,
-                client.clone(),
-                target,
-                <_>::default(),
-                <_>::default(),
-                tx_health,
-                "local",
-                vec![],
-                TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
-            )));
+            let local_events = UnblockingEventStream::new([inc!(connack)], tx);
+            let client = BlockingSubscribeClient::new(rx);
+            let mut bridge = Bridge::default().with_local_custom_events(local_events).with_local_client(client).process_all_events().await;
             let started = Instant::now();
-            while tokio::time::timeout(Duration::from_secs(5), client.rx.lock())
+            while tokio::time::timeout(Duration::from_secs(5), bridge.local_client.rx.lock())
                 .await
                 .unwrap()
                 .is_some()
             {
                 if started.elapsed() > Duration::from_secs(5) {
-                    panic!("Timed out")
+                    panic!("Timed out waiting for subscription to complete")
                 }
-                if bridge.as_ref().map(|b| b.is_finished()) == Some(true) {
-                    bridge.take().unwrap().await.unwrap();
-                }
+                bridge.assert_not_panicked().await;
                 tokio::task::yield_now().await;
             }
         }
 
-        #[derive(Default)]
-        struct Bridge {
-            local_events: FixedEventStream,
-            cloud_events: FixedEventStream,
+        struct Bridge<LoEv, ClEv, LoCl = ActionLogger> {
+            local_events: LoEv,
+            cloud_events: ClEv,
+            local_client: LoCl,
             subscription_topics: Vec<SubscribeFilter>,
             local_topic_converter: TopicConverter,
             cloud_topic_converter: TopicConverter,
         }
 
-        struct CompletedBridge {
-            local_client: ActionLogger,
+        struct CompletedBridge<Local> {
+            local_client: Local,
             cloud_client: ActionLogger,
+            local_task: Option<JoinHandle<()>>,
+            cloud_task: Option<JoinHandle<()>>,
         }
 
         macro_rules! bridge_rule {
@@ -1133,7 +1113,25 @@ mod tests {
             };
         }
 
-        impl Bridge {
+        impl Default for Bridge<FixedEventStream, FixedEventStream, ActionLogger> {
+            fn default() -> Self {
+                Self {
+                    local_events: <_>::default(),
+                    cloud_events: <_>::default(),
+                    local_client: <_>::default(),
+                    subscription_topics: <_>::default(),
+                    local_topic_converter: <_>::default(),
+                    cloud_topic_converter: <_>::default(),
+                }
+            }
+        }
+
+        impl<LoEv, ClEv, Client> Bridge<LoEv, ClEv, Client>
+        where
+            LoEv: MqttEvents + AllProcessed + Clone + 'static,
+            ClEv: MqttEvents + AllProcessed + Clone + 'static,
+            Client: MqttClient + MqttAck + 'static + Clone,
+        {
             fn with_subscription_topics(self, topics: Vec<SubscribeFilter>) -> Self {
                 Self {
                     subscription_topics: topics,
@@ -1152,32 +1150,39 @@ mod tests {
                 }
             }
 
-            fn with_local_events<const N: usize>(self, events: [Event; N]) -> Self {
-                Self {
-                    local_events: FixedEventStream::from(events),
-                    ..self
+            fn with_local_client<C>(self, client: C) -> Bridge<LoEv, ClEv, C> {
+                Bridge {
+                    local_client: client,
+                    local_events: self.local_events,
+                    cloud_events: self.cloud_events,
+                    subscription_topics: self.subscription_topics,
+                    local_topic_converter: self.local_topic_converter,
+                    cloud_topic_converter: self.cloud_topic_converter,
                 }
             }
 
-            fn with_cloud_events<const N: usize>(self, events: [Event; N]) -> Self {
-                Self {
-                    cloud_events: FixedEventStream::from(events),
-                    ..self
+            fn with_local_custom_events<NewLoEv>(self, events: NewLoEv) -> Bridge<NewLoEv, ClEv, Client> {
+                Bridge {
+                    local_events: events,
+                    cloud_events: self.cloud_events,
+                    local_client: self.local_client,
+                    subscription_topics: self.subscription_topics,
+                    local_topic_converter: self.local_topic_converter,
+                    cloud_topic_converter: self.cloud_topic_converter,
                 }
             }
 
             /// Spawn both bridge halves and wait for them to process all queued events
-            async fn process_all_events(self) -> CompletedBridge {
-                let local_client = ActionLogger::default();
+            async fn process_all_events(self) -> CompletedBridge<Client> {
                 let cloud_client = ActionLogger::default();
                 let (tx0, rx0) = mpsc::channel(10);
                 let (tx1, rx1) = mpsc::channel(10);
 
                 let (tx_health, _rx_health) = mpsc::channel(10);
 
-                tokio::spawn(half_bridge(
+                let local_task = tokio::spawn(half_bridge(
                     self.local_events.clone(),
-                    local_client.clone(),
+                    self.local_client.clone(),
                     BridgeAsyncClient::new(cloud_client.clone(), tx0, rx1),
                     self.local_topic_converter,
                     vec![],
@@ -1186,10 +1191,10 @@ mod tests {
                     self.subscription_topics.clone(),
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                 ));
-                tokio::spawn(half_bridge(
+                let cloud_task = tokio::spawn(half_bridge(
                     self.cloud_events.clone(),
                     cloud_client.clone(),
-                    BridgeAsyncClient::new(local_client.clone(), tx1, rx0),
+                    BridgeAsyncClient::new(self.local_client.clone(), tx1, rx0),
                     self.cloud_topic_converter,
                     vec![],
                     tx_health,
@@ -1203,8 +1208,45 @@ mod tests {
                 self.local_events.all_processed().await.unwrap();
                 self.cloud_events.all_processed().await.unwrap();
                 CompletedBridge {
-                    local_client,
+                    local_client: self.local_client,
                     cloud_client,
+                    local_task: Some(local_task),
+                    cloud_task: Some(cloud_task),
+                }
+            }
+        }
+
+        impl<Ev, Client> Bridge<FixedEventStream, Ev, Client>
+        where
+            Client: MqttClient + MqttAck + 'static + Clone,
+        {
+            fn with_local_events<const N: usize>(self, events: [Event; N]) -> Self {
+                Self {
+                    local_events: FixedEventStream::from(events),
+                    ..self
+                }
+            }
+        }
+
+        impl<Ev, Client> Bridge<Ev, FixedEventStream, Client>
+        where
+            Client: MqttClient + MqttAck + 'static + Clone,
+        {
+            fn with_cloud_events<const N: usize>(self, events: [Event; N]) -> Self {
+                Self {
+                    cloud_events: FixedEventStream::from(events),
+                    ..self
+                }
+            }
+        }
+
+        impl<C> CompletedBridge<C> {
+            pub async fn assert_not_panicked(&mut self) {
+                if self.local_task.as_ref().map(|b| b.is_finished()) == Some(true) {
+                    self.local_task.take().unwrap().await.unwrap();
+                }
+                if self.cloud_task.as_ref().map(|b| b.is_finished()) == Some(true) {
+                    self.cloud_task.take().unwrap().await.unwrap();
                 }
             }
         }
