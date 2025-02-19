@@ -102,7 +102,7 @@ impl CumulocityConverter {
         fragment_value: &JsonValue,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if (fragment_key == "name" || fragment_key == "type")
-            && (fragment_value.is_null() || fragment_value.as_str().map_or(false, str::is_empty))
+            && (fragment_value.is_null() || fragment_value.as_str().is_some_and(str::is_empty))
         {
             warn!("Clearing the entity `name` and `type` fragments is not supported");
             return Ok(vec![]);
