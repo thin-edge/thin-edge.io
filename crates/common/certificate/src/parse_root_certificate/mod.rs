@@ -287,13 +287,13 @@ mod tests {
         // Add a first chain with 1 certificate
         let mut cert_1 = File::create(temp_dir.path().join("cert_1")).unwrap();
         cert_1
-            .write_all(include_str!("./test_root_cert_1.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_1.txt").as_bytes())
             .unwrap();
 
         // Add a second chain with 2 certificates
         let mut cert_2 = File::create(temp_dir.path().join("cert_2")).unwrap();
         cert_2
-            .write_all(include_str!("./test_root_cert_2.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_2.txt").as_bytes())
             .unwrap();
 
         let root_certs = new_root_store(temp_dir.path()).unwrap();
@@ -307,14 +307,14 @@ mod tests {
         // Add a first chain with 1 certificate
         let mut cert_1 = File::create(temp_dir.path().join("cert_1")).unwrap();
         cert_1
-            .write_all(include_str!("./test_root_cert_1.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_1.txt").as_bytes())
             .unwrap();
 
         // Add a second chain with 2 certificates in a sub directory
         fs::create_dir(temp_dir.path().join("sub_certs")).unwrap();
         let mut cert_2 = File::create(temp_dir.path().join("sub_certs/cert_2")).unwrap();
         cert_2
-            .write_all(include_str!("./test_root_cert_2.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_2.txt").as_bytes())
             .unwrap();
 
         let root_certs = new_root_store(temp_dir.path()).unwrap();
