@@ -11,6 +11,7 @@ pub fn matches_ignore_dollar_prefix(topic: &str, filter: &str) -> bool {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Default))]
 pub struct TopicConverter(pub Vec<BridgeRule>);
 
 impl TopicConverter {

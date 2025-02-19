@@ -1,15 +1,19 @@
 mod backoff;
 mod config;
 mod health;
+#[cfg(test)]
+mod test_helpers;
 mod topics;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use certificate::parse_root_certificate::create_tls_config;
 use futures::SinkExt;
 use futures::StreamExt;
 pub use rumqttc;
 use rumqttc::AsyncClient;
 use rumqttc::ClientError;
+use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
@@ -142,7 +146,7 @@ impl MqttBridgeActorBuilder {
         tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
             local_event_loop,
-            local_client.clone(),
+            local_client,
             cloud_target,
             convert_local,
             bidir_local,
@@ -153,7 +157,7 @@ impl MqttBridgeActorBuilder {
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
-            cloud_client.clone(),
+            cloud_client,
             local_target,
             convert_cloud,
             bidir_cloud,
@@ -171,11 +175,11 @@ impl MqttBridgeActorBuilder {
     }
 }
 
-fn bidirectional_channel(
-    cloud_client: AsyncClient,
-    local_client: AsyncClient,
+fn bidirectional_channel<Client: MqttClient + 'static>(
+    cloud_client: Client,
+    local_client: Client,
     buffer: usize,
-) -> [BridgeAsyncClient; 2] {
+) -> [BridgeAsyncClient<Client>; 2] {
     let (tx_first, rx_first) = mpsc::channel(buffer);
     let (tx_second, rx_second) = mpsc::channel(buffer);
     [
@@ -209,9 +213,9 @@ enum BridgeMessage {
 /// So when a message is received and published by this half,
 /// the companion will await for that message to be acknowledged by the target
 /// before acknowledging to the source.
-struct BridgeAsyncClient {
+struct BridgeAsyncClient<Client: MqttClient> {
     /// MQTT target for the messages
-    target: AsyncClient,
+    target: Client,
 
     /// Receives messages from the companion half bridge
     rx: mpsc::Receiver<Option<(String, Publish)>>,
@@ -226,7 +230,7 @@ struct BridgeAsyncClient {
     acknowledged: Arc<AtomicUsize>,
 }
 
-impl BridgeAsyncClient {
+impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
     pub fn recv(&mut self) -> futures::stream::Next<mpsc::Receiver<Option<(String, Publish)>>> {
         self.rx.next()
     }
@@ -236,7 +240,7 @@ impl BridgeAsyncClient {
     }
 
     fn new(
-        target: AsyncClient,
+        target: Client,
         tx: mpsc::Sender<Option<(String, Publish)>>,
         rx: mpsc::Receiver<Option<(String, Publish)>>,
     ) -> Self {
@@ -442,9 +446,9 @@ impl BridgeMessageSender {
 /// is dropped.
 #[allow(clippy::too_many_arguments)]
 async fn half_bridge(
-    mut recv_event_loop: EventLoop,
-    recv_client: AsyncClient,
-    mut target: BridgeAsyncClient,
+    mut recv_event_loop: impl MqttEvents,
+    recv_client: impl MqttClient + 'static,
+    mut target: BridgeAsyncClient<impl MqttClient + 'static>,
     transformer: TopicConverter,
     bidirectional_topic_filters: Vec<Cow<'static, str>>,
     tx_health: mpsc::Sender<(&'static str, Status)>,
@@ -565,6 +569,45 @@ async fn half_bridge(
 
             _ => {}
         }
+    }
+}
+
+#[async_trait::async_trait]
+trait MqttEvents: Send {
+    async fn poll(&mut self) -> Result<Event, ConnectionError>;
+}
+
+#[async_trait::async_trait]
+impl MqttEvents for EventLoop {
+    async fn poll(&mut self) -> Result<Event, ConnectionError> {
+        EventLoop::poll(self).await
+    }
+}
+#[async_trait::async_trait]
+trait MqttClient: MqttAck + Clone + Send + Sync {
+    async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError>;
+    async fn publish(
+        &self,
+        topic: String,
+        qos: QoS,
+        retain: bool,
+        payload: Bytes,
+    ) -> Result<(), ClientError>;
+}
+
+#[async_trait::async_trait]
+impl MqttClient for AsyncClient {
+    async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError> {
+        AsyncClient::subscribe_many(self, topics).await
+    }
+    async fn publish(
+        &self,
+        topic: String,
+        qos: QoS,
+        retain: bool,
+        payload: Bytes,
+    ) -> Result<(), ClientError> {
+        AsyncClient::publish(self, topic, qos, retain, payload).await
     }
 }
 
@@ -783,12 +826,11 @@ mod tests {
 
         #[tokio::test]
         async fn cleans_up_stale_messages() {
-            let client = MockMqttAck::new();
             let mut clock = MockMonotonicClock::new();
             let now = Instant::now();
             let _now = clock.expect_now().times(1).return_once(move || now);
             let mut sut = MessageLoopBreaker {
-                client,
+                client: MockMqttAck::new(),
                 bidirectional_topics: vec!["test".into()],
                 forwarded_messages: <_>::default(),
                 clock,
@@ -942,6 +984,414 @@ mod tests {
             msg.retain = true;
             let msg2 = Publish::new("test", QoS::AtLeastOnce, "a test");
             assert!(!have_same_content(&msg, &msg2));
+        }
+    }
+
+    mod bridge {
+        use std::time::Duration;
+        use std::time::Instant;
+
+        use crate::test_helpers::*;
+        use crate::*;
+        use futures::channel::mpsc;
+        use futures::channel::oneshot;
+        use rumqttc::mqttbytes::v4::*;
+        use rumqttc::Event;
+        use rumqttc::QoS;
+        use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
+        use tokio::task::JoinHandle;
+
+        #[tokio::test]
+        async fn subscribes_after_conn_ack() {
+            let events = [inc!(connack)];
+
+            let subscription_topics = vec![SubscribeFilter::new(
+                "subscription".into(),
+                QoS::AtLeastOnce,
+            )];
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .with_subscription_topics(subscription_topics.clone())
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::SubscribeMany(subscription_topics)
+            )
+        }
+
+        #[tokio::test]
+        async fn acknowledges_messages_that_arent_forwarded() {
+            let msg = Publish::new("non-forwarded-topic", QoS::AtLeastOnce, "payload");
+            let events = [inc!(publish(msg))];
+
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .process_all_events()
+                .await;
+
+            assert_eq!(bridge.local_client.next_action().unwrap(), Action::Ack(msg))
+        }
+
+        #[tokio::test]
+        async fn forwards_published_messages() {
+            let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+            let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+            let events = [inc!(publish(incoming_msg))];
+
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.cloud_client.next_action().unwrap(),
+                Action::Publish(outgoing_msg)
+            )
+        }
+
+        #[tokio::test]
+        async fn forwards_message_acknowledgements() {
+            let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+            let local_events = [inc!(publish(incoming_msg))];
+            let cloud_events = [out!(publish(1)), inc!(puback(1))];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(incoming_msg)
+            )
+        }
+
+        #[tokio::test]
+        async fn subscribe_does_not_block() {
+            let (tx, rx) = oneshot::channel();
+            let local_events = UnblockingEventStream::new([inc!(connack)], tx);
+            let client = BlockingSubscribeClient::new(rx);
+            let mut bridge = Bridge::default()
+                .with_local_custom_events(local_events)
+                .with_local_client(client)
+                .process_all_events()
+                .await;
+            let started = Instant::now();
+            while tokio::time::timeout(Duration::from_secs(5), bridge.local_client.rx.lock())
+                .await
+                .unwrap()
+                .is_some()
+            {
+                if started.elapsed() > Duration::from_secs(5) {
+                    panic!("Timed out waiting for subscription to complete")
+                }
+                bridge.assert_not_panicked().await;
+                tokio::task::yield_now().await;
+            }
+        }
+
+        #[tokio::test]
+        async fn acknowledges_correct_messages_when_puback_out_of_order() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                out!(publish(1)),
+                out!(publish(2)),
+                inc!(puback(2)),
+                inc!(puback(1)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(second_msg)
+            );
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(first_msg)
+            );
+        }
+
+        #[tokio::test]
+        async fn acknowledges_messages_successfully_following_disconnection() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                out!(publish(1)),
+                // Abruptly disconnect client
+                inc!(network_error),
+                // Republish message after disconnect
+                out!(publish(1)),
+                inc!(puback(1)),
+                // Then check we successfully acknowledge a future message with the same pkid
+                out!(publish(1)),
+                inc!(puback(1)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(first_msg)
+            );
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(second_msg)
+            );
+        }
+
+        #[tokio::test]
+        async fn ignores_duplicate_acknowledgement_for_same_message() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                out!(publish(1)),
+                inc!(puback(1)),
+                // Simulate the cloud sending a second acknowledgement;s
+                inc!(puback(1)),
+                // Then publish the second message
+                out!(publish(2)),
+                inc!(puback(2)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(first_msg)
+            );
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(second_msg)
+            );
+        }
+
+        #[tokio::test]
+        async fn health_success_is_not_published_before_client_connected() {
+            let mut bridge = Bridge::default().process_all_events().await;
+            // There should not be a health message
+            assert_eq!(bridge.next_health_message(), None);
+        }
+
+        #[tokio::test]
+        async fn health_success_is_published_on_connack() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(connack), inc!(suback)])
+                .process_all_events()
+                .await;
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+            // Nothing else should be published
+            assert_eq!(bridge.next_health_message(), None)
+        }
+
+        #[tokio::test]
+        async fn health_status_is_updated_on_error() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(connack), inc!(network_error)])
+                .process_all_events()
+                .await;
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
+        }
+
+        #[tokio::test]
+        async fn health_errors_if_initial_connection_fails() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(network_error)])
+                .process_all_events()
+                .await;
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
+        }
+
+        struct Bridge<LoEv, ClEv, LoCl = ActionLogger> {
+            local_events: LoEv,
+            cloud_events: ClEv,
+            local_client: LoCl,
+            subscription_topics: Vec<SubscribeFilter>,
+            local_topic_converter: TopicConverter,
+            cloud_topic_converter: TopicConverter,
+        }
+
+        struct CompletedBridge<Local> {
+            local_client: Local,
+            cloud_client: ActionLogger,
+            local_task: Option<JoinHandle<()>>,
+            cloud_task: Option<JoinHandle<()>>,
+            rx_health: mpsc::Receiver<(&'static str, Status)>,
+        }
+
+        macro_rules! bridge_rule {
+            ($base:literal -$remove:literal +$add:literal) => {
+                BridgeRule::try_new($base.into(), $remove.into(), $add.into()).unwrap()
+            };
+        }
+
+        impl Default for Bridge<FixedEventStream, FixedEventStream, ActionLogger> {
+            fn default() -> Self {
+                Self {
+                    local_events: <_>::default(),
+                    cloud_events: <_>::default(),
+                    local_client: <_>::default(),
+                    subscription_topics: <_>::default(),
+                    local_topic_converter: <_>::default(),
+                    cloud_topic_converter: <_>::default(),
+                }
+            }
+        }
+
+        impl<LoEv, ClEv, Client> Bridge<LoEv, ClEv, Client>
+        where
+            LoEv: MqttEvents + AllProcessed + Clone + 'static,
+            ClEv: MqttEvents + AllProcessed + Clone + 'static,
+            Client: MqttClient + MqttAck + 'static + Clone,
+        {
+            fn with_subscription_topics(self, topics: Vec<SubscribeFilter>) -> Self {
+                Self {
+                    subscription_topics: topics,
+                    ..self
+                }
+            }
+
+            fn with_c8y_topics(self) -> Self {
+                let local_rules = vec![bridge_rule!("s/us" - "c8y/" + "")];
+                let cloud_topic_converter =
+                    TopicConverter(vec![bridge_rule!("s/ds" - "" + "c8y/")]);
+                Self {
+                    local_topic_converter: TopicConverter(local_rules),
+                    cloud_topic_converter,
+                    ..self
+                }
+            }
+
+            fn with_local_client<C>(self, client: C) -> Bridge<LoEv, ClEv, C> {
+                Bridge {
+                    local_client: client,
+                    local_events: self.local_events,
+                    cloud_events: self.cloud_events,
+                    subscription_topics: self.subscription_topics,
+                    local_topic_converter: self.local_topic_converter,
+                    cloud_topic_converter: self.cloud_topic_converter,
+                }
+            }
+
+            fn with_local_custom_events<NewLoEv>(
+                self,
+                events: NewLoEv,
+            ) -> Bridge<NewLoEv, ClEv, Client> {
+                Bridge {
+                    local_events: events,
+                    cloud_events: self.cloud_events,
+                    local_client: self.local_client,
+                    subscription_topics: self.subscription_topics,
+                    local_topic_converter: self.local_topic_converter,
+                    cloud_topic_converter: self.cloud_topic_converter,
+                }
+            }
+
+            /// Spawn both bridge halves and wait for them to process all queued events
+            async fn process_all_events(self) -> CompletedBridge<Client> {
+                let cloud_client = ActionLogger::default();
+                let (tx0, rx0) = mpsc::channel(10);
+                let (tx1, rx1) = mpsc::channel(10);
+
+                let (tx_health, rx_health) = mpsc::channel(10);
+
+                let local_task = tokio::spawn(half_bridge(
+                    self.local_events.clone(),
+                    self.local_client.clone(),
+                    BridgeAsyncClient::new(cloud_client.clone(), tx0, rx1),
+                    self.local_topic_converter,
+                    vec![],
+                    tx_health.clone(),
+                    "local",
+                    self.subscription_topics.clone(),
+                    TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+                ));
+                let cloud_task = tokio::spawn(half_bridge(
+                    self.cloud_events.clone(),
+                    cloud_client.clone(),
+                    BridgeAsyncClient::new(self.local_client.clone(), tx1, rx0),
+                    self.cloud_topic_converter,
+                    vec![],
+                    tx_health,
+                    "cloud",
+                    self.subscription_topics,
+                    TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+                ));
+
+                self.local_events.all_processed().await.unwrap();
+                self.cloud_events.all_processed().await.unwrap();
+                CompletedBridge {
+                    local_client: self.local_client,
+                    cloud_client,
+                    local_task: Some(local_task),
+                    cloud_task: Some(cloud_task),
+                    rx_health,
+                }
+            }
+        }
+
+        impl<Ev, Client> Bridge<FixedEventStream, Ev, Client>
+        where
+            Client: MqttClient + MqttAck + 'static + Clone,
+        {
+            fn with_local_events<const N: usize>(self, events: [EventRes; N]) -> Self {
+                Self {
+                    local_events: FixedEventStream::from(events),
+                    ..self
+                }
+            }
+        }
+
+        impl<Ev, Client> Bridge<Ev, FixedEventStream, Client>
+        where
+            Client: MqttClient + MqttAck + 'static + Clone,
+        {
+            fn with_cloud_events<const N: usize>(self, events: [EventRes; N]) -> Self {
+                Self {
+                    cloud_events: FixedEventStream::from(events),
+                    ..self
+                }
+            }
+        }
+
+        impl<C> CompletedBridge<C> {
+            pub async fn assert_not_panicked(&mut self) {
+                if self.local_task.as_ref().map(|b| b.is_finished()) == Some(true) {
+                    self.local_task.take().unwrap().await.unwrap();
+                }
+                if self.cloud_task.as_ref().map(|b| b.is_finished()) == Some(true) {
+                    self.cloud_task.take().unwrap().await.unwrap();
+                }
+            }
+
+            pub fn next_health_message(&mut self) -> Option<(&'static str, Status)> {
+                Some(self.rx_health.try_next().ok()?.unwrap())
+            }
         }
     }
 }
