@@ -458,14 +458,14 @@ pub mod default_topic_schema {
                 external_id: None,
                 r#type: EntityType::MainDevice,
                 parent: None,
-                other: Default::default(),
+                twin_data: Default::default(),
             }],
             ["device", child, "", ""] if !child.is_empty() => vec![EntityRegistrationMessage {
                 topic_id: topic_id.clone(),
                 external_id: None,
                 r#type: EntityType::ChildDevice,
                 parent: Some(EntityTopicId::default_main_device()),
-                other: json!({ "name": child }).as_object().unwrap().to_owned(),
+                twin_data: json!({ "name": child }).as_object().unwrap().to_owned(),
             }],
             ["device", device, "service", service] if !device.is_empty() && !service.is_empty() => {
                 // The device of a service has to be registered fist
@@ -478,7 +478,7 @@ pub mod default_topic_schema {
                     external_id: None,
                     r#type: EntityType::Service,
                     parent: Some(device_topic_id),
-                    other: json!({ "name": service }).as_object().unwrap().to_owned(),
+                    twin_data: json!({ "name": service }).as_object().unwrap().to_owned(),
                 });
                 registrations
             }

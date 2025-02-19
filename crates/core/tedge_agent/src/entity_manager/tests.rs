@@ -432,7 +432,7 @@ mod model {
                 external_id: None,
                 r#type: action.target_type(),
                 parent: action.parent_topic_id(),
-                other: action.properties(),
+                twin_data: action.properties(),
             }
         }
     }

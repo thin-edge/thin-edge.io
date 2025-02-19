@@ -347,8 +347,8 @@ impl CumulocityConverter {
         let mut messages = vec![];
 
         // Parse the optional fields
-        let display_name = input.other.get("name").and_then(|v| v.as_str());
-        let display_type = input.other.get("type").and_then(|v| v.as_str());
+        let display_name = input.twin_data.get("name").and_then(|v| v.as_str());
+        let display_type = input.twin_data.get("type").and_then(|v| v.as_str());
 
         let entity_topic_id = &input.topic_id;
         let external_id = self.entity_cache.try_get_external_id(entity_topic_id)?;
@@ -398,7 +398,7 @@ impl CumulocityConverter {
             messages.push(reg_message);
         }
 
-        for (fragment_key, fragment_value) in input.other.iter() {
+        for (fragment_key, fragment_value) in input.twin_data.iter() {
             if fragment_key == "name" || fragment_key == "type" {
                 // Skip converting the name and type fields as they are already included in the registration message
                 continue;

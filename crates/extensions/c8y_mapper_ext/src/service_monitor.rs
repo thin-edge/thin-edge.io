@@ -205,7 +205,6 @@ mod tests {
                 external_id: Some(external_id),
                 r#type: EntityType::Service,
                 parent,
-                other: Map::new(),
                 twin_data: Map::new(),
             },
         );

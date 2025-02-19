@@ -129,7 +129,7 @@ impl EntityStoreServer {
             Ok(entity) => match self.entity_store.update(entity.clone()) {
                 Ok(registered) => {
                     for entity in registered {
-                        for (fragment_key, fragment_value) in entity.reg_message.other {
+                        for (fragment_key, fragment_value) in entity.reg_message.twin_data {
                             self.publish_twin_data(
                                 &entity.reg_message.topic_id,
                                 fragment_key,

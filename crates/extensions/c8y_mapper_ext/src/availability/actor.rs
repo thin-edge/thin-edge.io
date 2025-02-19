@@ -164,7 +164,7 @@ impl AvailabilityActor {
     ) -> RegistrationResult {
         let source = &registration_message.topic_id;
 
-        let result = match registration_message.other.get("@health") {
+        let result = match registration_message.twin_data.get("@health") {
             None => registration_message
                 .topic_id
                 .default_service_for_device("tedge-agent")

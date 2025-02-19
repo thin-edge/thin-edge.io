@@ -360,7 +360,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
 
@@ -408,7 +408,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
 
@@ -461,7 +461,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
 

@@ -106,8 +106,7 @@ impl EntityStore {
             external_id: None,
             r#type: main_device.r#type,
             parent: None,
-            other: main_device.other,
-            twin_data: Map::new(),
+            twin_data: main_device.twin_data,
         };
 
         let message_log = if clean_start {
@@ -363,8 +362,7 @@ impl EntityStore {
             r#type: message.r#type,
             external_id: message.external_id,
             parent,
-            other: message.other,
-            twin_data: Map::new(),
+            twin_data: message.twin_data,
         };
 
         match self.entities.insert(topic_id.clone(), entity_metadata) {
@@ -634,11 +632,10 @@ impl EntityTree {
                 let existing_entity = occupied.get().metadata.clone();
                 let existing_children = occupied.get().children.clone();
 
-                let mut merged_other = existing_entity.other.clone();
-                merged_other.extend(entity_metadata.other.clone());
+                let mut merged_other = existing_entity.twin_data.clone();
+                merged_other.extend(entity_metadata.twin_data.clone());
                 let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data.clone(),
-                    other: merged_other,
+                    twin_data: merged_other,
                     ..entity_metadata
                 };
 
@@ -782,11 +779,8 @@ pub struct EntityRegistrationMessage {
     #[serde(rename = "@parent")]
     pub parent: Option<EntityTopicId>,
 
-    // other properties, usually cloud-specific
-    // TODO: replace with `Map` and use type wrapper that forbids fields `@id`,
-    // `@parent`, etc.
     #[serde(flatten)]
-    pub other: Map<String, JsonValue>,
+    pub twin_data: Map<String, JsonValue>,
 }
 
 impl EntityRegistrationMessage {
@@ -863,7 +857,7 @@ impl EntityRegistrationMessage {
             external_id: entity_id,
             r#type,
             parent,
-            other,
+            twin_data: other,
         })
     }
 
@@ -873,7 +867,7 @@ impl EntityRegistrationMessage {
             r#type,
             external_id: None,
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         }
     }
 
@@ -888,7 +882,7 @@ impl EntityRegistrationMessage {
     }
 
     pub fn with_other_fragment(mut self, key: String, value: JsonValue) -> Self {
-        let _ = self.other.insert(key, value);
+        let _ = self.twin_data.insert(key, value);
         self
     }
 
@@ -899,7 +893,7 @@ impl EntityRegistrationMessage {
             external_id: main_device_id.map(|v| v.into()),
             r#type: EntityType::MainDevice,
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         }
     }
 
@@ -917,7 +911,7 @@ impl EntityRegistrationMessage {
             props.insert("@parent".to_string(), parent.to_string().into());
         }
 
-        props.append(&mut self.other);
+        props.append(&mut self.twin_data);
 
         let message = serde_json::to_string(&props).unwrap();
 
@@ -1003,11 +997,11 @@ mod tests {
         );
         let parsed = EntityRegistrationMessage::new(&message).unwrap();
         assert_eq!(parsed.r#type, EntityType::ChildDevice);
-        assert_eq!(parsed.other.get("name").unwrap(), "child1");
-        assert_eq!(parsed.other.get("type").unwrap(), "RPi");
-        assert_eq!(parsed.other.get("version").unwrap(), "5");
+        assert_eq!(parsed.twin_data.get("name").unwrap(), "child1");
+        assert_eq!(parsed.twin_data.get("type").unwrap(), "RPi");
+        assert_eq!(parsed.twin_data.get("version").unwrap(), "5");
         assert_eq!(
-            parsed.other.get("complex").unwrap().get("foo").unwrap(),
+            parsed.twin_data.get("complex").unwrap().get("foo").unwrap(),
             "bar"
         );
     }
@@ -1338,7 +1332,7 @@ mod tests {
                     r#type,
                     external_id: None,
                     parent,
-                    other: Map::new(),
+                    twin_data: Map::new(),
                 })
                 .unwrap();
         }
@@ -1356,7 +1350,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service1").unwrap(),
                 parent: None,
-                other: Map::new(),
+                twin_data: Map::new(),
             })
             .unwrap();
 
@@ -1375,7 +1369,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service2").unwrap(),
                 parent: None,
-                other: Map::new(),
+                twin_data: Map::new(),
             })
             .unwrap();
 
@@ -1407,14 +1401,14 @@ mod tests {
                     r#type: EntityType::ChildDevice,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
-                    other: json!({ "name": "child1" }).as_object().unwrap().to_owned(),
+                    twin_data: json!({ "name": "child1" }).as_object().unwrap().to_owned(),
                 },
                 EntityRegistrationMessage {
                     topic_id: EntityTopicId::from_str("device/child1/service/service1").unwrap(),
                     r#type: EntityType::Service,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
-                    other: json!({ "name": "service1" })
+                    twin_data: json!({ "name": "service1" })
                         .as_object()
                         .unwrap()
                         .to_owned(),
@@ -1438,7 +1432,7 @@ mod tests {
                 r#type: EntityType::ChildDevice,
                 external_id: None,
                 parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
-                other: json!({ "name": "child2" }).as_object().unwrap().to_owned(),
+                twin_data: json!({ "name": "child2" }).as_object().unwrap().to_owned(),
             },]
         );
     }
@@ -1466,7 +1460,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: None,
                 parent: None,
-                other: json!({}).as_object().unwrap().to_owned(),
+                twin_data: json!({}).as_object().unwrap().to_owned(),
             })
             .unwrap();
 
@@ -1475,7 +1469,6 @@ mod tests {
             parent: None,
             r#type: EntityType::MainDevice,
             external_id: None,
-            other: json!({}).as_object().unwrap().to_owned(),
             twin_data: Map::new(),
         };
         // Assert main device registered with custom topic scheme
@@ -1492,7 +1485,7 @@ mod tests {
                 r#type: EntityType::Service,
                 external_id: None,
                 parent: Some(main_topic_id.clone()),
-                other: json!({}).as_object().unwrap().to_owned(),
+                twin_data: json!({}).as_object().unwrap().to_owned(),
             })
             .unwrap();
 
@@ -1501,7 +1494,6 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: None,
-            other: Map::new(),
             twin_data: Map::new(),
         };
         // Assert service registered under main device with custom topic scheme
@@ -1612,7 +1604,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                other: json!({ "name" : "test-name", "type": "test-type" })
+                twin_data: json!({ "name" : "test-name", "type": "test-type" })
                     .as_object()
                     .unwrap()
                     .to_owned(),
@@ -1638,7 +1630,7 @@ mod tests {
             external_id: Some("test-device".into()),
             r#type: EntityType::MainDevice,
             parent: None,
-            other: json!({ "name" : "new-test-device" })
+            twin_data: json!({ "name" : "new-test-device" })
                 .as_object()
                 .unwrap()
                 .to_owned(),
@@ -1648,12 +1640,12 @@ mod tests {
         // Assert that the old and new twin data are merged
         let entity_metadata = store.get(&topic_id).unwrap();
         assert_eq!(
-            entity_metadata.other.get("name").unwrap(),
+            entity_metadata.twin_data.get("name").unwrap(),
             &json!("new-test-device"),
             "Expected new name in twin data"
         );
         assert_eq!(
-            entity_metadata.other.get("type").unwrap(),
+            entity_metadata.twin_data.get("type").unwrap(),
             &json!("test-type"),
             "Expected old type in twin data"
         );
@@ -1674,7 +1666,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("child1".into()),
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         };
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
@@ -1702,7 +1694,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("child1".into()),
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         };
 
         let affected_entities = store.update(reg_message.clone()).unwrap();
@@ -1904,7 +1896,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                other: Map::new(),
+                twin_data: Map::new(),
             },
             0,
             temp_dir,
