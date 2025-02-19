@@ -133,30 +133,6 @@ impl PkcsSigner {
             SignatureScheme::RSA_PKCS1_SHA256 => Ok(Mechanism::Sha256RsaPkcs),
             SignatureScheme::RSA_PKCS1_SHA384 => Ok(Mechanism::Sha384RsaPkcs),
             SignatureScheme::RSA_PKCS1_SHA512 => Ok(Mechanism::Sha512RsaPkcs),
-            SignatureScheme::RSA_PSS_SHA256 => {
-                let params = PkcsPssParams {
-                    hash_alg: MechanismType::SHA256_RSA_PKCS,
-                    mgf: PkcsMgfType::MGF1_SHA256,
-                    s_len: 32.into(),
-                };
-                Ok(Mechanism::Sha256RsaPkcsPss(params))
-            }
-            SignatureScheme::RSA_PSS_SHA384 => {
-                let params = PkcsPssParams {
-                    hash_alg: MechanismType::SHA384_RSA_PKCS,
-                    mgf: PkcsMgfType::MGF1_SHA384,
-                    s_len: 48.into(),
-                };
-                Ok(Mechanism::Sha384RsaPkcsPss(params))
-            }
-            SignatureScheme::RSA_PSS_SHA512 => {
-                let params = PkcsPssParams {
-                    hash_alg: MechanismType::SHA512_RSA_PKCS,
-                    mgf: PkcsMgfType::MGF1_SHA512,
-                    s_len: 64.into(),
-                };
-                Ok(Mechanism::Sha512RsaPkcsPss(params))
-            }
             _ => Err(rustls::Error::General(
                 "Unsupported signature scheme".to_owned(),
             )),
@@ -314,7 +290,6 @@ impl RSASigningKey {
             SignatureScheme::RSA_PKCS1_SHA256,
             SignatureScheme::RSA_PKCS1_SHA384,
             SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
         ]
     }
 }
