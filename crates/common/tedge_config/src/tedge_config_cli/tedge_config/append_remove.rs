@@ -43,6 +43,7 @@ impl_append_remove_for_single_value!(
     IpAddr,
     u16,
     Arc<str>,
+    Arc<Utf8Path>,
     AutoFlag,
     TopicPrefix,
     SoftwareManagementApiFlag,

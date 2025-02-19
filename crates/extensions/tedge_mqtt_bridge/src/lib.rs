@@ -65,6 +65,7 @@ const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 pub struct MqttBridgeActorBuilder {}
 
 impl MqttBridgeActorBuilder {
+    // XXX(marcel): this function loads certs, which can fail, so it should probably be fallible
     pub async fn new(
         tedge_config: &TEdgeConfig,
         service_name: &str,
@@ -84,7 +85,22 @@ impl MqttBridgeActorBuilder {
                 ca_dir: Some(ca_dir),
                 client: Some(client),
                 ..
-            } => Some(create_tls_config(ca_dir, &client.key_file, &client.cert_file).unwrap()),
+            } => {
+                // TODO(marcel): all the tls setup could be extracted to a common place
+                let cryptoki_config = tedge_config.device.cryptoki.config().unwrap();
+                if let Some(cryptoki_config) = cryptoki_config {
+                    Some(
+                        certificate::parse_root_certificate::create_tls_config_cryptoki(
+                            ca_dir,
+                            client.cert_file,
+                            cryptoki_config,
+                        )
+                        .unwrap(),
+                    )
+                } else {
+                    Some(create_tls_config(ca_dir, &client.key_file, &client.cert_file).unwrap())
+                }
+            }
             MqttAuthConfig {
                 ca_file: Some(ca_file),
                 client: Some(client),

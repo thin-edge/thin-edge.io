@@ -893,6 +893,7 @@ fn check_device_status_aws(
     }
 }
 
+// TODO: too many args
 fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
@@ -915,7 +916,10 @@ fn new_bridge(
     let use_basic_auth =
         bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
 
-    bridge_config.validate(use_basic_auth)?;
+    bridge_config.validate(use_basic_auth);
+
+    // TODO: put in general auth config struct
+    let cryptoki_config = tedge_config.device.cryptoki.config()?;
 
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
@@ -926,6 +930,7 @@ fn new_bridge(
                 use_basic_auth,
                 bridge_config,
                 device_type,
+                cryptoki_config,
             );
             spinner.finish(res)?;
         }
