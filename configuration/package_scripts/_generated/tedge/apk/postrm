@@ -81,6 +81,12 @@ purge_var_log() {
     fi
 }
 
+remove_shell_completion_scripts() {
+    rm -f /usr/share/zsh/vendor-completions/_tedge
+    rm -f /usr/share/bash-completion/completions/tedge
+    rm -f /usr/share/fish/completions/tedge.fish
+}
+
 case "$1" in
     purge)
         remove_user_tedge
@@ -89,5 +95,6 @@ case "$1" in
         remove_sudoers_file
         purge_configs
         purge_var_log
+        remove_shell_completion_scripts
     ;;
 esac

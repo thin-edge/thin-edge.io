@@ -223,43 +223,120 @@ The packages can be viewed directly from the [Cloudsmith.io](https://cloudsmith.
 </table>
 
 ## Shell completions
+
 :::note
 Shell-completions are supported with `tedge` >= 1.5.0
 :::
 
-To make using the CLI easier, `tedge` provides tab-completion support. This can
-be enabled by adding a small configuration to your shell environment:
+To make using the Command Line Interface (CLI) easier, `tedge` provides shell completion support (also known as tab-completions). Shell completions allow users to discover commands and configuration directly on the command line without having to check the online documentation.
+For all `tedge` commands, you can activate the tab completion by pressing `<TAB>` twice in quick succession. You will be presented with the available options based on the given the command line's current input.
 
-```sh title="~/.bashrc" tab={"label":"bash"}
-source <(tedge completions bash)
+Before you can use shell completions, you need to enable them first. If you've configured tab completion for other packages already, then you may be able to skip these steps. The following sections include instructions on how to load the completions which are included in the %%te%% Linux packages, or how to load the completions at runtime by running the `tedge completions <SHELL_TYPE>` command.
+
+Each type of shell (e.g. bash, zsh, fish) offers slightly different shell completion user experiences, where zsh and fish are generally more verbose than bash, so to give you idea what to expect, the following examples show some examples for various shells (where `<TAB>` represents pressing the "TAB" button on the keyboard).
+
+```sh title="bash completion to set the log level"
+$ tedge connect c8y --log-level <TAB><TAB>
+trace  debug  info   warn   error
 ```
 
-```sh title="~/.zshrc" tab={"label":"zsh"}
-source <(tedge completions zsh)
+```sh title="zsh completion to set a specific configuration item"
+$ tedge config set mqtt.client.<TAB><TAB>
+mqtt.client.auth.ca_dir     --  Path to the directory containing the CA certificates used by MQTT
+mqtt.client.auth.ca_file    --  Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker
+mqtt.client.auth.cert_file  --  Path to the client certificate
+mqtt.client.auth.key_file   --  Path to the client private key
+mqtt.client.host            --  The host that the thin-edge MQTT client should connect to
+mqtt.client.port            --  The port that the thin-edge MQTT client should connect to
 ```
 
-```sh title="~/.config/fish/config.fish" tab={"label":"fish"}
-tedge completions fish | source
-```
-
-Once you have configured this, reload your shell configuration:
-
-```sh tab={"label":"bash"}
-source ~/.bashrc
-```
-
-```sh tab={"label":"zsh"}
-source ~/.zshrc
-```
-
-```sh tab={"label":"fish"}
-source ~/.config/fish/config.fish
-```
-
-After this, you should be able to tab complete values (where `<TAB>` indicates
-pressing the tab key on your keyboard):
-
-```sh
+```sh title="fish completion to find a subcommand"
 $ tedge con<TAB><TAB>
 config  (Configure Thin Edge)  connect  (Connect to cloud provider)
 ```
+
+### Loading completions from Linux packages {#load-packaged-completions}
+
+The %%te%% Linux packages (starting from 1.5.0) will install the shell completion scripts during the package's post installation phase. However, post installation
+will only add the completions scripts if it detects the presence of the associated shells (e.g. `bash`, `zsh` and/or `fish`).
+
+Using the completions included in the Linux packages offers a better out of the box experience as some operating systems or shells don't require any setup.
+If your operating system does not enable completions for you, then follow the instructions for your preferred shell to enable the shell completions.
+
+
+### bash
+
+For bash completions, you will need to install the **bash-completion** package for your operating system. If you can't find instructions for your operating system, then please consult online resources.
+
+```sh tab={"label":"Debian/Ubuntu"}
+sudo apt-get update
+sudo apt-get install bash-completion
+```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+sudo dnf install --best bash-completion --refresh
+```
+
+```sh tab={"label":"Alpine"}
+apk add bash-completion
+```
+
+After the **bash-completion** package is installed, then you will need to edit your shell profile by adding the following snippet, so that when bash shell starts, it will know that it should also load the available tab completions.
+
+```sh title="~/.bashrc"
+[ -f /etc/bash_completion ] && source /etc/bash_completion
+```
+
+Reload your shell profile after making any changes to it. You can reload your shell profile by running:
+
+```sh
+source ~/.bashrc
+```
+
+:::note
+If the **bash-completion** package was not installed at the time %%te%% was installed then you can still activate completions as runtime by following [these instructions](#load-completions-at-runtime).
+:::
+
+### zsh
+
+zsh does not require any package dependencies, however you will need to add the following snippet to your zsh profile:
+
+```sh title="~/.zshrc"
+# refresh completions
+autoload -U compinit; compinit
+
+# Optional: Improve styling of menu complete
+zstyle ':completion:*' menu select
+# bind shift+tab to reverse menu complete
+zmodload zsh/complist
+bindkey -M menuselect '^[[Z' reverse-menu-complete
+```
+
+Reload your shell profile after making any changes to it. You can reload your shell profile by running:
+
+```sh
+source ~/.zshrc
+```
+
+### fish
+
+fish completions should just work out of the box without any additional dependencies or editing your shell profile.
+
+### Loading completions at runtime {#load-completions-at-runtime}
+
+The shell completions can also be loaded at runtime in your current shell by running one of the following commands associated with your shell.
+The completions will only be loaded into your current shell's session, so you will need to run the command every time you open a new shell.
+
+```sh tab={"label":"bash"}
+source <(tedge completions bash)
+```
+
+```sh tab={"label":"zsh"}
+source <(tedge completions zsh)
+```
+
+```sh tab={"label":"fish"}
+tedge completions fish | source
+```
+
+You can add the above line to your shell's profile manually to save you having to run the command each time.
