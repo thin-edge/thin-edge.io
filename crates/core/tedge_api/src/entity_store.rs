@@ -106,8 +106,7 @@ impl EntityStore {
             external_id: None,
             r#type: main_device.r#type,
             parent: None,
-            other: main_device.other,
-            twin_data: Map::new(),
+            twin_data: main_device.other,
         };
 
         let message_log = if clean_start {
@@ -363,8 +362,7 @@ impl EntityStore {
             r#type: message.r#type,
             external_id: message.external_id,
             parent,
-            other: message.other,
-            twin_data: Map::new(),
+            twin_data: message.other,
         };
 
         match self.entities.insert(topic_id.clone(), entity_metadata) {
@@ -634,11 +632,10 @@ impl EntityTree {
                 let existing_entity = occupied.get().metadata.clone();
                 let existing_children = occupied.get().children.clone();
 
-                let mut merged_other = existing_entity.other.clone();
-                merged_other.extend(entity_metadata.other.clone());
+                let mut merged_other = existing_entity.twin_data.clone();
+                merged_other.extend(entity_metadata.twin_data.clone());
                 let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data.clone(),
-                    other: merged_other,
+                    twin_data: merged_other,
                     ..entity_metadata
                 };
 
@@ -1475,7 +1472,6 @@ mod tests {
             parent: None,
             r#type: EntityType::MainDevice,
             external_id: None,
-            other: json!({}).as_object().unwrap().to_owned(),
             twin_data: Map::new(),
         };
         // Assert main device registered with custom topic scheme
@@ -1501,7 +1497,6 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: None,
-            other: Map::new(),
             twin_data: Map::new(),
         };
         // Assert service registered under main device with custom topic scheme
@@ -1648,12 +1643,12 @@ mod tests {
         // Assert that the old and new twin data are merged
         let entity_metadata = store.get(&topic_id).unwrap();
         assert_eq!(
-            entity_metadata.other.get("name").unwrap(),
+            entity_metadata.twin_data.get("name").unwrap(),
             &json!("new-test-device"),
             "Expected new name in twin data"
         );
         assert_eq!(
-            entity_metadata.other.get("type").unwrap(),
+            entity_metadata.twin_data.get("type").unwrap(),
             &json!("test-type"),
             "Expected old type in twin data"
         );

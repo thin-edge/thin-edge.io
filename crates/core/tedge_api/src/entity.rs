@@ -68,11 +68,7 @@ pub struct EntityMetadata {
     #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<EntityExternalId>,
 
-    // TODO: use a dedicated struct for cloud-specific fields, have `EntityMetadata` be generic over
-    // cloud we're currently connected to
     #[serde(flatten)]
-    pub other: Map<String, JsonValue>,
-    #[serde(skip)]
     pub twin_data: Map<String, JsonValue>,
 }
 
@@ -84,7 +80,6 @@ impl EntityMetadata {
             external_id: None,
             r#type: EntityType::MainDevice,
             parent: None,
-            other: Map::new(),
             twin_data: Map::new(),
         }
     }
@@ -96,17 +91,16 @@ impl EntityMetadata {
             external_id: Some(child_device_id.clone().into()),
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_main_device()),
-            other: Map::new(),
             twin_data: Map::new(),
         })
     }
 
     pub fn display_name(&self) -> Option<&str> {
-        self.other.get("name").and_then(|v| v.as_str())
+        self.twin_data.get("name").and_then(|v| v.as_str())
     }
 
     pub fn display_type(&self) -> Option<&str> {
-        self.other.get("type").and_then(|v| v.as_str())
+        self.twin_data.get("type").and_then(|v| v.as_str())
     }
 }
 
