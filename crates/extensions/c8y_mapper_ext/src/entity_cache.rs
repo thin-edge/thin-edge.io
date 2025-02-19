@@ -169,7 +169,6 @@ impl EntityCache {
             external_id: Some(external_id.clone()),
             r#type: entity.r#type,
             parent,
-            other: entity.other.clone(),
             twin_data: entity.other,
         };
 
@@ -195,11 +194,10 @@ impl EntityCache {
                 // if there is no change, no entities were affected
                 let existing_entity = &occupied.get().metadata;
 
-                let mut merged_other = existing_entity.other.clone();
-                merged_other.extend(entity_metadata.other.clone());
+                let mut merged_other = existing_entity.twin_data.clone();
+                merged_other.extend(entity_metadata.twin_data.clone());
                 let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data.clone(),
-                    other: merged_other,
+                    twin_data: merged_other,
                     ..entity_metadata
                 };
 
