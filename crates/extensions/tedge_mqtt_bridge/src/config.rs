@@ -1,9 +1,7 @@
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 use certificate::parse_root_certificate::create_tls_config;
-use certificate::parse_root_certificate::create_tls_config_cryptoki;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
-use certificate::parse_root_certificate::CryptokiConfig;
 use rumqttc::valid_filter;
 use rumqttc::valid_topic;
 use rumqttc::MqttOptions;
@@ -21,21 +19,6 @@ pub fn use_key_and_cert(
         cloud_config.device_key_path(),
         cloud_config.device_cert_path(),
     )?;
-    config.set_transport(Transport::tls_with_config(tls_config.into()));
-    Ok(())
-}
-
-pub fn use_cryptoki(
-    config: &mut MqttOptions,
-    cloud_config: &dyn CloudConfig,
-    cryptoki_config: CryptokiConfig,
-) -> anyhow::Result<()> {
-    let tls_config = create_tls_config_cryptoki(
-        cloud_config.root_cert_path(),
-        cloud_config.device_cert_path(),
-        cryptoki_config,
-    )?;
-
     config.set_transport(Transport::tls_with_config(tls_config.into()));
     Ok(())
 }

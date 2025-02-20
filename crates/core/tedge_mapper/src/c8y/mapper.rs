@@ -20,9 +20,8 @@ use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
+use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
-use tedge_mqtt_bridge::use_cryptoki;
-use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::QoS;
@@ -154,12 +153,15 @@ impl TEdgeComponent for CumulocityMapper {
             cloud_config.set_clean_session(true);
 
             if use_certificate {
-                if let Some(cryptoki_config) = tedge_config.device.cryptoki.config()? {
-                    use_cryptoki(&mut cloud_config, c8y_config, cryptoki_config)?;
-                } else {
-                    use_key_and_cert(&mut cloud_config, c8y_config)?;
-                }
+                let cloud_broker_auth_config = tedge_config
+                    .mqtt_auth_config_cloud_broker(c8y_profile)
+                    .expect("error getting cloud broker auth config");
+                let client_config = cloud_broker_auth_config
+                    .to_rustls_client_config()
+                    .expect("error getting cloud broker auth config");
+                cloud_config.set_transport(Transport::tls_with_config(client_config.into()));
             } else {
+                // TODO(marcel): integrate credentials auth into MqttAuthConfig?
                 let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
                 use_credentials(
                     &mut cloud_config,
