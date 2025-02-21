@@ -1,6 +1,4 @@
-use anyhow::Context;
 use camino::Utf8PathBuf;
-use pkcs11::Pkcs11SigningKey;
 use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
@@ -16,8 +14,8 @@ use std::sync::Arc;
 
 use crate::CertificateError;
 
+#[cfg(feature = "cryptoki")]
 mod pkcs11;
-use pkcs11::Pkcs11Resolver;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -37,11 +35,16 @@ pub fn create_tls_config(
 ///
 /// This TLS configuration should be used for communication between a device (or bridge) and a cloud
 /// remote MQTT broker, not local MQTT broker.
+#[cfg(feature = "cryptoki")]
 pub fn create_tls_config_cryptoki(
     root_certificates: impl AsRef<Path>,
     client_certificate: impl AsRef<Path>,
     cryptoki_config: CryptokiConfig,
 ) -> Result<ClientConfig, CertificateError> {
+    use anyhow::Context;
+    use pkcs11::Pkcs11Resolver;
+    use pkcs11::Pkcs11SigningKey;
+
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
     let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)

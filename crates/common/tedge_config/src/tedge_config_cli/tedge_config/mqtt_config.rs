@@ -8,8 +8,13 @@
 use crate::TEdgeConfig;
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use certificate::{parse_root_certificate::CryptokiConfig, CertificateError};
+use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
+
+use super::TEdgeConfigReaderDeviceCryptoki;
+
+#[cfg(feature = "cryptoki")]
+use certificate::parse_root_certificate::CryptokiConfig;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
 ///
@@ -28,13 +33,21 @@ pub struct MqttAuthClientConfigCloudBroker {
     pub private_key: PrivateKeyType,
 }
 
+#[cfg(feature = "cryptoki")]
 #[derive(Debug, Clone)]
 pub enum PrivateKeyType {
     File(Utf8PathBuf),
     Cryptoki(CryptokiConfig),
 }
 
+#[cfg(not(feature = "cryptoki"))]
+#[derive(Debug, Clone)]
+pub enum PrivateKeyType {
+    File(Utf8PathBuf),
+}
+
 impl MqttAuthConfigCloudBroker {
+    #[cfg(feature = "cryptoki")]
     pub fn to_rustls_client_config(self) -> anyhow::Result<rustls::ClientConfig> {
         let Some(ca) = self.ca_dir.or(self.ca_file) else {
             anyhow::bail!("No CA file or directory provided");
@@ -61,7 +74,29 @@ impl MqttAuthConfigCloudBroker {
             }
         }
         .context("Failed to create TLS client config")?;
+        Ok(client_config)
+    }
 
+    #[cfg(not(feature = "cryptoki"))]
+    pub fn to_rustls_client_config(self) -> anyhow::Result<rustls::ClientConfig> {
+        let Some(ca) = self.ca_dir.or(self.ca_file) else {
+            anyhow::bail!("No CA file or directory provided");
+        };
+
+        let Some(MqttAuthClientConfigCloudBroker {
+            cert_file,
+            private_key,
+        }) = self.client
+        else {
+            todo!("no client auth not supported yet");
+        };
+
+        let client_config = match private_key {
+            PrivateKeyType::File(key_file) => {
+                certificate::parse_root_certificate::create_tls_config(ca, key_file, cert_file)
+            }
+        }
+        .context("Failed to create TLS client config")?;
         Ok(client_config)
     }
 }
@@ -137,6 +172,7 @@ impl TEdgeConfig {
     }
 
     /// Returns an authentication configuration for an MQTT client that will connect to the Cumulocity MQTT broker.
+    #[cfg(feature = "cryptoki")]
     pub fn mqtt_auth_config_cloud_broker(
         &self,
         c8y_profile: Option<&str>,
@@ -166,6 +202,34 @@ impl TEdgeConfig {
         Ok(mqtt_auth)
     }
 
+    /// Returns an authentication configuration for an MQTT client that will connect to the Cumulocity MQTT broker.
+    #[cfg(not(feature = "cryptoki"))]
+    pub fn mqtt_auth_config_cloud_broker(
+        &self,
+        c8y_profile: Option<&str>,
+    ) -> anyhow::Result<MqttAuthConfigCloudBroker> {
+        use tracing::warn;
+
+        let c8y = self.c8y.try_get(c8y_profile)?;
+
+        let mut mqtt_auth = MqttAuthConfigCloudBroker {
+            ca_dir: Some(c8y.root_cert_path.clone()),
+            ca_file: None,
+            client: None,
+        };
+
+        if self.device.cryptoki.enable {
+            warn!("device.cryptoki.enable is set, but Cryptoki feature is not enabled");
+        }
+
+        mqtt_auth.client = Some(MqttAuthClientConfigCloudBroker {
+            cert_file: c8y.device.cert_path.clone(),
+            private_key: PrivateKeyType::File(c8y.device.key_path.clone()),
+        });
+
+        Ok(mqtt_auth)
+    }
+
     /// Returns an authentication configuration for an MQTT client that will connect to the local MQTT broker.
     pub fn mqtt_client_auth_config(&self) -> MqttAuthConfig {
         let mut client_auth = MqttAuthConfig {
@@ -184,5 +248,20 @@ impl TEdgeConfig {
             })
         }
         client_auth
+    }
+}
+
+impl TEdgeConfigReaderDeviceCryptoki {
+    #[cfg(feature = "cryptoki")]
+    pub fn config(&self) -> Result<Option<CryptokiConfig>, anyhow::Error> {
+        if !self.enable {
+            return Ok(None);
+        }
+
+        Ok(Some(CryptokiConfig {
+            module_path: self.module_path.or_config_not_set().unwrap().clone(),
+            pin: self.pin.clone(),
+            serial: self.serial.or_none().cloned(),
+        }))
     }
 }
