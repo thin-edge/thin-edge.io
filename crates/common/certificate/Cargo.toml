@@ -17,7 +17,9 @@ reqwest = ["dep:reqwest"]
 anyhow = { workspace = true }
 camino = { workspace = true }
 rcgen = { workspace = true }
-reqwest = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true, features = [
+    "rustls-tls-native-roots",
+] }
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
 rustls-pemfile = { workspace = true }
