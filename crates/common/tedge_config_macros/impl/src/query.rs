@@ -754,6 +754,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
             (
                 parse_quote_spanned! {ty.span()=>
+                    #[allow(clippy::useless_conversion)]
                     WritableKey::#match_variant => self.#(#write_segments).* = Some(value
                         .#parse
                         .#convert_to_field_ty
@@ -766,6 +767,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                     },
                 },
                 parse_quote_spanned! {ty.span()=>
+                    #[allow(clippy::useless_conversion)]
                     WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::append(
                         #current_value,
                         value
@@ -774,6 +776,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
+                    #[allow(clippy::useless_conversion)]
                     WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::remove(
                         #current_value,
                         value
@@ -1540,6 +1543,7 @@ mod tests {
             impl TEdgeConfigDto {
                 pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                     match key {
+                        #[allow(clippy::useless_conversion)]
                         WritableKey::C8yDeviceId(key0) => {
                             self.c8y.try_get_mut(key0.as_deref(), "c8y")?.device.id = <String as AppendRemoveItem>::append(
                                 Some(reader.c8y.try_get(key0.as_deref())?.device.id()),
