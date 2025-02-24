@@ -220,9 +220,9 @@ class ThinEdgeIO(DeviceLibrary):
 
         try:
             # tedge-mapper-c8y message log (if they exist)
-            log.info("tedge-mapper-c8y message log: /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl")
+            log.info("tedge-mapper-c8y message log: /etc/tedge/.agent/entity_store.jsonl")
             device.execute_command(
-                "cat /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl || true",
+                "cat /etc/tedge/.agent/entity_store.jsonl || true",
                 shell=True,
             )
         except Exception as ex:
