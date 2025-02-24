@@ -152,7 +152,7 @@ There is no restriction on the order of modules in a profile and hence can be de
 For example, additional software can be installed or configurations updated before the firmware is updated.
 This default execution order can also be overridden in the workflow definition, by updating the order in the `scheduled` state.
 
-The `"skip"` field is optional and the value is `false`, by default.
+The `"@skip"` field is optional and the value is `false`, by default.
 It can be used to skip any operations during the development/testing phase, without fully deleting the entry from the profile.
 
 ## Tedge agent handling device profile commands
