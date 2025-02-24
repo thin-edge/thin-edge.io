@@ -57,32 +57,34 @@ impl OperationContext {
                 let mut messages = Vec::new();
 
                 for device_profile_operation in command.payload.operations {
-                    let message = match device_profile_operation.operation {
-                        OperationPayload::Firmware(firmware) => {
-                            let twin_metadata_topic = self.mqtt_schema.topic_for(
-                                &target.topic_id,
-                                &Channel::EntityTwinData {
-                                    fragment_key: "firmware".to_string(),
-                                },
-                            );
+                    if !device_profile_operation.skip {
+                        let message = match device_profile_operation.operation {
+                            OperationPayload::Firmware(firmware) => {
+                                let twin_metadata_topic = self.mqtt_schema.topic_for(
+                                    &target.topic_id,
+                                    &Channel::EntityTwinData {
+                                        fragment_key: "firmware".to_string(),
+                                    },
+                                );
 
-                            MqttMessage::new(&twin_metadata_topic, firmware.to_json())
-                                .with_retain()
-                                .with_qos(QoS::AtLeastOnce)
-                        }
-                        OperationPayload::Software(_) => {
-                            self.request_software_list(&target.topic_id)
-                        }
-                        OperationPayload::Config(config) => MqttMessage::new(
-                            sm_topic,
-                            set_c8y_config_fragment(
-                                &config.config_type,
-                                &config.server_url.unwrap_or_default(),
-                                Some(&config.name),
+                                MqttMessage::new(&twin_metadata_topic, firmware.to_json())
+                                    .with_retain()
+                                    .with_qos(QoS::AtLeastOnce)
+                            }
+                            OperationPayload::Software(_) => {
+                                self.request_software_list(&target.topic_id)
+                            }
+                            OperationPayload::Config(config) => MqttMessage::new(
+                                sm_topic,
+                                set_c8y_config_fragment(
+                                    &config.config_type,
+                                    &config.server_url.unwrap_or_default(),
+                                    Some(&config.name),
+                                ),
                             ),
-                        ),
-                    };
-                    messages.push(message);
+                        };
+                        messages.push(message);
+                    }
                 }
 
                 // set the target profile as executed
@@ -1810,5 +1812,96 @@ mod tests {
 
         // Expect `506` smartrest message on `c8y/s/us`.
         assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,123456")]).await;
+    }
+
+    #[tokio::test]
+    async fn skip_device_profile_operation() {
+        let ttd = TempTedgeDir::new();
+        let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate config_update command with "successful" state
+        mqtt.send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
+            json!({
+                "status": "successful",
+                "name": "test-profile",
+                "operations": [
+                    {
+                        "operation": "firmware_update",
+                        "payload": {
+                            "name": "test-firmware",
+                            "version": "1.0",
+                            "remoteUrl": "http://www.my.url"
+                        }
+                    },
+                    {
+                        "operation": "software_update",
+                        "@skip": false,
+                        "payload": {
+                            "updateList": [
+                                {
+                                    "type": "apt",
+                                    "modules": [
+                                        {
+                                            "name": "test-software-1",
+                                            "version": "latest",
+                                            "action": "install"
+                                        },
+                                        {
+                                            "name": "test-software-2",
+                                            "version": "latest",
+                                            "action": "install"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "operation": "config_update",
+                        "@skip": true,
+                        "payload": {
+                            "name": "test-config",
+                            "type": "path/config/test-config",
+                            "remoteUrl":"http://www.my.url",
+                            "serverUrl":"http://www.my.url"
+                        }
+                    }
+                ]
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        // Expect twin firmware metadata.
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///twin/firmware",
+                r#"{"name":"test-firmware","version":"1.0","remoteUrl":"http://www.my.url"}"#,
+            )],
+        )
+        .await;
+
+        // An updated list of software is requested
+        assert_received_contains_str(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/software_list/+",
+                r#"{"status":"init"}"#,
+            )],
+        )
+        .await;
+
+        // Expect `121` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "121,true")]).await;
+
+        // Expect `503` smartrest message on `c8y/s/us`.
+        assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_DeviceProfile")]).await;
     }
 }
