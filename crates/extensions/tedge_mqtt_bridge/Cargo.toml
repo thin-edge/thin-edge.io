@@ -17,6 +17,7 @@ default = []
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 backoff = { workspace = true }
+bytes = { workspace = true }
 certificate = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }

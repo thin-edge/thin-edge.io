@@ -589,7 +589,7 @@ mod tests {
             .expect("Actor to panic in time");
         assert_eq!(
             error.map(|s| s.replace(char::is_numeric, "")), // ignore the task id
-            Some("task  panicked".to_string())
+            Some("task  panicked with message \"Oh dear\"".to_string())
         );
 
         // No more message can be sent to the actors: they have been shutdown
