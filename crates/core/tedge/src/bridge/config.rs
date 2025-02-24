@@ -41,6 +41,7 @@ pub struct BridgeConfig {
     pub auth_method: Option<AuthMethod>,
     pub mosquitto_version: Option<String>,
     pub keepalive_interval: Duration,
+    pub use_cryptoki: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -185,6 +186,7 @@ mod test {
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -257,6 +259,7 @@ keepalive_interval 60
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -331,6 +334,7 @@ keepalive_interval 60
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
 
         let mut buffer = Vec::new();
@@ -405,6 +409,7 @@ keepalive_interval 60
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
 
         let mut buffer = Vec::new();

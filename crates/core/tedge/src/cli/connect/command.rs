@@ -535,6 +535,7 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
+                use_cryptoki: config.device.cryptoki.enable,
             };
 
             Ok(BridgeConfig::from(params))
@@ -989,13 +990,19 @@ pub fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
     // Ignore errors - This was the behavior with the now deprecated user manager.
     // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
     // - A better approach could be to remove this `chown` and run the command as mosquitto.
-    for path in [
-        &bridge_config.bridge_certfile,
-        &bridge_config.bridge_keyfile,
-    ] {
-        if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
-            warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
-        }
+    let path = &bridge_config.bridge_certfile;
+    if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
+        warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
+    }
+
+    // if using cryptoki, no private key to chown
+    if bridge_config.use_cryptoki {
+        return;
+    }
+
+    let path = &bridge_config.bridge_keyfile;
+    if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
+        warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }
 }
 

@@ -111,6 +111,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval,
+            use_cryptoki: false,
         }
     }
 }
@@ -168,6 +169,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         auth_method: None,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
+        use_cryptoki: false,
     };
 
     assert_eq!(bridge, expected);
@@ -230,6 +232,7 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         auth_method: None,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
+        use_cryptoki: false,
     };
 
     assert_eq!(bridge, expected);
