@@ -1019,7 +1019,7 @@ mod tests {
             "operations": [
                 {
                     "operation": "firmware_update",
-                    "skip": false,
+                    "@skip": false,
                     "payload": {
                         "name": "core-image-tedge-rauc",
                         "version": "20240430.1139",
@@ -1028,7 +1028,7 @@ mod tests {
                 },
                 {
                     "operation": "software_update",
-                    "skip": false,
+                    "@skip": false,
                     "payload": {
                         "updateList": [
                         {
@@ -1051,7 +1051,7 @@ mod tests {
                 },
                 {
                 "operation": "config_update",
-                "skip": false,
+                "@skip": false,
                 "payload": {
                     "name": "collectd-v2",
                     "type": "collectd.conf",

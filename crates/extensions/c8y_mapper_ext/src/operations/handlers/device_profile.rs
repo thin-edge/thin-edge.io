@@ -283,7 +283,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -292,7 +292,7 @@ mod tests {
                         },
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -315,7 +315,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -404,7 +404,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -413,7 +413,7 @@ mod tests {
                         },
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -436,7 +436,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -513,7 +513,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -522,7 +522,7 @@ mod tests {
                         },
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -545,7 +545,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -624,7 +624,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -633,7 +633,7 @@ mod tests {
                         },
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -657,7 +657,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -734,7 +734,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -743,7 +743,7 @@ mod tests {
                         },
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -766,7 +766,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -840,7 +840,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -863,7 +863,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -926,7 +926,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -935,7 +935,7 @@ mod tests {
                         },
                         {
                             "operation": "config_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-config",
                                 "type": "path/config/test-config",
@@ -1007,7 +1007,7 @@ mod tests {
                     "operations": [
                         {
                             "operation": "firmware_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "name": "test-firmware",
                                 "version": "1.0",
@@ -1016,7 +1016,7 @@ mod tests {
                         },
                         {
                             "operation": "software_update",
-                            "skip": false,
+                            "@skip": false,
                             "payload": {
                                 "updateList": [
                                     {
@@ -1062,7 +1062,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1071,7 +1071,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1094,7 +1094,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1124,7 +1124,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1133,7 +1133,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1156,7 +1156,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1216,7 +1216,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1225,7 +1225,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1248,7 +1248,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1279,7 +1279,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1288,7 +1288,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1311,7 +1311,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1368,7 +1368,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1377,7 +1377,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1400,7 +1400,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1430,7 +1430,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1439,7 +1439,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1462,7 +1462,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1509,7 +1509,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1518,7 +1518,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1541,7 +1541,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1621,7 +1621,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1630,7 +1630,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1653,7 +1653,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
@@ -1728,7 +1728,7 @@ mod tests {
                 "operations": [
                     {
                         "operation": "firmware_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-firmware",
                             "version": "1.0",
@@ -1737,7 +1737,7 @@ mod tests {
                     },
                     {
                         "operation": "software_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "updateList": [
                                 {
@@ -1760,7 +1760,7 @@ mod tests {
                     },
                     {
                         "operation": "config_update",
-                        "skip": false,
+                        "@skip": false,
                         "payload": {
                             "name": "test-config",
                             "type": "path/config/test-config",
