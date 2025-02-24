@@ -219,10 +219,10 @@ class ThinEdgeIO(DeviceLibrary):
             log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
 
         try:
-            # tedge-mapper-c8y message log (if they exist)
-            log.info("tedge-mapper-c8y message log: /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl")
+            # entity_store.jsonl log (if they exist)
+            log.info("entity_store.jsonl log:")
             device.execute_command(
-                "cat /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl || true",
+                "head -n-1 /etc/tedge/.tedge-mapper-c8y/entity_store.jsonl /etc/tedge/.agent/entity_store.jsonl 2>/dev/null || true",
                 shell=True,
             )
         except Exception as ex:
