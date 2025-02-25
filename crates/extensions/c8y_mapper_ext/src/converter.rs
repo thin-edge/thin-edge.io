@@ -344,49 +344,75 @@ impl CumulocityConverter {
         &mut self,
         input: &EntityRegistrationMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let mut messages = vec![];
+
         // Parse the optional fields
-        let display_name = input.other.get("name").and_then(|v| v.as_str());
-        let display_type = input.other.get("type").and_then(|v| v.as_str());
+        let display_name = input.twin_data.get("name").and_then(|v| v.as_str());
+        let display_type = input.twin_data.get("type").and_then(|v| v.as_str());
 
         let entity_topic_id = &input.topic_id;
         let external_id = self.entity_cache.try_get_external_id(entity_topic_id)?;
-        match input.r#type {
-            EntityType::MainDevice => Ok(vec![]),
+        let reg_message = match input.r#type {
+            EntityType::MainDevice => None,
             EntityType::ChildDevice => {
                 let parent_xid: Option<&EntityExternalId> =
                     self.entity_cache.parent_external_id(entity_topic_id)?;
+                let display_name = display_name.unwrap_or(external_id.as_ref());
+                let display_type = display_type.unwrap_or("thin-edge.io-child");
 
                 let child_creation_message = child_device_creation_message(
                     external_id.as_ref(),
-                    display_name,
-                    display_type,
+                    Some(display_name),
+                    Some(display_type),
                     parent_xid.map(|xid| xid.as_ref()),
                     &self.device_name,
                     &self.config.bridge_config.c8y_prefix,
                 )
                 .context("Could not create device creation message")?;
-                Ok(vec![child_creation_message])
+                Some(child_creation_message)
             }
             EntityType::Service => {
                 let parent_xid = self.entity_cache.parent_external_id(entity_topic_id)?;
+                let display_name = display_name.unwrap_or_else(|| {
+                    entity_topic_id
+                        .default_service_name()
+                        .unwrap_or(external_id.as_ref())
+                });
+                let display_type = display_type.unwrap_or(&self.service_type);
 
                 let service_creation_message = service_creation_message(
                     external_id.as_ref(),
-                    display_name.unwrap_or_else(|| {
-                        entity_topic_id
-                            .default_service_name()
-                            .unwrap_or(external_id.as_ref())
-                    }),
-                    display_type.unwrap_or(&self.service_type),
+                    display_name,
+                    display_type,
                     "up",
                     parent_xid.map(|xid| xid.as_ref()),
                     &self.device_name,
                     &self.config.bridge_config.c8y_prefix,
                 )
                 .context("Could not create service creation message")?;
-                Ok(vec![service_creation_message])
+                Some(service_creation_message)
             }
+        };
+
+        if let Some(reg_message) = reg_message {
+            messages.push(reg_message);
         }
+
+        for (fragment_key, fragment_value) in input.twin_data.iter() {
+            if fragment_key == "name" || fragment_key == "type" {
+                // Skip converting the name and type fields as they are already included in the registration message
+                continue;
+            }
+            let twin_messages = self.convert_twin_fragment(
+                entity_topic_id,
+                &input.r#type,
+                fragment_key,
+                fragment_value,
+            )?;
+            messages.extend(twin_messages);
+        }
+
+        Ok(messages)
     }
 
     /// Return the SmartREST publish topic for the given entity
@@ -1274,9 +1300,10 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
+        let entity_type = self.entity_cache.try_get(&source)?.metadata.r#type.clone();
         match &channel {
             Channel::EntityTwinData { fragment_key } => {
-                self.try_convert_entity_twin_data(&source, message, fragment_key)
+                self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
             }
 
             Channel::Measurement { measurement_type } => {

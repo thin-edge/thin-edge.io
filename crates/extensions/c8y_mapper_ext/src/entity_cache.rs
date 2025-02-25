@@ -1,4 +1,3 @@
-use serde_json::Map;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
@@ -170,8 +169,7 @@ impl EntityCache {
             external_id: Some(external_id.clone()),
             r#type: entity.r#type,
             parent,
-            other: entity.other,
-            twin_data: Map::new(),
+            twin_data: entity.twin_data,
         };
 
         let outcome = self.insert(entity.topic_id.clone(), external_id, entity_metadata);
@@ -196,11 +194,10 @@ impl EntityCache {
                 // if there is no change, no entities were affected
                 let existing_entity = &occupied.get().metadata;
 
-                let mut merged_other = existing_entity.other.clone();
-                merged_other.extend(entity_metadata.other.clone());
+                let mut merged_other = existing_entity.twin_data.clone();
+                merged_other.extend(entity_metadata.twin_data.clone());
                 let merged_entity = EntityMetadata {
-                    twin_data: existing_entity.twin_data.clone(),
-                    other: merged_other,
+                    twin_data: merged_other,
                     ..entity_metadata
                 };
 
@@ -361,7 +358,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("bad+id".into()),
             parent: None,
-            other: Map::new(),
+            twin_data: Map::new(),
         });
 
         // Assert service registered under main device with custom topic scheme

@@ -56,15 +56,35 @@ Register child device with defaults via MQTT
 Register child device with custom name and type via MQTT
     Execute Command
     ...    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
+
     Should Have MQTT Messages
-    ...    te/device/${CHILD_SN}//
-    ...    message_contains="@id":"${CHILD_XID}"
-    ...    message_contains="@type":"child-device"
+    ...    te/device/${CHILD_SN}///twin/name
+    ...    message_contains=${CHILD_SN}
+    Should Have MQTT Messages
+    ...    te/device/${CHILD_SN}///twin/type
+    ...    message_contains=linux-device-Aböut
     Check Child Device
     ...    parent_sn=${DEVICE_SN}
     ...    child_sn=${CHILD_XID}
     ...    child_name=${CHILD_SN}
     ...    child_type=linux-device-Aböut
+
+Register child device with initial twin data
+    Execute Command
+    ...    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type": "child-device", "@id":"${CHILD_SN}", "name":"${CHILD_SN}", "maintenance_mode": true, "maintenance_window": 5}'
+
+    Should Have MQTT Messages
+    ...    te/device/${CHILD_SN}///twin/name
+    ...    message_contains=${CHILD_SN}
+    Should Have MQTT Messages
+    ...    te/device/${CHILD_SN}///twin/maintenance_mode
+    ...    message_contains=true
+    Should Have MQTT Messages
+    ...    te/device/${CHILD_SN}///twin/maintenance_window
+    ...    message_contains=5
+
+    Device Should Exist    ${CHILD_SN}
+    Device Should Have Fragment Values    name\="${CHILD_SN}"    maintenance_mode\=true    maintenance_window\=5
 
 Register child device with custom id via MQTT
     Execute Command
@@ -262,7 +282,7 @@ Early data messages cached and processed
     ${children}=    Create List    child0    child00    child01    child02    child000    child0000    child00000
     FOR    ${child}    IN    @{children}
         Execute Command    sudo tedge mqtt pub 'te/device/${child}///m/environment' '{ "temp": 50 }'
-        Execute Command    sudo tedge mqtt pub 'te/device/${child}///twin/maintenance_mode' 'true'
+        Execute Command    sudo tedge mqtt pub 'te/device/${child}///twin/maintenance_mode' true
     END
 
     Execute Command

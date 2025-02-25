@@ -8,6 +8,7 @@ use serde_json::Value as JsonValue;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -80,24 +81,26 @@ impl CumulocityConverter {
     pub(crate) fn try_convert_entity_twin_data(
         &mut self,
         source: &EntityTopicId,
+        entity_type: &EntityType,
         message: &MqttMessage,
-        mut fragment_key: &str,
+        fragment_key: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if fragment_key == "name" || fragment_key == "type" {
-            warn!("Updating the entity `name` and `type` fields via the twin/ topic channel is not supported");
-            return Ok(vec![]);
-        }
-
-        if fragment_key == "firmware" {
-            fragment_key = "c8y_Firmware";
-        }
-
         let fragment_value = if message.payload_bytes().is_empty() {
             JsonValue::Null
         } else {
             serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
+        self.try_convert_twin_fragment(source, entity_type, fragment_key, &fragment_value)
+    }
+
+    pub(crate) fn try_convert_twin_fragment(
+        &mut self,
+        source: &EntityTopicId,
+        entity_type: &EntityType,
+        fragment_key: &str,
+        fragment_value: &JsonValue,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         let updated = self.entity_cache.update_twin_data(EntityTwinMessage::new(
             source.clone(),
             fragment_key.into(),
@@ -105,6 +108,27 @@ impl CumulocityConverter {
         ))?;
         if !updated {
             return Ok(vec![]);
+        }
+
+        self.convert_twin_fragment(source, entity_type, fragment_key, fragment_value)
+    }
+
+    pub(crate) fn convert_twin_fragment(
+        &mut self,
+        source: &EntityTopicId,
+        entity_type: &EntityType,
+        mut fragment_key: &str,
+        fragment_value: &JsonValue,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if fragment_key == "firmware" {
+            fragment_key = "c8y_Firmware";
+        }
+
+        // All services in C8Y must have a fixed `type` fragment called `c8y_Service`.
+        // The service specific type fragment is called `serviceType` and hence
+        // we need to map the entity `type` into `serviceType` for services.
+        if entity_type == &EntityType::Service && fragment_key == "type" {
+            fragment_key = "serviceType";
         }
 
         let mapped_json = json!({ fragment_key: fragment_value });
@@ -252,6 +276,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn duplicate_twin_name_and_type_updates_ignored_after_registration() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        // Register a child with a name and type upfront
+        let reg_message = &MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01//"),
+            r#"{"@type": "child-device", "@id": "child01", "name": "child01", "type": "Rpi"}"#,
+        );
+        let _ = converter
+            .try_register_source_entities(reg_message)
+            .await
+            .unwrap();
+
+        // Re-send the same name as a twin update
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///twin/name"),
+            r#""child01""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+        // Assert that the duplicate name update is ignored
+        assert_messages_matching(&inventory_messages, []);
+
+        // Re-send the same type as a twin update
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///twin/type"),
+            r#""Rpi""#,
+        );
+        // Assert that the duplicate type update is ignored
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(&inventory_messages, []);
+
+        // Update with a different name
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///twin/name"),
+            r#""my_child01""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/child01",
+                json!({
+                    "name": "my_child01"
+                })
+                .into(),
+            )],
+        );
+
+        // Update with a different type
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///twin/type"),
+            r#""Rpi4""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/child01",
+                json!({
+                    "type": "Rpi4"
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
     async fn unquoted_string_value_invalid() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
@@ -307,24 +399,6 @@ mod tests {
                 })
                 .into(),
             )],
-        );
-    }
-
-    #[tokio::test]
-    async fn forbidden_fragment_keys() {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
-        let twin_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///twin/name"),
-            r#"New Name"#,
-        );
-        let inventory_messages = converter.convert(&twin_message).await;
-        println!("{:?}", inventory_messages);
-        assert!(
-            inventory_messages.is_empty(),
-            "Expected no converted messages, but received {:?}",
-            &inventory_messages
         );
     }
 
@@ -482,6 +556,39 @@ mod tests {
             [(
                 "c8y/inventory/managedObjects/update/test-device:device:child1",
                 json!({"c8y_Firmware":{"name":"firmware","version":"1.0"}}).into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_service_type() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let reg_message = &MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/service01"),
+            r#"{"@type": "service", "@id": "service01"}"#,
+        );
+        let _ = converter
+            .try_register_source_entities(reg_message)
+            .await
+            .unwrap();
+
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/service01/twin/type"),
+            r#""systemd""#,
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        // Assert that the `type` fragment is mapped to `serviceType`
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/service01",
+                json!({
+                    "serviceType": "systemd"
+                })
+                .into(),
             )],
         );
     }
