@@ -15,7 +15,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::info;
-use tracing::warn;
 
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
@@ -31,16 +30,7 @@ impl CumulocityConverter {
             .config
             .config_dir
             .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
-        let mut inventory_base = Self::get_inventory_fragments(inventory_file_path.as_std_path())?;
-
-        if let Some(map) = inventory_base.as_object_mut() {
-            if map.remove("name").is_some() {
-                warn!("Ignoring `name` fragment key from inventory.json as updating the same using this file is not supported");
-            }
-            if map.remove("type").is_some() {
-                warn!("Ignoring `type` fragment key from inventory.json as updating the same using this file is not supported");
-            }
-        }
+        let inventory_base = Self::get_inventory_fragments(inventory_file_path.as_std_path())?;
 
         let message =
             self.inventory_update_message(&self.device_topic_id, inventory_base.clone())?;
