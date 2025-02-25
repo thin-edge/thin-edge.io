@@ -16,9 +16,6 @@ use cryptoki::object::KeyType;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
 use cryptoki::types::AuthPin;
-use rustls::client::ResolvesClientCert;
-use rustls::pki_types::CertificateDer;
-use rustls::sign::CertifiedKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -209,30 +206,6 @@ impl Signer for PkcsSigner {
     fn scheme(&self) -> SignatureScheme {
         trace!("Using Signature scheme: {:?}", self.scheme.as_str());
         self.scheme
-    }
-}
-
-#[derive(Debug)]
-pub struct Pkcs11Resolver {
-    pub chain: Vec<CertificateDer<'static>>,
-    pub signing_key: Arc<dyn SigningKey>,
-}
-
-impl ResolvesClientCert for Pkcs11Resolver {
-    fn resolve(
-        &self,
-        _acceptable_issuers: &[&[u8]],
-        _sigschemes: &[SignatureScheme],
-    ) -> Option<Arc<CertifiedKey>> {
-        Some(Arc::new(CertifiedKey {
-            cert: self.chain.clone(),
-            key: self.signing_key.clone(),
-            ocsp: None,
-        }))
-    }
-
-    fn has_certs(&self) -> bool {
-        true
     }
 }
 

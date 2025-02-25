@@ -42,22 +42,25 @@ pub fn create_tls_config_cryptoki(
     cryptoki_config: CryptokiConfig,
 ) -> Result<ClientConfig, CertificateError> {
     use anyhow::Context;
-    use pkcs11::Pkcs11Resolver;
     use pkcs11::Pkcs11SigningKey;
+    use rustls::sign::CertifiedKey;
+    use rustls::sign::SingleCertAndKey;
 
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
     let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
         .context("failed to create a TLS signer using PKCS#11 device")?;
 
-    let resolver = Arc::new(Pkcs11Resolver {
-        chain: cert_chain,
-        signing_key: Arc::new(pkcs11_signing_key),
-    });
+    let resolver: SingleCertAndKey = CertifiedKey {
+        cert: cert_chain,
+        key: Arc::new(pkcs11_signing_key),
+        ocsp: None,
+    }
+    .into();
 
     let config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
-        .with_client_cert_resolver(resolver);
+        .with_client_cert_resolver(Arc::new(resolver));
 
     Ok(config)
 }
