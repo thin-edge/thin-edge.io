@@ -4660,7 +4660,10 @@ dependencies = [
 name = "tedge_p11_server"
 version = "1.4.2"
 dependencies = [
+ "camino",
  "certificate",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

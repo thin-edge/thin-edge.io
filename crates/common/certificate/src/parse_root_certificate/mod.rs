@@ -15,7 +15,10 @@ use std::sync::Arc;
 use crate::CertificateError;
 
 #[cfg(feature = "cryptoki")]
-mod pkcs11;
+pub mod pkcs11;
+
+#[cfg(feature = "cryptoki")]
+mod p11_client;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -48,8 +51,11 @@ pub fn create_tls_config_cryptoki(
 
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
-    let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
-        .context("failed to create a TLS signer using PKCS#11 device")?;
+    // let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
+    //     .context("failed to create a TLS signer using PKCS#11 device")?;
+    let pkcs11_signing_key = p11_client::TedgeP11Client {
+        socket_path: Arc::from(Path::new("/tmp/rust_unix_socket")),
+    };
 
     let resolver: SingleCertAndKey = CertifiedKey {
         cert: cert_chain,

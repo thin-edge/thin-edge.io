@@ -105,17 +105,24 @@ impl SigningKey for Pkcs11SigningKey {
 }
 
 #[derive(Debug, Clone)]
-struct PKCS11 {
-    session: Arc<Mutex<Session>>,
+pub struct PKCS11 {
+    pub session: Arc<Mutex<Session>>,
 }
 
 #[derive(Debug)]
-struct PkcsSigner {
-    pkcs11: PKCS11,
-    scheme: SignatureScheme,
+pub struct PkcsSigner {
+    pub pkcs11: PKCS11,
+    pub scheme: SignatureScheme,
 }
 
 impl PkcsSigner {
+    pub fn from_session(session: PKCS11) -> Self {
+        Self {
+            pkcs11: session,
+            scheme: SignatureScheme::ECDSA_NISTP256_SHA256,
+        }
+    }
+
     fn get_mechanism(&self) -> Result<Mechanism, rustls::Error> {
         trace!("Getting mechanism from chosen scheme: {:?}", self.scheme);
         match self.scheme {
@@ -132,10 +139,8 @@ impl PkcsSigner {
             )),
         }
     }
-}
 
-impl Signer for PkcsSigner {
-    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
+    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
         let session = self.pkcs11.session.lock().unwrap();
 
         let key_template = vec![
@@ -202,6 +207,12 @@ impl Signer for PkcsSigner {
         );
         Ok(signature_asn1)
     }
+}
+
+impl Signer for PkcsSigner {
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
+        Self::sign(self, message)
+    }
 
     fn scheme(&self) -> SignatureScheme {
         trace!("Using Signature scheme: {:?}", self.scheme.as_str());
@@ -211,7 +222,7 @@ impl Signer for PkcsSigner {
 
 #[derive(Debug)]
 pub struct ECSigningKey {
-    pkcs11: PKCS11,
+    pub pkcs11: PKCS11,
 }
 
 impl ECSigningKey {
@@ -251,7 +262,7 @@ impl SigningKey for ECSigningKey {
 
 #[derive(Debug)]
 pub struct RSASigningKey {
-    pkcs11: PKCS11,
+    pub pkcs11: PKCS11,
 }
 
 impl RSASigningKey {
