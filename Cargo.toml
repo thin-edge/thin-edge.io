@@ -162,7 +162,11 @@ rpassword = "5.0"
 rstest = "0.16.0"
 rumqttc = { git = "https://github.com/jarhodes314/rumqtt", rev = "8c489faf6af910956c97b55587ff3ecb2ac4e96f" }
 rumqttd = "0.19"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "tls12",
+    "ring",
+] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2"
 serde = "1.0"
