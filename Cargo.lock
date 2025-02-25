@@ -4657,6 +4657,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_p11_server"
+version = "1.4.2"
+dependencies = [
+ "anyhow",
+ "camino",
+ "certificate",
+ "clap",
+ "rustls 0.23.22",
+ "tedge_config",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tedge_script_ext"
 version = "1.4.2"
 dependencies = [
