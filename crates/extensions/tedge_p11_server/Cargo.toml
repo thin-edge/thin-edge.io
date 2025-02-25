@@ -9,7 +9,16 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
+[features]
+# added because rust-analyzer screams at me; probably can be removed later
+cryptoki = []
+
 [dependencies]
+camino.workspace = true
+certificate = { workspace = true, features = ["cryptoki"] }
+# rustls.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
