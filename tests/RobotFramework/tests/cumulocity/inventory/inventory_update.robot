@@ -17,6 +17,8 @@ Update Inventory data via inventory.json
     Should Be Equal    ${mo["customData"]["alertingEnabled"]}    ${True}
     Should Be Equal    ${mo["types"][0]}    type1
     Should Be Equal    ${mo["types"][1]}    type2
+    Should Be Equal    ${mo["name"]}    TST_dark_knight
+    Should Be Equal    ${mo["type"]}    RPi5
 
 Inventory includes the agent fragment with version information
     ${expected_version}=    Execute Command    tedge-mapper --version | cut -d' ' -f2    strip=${True}

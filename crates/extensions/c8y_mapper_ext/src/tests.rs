@@ -80,6 +80,10 @@ async fn mapper_publishes_init_messages_on_startup() {
         [
             (
                 "c8y/inventory/managedObjects/update/test-device",
+                json!({"type":"test-device-type"}).to_string().as_str(),
+            ),
+            (
+                "c8y/inventory/managedObjects/update/test-device",
                 default_fragment_content.as_str(),
             ),
             (
@@ -92,10 +96,6 @@ async fn mapper_publishes_init_messages_on_startup() {
                 .to_string(),
             ),
             ("c8y/s/us", "114"),
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                &json!({"type":"test-device-type"}).to_string(),
-            ),
             ("c8y/s/us", "500"),
         ],
     )
@@ -1242,7 +1242,7 @@ async fn mapper_publishes_supported_operations() {
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    mqtt.skip(2).await;
+    mqtt.skip(3).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
@@ -1534,6 +1534,10 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
         [
             (
                 "c8y/inventory/managedObjects/update/test-device",
+                json!({"type":"test-device-type"}),
+            ),
+            (
+                "c8y/inventory/managedObjects/update/test-device",
                 custom_fragment_content,
             ),
             ("te/device/main///twin/boolean_key", json!(true)),
@@ -1561,7 +1565,7 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
 }
 
 #[tokio::test]
-async fn forbidden_keys_in_inventory_fragments_file_ignored() {
+async fn override_type_using_inventory_fragments_file() {
     // The test Creates an inventory file in (Temp_base_Dir)/device/inventory.json
     // The tedge-mapper parses the inventory fragment file and publishes on c8y/inventory/managedObjects/update/test-device
     // Verify the fragment message that is published
@@ -1570,7 +1574,7 @@ async fn forbidden_keys_in_inventory_fragments_file_ignored() {
     let version = env!("CARGO_PKG_VERSION");
     let custom_fragment_content = json!({
         "name": "new-name",
-        "type": "new-name",
+        "type": "new-type",
         "c8y_Firmware": {
             "name": "raspberrypi-bootloader",
             "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
@@ -1588,7 +1592,13 @@ async fn forbidden_keys_in_inventory_fragments_file_ignored() {
         [
             (
                 "c8y/inventory/managedObjects/update/test-device",
+                json!({"type":"test-device-type"}),
+            ),
+            (
+                "c8y/inventory/managedObjects/update/test-device",
                 json!({
+                    "name": "new-name",
+                    "type": "new-type",
                     "c8y_Firmware": {
                         "name": "raspberrypi-bootloader",
                         "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
@@ -3450,13 +3460,13 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
     assert_received_contains_str(
         mqtt,
         [
+            (
+                "c8y/inventory/managedObjects/update/test-device",
+                json!({"type":"test-device-type"}).to_string().as_str(),
+            ),
             ("c8y/inventory/managedObjects/update/test-device", "{"),
             ("te/device/main///twin/c8y_Agent", "{"),
             ("c8y/s/us", "114"),
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                &json!({"type":"test-device-type"}).to_string(),
-            ),
             ("c8y/s/us", "500"),
         ],
     )
