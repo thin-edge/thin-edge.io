@@ -39,7 +39,11 @@ Software list should be populated during startup with advanced software manageme
     [Documentation]    The list is sent via SmartREST with advanced software management. See #2654
     Execute Command    tedge config set c8y.software_management.api advanced
     Restart Service    tedge-mapper-c8y
-    Should Have MQTT Messages    c8y/s/us    message_contains=140,    minimum=1    maximum=1
+    # Note: Only check minimum message count, as it is possible that the mapper isn't finished
+    # processing previous created software_list operations before the tedge-mapper-c8y service
+    # is restarted which results in more than 1 c8y/s/us 140 message being sent
+    # See related flaky test issue #3426
+    Should Have MQTT Messages    c8y/s/us    message_contains=140,    minimum=1
     Device Should Have Installed Software    tedge    timeout=120
 
 Install software via Cumulocity
