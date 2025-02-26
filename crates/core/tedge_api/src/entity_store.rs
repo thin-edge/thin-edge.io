@@ -733,7 +733,7 @@ pub enum Error {
     #[error("An entity with topic id: {0} is already registered")]
     EntityAlreadyRegistered(EntityTopicId),
 
-    #[error("The specified entity {0} does not exist in the store")]
+    #[error("The specified entity: {0} does not exist in the store")]
     UnknownEntity(String),
 
     #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
