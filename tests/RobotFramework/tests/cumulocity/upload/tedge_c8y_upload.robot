@@ -17,6 +17,7 @@ ${CHILD_SN}     ${EMPTY}
 *** Test Cases ***
 Upload a file to Cumulocity from main device
     ThinEdgeIO.Set Device Context    ${PARENT_SN}
+    Cumulocity.Set Managed Object    ${PARENT_SN}
     Execute Command    yes 0123456789 | head>/tmp/sample.txt
     ${event_id}=    Execute Command
     ...    tedge upload c8y --file /tmp/sample.txt --mime-type text/plain --type "test event" --text "testing file upload"
