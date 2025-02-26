@@ -130,8 +130,10 @@ The following restrictions apply:
   ]
   ```
 * 404: Not Found
-  ```
-  Entity not found with topic id: device/unknown/topic/id
+  ```json
+  {
+      "error": "Entity with topic id: device/unknown// not found"
+  }
   ```
 
 **Examples**
@@ -430,6 +432,77 @@ curl 'http://localhost:8000/tedge/entity-store/v1/entities?parent=device/child2/
     }
 ]
 ```
+
+## Update entity twin data
+
+Update an exiting entity, adding new twin data fragments or removing existing fragments.
+
+**Endpoint**
+
+```
+PATCH /v1/entities/{topic-id}
+```
+
+**Payload**
+
+Any fragments to be inserted/updated are specified with their desired values.
+Fragments to be removed are specified with a `null` value.
+
+```json
+{
+    "new-fragment": {
+        "new-key": "new-value"
+    },
+    "fragment-to-update": "updated-value",
+    "fragment-to-delete": null
+}
+```
+
+**Example**
+
+Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` with a `null` value:
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01 \
+  -X PATCH \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Child": "Child 01",
+    "hardware": {
+        "serialNo": "98761234"
+    },
+    "maintenanceMode": null
+  }'
+```
+
+**Responses**
+
+* 200: OK
+  ```json
+  {
+      "@topic-id": "device/child01//",
+      "@parent":"device/main//",
+      "@type": "child-device",
+      "@id": "child01",
+      "name": "Child 01",
+      "type": "Raspberry Pi 4",
+      "hardware": {
+          "serialNo": "98761234"
+      },
+  }
+  ```
+* 400: Bad Request (Invalid JSON payload or payload with fragment keys starting with the reserved `@` character)
+  ```json
+  {
+      "error": "Fragment keys starting with '@' are not allowed as twin data"
+  }
+  ```
+* 404: Not Found
+  ```json
+  {
+      "error": "The specified entity: device/test-child// does not exist in the store"
+  }
+  ```
 
 ## Delete entity
 
