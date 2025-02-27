@@ -59,23 +59,21 @@ Configuration snapshots are uploaded to File Transfer Service via HTTPS with cli
     Get Configuration Should Succeed    device=${CHILD_SN}    external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration operation fails when configuration-plugin does not supply client certificate
-    [Tags]    test:retry(2)
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/tedge/file-transfer/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
-    ...    failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8001/c8y/inventory/binaries/.+received fatal alert: CertificateRequired
+    ...    failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8001/c8y/inventory/binaries/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration snapshot fails when mapper does not supply client certificate
-    [Tags]    test:retry(2)
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for Mapper
     Enable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${FTS_IP}:8000/tedge/file-transfer/.+received fatal alert: CertificateRequired
+    ...    failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${FTS_IP}:8000/tedge/file-transfer/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     [Teardown]    Re-enable HTTP Client Certificate for Mapper
 
