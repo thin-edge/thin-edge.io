@@ -95,7 +95,7 @@ impl RenewCertCmd {
         csr: &str,
     ) -> Result<Response, reqwest::Error> {
         http.post(url.clone())
-            .header(CONTENT_TYPE, "text/plain")
+            .header(CONTENT_TYPE, "application/pkcs10")
             .body(csr.to_string())
             .send()
     }
