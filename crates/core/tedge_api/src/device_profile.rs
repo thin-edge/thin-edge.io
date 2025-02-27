@@ -41,6 +41,7 @@ impl CommandPayload for DeviceProfileCmdPayload {
 pub struct DeviceProfileOperation {
     #[serde(flatten)]
     pub operation: OperationPayload,
+    #[serde(default, rename = "@skip")]
     pub skip: bool,
 }
 
