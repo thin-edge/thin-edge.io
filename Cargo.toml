@@ -100,6 +100,7 @@ clap = { version = "4.5", features = [
 ] }
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
 cryptoki = "0.8.0"
+cryptographic-message-syntax = { version = "0.27", default-features = false }
 csv = "1.1"
 darling = "0.20"
 doku = "0.21"
