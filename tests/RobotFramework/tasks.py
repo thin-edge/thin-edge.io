@@ -16,6 +16,24 @@ from invoke import task
 from dotenv import load_dotenv
 
 
+def using_buildx(c: any, binary: str) -> bool:
+    """Detect if docker buildx is being used
+
+    Args:
+        c (Any):
+        binary (str): container cli binary, e.g. docker or podman
+
+    Returns:
+        bool: True if buildx is being used
+    """
+    output = c.run(
+        f"{binary} build --help",
+        echo=False,
+        hide=True,
+    )
+    return "--load" in output.stdout
+
+
 class ColourFormatter(logging.Formatter):
     grey = "\x1b[38;20m"
     yellow = "\x1b[33;20m"
@@ -270,12 +288,15 @@ def use_local(c, arch="", package_type="deb"):
     },
 )
 def build(
-    c, name="debian-systemd", cache=True, local=False, binary=None, build_options=""
+    c, name="debian-systemd", cache=True, local=True, binary=None, arch="", build_options=""
 ):
     """Build the container integration test image
 
     Docker is used by default, unless if the DOCKER_HOST variable is pointing to podman
     and podman is installed.
+
+    Note: The arch argument is only used if local is set to True. The arch value can
+    either by the architecture or the target, e.g. aarch64 or x86_64-unknown-linux-musl
 
     Examples:
 
@@ -284,6 +305,9 @@ def build(
 
         invoke clean build
         # Build the test container image but remove any existing files
+
+        invoke build --no-local
+        # Build the test container image without copying the debian packages installed locally
 
         invoke build --local
         # Build the test container image using the locally build version (auto detecting your host's architecture)
@@ -298,7 +322,7 @@ def build(
 
     if local:
         clean(c)
-        use_local(c)
+        use_local(c, arch=arch)
 
     # Support podman, and automatically switch if the DOCKER_HOST is set
     binary = binary or "docker"
@@ -311,6 +335,10 @@ def build(
 
     if build_options:
         options += f" {build_options}"
+
+    # Add required buildx option (if buildx is detected)
+    if using_buildx(c, binary):
+        options += " --load"
 
     context = "../images/debian-systemd"
     c.run(

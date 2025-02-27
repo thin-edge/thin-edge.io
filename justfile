@@ -121,7 +121,7 @@ test *ARGS:
 
 # Run unit tests
 test-unit *ARGS:
-    cargo nextest run --no-fail-fast --all-features --all-targets {{ARGS}}
+    cargo nextest run --status-level fail --no-fail-fast --all-features --all-targets {{ARGS}}
 
 # Run doc tests
 test-docs *ARGS:
