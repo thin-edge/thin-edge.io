@@ -44,6 +44,8 @@
 <!-- ABOUT THE PROJECT -->
 # About The Project
 
+Dummy change
+
 thin-edge.io is the first open-source and cloud-agnostic edge framework designed for resource-constrained IoT edge devices.
 
 We have started the project to solve the challenge of IoT device enablement in industrial IoT or more precisely to make the integration of IoT devices with cloud and IoT platforms easy and reliable.
