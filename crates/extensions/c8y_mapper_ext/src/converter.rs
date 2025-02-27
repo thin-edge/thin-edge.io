@@ -1435,7 +1435,11 @@ impl CumulocityConverter {
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut messages = self.parse_base_inventory_file()?;
+        let device_data_message = self.inventory_device_type_update_message()?;
+        let mut messages = vec![device_data_message];
+
+        let inventory_data = self.parse_base_inventory_file()?;
+        messages.extend(inventory_data);
 
         self.supported_operations
             .load_all(&self.config.device_id, &self.config.bridge_config)?;
@@ -1444,14 +1448,11 @@ impl CumulocityConverter {
             &self.config.bridge_config.c8y_prefix,
         )?;
 
-        let device_data_message = self.inventory_device_type_update_message()?;
-
         let pending_operations_message =
             create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix);
 
         messages.append(&mut vec![
             supported_operations_message,
-            device_data_message,
             pending_operations_message,
         ]);
         Ok(messages)

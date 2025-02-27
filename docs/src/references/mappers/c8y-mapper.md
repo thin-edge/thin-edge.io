@@ -782,15 +782,6 @@ c8y/inventory/managedObjects/update/<main-device-id>
 
 </div>
 
-:::warning
-Updating the following properties via the `twin` channel is not supported
-
-* `name`
-* `type`
-
-as they are included in the entity registration message and can only be updated with another registration message.
-:::
-
 
 ### Twin - Deleting a fragment
 
@@ -913,18 +904,9 @@ te/device/main///twin/c8y_Hardware
 }
 ```
 
-:::warning
-The following keys in the `inventory.json` file are also ignored:
-
-* `name`
-* `type`
-
-as they are included in the entity registration message and can only be updated with another registration message.
-:::
-
 ### Updating entity type in inventory
 
-After updating the inventory with `inventory.json` file contents, 
+If not included in the `inventory.json` file,
 the device `type` of the main device, set using the `device.type` tedge config key,
 is also updated in the inventory with the following message:
 
