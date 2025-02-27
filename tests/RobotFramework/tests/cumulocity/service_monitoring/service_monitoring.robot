@@ -144,6 +144,9 @@ Custom Setup
 
 Check if a service is up
     [Arguments]    ${service_name}
+    # Ensure tedge-mapper-c8y is running because it publishes messages to the cloud
+    ThinEdgeIO.Start Service    tedge-mapper-c8y
+    ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    ${service_name}
 
     Device Should Exist    ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
@@ -157,6 +160,9 @@ Check if a service is up
 
 Check if a service is down
     [Arguments]    ${service_name}
+    # Ensure tedge-mapper-c8y is running because it publishes messages to the cloud
+    ThinEdgeIO.Start Service    tedge-mapper-c8y
+    ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
     ThinEdgeIO.Start Service    ${service_name}
     Device Should Exist    ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ThinEdgeIO.Stop Service    ${service_name}
