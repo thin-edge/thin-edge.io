@@ -74,12 +74,11 @@ Validate inventory fragment updates via twin topics
     ...    tedge mqtt pub --retain "te/device/${device_tid}///twin/device_OS" '{"family":"Debian","version":11,"complex":[1,"2",3],"object":{"foo":"bar"}}'
 
     Cumulocity.Set Device    ${device_xid}
-    ${mo}=    Device Should Have Fragments    subtype
+    Device Should Have Fragment Values    subtype\="LinuxDeviceA"
+    Device Should Have Fragment Values    type\="NewType"
+    Device Should Have Fragment Values    name\="NewName"
 
-    Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
-    Should Be Equal    ${mo["type"]}    NewType
-    Should Be Equal    ${mo["name"]}    NewName
-
+    ${mo}=    Device Should Have Fragments    device_OS
     Should Be Equal    ${mo["device_OS"]["family"]}    Debian
     Should Be Equal As Integers    ${mo["device_OS"]["version"]}    11
 
@@ -100,6 +99,5 @@ Validate inventory fragment updates via twin topics
     Sleep
     ...    5s
     ...    reason=Wait a minimum period before checking that the fragment has not changed (as it was previously set)
-    ${mo}=    Device Should Have Fragments    type
-    Should Be Equal    ${mo["type"]}    NewType
-    Should Be Equal    ${mo["name"]}    NewName
+    Device Should Have Fragment Values    type\="NewType"
+    Device Should Have Fragment Values    name\="NewName"
