@@ -11,6 +11,7 @@ repository = { workspace = true }
 [features]
 default = []
 test = []
+cryptoki = ["certificate/cryptoki"]
 
 [dependencies]
 anyhow = { workspace = true }

@@ -3,7 +3,6 @@ use crate::bridge::BridgeConfig;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use anyhow::bail;
 use anyhow::Context as _;
-use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
@@ -18,6 +17,7 @@ use rumqttc::Packet;
 use rumqttc::QoS;
 use rumqttc::TlsError;
 use rumqttc::Transport;
+use tedge_config::MqttAuthConfigCloudBroker;
 
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
 
@@ -26,6 +26,8 @@ pub fn create_device_with_direct_connection(
     use_basic_auth: bool,
     bridge_config: &BridgeConfig,
     device_type: &str,
+    // TODO: put into general authentication struct
+    mqtt_auth_config: MqttAuthConfigCloudBroker,
 ) -> anyhow::Result<()> {
     const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
     const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
@@ -52,11 +54,7 @@ pub fn create_device_with_direct_connection(
         );
         create_tls_config_without_client_cert(&bridge_config.bridge_root_cert_path)?
     } else {
-        create_tls_config(
-            &bridge_config.bridge_root_cert_path,
-            &bridge_config.bridge_keyfile,
-            &bridge_config.bridge_certfile,
-        )?
+        mqtt_auth_config.to_rustls_client_config()?
     };
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 

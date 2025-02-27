@@ -72,6 +72,7 @@ upload = { path = "crates/common/upload" }
 
 anstyle = "1.0"
 anyhow = "1.0"
+asn1-rs = { version = "0.7.0", features = ["bigint"] }
 assert-json-diff = "2.0"
 assert_cmd = "2.0"
 assert_matches = "1.5"
@@ -98,6 +99,7 @@ clap = { version = "4.5", features = [
     "unstable-styles",
 ] }
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+cryptoki = "0.8.0"
 csv = "1.1"
 darling = "0.20"
 doku = "0.21"
@@ -161,7 +163,7 @@ rstest = "0.16.0"
 rumqttc = { git = "https://github.com/jarhodes314/rumqtt", rev = "8c489faf6af910956c97b55587ff3ecb2ac4e96f" }
 rumqttd = "0.19"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
-rustls-native-certs = "0.6.3"
+rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2"
 serde = "1.0"
 serde_ignored = "0.1"
@@ -198,6 +200,13 @@ ws_stream_tungstenite = "0.14"
 x509-parser = "0.16"
 yansi = "1.0.1"
 zeroize = "1.5"
+
+
+# cryptoki uses libloading which tries to link libdl when declaring extern dlopen, but on musl
+# dlopen is directly under libc, so we need to modify the extern block to not link libdl
+# TODO: remove once fix is upstreamed to libloading
+[patch.crates-io]
+libloading = { git = "https://github.com/Bravo555/rust_libloading.git", branch = "v0.7.4" }
 
 [profile.release]
 codegen-units = 1

@@ -268,6 +268,9 @@ pub enum CertificateError {
 
     #[error(transparent)]
     CertParse2(#[from] rustls::pki_types::pem::Error),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 pub struct NewCertificateConfig {
@@ -291,6 +294,7 @@ impl Default for NewCertificateConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine as _;
     use std::error::Error;
     use time::macros::datetime;
     use x509_parser::der_parser::asn1_rs::FromDer;
@@ -494,8 +498,9 @@ mod tests {
         let footer_len = "-----END CERTIFICATE-----".len();
 
         // just decode the key contents
-        let b64_bytes =
-            base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
+        let b64_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&cert_cont[header_len..cert_cont.len() - footer_len])
+            .unwrap();
         let expected_thumbprint = format!("{:x}", sha1::Sha1::digest(b64_bytes));
 
         // compare the two thumbprints

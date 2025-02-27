@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use core::fmt;
 use std::borrow::Cow;
@@ -8,8 +7,6 @@ use tedge_config::HostPort;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::MQTT_TLS_PORT;
 use tedge_utils::paths::DraftFile;
-
-use crate::ConnectError;
 
 use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 
@@ -44,6 +41,7 @@ pub struct BridgeConfig {
     pub auth_method: Option<AuthMethod>,
     pub mosquitto_version: Option<String>,
     pub keepalive_interval: Duration,
+    pub use_cryptoki: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -121,33 +119,6 @@ impl BridgeConfig {
         Ok(())
     }
 
-    pub fn validate(&self, use_basic_auth: bool) -> Result<(), ConnectError> {
-        if !self.bridge_root_cert_path.exists() {
-            return Err(ConnectError::Certificate(anyhow!(
-                "Bridge root cert path {:?} does not exist",
-                self.bridge_root_cert_path
-            )));
-        }
-
-        if !use_basic_auth {
-            if !self.bridge_certfile.exists() {
-                return Err(ConnectError::Certificate(anyhow!(
-                    "Bridge certificate {:?} does not exist",
-                    self.bridge_certfile
-                )));
-            }
-
-            if !self.bridge_keyfile.exists() {
-                return Err(ConnectError::Certificate(anyhow!(
-                    "Bridge key {:?} does not exist",
-                    self.bridge_keyfile
-                )));
-            }
-        }
-
-        Ok(())
-    }
-
     /// Write the configuration file in a mosquitto configuration directory relative to the main
     /// tedge config location.
     pub fn save(
@@ -178,12 +149,8 @@ impl BridgeConfig {
 
 #[cfg(test)]
 mod test {
-
-    use std::str::FromStr;
-
     use super::*;
     use camino::Utf8Path;
-    use camino::Utf8PathBuf;
 
     #[test]
     fn test_serialize_with_cafile_correctly() -> anyhow::Result<()> {
@@ -219,6 +186,7 @@ mod test {
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -291,6 +259,7 @@ keepalive_interval 60
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config)?;
@@ -365,6 +334,7 @@ keepalive_interval 60
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
 
         let mut buffer = Vec::new();
@@ -439,6 +409,7 @@ keepalive_interval 60
             auth_method: None,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            use_cryptoki: false,
         };
 
         let mut buffer = Vec::new();
@@ -472,94 +443,5 @@ keepalive_interval 60
         expected.insert(r#"topic measurement/measurements/create out 2 c8y/ """#);
         assert_eq!(config_set, expected);
         Ok(())
-    }
-
-    #[test]
-    fn test_validate_ok() -> anyhow::Result<()> {
-        let ca_file = tempfile::NamedTempFile::new()?;
-        let bridge_ca_path = Utf8Path::from_path(ca_file.path()).unwrap();
-
-        let cert_file = tempfile::NamedTempFile::new()?;
-        let bridge_certfile = Utf8Path::from_path(cert_file.path()).unwrap().to_owned();
-
-        let key_file = tempfile::NamedTempFile::new()?;
-        let bridge_keyfile = Utf8Path::from_path(key_file.path()).unwrap().to_owned();
-
-        let config = BridgeConfig {
-            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883".to_string())?,
-            bridge_root_cert_path: bridge_ca_path.to_owned(),
-            bridge_certfile,
-            bridge_keyfile,
-            ..default_bridge_config()
-        };
-
-        assert!(config.validate(false).is_ok());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_validate_wrong_cert_path() {
-        let non_existent_path = Utf8PathBuf::from("/path/that/does/not/exist");
-
-        let config = BridgeConfig {
-            address: HostPort::<MQTT_TLS_PORT>::try_from("test.com").unwrap(),
-            bridge_certfile: non_existent_path.clone(),
-            bridge_keyfile: non_existent_path,
-            ..default_bridge_config()
-        };
-
-        assert!(config.validate(false).is_err());
-    }
-
-    #[test]
-    fn test_validate_wrong_key_path() -> anyhow::Result<()> {
-        let cert_file = tempfile::NamedTempFile::new()?;
-        let bridge_certfile = Utf8Path::from_path(cert_file.path()).unwrap().to_owned();
-        let non_existent_path = "/path/that/does/not/exist";
-
-        let config = BridgeConfig {
-            address: HostPort::<MQTT_TLS_PORT>::try_from("test.com".to_string())?,
-            bridge_certfile,
-            bridge_keyfile: non_existent_path.into(),
-            ..default_bridge_config()
-        };
-
-        assert!(config.validate(false).is_err());
-
-        Ok(())
-    }
-
-    fn default_bridge_config() -> BridgeConfig {
-        BridgeConfig {
-            cloud_name: "az/c8y".into(),
-            config_file: "cfg".into(),
-            connection: "edge_to_az/c8y".into(),
-            address: HostPort::<MQTT_TLS_PORT>::from_str("test.com").unwrap(),
-            remote_username: None,
-            remote_password: None,
-            bridge_root_cert_path: "".into(),
-            bridge_certfile: "".into(),
-            bridge_keyfile: "".into(),
-            remote_clientid: "".into(),
-            local_clientid: "".into(),
-            use_mapper: true,
-            use_agent: true,
-            try_private: false,
-            start_type: "automatic".into(),
-            clean_session: true,
-            include_local_clean_session: true,
-            local_clean_session: true,
-            notifications: false,
-            notifications_local_only: false,
-            notification_topic: "test_topic".into(),
-            bridge_attempt_unsubscribe: false,
-            topics: vec![],
-            bridge_location: BridgeLocation::Mosquitto,
-            connection_check_attempts: 1,
-            auth_method: None,
-            mosquitto_version: None,
-            keepalive_interval: Duration::from_secs(60),
-        }
     }
 }

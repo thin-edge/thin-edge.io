@@ -1,3 +1,4 @@
+use camino::Utf8PathBuf;
 use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
@@ -9,8 +10,12 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::CertificateError;
+
+#[cfg(feature = "cryptoki")]
+mod pkcs11;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -26,6 +31,44 @@ pub fn create_tls_config(
         .with_client_auth_cert(cert_chain, pvt_key)?)
 }
 
+/// Create a TLS ClientConfig that uses a PKCS#11 device for client authentication.
+///
+/// This TLS configuration should be used for communication between a device (or bridge) and a cloud
+/// remote MQTT broker, not local MQTT broker.
+#[cfg(feature = "cryptoki")]
+pub fn create_tls_config_cryptoki(
+    root_certificates: impl AsRef<Path>,
+    client_certificate: impl AsRef<Path>,
+    cryptoki_config: CryptokiConfig,
+) -> Result<ClientConfig, CertificateError> {
+    use anyhow::Context;
+    use pkcs11::Pkcs11Resolver;
+    use pkcs11::Pkcs11SigningKey;
+
+    let root_cert_store = new_root_store(root_certificates.as_ref())?;
+    let cert_chain = read_cert_chain(client_certificate)?;
+    let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
+        .context("failed to create a TLS signer using PKCS#11 device")?;
+
+    let resolver = Arc::new(Pkcs11Resolver {
+        chain: cert_chain,
+        signing_key: Arc::new(pkcs11_signing_key),
+    });
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(root_cert_store)
+        .with_client_cert_resolver(resolver);
+
+    Ok(config)
+}
+
+#[derive(Debug, Clone)]
+pub struct CryptokiConfig {
+    pub module_path: Utf8PathBuf,
+    pub pin: Arc<str>,
+    pub serial: Option<Arc<str>>,
+}
+
 pub fn client_config_for_ca_certificates<P>(
     root_certificates: impl IntoIterator<Item = P>,
 ) -> Result<ClientConfig, std::io::Error>
@@ -39,7 +82,7 @@ where
 
     let (mut valid_count, mut invalid_count) = (0, 0);
     for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-        match roots.add(CertificateDer::from_slice(&cert.0)) {
+        match roots.add(cert) {
             Ok(_) => valid_count += 1,
             Err(err) => {
                 tracing::debug!("certificate parsing failed: {:?}", err);
@@ -170,7 +213,16 @@ fn add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) -> Result<(),
 pub fn read_pvt_key(
     key_file: impl AsRef<Path>,
 ) -> Result<PrivateKeyDer<'static>, CertificateError> {
-    PrivateKeyDer::from_pem_file(key_file).map_err(CertificateError::from)
+    PrivateKeyDer::from_pem_file(&key_file).map_err(|err| {
+        if let rustls::pki_types::pem::Error::Io(io) = err {
+            CertificateError::IoError {
+                path: key_file.as_ref().to_path_buf(),
+                error: io,
+            }
+        } else {
+            CertificateError::CertParse2(err)
+        }
+    })
 }
 
 pub fn read_cert_chain(
@@ -238,13 +290,13 @@ mod tests {
         // Add a first chain with 1 certificate
         let mut cert_1 = File::create(temp_dir.path().join("cert_1")).unwrap();
         cert_1
-            .write_all(include_str!("./test_root_cert_1.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_1.txt").as_bytes())
             .unwrap();
 
         // Add a second chain with 2 certificates
         let mut cert_2 = File::create(temp_dir.path().join("cert_2")).unwrap();
         cert_2
-            .write_all(include_str!("./test_root_cert_2.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_2.txt").as_bytes())
             .unwrap();
 
         let root_certs = new_root_store(temp_dir.path()).unwrap();
@@ -258,14 +310,14 @@ mod tests {
         // Add a first chain with 1 certificate
         let mut cert_1 = File::create(temp_dir.path().join("cert_1")).unwrap();
         cert_1
-            .write_all(include_str!("./test_root_cert_1.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_1.txt").as_bytes())
             .unwrap();
 
         // Add a second chain with 2 certificates in a sub directory
         fs::create_dir(temp_dir.path().join("sub_certs")).unwrap();
         let mut cert_2 = File::create(temp_dir.path().join("sub_certs/cert_2")).unwrap();
         cert_2
-            .write_all(include_str!("./test_root_cert_2.txt").as_bytes())
+            .write_all(include_str!("../test_root_cert_2.txt").as_bytes())
             .unwrap();
 
         let root_certs = new_root_store(temp_dir.path()).unwrap();

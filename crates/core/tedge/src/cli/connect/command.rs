@@ -147,6 +147,12 @@ impl ConnectCommand {
 
         let device_type = &config.device.ty;
 
+        let profile_name = if let Cloud::C8y(profile_name) = &self.cloud {
+            profile_name.as_ref().map(|p| p.to_string())
+        } else {
+            None
+        };
+
         match new_bridge(
             &bridge_config,
             &updated_mosquitto_config,
@@ -155,6 +161,7 @@ impl ConnectCommand {
             device_type,
             self.offline_mode,
             config,
+            profile_name.as_deref(),
         ) {
             Ok(()) => (),
             Err(Fancy {
@@ -528,6 +535,7 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
+                use_cryptoki: config.device.cryptoki.enable,
             };
 
             Ok(BridgeConfig::from(params))
@@ -893,6 +901,8 @@ fn check_device_status_aws(
     }
 }
 
+// TODO: too many args
+#[allow(clippy::too_many_arguments)]
 fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
@@ -901,6 +911,8 @@ fn new_bridge(
     device_type: &str,
     offline_mode: bool,
     tedge_config: &TEdgeConfig,
+    // TODO(marcel): remove this argument
+    profile_name: Option<&str>,
 ) -> Result<(), Fancy<ConnectError>> {
     let service_manager_result = service_manager.check_operational();
 
@@ -915,7 +927,7 @@ fn new_bridge(
     let use_basic_auth =
         bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
 
-    bridge_config.validate(use_basic_auth)?;
+    let mqtt_auth_config = tedge_config.mqtt_auth_config_cloud_broker(profile_name)?;
 
     if bridge_config.cloud_name.eq("c8y") {
         if offline_mode {
@@ -926,6 +938,7 @@ fn new_bridge(
                 use_basic_auth,
                 bridge_config,
                 device_type,
+                mqtt_auth_config,
             );
             spinner.finish(res)?;
         }
@@ -977,13 +990,19 @@ pub fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
     // Ignore errors - This was the behavior with the now deprecated user manager.
     // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
     // - A better approach could be to remove this `chown` and run the command as mosquitto.
-    for path in [
-        &bridge_config.bridge_certfile,
-        &bridge_config.bridge_keyfile,
-    ] {
-        if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
-            warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
-        }
+    let path = &bridge_config.bridge_certfile;
+    if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
+        warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
+    }
+
+    // if using cryptoki, no private key to chown
+    if bridge_config.use_cryptoki {
+        return;
+    }
+
+    let path = &bridge_config.bridge_keyfile;
+    if let Err(err) = tedge_utils::file::change_user_and_group(path.as_ref(), user, group) {
+        warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }
 }
 

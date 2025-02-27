@@ -7,7 +7,6 @@ mod topics;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use certificate::parse_root_certificate::create_tls_config;
 pub use rumqttc;
 use rumqttc::AsyncClient;
 use rumqttc::ClientError;
@@ -53,7 +52,6 @@ pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;
 pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
-use tedge_config::MqttAuthConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
 
@@ -67,6 +65,7 @@ const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 pub struct MqttBridgeActorBuilder {}
 
 impl MqttBridgeActorBuilder {
+    // XXX(marcel): this function loads certs, which can fail, so it should probably be fallible
     pub async fn new(
         tedge_config: &TEdgeConfig,
         service_name: &str,
@@ -81,19 +80,7 @@ impl MqttBridgeActorBuilder {
         );
         // TODO cope with certs but not ca_dir, or handle that case with an explicit error message?
         let auth_config = tedge_config.mqtt_client_auth_config();
-        let local_tls_config = match auth_config {
-            MqttAuthConfig {
-                ca_dir: Some(ca_dir),
-                client: Some(client),
-                ..
-            } => Some(create_tls_config(ca_dir, &client.key_file, &client.cert_file).unwrap()),
-            MqttAuthConfig {
-                ca_file: Some(ca_file),
-                client: Some(client),
-                ..
-            } => Some(create_tls_config(ca_file, &client.key_file, &client.cert_file).unwrap()),
-            _ => None,
-        };
+        let local_tls_config = auth_config.to_rustls_client_config().unwrap();
         if let Some(tls_config) = local_tls_config {
             local_config.set_transport(Transport::tls_with_config(tls_config.into()));
         }
