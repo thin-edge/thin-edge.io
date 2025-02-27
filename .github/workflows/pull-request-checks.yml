@@ -10,7 +10,7 @@ env:
 jobs:
   block-fixup:
     name: Block fixup commits
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
@@ -23,7 +23,7 @@ jobs:
   # JOB to run change detection
   changes:
     name: Filter changes
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     # Set job outputs to values from filter step
     outputs:
       rust: ${{ steps.filter.outputs.rust || 'true' }}
@@ -52,7 +52,7 @@ jobs:
   #
   check-lockfile-uptodate:
     name: Check whether Cargo.lock is up to date
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: ${{ github.event_name == 'pull_request' }}
     outputs:
       locks: ${{ steps.filter.outputs.locks }}
@@ -106,7 +106,7 @@ jobs:
 
   dependency-sort:
     name: Sort dependencies
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -126,7 +126,7 @@ jobs:
   format:
     # Check formatting of both Rust and Robotframework code
     name: Run format checks
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ github.event_name == 'pull_request' }}
 
@@ -163,7 +163,7 @@ jobs:
 
   cargo-clippy:
     name: Run cargo clippy
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       RUSTFLAGS: -D warnings
     needs: changes
@@ -189,7 +189,7 @@ jobs:
 
   cargo-audit:
     name: Run cargo audit
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -206,7 +206,7 @@ jobs:
   # Only run check if the project still compiles on MSRV, test are run on stable
   check-msrv:
     name: Run cargo check on MSRV
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -234,7 +234,7 @@ jobs:
 
   cargo-test:
     name: Run cargo test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
