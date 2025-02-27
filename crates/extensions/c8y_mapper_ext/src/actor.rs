@@ -53,21 +53,6 @@ pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PublishMessage(pub MqttMessage);
-
-impl From<MqttMessage> for PublishMessage {
-    fn from(value: MqttMessage) -> Self {
-        PublishMessage(value)
-    }
-}
-
-impl From<PublishMessage> for MqttMessage {
-    fn from(value: PublishMessage) -> Self {
-        value.0
-    }
-}
-
 fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete] : Debug);
 
 type C8yMapperOutput = MqttMessage;
@@ -411,8 +396,8 @@ impl MessageSource<MqttMessage, Vec<ChannelFilter>> for C8yMapperBuilder {
     }
 }
 
-impl MessageSink<PublishMessage> for C8yMapperBuilder {
-    fn get_sender(&self) -> DynSender<PublishMessage> {
+impl MessageSink<MqttMessage> for C8yMapperBuilder {
+    fn get_sender(&self) -> DynSender<MqttMessage> {
         self.mqtt_publisher.sender_clone()
     }
 }
