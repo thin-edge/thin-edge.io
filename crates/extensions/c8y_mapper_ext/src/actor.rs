@@ -43,6 +43,8 @@ use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
 use tokio::select;
+use tracing::debug;
+use tracing::instrument;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -185,7 +187,9 @@ impl C8yMapperActor {
     ///    2. Publish that message to any message handlers interested in its message type
     ///
     /// If the message follows the legacy topic scheme v0, the data message is simply converted the old way.
+    #[instrument(skip(self), fields(topic = %message.topic.name))]
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
+        debug!(topic = %message.topic.name, "processing mqtt message");
         // If incoming message follows MQTT topic scheme v1
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
             match self.converter.try_register_source_entities(&message).await {
@@ -214,6 +218,7 @@ impl C8yMapperActor {
     /// For each entity its registration message is converted and published to the cloud
     /// and any of the interested message handlers for that type,
     /// followed by repeating the same for its cached data messages.
+    #[instrument(skip(self))]
     pub(crate) async fn process_registered_entities(
         &mut self,
         pending_entities: Vec<RegisteredEntityData>,
@@ -231,6 +236,7 @@ impl C8yMapperActor {
         Ok(())
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn process_registration_message(
         &mut self,
         mut message: EntityRegistrationMessage,
@@ -255,6 +261,7 @@ impl C8yMapperActor {
 
     //  Process an MQTT message by converting and publishing it to the cloud
     /// and any of the message handlers interested in its type.
+    #[instrument(skip_all, level = "trace")]
     async fn process_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
             self.convert_and_publish(&message).await?;
@@ -273,6 +280,7 @@ impl C8yMapperActor {
         Ok(())
     }
 
+    #[instrument(skip_all, level = "trace")]
     async fn publish_message_to_subscribed_handles(
         &mut self,
         channel: &Channel,

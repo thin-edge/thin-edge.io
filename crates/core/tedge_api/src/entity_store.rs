@@ -20,10 +20,6 @@ use crate::store::message_log::MessageLogReader;
 use crate::store::message_log::MessageLogWriter;
 use crate::store::pending_entity_store::PendingEntityStore;
 use crate::store::pending_entity_store::RegisteredEntityData;
-use log::debug;
-use log::error;
-use log::info;
-use log::warn;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use serde::Deserialize;
@@ -35,6 +31,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::path::Path;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::trace;
+use tracing::warn;
 
 // In the future, root will be read from config
 const MQTT_ROOT: &str = "te";
@@ -289,6 +291,7 @@ impl EntityStore {
     /// Returns a vector of registered entities that includes:
     /// - the entity that is provided in the input message (if actually new and not cached)
     /// - any previously cached child entities of the parent that is now registered.
+    #[instrument(skip_all, level = "debug")]
     pub fn update(
         &mut self,
         message: EntityRegistrationMessage,
@@ -326,15 +329,16 @@ impl EntityStore {
         }
     }
 
+    #[instrument(skip(self), level = "debug")]
     fn register_entity(
         &mut self,
         message: EntityRegistrationMessage,
     ) -> Result<Vec<EntityTopicId>, Error> {
-        debug!("Processing entity registration message, {:?}", message);
         let topic_id = message.topic_id.clone();
 
         let mut affected_entities = vec![];
 
+        trace!("getting parent");
         let parent = match message.r#type {
             EntityType::MainDevice => None,
             EntityType::ChildDevice => message
@@ -365,6 +369,8 @@ impl EntityStore {
             twin_data: message.twin_data,
         };
 
+        trace!("inserting + returning affected entities");
+
         match self.entities.insert(topic_id.clone(), entity_metadata) {
             InsertOutcome::Unchanged => Ok(vec![]),
             InsertOutcome::Inserted => Ok(affected_entities),
@@ -375,6 +381,7 @@ impl EntityStore {
         }
     }
 
+    #[instrument(skip_all, level = "debug")]
     fn register_and_persist_entity(
         &mut self,
         message: EntityRegistrationMessage,
@@ -619,6 +626,7 @@ impl EntityTree {
     /// Return Inserted if the entity is new
     /// Return Updated if the entity was previously registered and has been updated by this call
     /// Return Unchanged if the entity not affected by this call
+    #[instrument(skip(self), level = "debug")]
     pub fn insert(
         &mut self,
         topic_id: EntityTopicId,

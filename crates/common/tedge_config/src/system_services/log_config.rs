@@ -1,4 +1,8 @@
 use camino::Utf8Path;
+use tracing_chrome::ChromeLayerBuilder;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 use crate::cli::LogConfigArgs;
 use crate::system_services::SystemConfig;
@@ -18,34 +22,54 @@ pub fn log_init(
     sname: &str,
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
-) -> Result<(), SystemServiceError> {
-    let subscriber = tracing_subscriber::fmt()
+) -> Result<Option<tracing_chrome::FlushGuard>, SystemServiceError> {
+    let print_file_and_line = std::env::var("RUST_LOG").is_ok();
+    let file_level = get_log_level(sname, config_dir)?;
+
+    let filter_layer = filter_layer(flags, file_level);
+
+    // print code location if RUST_LOG is used
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_ansi(std::io::stderr().is_terminal())
-        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+        .with_span_events(FmtSpan::NONE)
+        .with_file(print_file_and_line)
+        .with_line_number(print_file_and_line)
+        .with_filter(filter_layer);
 
+    // chrome layer if `--trace-json`
+    let (chrome_layer, guard) = if flags.trace_json {
+        let (chrome_layer, guard) = ChromeLayerBuilder::new().include_args(true).build();
+        (Some(chrome_layer), Some(guard))
+    } else {
+        (None, None)
+    };
+
+    tracing_subscriber::registry()
+        .with(chrome_layer)
+        .with(fmt_layer)
+        .init();
+
+    Ok(guard)
+}
+
+fn filter_layer(flags: &LogConfigArgs, file_level: tracing::Level) -> EnvFilter {
+    // 1. use level from flags if they're present
     let log_level = flags
         .log_level
         .or(flags.debug.then_some(tracing::Level::DEBUG));
-
     if let Some(log_level) = log_level {
-        subscriber.with_max_level(log_level).init();
-        return Ok(());
+        return EnvFilter::new(log_level.to_string());
     }
 
+    // 2. if not, use RUST_LOG
     if std::env::var("RUST_LOG").is_ok() {
-        subscriber
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .with_file(true)
-            .with_line_number(true)
-            .init();
-        return Ok(());
+        return EnvFilter::from_default_env();
     }
 
-    let log_level = get_log_level(sname, config_dir)?;
-    subscriber.with_max_level(log_level).init();
-
-    Ok(())
+    // 3. if not, use file content (info if no logging preferences in file)
+    EnvFilter::new(file_level.to_string())
 }
 
 pub fn get_log_level(
