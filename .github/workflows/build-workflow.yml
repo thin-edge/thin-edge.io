@@ -263,7 +263,7 @@ jobs:
       github.event_name != 'pull_request_target' &&
       (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [check-build, test]
     strategy:
       fail-fast: false
@@ -318,7 +318,7 @@ jobs:
       github.event_name != 'pull_request_target' &&
       (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [check-build, test]
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: 1
@@ -391,7 +391,7 @@ jobs:
       always() &&
       github.event_name != 'pull_request_target' &&
       needs.publish.result == 'success'
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [publish]
     steps:
       - name: Checkout
