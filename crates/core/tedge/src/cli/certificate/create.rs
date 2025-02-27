@@ -233,8 +233,8 @@ mod tests {
                 .await,
             Ok(())
         );
-        assert_eq!(parse_pem_file(&cert_path).tag, "CERTIFICATE");
-        assert_eq!(parse_pem_file(&key_path).tag, "PRIVATE KEY");
+        assert_eq!(parse_pem_file(&cert_path).tag(), "CERTIFICATE");
+        assert_eq!(parse_pem_file(&key_path).tag(), "PRIVATE KEY");
     }
 
     #[tokio::test]
