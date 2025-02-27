@@ -35,3 +35,4 @@ Custom Setup
     Set Suite Variable    ${DEVICE_SN}
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge reconnect c8y
+    Set Managed Object    ${DEVICE_SN}
