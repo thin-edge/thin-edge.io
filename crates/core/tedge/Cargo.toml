@@ -31,6 +31,9 @@ mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
+pem = { workspace = true }
+rasn = { workspace = true }
+rasn-cms = { workspace = true }
 reqwest = { workspace = true, features = [
     "json",
     "multipart",
@@ -64,7 +67,6 @@ assert_matches = { workspace = true }
 mockall = { workspace = true }
 mockito = { workspace = true }
 mqtt_tests = { workspace = true }
-pem = { workspace = true }
 predicates = { workspace = true }
 rcgen = { workspace = true }
 tedge_test_utils = { workspace = true }
