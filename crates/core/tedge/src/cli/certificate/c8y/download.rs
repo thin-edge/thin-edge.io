@@ -146,7 +146,7 @@ impl DownloadCertCmd {
     ) -> Result<Response, reqwest::Error> {
         http.post(url.clone())
             .basic_auth(username, Some(password))
-            .header(CONTENT_TYPE, "text/plain")
+            .header(CONTENT_TYPE, "application/pkcs10")
             .body(csr.to_string())
             .send()
     }
