@@ -8,6 +8,7 @@ use crate::cli::LogConfigArgs;
 use crate::system_services::SystemConfig;
 use crate::system_services::SystemServiceError;
 use std::io::IsTerminal;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 /// Configures and enables logging taking into account flags, env variables and file config.
@@ -38,9 +39,30 @@ pub fn log_init(
         .with_line_number(print_file_and_line)
         .with_filter(filter_layer);
 
-    // chrome layer if `--trace-json`
-    let (chrome_layer, guard) = if flags.trace_json {
-        let (chrome_layer, guard) = ChromeLayerBuilder::new().include_args(true).build();
+    // chrome layer if `--trace-json` OR `TEDGE_TRACE_DIR` envvar present
+
+    // `TEDGE_TRACE_DIR` is helpful if we want to enable tracing for all the services; turns out using a config is
+    // tricky because we set up logging before loading the config to be able to log config loading and parsing logic! So
+    // we can either 1) try to change and reinstall the subscriber after we've loaded desired logging config, which i'm
+    // sure is tricky, or 2) the simpler and selected approach of just bypassing the config and using an envvar.
+    let trace_json_enabled = std::env::var("TEDGE_TRACE_DIR").is_ok() || flags.trace_json;
+    let trace_filename = format!(
+        "{sname}-trace-{}.json",
+        std::time::SystemTime::UNIX_EPOCH
+            .elapsed()
+            .unwrap()
+            .as_micros()
+    );
+    let trace_path_file: PathBuf = match std::env::var("TEDGE_TRACE_DIR") {
+        Ok(dir) => [&dir, &trace_filename].iter().collect(),
+        Err(_) => ["./", &trace_filename].iter().collect(),
+    };
+
+    let (chrome_layer, guard) = if trace_json_enabled {
+        let (chrome_layer, guard) = ChromeLayerBuilder::new()
+            .file(trace_path_file)
+            .include_args(true)
+            .build();
         (Some(chrome_layer), Some(guard))
     } else {
         (None, None)
