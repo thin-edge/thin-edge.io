@@ -1,4 +1,3 @@
-use crate::actor::PublishMessage;
 use crate::availability::actor::AvailabilityActor;
 use crate::availability::AvailabilityConfig;
 use crate::availability::AvailabilityInput;
@@ -32,7 +31,7 @@ pub struct AvailabilityBuilder {
 impl AvailabilityBuilder {
     pub fn new(
         config: AvailabilityConfig,
-        mqtt: &mut (impl MessageSource<MqttMessage, Vec<ChannelFilter>> + MessageSink<PublishMessage>),
+        mqtt: &mut (impl MessageSource<MqttMessage, Vec<ChannelFilter>> + MessageSink<MqttMessage>),
         timer: &mut impl Service<TimerStart, TimerComplete>,
     ) -> Self {
         let mut box_builder: SimpleMessageBoxBuilder<AvailabilityInput, AvailabilityOutput> =
@@ -84,12 +83,10 @@ impl AvailabilityBuilder {
         }
     }
 
-    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<PublishMessage> {
+    fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
-            AvailabilityOutput::C8ySmartRestSetInterval117(value) => {
-                Some(PublishMessage(value.into()))
-            }
-            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(PublishMessage(value.into())),
+            AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(value.into()),
+            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(value.into()),
         }
     }
 }

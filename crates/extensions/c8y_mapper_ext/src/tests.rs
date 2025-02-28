@@ -6,7 +6,6 @@ use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
-use crate::actor::PublishMessage;
 use crate::availability::AvailabilityBuilder;
 use crate::config::BridgeConfig;
 use crate::operations::OperationHandler;
@@ -3295,7 +3294,7 @@ pub(crate) struct TestHandle {
     pub timer: FakeServerBox<SyncStart, SyncComplete>,
     pub ul: FakeServerBox<IdUploadRequest, IdUploadResult>,
     pub dl: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
-    pub avail: SimpleMessageBox<MqttMessage, PublishMessage>,
+    pub avail: SimpleMessageBox<MqttMessage, MqttMessage>,
 }
 
 pub(crate) async fn spawn_c8y_mapper_actor_with_config(
@@ -3336,7 +3335,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     )
     .unwrap();
 
-    let mut availability_box_builder: SimpleMessageBoxBuilder<MqttMessage, PublishMessage> =
+    let mut availability_box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("Availability", 10);
     availability_box_builder
         .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
