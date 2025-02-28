@@ -2,7 +2,6 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::fragments::C8yAgentFragment;
-use crate::fragments::C8yDeviceDataFragment;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use std::fs::File;
@@ -15,47 +14,30 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::info;
-use tracing::warn;
 
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
 
 impl CumulocityConverter {
-    /// Creates the inventory update message with fragments from inventory.json file
-    /// while also updating the live `inventory_model` of this converter
-    pub(crate) fn parse_base_inventory_file(
-        &mut self,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
+    /// Creates the inventory twin messages with fragments from inventory.json file
+    pub(crate) fn base_inventory_twin_data(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = vec![];
         let inventory_file_path = self
             .config
             .config_dir
             .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
-        let mut inventory_base = Self::get_inventory_fragments(inventory_file_path.as_std_path())?;
+        let inventory_base = Self::get_inventory_fragments(inventory_file_path.as_std_path())?;
 
-        if let Some(map) = inventory_base.as_object_mut() {
-            if map.remove("name").is_some() {
-                warn!("Ignoring `name` fragment key from inventory.json as updating the same using this file is not supported");
-            }
-            if map.remove("type").is_some() {
-                warn!("Ignoring `type` fragment key from inventory.json as updating the same using this file is not supported");
-            }
-        }
+        if let JsonValue::Object(mut map) = inventory_base {
+            map.entry("name").or_insert(json!(self.device_name));
+            map.entry("type").or_insert(json!(self.device_type));
 
-        let message =
-            self.inventory_update_message(&self.device_topic_id, inventory_base.clone())?;
-        messages.push(message);
-
-        if let JsonValue::Object(map) = inventory_base {
             for (key, value) in map {
-                let main_device_tid = self.entity_cache.main_device_topic_id().clone();
-                let _ = self.entity_cache.update_twin_data(EntityTwinMessage::new(
-                    main_device_tid.clone(),
+                let mapped_message = self.entity_twin_data_message(
+                    &self.device_topic_id,
                     key.clone(),
                     value.clone(),
-                ))?;
-                let mapped_message =
-                    self.entity_twin_data_message(&main_device_tid, key.clone(), value.clone());
+                );
                 messages.push(mapped_message);
             }
         }
@@ -148,16 +130,6 @@ impl CumulocityConverter {
             &inventory_update_topic,
             fragment_value.to_string(),
         ))
-    }
-
-    /// Create the inventory update message to update the `type` of the main device
-    pub(crate) fn inventory_device_type_update_message(
-        &self,
-    ) -> Result<MqttMessage, ConversionError> {
-        let device_data = C8yDeviceDataFragment::from_type(&self.device_type)?;
-        let device_type_fragment = device_data.to_json()?;
-
-        self.inventory_update_message(&self.device_topic_id, device_type_fragment)
     }
 
     /// Return the contents of inventory.json file as a `JsonValue`
