@@ -66,35 +66,22 @@ async fn mapper_publishes_init_messages_on_startup() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     let version = env!("CARGO_PKG_VERSION");
-    let default_fragment_content = json!({
-        "c8y_Agent": {
-            "name": "thin-edge.io",
-            "url": "https://thin-edge.io",
-            "version": version
-        }
-    })
-    .to_string();
 
     assert_received_contains_str(
         &mut mqtt,
         [
             (
-                "c8y/inventory/managedObjects/update/test-device",
-                json!({"type":"test-device-type"}).to_string().as_str(),
-            ),
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                default_fragment_content.as_str(),
-            ),
-            (
                 "te/device/main///twin/c8y_Agent",
-                &json!({
+                json!({
                     "name": "thin-edge.io",
                     "url": "https://thin-edge.io",
                     "version": version
                 })
-                .to_string(),
+                .to_string()
+                .as_str(),
             ),
+            ("te/device/main///twin/name", "test-device"),
+            ("te/device/main///twin/type", "test-device-type"),
             ("c8y/s/us", "114"),
             ("c8y/s/us", "500"),
         ],
@@ -1532,14 +1519,6 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
     assert_received_includes_json(
         &mut mqtt,
         [
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                json!({"type":"test-device-type"}),
-            ),
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                custom_fragment_content,
-            ),
             ("te/device/main///twin/boolean_key", json!(true)),
             (
                 "te/device/main///twin/c8y_Agent",
@@ -1557,8 +1536,10 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
                     "version": "1.20140107-1"
                 }),
             ),
+            ("te/device/main///twin/name", json!("test-device")),
             ("te/device/main///twin/numeric_key", json!(10)),
             ("te/device/main///twin/string_key", json!("value")),
+            ("te/device/main///twin/type", json!("test-device-type")),
         ],
     )
     .await;
@@ -1591,22 +1572,6 @@ async fn override_type_using_inventory_fragments_file() {
         &mut mqtt,
         [
             (
-                "c8y/inventory/managedObjects/update/test-device",
-                json!({"type":"test-device-type"}),
-            ),
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                json!({
-                    "name": "new-name",
-                    "type": "new-type",
-                    "c8y_Firmware": {
-                        "name": "raspberrypi-bootloader",
-                        "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
-                        "version": "1.20140107-1"
-                    }
-                }),
-            ),
-            (
                 "te/device/main///twin/c8y_Agent",
                 json!({
                     "name": "thin-edge.io",
@@ -1622,6 +1587,8 @@ async fn override_type_using_inventory_fragments_file() {
                     "version": "1.20140107-1"
                 }),
             ),
+            ("te/device/main///twin/name", json!("new-name")),
+            ("te/device/main///twin/type", json!("new-type")),
         ],
     )
     .await;
@@ -3460,12 +3427,9 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
     assert_received_contains_str(
         mqtt,
         [
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                json!({"type":"test-device-type"}).to_string().as_str(),
-            ),
-            ("c8y/inventory/managedObjects/update/test-device", "{"),
             ("te/device/main///twin/c8y_Agent", "{"),
+            ("te/device/main///twin/name", "test-device"),
+            ("te/device/main///twin/type", "test-device-type"),
             ("c8y/s/us", "114"),
             ("c8y/s/us", "500"),
         ],

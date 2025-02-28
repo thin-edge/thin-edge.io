@@ -904,21 +904,10 @@ te/device/main///twin/c8y_Hardware
 }
 ```
 
-### Updating entity type in inventory
-
-If not included in the `inventory.json` file,
-the device `type` of the main device, set using the `device.type` tedge config key,
-is also updated in the inventory with the following message:
-
-```text title="Topic"
-c8y/inventory/managedObjects/update
-```
-
-```json5 title="Payload"
-{
-  "type": "configured-device-type"
-}
-```
+:::note
+The `name` and `type` fragments, if defined in the `inventory.json` file,
+would override the config settings defined in `device.name` and `device.type`.
+:::
 
 
 ## Operations/Commands

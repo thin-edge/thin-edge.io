@@ -306,11 +306,6 @@ impl EntityCache {
     }
 
     /// Returns the external id of the main device.
-    pub fn main_device_topic_id(&self) -> &EntityTopicId {
-        &self.main_device_tid
-    }
-
-    /// Returns the external id of the main device.
     pub fn main_device_external_id(&self) -> &EntityExternalId {
         &self.main_device_xid
     }

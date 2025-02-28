@@ -1435,11 +1435,7 @@ impl CumulocityConverter {
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let device_data_message = self.inventory_device_type_update_message()?;
-        let mut messages = vec![device_data_message];
-
-        let inventory_data = self.parse_base_inventory_file()?;
-        messages.extend(inventory_data);
+        let mut messages = self.base_inventory_twin_data()?;
 
         self.supported_operations
             .load_all(&self.config.device_id, &self.config.bridge_config)?;
