@@ -96,6 +96,7 @@ use tokio::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
@@ -114,6 +115,7 @@ pub struct MapperConfig {
 }
 
 impl CumulocityConverter {
+    #[instrument(skip_all, level = "trace")]
     pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
         let messages_or_err = self.try_convert(input).await;
         self.wrap_errors_with_input(messages_or_err, input)
@@ -292,6 +294,7 @@ impl CumulocityConverter {
     /// For any other data messages, auto-registration of the target entities are attempted when enabled.
     ///
     /// In both cases, the successfully registered entities, along with their cached data, is returned.
+    #[instrument(skip(self), fields(topic = %message.topic.name))]
     pub async fn try_register_source_entities(
         &mut self,
         message: &MqttMessage,

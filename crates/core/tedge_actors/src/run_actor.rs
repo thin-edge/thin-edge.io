@@ -1,3 +1,6 @@
+use tracing::debug_span;
+use tracing::Instrument;
+
 use crate::Actor;
 use crate::Builder;
 use crate::DynSender;
@@ -39,7 +42,11 @@ impl RunActor {
     }
 
     pub async fn run(self) -> Result<(), RuntimeError> {
-        self.actor.run_boxed().await
+        let name = self.actor.name().to_string();
+        self.actor
+            .run_boxed()
+            .instrument(debug_span!("Actor::run", actor_name = name))
+            .await
     }
 }
 

@@ -20,6 +20,8 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tracing::debug;
+use tracing::instrument;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub use mqtt_channel::DebugPayload;
@@ -117,18 +119,20 @@ pub struct ToPeers {
 }
 
 impl FromPeers {
+    #[instrument(skip_all, level = "trace")]
     async fn relay_messages_to(
         &mut self,
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         while let Ok(Some(message)) = self.try_recv().await {
-            tracing::debug!(target: "MQTT pub", "{message}");
+            tracing::debug!(target: "MQTT_pub", "{message}");
             SinkExt::send(outgoing_mqtt, message)
                 .await
                 .map_err(Box::new)?;
         }
 
         // On shutdown, first close input so no new messages can be pushed
+        debug!("closing");
         self.input_receiver.close_input();
 
         // Then, publish all the messages awaiting to be sent over MQTT
@@ -142,12 +146,13 @@ impl FromPeers {
 }
 
 impl ToPeers {
+    #[instrument(skip_all, level = "trace")]
     async fn relay_messages_from(
         mut self,
         incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         while let Some(message) = incoming_mqtt.next().await {
-            tracing::debug!(target: "MQTT recv", "{message}");
+            tracing::debug!(target: "MQTT_recv", "{message}");
             self.send(message).await?;
         }
         Ok(())
@@ -215,11 +220,11 @@ impl Actor for MqttActor {
             }
         };
 
-        tedge_utils::futures::select(
-            self.from_peers
-                .relay_messages_to(&mut mqtt_client.published),
-            self.to_peers.relay_messages_from(&mut mqtt_client.received),
-        )
-        .await
+        let sender_task = self
+            .from_peers
+            .relay_messages_to(&mut mqtt_client.published);
+        let receiver_task = self.to_peers.relay_messages_from(&mut mqtt_client.received);
+
+        tedge_utils::futures::select(sender_task, receiver_task).await
     }
 }

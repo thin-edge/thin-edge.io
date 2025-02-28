@@ -281,6 +281,7 @@ impl TEdgeComponent for CumulocityMapper {
             Some(AvailabilityBuilder::new(
                 AvailabilityConfig::try_new(&tedge_config, c8y_profile)?,
                 &mut c8y_mapper_actor,
+                &mut mqtt_actor,
                 &mut timer_actor,
             ))
         } else {

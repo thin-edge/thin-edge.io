@@ -41,6 +41,10 @@ pub struct LogConfigArgs {
     #[clap(long, global = true)]
     #[clap(add(ArgValueCandidates::new(log_level_completions)))]
     pub log_level: Option<tracing::Level>,
+
+    /// Emit a JSON trace file that can be opened by ui.perfetto.dev
+    #[clap(long, global = true)]
+    pub trace_json: bool,
 }
 
 fn log_level_completions() -> Vec<CompletionCandidate> {
