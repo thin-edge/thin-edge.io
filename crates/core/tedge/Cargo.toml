@@ -23,7 +23,6 @@ cap = { workspace = true }
 certificate = { workspace = true, features = ["reqwest-blocking"] }
 clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
-cryptographic-message-syntax = { workspace = true }
 doku = { workspace = true }
 humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }
@@ -31,6 +30,7 @@ mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
+pem = { workspace = true }
 reqwest = { workspace = true, features = [
     "blocking",
     "json",
@@ -40,6 +40,8 @@ reqwest = { workspace = true, features = [
 ] }
 rpassword = { workspace = true }
 rumqttc = { workspace = true }
+rasn = { workspace = true }
+rasn-cms = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 signal-hook = { workspace = true }
@@ -66,7 +68,6 @@ assert_matches = { workspace = true }
 mockall = { workspace = true }
 mockito = { workspace = true }
 mqtt_tests = { workspace = true }
-pem = { workspace = true }
 predicates = { workspace = true }
 rcgen = { workspace = true }
 tedge_test_utils = { workspace = true }
