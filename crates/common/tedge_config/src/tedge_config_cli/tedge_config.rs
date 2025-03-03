@@ -127,7 +127,7 @@ define_tedge_config! {
         cert_path: Utf8PathBuf,
 
         /// Path where the device's certificate signing request is stored
-        #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(function = "default_device_csr"))]
+        #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(function = "default_device_csr"), reader(private))]
         #[doku(as = "PathBuf")]
         csr_path: Utf8PathBuf,
 
@@ -204,6 +204,11 @@ define_tedge_config! {
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
             #[doku(as = "PathBuf")]
             cert_path: Utf8PathBuf,
+
+            /// Path where the device's certificate signing request is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
+            #[doku(as = "PathBuf")]
+            csr_path: Utf8PathBuf,
         },
 
         smartrest: {
@@ -399,6 +404,11 @@ define_tedge_config! {
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
             #[doku(as = "PathBuf")]
             cert_path: Utf8PathBuf,
+
+            /// Path where the device's certificate signing request is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
+            #[doku(as = "PathBuf")]
+            csr_path: Utf8PathBuf,
         },
 
         mapper: {
@@ -468,6 +478,11 @@ define_tedge_config! {
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
             #[doku(as = "PathBuf")]
             cert_path: Utf8PathBuf,
+
+            /// Path where the device's certificate signing request is stored
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
+            #[doku(as = "PathBuf")]
+            csr_path: Utf8PathBuf,
         },
 
         mapper: {
@@ -899,6 +914,18 @@ impl TEdgeConfigReader {
             Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.cert_path,
             Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.cert_path,
             Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
+        })
+    }
+
+    pub fn device_csr_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<&Utf8Path, MultiError> {
+        Ok(match cloud.map(<_>::into) {
+            None => &self.device.csr_path,
+            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.csr_path,
+            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.csr_path,
+            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.csr_path,
         })
     }
 

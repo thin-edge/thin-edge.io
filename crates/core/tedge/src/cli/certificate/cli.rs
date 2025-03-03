@@ -6,8 +6,6 @@ use super::show::ShowCertCmd;
 use super::upload::*;
 
 use anyhow::anyhow;
-use camino::Utf8PathBuf;
-use clap::ValueHint;
 use tedge_config::OptionalConfigError;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
@@ -36,10 +34,6 @@ pub enum TEdgeCertCli {
         /// The device identifier to be used as the common name for the certificate
         #[clap(long = "device-id", global = true)]
         id: Option<String>,
-
-        /// Path where a Certificate signing request will be stored
-        #[clap(long = "output-path", global = true, value_hint = ValueHint::FilePath)]
-        output_path: Option<Utf8PathBuf>,
 
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
@@ -91,18 +85,13 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::CreateCsr {
-                id,
-                output_path,
-                cloud,
-            } => {
+            TEdgeCertCli::CreateCsr { id, cloud } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
 
                 let cmd = CreateCsrCmd {
                     id: get_device_id(id, &config, &cloud)?,
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
-                    // Use output file instead of csr_path from tedge config if provided
-                    csr_path: output_path.unwrap_or_else(|| config.device.csr_path.clone()),
+                    csr_path: config.device_csr_path(cloud.as_ref())?.to_owned(),
                     user: user.to_owned(),
                     group: group.to_owned(),
                 };
