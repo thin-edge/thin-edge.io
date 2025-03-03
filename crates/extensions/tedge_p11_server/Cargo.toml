@@ -18,10 +18,20 @@ anyhow.workspace = true
 camino.workspace = true
 certificate = { workspace = true, features = ["cryptoki"] }
 clap.workspace = true
+prost = "0.13.5"
 rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tedge_config = { workspace = true, features = ["cryptoki"] }
+tokio.workspace = true
+tokio-stream = "0.1.17"
+tonic = "0.12.3"
+tower.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[build-dependencies]
+tonic-build = "*"
 
 [lints]
 workspace = true
