@@ -102,7 +102,11 @@ impl BuildCommand for TEdgeCertCli {
                     id: get_device_id(id, &config, &cloud)?,
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     // Use output file instead of csr_path from tedge config if provided
-                    csr_path: output_path.unwrap_or_else(|| config.device.csr_path.clone()),
+                    csr_path: if let Some(output_path) = output_path {
+                        output_path
+                    } else {
+                        config.device_csr_path(cloud.as_ref())?.to_owned()
+                    },
                     user: user.to_owned(),
                     group: group.to_owned(),
                 };
