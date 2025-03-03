@@ -16,7 +16,7 @@ cryptoki = []
 [dependencies]
 camino.workspace = true
 certificate = { workspace = true, features = ["cryptoki"] }
-# rustls.workspace = true
+rustls.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
