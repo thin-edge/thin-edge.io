@@ -14,25 +14,38 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use certificate::parse_root_certificate::pkcs11;
 use certificate::parse_root_certificate::pkcs11::PkcsSigner;
+use certificate::parse_root_certificate::{pkcs11, CryptokiConfig};
 use clap::command;
 use clap::Parser;
+use tracing::debug;
 use tracing::info;
 use tracing::level_filters::LevelFilter;
-use tracing::{debug, trace};
 use tracing_subscriber::EnvFilter;
 
 /// thin-edge.io service for passing PKCS#11 cryptographic tokens.
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
-#[command(about, version, long_about)]
+#[command(version)]
 pub struct Args {
     /// A path where the service's unix token will be created.
     #[arg(default_value = "./thin-edge-pkcs11.sock")]
-    path: Utf8PathBuf,
+    socket_path: Utf8PathBuf,
+
+    /// The path to the PKCS#11 module.
+    ///
+    /// If not provided, the module path will be read from tedge-config.
+    #[arg(long)]
+    module_path: Option<Utf8PathBuf>,
+
+    /// The PIN for the PKCS#11 token.
+    ///
+    /// If not provided, the PIN will be read from tedge-config.
+    #[arg(long, default_value = "123456")]
+    pin: Arc<str>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -45,29 +58,33 @@ fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let tedge_config = tedge_config::TEdgeConfigLocation::default()
-        .load()
-        .context("Failed to load config")?;
-
     let args = Args::parse();
-
-    let socket_path = args.path;
+    let socket_path = args.socket_path;
 
     if Path::new(&socket_path).exists() {
         let _ = std::fs::remove_file(&socket_path);
     }
 
-    let listener = UnixListener::bind(&socket_path).context("Failed to bind to socket")?;
-    info!(%socket_path, "Server listening");
-
-    let Some(cryptoki_config) = tedge_config
-        .device
-        .cryptoki
-        .config()
-        .context("Invalid cryptoki config")?
-    else {
-        return Err(anyhow::anyhow!("tedge-p11-server requires cryptoki to be enabled in tedge-config, but it's currently disabled"));
+    let cryptoki_config = if let Some(module_path) = args.module_path {
+        CryptokiConfig {
+            module_path,
+            pin: args.pin,
+            serial: None,
+        }
+    } else if let Some(cryptoki_config) = tedge_config::TEdgeConfigLocation::default()
+        .load()
+        .ok()
+        .and_then(|tedge_config| tedge_config.device.cryptoki.config().ok().flatten())
+    {
+        debug!("Using cryptoki config from tedge-config");
+        cryptoki_config
+    } else {
+        return Err(anyhow::anyhow!(
+            "Need to provide module_path via argument or tedge-config"
+        ));
     };
+
+    info!(?cryptoki_config, "Using cryptoki configuration");
 
     let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
         .expect("failed to get pkcs11 signing key");
@@ -77,6 +94,9 @@ fn main() -> anyhow::Result<()> {
         _ => panic!("Expected a session"),
     };
     let signer = PkcsSigner::from_session(session);
+
+    let listener = UnixListener::bind(&socket_path).context("Failed to bind to socket")?;
+    info!(%socket_path, "Server listening");
 
     // Accept a connection
     loop {
