@@ -13,31 +13,63 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::Path;
 
+use anyhow::Context;
 use camino::Utf8PathBuf;
-use certificate::parse_root_certificate::pkcs11::{self, PkcsSigner};
-use tracing::{debug, info, trace};
+use certificate::parse_root_certificate::pkcs11;
+use certificate::parse_root_certificate::pkcs11::PkcsSigner;
+use clap::command;
+use clap::Parser;
+use tracing::info;
+use tracing::level_filters::LevelFilter;
+use tracing::{debug, trace};
+use tracing_subscriber::EnvFilter;
 
-fn main() {
-    tracing_subscriber::fmt::init();
+/// thin-edge.io service for passing PKCS#11 cryptographic tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Parser)]
+#[command(about, version, long_about)]
+pub struct Args {
+    /// A path where the service's unix token will be created.
+    #[arg(default_value = "./thin-edge-pkcs11.sock")]
+    path: Utf8PathBuf,
+}
 
-    let socket_path = "/tmp/rust_unix_socket";
+fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env()
+                .unwrap(),
+        )
+        .init();
 
-    if Path::new(socket_path).exists() {
-        std::fs::remove_file(socket_path).unwrap();
+    let tedge_config = tedge_config::TEdgeConfigLocation::default()
+        .load()
+        .context("Failed to load config")?;
+
+    let args = Args::parse();
+
+    let socket_path = args.path;
+
+    if Path::new(&socket_path).exists() {
+        let _ = std::fs::remove_file(&socket_path);
     }
 
-    let listener = UnixListener::bind(socket_path).unwrap();
-    println!("Server listening on {}", socket_path);
+    let listener = UnixListener::bind(&socket_path).context("Failed to bind to socket")?;
+    info!(%socket_path, "Server listening");
 
-    let config = certificate::parse_root_certificate::CryptokiConfig {
-        module_path: Utf8PathBuf::from("/usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-client.so"),
-        pin: Arc::from("123456"),
-        serial: None,
+    let Some(cryptoki_config) = tedge_config
+        .device
+        .cryptoki
+        .config()
+        .context("Invalid cryptoki config")?
+    else {
+        return Err(anyhow::anyhow!("tedge-p11-server requires cryptoki to be enabled in tedge-config, but it's currently disabled"));
     };
-    let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(config)
+
+    let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
         .expect("failed to get pkcs11 signing key");
 
     let session = match signing_key {
@@ -50,7 +82,7 @@ fn main() {
     loop {
         match listener.accept() {
             Ok((mut stream, _)) => {
-                println!("Accepted a connection");
+                info!("Accepted a connection");
 
                 // Read data from the client
                 let mut buffer = [0; 1024];

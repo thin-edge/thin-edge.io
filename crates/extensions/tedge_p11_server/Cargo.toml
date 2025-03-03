@@ -14,9 +14,12 @@ repository.workspace = true
 cryptoki = []
 
 [dependencies]
+anyhow.workspace = true
 camino.workspace = true
 certificate = { workspace = true, features = ["cryptoki"] }
+clap.workspace = true
 rustls.workspace = true
+tedge_config = { workspace = true, features = ["cryptoki"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
