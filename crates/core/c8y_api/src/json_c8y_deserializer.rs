@@ -544,6 +544,13 @@ pub struct C8yDeviceProfile {
     pub configuration: Vec<C8yDownloadConfigFile>,
 }
 
+/// Error returned by C8Y REST API
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+pub struct C8yAPIError {
+    pub error: String,
+    pub message: String,
+}
+
 pub trait C8yDeviceControlOperationHelper {
     fn from_json_value(value: serde_json::Value) -> Result<Self, serde_json::Error>
     where
