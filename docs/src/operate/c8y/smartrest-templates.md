@@ -8,15 +8,15 @@ description: SmartREST 2.0 template registration and usage
 
 %%te%% supports subscription to custom templates as documented [here](https://cumulocity.com/docs/smartrest/smartrest-two/#template-collections).
 
-For every template that the device uses, it must publish all data to `s/uc/<template-name>` topic and subscribe to `s/dc/<template-name>` to receive data from the cloud, based on that template.
+For every template that the device uses, it must publish all data to the `s/uc/<template-external-id>` topic and subscribe to the `s/dc/<template-external-id>` topic to receive data from the cloud, based on that template's external id.
 When these templates are configured with %%te%%, subscriptions to all these relevant topics on Cumulocity cloud will be done by %%te%% internally.
-Local processes on the device can access these templates on the local MQTT broker by simply publishing to `c8y/s/uc/<template-name>` and subscribing to `c8y/s/dc/<template-name>` topics (note the `c8y/` prefix in topics).
+Local processes on the device can access these templates on the local MQTT broker by simply publishing to the `c8y/s/uc/<template-external-id>` topic and subscribing to the `c8y/s/dc/<template-external-id>` topic (note the `c8y/` prefix in topics).
 
-A template named `$TEMPLATE_NAME` requires the following subscriptions to be added when connecting to Cumulocity:
+A template with the external id `$TEMPLATE_XID` requires the following subscriptions to be added when connecting to Cumulocity:
 
 ```text
-s/dc/$TEMPLATE_NAME
-s/uc/$TEMPLATE_NAME
+s/dc/$TEMPLATE_XID
+s/uc/$TEMPLATE_XID
 ```
 
 **This is not done automatically and the custom templates have to be declared using the `tedge` command.**
@@ -28,6 +28,10 @@ tedge config get c8y.smartrest.templates
 ```
 
 ## Add new template to thin-edge configuration
+
+:::tip
+The thin-edge.io `c8y.smartrest.templates` configuration values refer to the SmartREST templates' External ID (also known as "X-ID").
+:::
 
 To add new template to %%te%% the `tedge config` cli tool can be used as following:
 
