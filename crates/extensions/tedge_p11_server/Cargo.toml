@@ -1,0 +1,27 @@
+[package]
+name = "tedge_p11_server"
+description = "thin-edge PKCS#11 server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[features]
+# added because rust-analyzer screams at me; probably can be removed later
+cryptoki = []
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+certificate = { workspace = true, features = ["cryptoki"] }
+clap.workspace = true
+rustls.workspace = true
+tedge_config = { workspace = true, features = ["cryptoki"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
