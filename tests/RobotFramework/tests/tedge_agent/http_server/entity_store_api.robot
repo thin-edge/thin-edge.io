@@ -16,24 +16,44 @@ ${DEVICE_SN}    ${EMPTY}    # Main device serial number
 CRUD apis
     Execute Command
     ...    curl -X POST http://localhost:8000/tedge/entity-store/v1/entities -H 'Content-Type: application/json' -d '{"@topic-id": "device/child01//", "@type": "child-device"}'
+    Should Have MQTT Messages
+    ...    te/device/child01//
+    ...    message_contains="@type":"child-device"
 
     ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal
     ...    ${get}
     ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
+
+    ${payload}=    Set Variable    '{"maintenance_mode":true,"maintenance_window":5}'
+    ${patch}=    Execute Command
+    ...    curl -X PATCH http://localhost:8000/tedge/entity-store/v1/entities/device/child01// -H 'Content-Type: application/json' -d ${payload}
+    Should Be Equal
+    ...    ${patch}
+    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
     Should Have MQTT Messages
-    ...    te/device/child01//
-    ...    message_contains="@type":"child-device"
+    ...    te/device/child01///twin/maintenance_mode
+    ...    message_contains=true
+    Should Have MQTT Messages
+    ...    te/device/child01///twin/maintenance_window
+    ...    message_contains=5
+
+    ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
+    Should Be Equal
+    ...    ${get}
+    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
 
     ${entities}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities
-    Should Contain    ${entities}    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
+    Should Contain
+    ...    ${entities}
+    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
 
     ${timestamp}=    Get Unix Timestamp
     ${delete}=    Execute Command
     ...    curl --silent -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal
     ...    ${delete}
-    ...    [{"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}]
+    ...    [{"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}]
     Should Have MQTT Messages
     ...    te/device/child01//
     ...    date_from=${timestamp}

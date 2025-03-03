@@ -1,4 +1,7 @@
 use async_trait::async_trait;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Map;
 use serde_json::Value;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
@@ -7,6 +10,7 @@ use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -22,6 +26,7 @@ use tracing::error;
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
+    Patch(EntityTwinData),
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
@@ -31,10 +36,39 @@ pub enum EntityStoreRequest {
 pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
     Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
+    Patch(Result<(), entity_store::Error>),
     Delete(Vec<EntityMetadata>),
     List(Vec<EntityMetadata>),
     Ok,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EntityTwinData {
+    pub topic_id: EntityTopicId,
+    #[serde(flatten)]
+    pub fragments: Map<String, Value>,
+}
+
+impl EntityTwinData {
+    pub fn try_new(
+        topic_id: EntityTopicId,
+        twin_data: Map<String, Value>,
+    ) -> Result<Self, InvalidTwinData> {
+        for key in twin_data.keys() {
+            if key.starts_with('@') {
+                return Err(InvalidTwinData(key.clone()));
+            }
+        }
+        Ok(Self {
+            topic_id,
+            fragments: twin_data,
+        })
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("Invalid key: '{0}', as fragment keys starting with '@' are not allowed as twin data")]
+pub struct InvalidTwinData(String);
 
 pub struct EntityStoreServer {
     entity_store: EntityStore,
@@ -89,6 +123,10 @@ impl Server for EntityStoreServer {
             EntityStoreRequest::Create(entity) => {
                 let res = self.register_entity(entity).await;
                 EntityStoreResponse::Create(res)
+            }
+            EntityStoreRequest::Patch(twin_data) => {
+                let res = self.patch_entity(twin_data).await;
+                EntityStoreResponse::Patch(res)
             }
             EntityStoreRequest::Delete(topic_id) => {
                 let deleted_entities = self.deregister_entity(topic_id).await;
@@ -216,6 +254,21 @@ impl EntityStoreServer {
             self.publish_message(message).await;
         }
         Ok(registered)
+    }
+
+    async fn patch_entity(&mut self, twin_data: EntityTwinData) -> Result<(), entity_store::Error> {
+        for (fragment_key, fragment_value) in twin_data.fragments.into_iter() {
+            let twin_message =
+                EntityTwinMessage::new(twin_data.topic_id.clone(), fragment_key, fragment_value);
+            let updated = self.entity_store.update_twin_data(twin_message.clone())?;
+
+            if updated {
+                let message = twin_message.to_mqtt_message(&self.mqtt_schema);
+                self.publish_message(message).await;
+            }
+        }
+
+        Ok(())
     }
 
     async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityMetadata> {
