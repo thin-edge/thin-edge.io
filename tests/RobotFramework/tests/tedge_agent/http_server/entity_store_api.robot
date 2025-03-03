@@ -31,6 +31,12 @@ CRUD apis
     Should Be Equal
     ...    ${patch}
     ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
+    Should Have MQTT Messages
+    ...    te/device/child01///twin/maintenance_mode
+    ...    message_contains=true
+    Should Have MQTT Messages
+    ...    te/device/child01///twin/maintenance_window
+    ...    message_contains=5
 
     ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal

@@ -588,7 +588,7 @@ mod tests {
         let entity: Value = serde_json::from_slice(&body).unwrap();
         assert_json_eq!(
             entity,
-            json!({"error":"Fragment keys starting with '@' are not allowed as twin data"})
+            json!({"error":"Invalid key: '@id', as fragment keys starting with '@' are not allowed as twin data"})
         );
     }
 

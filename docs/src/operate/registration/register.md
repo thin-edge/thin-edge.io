@@ -445,26 +445,29 @@ PATCH /v1/entities/{topic-id}
 
 **Payload**
 
-Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` with a `null` value:
+Any fragments to be inserted/updated are specified with their desired values.
+Fragments to be removed are specified with a `null` value.
 
 ```json
 {
-    "name": "Child 01",
     "new-fragment": {
         "new-key": "new-value"
     },
-    "extra-fragment": null
+    "fragment-to-update": "updated-value",
+    "fragment-to-delete": null
 }
 ```
 
 **Example**
+
+Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` with a `null` value:
 
 ```shell
 curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01 \
   -X PATCH \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "Raspberry Pi 4",
+    "Child": "Child 01",
     "hardware": {
         "serialNo": "98761234"
     },

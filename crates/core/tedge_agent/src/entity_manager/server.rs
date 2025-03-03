@@ -56,7 +56,7 @@ impl EntityTwinData {
     ) -> Result<Self, InvalidTwinData> {
         for key in twin_data.keys() {
             if key.starts_with('@') {
-                return Err(InvalidTwinData);
+                return Err(InvalidTwinData(key.clone()));
             }
         }
         Ok(Self {
@@ -67,8 +67,8 @@ impl EntityTwinData {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("Fragment keys starting with '@' are not allowed as twin data")]
-pub struct InvalidTwinData;
+#[error("Invalid key: '{0}', as fragment keys starting with '@' are not allowed as twin data")]
+pub struct InvalidTwinData(String);
 
 pub struct EntityStoreServer {
     entity_store: EntityStore,
@@ -258,11 +258,14 @@ impl EntityStoreServer {
 
     async fn patch_entity(&mut self, twin_data: EntityTwinData) -> Result<(), entity_store::Error> {
         for (fragment_key, fragment_value) in twin_data.fragments.into_iter() {
-            self.entity_store.update_twin_data(EntityTwinMessage::new(
-                twin_data.topic_id.clone(),
-                fragment_key,
-                fragment_value,
-            ))?;
+            let twin_message =
+                EntityTwinMessage::new(twin_data.topic_id.clone(), fragment_key, fragment_value);
+            let updated = self.entity_store.update_twin_data(twin_message.clone())?;
+
+            if updated {
+                let message = twin_message.to_mqtt_message(&self.mqtt_schema);
+                self.publish_message(message).await;
+            }
         }
 
         Ok(())

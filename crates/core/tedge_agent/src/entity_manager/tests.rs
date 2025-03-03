@@ -1,4 +1,5 @@
 use crate::entity_manager::server::EntityStoreResponse;
+use crate::entity_manager::server::EntityTwinData;
 use crate::entity_manager::tests::model::Action;
 use crate::entity_manager::tests::model::Action::AddDevice;
 use crate::entity_manager::tests::model::Action::AddService;
@@ -7,9 +8,12 @@ use crate::entity_manager::tests::model::Commands;
 use crate::entity_manager::tests::model::Protocol::HTTP;
 use crate::entity_manager::tests::model::Protocol::MQTT;
 use proptest::proptest;
+use serde_json::json;
 use std::collections::HashSet;
 use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 
 #[tokio::test]
 async fn new_entity_store() {
@@ -55,6 +59,23 @@ async fn removing_a_child_using_mqtt() {
         },
     ];
     check_registrations(Commands(registrations)).await
+}
+
+#[tokio::test]
+async fn patched_twin_fragments_published_to_mqtt() {
+    let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
+    let twin_data = EntityTwinData::try_new(
+        EntityTopicId::default_main_device(),
+        json!({"x": 9, "y": true, "z": "foo"})
+            .as_object()
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    entity::patch(&mut entity_store, twin_data).await.unwrap();
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/x", "9")]).await;
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/y", "true")]).await;
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/z", "foo")]).await;
 }
 
 proptest! {
@@ -165,6 +186,7 @@ mod entity {
     use crate::entity_manager::server::EntityStoreRequest;
     use crate::entity_manager::server::EntityStoreResponse;
     use crate::entity_manager::server::EntityStoreServer;
+    use crate::entity_manager::server::EntityTwinData;
     use std::str::FromStr;
     use tedge_actors::Builder;
     use tedge_actors::NoMessage;
@@ -190,6 +212,19 @@ mod entity {
             return entity;
         };
         None
+    }
+
+    pub async fn patch(
+        entity_store: &mut EntityStoreServer,
+        twin_data: EntityTwinData,
+    ) -> Result<(), anyhow::Error> {
+        if let EntityStoreResponse::Patch(result) = entity_store
+            .handle(EntityStoreRequest::Patch(twin_data))
+            .await
+        {
+            return result.map_err(Into::into);
+        };
+        anyhow::bail!("Unexpected response");
     }
 
     pub fn server(
