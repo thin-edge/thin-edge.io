@@ -47,7 +47,7 @@ pub enum TEdgeCertCli {
     /// Renew the device certificate
     Renew {
         /// CA from which the certificate will be renew
-        #[arg(value_enum, default_value = "self-signed")]
+        #[arg(long, default_value = "self-signed")]
         ca: CertRenewalCA,
 
         #[clap(subcommand)]
