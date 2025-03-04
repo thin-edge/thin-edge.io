@@ -13,6 +13,7 @@ use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -29,6 +30,8 @@ pub struct MqttSubscribeCommand {
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
     pub client_auth_config: Option<MqttAuthClientConfig>,
+    pub duration: Option<Duration>,
+    pub count: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -87,8 +90,20 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
 
+    match cmd.duration {
+        Some(Duration::ZERO) | None => {}
+        Some(duration) if duration.as_secs() < 5 => {
+            options.set_keep_alive(duration);
+        }
+        Some(_) => {
+            options.set_keep_alive(Duration::from_secs(5));
+        }
+    }
+
     let (client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
     let interrupted = super::disconnect_if_interrupted(client.clone());
+    let started = std::time::Instant::now();
+    let mut n_packets = 0;
 
     for event in connection.iter() {
         match event {
@@ -105,8 +120,20 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                         } else {
                             println!("[{}] {}", &message.topic, payload);
                         }
+                        n_packets += 1;
+                        if matches!(cmd.count, Some(count) if count > 0 && n_packets >= count) {
+                            eprintln!("INFO: Break");
+                            break;
+                        }
                     }
                     Err(err) => error!("{err}"),
+                }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                if matches!(cmd.duration, Some(duration) if !duration.is_zero() && started.elapsed() > duration)
+                {
+                    eprintln!("INFO: Timeout");
+                    break;
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
