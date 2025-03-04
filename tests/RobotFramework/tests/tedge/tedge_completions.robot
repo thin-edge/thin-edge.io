@@ -53,10 +53,10 @@ Tedge has completions for cloud profile names
     Execute Command    cmd=tedge config set az.url --profile azure azure.example.com
     Execute Command    cmd=tedge config set aws.url --profile aws aws.example.com
 
-    ${output}=    Execute Command    cmd=COMPLETE=fish tedge -- tedge connect c8y --profile ''
+    ${output}=    Execute Command    cmd=COMPLETE=fish tedge -- tedge connect c8y --profile '' | sort
     Should Be Equal
     ...    ${output}
-    ...    test\nother\nazure\naws
+    ...    aws\nazure\nother\ntest
     ...    strip_spaces=${True}
 
 
