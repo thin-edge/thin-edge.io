@@ -169,6 +169,7 @@ fn doc_comments_from(attrs: &[syn::Attribute]) -> Option<String> {
             }) => Some(lit.value()),
             _ => None,
         })
+        .map(|lit| lit.trim().to_owned())
         .collect::<Vec<_>>()
         .join("\n");
     match doc.as_str() {
