@@ -61,7 +61,7 @@ jobs:
           - --release
 
         rust_channel:
-          - "1.82"
+          - "1.78"
 
         include:
           - target: aarch64-unknown-linux-musl

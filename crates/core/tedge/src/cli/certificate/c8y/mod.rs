@@ -93,11 +93,17 @@ pub enum IllFormedPk7Cert {
     #[error(transparent)]
     NotBase64(#[from] base64::DecodeError),
 
-    #[error(transparent)]
-    IllFormedCMS(#[from] rasn::error::DecodeError),
+    #[error("Invalid pkcs#7 certificate: {0}")]
+    IllFormedCMS(String),
 
     #[error("No certificate found in pkcs#7 content")]
     MissingCertificate,
+}
+
+impl From<rasn::error::DecodeError> for IllFormedPk7Cert {
+    fn from(value: rasn::error::DecodeError) -> Self {
+        IllFormedPk7Cert::IllFormedCMS(format!("{value}"))
+    }
 }
 
 #[cfg(test)]
