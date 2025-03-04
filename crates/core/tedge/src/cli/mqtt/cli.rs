@@ -9,6 +9,7 @@ use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
 use mqtt_channel::Topic;
 use rumqttc::QoS;
+use tedge_config::SecondsOrHumanTime;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
@@ -45,6 +46,9 @@ pub enum TEdgeMqttCli {
         /// Avoid printing the message topics on the console
         #[clap(long = "no-topic")]
         hide_topic: bool,
+        /// Set a timeout duration (e.g., 60s, 1h). Use 0 for no timeout
+        #[clap(long, default_value = "0")]
+        window: SecondsOrHumanTime,
     },
 }
 
@@ -77,6 +81,7 @@ impl BuildCommand for TEdgeMqttCli {
                     topic,
                     qos,
                     hide_topic,
+                    window,
                 } => MqttSubscribeCommand {
                     host: config.mqtt.client.host.clone(),
                     port: config.mqtt.client.port.into(),
@@ -87,6 +92,7 @@ impl BuildCommand for TEdgeMqttCli {
                     ca_file: auth_config.ca_file,
                     ca_dir: auth_config.ca_dir,
                     client_auth_config: auth_config.client,
+                    window: window.duration(),
                 }
                 .into_boxed(),
             }

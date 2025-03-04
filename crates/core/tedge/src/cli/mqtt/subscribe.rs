@@ -13,6 +13,7 @@ use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -29,6 +30,7 @@ pub struct MqttSubscribeCommand {
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
     pub client_auth_config: Option<MqttAuthClientConfig>,
+    pub window: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -87,8 +89,14 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
 
+    // the default keepalive in rumqttc is 60 sec
+    if !cmd.window.is_zero() && cmd.window.as_secs() < 60 {
+        options.set_keep_alive(cmd.window);
+    }
+
     let (client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
     let interrupted = super::disconnect_if_interrupted(client.clone());
+    let started = std::time::Instant::now();
 
     for event in connection.iter() {
         match event {
@@ -107,6 +115,12 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                         }
                     }
                     Err(err) => error!("{err}"),
+                }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                if !cmd.window.is_zero() && started.elapsed() > cmd.window {
+                    eprintln!("INFO: Timeout");
+                    break;
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
