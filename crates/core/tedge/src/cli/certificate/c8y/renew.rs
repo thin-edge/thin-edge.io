@@ -54,7 +54,7 @@ impl RenewCertCmd {
         )?;
 
         let http = self.root_certs.blocking_client();
-        let url = "http://127.0.0.1:8001/c8y/.well-known/est/simplereenroll";
+        let url = "http://127.0.0.1:8002/c8y/.well-known/est/simplereenroll";
         let url = Url::parse(url)?;
         let result = self.post_device_csr(&http, &url, &csr);
         match result {
@@ -70,9 +70,10 @@ impl RenewCertCmd {
             }
             Ok(response) => {
                 error!(
-                    "The device certificate cannot be renewed on {}: {:?}",
+                    "The device certificate cannot be renewed from {}:\n\t{} {}",
                     self.c8y_url,
-                    response.status()
+                    response.status(),
+                    response.text().unwrap_or("".to_string())
                 );
             }
             Err(err) => {
