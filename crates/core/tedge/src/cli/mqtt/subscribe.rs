@@ -31,6 +31,7 @@ pub struct MqttSubscribeCommand {
     pub ca_dir: Option<Utf8PathBuf>,
     pub client_auth_config: Option<MqttAuthClientConfig>,
     pub window: Duration,
+    pub packets: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -97,6 +98,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
     let (client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
     let interrupted = super::disconnect_if_interrupted(client.clone());
     let started = std::time::Instant::now();
+    let mut n_packets = 0;
 
     for event in connection.iter() {
         match event {
@@ -112,6 +114,11 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                             println!("{}", &payload);
                         } else {
                             println!("[{}] {}", &message.topic, payload);
+                        }
+                        n_packets += 1;
+                        if cmd.packets != 0 && n_packets == cmd.packets {
+                            eprintln!("INFO: Break");
+                            break;
                         }
                     }
                     Err(err) => error!("{err}"),

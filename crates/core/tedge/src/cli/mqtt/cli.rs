@@ -49,6 +49,9 @@ pub enum TEdgeMqttCli {
         /// Set a timeout duration (e.g., 60s, 1h). Use 0 for no timeout
         #[clap(long, default_value = "0")]
         window: SecondsOrHumanTime,
+        /// Set the number of packets before stopping. Use 0 for unlimited
+        #[clap(long, default_value = "0")]
+        packets: u32,
     },
 }
 
@@ -82,6 +85,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     hide_topic,
                     window,
+                    packets,
                 } => MqttSubscribeCommand {
                     host: config.mqtt.client.host.clone(),
                     port: config.mqtt.client.port.into(),
@@ -93,6 +97,7 @@ impl BuildCommand for TEdgeMqttCli {
                     ca_dir: auth_config.ca_dir,
                     client_auth_config: auth_config.client,
                     window: window.duration(),
+                    packets,
                 }
                 .into_boxed(),
             }
