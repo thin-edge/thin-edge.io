@@ -181,6 +181,9 @@ impl C8yMapperActor {
             self.process_registration_message(pending_entity.reg_message)
                 .await?;
 
+            // Wait for a while to allow the registration message to be processed by the cloud before sending the data messages
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
                 self.process_message(pending_data_message).await?;
