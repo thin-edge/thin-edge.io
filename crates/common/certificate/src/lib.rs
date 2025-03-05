@@ -77,6 +77,16 @@ impl PemCertificate {
             .map_err(CertificateError::X509Error)
     }
 
+    pub fn serial(&self) -> Result<String, CertificateError> {
+        let x509 = PemCertificate::extract_certificate(&self.pem)?;
+        Ok(x509.tbs_certificate.serial.to_string())
+    }
+
+    pub fn serial_hex(&self) -> Result<String, CertificateError> {
+        let x509 = PemCertificate::extract_certificate(&self.pem)?;
+        Ok(format!("{:x}", x509.tbs_certificate.serial))
+    }
+
     pub fn thumbprint(&self) -> Result<String, CertificateError> {
         let bytes = Sha1::digest(&self.pem.contents).as_slice().to_vec();
         let strs: Vec<String> = bytes.iter().map(|b| format!("{:02X}", b)).collect();

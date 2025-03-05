@@ -47,6 +47,12 @@ impl ShowCertCmd {
         print_async!(stdout, "Issuer: {}\n", pem.issuer()?);
         print_async!(stdout, "Valid from: {}\n", pem.not_before()?);
         print_async!(stdout, "Valid up to: {}\n", pem.not_after()?);
+        print_async!(
+            stdout,
+            "Serial number: {} (0x{})\n",
+            pem.serial()?,
+            pem.serial_hex()?
+        );
         print_async!(stdout, "Thumbprint: {}\n", pem.thumbprint()?);
         let _ = stdout.flush().await;
         Ok(())
