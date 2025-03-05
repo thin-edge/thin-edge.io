@@ -36,6 +36,7 @@ impl ShowCertCmd {
         println!("Issuer: {}", pem.issuer()?);
         println!("Valid from: {}", pem.not_before()?);
         println!("Valid up to: {}", pem.not_after()?);
+        println!("Serial number: {} (0x{})", pem.serial()?, pem.serial_hex()?);
         println!("Thumbprint: {}", pem.thumbprint()?);
         Ok(())
     }
