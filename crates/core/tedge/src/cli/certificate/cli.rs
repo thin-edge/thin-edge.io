@@ -51,6 +51,16 @@ pub enum TEdgeCertCli {
         #[arg(long, default_value = "self-signed")]
         ca: CertRenewalCA,
 
+        /// Path to a Certificate Signing Request (CSR) ready to be used
+        ///
+        /// Providing the CSR is notably required when the request has to be signed
+        /// by a tier tool owning the private key of the device.
+        ///
+        /// If none is provided a CSR is generated using the device id and private key
+        /// configured for the given cloud profile.
+        #[clap(long = "csr-path", global = true, value_hint = ValueHint::FilePath)]
+        csr_path: Option<Utf8PathBuf>,
+
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -164,10 +174,17 @@ impl BuildCommand for TEdgeCertCli {
                 id,
                 token,
                 profile,
+                csr_path,
                 retry_every,
                 max_timeout,
             }) => {
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
+
+                let (csr_path, generate_csr) = match csr_path {
+                    None => (c8y_config.device.csr_path.clone(), true),
+                    Some(csr_path) => (csr_path, false),
+                };
+
                 let cmd = c8y::DownloadCertCmd {
                     device_id: id,
                     security_token: token,
@@ -175,7 +192,8 @@ impl BuildCommand for TEdgeCertCli {
                     root_certs: config.cloud_root_certs(),
                     cert_path: c8y_config.device.cert_path.to_owned(),
                     key_path: c8y_config.device.key_path.to_owned(),
-                    csr_path: c8y_config.device.csr_path.to_owned(),
+                    csr_path,
+                    generate_csr,
                     retry_every,
                     max_timeout,
                 };
@@ -185,6 +203,7 @@ impl BuildCommand for TEdgeCertCli {
             TEdgeCertCli::Renew {
                 ca: CertRenewalCA::SelfSigned,
                 cloud,
+                ..
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cmd = RenewCertCmd {
@@ -196,6 +215,7 @@ impl BuildCommand for TEdgeCertCli {
 
             TEdgeCertCli::Renew {
                 ca: CertRenewalCA::C8y,
+                csr_path,
                 cloud,
             } => {
                 let c8y_profile = match cloud.map(<_>::try_into).transpose()? {
@@ -210,6 +230,11 @@ impl BuildCommand for TEdgeCertCli {
                 let c8y =
                     C8yEndPoint::local_proxy(&config, c8y_profile.as_deref().map(|p| p.as_ref()))?;
                 let c8y_config = config.c8y.try_get(c8y_profile.as_deref())?;
+                let (csr_path, generate_csr) = match csr_path {
+                    None => (c8y_config.device.csr_path.clone(), true),
+                    Some(csr_path) => (csr_path, false),
+                };
+
                 let cmd = c8y::RenewCertCmd {
                     device_id: c8y_config.device.id()?.to_string(),
                     c8y,
@@ -217,7 +242,8 @@ impl BuildCommand for TEdgeCertCli {
                     identity: config.http.client.auth.identity()?,
                     cert_path: c8y_config.device.cert_path.clone(),
                     key_path: c8y_config.device.key_path.clone(),
-                    csr_path: c8y_config.device.csr_path.clone(),
+                    csr_path,
+                    generate_csr,
                 };
                 cmd.into_boxed()
             }
@@ -316,6 +342,16 @@ pub enum DownloadCertCli {
         #[clap(long)]
         /// The Cumulocity cloud profile (when the device is connected to several tenants)
         profile: Option<ProfileName>,
+
+        /// Path to a Certificate Signing Request (CSR) ready to be used
+        ///
+        /// Providing the CSR is notably required when the request has to be signed
+        /// by a tier tool owning the private key of the device.
+        ///
+        /// If none is provided a CSR is generated using the device id and private key
+        /// configured for the given cloud profile.
+        #[clap(long = "csr-path", global = true, value_hint = ValueHint::FilePath)]
+        csr_path: Option<Utf8PathBuf>,
 
         #[clap(long, default_value = "30s")]
         #[arg(value_parser = humantime::parse_duration)]

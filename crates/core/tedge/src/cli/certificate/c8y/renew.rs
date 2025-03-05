@@ -1,4 +1,5 @@
 use crate::cli::certificate::c8y::create_device_csr;
+use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
 use crate::command::Command;
 use crate::error;
@@ -36,6 +37,9 @@ pub struct RenewCertCmd {
 
     /// The path where the device CSR file will be stored
     pub csr_path: Utf8PathBuf,
+
+    /// Tell if the CSR has to be generated or is ready to be used
+    pub generate_csr: bool,
 }
 
 impl Command for RenewCertCmd {
@@ -55,11 +59,14 @@ impl RenewCertCmd {
     }
 
     fn renew_device_certificate(&self) -> Result<(), Error> {
-        let csr = create_device_csr(
-            self.device_id.clone(),
-            self.key_path.clone(),
-            self.csr_path.clone(),
-        )?;
+        if self.generate_csr {
+            create_device_csr(
+                self.device_id.clone(),
+                self.key_path.clone(),
+                self.csr_path.clone(),
+            )?
+        }
+        let csr = read_csr_from_file(&self.csr_path)?;
 
         let http_builder = self.root_certs.blocking_client_builder();
         let http_builder = if let Some(identity) = &self.identity {
