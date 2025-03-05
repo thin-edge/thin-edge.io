@@ -77,6 +77,20 @@ impl PemCertificate {
             .map_err(CertificateError::X509Error)
     }
 
+    pub fn still_valid(&self) -> Result<Option<Duration>, CertificateError> {
+        let x509 = PemCertificate::extract_certificate(&self.pem)?;
+        let now = OffsetDateTime::now_utc();
+        let not_before = x509.tbs_certificate.validity.not_before.to_datetime();
+        let not_after = x509.tbs_certificate.validity.not_after.to_datetime();
+        if now < not_before {
+            return Ok(None);
+        }
+        if now > not_after {
+            return Ok(None);
+        }
+        Ok(Some(not_after - now))
+    }
+
     pub fn serial(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
         Ok(x509.tbs_certificate.serial.to_string())
