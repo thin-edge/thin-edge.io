@@ -3,6 +3,7 @@ use crate::log::MaybeFancy;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
+use certificate::ValidityStatus;
 use tokio::io::AsyncWriteExt;
 
 macro_rules! print_async {
@@ -45,6 +46,7 @@ impl ShowCertCmd {
         print_async!(stdout, "Device certificate: {}\n", self.cert_path);
         print_async!(stdout, "Subject: {}\n", pem.subject()?);
         print_async!(stdout, "Issuer: {}\n", pem.issuer()?);
+        print_async!(stdout, "Status: {}\n", display_status(pem.still_valid()?));
         print_async!(stdout, "Valid from: {}\n", pem.not_before()?);
         print_async!(stdout, "Valid up to: {}\n", pem.not_after()?);
         print_async!(
@@ -56,5 +58,25 @@ impl ShowCertCmd {
         print_async!(stdout, "Thumbprint: {}\n", pem.thumbprint()?);
         let _ = stdout.flush().await;
         Ok(())
+    }
+}
+
+fn display_status(status: ValidityStatus) -> String {
+    match status {
+        ValidityStatus::Valid { expired_in } => {
+            format!(
+                "VALID (expires in: {})",
+                humantime::format_duration(expired_in)
+            )
+        }
+        ValidityStatus::Expired { since } => {
+            format!("EXPIRED (since: {})", humantime::format_duration(since))
+        }
+        ValidityStatus::NotValidYet { valid_in } => {
+            format!(
+                "NOT VALID YET (will be in: {})",
+                humantime::format_duration(valid_in)
+            )
+        }
     }
 }
