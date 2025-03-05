@@ -44,6 +44,7 @@ openssl x509 -req \
     -in client.csr \
     -CA ca.crt \
     -CAkey ca.key \
+    -extfile v3.ext \
     -CAcreateserial \
     -out client.crt \
     -days 7

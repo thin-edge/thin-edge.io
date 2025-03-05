@@ -62,5 +62,5 @@ tedge configure MQTT server authentication
     Execute Command    tedge config set mqtt.client.auth.ca_file /etc/mosquitto/ca_certificates/ca.crt
 
 tedge configure MQTT client authentication
-    Execute Command    tedge config set mqtt.client.auth.cert_file client.crt
-    Execute Command    tedge config set mqtt.client.auth.key_file client.key
+    Execute Command    tedge config set mqtt.client.auth.cert_file /setup/client.crt
+    Execute Command    tedge config set mqtt.client.auth.key_file /setup/client.key
