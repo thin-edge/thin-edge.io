@@ -1,6 +1,7 @@
 use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use std::time::Duration;
 
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
@@ -34,6 +35,20 @@ impl ShowCertCmd {
         println!("Device certificate: {}", self.cert_path);
         println!("Subject: {}", pem.subject()?);
         println!("Issuer: {}", pem.issuer()?);
+        println!(
+            "{}",
+            pem.still_valid()?
+                .map(|d| format!(
+                    "Still valid: {} days {} hours",
+                    d.whole_days(),
+                    (d - Duration::from_secs(
+                        24 * 3600
+                            * <i64 as TryInto<u64>>::try_into(d.whole_days()).unwrap_or_default()
+                    ))
+                    .whole_hours(),
+                ))
+                .unwrap_or("Invalid".to_string())
+        );
         println!("Valid from: {}", pem.not_before()?);
         println!("Valid up to: {}", pem.not_after()?);
         println!("Serial number: {}", pem.serial()?);
