@@ -31,6 +31,8 @@ mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
 pem = { workspace = true }
+rasn = { workspace = true }
+rasn-cms = { workspace = true }
 reqwest = { workspace = true, features = [
     "blocking",
     "json",
@@ -40,8 +42,6 @@ reqwest = { workspace = true, features = [
 ] }
 rpassword = { workspace = true }
 rumqttc = { workspace = true }
-rasn = { workspace = true }
-rasn-cms = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 signal-hook = { workspace = true }
