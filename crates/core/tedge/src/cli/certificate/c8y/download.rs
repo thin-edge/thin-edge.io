@@ -1,4 +1,5 @@
 use crate::cli::certificate::c8y::create_device_csr;
+use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
 use crate::command::Command;
 use crate::error;
@@ -42,6 +43,9 @@ pub struct DownloadCertCmd {
     /// The path where the device CSR file will be stored
     pub csr_path: Utf8PathBuf,
 
+    /// Tell if the CSR has to be generated or is ready to be used
+    pub generate_csr: bool,
+
     /// Delay between two attempts, polling till the device is registered
     pub retry_every: Duration,
 
@@ -66,13 +70,16 @@ impl Command for DownloadCertCmd {
 impl DownloadCertCmd {
     async fn download_device_certificate(&self) -> Result<(), Error> {
         let (common_name, security_token) = self.get_registration_data()?;
-        let csr = create_device_csr(
-            common_name.clone(),
-            self.key_path.clone(),
-            self.csr_path.clone(),
-        )
-        .await
-        .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
+        if self.generate_csr {
+            create_device_csr(
+                common_name.clone(),
+                self.key_path.clone(),
+                self.csr_path.clone(),
+            )
+            .await
+            .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
+        }
+        let csr = read_csr_from_file(&self.csr_path).await?;
 
         let http = self.root_certs.client();
         let c8y_url = &self.c8y_url;
