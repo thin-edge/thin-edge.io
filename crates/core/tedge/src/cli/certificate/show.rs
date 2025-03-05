@@ -8,7 +8,7 @@ use certificate::PemCertificate;
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
-    /// The path where the device certificate will be stored
+    /// The path where the device certificate is stored
     pub cert_path: Utf8PathBuf,
 }
 
