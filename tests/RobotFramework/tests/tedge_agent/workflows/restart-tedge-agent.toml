@@ -10,7 +10,7 @@ on_exec = "restarting"
 
 [restarting]
 script = "/etc/tedge/operations/tedge-agent-pid.sh test ${.payload.tedge-agent-pid}"
-timeout_second = 10
+timeout_second = 65 # A value higher than agent max shutdown timeout
 on_success = "tedge-agent-restarted"
 on_kill = { status = "failed", reason = "tedge-agent not restarted" }
 
