@@ -13,13 +13,11 @@ pub use renew::RenewCertCmd;
 pub use upload::UploadCertCmd;
 
 /// Create a device private key and CSR
-///
-/// Return the CSR in the format expected by c8y CA
 fn create_device_csr(
     common_name: String,
     key_path: Utf8PathBuf,
     csr_path: Utf8PathBuf,
-) -> Result<String, CertError> {
+) -> Result<(), CertError> {
     let config = NewCertificateConfig::default();
     let create_cmd = CreateCsrCmd {
         id: common_name,
@@ -28,9 +26,12 @@ fn create_device_csr(
         user: "tedge".to_string(),
         group: "tedge".to_string(),
     };
-    create_cmd.create_certificate_signing_request(&config)?;
+    create_cmd.create_certificate_signing_request(&config)
+}
 
-    let csr = read_cert_to_string(&csr_path)?;
+/// Return the CSR in the format expected by c8y CA
+fn read_csr_from_file(csr_path: &Utf8PathBuf) -> Result<String, CertError> {
+    let csr = read_cert_to_string(csr_path)?;
     let csr = csr
         .strip_prefix("-----BEGIN CERTIFICATE REQUEST-----\n")
         .unwrap_or(&csr);
