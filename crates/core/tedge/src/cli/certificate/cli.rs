@@ -57,6 +57,10 @@ pub enum TEdgeCertCli {
 
     /// Show the device certificate, if any
     Show {
+        /// Path to the certificate - default to the configured device certificate
+        #[clap(long = "cert-path", value_hint = ValueHint::FilePath)]
+        cert_path: Option<Utf8PathBuf>,
+
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -124,10 +128,11 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Show { cloud } => {
+            TEdgeCertCli::Show { cloud, cert_path } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+                let device_cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let cmd = ShowCertCmd {
-                    cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
+                    cert_path: cert_path.unwrap_or(device_cert_path),
                 };
                 cmd.into_boxed()
             }
