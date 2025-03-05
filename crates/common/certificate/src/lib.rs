@@ -77,6 +77,26 @@ impl PemCertificate {
             .map_err(CertificateError::X509Error)
     }
 
+    pub fn still_valid(&self) -> Result<ValidityStatus, CertificateError> {
+        let x509 = PemCertificate::extract_certificate(&self.pem)?;
+        let now = OffsetDateTime::now_utc();
+        let not_before = x509.tbs_certificate.validity.not_before.to_datetime();
+        let not_after = x509.tbs_certificate.validity.not_after.to_datetime();
+        if now < not_before {
+            let secs = (not_before - now).unsigned_abs().as_secs();
+            let valid_in = std::time::Duration::from_secs(secs);
+            return Ok(ValidityStatus::NotValidYet { valid_in });
+        }
+        if now > not_after {
+            let secs = (now - not_after).unsigned_abs().as_secs();
+            let since = std::time::Duration::from_secs(secs);
+            return Ok(ValidityStatus::Expired { since });
+        }
+        let secs = (not_after - now).unsigned_abs().as_secs();
+        let expired_in = std::time::Duration::from_secs(secs);
+        Ok(ValidityStatus::Valid { expired_in })
+    }
+
     pub fn serial(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
         Ok(x509.tbs_certificate.serial.to_string())
@@ -111,6 +131,12 @@ impl PemCertificate {
         let x509_error_string = format!("{}", err);
         CertificateError::X509Error(x509_error_string)
     }
+}
+
+pub enum ValidityStatus {
+    Valid { expired_in: std::time::Duration },
+    Expired { since: std::time::Duration },
+    NotValidYet { valid_in: std::time::Duration },
 }
 
 pub enum KeyKind {
