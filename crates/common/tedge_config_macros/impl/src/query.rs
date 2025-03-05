@@ -579,7 +579,7 @@ fn keys_enum(
             }
 
             pub fn completions() -> Vec<::clap_complete::CompletionCandidate> {
-                Self::VALUES.into_iter().map(|v| ::clap_complete::CompletionCandidate::new(v.to_cow_str().into_owned()).help(v.help().map(|h| h.into()))).collect()
+                Self::VALUES.into_iter().map(|v| ::clap_complete::CompletionCandidate::new(v.to_cow_str().into_owned()).help(v.help().map(|h| h.replace("\n", " ").into()))).collect()
             }
         }
 
