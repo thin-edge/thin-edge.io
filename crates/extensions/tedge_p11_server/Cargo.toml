@@ -18,6 +18,7 @@ anyhow.workspace = true
 camino.workspace = true
 certificate = { workspace = true, features = ["cryptoki"] }
 clap.workspace = true
+hyper-util.workspace = true
 prost = "0.13.5"
 rustls.workspace = true
 serde.workspace = true

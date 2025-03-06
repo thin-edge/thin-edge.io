@@ -1,6 +1,10 @@
 use certificate::parse_root_certificate::pkcs11::{self, PkcsSigner};
 use tracing::instrument;
 
+mod p11_grpc_service;
+pub use p11_grpc_service::p11_grpc::p11_server::P11Server;
+pub use p11_grpc_service::P11Service;
+
 #[derive(Debug)]
 struct CryptokiResolverService {
     signer: pkcs11::PkcsSigner,

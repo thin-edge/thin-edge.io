@@ -14,10 +14,6 @@
 
 syntax = "proto3";
 
-option java_multiple_files = true;
-option java_package = "io.grpc.examples.helloworld";
-option java_outer_classname = "HelloWorldProto";
-
 package p11_grpc;
 
 // The greeting service definition.
@@ -34,4 +30,25 @@ message HelloRequest {
 // The response message containing the greetings
 message HelloReply {
   string message = 1;
+}
+
+service P11 {
+  rpc ChooseScheme (ChooseSchemeRequest) returns (ChooseSchemeResponse) {}
+  rpc Sign (SignRequest) returns (SignResponse) {}
+}
+
+message ChooseSchemeRequest {
+  repeated string offered = 1;
+}
+
+message ChooseSchemeResponse {
+  string chosen = 1; // Chosen scheme
+}
+
+message SignRequest {
+  bytes data = 1;
+}
+
+message SignResponse {
+  bytes signature = 1;
 }
